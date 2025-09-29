@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.tools;
 
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
@@ -36,33 +37,27 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.Collection;
-import java.util.List;
-import java.util.Optional;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
-import java.util.regex.Pattern;
 
 import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 import static joptsimple.util.RegexMatcher.regex;
-import static org.apache.kafka.server.util.CommandLineUtils.parseKeyValueArgs;
 
 public class ConsumerPerformance {
     private static final Logger LOG = LoggerFactory.getLogger(ConsumerPerformance.class);
     private static final Random RND = new Random();
 
     public static void main(String[] args) {
-        run(args, KafkaConsumer::new);
-    }
-
-    static void run(String[] args, Function<Properties, Consumer<byte[], byte[]>> consumerCreator) {
         try {
             LOG.info("Starting consumer...");
             ConsumerPerfOptions options = new ConsumerPerfOptions(args);
-            AtomicLong totalRecordsRead = new AtomicLong(0);
+            AtomicLong totalMessagesRead = new AtomicLong(0);
             AtomicLong totalBytesRead = new AtomicLong(0);
             AtomicLong joinTimeMs = new AtomicLong(0);
             AtomicLong joinTimeMsInSingleRound = new AtomicLong(0);
@@ -70,42 +65,45 @@ public class ConsumerPerformance {
             if (!options.hideHeader())
                 printHeader(options.showDetailedStats());
 
-            try (Consumer<byte[], byte[]> consumer = consumerCreator.apply(options.props())) {
-                long bytesRead = 0L;
-                long recordsRead = 0L;
-                long lastBytesRead = 0L;
-                long lastRecordsRead = 0L;
-                long currentTimeMs = System.currentTimeMillis();
-                long joinStartMs = currentTimeMs;
-                long startMs = currentTimeMs;
-                consume(consumer, options, totalRecordsRead, totalBytesRead, joinTimeMs,
-                    bytesRead, recordsRead, lastBytesRead, lastRecordsRead,
-                    joinStartMs, joinTimeMsInSingleRound);
-                long endMs = System.currentTimeMillis();
+            KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(options.props());
+            long bytesRead = 0L;
+            long messagesRead = 0L;
+            long lastBytesRead = 0L;
+            long lastMessagesRead = 0L;
+            long currentTimeMs = System.currentTimeMillis();
+            long joinStartMs = currentTimeMs;
+            long startMs = currentTimeMs;
+            consume(consumer, options, totalMessagesRead, totalBytesRead, joinTimeMs,
+                bytesRead, messagesRead, lastBytesRead, lastMessagesRead,
+                joinStartMs, joinTimeMsInSingleRound);
+            long endMs = System.currentTimeMillis();
 
-                // print final stats
-                double elapsedSec = (endMs - startMs) / 1_000.0;
-                long fetchTimeInMs = (endMs - startMs) - joinTimeMs.get();
-                if (!options.showDetailedStats()) {
-                    double totalMbRead = (totalBytesRead.get() * 1.0) / (1024 * 1024);
-                    System.out.printf("%s, %s, %.4f, %.4f, %d, %.4f, %d, %d, %.4f, %.4f%n",
-                        options.dateFormat().format(startMs),
-                        options.dateFormat().format(endMs),
-                        totalMbRead,
-                        totalMbRead / elapsedSec,
-                        totalRecordsRead.get(),
-                        totalRecordsRead.get() / elapsedSec,
-                        joinTimeMs.get(),
-                        fetchTimeInMs,
-                        totalMbRead / (fetchTimeInMs / 1000.0),
-                        totalRecordsRead.get() / (fetchTimeInMs / 1000.0)
-                    );
-                }
+            Map<MetricName, ? extends Metric> metrics = null;
+            if (options.printMetrics())
+                metrics = consumer.metrics();
+            consumer.close();
 
-                if (options.printMetrics()) {
-                    ToolsUtils.printMetrics(consumer.metrics());
-                }
+            // print final stats
+            double elapsedSec = (endMs - startMs) / 1_000.0;
+            long fetchTimeInMs = (endMs - startMs) - joinTimeMs.get();
+            if (!options.showDetailedStats()) {
+                double totalMbRead = (totalBytesRead.get() * 1.0) / (1024 * 1024);
+                System.out.printf("%s, %s, %.4f, %.4f, %d, %.4f, %d, %d, %.4f, %.4f%n",
+                    options.dateFormat().format(startMs),
+                    options.dateFormat().format(endMs),
+                    totalMbRead,
+                    totalMbRead / elapsedSec,
+                    totalMessagesRead.get(),
+                    totalMessagesRead.get() / elapsedSec,
+                    joinTimeMs.get(),
+                    fetchTimeInMs,
+                    totalMbRead / (fetchTimeInMs / 1000.0),
+                    totalMessagesRead.get() / (fetchTimeInMs / 1000.0)
+                );
             }
+
+            if (metrics != null)
+                ToolsUtils.printMetrics(metrics);
         } catch (Throwable e) {
             System.err.println(e.getMessage());
             System.err.println(Utils.stackTrace(e));
@@ -121,84 +119,79 @@ public class ConsumerPerformance {
             System.out.printf("time, threadId, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec%s%n", newFieldsInHeader);
     }
 
-    private static void consume(Consumer<byte[], byte[]> consumer,
+    private static void consume(KafkaConsumer<byte[], byte[]> consumer,
                                 ConsumerPerfOptions options,
-                                AtomicLong totalRecordsRead,
+                                AtomicLong totalMessagesRead,
                                 AtomicLong totalBytesRead,
                                 AtomicLong joinTimeMs,
                                 long bytesRead,
-                                long recordsRead,
+                                long messagesRead,
                                 long lastBytesRead,
-                                long lastRecordsRead,
+                                long lastMessagesRead,
                                 long joinStartMs,
                                 AtomicLong joinTimeMsInSingleRound) {
-        long numRecords = options.numRecords();
+        long numMessages = options.numMessages();
         long recordFetchTimeoutMs = options.recordFetchTimeoutMs();
         long reportingIntervalMs = options.reportingIntervalMs();
         boolean showDetailedStats = options.showDetailedStats();
         SimpleDateFormat dateFormat = options.dateFormat();
-
-        ConsumerPerfRebListener listener = new ConsumerPerfRebListener(joinTimeMs, joinStartMs, joinTimeMsInSingleRound);
-        if (options.topic().isPresent()) {
-            consumer.subscribe(options.topic().get(), listener);
-        } else {
-            consumer.subscribe(options.include().get(), listener);
-        }
+        consumer.subscribe(options.topic(),
+            new ConsumerPerfRebListener(joinTimeMs, joinStartMs, joinTimeMsInSingleRound));
 
         // now start the benchmark
         long currentTimeMs = System.currentTimeMillis();
         long lastReportTimeMs = currentTimeMs;
         long lastConsumedTimeMs = currentTimeMs;
 
-        while (recordsRead < numRecords && currentTimeMs - lastConsumedTimeMs <= recordFetchTimeoutMs) {
+        while (messagesRead < numMessages && currentTimeMs - lastConsumedTimeMs <= recordFetchTimeoutMs) {
             ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
             currentTimeMs = System.currentTimeMillis();
             if (!records.isEmpty())
                 lastConsumedTimeMs = currentTimeMs;
             for (ConsumerRecord<byte[], byte[]> record : records) {
-                recordsRead += 1;
+                messagesRead += 1;
                 if (record.key() != null)
                     bytesRead += record.key().length;
                 if (record.value() != null)
                     bytesRead += record.value().length;
                 if (currentTimeMs - lastReportTimeMs >= reportingIntervalMs) {
                     if (showDetailedStats)
-                        printConsumerProgress(0, bytesRead, lastBytesRead, recordsRead, lastRecordsRead,
+                        printConsumerProgress(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead,
                             lastReportTimeMs, currentTimeMs, dateFormat, joinTimeMsInSingleRound.get());
                     joinTimeMsInSingleRound = new AtomicLong(0);
                     lastReportTimeMs = currentTimeMs;
-                    lastRecordsRead = recordsRead;
+                    lastMessagesRead = messagesRead;
                     lastBytesRead = bytesRead;
                 }
             }
         }
 
-        if (recordsRead < numRecords)
-            System.out.printf("WARNING: Exiting before consuming the expected number of records: timeout (%d ms) exceeded. " +
+        if (messagesRead < numMessages)
+            System.out.printf("WARNING: Exiting before consuming the expected number of messages: timeout (%d ms) exceeded. " +
                 "You can use the --timeout option to increase the timeout.%n", recordFetchTimeoutMs);
-        totalRecordsRead.set(recordsRead);
+        totalMessagesRead.set(messagesRead);
         totalBytesRead.set(bytesRead);
     }
 
     protected static void printConsumerProgress(int id,
                                                 long bytesRead,
                                                 long lastBytesRead,
-                                                long recordsRead,
-                                                long lastRecordsRead,
+                                                long messagesRead,
+                                                long lastMessagesRead,
                                                 long startMs,
                                                 long endMs,
                                                 SimpleDateFormat dateFormat,
                                                 long joinTimeMsInSingleRound) {
-        printBasicProgress(id, bytesRead, lastBytesRead, recordsRead, lastRecordsRead, startMs, endMs, dateFormat);
-        printExtendedProgress(bytesRead, lastBytesRead, recordsRead, lastRecordsRead, startMs, endMs, joinTimeMsInSingleRound);
+        printBasicProgress(id, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, endMs, dateFormat);
+        printExtendedProgress(bytesRead, lastBytesRead, messagesRead, lastMessagesRead, startMs, endMs, joinTimeMsInSingleRound);
         System.out.println();
     }
 
     private static void printBasicProgress(int id,
                                            long bytesRead,
                                            long lastBytesRead,
-                                           long recordsRead,
-                                           long lastRecordsRead,
+                                           long messagesRead,
+                                           long lastMessagesRead,
                                            long startMs,
                                            long endMs,
                                            SimpleDateFormat dateFormat) {
@@ -206,30 +199,30 @@ public class ConsumerPerformance {
         double totalMbRead = (bytesRead * 1.0) / (1024 * 1024);
         double intervalMbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024);
         double intervalMbPerSec = 1000.0 * intervalMbRead / elapsedMs;
-        double intervalRecordsPerSec = ((recordsRead - lastRecordsRead) / elapsedMs) * 1000.0;
+        double intervalMessagesPerSec = ((messagesRead - lastMessagesRead) / elapsedMs) * 1000.0;
         System.out.printf("%s, %d, %.4f, %.4f, %d, %.4f", dateFormat.format(endMs), id,
-            totalMbRead, intervalMbPerSec, recordsRead, intervalRecordsPerSec);
+            totalMbRead, intervalMbPerSec, messagesRead, intervalMessagesPerSec);
     }
 
     private static void printExtendedProgress(long bytesRead,
                                               long lastBytesRead,
-                                              long recordsRead,
-                                              long lastRecordsRead,
+                                              long messagesRead,
+                                              long lastMessagesRead,
                                               long startMs,
                                               long endMs,
                                               long joinTimeMsInSingleRound) {
         long fetchTimeMs = endMs - startMs - joinTimeMsInSingleRound;
         double intervalMbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024);
-        long intervalRecordsRead = recordsRead - lastRecordsRead;
+        long intervalMessagesRead = messagesRead - lastMessagesRead;
         double intervalMbPerSec = (fetchTimeMs <= 0) ? 0.0 : 1000.0 * intervalMbRead / fetchTimeMs;
-        double intervalRecordsPerSec = (fetchTimeMs <= 0) ? 0.0 : 1000.0 * intervalRecordsRead / fetchTimeMs;
+        double intervalMessagesPerSec = (fetchTimeMs <= 0) ? 0.0 : 1000.0 * intervalMessagesRead / fetchTimeMs;
         System.out.printf(", %d, %d, %.4f, %.4f", joinTimeMsInSingleRound,
-            fetchTimeMs, intervalMbPerSec, intervalRecordsPerSec);
+            fetchTimeMs, intervalMbPerSec, intervalMessagesPerSec);
     }
 
     public static class ConsumerPerfRebListener implements ConsumerRebalanceListener {
-        private final AtomicLong joinTimeMs;
-        private final AtomicLong joinTimeMsInSingleRound;
+        private AtomicLong joinTimeMs;
+        private AtomicLong joinTimeMsInSingleRound;
         private long joinStartMs;
 
         public ConsumerPerfRebListener(AtomicLong joinTimeMs, long joinStartMs, AtomicLong joinTimeMsInSingleRound) {
@@ -254,21 +247,15 @@ public class ConsumerPerformance {
     protected static class ConsumerPerfOptions extends CommandDefaultOptions {
         private final OptionSpec<String> bootstrapServerOpt;
         private final OptionSpec<String> topicOpt;
-        private final OptionSpec<String> includeOpt;
         private final OptionSpec<String> groupIdOpt;
         private final OptionSpec<Integer> fetchSizeOpt;
-        private final OptionSpec<String> commandPropertiesOpt;
         private final OptionSpec<Void> resetBeginningOffsetOpt;
         private final OptionSpec<Integer> socketBufferSizeOpt;
-        @Deprecated(since = "4.2", forRemoval = true)
         private final OptionSpec<String> consumerConfigOpt;
-        private final OptionSpec<String> commandConfigOpt;
         private final OptionSpec<Void> printMetricsOpt;
         private final OptionSpec<Void> showDetailedStatsOpt;
         private final OptionSpec<Long> recordFetchTimeoutOpt;
-        @Deprecated(since = "4.2", forRemoval = true)
         private final OptionSpec<Long> numMessagesOpt;
-        private final OptionSpec<Long> numRecordsOpt;
         private final OptionSpec<Long> reportingIntervalOpt;
         private final OptionSpec<String> dateFormatOpt;
         private final OptionSpec<Void> hideHeaderOpt;
@@ -279,13 +266,9 @@ public class ConsumerPerformance {
                 .withRequiredArg()
                 .describedAs("server to connect to")
                 .ofType(String.class);
-            topicOpt = parser.accepts("topic", "The topic to consume from.")
+            topicOpt = parser.accepts("topic", "REQUIRED: The topic to consume from.")
                 .withRequiredArg()
                 .describedAs("topic")
-                .ofType(String.class);
-            includeOpt = parser.accepts("include", "Regular expression specifying list of topics to include for consumption.")
-                .withRequiredArg()
-                .describedAs("Java regex (String)")
                 .ofType(String.class);
             groupIdOpt = parser.accepts("group", "The group id to consume on.")
                 .withRequiredArg()
@@ -297,41 +280,26 @@ public class ConsumerPerformance {
                 .describedAs("size")
                 .ofType(Integer.class)
                 .defaultsTo(1024 * 1024);
-            commandPropertiesOpt = parser.accepts("command-property", "Kafka consumer related configuration properties like client.id. " +
-                    "These configs take precedence over those passed via --command-config or --consumer.config.")
-                .withRequiredArg()
-                .describedAs("prop1=val1")
-                .ofType(String.class);
             resetBeginningOffsetOpt = parser.accepts("from-latest", "If the consumer does not already have an established " +
-                "offset to consume from, start with the latest record present in the log rather than the earliest record.");
+                "offset to consume from, start with the latest message present in the log rather than the earliest message.");
             socketBufferSizeOpt = parser.accepts("socket-buffer-size", "The size of the tcp RECV size.")
                 .withRequiredArg()
                 .describedAs("size")
                 .ofType(Integer.class)
                 .defaultsTo(2 * 1024 * 1024);
-            consumerConfigOpt = parser.accepts("consumer.config", "(DEPRECATED) Consumer config properties file. " +
-                            "This option will be removed in a future version. Use --command-config instead.")
-                .withRequiredArg()
-                .describedAs("config file")
-                .ofType(String.class);
-            commandConfigOpt = parser.accepts("command-config", "Config properties file.")
+            consumerConfigOpt = parser.accepts("consumer.config", "Consumer config properties file.")
                 .withRequiredArg()
                 .describedAs("config file")
                 .ofType(String.class);
             printMetricsOpt = parser.accepts("print-metrics", "Print out the metrics.");
             showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
-                "interval as configured by reporting-interval.");
+                "interval as configured by reporting-interval");
             recordFetchTimeoutOpt = parser.accepts("timeout", "The maximum allowed time in milliseconds between returned records.")
                 .withOptionalArg()
                 .describedAs("milliseconds")
                 .ofType(Long.class)
                 .defaultsTo(10_000L);
-            numMessagesOpt = parser.accepts("messages", "(DEPRECATED) The number of records to consume. " +
-                            "This option will be removed in a future version. Use --num-records instead.")
-                .withRequiredArg()
-                .describedAs("count")
-                .ofType(Long.class);
-            numRecordsOpt = parser.accepts("num-records", "REQUIRED: The number of records to consume.")
+            numMessagesOpt = parser.accepts("messages", "REQUIRED: The number of messages to send or consume")
                 .withRequiredArg()
                 .describedAs("count")
                 .ofType(Long.class);
@@ -347,7 +315,7 @@ public class ConsumerPerformance {
                 .describedAs("date format")
                 .ofType(String.class)
                 .defaultsTo("yyyy-MM-dd HH:mm:ss:SSS");
-            hideHeaderOpt = parser.accepts("hide-header", "If set, skips printing the header for the stats.");
+            hideHeaderOpt = parser.accepts("hide-header", "If set, skips printing the header for the stats");
             try {
                 options = parser.parse(args);
             } catch (OptionException e) {
@@ -356,19 +324,7 @@ public class ConsumerPerformance {
             }
             if (options != null) {
                 CommandLineUtils.maybePrintHelpOrVersion(this, "This tool is used to verify the consumer performance.");
-                CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
-                CommandLineUtils.checkOneOfArgs(parser, options, topicOpt, includeOpt);
-
-                CommandLineUtils.checkOneOfArgs(parser, options, numMessagesOpt, numRecordsOpt);
-                CommandLineUtils.checkInvalidArgs(parser, options, consumerConfigOpt, commandConfigOpt);
-
-                if (options.has(numMessagesOpt)) {
-                    System.out.println("Warning: --messages is deprecated. Use --num-records instead.");
-                }
-
-                if (options.has(consumerConfigOpt)) {
-                    System.out.println("Warning: --consumer.config is deprecated. Use --command-config instead.");
-                }
+                CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt);
             }
         }
 
@@ -380,23 +336,10 @@ public class ConsumerPerformance {
             return options.valueOf(bootstrapServerOpt);
         }
 
-        private Properties readProps(List<String> commandProperties, String commandConfigFile) throws IOException {
-            Properties props = commandConfigFile != null
-                    ? Utils.loadProps(commandConfigFile)
-                    : new Properties();
-            props.putAll(parseKeyValueArgs(commandProperties));
-            return props;
-        }
-
         public Properties props() throws IOException {
-            List<String> commandProperties = options.valuesOf(commandPropertiesOpt);
-            String commandConfigFile;
-            if (options.has(consumerConfigOpt)) {
-                commandConfigFile = options.valueOf(consumerConfigOpt);
-            } else {
-                commandConfigFile = options.valueOf(commandConfigOpt);
-            }
-            Properties props = readProps(commandProperties, commandConfigFile);
+            Properties props = (options.has(consumerConfigOpt))
+                ? Utils.loadProps(options.valueOf(consumerConfigOpt))
+                : new Properties();
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostsAndPorts());
             props.put(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(groupIdOpt));
             props.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, options.valueOf(socketBufferSizeOpt).toString());
@@ -411,22 +354,12 @@ public class ConsumerPerformance {
             return props;
         }
 
-        public Optional<Collection<String>> topic() {
-            return options.has(topicOpt)
-                    ? Optional.of(List.of(options.valueOf(topicOpt)))
-                    : Optional.empty();
+        public Set<String> topic() {
+            return Collections.singleton(options.valueOf(topicOpt));
         }
 
-        public Optional<Pattern> include() {
-            return options.has(includeOpt)
-                    ? Optional.of(Pattern.compile(options.valueOf(includeOpt)))
-                    : Optional.empty();
-        }
-
-        public long numRecords() {
-            return options.has(numMessagesOpt)
-                    ? options.valueOf(numMessagesOpt)
-                    : options.valueOf(numRecordsOpt);
+        public long numMessages() {
+            return options.valueOf(numMessagesOpt);
         }
 
         public long reportingIntervalMs() {

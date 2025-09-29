@@ -42,4 +42,10 @@ public class MonotonicProcessorRecordContext extends ProcessorRecordContext {
         }
         return ret;
     }
+
+    public void kick() {
+        if (!automatic) {
+            counter++;
+        }
+    }
 }

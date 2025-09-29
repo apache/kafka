@@ -40,6 +40,7 @@ import org.mockito.Mockito.{mock, times, verify, when}
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
+import java.util.Collections
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
@@ -55,8 +56,8 @@ class KafkaRequestHandlerTest {
   def testCallbackTiming(): Unit = {
     val time = new MockTime()
     val startTime = time.nanoseconds()
-    val metrics = new RequestChannelMetrics(java.util.Set.of[ApiKeys])
-    val requestChannel = new RequestChannel(10, time, metrics)
+    val metrics = new RequestChannelMetrics(Collections.emptySet[ApiKeys])
+    val requestChannel = new RequestChannel(10, "", time, metrics)
     val apiHandler = mock(classOf[ApiRequestHandler])
     try {
       val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
@@ -94,7 +95,7 @@ class KafkaRequestHandlerTest {
     val time = new MockTime()
     val metrics = mock(classOf[RequestChannelMetrics])
     val apiHandler = mock(classOf[ApiRequestHandler])
-    val requestChannel = new RequestChannel(10, time, metrics)
+    val requestChannel = new RequestChannel(10, "", time, metrics)
     val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
 
     var handledCount = 0
@@ -130,7 +131,7 @@ class KafkaRequestHandlerTest {
     val time = new MockTime()
     val metrics = mock(classOf[RequestChannelMetrics])
     val apiHandler = mock(classOf[ApiRequestHandler])
-    val requestChannel = new RequestChannel(10, time, metrics)
+    val requestChannel = new RequestChannel(10, "", time, metrics)
     val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
 
     val originalRequestLocal = mock(classOf[RequestLocal])
@@ -164,7 +165,7 @@ class KafkaRequestHandlerTest {
     val time = new MockTime()
     val metrics = mock(classOf[RequestChannelMetrics])
     val apiHandler = mock(classOf[ApiRequestHandler])
-    val requestChannel = new RequestChannel(10, time, metrics)
+    val requestChannel = new RequestChannel(10, "", time, metrics)
     val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
 
     val originalRequestLocal = mock(classOf[RequestLocal])

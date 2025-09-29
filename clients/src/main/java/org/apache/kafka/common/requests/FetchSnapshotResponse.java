@@ -19,10 +19,11 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
-import java.util.EnumMap;
+import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -36,7 +37,7 @@ public final class FetchSnapshotResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errors = new EnumMap<>(Errors.class);
+        Map<Errors, Integer> errors = new HashMap<>();
 
         Errors topLevelError = Errors.forCode(data.errorCode());
         if (topLevelError != Errors.NONE) {
@@ -98,7 +99,7 @@ public final class FetchSnapshotResponse extends AbstractResponse {
             .findAny();
     }
 
-    public static FetchSnapshotResponse parse(Readable readable, short version) {
-        return new FetchSnapshotResponse(new FetchSnapshotResponseData(readable, version));
+    public static FetchSnapshotResponse parse(ByteBuffer buffer, short version) {
+        return new FetchSnapshotResponse(new FetchSnapshotResponseData(new ByteBufferAccessor(buffer), version));
     }
 }

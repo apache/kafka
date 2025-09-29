@@ -139,7 +139,7 @@ class AlterPartitionManagerTest {
 
     val failedSubmitFuture = alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10))
     assertTrue(failedSubmitFuture.isCompletedExceptionally)
-    assertFutureThrows(classOf[OperationNotAttemptedException], failedSubmitFuture)
+    assertFutureThrows(failedSubmitFuture, classOf[OperationNotAttemptedException])
 
     // Simulate response
     val alterPartitionResp = partitionResponse()
@@ -364,7 +364,7 @@ class AlterPartitionManagerTest {
     val resp = makeClientResponse(alterPartitionResp, ApiKeys.ALTER_PARTITION.latestVersion)
     callbackCapture.getValue.onComplete(resp)
     assertTrue(future.isCompletedExceptionally)
-    assertFutureThrows(error.exception.getClass, future)
+    assertFutureThrows(future, error.exception.getClass)
     alterPartitionManager
   }
 
@@ -426,7 +426,7 @@ class AlterPartitionManagerTest {
       response = partitionResponse(tp0, Errors.UNKNOWN_SERVER_ERROR),
       version = expectedVersion
     ))
-    assertFutureThrows(classOf[UnknownServerException], future1)
+    assertFutureThrows(future1, classOf[UnknownServerException])
     assertFalse(future2.isDone)
     assertFalse(future3.isDone)
 
@@ -439,7 +439,7 @@ class AlterPartitionManagerTest {
       response = partitionResponse(tp2, Errors.UNKNOWN_SERVER_ERROR),
       version = expectedVersion
     ))
-    assertFutureThrows(classOf[UnknownServerException], future3)
+    assertFutureThrows(future3, classOf[UnknownServerException])
     assertFalse(future2.isDone)
 
     // The missing partition should be retried
@@ -451,7 +451,7 @@ class AlterPartitionManagerTest {
       response = partitionResponse(tp1, Errors.UNKNOWN_SERVER_ERROR),
       version = expectedVersion
     ))
-    assertFutureThrows(classOf[UnknownServerException], future2)
+    assertFutureThrows(future2, classOf[UnknownServerException])
   }
 
   private def verifySendRequest(
@@ -505,7 +505,7 @@ class AlterPartitionManagerTest {
       null,
       // Response is serialized and deserialized to ensure that its does
       // not contain ignorable fields used by other versions.
-      AlterPartitionResponse.parse(MessageUtil.toByteBufferAccessor(response.data, version), version)
+      AlterPartitionResponse.parse(MessageUtil.toByteBuffer(response.data, version), version)
     )
   }
 

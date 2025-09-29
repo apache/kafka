@@ -22,7 +22,7 @@ import org.apache.kafka.image.node.printer.NodeStringifier;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
+import java.util.Collections;
 
 
 public interface MetadataNode {
@@ -34,7 +34,7 @@ public interface MetadataNode {
      * Get the names of the children of this node, if there are any.
      */
     default Collection<String> childNames() {
-        return List.of();
+        return Collections.emptyList();
     }
 
     /**

@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
-import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.metrics.Measurable;
@@ -36,6 +35,7 @@ import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -183,11 +183,16 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         configSnapshot = configStorage.snapshot();
         final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
         ExtendedWorkerState workerState = new ExtendedWorkerState(restUrl, configSnapshot.offset(), localAssignmentSnapshot);
-        return switch (protocolCompatibility) {
-            case EAGER -> ConnectProtocol.metadataRequest(workerState);
-            case COMPATIBLE -> IncrementalCooperativeConnectProtocol.metadataRequest(workerState, false);
-            case SESSIONED -> IncrementalCooperativeConnectProtocol.metadataRequest(workerState, true);
-        };
+        switch (protocolCompatibility) {
+            case EAGER:
+                return ConnectProtocol.metadataRequest(workerState);
+            case COMPATIBLE:
+                return IncrementalCooperativeConnectProtocol.metadataRequest(workerState, false);
+            case SESSIONED:
+                return IncrementalCooperativeConnectProtocol.metadataRequest(workerState, true);
+            default:
+                throw new IllegalStateException("Unknown Connect protocol compatibility mode " + protocolCompatibility);
+        }
     }
 
     @Override
@@ -228,10 +233,9 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         if (skipAssignment)
             throw new IllegalStateException("Can't skip assignment because Connect does not support static membership.");
 
-        ConnectProtocolCompatibility protocolCompatibility = ConnectProtocolCompatibility.fromProtocol(protocol);
-        return protocolCompatibility == EAGER
-               ? eagerAssignor.performAssignment(leaderId, protocolCompatibility, allMemberMetadata, this)
-               : incrementalAssignor.performAssignment(leaderId, protocolCompatibility, allMemberMetadata, this);
+        return ConnectProtocolCompatibility.fromProtocol(protocol) == EAGER
+               ? eagerAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this)
+               : incrementalAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this);
     }
 
     @Override
@@ -267,7 +271,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     @Override
     protected void handlePollTimeoutExpiry() {
         listener.onPollTimeoutExpiry();
-        maybeLeaveGroup(CloseOptions.GroupMembershipOperation.DEFAULT, "worker poll timeout has expired.");
+        maybeLeaveGroup("worker poll timeout has expired.");
     }
 
     /**
@@ -436,7 +440,8 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof LeaderState that)) return false;
+            if (!(o instanceof LeaderState)) return false;
+            LeaderState that = (LeaderState) o;
             return Objects.equals(allMembers, that.allMembers)
                     && Objects.equals(connectorOwners, that.connectorOwners)
                     && Objects.equals(taskOwners, that.taskOwners);
@@ -459,7 +464,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
 
     public static class ConnectorsAndTasks {
         public static final ConnectorsAndTasks EMPTY =
-                new ConnectorsAndTasks(List.of(), List.of());
+                new ConnectorsAndTasks(Collections.emptyList(), Collections.emptyList());
 
         private final Collection<String> connectors;
         private final Collection<ConnectorTaskId> tasks;
@@ -639,9 +644,10 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             if (this == o) {
                 return true;
             }
-            if (!(o instanceof WorkerLoad that)) {
+            if (!(o instanceof WorkerLoad)) {
                 return false;
             }
+            WorkerLoad that = (WorkerLoad) o;
             return worker.equals(that.worker) &&
                     connectors.equals(that.connectors) &&
                     tasks.equals(that.tasks);

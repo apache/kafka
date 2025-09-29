@@ -26,10 +26,8 @@ import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.api.ClusterConfigProperty;
-import org.apache.kafka.common.test.api.ClusterTest;
-import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.common.test.api.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
@@ -38,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -47,6 +46,8 @@ import java.util.stream.IntStream;
 
 import joptsimple.OptionException;
 
+import static java.util.Collections.emptyMap;
+import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
@@ -55,9 +56,6 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.PARTITION_ASSIGNM
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.common.GroupState.EMPTY;
 import static org.apache.kafka.common.GroupState.STABLE;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -66,15 +64,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ClusterTestDefaults(
-    types = {Type.CO_KRAFT},
-    serverProperties = {
-        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
-        @ClusterConfigProperty(key = CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
-    }
-)
 public class DeleteConsumerGroupsTest {
+
+    private static List<ClusterConfig> generator() {
+        return ConsumerGroupCommandTestUtils.generator();
+    }
 
     @Test
     public void testDeleteWithTopicOption() {
@@ -82,8 +76,7 @@ public class DeleteConsumerGroupsTest {
         assertThrows(OptionException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
     }
 
-
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteCmdNonExistingGroup(ClusterInstance cluster) {
         String missingGroupId = getDummyGroupId();
         String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", missingGroupId};
@@ -94,7 +87,7 @@ public class DeleteConsumerGroupsTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteNonExistingGroup(ClusterInstance cluster) {
         String missingGroupId = getDummyGroupId();
         String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", missingGroupId};
@@ -108,7 +101,7 @@ public class DeleteConsumerGroupsTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteNonEmptyGroup(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String groupId = composeGroupId(groupProtocol);
@@ -141,7 +134,7 @@ public class DeleteConsumerGroupsTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     void testDeleteEmptyGroup(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String groupId = composeGroupId(groupProtocol);
@@ -175,7 +168,7 @@ public class DeleteConsumerGroupsTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteCmdAllGroups(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String topicName = composeTopicName(groupProtocol);
@@ -213,7 +206,7 @@ public class DeleteConsumerGroupsTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteCmdWithMixOfSuccessAndError(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String groupId = composeGroupId(groupProtocol);
@@ -246,7 +239,7 @@ public class DeleteConsumerGroupsTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteWithMixOfSuccessAndError(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String groupId = composeGroupId(groupProtocol);
@@ -311,7 +304,7 @@ public class DeleteConsumerGroupsTest {
                 cluster,
                 groupId,
                 protocol.name,
-                Map.of());
+                emptyMap());
 
         return ConsumerGroupCommandTestUtils.buildConsumers(
                 1,
@@ -322,14 +315,14 @@ public class DeleteConsumerGroupsTest {
     }
 
     private boolean checkGroupState(ConsumerGroupCommand.ConsumerGroupService service, String groupId, GroupState state) throws Exception {
-        return Objects.equals(service.collectGroupState(groupId).groupState(), state);
+        return Objects.equals(service.collectGroupState(groupId).groupState, state);
     }
 
     private ConsumerGroupCommand.ConsumerGroupService getConsumerGroupService(String[] args) {
         ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(args);
         return new ConsumerGroupCommand.ConsumerGroupService(
                 opts,
-                Map.of(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
+                singletonMap(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
         );
     }
 

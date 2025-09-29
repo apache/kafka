@@ -21,6 +21,7 @@ import org.apache.kafka.common.security.plain.PlainAuthenticateCallback;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -161,14 +162,14 @@ public class PlainSaslServer implements SaslServer {
     public byte[] unwrap(byte[] incoming, int offset, int len) {
         if (!complete)
             throw new IllegalStateException("Authentication exchange has not completed");
-        throw new IllegalStateException("PLAIN supports neither integrity nor privacy");
+        return Arrays.copyOfRange(incoming, offset, offset + len);
     }
 
     @Override
     public byte[] wrap(byte[] outgoing, int offset, int len) {
         if (!complete)
             throw new IllegalStateException("Authentication exchange has not completed");
-        throw new IllegalStateException("PLAIN supports neither integrity nor privacy");
+        return Arrays.copyOfRange(outgoing, offset, offset + len);
     }
 
     @Override

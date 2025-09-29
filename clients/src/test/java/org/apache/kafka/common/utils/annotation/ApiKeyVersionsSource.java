@@ -30,7 +30,4 @@ import java.lang.annotation.Target;
 @ArgumentsSource(ApiKeyVersionsProvider.class)
 public @interface ApiKeyVersionsSource {
     ApiKeys apiKey();
-    short fromVersion() default -1;
-    short toVersion() default -1;
-    boolean enableUnstableLastVersion() default true;
 }

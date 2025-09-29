@@ -27,8 +27,8 @@ import org.apache.kafka.server.share.ErroneousAndValidPartitionData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.List;
 
 /**
  * The share fetch context for a final share fetch request.
@@ -54,7 +54,8 @@ public class FinalContext extends ShareFetchContext {
     public ShareFetchResponse updateAndGenerateResponseData(String groupId, Uuid memberId,
                                                      LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates) {
         log.debug("Final context returning {}", partitionsToLogString(updates.keySet()));
-        return ShareFetchResponse.of(Errors.NONE, 0, updates, List.of(), 0);
+        return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, 0,
+                updates.entrySet().iterator(), Collections.emptyList()));
     }
 
     @Override

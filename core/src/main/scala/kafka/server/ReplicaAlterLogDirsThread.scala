@@ -24,10 +24,7 @@ import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.server.common.{DirectoryEventHandler, OffsetAndEpoch, TopicIdPartition}
 import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogStartOffsetIncrementReason}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
-import org.apache.kafka.server.LeaderEndPoint
-import org.apache.kafka.server.PartitionFetchState
 
-import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
 import scala.collection.{Map, Set}
 
@@ -52,7 +49,7 @@ class ReplicaAlterLogDirsThread(name: String,
   // Visible for testing
   private[server] val promotionStates: ConcurrentHashMap[TopicPartition, PromotionState] = new ConcurrentHashMap()
 
-  override protected def latestEpoch(topicPartition: TopicPartition): Optional[Integer] = {
+  override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
     replicaMgr.futureLocalLogOrException(topicPartition).latestEpoch
   }
 
@@ -64,17 +61,14 @@ class ReplicaAlterLogDirsThread(name: String,
     replicaMgr.futureLocalLogOrException(topicPartition).logEndOffset
   }
 
-  override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Optional[OffsetAndEpoch] = {
+  override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = {
     replicaMgr.futureLocalLogOrException(topicPartition).endOffsetForEpoch(epoch)
   }
 
   // process fetched data
-  override def processPartitionData(
-    topicPartition: TopicPartition,
-    fetchOffset: Long,
-    partitionLeaderEpoch: Int,
-    partitionData: FetchData
-  ): Option[LogAppendInfo] = {
+  override def processPartitionData(topicPartition: TopicPartition,
+                                    fetchOffset: Long,
+                                    partitionData: FetchData): Option[LogAppendInfo] = {
     val partition = replicaMgr.getPartitionOrException(topicPartition)
     val futureLog = partition.futureLocalLogOrException
     val records = toMemoryRecords(FetchResponse.recordsOrFail(partitionData))
@@ -84,7 +78,7 @@ class ReplicaAlterLogDirsThread(name: String,
         topicPartition, fetchOffset, futureLog.logEndOffset))
 
     val logAppendInfo = if (records.sizeInBytes() > 0)
-      partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = true, partitionLeaderEpoch)
+      partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = true)
     else
       None
 

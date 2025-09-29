@@ -17,8 +17,7 @@
   "apiKey": 80,
   "type": "response",
   "name": "AddRaftVoterResponse",
-  // Version 1 is the same as version 0
-  "validVersions": "0-1",
+  "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",

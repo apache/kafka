@@ -64,7 +64,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.EnumSet;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -101,7 +100,7 @@ public final class Utils {
 
     private static final Pattern VALID_HOST_CHARACTERS = Pattern.compile("([0-9a-zA-Z\\-%._:]*)");
 
-    // Prints up to 2 decimal digits. Used for human-readable printing
+    // Prints up to 2 decimal digits. Used for human readable printing
     private static final DecimalFormat TWO_DIGIT_FORMAT = new DecimalFormat("0.##",
         DecimalFormatSymbols.getInstance(Locale.ENGLISH));
 
@@ -347,7 +346,7 @@ public final class Utils {
      * Compares two character arrays for equality using a constant-time algorithm, which is needed
      * for comparing passwords. Two arrays are equal if they have the same length and all
      * characters at corresponding positions are equal.
-     * <p>
+     *
      * All characters in the first array are examined to determine equality.
      * The calculation time depends only on the length of this first character array; it does not
      * depend on the length of the second character array or the contents of either array.
@@ -573,12 +572,9 @@ public final class Utils {
     }
 
     /**
-     * Formats a byte value into a human-readable string with an appropriate unit
-     * (e.g., "3.2 KB", "1.5 MB", "2.1 GB"). The format includes two decimal places.
-     *
-     * @param bytes the size in bytes
-     * @return a string representing the size with the appropriate unit (e.g., "3.2 KB", "1.5 MB").
-     *         If the value is negative or too large, the input is returned as a string (e.g., "-500", "999999999999999").
+     * Formats a byte number as a human-readable String ("3.2 MB")
+     * @param bytes some size in bytes
+     * @return
      */
     public static String formatBytes(long bytes) {
         if (bytes < 0) {
@@ -619,7 +615,7 @@ public final class Utils {
 
     /**
      *  Converts an extensions string into a {@code Map<String, String>}.
-     * <p>
+     *
      *  Example:
      *      {@code parseMap("key=hey,keyTwo=hi,keyThree=hello", "=", ",") => { key: "hey", keyTwo: "hi", keyThree: "hello" }}
      *
@@ -857,7 +853,7 @@ public final class Utils {
     public static void delete(final File rootFile) throws IOException {
         if (rootFile == null)
             return;
-        Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<>() {
+        Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<Path>() {
             @Override
             public FileVisitResult visitFileFailed(Path path, IOException exc) throws IOException {
                 if (exc instanceof NoSuchFileException) {
@@ -892,12 +888,9 @@ public final class Utils {
     }
 
     /**
-     * Returns an empty list if the provided list is null, otherwise returns the list itself.
-     * <p>
-     * This method is useful for avoiding {@code NullPointerException} when working with potentially null lists.
-     *
-     * @param other the list to check for null
-     * @return an empty list if the provided list is null, otherwise the original list
+     * Returns an empty collection if this list is null
+     * @param other
+     * @return
      */
     public static <T> List<T> safe(List<T> other) {
         return other == null ? Collections.emptyList() : other;
@@ -913,7 +906,7 @@ public final class Utils {
     /**
      * Get the Context ClassLoader on this thread or, if not present, the ClassLoader that
      * loaded Kafka.
-     * <p>
+     *
      * This should be used whenever passing a ClassLoader to Class.forName
      */
     public static ClassLoader getContextOrKafkaClassLoader() {
@@ -964,7 +957,7 @@ public final class Utils {
 
     /**
      * Flushes dirty directories to guarantee crash consistency.
-     * <p>
+     *
      * Note: We don't fsync directories on Windows OS because otherwise it'll throw AccessDeniedException (KAFKA-13391)
      *
      * @throws IOException if flushing the directory fails.
@@ -1067,7 +1060,7 @@ public final class Utils {
 
     /**
      * An {@link AutoCloseable} interface without a throws clause in the signature
-     * <p>
+     *
      * This is used with lambda expressions in try-with-resources clauses
      * to avoid casting un-checked exceptions to checked exceptions unnecessarily.
      */
@@ -1156,7 +1149,7 @@ public final class Utils {
 
     /**
      * Invokes every function in `all` even if one or more functions throws an exception.
-     * <p>
+     *
      * If any of the functions throws an exception, the first one will be rethrown at the end with subsequent exceptions
      * added as suppressed exceptions.
      */
@@ -1183,7 +1176,7 @@ public final class Utils {
      * positive, the original value is returned. When the input number is negative, the returned
      * positive value is the original value bit AND against 0x7fffffff which is not its absolute
      * value.
-     * <p>
+     *
      * Note: changing this method in the future will possibly cause partition selection not to be
      * compatible with the existing messages already placed on a partition since it is used
      * in producer's partition selection logic {@link org.apache.kafka.clients.producer.KafkaProducer}
@@ -1403,7 +1396,7 @@ public final class Utils {
      * @return new Collector<Map.Entry<K, V>, M, M>
      */
     public static <K, V, M extends Map<K, V>> Collector<Map.Entry<K, V>, M, M> entriesToMap(final Supplier<M> mapSupplier) {
-        return new Collector<>() {
+        return new Collector<Map.Entry<K, V>, M, M>() {
             @Override
             public Supplier<M> supplier() {
                 return mapSupplier;
@@ -1470,24 +1463,7 @@ public final class Utils {
      * @return a map including all elements in properties
      */
     public static Map<String, Object> propsToMap(Properties properties) {
-        // This try catch block is to handle the case when the Properties object has non-String keys
-        // when calling the propertyNames() method. This is a workaround for the lack of a method that
-        // returns all properties including defaults and does not attempt to convert all keys to Strings.
-        Enumeration<?> enumeration;
-        try {
-            enumeration = properties.propertyNames();
-        } catch (ClassCastException e) {
-            throw new ConfigException("One or more keys is not a string.");
-        }
-        Map<String, Object> map = new HashMap<>();
-        while (enumeration.hasMoreElements()) {
-            String key = (String) enumeration.nextElement();
-            // properties.get(key) returns null for defaults, but properties.getProperty(key) returns null for
-            // non-string values. A combination of the two methods is used to cover all cases
-            Object value = (properties.get(key) != null) ? properties.get(key) : properties.getProperty(key);
-            map.put(key, value);
-        }
-        return map;
+        return castToStringObjectMap(properties);
     }
 
     /**
@@ -1497,9 +1473,6 @@ public final class Utils {
      * @throws ConfigException if any key is not a String
      */
     public static Map<String, Object> castToStringObjectMap(Map<?, ?> inputMap) {
-        if (inputMap instanceof Properties) {
-            return propsToMap((Properties) inputMap);
-        }
         Map<String, Object> map = new HashMap<>(inputMap.size());
         for (Map.Entry<?, ?> entry : inputMap.entrySet()) {
             if (entry.getKey() instanceof String) {
@@ -1711,25 +1684,11 @@ public final class Utils {
         configDefs.forEach(configDef -> configDef.configKeys().values().forEach(all::define));
         return all;
     }
-
     /**
      * A runnable that can throw checked exception.
      */
     @FunctionalInterface
     public interface ThrowingRunnable {
         void run() throws Exception;
-    }
-
-    /**
-     * convert millisecond to nanosecond, or throw exception if overflow
-     * @param timeMs the time in millisecond
-     * @return the converted nanosecond
-     */
-    public static long msToNs(long timeMs) {
-        try {
-            return Math.multiplyExact(1000 * 1000, timeMs);
-        } catch (ArithmeticException e) {
-            throw new IllegalArgumentException("Cannot convert " + timeMs + " millisecond to nanosecond due to arithmetic overflow", e);
-        }
     }
 }

@@ -23,7 +23,9 @@ import org.apache.kafka.connect.util.Callback;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -37,7 +39,8 @@ public class CheckpointStoreTest {
 
     @Test
     public void testReadCheckpointsTopic() {
-        Set<String> consumerGroups = Set.of("group1");
+        Set<String> consumerGroups = new HashSet<>();
+        consumerGroups.add("group1");
 
         MirrorCheckpointTaskConfig config = mock(MirrorCheckpointTaskConfig.class);
         when(config.checkpointsTopic()).thenReturn("checkpoint.topic");
@@ -60,7 +63,7 @@ public class CheckpointStoreTest {
             assertTrue(store.isInitialized());
 
             Map<String, Map<TopicPartition, Checkpoint>> expected = new HashMap<>();
-            expected.put("group1", Map.of(new TopicPartition("t1", 0),
+            expected.put("group1", Collections.singletonMap(new TopicPartition("t1", 0),
                     new Checkpoint("group1", new TopicPartition("t1", 0), 1, 1, "")));
             assertEquals(expected, store.checkpointsPerConsumerGroup);
         }
@@ -68,7 +71,8 @@ public class CheckpointStoreTest {
 
     @Test
     public void testReadCheckpointsTopicError() {
-        Set<String> consumerGroups = Set.of("group1");
+        Set<String> consumerGroups = new HashSet<>();
+        consumerGroups.add("group1");
 
         MirrorCheckpointTaskConfig config = mock(MirrorCheckpointTaskConfig.class);
         when(config.checkpointsTopic()).thenReturn("checkpoint.topic");

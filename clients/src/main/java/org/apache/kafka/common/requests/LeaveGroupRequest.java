@@ -21,10 +21,11 @@ import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.common.protocol.Readable;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 
@@ -120,7 +121,7 @@ public class LeaveGroupRequest extends AbstractRequest {
         return new LeaveGroupResponse(responseData);
     }
 
-    public static LeaveGroupRequest parse(Readable readable, short version) {
-        return new LeaveGroupRequest(new LeaveGroupRequestData(readable, version), version);
+    public static LeaveGroupRequest parse(ByteBuffer buffer, short version) {
+        return new LeaveGroupRequest(new LeaveGroupRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

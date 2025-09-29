@@ -19,8 +19,10 @@ package org.apache.kafka.streams.integration.utils;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreams.StateListener;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -37,7 +39,7 @@ public class CompositeStateListener implements StateListener {
     }
 
     public CompositeStateListener(final Collection<StateListener> stateListeners) {
-        this.listeners = List.copyOf(stateListeners);
+        this.listeners = Collections.unmodifiableList(new ArrayList<>(stateListeners));
     }
 
     @Override

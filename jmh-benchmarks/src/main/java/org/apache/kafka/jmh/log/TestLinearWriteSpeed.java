@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.jmh.log;
 
+import kafka.log.UnifiedLog;
+
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.compress.GzipCompression;
 import org.apache.kafka.common.compress.Lz4Compression;
@@ -39,7 +41,6 @@ import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.storage.internals.log.LogOffsetsListener;
 import org.apache.kafka.storage.internals.log.ProducerStateManagerConfig;
-import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
@@ -52,13 +53,13 @@ import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ThreadLocalRandom;
 
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
+import scala.Option;
 
 public class TestLinearWriteSpeed {
 
@@ -81,13 +82,13 @@ public class TestLinearWriteSpeed {
             .describedAs("num_bytes")
             .ofType(Integer.class);
 
-        OptionSpec<Integer> messageSizeOpt = parser.accepts("message-size", "The size of each message in the message set.")
+        OptionSpec<Integer> messageSizeOpt = parser.accepts("message-size", "REQUIRED: The size of each message in the message set.")
             .withRequiredArg()
             .describedAs("num_bytes")
             .ofType(Integer.class)
             .defaultsTo(1024);
 
-        OptionSpec<Integer> filesOpt = parser.accepts("files", "The number of logs or files.")
+        OptionSpec<Integer> filesOpt = parser.accepts("files", "REQUIRED: The number of logs or files.")
             .withRequiredArg()
             .describedAs("num_files")
             .ofType(Integer.class)
@@ -120,13 +121,14 @@ public class TestLinearWriteSpeed {
         OptionSpec<Integer> compressionLevelOpt = parser.accepts("level", "The compression level to use")
             .withRequiredArg()
             .describedAs("level")
-            .ofType(Integer.class);
+            .ofType(Integer.class)
+            .defaultsTo(0);
 
         OptionSpec<Void> mmapOpt = parser.accepts("mmap", "Do writes to memory-mapped files.");
         OptionSpec<Void> channelOpt = parser.accepts("channel", "Do writes to file channels.");
         OptionSpec<Void> logOpt = parser.accepts("log", "Do writes to kafka logs.");
         OptionSet options = parser.parse(args);
-        CommandLineUtils.checkRequiredArgs(parser, options, bytesOpt, sizeOpt);
+        CommandLineUtils.checkRequiredArgs(parser, options, bytesOpt, sizeOpt, filesOpt);
 
         long bytesToWrite = options.valueOf(bytesOpt);
         int bufferSize = options.valueOf(sizeOpt);
@@ -139,10 +141,9 @@ public class TestLinearWriteSpeed {
         long flushInterval = options.valueOf(flushIntervalOpt);
         CompressionType compressionType = CompressionType.forName(options.valueOf(compressionCodecOpt));
         Compression.Builder<? extends Compression> compressionBuilder = Compression.of(compressionType);
-        Integer compressionLevel = options.valueOf(compressionLevelOpt);
+        int compressionLevel = options.valueOf(compressionLevelOpt);
 
-        if (compressionLevel != null) setupCompression(compressionType, compressionBuilder, compressionLevel);
-        Compression compression = compressionBuilder.build();
+        setupCompression(compressionType, compressionBuilder, compressionLevel);
 
         ThreadLocalRandom.current().nextBytes(buffer.array());
         int numMessages = bufferSize / (messageSize + Records.LOG_OVERHEAD);
@@ -153,7 +154,7 @@ public class TestLinearWriteSpeed {
             recordsList.add(new SimpleRecord(createTime, null, new byte[messageSize]));
         }
 
-        MemoryRecords messageSet = MemoryRecords.withRecords(compression, recordsList.toArray(new SimpleRecord[0]));
+        MemoryRecords messageSet = MemoryRecords.withRecords(Compression.NONE, recordsList.toArray(new SimpleRecord[0]));
         Writable[] writables = new Writable[numFiles];
         KafkaScheduler scheduler = new KafkaScheduler(1);
         scheduler.startup();
@@ -215,14 +216,11 @@ public class TestLinearWriteSpeed {
         double elapsedSecs = (System.nanoTime() - beginTest) / (1000.0 * 1000.0 * 1000.0);
         System.out.println((bytesToWrite / (1024.0 * 1024.0 * elapsedSecs)) + " MB per sec");
         scheduler.shutdown();
-        for (Writable writable : writables) {
-            writable.close();
-        }
     }
 
     private static void setupCompression(CompressionType compressionType,
                                          Compression.Builder<? extends Compression> compressionBuilder,
-                                         Integer compressionLevel) {
+                                         int compressionLevel) {
         switch (compressionType) {
             case GZIP:
                 ((GzipCompression.Builder) compressionBuilder).level(compressionLevel);
@@ -302,7 +300,7 @@ public class TestLinearWriteSpeed {
         public LogWritable(File dir, LogConfig config, Scheduler scheduler, MemoryRecords messages) throws IOException {
             this.messages = messages;
             Utils.delete(dir);
-            this.log = UnifiedLog.create(
+            this.log = UnifiedLog.apply(
                 dir,
                 config,
                 0L,
@@ -315,7 +313,8 @@ public class TestLinearWriteSpeed {
                 TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
                 new LogDirFailureChannel(10),
                 true,
-                Optional.empty(),
+                Option.empty(),
+                true,
                 new CopyOnWriteMap<>(),
                 false,
                 LogOffsetsListener.NO_OP_OFFSETS_LISTENER

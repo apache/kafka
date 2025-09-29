@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.test.junit;
 
+
 import org.apache.kafka.common.test.ClusterInstance;
 
 import org.junit.jupiter.api.TestTemplate;
@@ -51,7 +52,7 @@ public class ClusterInstanceParameterResolver implements ParameterResolver {
             return false;
         }
 
-        if (extensionContext.getTestMethod().isEmpty()) {
+        if (!extensionContext.getTestMethod().isPresent()) {
             // Allow this to be injected into the class
             extensionContext.getRequiredTestClass();
             return true;

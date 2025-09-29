@@ -41,9 +41,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
@@ -77,10 +75,10 @@ public class ImageWriterOptionsTest {
         MetadataVersion version = MetadataVersion.MINIMUM_VERSION;
         ImageWriterOptions options = new ImageWriterOptions.Builder(version).
             setEligibleLeaderReplicasEnabled(true).build();
-        assertTrue(options.isEligibleLeaderReplicasEnabled());
+        assertEquals(true, options.isEligibleLeaderReplicasEnabled());
 
         options = new ImageWriterOptions.Builder(version).build();
-        assertFalse(options.isEligibleLeaderReplicasEnabled());
+        assertEquals(false, options.isEligibleLeaderReplicasEnabled());
     }
 
     @ParameterizedTest
@@ -113,9 +111,9 @@ public class ImageWriterOptionsTest {
         ImageWriterOptions options = new ImageWriterOptions.Builder(metadataImage).build();
         assertEquals(MetadataVersion.IBP_4_0_IV1, options.metadataVersion());
         if (isElrEnabled) {
-            assertTrue(options.isEligibleLeaderReplicasEnabled());
+            assertEquals(true, options.isEligibleLeaderReplicasEnabled());
         } else {
-            assertFalse(options.isEligibleLeaderReplicasEnabled());
+            assertEquals(false, options.isEligibleLeaderReplicasEnabled());
         }
     }
 }

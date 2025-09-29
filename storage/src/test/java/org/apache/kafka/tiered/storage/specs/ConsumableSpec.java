@@ -16,7 +16,33 @@
  */
 package org.apache.kafka.tiered.storage.specs;
 
-public record ConsumableSpec(long fetchOffset, int expectedTotalCount, int expectedFromSecondTierCount) {
+import java.util.Objects;
+
+public final class ConsumableSpec {
+
+    private final Long fetchOffset;
+    private final Integer expectedTotalCount;
+    private final Integer expectedFromSecondTierCount;
+
+    public ConsumableSpec(Long fetchOffset,
+                          Integer expectedTotalCount,
+                          Integer expectedFromSecondTierCount) {
+        this.fetchOffset = fetchOffset;
+        this.expectedTotalCount = expectedTotalCount;
+        this.expectedFromSecondTierCount = expectedFromSecondTierCount;
+    }
+
+    public Long getFetchOffset() {
+        return fetchOffset;
+    }
+
+    public Integer getExpectedTotalCount() {
+        return expectedTotalCount;
+    }
+
+    public Integer getExpectedFromSecondTierCount() {
+        return expectedFromSecondTierCount;
+    }
 
     @Override
     public String toString() {
@@ -27,4 +53,18 @@ public record ConsumableSpec(long fetchOffset, int expectedTotalCount, int expec
                 '}';
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ConsumableSpec that = (ConsumableSpec) o;
+        return Objects.equals(fetchOffset, that.fetchOffset)
+                && Objects.equals(expectedTotalCount, that.expectedTotalCount)
+                && Objects.equals(expectedFromSecondTierCount, that.expectedFromSecondTierCount);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(fetchOffset, expectedTotalCount, expectedFromSecondTierCount);
+    }
 }

@@ -109,7 +109,8 @@ public final class TimelineObject<T> implements Revertable {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof TimelineObject<?> other)) return false;
+        if (!(o instanceof TimelineObject)) return false;
+        TimelineObject other = (TimelineObject) o;
         return value.equals(other.value);
     }
 

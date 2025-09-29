@@ -24,6 +24,7 @@ import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -36,7 +37,7 @@ import java.util.Optional;
  */
 public class BootstrapMetadata {
     private final List<ApiMessageAndVersion> records;
-    private final short metadataVersionLevel;
+    private final MetadataVersion metadataVersion;
     private final String source;
 
     public static BootstrapMetadata fromVersions(
@@ -66,36 +67,37 @@ public class BootstrapMetadata {
                     setFeatureLevel(level), (short) 0));
             }
         }
-        return new BootstrapMetadata(records, metadataVersion.featureLevel(), source);
+        return new BootstrapMetadata(records, metadataVersion, source);
     }
 
     public static BootstrapMetadata fromVersion(MetadataVersion metadataVersion, String source) {
-        List<ApiMessageAndVersion> records = List.of(
+        List<ApiMessageAndVersion> records = Collections.singletonList(
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
                 setFeatureLevel(metadataVersion.featureLevel()), (short) 0));
-        return new BootstrapMetadata(records, metadataVersion.featureLevel(), source);
+        return new BootstrapMetadata(records, metadataVersion, source);
     }
 
     public static BootstrapMetadata fromRecords(List<ApiMessageAndVersion> records, String source) {
-        Optional<Short> metadataVersionLevel = Optional.empty();
+        MetadataVersion metadataVersion = null;
         for (ApiMessageAndVersion record : records) {
-            Optional<Short> level = recordToMetadataVersionLevel(record.message());
-            if (level.isPresent()) {
-                metadataVersionLevel = level;
+            Optional<MetadataVersion> version = recordToMetadataVersion(record.message());
+            if (version.isPresent()) {
+                metadataVersion = version.get();
             }
         }
-        if (metadataVersionLevel.isEmpty()) {
+        if (metadataVersion == null) {
             throw new RuntimeException("No FeatureLevelRecord for " + MetadataVersion.FEATURE_NAME +
                     " was found in the bootstrap metadata from " + source);
         }
-        return new BootstrapMetadata(records, metadataVersionLevel.get(), source);
+        return new BootstrapMetadata(records, metadataVersion, source);
     }
 
-    public static Optional<Short> recordToMetadataVersionLevel(ApiMessage record) {
-        if (record instanceof FeatureLevelRecord featureLevel) {
+    public static Optional<MetadataVersion> recordToMetadataVersion(ApiMessage record) {
+        if (record instanceof FeatureLevelRecord) {
+            FeatureLevelRecord featureLevel = (FeatureLevelRecord) record;
             if (featureLevel.name().equals(MetadataVersion.FEATURE_NAME)) {
-                return Optional.of(featureLevel.featureLevel());
+                return Optional.of(MetadataVersion.fromFeatureLevel(featureLevel.featureLevel()));
             }
         }
         return Optional.empty();
@@ -103,11 +105,11 @@ public class BootstrapMetadata {
 
     BootstrapMetadata(
         List<ApiMessageAndVersion> records,
-        short metadataVersionLevel,
+        MetadataVersion metadataVersion,
         String source
     ) {
         this.records = Objects.requireNonNull(records);
-        this.metadataVersionLevel = metadataVersionLevel;
+        this.metadataVersion = metadataVersion;
         Objects.requireNonNull(source);
         this.source = source;
     }
@@ -117,7 +119,7 @@ public class BootstrapMetadata {
     }
 
     public MetadataVersion metadataVersion() {
-        return MetadataVersion.fromFeatureLevel(metadataVersionLevel);
+        return metadataVersion;
     }
 
     public String source() {
@@ -127,7 +129,8 @@ public class BootstrapMetadata {
     public short featureLevel(String featureName) {
         short result = 0;
         for (ApiMessageAndVersion record : records) {
-            if (record.message() instanceof FeatureLevelRecord message) {
+            if (record.message() instanceof FeatureLevelRecord) {
+                FeatureLevelRecord message = (FeatureLevelRecord) record.message();
                 if (message.name().equals(featureName)) {
                     result = message.featureLevel();
                 }
@@ -140,7 +143,8 @@ public class BootstrapMetadata {
         List<ApiMessageAndVersion> newRecords = new ArrayList<>();
         int i = 0;
         while (i < records.size()) {
-            if (records.get(i).message() instanceof FeatureLevelRecord record) {
+            if (records.get(i).message() instanceof FeatureLevelRecord) {
+                FeatureLevelRecord record = (FeatureLevelRecord) records.get(i).message();
                 if (record.name().equals(featureName)) {
                     FeatureLevelRecord newRecord = record.duplicate();
                     newRecord.setFeatureLevel(level);
@@ -163,7 +167,7 @@ public class BootstrapMetadata {
 
     @Override
     public int hashCode() {
-        return Objects.hash(records, metadataVersionLevel, source);
+        return Objects.hash(records, metadataVersion, source);
     }
 
     @Override
@@ -171,14 +175,14 @@ public class BootstrapMetadata {
         if (o == null || !o.getClass().equals(this.getClass())) return false;
         BootstrapMetadata other = (BootstrapMetadata) o;
         return Objects.equals(records, other.records) &&
-            metadataVersionLevel == other.metadataVersionLevel &&
+            metadataVersion.equals(other.metadataVersion) &&
             source.equals(other.source);
     }
 
     @Override
     public String toString() {
-        return "BootstrapMetadata(records=" + records +
-            ", metadataVersionLevel=" + metadataVersionLevel +
+        return "BootstrapMetadata(records=" + records.toString() +
+            ", metadataVersion=" + metadataVersion +
             ", source=" + source +
             ")";
     }

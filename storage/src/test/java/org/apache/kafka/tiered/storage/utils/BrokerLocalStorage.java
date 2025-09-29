@@ -28,6 +28,7 @@ import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -46,10 +47,10 @@ public final class BrokerLocalStorage {
     private final Time time = Time.SYSTEM;
 
     public BrokerLocalStorage(Integer brokerId,
-                              Set<String> storageDirNames,
+                              Set<String> storageDirnames,
                               Integer storageWaitTimeoutSec) {
         this.brokerId = brokerId;
-        this.brokerStorageDirectories = storageDirNames.stream().map(File::new).collect(Collectors.toSet());
+        this.brokerStorageDirectories = storageDirnames.stream().map(File::new).collect(Collectors.toSet());
         this.storageWaitTimeoutSec = storageWaitTimeoutSec;
     }
 
@@ -113,7 +114,7 @@ public final class BrokerLocalStorage {
                                Long offset,
                                Function<OffsetHolder, Optional<String>> relativePosFunc) {
         Timer timer = time.timer(TimeUnit.SECONDS.toMillis(storageWaitTimeoutSec));
-        OffsetHolder offsetHolder = new OffsetHolder(0L, List.of());
+        OffsetHolder offsetHolder = new OffsetHolder(0L, Collections.emptyList());
         while (timer.notExpired() && offsetHolder.firstLogFileBaseOffset < offset) {
             timer.sleep(TimeUnit.SECONDS.toMillis(storagePollPeriodSec));
             offsetHolder = getEarliestLocalOffset(topicPartition);
@@ -180,7 +181,7 @@ public final class BrokerLocalStorage {
                 .filter(filename -> filename.endsWith(LogFileUtils.LOG_FILE_SUFFIX))
                 .sorted()
                 .findFirst();
-        if (firstLogFile.isEmpty()) {
+        if (!firstLogFile.isPresent()) {
             throw new IllegalArgumentException(String.format(
                     "[BrokerId=%d] No log file found for the topic-partition %s", brokerId, topicPartition));
         }
@@ -188,7 +189,7 @@ public final class BrokerLocalStorage {
     }
 
     public boolean dirContainsTopicPartition(TopicPartition topicPartition, File logDir) {
-        File[] files = getTopicPartitionFiles(topicPartition, Set.of(logDir));
+        File[] files = getTopicPartitionFiles(topicPartition, Collections.singleton(logDir));
         return files != null && files.length > 0;
     }
 
@@ -217,9 +218,16 @@ public final class BrokerLocalStorage {
         File topicPartitionDir = files[0];
         return Arrays.stream(Objects.requireNonNull(topicPartitionDir.listFiles()))
                 .map(File::getName)
-                .toList();
+                .collect(Collectors.toList());
     }
 
-    private record OffsetHolder(long firstLogFileBaseOffset, List<String> partitionFiles) {
+    private static final class OffsetHolder {
+        private final long firstLogFileBaseOffset;
+        private final List<String> partitionFiles;
+
+        public OffsetHolder(long firstLogFileBaseOffset, List<String> partitionFiles) {
+            this.firstLogFileBaseOffset = firstLogFileBaseOffset;
+            this.partitionFiles = partitionFiles;
+        }
     }
 }

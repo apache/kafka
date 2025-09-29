@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -418,6 +417,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         timeCurrentIdlingStarted = Optional.empty();
     }
 
+
     public void flush() {
         stateMgr.flushCache();
         recordCollector.flush();
@@ -429,7 +429,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @return offsets that should be committed for this task
      */
     @Override
-    public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
+    public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
         switch (state()) {
             case CREATED:
             case RESTORING:
@@ -444,10 +444,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     //
                     // TODO: this should be removed after we decouple caching with emitting
                     flush();
-                    if (!clean) {
-                        log.debug("Skipped preparing {} task with id {} for commit since the task is getting closed dirty.", state(), id);
-                        return null;
-                    }
                     hasPendingTxCommit = eosEnabled;
 
                     log.debug("Prepared {} task for committing", state());
@@ -746,7 +742,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
         final boolean readyToProcess = partitionGroup.readyToProcess(wallClockTime);
         if (!readyToProcess) {
-            if (timeCurrentIdlingStarted.isEmpty()) {
+            if (!timeCurrentIdlingStarted.isPresent()) {
                 timeCurrentIdlingStarted = Optional.of(wallClockTime);
             }
         } else {
@@ -857,9 +853,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             record.offset(),
             record.partition(),
             record.topic(),
-            record.headers(),
-            record.rawKey(),
-            record.rawValue()
+            record.headers()
         );
         updateProcessorContext(currNode, wallClockTime, recordContext);
 
@@ -867,8 +861,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         final Record<Object, Object> toProcess = new Record<>(
             record.key(),
             record.value(),
-            processorContext.recordContext().timestamp(),
-            processorContext.recordContext().headers()
+            processorContext.timestamp(),
+            processorContext.headers()
         );
         maybeMeasureLatency(() -> currNode.process(toProcess), time, processLatencySensor);
 
@@ -941,15 +935,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 recordContext.headers(),
                 node.name(),
                 id(),
-                recordContext.timestamp(),
-                recordContext.sourceRawKey(),
-                recordContext.sourceRawValue()
+                recordContext.timestamp()
             );
 
-            final ProcessingExceptionHandler.Response processingExceptionResponse;
+            final ProcessingExceptionHandler.ProcessingHandlerResponse response;
             try {
-                processingExceptionResponse = Objects.requireNonNull(
-                    processingExceptionHandler.handleError(errorHandlerContext, null, processingException),
+                response = Objects.requireNonNull(
+                    processingExceptionHandler.handle(errorHandlerContext, null, processingException),
                     "Invalid ProcessingExceptionHandler response."
                 );
             } catch (final Exception fatalUserException) {
@@ -964,20 +956,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw new FailedProcessingException("Fatal user code error in processing error callback", node.name(), fatalUserException);
             }
 
-            final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = processingExceptionResponse.deadLetterQueueRecords();
-            if (!deadLetterQueueRecords.isEmpty()) {
-                final RecordCollector collector = ((RecordCollector.Supplier) processorContext).recordCollector();
-                for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
-                    collector.send(
-                            deadLetterQueueRecord.key(),
-                            deadLetterQueueRecord.value(),
-                            node.name(),
-                            processorContext,
-                            deadLetterQueueRecord);
-                }
-            }
-
-            if (processingExceptionResponse.result() == ProcessingExceptionHandler.Result.FAIL) {
+            if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
                 log.error("Processing exception handler is set to fail upon" +
                         " a processing error. If you would rather have the streaming pipeline" +
                         " continue after a processing error, please set the " +
@@ -1045,7 +1024,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             log.warn(
                 "Encountered {} while trying to fetch committed offsets, will retry initializing the metadata in the next loop." +
                     "\nConsider overwriting consumer config {} to a larger value to avoid timeout errors",
-                timeoutException.toString(),
+                time.toString(),
                 ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
 
             // re-throw to trigger `task.timeout.ms`

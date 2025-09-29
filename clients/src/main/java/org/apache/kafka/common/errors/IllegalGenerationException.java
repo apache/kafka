@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.errors;
 
-public class IllegalGenerationException extends ApplicationRecoverableException {
+public class IllegalGenerationException extends ApiException {
     private static final long serialVersionUID = 1L;
 
     public IllegalGenerationException() {

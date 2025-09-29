@@ -25,6 +25,7 @@ import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignment
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -107,23 +108,6 @@ public class GroupSpecImplTest {
         ));
 
         assertEquals(topicPartitions, groupSpec.memberAssignment(TEST_MEMBER).partitions());
-        assertEquals(Map.of(), groupSpec.memberAssignment("unknown-member").partitions());
-    }
-
-    @Test
-    void testIsPartitionAssignable() {
-        // Empty allowed map.
-        assertTrue(groupSpec.isPartitionAssignable(topicId, 1));
-
-        // Allowed map with data.
-        groupSpec = new GroupSpecImpl(
-            members,
-            subscriptionType,
-            invertedTargetAssignment,
-            Optional.of(Map.of(topicId, Set.of(0)))
-        );
-
-        assertTrue(groupSpec.isPartitionAssignable(topicId, 0));
-        assertFalse(groupSpec.isPartitionAssignable(topicId, 1));
+        assertEquals(Collections.emptyMap(), groupSpec.memberAssignment("unknown-member").partitions());
     }
 }

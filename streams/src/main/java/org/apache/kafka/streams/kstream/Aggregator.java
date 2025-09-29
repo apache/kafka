@@ -38,7 +38,6 @@ package org.apache.kafka.streams.kstream;
  * @see SessionWindowedKStream#aggregate(Initializer, Aggregator, Merger, Materialized)
  * @see Reducer
  */
-@FunctionalInterface
 public interface Aggregator<K, V, VAgg> {
 
     /**

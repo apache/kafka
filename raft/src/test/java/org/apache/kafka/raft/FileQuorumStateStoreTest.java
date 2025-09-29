@@ -36,6 +36,7 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
 
@@ -66,7 +67,7 @@ public class FileQuorumStateStoreTest {
         final Optional<ElectionState> expected;
         if (kraftVersion.isReconfigSupported()) {
             expected = Optional.of(
-                ElectionState.withElectedLeader(epoch, voter1, Optional.of(votedKey), Set.of())
+                ElectionState.withElectedLeader(epoch, voter1, Optional.of(votedKey), Collections.emptySet())
             );
         } else {
             expected = Optional.of(
@@ -107,7 +108,7 @@ public class FileQuorumStateStoreTest {
                 ElectionState.withVotedCandidate(
                     epoch,
                     voter1Key,
-                    Set.of()
+                    Collections.emptySet()
                 )
             );
         } else {
@@ -139,7 +140,7 @@ public class FileQuorumStateStoreTest {
 
         final Optional<ElectionState> expected;
         if (kraftVersion.isReconfigSupported()) {
-            expected = Optional.of(ElectionState.withUnknownLeader(epoch, Set.of()));
+            expected = Optional.of(ElectionState.withUnknownLeader(epoch, Collections.emptySet()));
         } else {
             expected = Optional.of(ElectionState.withUnknownLeader(epoch, voters));
         }
@@ -161,7 +162,7 @@ public class FileQuorumStateStoreTest {
         // Check that state is persisted
         FileQuorumStateStore reloadedStore = new FileQuorumStateStore(stateFile);
         assertEquals(
-            Optional.of(ElectionState.withUnknownLeader(epoch, Set.of())),
+            Optional.of(ElectionState.withUnknownLeader(epoch, Collections.emptySet())),
             reloadedStore.readElectionState()
         );
     }

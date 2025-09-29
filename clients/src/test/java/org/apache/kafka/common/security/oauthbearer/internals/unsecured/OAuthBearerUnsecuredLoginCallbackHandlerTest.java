@@ -31,7 +31,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
@@ -87,7 +86,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
         assertNotNull(jws, "create token failed");
         long startMs = mockTime.milliseconds();
         confirmCorrectValues(jws, user, startMs, 1000 * 60 * 60);
-        assertEquals(Set.of("sub", "iat", "exp"), jws.claims().keySet());
+        assertEquals(new HashSet<>(Arrays.asList("sub", "iat", "exp")), jws.claims().keySet());
     }
 
     @SuppressWarnings("unchecked")
@@ -124,11 +123,11 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
             long startMs = mockTime.milliseconds();
             confirmCorrectValues(jws, user, startMs, lifetimeSeconds * 1000);
             Map<String, Object> claims = jws.claims();
-            assertEquals(Set.of(actualScopeClaimName, principalClaimName, "iat", "exp", "number",
-                    "list", "emptyList1", "emptyList2"), claims.keySet());
-            assertEquals(Set.of(explicitScope1, explicitScope2),
+            assertEquals(new HashSet<>(Arrays.asList(actualScopeClaimName, principalClaimName, "iat", "exp", "number",
+                    "list", "emptyList1", "emptyList2")), claims.keySet());
+            assertEquals(new HashSet<>(Arrays.asList(explicitScope1, explicitScope2)),
                     new HashSet<>((List<String>) claims.get(actualScopeClaimName)));
-            assertEquals(Set.of(explicitScope1, explicitScope2), jws.scope());
+            assertEquals(new HashSet<>(Arrays.asList(explicitScope1, explicitScope2)), jws.scope());
             assertEquals(1.0, jws.claim("number", Number.class));
             assertEquals(Arrays.asList("1", "2", ""), jws.claim("list", List.class));
             assertEquals(Collections.emptyList(), jws.claim("emptyList1", List.class));
@@ -152,7 +151,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
     private static void confirmCorrectValues(OAuthBearerUnsecuredJws jws, String user, long startMs,
             long lifetimeSeconds) throws OAuthBearerIllegalTokenException {
         Map<String, Object> header = jws.header();
-        assertEquals(1, header.size());
+        assertEquals(header.size(), 1);
         assertEquals("none", header.get("alg"));
         assertEquals(user != null ? user : "<unknown>", jws.principalName());
         assertEquals(Long.valueOf(startMs), jws.startTimeMs());

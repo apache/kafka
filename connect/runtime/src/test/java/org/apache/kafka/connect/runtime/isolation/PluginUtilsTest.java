@@ -113,7 +113,7 @@ public class PluginUtilsTest {
 
     @Test
     public void testConnectApiClasses() {
-        List<String> apiClasses = List.of(
+        List<String> apiClasses = Arrays.asList(
             // Enumerate all packages and classes
             "org.apache.kafka.connect.",
             "org.apache.kafka.connect.components.",
@@ -201,7 +201,7 @@ public class PluginUtilsTest {
     @Test
     public void testConnectRuntimeClasses() {
         // Only list packages, because there are too many classes.
-        List<String> runtimeClasses = List.of(
+        List<String> runtimeClasses = Arrays.asList(
             "org.apache.kafka.connect.cli.",
             //"org.apache.kafka.connect.connector.policy.", isolated by default
             //"org.apache.kafka.connect.converters.", isolated by default
@@ -229,7 +229,7 @@ public class PluginUtilsTest {
 
     @Test
     public void testAllowedRuntimeClasses() {
-        List<String> jsonConverterClasses = List.of(
+        List<String> jsonConverterClasses = Arrays.asList(
             "org.apache.kafka.connect.connector.policy.",
             "org.apache.kafka.connect.connector.policy.AbstractConnectorClientConfigOverridePolicy",
             "org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy",
@@ -256,7 +256,7 @@ public class PluginUtilsTest {
 
     @Test
     public void testTransformsClasses() {
-        List<String> transformsClasses = List.of(
+        List<String> transformsClasses = Arrays.asList(
             "org.apache.kafka.connect.transforms.",
             "org.apache.kafka.connect.transforms.util.",
             "org.apache.kafka.connect.transforms.util.NonEmptyListValidator",
@@ -309,7 +309,7 @@ public class PluginUtilsTest {
 
     @Test
     public void testAllowedJsonConverterClasses() {
-        List<String> jsonConverterClasses = List.of(
+        List<String> jsonConverterClasses = Arrays.asList(
             "org.apache.kafka.connect.json.",
             "org.apache.kafka.connect.json.DecimalFormat",
             "org.apache.kafka.connect.json.JsonConverter",
@@ -326,7 +326,7 @@ public class PluginUtilsTest {
 
     @Test
     public void testAllowedFileConnectors() {
-        List<String> jsonConverterClasses = List.of(
+        List<String> jsonConverterClasses = Arrays.asList(
             "org.apache.kafka.connect.file.",
             "org.apache.kafka.connect.file.FileStreamSinkConnector",
             "org.apache.kafka.connect.file.FileStreamSinkTask",
@@ -341,7 +341,7 @@ public class PluginUtilsTest {
 
     @Test
     public void testAllowedBasicAuthExtensionClasses() {
-        List<String> basicAuthExtensionClasses = List.of(
+        List<String> basicAuthExtensionClasses = Arrays.asList(
             "org.apache.kafka.connect.rest.basic.auth.extension.BasicAuthSecurityRestExtension"
             //"org.apache.kafka.connect.rest.basic.auth.extension.JaasBasicAuthFilter", TODO fix?
             //"org.apache.kafka.connect.rest.basic.auth.extension.PropertyFileLoginModule" TODO fix?
@@ -377,13 +377,13 @@ public class PluginUtilsTest {
 
     @Test
     public void testEmptyPluginUrls() throws Exception {
-        assertEquals(List.of(), PluginUtils.pluginUrls(pluginPath));
+        assertEquals(Collections.emptyList(), PluginUtils.pluginUrls(pluginPath));
     }
 
     @Test
     public void testEmptyStructurePluginUrls() throws Exception {
         createBasicDirectoryLayout();
-        assertEquals(List.of(), PluginUtils.pluginUrls(pluginPath));
+        assertEquals(Collections.emptyList(), PluginUtils.pluginUrls(pluginPath));
     }
 
     @Test
@@ -511,12 +511,12 @@ public class PluginUtilsTest {
                 sinkConnectors,
                 sourceConnectors,
                 converters,
-                new TreeSet<>(),
-                new TreeSet<>(),
-                new TreeSet<>(),
-                new TreeSet<>(),
-                new TreeSet<>(),
-                new TreeSet<>()
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet()
         );
         Map<String, String> actualAliases = PluginUtils.computeAliases(result);
         Map<String, String> expectedAliases = new HashMap<>();
@@ -538,14 +538,14 @@ public class PluginUtilsTest {
         assertEquals(2, sinkConnectors.size());
         PluginScanResult result = new PluginScanResult(
                 sinkConnectors,
-                new TreeSet<>(),
-                new TreeSet<>(),
-                new TreeSet<>(),
-                new TreeSet<>(),
-                new TreeSet<>(),
-                new TreeSet<>(),
-                new TreeSet<>(),
-                new TreeSet<>()
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet()
         );
         Map<String, String> actualAliases = PluginUtils.computeAliases(result);
         Map<String, String> expectedAliases = new HashMap<>();
@@ -561,15 +561,15 @@ public class PluginUtilsTest {
         SortedSet<PluginDesc<HeaderConverter>> headerConverters = new TreeSet<>();
         headerConverters.add(new PluginDesc<>(CollidingHeaderConverter.class, null, PluginType.HEADER_CONVERTER, CollidingHeaderConverter.class.getClassLoader()));
         PluginScanResult result = new PluginScanResult(
-                new TreeSet<>(),
-                new TreeSet<>(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
                 converters,
                 headerConverters,
-                new TreeSet<>(),
-                new TreeSet<>(),
-                new TreeSet<>(),
-                new TreeSet<>(),
-                new TreeSet<>()
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet()
         );
         Map<String, String> actualAliases = PluginUtils.computeAliases(result);
         Map<String, String> expectedAliases = new HashMap<>();
@@ -586,15 +586,15 @@ public class PluginUtilsTest {
         SortedSet<PluginDesc<Transformation<?>>> transformations = new TreeSet<>();
         transformations.add(new PluginDesc<>((Class<? extends Transformation<?>>) (Class<?>) Colliding.class, null, PluginType.TRANSFORMATION, Colliding.class.getClassLoader()));
         PluginScanResult result = new PluginScanResult(
-                new TreeSet<>(),
-                new TreeSet<>(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
                 converters,
-                new TreeSet<>(),
+                Collections.emptySortedSet(),
                 transformations,
-                new TreeSet<>(),
-                new TreeSet<>(),
-                new TreeSet<>(),
-                new TreeSet<>()
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet()
         );
         Map<String, String> actualAliases = PluginUtils.computeAliases(result);
         Map<String, String> expectedAliases = new HashMap<>();

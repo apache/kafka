@@ -18,7 +18,6 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -27,11 +26,8 @@ import org.apache.kafka.streams.tests.SmokeTestClient;
 import org.apache.kafka.streams.tests.SmokeTestDriver;
 
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -39,50 +35,29 @@ import org.junit.jupiter.params.provider.CsvSource;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
 import static org.apache.kafka.streams.tests.SmokeTestDriver.generate;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.verify;
-import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
 public class SmokeTestDriverIntegrationTest {
-    private static EmbeddedKafkaCluster cluster = null;
-    public TestInfo testInfo;
-    private ArrayList<SmokeTestClient> clients = new ArrayList<>();
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
     @BeforeAll
     public static void startCluster() throws IOException {
-        cluster = new EmbeddedKafkaCluster(3);
-        cluster.start();
+        CLUSTER.start();
     }
 
     @AfterAll
     public static void closeCluster() {
-        cluster.stop();
-        cluster = null;
+        CLUSTER.stop();
     }
 
-    @BeforeEach
-    public void setUp(final TestInfo testInfo) {
-        this.testInfo = testInfo;
-    }
-
-    @AfterEach
-    public void shutDown(final TestInfo testInfo) {
-        // Clean up clients in case the test failed or timed out
-        for (final SmokeTestClient client : clients) {
-            if (!client.closed() && !client.error()) {
-                client.close();
-            }
-        }
-    }
 
     private static class Driver extends Thread {
         private final String bootstrapServers;
@@ -102,7 +77,7 @@ public class SmokeTestDriverIntegrationTest {
             try {
                 final Map<String, Set<Integer>> allData =
                     generate(bootstrapServers, numKeys, maxRecordsPerKey, Duration.ofSeconds(20));
-                result = verify(bootstrapServers, allData, maxRecordsPerKey, false);
+                result = verify(bootstrapServers, allData, maxRecordsPerKey);
 
             } catch (final Exception ex) {
                 this.exception = ex;
@@ -123,16 +98,9 @@ public class SmokeTestDriverIntegrationTest {
     // During the new stream added and old stream left, the stream process should still complete without issue.
     // We set 2 timeout condition to fail the test before passing the verification:
     // (1) 10 min timeout, (2) 30 tries of polling without getting any data
-    // The processing thread variations where disabled since they triggered a race condition, see KAFKA-19696
     @ParameterizedTest
-    @CsvSource({
-        "false, true",
-        "false, false"
-    })
-    public void shouldWorkWithRebalance(
-        final boolean processingThreadsEnabled,
-        final boolean streamsProtocolEnabled
-    ) throws InterruptedException {
+    @CsvSource({"false, false", "true, false", "true, true"})
+    public void shouldWorkWithRebalance(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws InterruptedException {
         Exit.setExitProcedure((statusCode, message) -> {
             throw new AssertionError("Test called exit(). code:" + statusCode + " message:" + message);
         });
@@ -140,29 +108,22 @@ public class SmokeTestDriverIntegrationTest {
             throw new AssertionError("Test called halt(). code:" + statusCode + " message:" + message);
         });
         int numClientsCreated = 0;
+        final ArrayList<SmokeTestClient> clients = new ArrayList<>();
 
-        IntegrationTestUtils.cleanStateBeforeTest(cluster, SmokeTestDriver.topics());
+        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, SmokeTestDriver.topics());
 
-        final String bootstrapServers = cluster.bootstrapServers();
+        final String bootstrapServers = CLUSTER.bootstrapServers();
         final Driver driver = new Driver(bootstrapServers, 10, 1000);
         driver.start();
         System.out.println("started driver");
 
 
         final Properties props = new Properties();
-        final String appId = safeUniqueTestName(testInfo);
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
+        props.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
         props.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
-        if (streamsProtocolEnabled) {
-            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
-            // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
-            cluster.setGroupSessionTimeout(appId, 10000);
-            cluster.setGroupHeartbeatTimeout(appId, 1000);
-        } else {
-            // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
-            props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
-        }
+        // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
+        props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
 
         // cycle out Streams instances as long as the test is running.
         while (driver.isAlive()) {
@@ -180,7 +141,6 @@ public class SmokeTestDriverIntegrationTest {
 
                 client.closeAsync();
                 while (!client.closed()) {
-                    assertFalse(client.error(), "The streams application seems to have crashed.");
                     Thread.sleep(100);
                 }
             }
@@ -198,7 +158,6 @@ public class SmokeTestDriverIntegrationTest {
             // then, wait for them to stop
             for (final SmokeTestClient client : clients) {
                 while (!client.closed()) {
-                    assertFalse(client.error(), "The streams application seems to have crashed.");
                     Thread.sleep(100);
                 }
             }

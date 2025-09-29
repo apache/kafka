@@ -241,8 +241,9 @@ public class TimelineHashSet<T>
     public boolean equals(Object o) {
         if (o == this)
             return true;
-        if (!(o instanceof Collection<?> c))
+        if (!(o instanceof Set))
             return false;
+        Collection<?> c = (Collection<?>) o;
         if (c.size() != size())
             return false;
         try {

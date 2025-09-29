@@ -105,7 +105,7 @@ public interface PartitionWriter {
         String transactionalId,
         long producerId,
         short producerEpoch,
-        int apiVersion
+        short apiVersion
     ) throws KafkaException;
 
     /**

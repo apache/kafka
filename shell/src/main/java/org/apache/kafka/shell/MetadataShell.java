@@ -17,12 +17,14 @@
 
 package org.apache.kafka.shell;
 
+import kafka.raft.KafkaRaftManager;
 import kafka.tools.TerseFailure;
 
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.image.loader.MetadataLoader;
 import org.apache.kafka.metadata.util.SnapshotFileReader;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.LoggingFaultHandler;
 import org.apache.kafka.server.util.FileLock;
@@ -45,9 +47,11 @@ import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+
 
 /**
  * The Kafka metadata shell entry point.
@@ -56,8 +60,16 @@ public final class MetadataShell {
     private static final Logger log = LoggerFactory.getLogger(MetadataShell.class);
 
     public static class Builder {
+        private KafkaRaftManager<ApiMessageAndVersion> raftManager = null;
         private String snapshotPath = null;
         private FaultHandler faultHandler = new LoggingFaultHandler("shell", () -> { });
+
+        // Note: we assume that we have already taken the lock on the log directory before calling
+        // this method.
+        public Builder setRaftManager(KafkaRaftManager<ApiMessageAndVersion> raftManager) {
+            this.raftManager = raftManager;
+            return this;
+        }
 
         public Builder setSnapshotPath(String snapshotPath) {
             this.snapshotPath = snapshotPath;
@@ -70,7 +82,9 @@ public final class MetadataShell {
         }
 
         public MetadataShell build() {
-            return new MetadataShell(snapshotPath, faultHandler);
+            return new MetadataShell(raftManager,
+                snapshotPath,
+                faultHandler);
         }
     }
 
@@ -82,7 +96,7 @@ public final class MetadataShell {
         File parent = file.getParentFile();
         return parent == null ? file : parent;
     }
-
+    
     static File parentParent(File file) {
         return parent(parent(file));
     }
@@ -114,13 +128,15 @@ public final class MetadataShell {
                     "directory before proceeding.");
             }
         } catch (Throwable e) {
-            fileLock.unlockAndClose();
+            fileLock.destroy();
             throw e;
         }
         return fileLock;
     }
 
     private final MetadataShellState state;
+
+    private final KafkaRaftManager<ApiMessageAndVersion> raftManager;
 
     private final String snapshotPath;
 
@@ -135,15 +151,27 @@ public final class MetadataShell {
     private MetadataLoader loader;
 
     public MetadataShell(
+        KafkaRaftManager<ApiMessageAndVersion> raftManager,
         String snapshotPath,
         FaultHandler faultHandler
     ) {
         this.state = new MetadataShellState();
+        this.raftManager = raftManager;
         this.snapshotPath = snapshotPath;
         this.faultHandler = faultHandler;
         this.publisher = new MetadataShellPublisher(state);
         this.fileLock = null;
         this.snapshotFileReader = null;
+    }
+
+    private void initializeWithRaftManager() {
+        raftManager.startup();
+        this.loader = new MetadataLoader.Builder().
+                setFaultHandler(faultHandler).
+                setNodeId(-1).
+                setHighWaterMarkAccessor(() -> raftManager.client().highWatermark()).
+                build();
+        raftManager.register(loader);
     }
 
     private void initializeWithSnapshotFileReader() throws Exception {
@@ -158,8 +186,19 @@ public final class MetadataShell {
     }
 
     public void run(List<String> args) throws Exception {
-        initializeWithSnapshotFileReader();
-        loader.installPublishers(List.of(publisher)).get(15, TimeUnit.MINUTES);
+        if (raftManager != null) {
+            if (snapshotPath != null) {
+                throw new RuntimeException("Can't specify both a raft manager and " +
+                        "snapshot file reader.");
+            }
+            initializeWithRaftManager();
+        } else if (snapshotPath != null) {
+            initializeWithSnapshotFileReader();
+        } else {
+            throw new RuntimeException("You must specify either a raft manager or a " +
+                    "snapshot file reader.");
+        }
+        loader.installPublishers(Collections.singletonList(publisher)).get(15, TimeUnit.MINUTES);
         if (args == null || args.isEmpty()) {
             // Interactive mode.
             System.out.println("Loading...");
@@ -183,12 +222,19 @@ public final class MetadataShell {
 
     public void close() {
         Utils.closeQuietly(loader, "loader");
-        Utils.closeQuietly(snapshotFileReader, "snapshotFileReader");
+        if (raftManager != null) {
+            try {
+                raftManager.shutdown();
+            } catch (Exception e) {
+                log.error("Error shutting down RaftManager", e);
+            }
+        }
+        Utils.closeQuietly(snapshotFileReader, "raftManager");
         if (fileLock != null) {
             try {
-                fileLock.unlockAndClose();
+                fileLock.destroy();
             } catch (Exception e) {
-                log.error("Error cleaning up fileLock", e);
+                log.error("Error destroying fileLock", e);
             } finally {
                 fileLock = null;
             }
@@ -202,8 +248,7 @@ public final class MetadataShell {
             .description("The Apache Kafka metadata shell");
         parser.addArgument("--snapshot", "-s")
             .type(String.class)
-            .required(true)
-            .help("The metadata snapshot file to read.");
+            .help("The snapshot file to read.");
         parser.addArgument("command")
             .nargs("*")
             .help("The command to run.");

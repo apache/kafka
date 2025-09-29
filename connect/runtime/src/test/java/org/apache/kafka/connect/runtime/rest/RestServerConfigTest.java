@@ -21,6 +21,8 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RestServerConfigTest {
 
-    private static final List<String> VALID_HEADER_CONFIGS = List.of(
+    private static final List<String> VALID_HEADER_CONFIGS = Arrays.asList(
             "add \t Cache-Control: no-cache, no-store, must-revalidate",
             "add \r X-XSS-Protection: 1; mode=block",
             "\n add Strict-Transport-Security: max-age=31536000; includeSubDomains",
@@ -46,7 +48,7 @@ public class RestServerConfigTest {
             "adDdate \n Last-Modified: \t 0"
     );
 
-    private static final List<String> INVALID_HEADER_CONFIGS = List.of(
+    private static final List<String> INVALID_HEADER_CONFIGS = Arrays.asList(
             "set \t",
             "badaction \t X-Frame-Options:DENY",
             "set add X-XSS-Protection:1",
@@ -68,11 +70,11 @@ public class RestServerConfigTest {
 
         props.put(RestServerConfig.LISTENERS_CONFIG, "http://a.b:9999");
         config = RestServerConfig.forPublic(null, props);
-        assertEquals(List.of("http://a.b:9999"), config.listeners());
+        assertEquals(Collections.singletonList("http://a.b:9999"), config.listeners());
 
         props.put(RestServerConfig.LISTENERS_CONFIG, "http://a.b:9999, https://a.b:7812");
         config = RestServerConfig.forPublic(null, props);
-        assertEquals(List.of("http://a.b:9999", "https://a.b:7812"), config.listeners());
+        assertEquals(Arrays.asList("http://a.b:9999", "https://a.b:7812"), config.listeners());
     }
 
     @Test
@@ -111,7 +113,7 @@ public class RestServerConfigTest {
 
         props.put(RestServerConfig.ADMIN_LISTENERS_CONFIG, "http://a.b:9999, https://a.b:7812");
         config = RestServerConfig.forPublic(null, props);
-        assertEquals(List.of("http://a.b:9999", "https://a.b:7812"), config.adminListeners());
+        assertEquals(Arrays.asList("http://a.b:9999", "https://a.b:7812"), config.adminListeners());
 
         RestServerConfig.forPublic(null, props);
     }
@@ -122,7 +124,7 @@ public class RestServerConfigTest {
 
         props.put(RestServerConfig.ADMIN_LISTENERS_CONFIG, "http://a.b:9999,");
         ConfigException ce = assertThrows(ConfigException.class, () -> RestServerConfig.forPublic(null, props));
-        assertTrue(ce.getMessage().contains("admin.listeners"));
+        assertTrue(ce.getMessage().contains(" admin.listeners"));
     }
 
     @Test

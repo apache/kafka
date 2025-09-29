@@ -58,7 +58,11 @@ public class CodeBuffer {
     }
 
     private String indentSpaces() {
-        return "    ".repeat(Math.max(0, indent));
+        StringBuilder bld = new StringBuilder();
+        for (int i = 0; i < indent; i++) {
+            bld.append("    ");
+        }
+        return bld.toString();
     }
 
     @Override

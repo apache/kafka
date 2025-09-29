@@ -39,6 +39,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
@@ -331,11 +332,29 @@ public class RestClientTest {
         return assertDoesNotThrow(() -> OBJECT_MAPPER.writeValueAsString(obj));
     }
 
-    private record TestDTO(String content) {
+    private static class TestDTO {
+        private final String content;
+
         @JsonCreator
         private TestDTO(@JsonProperty(value = "content") String content) {
             this.content = content;
         }
 
+        public String getContent() {
+            return content;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            TestDTO testDTO = (TestDTO) o;
+            return content.equals(testDTO.content);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(content);
+        }
     }
 }

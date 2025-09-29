@@ -36,9 +36,12 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -116,7 +119,7 @@ class BatchAccumulatorTest {
             maxBatchSize
         );
 
-        List<String> records = List.of("a", "b", "c", "d", "e", "f", "g", "h", "i");
+        List<String> records = asList("a", "b", "c", "d", "e", "f", "g", "h", "i");
 
         // Append records
         assertEquals(baseOffset, acc.append(leaderEpoch, records.subList(0, 1), false));
@@ -162,7 +165,7 @@ class BatchAccumulatorTest {
             maxBatchSize
         );
 
-        List<String> records = List.of("a", "b", "c", "d", "e", "f", "g", "h", "i");
+        List<String> records = asList("a", "b", "c", "d", "e", "f", "g", "h", "i");
 
         // Append records
         assertEquals(baseOffset, acc.append(leaderEpoch, records.subList(0, 1), false));
@@ -232,7 +235,7 @@ class BatchAccumulatorTest {
         );
 
         time.sleep(15);
-        assertEquals(baseOffset, acc.append(leaderEpoch, List.of("a"), false));
+        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a"), false));
         assertEquals(lingerMs, acc.timeUntilDrain(time.milliseconds()));
         assertFalse(acc.isEmpty());
 
@@ -264,7 +267,7 @@ class BatchAccumulatorTest {
             maxBatchSize
         );
 
-        assertEquals(baseOffset, acc.append(leaderEpoch, List.of("a"), false));
+        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a"), false));
         time.sleep(lingerMs);
 
         List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
@@ -293,7 +296,7 @@ class BatchAccumulatorTest {
             maxBatchSize
         );
 
-        assertEquals(baseOffset, acc.append(leaderEpoch, List.of("a"), false));
+        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a"), false));
         acc.close();
         Mockito.verify(memoryPool).release(buffer);
     }
@@ -315,7 +318,7 @@ class BatchAccumulatorTest {
             maxBatchSize
         );
 
-        List<String> records = List.of("a", "b", "c", "d", "e", "f", "g", "h", "i");
+        List<String> records = asList("a", "b", "c", "d", "e", "f", "g", "h", "i");
         assertEquals(baseOffset, acc.append(leaderEpoch, records.subList(0, 1), false));
         assertEquals(baseOffset + 2, acc.append(leaderEpoch, records.subList(1, 3), false));
         assertEquals(baseOffset + 5, acc.append(leaderEpoch, records.subList(3, 6), false));
@@ -357,7 +360,7 @@ class BatchAccumulatorTest {
 
         // Append enough records so that multiple batches get created
         for (int records = 0; records < numberOfRecords; records++) {
-            acc.append(leaderEpoch, List.of("foo"), false);
+            acc.append(leaderEpoch, singletonList("foo"), false);
         }
 
         List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
@@ -410,7 +413,7 @@ class BatchAccumulatorTest {
         // Do the first append outside the thread to start the linger timer
         Mockito.when(memoryPool.tryAllocate(maxBatchSize))
             .thenReturn(ByteBuffer.allocate(maxBatchSize));
-        acc.append(leaderEpoch, List.of("a"), false);
+        acc.append(leaderEpoch, singletonList("a"), false);
 
         // Let the serde block to simulate a slow append
         Mockito.doAnswer(invocation -> {
@@ -425,14 +428,14 @@ class BatchAccumulatorTest {
             Mockito.any(Writable.class)
         );
 
-        Thread appendThread = new Thread(() -> acc.append(leaderEpoch, List.of("b"), false));
+        Thread appendThread = new Thread(() -> acc.append(leaderEpoch, singletonList("b"), false));
         appendThread.start();
 
         // Attempt to drain while the append thread is holding the lock
         acquireLockLatch.await();
         time.sleep(lingerMs);
         assertTrue(acc.needsDrain(time.milliseconds()));
-        assertEquals(List.of(), acc.drain());
+        assertEquals(Collections.emptyList(), acc.drain());
         assertTrue(acc.needsDrain(time.milliseconds()));
 
         // Now let the append thread complete and verify that we can finish the drain
@@ -661,7 +664,7 @@ class BatchAccumulatorTest {
             maxBatchSize
         );
 
-        List<String> records = List.of("a", "b", "c", "d", "e", "f", "g");
+        List<String> records = asList("a", "b", "c", "d", "e", "f", "g");
         assertEquals(baseOffset, acc.append(leaderEpoch, records.subList(0, 1), true));
         acc.forceDrain();
         assertEquals(baseOffset + 2, acc.append(leaderEpoch, records.subList(1, 3), true));
@@ -697,7 +700,7 @@ class BatchAccumulatorTest {
             maxBatchSize
         );
 
-        List<String> records = List.of("a", "b", "c", "d", "e", "f", "g");
+        List<String> records = asList("a", "b", "c", "d", "e", "f", "g");
         assertEquals(baseOffset, acc.append(leaderEpoch, records.subList(0, 1), true));
         acc.forceDrain();
 
@@ -729,7 +732,7 @@ class BatchAccumulatorTest {
             serde
         );
 
-        List<String> records = List.of("a", "b", "c", "d", "e", "f", "g");
+        List<String> records = asList("a", "b", "c", "d", "e", "f", "g");
         assertEquals(baseOffset, acc.append(leaderEpoch, records.subList(0, 1), true));
         acc.forceDrain();
         assertEquals(baseOffset + 2, acc.append(leaderEpoch, records.subList(1, 3), true));

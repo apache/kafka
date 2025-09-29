@@ -21,8 +21,9 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Readable;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -57,9 +58,9 @@ public class ListPartitionReassignmentsRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public static ListPartitionReassignmentsRequest parse(Readable readable, short version) {
+    public static ListPartitionReassignmentsRequest parse(ByteBuffer buffer, short version) {
         return new ListPartitionReassignmentsRequest(new ListPartitionReassignmentsRequestData(
-            readable, version), version);
+            new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override

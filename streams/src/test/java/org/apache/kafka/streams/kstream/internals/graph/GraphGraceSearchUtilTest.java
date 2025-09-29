@@ -87,7 +87,7 @@ public class GraphGraceSearchUtilTest {
     @Test
     public void shouldExtractGraceFromKStreamWindowAggregateNode() {
         final TimeWindows windows = TimeWindows.ofSizeAndGrace(ofMillis(10L), ofMillis(1234L));
-        final ProcessorGraphNode<String, Long> node = new GracePeriodGraphNode<>(
+        final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>(
             "asdf",
             new ProcessorParameters<>(
                 new KStreamWindowAggregate<String, Long, Integer, TimeWindow>(
@@ -98,19 +98,18 @@ public class GraphGraceSearchUtilTest {
                     null
                 ),
                 "asdf"
-            ),
-            windows.gracePeriodMs()
+            )
         );
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
-        assertThat(extracted, is(1234L));
+        assertThat(extracted, is(windows.gracePeriodMs()));
     }
 
     @Test
     public void shouldExtractGraceFromKStreamSessionWindowAggregateNode() {
         final SessionWindows windows = SessionWindows.ofInactivityGapAndGrace(ofMillis(10L), ofMillis(1234L));
 
-        final ProcessorGraphNode<String, Long> node = new GracePeriodGraphNode<>(
+        final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>(
             "asdf",
             new ProcessorParameters<>(
                 new KStreamSessionWindowAggregate<String, Long, Integer>(
@@ -122,23 +121,21 @@ public class GraphGraceSearchUtilTest {
                     null
                 ),
                 "asdf"
-            ),
-            windows.gracePeriodMs() + windows.inactivityGap()
+            )
         );
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
-        assertThat(extracted, is(1244L));
+        assertThat(extracted, is(windows.gracePeriodMs() + windows.inactivityGap()));
     }
 
     @Test
     public void shouldExtractGraceFromSessionAncestorThroughStatefulParent() {
         final SessionWindows windows = SessionWindows.ofInactivityGapAndGrace(ofMillis(10L), ofMillis(1234L));
-        final ProcessorGraphNode<String, Long> graceGrandparent = new GracePeriodGraphNode<>(
+        final ProcessorGraphNode<String, Long> graceGrandparent = new ProcessorGraphNode<>(
             "asdf",
             new ProcessorParameters<>(new KStreamSessionWindowAggregate<String, Long, Integer>(
                 windows, mockStoreFactory("asdf"), EmitStrategy.onWindowUpdate(), null, null, null
-            ), "asdf"),
-            windows.gracePeriodMs() + windows.inactivityGap()
+            ), "asdf")
         );
 
         final ProcessorGraphNode<String, Long> statefulParent = new ProcessorGraphNode<>(
@@ -170,13 +167,13 @@ public class GraphGraceSearchUtilTest {
         statefulParent.addChild(node);
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
-        assertThat(extracted, is(1244L));
+        assertThat(extracted, is(windows.gracePeriodMs() + windows.inactivityGap()));
     }
 
     @Test
     public void shouldExtractGraceFromSessionAncestorThroughStatelessParent() {
         final SessionWindows windows = SessionWindows.ofInactivityGapAndGrace(ofMillis(10L), ofMillis(1234L));
-        final ProcessorGraphNode<String, Long> graceGrandparent = new GracePeriodGraphNode<>(
+        final ProcessorGraphNode<String, Long> graceGrandparent = new ProcessorGraphNode<>(
             "asdf",
             new ProcessorParameters<>(
                 new KStreamSessionWindowAggregate<String, Long, Integer>(
@@ -188,8 +185,7 @@ public class GraphGraceSearchUtilTest {
                     null
                 ),
                 "asdf"
-            ),
-            windows.gracePeriodMs() + windows.inactivityGap()
+            )
         );
 
         final ProcessorGraphNode<String, Long> statelessParent = new ProcessorGraphNode<>(
@@ -221,17 +217,16 @@ public class GraphGraceSearchUtilTest {
         statelessParent.addChild(node);
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
-        assertThat(extracted, is(1244L));
+        assertThat(extracted, is(windows.gracePeriodMs() + windows.inactivityGap()));
     }
 
     @Test
     public void shouldUseMaxIfMultiParentsDoNotAgreeOnGrace() {
-        final SessionWindows leftWindows = SessionWindows.ofInactivityGapAndGrace(ofMillis(10L), ofMillis(1234L));
-        final ProcessorGraphNode<String, Long> leftParent = new GracePeriodGraphNode<>(
+        final ProcessorGraphNode<String, Long> leftParent = new ProcessorGraphNode<>(
             "asdf",
             new ProcessorParameters<>(
                 new KStreamSessionWindowAggregate<String, Long, Integer>(
-                    leftWindows,
+                    SessionWindows.ofInactivityGapAndGrace(ofMillis(10L), ofMillis(1234L)),
                     mockStoreFactory("asdf"),
                     EmitStrategy.onWindowUpdate(),
                     null,
@@ -239,24 +234,21 @@ public class GraphGraceSearchUtilTest {
                     null
                 ),
                 "asdf"
-            ),
-            leftWindows.gracePeriodMs() + leftWindows.inactivityGap()
+            )
         );
 
-        final TimeWindows rightWindows = TimeWindows.ofSizeAndGrace(ofMillis(10L), ofMillis(4321L));
-        final ProcessorGraphNode<String, Long> rightParent = new GracePeriodGraphNode<>(
+        final ProcessorGraphNode<String, Long> rightParent = new ProcessorGraphNode<>(
             "asdf",
             new ProcessorParameters<>(
                 new KStreamWindowAggregate<String, Long, Integer, TimeWindow>(
-                    rightWindows,
+                    TimeWindows.ofSizeAndGrace(ofMillis(10L), ofMillis(4321L)),
                     mockStoreFactory("asdf"),
                     EmitStrategy.onWindowUpdate(),
                     null,
                     null
                 ),
                 "asdf"
-            ),
-            rightWindows.gracePeriodMs()
+            )
         );
 
         final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>(

@@ -26,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -42,7 +43,7 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class SharedTopicAdminTest {
 
-    private static final Map<String, Object> EMPTY_CONFIG = Map.of();
+    private static final Map<String, Object> EMPTY_CONFIG = Collections.emptyMap();
 
     @Mock private TopicAdmin mockTopicAdmin;
     @Mock private Function<Map<String, Object>, TopicAdmin> factory;

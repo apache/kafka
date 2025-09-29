@@ -53,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -81,10 +82,10 @@ public class DescribeConsumerGroupsHandlerTest {
         CoordinatorKey.byGroupId(groupId2)
     ));
     private final Node coordinator = new Node(1, "host", 1234);
-    private final Set<TopicPartition> tps = Set.of(
+    private final Set<TopicPartition> tps = new HashSet<>(Arrays.asList(
         new TopicPartition("foo", 0),
         new TopicPartition("bar",  1)
-    );
+    ));
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})

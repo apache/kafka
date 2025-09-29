@@ -92,7 +92,15 @@ public class OffsetCheckpointFile {
         }
     }
 
-    record TopicPartitionOffset(TopicPartition tp, long offset) {
+    static class TopicPartitionOffset {
+
+        final TopicPartition tp;
+        final long offset;
+
+        TopicPartitionOffset(TopicPartition tp, long offset) {
+            this.tp = tp;
+            this.offset = offset;
+        }
     }
 
 }

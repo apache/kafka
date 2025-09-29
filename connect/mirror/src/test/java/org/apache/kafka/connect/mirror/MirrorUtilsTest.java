@@ -29,6 +29,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
@@ -50,7 +51,7 @@ public class MirrorUtilsTest {
 
     @Test
     public void testCreateCompactedTopic() throws Exception {
-        Map<String, KafkaFuture<Void>> values = Map.of(TOPIC, future);
+        Map<String, KafkaFuture<Void>> values = Collections.singletonMap(TOPIC, future);
         when(future.get()).thenReturn(null);
         when(ctr.values()).thenReturn(values);
         when(admin.createTopics(any(), any())).thenReturn(ctr);
@@ -63,7 +64,7 @@ public class MirrorUtilsTest {
 
     @Test
     public void testCreateCompactedTopicAlreadyExists() throws Exception {
-        Map<String, KafkaFuture<Void>> values = Map.of(TOPIC, future);
+        Map<String, KafkaFuture<Void>> values = Collections.singletonMap(TOPIC, future);
         when(future.get()).thenThrow(new ExecutionException(new TopicExistsException("topic exists")));
         when(ctr.values()).thenReturn(values);
         when(admin.createTopics(any(), any())).thenReturn(ctr);
@@ -76,7 +77,7 @@ public class MirrorUtilsTest {
 
     @Test
     public void testCreateCompactedTopicAssumeTopicAlreadyExistsWithUnsupportedVersionException() throws Exception {
-        Map<String, KafkaFuture<Void>> values = Map.of(TOPIC, future);
+        Map<String, KafkaFuture<Void>> values = Collections.singletonMap(TOPIC, future);
         when(future.get()).thenThrow(new ExecutionException(new UnsupportedVersionException("unsupported")));
         when(ctr.values()).thenReturn(values);
         when(admin.createTopics(any(), any())).thenReturn(ctr);
@@ -89,7 +90,7 @@ public class MirrorUtilsTest {
 
     @Test
     public void testCreateCompactedTopicAssumeTopicAlreadyExistsWithClusterAuthorizationException() throws Exception {
-        Map<String, KafkaFuture<Void>> values = Map.of(TOPIC, future);
+        Map<String, KafkaFuture<Void>> values = Collections.singletonMap(TOPIC, future);
         when(future.get()).thenThrow(new ExecutionException(new ClusterAuthorizationException("not authorised")));
         when(ctr.values()).thenReturn(values);
         when(admin.createTopics(any(), any())).thenReturn(ctr);
@@ -102,7 +103,7 @@ public class MirrorUtilsTest {
 
     @Test
     public void testCreateCompactedTopicAssumeTopicAlreadyExistsWithTopicAuthorizationException() throws Exception {
-        Map<String, KafkaFuture<Void>> values = Map.of(TOPIC, future);
+        Map<String, KafkaFuture<Void>> values = Collections.singletonMap(TOPIC, future);
         when(future.get()).thenThrow(new ExecutionException(new TopicAuthorizationException("not authorised")));
         when(ctr.values()).thenReturn(values);
         when(admin.createTopics(any(), any())).thenReturn(ctr);
@@ -115,7 +116,7 @@ public class MirrorUtilsTest {
 
     @Test
     public void testCreateCompactedTopicFailsWithInvalidConfigurationException() throws Exception {
-        Map<String, KafkaFuture<Void>> values = Map.of(TOPIC, future);
+        Map<String, KafkaFuture<Void>> values = Collections.singletonMap(TOPIC, future);
         when(future.get()).thenThrow(new ExecutionException(new InvalidConfigurationException("wrong config")));
         when(ctr.values()).thenReturn(values);
         when(admin.createTopics(any(), any())).thenReturn(ctr);
@@ -129,7 +130,7 @@ public class MirrorUtilsTest {
 
     @Test
     public void testCreateCompactedTopicFailsWithTimeoutException() throws Exception {
-        Map<String, KafkaFuture<Void>> values = Map.of(TOPIC, future);
+        Map<String, KafkaFuture<Void>> values = Collections.singletonMap(TOPIC, future);
         when(future.get()).thenThrow(new ExecutionException(new TimeoutException("Timeout")));
         when(ctr.values()).thenReturn(values);
         when(admin.createTopics(any(), any())).thenReturn(ctr);

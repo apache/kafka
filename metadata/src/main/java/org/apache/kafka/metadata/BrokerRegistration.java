@@ -64,7 +64,7 @@ public class BrokerRegistration {
             this.fenced = false;
             this.inControlledShutdown = false;
             this.isMigratingZkBroker = false;
-            this.directories = List.of();
+            this.directories = Collections.emptyList();
         }
 
         public Builder setId(int id) {
@@ -85,7 +85,7 @@ public class BrokerRegistration {
         public Builder setListeners(List<Endpoint> listeners) {
             Map<String, Endpoint> listenersMap = new HashMap<>();
             for (Endpoint endpoint : listeners) {
-                listenersMap.put(endpoint.listener(), endpoint);
+                listenersMap.put(endpoint.listenerName().get(), endpoint);
             }
             this.listeners = listenersMap;
             return this;
@@ -170,7 +170,7 @@ public class BrokerRegistration {
         this.incarnationId = incarnationId;
         Map<String, Endpoint> newListeners = new HashMap<>(listeners.size());
         for (Entry<String, Endpoint> entry : listeners.entrySet()) {
-            if (entry.getValue().listener().isEmpty()) {
+            if (entry.getValue().listenerName().isEmpty()) {
                 throw new IllegalArgumentException("Broker listeners must be named.");
             }
             newListeners.put(entry.getKey(), entry.getValue());
@@ -256,6 +256,10 @@ public class BrokerRegistration {
         return inControlledShutdown;
     }
 
+    public boolean isMigratingZkBroker() {
+        return isMigratingZkBroker;
+    }
+
     public List<Uuid> directories() {
         return directories;
     }
@@ -335,7 +339,8 @@ public class BrokerRegistration {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof BrokerRegistration other)) return false;
+        if (!(o instanceof BrokerRegistration)) return false;
+        BrokerRegistration other = (BrokerRegistration) o;
         return other.id == id &&
             other.epoch == epoch &&
             other.incarnationId.equals(incarnationId) &&

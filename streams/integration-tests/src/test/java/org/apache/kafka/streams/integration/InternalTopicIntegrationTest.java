@@ -28,7 +28,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.server.util.MockTime;
-import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -49,9 +48,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -149,22 +147,14 @@ public class InternalTopicIntegrationTest {
         return Admin.create(adminClientConfig);
     }
 
-    private void configureStreams(final boolean streamsProtocolEnabled, final String appID) {
-        streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
-        if (streamsProtocolEnabled) {
-            streamsProp.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
-        }
-    }
-
     /*
      * This test just ensures that the assignor does not get stuck during partition number resolution
      * for internal repartition topics. See KAFKA-10689
      */
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldGetToRunningWithWindowedTableInFKJ(final boolean streamsProtocolEnabled) throws Exception {
-        final String appID = APP_ID + "-windowed-FKJ-" + streamsProtocolEnabled;
-        configureStreams(streamsProtocolEnabled, appID);
+    @Test
+    public void shouldGetToRunningWithWindowedTableInFKJ() throws Exception {
+        final String appID = APP_ID + "-windowed-FKJ";
+        streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
         final KStream<String, String> inputTopic = streamsBuilder.stream(DEFAULT_INPUT_TOPIC);
@@ -189,12 +179,10 @@ public class InternalTopicIntegrationTest {
         }
     }
 
-
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldCompactTopicsForKeyValueStoreChangelogs(final boolean streamsProtocolEnabled) throws Exception {
-        final String appID = APP_ID + "-compact-" + streamsProtocolEnabled;
-        configureStreams(streamsProtocolEnabled, appID);
+    @Test
+    public void shouldCompactTopicsForKeyValueStoreChangelogs() throws Exception {
+        final String appID = APP_ID + "-compact";
+        streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         //
         // Step 1: Configure and start a simple word count topology
@@ -228,11 +216,10 @@ public class InternalTopicIntegrationTest {
         assertEquals(4, repartitionProps.size());
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldCompactAndDeleteTopicsForWindowStoreChangelogs(final boolean streamsProtocolEnabled) throws Exception {
-        final String appID = APP_ID + "-compact-delete-" + streamsProtocolEnabled;
-        configureStreams(streamsProtocolEnabled, appID);
+    @Test
+    public void shouldCompactAndDeleteTopicsForWindowStoreChangelogs() throws Exception {
+        final String appID = APP_ID + "-compact-delete";
+        streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         //
         // Step 1: Configure and start a simple word count topology

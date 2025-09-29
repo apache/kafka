@@ -35,9 +35,9 @@ public class MirrorHeartbeatTaskTest {
         List<SourceRecord> records = heartbeatTask.poll();
         assertEquals(1, records.size());
         Map<String, ?> sourcePartition = records.iterator().next().sourcePartition();
-        assertEquals("testSource", sourcePartition.get(Heartbeat.SOURCE_CLUSTER_ALIAS_KEY),
+        assertEquals(sourcePartition.get(Heartbeat.SOURCE_CLUSTER_ALIAS_KEY), "testSource",
                 "sourcePartition's " + Heartbeat.SOURCE_CLUSTER_ALIAS_KEY + " record was not created");
-        assertEquals("testTarget", sourcePartition.get(Heartbeat.TARGET_CLUSTER_ALIAS_KEY),
+        assertEquals(sourcePartition.get(Heartbeat.TARGET_CLUSTER_ALIAS_KEY), "testTarget",
                 "sourcePartition's " + Heartbeat.TARGET_CLUSTER_ALIAS_KEY + " record was not created");
     }
 }

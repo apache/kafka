@@ -17,23 +17,22 @@
 package kafka.server
 
 import kafka.cluster.Partition
-import kafka.log.LogManager
+import kafka.log.{LogManager, UnifiedLog}
+import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.server.ReplicaAlterLogDirsThread.ReassignmentState
-import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.server.{PartitionFetchState, ReplicaState, common}
+import org.apache.kafka.server.common
 import org.apache.kafka.server.common.{DirectoryEventHandler, KRaftVersion, OffsetAndEpoch}
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
-import org.apache.kafka.storage.internals.log.UnifiedLog
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -53,7 +52,7 @@ class ReplicaAlterLogDirsThreadTest {
   private val topicNames = collection.immutable.Map(topicId -> "topic1")
   private val tid1p0 = new TopicIdPartition(topicId, t1p0)
   private val failedPartitions = new FailedPartitions
-  private val metadataCache = new KRaftMetadataCache(1, () => KRaftVersion.LATEST_PRODUCTION)
+  private val metadataCache = MetadataCache.kRaftMetadataCache(1, () => KRaftVersion.LATEST_PRODUCTION)
 
   private def initialFetchState(fetchOffset: Long, leaderEpoch: Int = 1): InitialFetchState = {
     InitialFetchState(topicId = Some(topicId), leader = new BrokerEndPoint(0, "localhost", 9092),
@@ -123,7 +122,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     when(futureLog.logStartOffset).thenReturn(0L)
     when(futureLog.logEndOffset).thenReturn(0L)
-    when(futureLog.latestEpoch).thenReturn(Optional.empty)
+    when(futureLog.latestEpoch).thenReturn(None)
 
     val fencedRequestData = new FetchRequest.PartitionData(topicId, 0L, 0L,
       config.replicaFetchMaxBytes, Optional.of(leaderEpoch - 1))
@@ -223,7 +222,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     when(futureLog.logStartOffset).thenReturn(0L)
     when(futureLog.logEndOffset).thenReturn(0L)
-    when(futureLog.latestEpoch).thenReturn(Optional.empty)
+    when(futureLog.latestEpoch).thenReturn(None)
 
     val requestData = new FetchRequest.PartitionData(topicId, 0L, 0L,
       config.replicaFetchMaxBytes, Optional.of(leaderEpoch))
@@ -309,7 +308,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     when(futureLog.logStartOffset).thenReturn(0L)
     when(futureLog.logEndOffset).thenReturn(0L)
-    when(futureLog.latestEpoch).thenReturn(Optional.empty)
+    when(futureLog.latestEpoch).thenReturn(None)
 
     val requestData = new FetchRequest.PartitionData(topicId, 0L, 0L,
       config.replicaFetchMaxBytes, Optional.of(leaderEpoch))
@@ -404,7 +403,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     when(futureLog.logStartOffset).thenReturn(0L)
     when(futureLog.logEndOffset).thenReturn(0L)
-    when(futureLog.latestEpoch).thenReturn(Optional.empty)
+    when(futureLog.latestEpoch).thenReturn(None)
 
     val requestData = new FetchRequest.PartitionData(topicId, 0L, 0L,
       config.replicaFetchMaxBytes, Optional.of(leaderEpoch))
@@ -504,6 +503,7 @@ class ReplicaAlterLogDirsThreadTest {
       ArgumentCaptor.forClass(classOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit])
 
     val expectedFetchParams = new FetchParams(
+      ApiKeys.FETCH.latestVersion,
       FetchRequest.FUTURE_LOCAL_REPLICA_ID,
       -1,
       0L,
@@ -573,13 +573,13 @@ class ReplicaAlterLogDirsThreadTest {
       null,
       config.replicaFetchBackoffMs)
 
-    val result = thread.leader.fetchEpochEndOffsets(java.util.Map.of(
-      t1p0, new OffsetForLeaderPartition()
+    val result = thread.leader.fetchEpochEndOffsets(Map(
+      t1p0 -> new OffsetForLeaderPartition()
         .setPartition(t1p0.partition)
         .setLeaderEpoch(leaderEpochT1p0),
-      t1p1, new OffsetForLeaderPartition()
+      t1p1 -> new OffsetForLeaderPartition()
         .setPartition(t1p1.partition)
-        .setLeaderEpoch(leaderEpochT1p1))).asScala
+        .setLeaderEpoch(leaderEpochT1p1)))
 
     val expected = Map(
       t1p0 -> new EpochEndOffset()
@@ -635,13 +635,13 @@ class ReplicaAlterLogDirsThreadTest {
       null,
       config.replicaFetchBackoffMs)
 
-    val result = thread.leader.fetchEpochEndOffsets(java.util.Map.of(
-      t1p0, new OffsetForLeaderPartition()
+    val result = thread.leader.fetchEpochEndOffsets(Map(
+      t1p0 -> new OffsetForLeaderPartition()
         .setPartition(t1p0.partition)
         .setLeaderEpoch(leaderEpoch),
-      t1p1, new OffsetForLeaderPartition()
+      t1p1 -> new OffsetForLeaderPartition()
         .setPartition(t1p1.partition)
-        .setLeaderEpoch(leaderEpoch))).asScala
+        .setLeaderEpoch(leaderEpoch)))
 
     val expected = Map(
       t1p0 -> new EpochEndOffset()
@@ -702,9 +702,9 @@ class ReplicaAlterLogDirsThreadTest {
     when(futureLogT1p0.logEndOffset).thenReturn(futureReplicaLEO)
     when(futureLogT1p1.logEndOffset).thenReturn(futureReplicaLEO)
 
-    when(futureLogT1p0.latestEpoch).thenReturn(Optional.of(leaderEpoch))
+    when(futureLogT1p0.latestEpoch).thenReturn(Some(leaderEpoch))
     when(futureLogT1p0.endOffsetForEpoch(leaderEpoch)).thenReturn(
-      Optional.of(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
+      Some(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
     when(partitionT1p0.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false))
       .thenReturn(new EpochEndOffset()
         .setPartition(partitionT1p0Id)
@@ -712,9 +712,9 @@ class ReplicaAlterLogDirsThreadTest {
         .setLeaderEpoch(leaderEpoch)
         .setEndOffset(replicaT1p0LEO))
 
-    when(futureLogT1p1.latestEpoch).thenReturn(Optional.of(leaderEpoch))
+    when(futureLogT1p1.latestEpoch).thenReturn(Some(leaderEpoch))
     when(futureLogT1p1.endOffsetForEpoch(leaderEpoch)).thenReturn(
-      Optional.of(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
+      Some(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
     when(partitionT1p1.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false))
       .thenReturn(new EpochEndOffset()
         .setPartition(partitionT1p1Id)
@@ -785,8 +785,8 @@ class ReplicaAlterLogDirsThreadTest {
 
     when(futureLog.logEndOffset).thenReturn(futureReplicaLEO)
     when(futureLog.latestEpoch)
-      .thenReturn(Optional.of(leaderEpoch))
-      .thenReturn(Optional.of(leaderEpoch - 2))
+      .thenReturn(Some(leaderEpoch))
+      .thenReturn(Some(leaderEpoch - 2))
 
     // leader replica truncated and fetched new offsets with new leader epoch
     when(partition.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false))
@@ -797,7 +797,7 @@ class ReplicaAlterLogDirsThreadTest {
         .setEndOffset(replicaLEO))
     // but future replica does not know about this leader epoch, so returns a smaller leader epoch
     when(futureLog.endOffsetForEpoch(leaderEpoch - 1)).thenReturn(
-      Optional.of(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch - 2)))
+      Some(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch - 2)))
     // finally, the leader replica knows about the leader epoch and returns end offset
     when(partition.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch - 2, fetchOnlyFromLeader = false))
       .thenReturn(new EpochEndOffset()
@@ -806,7 +806,7 @@ class ReplicaAlterLogDirsThreadTest {
         .setLeaderEpoch(leaderEpoch - 2)
         .setEndOffset(replicaEpochEndOffset))
     when(futureLog.endOffsetForEpoch(leaderEpoch - 2)).thenReturn(
-      Optional.of(new OffsetAndEpoch(futureReplicaEpochEndOffset, leaderEpoch - 2)))
+      Some(new OffsetAndEpoch(futureReplicaEpochEndOffset, leaderEpoch - 2)))
     when(partition.logDirectoryId()).thenReturn(Some(Uuid.fromString("n6WOe2zPScqZLIreCWN6Ug")))
 
     when(replicaManager.logManager).thenReturn(logManager)
@@ -865,7 +865,7 @@ class ReplicaAlterLogDirsThreadTest {
     when(partition.logDirectoryId()).thenReturn(Some(Uuid.fromString("b2e1ihvGQiu6A504oKoddQ")))
 
     // pretend this is a completely new future replica, with no leader epochs recorded
-    when(futureLog.latestEpoch).thenReturn(Optional.empty)
+    when(futureLog.latestEpoch).thenReturn(None)
 
     stubWithFetchMessages(log, null, futureLog, partition, replicaManager, responseCallback)
 
@@ -923,9 +923,9 @@ class ReplicaAlterLogDirsThreadTest {
     when(replicaManager.futureLocalLogOrException(t1p0)).thenReturn(futureLog)
     when(replicaManager.futureLogExists(t1p0)).thenReturn(true)
     when(futureLog.logEndOffset).thenReturn(futureReplicaLEO)
-    when(futureLog.latestEpoch).thenReturn(Optional.of(futureReplicaLeaderEpoch))
+    when(futureLog.latestEpoch).thenReturn(Some(futureReplicaLeaderEpoch))
     when(futureLog.endOffsetForEpoch(futureReplicaLeaderEpoch)).thenReturn(
-      Optional.of(new OffsetAndEpoch(futureReplicaLEO, futureReplicaLeaderEpoch)))
+      Some(new OffsetAndEpoch(futureReplicaLEO, futureReplicaLeaderEpoch)))
     when(replicaManager.localLog(t1p0)).thenReturn(Some(log))
 
     // this will cause fetchEpochsFromLeader return an error with undefined offset
@@ -1016,10 +1016,10 @@ class ReplicaAlterLogDirsThreadTest {
 
     when(replicaManager.futureLocalLogOrException(t1p0)).thenReturn(futureLog)
     when(replicaManager.futureLogExists(t1p0)).thenReturn(true)
-    when(futureLog.latestEpoch).thenReturn(Optional.of(leaderEpoch))
+    when(futureLog.latestEpoch).thenReturn(Some(leaderEpoch))
     when(futureLog.logEndOffset).thenReturn(futureReplicaLEO)
     when(futureLog.endOffsetForEpoch(leaderEpoch)).thenReturn(
-      Optional.of(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
+      Some(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
     when(replicaManager.logManager).thenReturn(logManager)
     stubWithFetchMessages(log, null, futureLog, partition, replicaManager, responseCallback)
 
@@ -1082,15 +1082,14 @@ class ReplicaAlterLogDirsThreadTest {
       t1p0 -> initialFetchState(0L, leaderEpoch),
       t1p1 -> initialFetchState(0L, leaderEpoch)))
 
-    val result = thread.leader.buildFetch(java.util.Map.of(
-      t1p0, new PartitionFetchState(Optional.of(topicId), 150, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.FETCHING, Optional.empty),
-      t1p1, new PartitionFetchState(Optional.of(topicId), 160, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.FETCHING, Optional.empty)))
-    val fetchRequestOpt = result.result
-    val partitionsWithError = result.partitionsWithError
-    assertTrue(fetchRequestOpt.isPresent)
+    val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = thread.leader.buildFetch(Map(
+      t1p0 -> PartitionFetchState(Some(topicId), 150, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = None),
+      t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = None)))
+
+    assertTrue(fetchRequestOpt.isDefined)
     val fetchRequest = fetchRequestOpt.get.fetchRequest
     assertFalse(fetchRequest.fetchData.isEmpty)
-    assertTrue(partitionsWithError.isEmpty)
+    assertFalse(partitionsWithError.nonEmpty)
     val request = fetchRequest.build()
     assertEquals(0, request.minBytes)
     val fetchInfos = request.fetchData(topicNames.asJava).asScala.toSeq
@@ -1138,54 +1137,39 @@ class ReplicaAlterLogDirsThreadTest {
       t1p1 -> initialFetchState(0L, leaderEpoch)))
 
     // one partition is ready and one is truncating
-    val result1 = thread.leader.buildFetch(java.util.Map.of(
-      t1p0, new PartitionFetchState(Optional.of(topicId), 150, Optional.empty(), leaderEpoch, Optional.empty(),
-        ReplicaState.FETCHING, Optional.empty()),
-      t1p1, new PartitionFetchState(Optional.of(topicId), 160, Optional.empty(), leaderEpoch, Optional.empty(),
-        ReplicaState.TRUNCATING, Optional.empty())
-    ))
-    val fetchRequestOpt1 = result1.result
-    val partitionsWithError1 = result1.partitionsWithError
+    val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = thread.leader.buildFetch(Map(
+        t1p0 -> PartitionFetchState(Some(topicId), 150, None, leaderEpoch, state = Fetching, lastFetchedEpoch = None),
+        t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, state = Truncating, lastFetchedEpoch = None)))
 
-    assertTrue(fetchRequestOpt1.isPresent)
-    val fetchRequest = fetchRequestOpt1.get
-    assertFalse(fetchRequest.fetchRequest.fetchData.isEmpty)
-    assertTrue(partitionsWithError1.isEmpty)
+    assertTrue(fetchRequestOpt.isDefined)
+    val fetchRequest = fetchRequestOpt.get
+    assertFalse(fetchRequest.partitionData.isEmpty)
+    assertFalse(partitionsWithError.nonEmpty)
     val fetchInfos = fetchRequest.fetchRequest.build().fetchData(topicNames.asJava).asScala.toSeq
     assertEquals(1, fetchInfos.length)
     assertEquals(t1p0, fetchInfos.head._1.topicPartition, "Expected fetch request for non-truncating partition")
     assertEquals(150, fetchInfos.head._2.fetchOffset)
 
     // one partition is ready and one is delayed
-    val result2 = thread.leader.buildFetch(java.util.Map.of(
-      t1p0, new PartitionFetchState(Optional.of(topicId), 140, Optional.empty(), leaderEpoch, Optional.empty(),
-        ReplicaState.FETCHING, Optional.empty()),
-      t1p1, new PartitionFetchState(Optional.of(topicId), 160, Optional.empty(), leaderEpoch, Optional.of(5000L),
-        ReplicaState.FETCHING, Optional.empty())
-    ))
-    val fetchRequest2Opt = result2.result
-    val partitionsWithError2 = result2.partitionsWithError
+    val ResultWithPartitions(fetchRequest2Opt, partitionsWithError2) = thread.leader.buildFetch(Map(
+        t1p0 -> PartitionFetchState(Some(topicId), 140, None, leaderEpoch, state = Fetching, lastFetchedEpoch = None),
+        t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, delay = Some(5000), state = Fetching, lastFetchedEpoch = None)))
 
-    assertTrue(fetchRequest2Opt.isPresent)
+    assertTrue(fetchRequest2Opt.isDefined)
     val fetchRequest2 = fetchRequest2Opt.get
-    assertFalse(fetchRequest2.fetchRequest.fetchData().isEmpty)
-    assertTrue(partitionsWithError2.isEmpty())
+    assertFalse(fetchRequest2.partitionData.isEmpty)
+    assertFalse(partitionsWithError2.nonEmpty)
     val fetchInfos2 = fetchRequest2.fetchRequest.build().fetchData(topicNames.asJava).asScala.toSeq
     assertEquals(1, fetchInfos2.length)
     assertEquals(t1p0, fetchInfos2.head._1.topicPartition, "Expected fetch request for non-delayed partition")
     assertEquals(140, fetchInfos2.head._2.fetchOffset)
 
     // both partitions are delayed
-    val result3 = thread.leader.buildFetch(java.util.Map.of(
-      t1p0, new PartitionFetchState(Optional.of(topicId), 140, Optional.empty(), leaderEpoch, Optional.of(5000L),
-        ReplicaState.FETCHING, Optional.empty()),
-      t1p1, new PartitionFetchState(Optional.of(topicId), 160, Optional.empty(), leaderEpoch, Optional.of(5000L),
-        ReplicaState.FETCHING, Optional.empty())
-    ))
-    val fetchRequest3Opt = result3.result
-    val partitionsWithError3 = result3.partitionsWithError
+    val ResultWithPartitions(fetchRequest3Opt, partitionsWithError3) = thread.leader.buildFetch(Map(
+        t1p0 -> PartitionFetchState(Some(topicId), 140, None, leaderEpoch, delay = Some(5000), state = Fetching, lastFetchedEpoch = None),
+        t1p1 -> PartitionFetchState(Some(topicId), 160, None, leaderEpoch, delay = Some(5000), state = Fetching, lastFetchedEpoch = None)))
     assertTrue(fetchRequest3Opt.isEmpty, "Expected no fetch requests since all partitions are delayed")
-    assertTrue(partitionsWithError3.isEmpty())
+    assertFalse(partitionsWithError3.nonEmpty)
   }
 
   def stub(logT1p0: UnifiedLog, logT1p1: UnifiedLog, futureLog: UnifiedLog, partition: Partition,

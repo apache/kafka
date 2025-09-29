@@ -14,15 +14,14 @@
 // limitations under the License.
 
 {
-  "apiKey": 7,
-  "type": "coordinator-key",
+  "type": "data",
   "name": "ConsumerGroupTargetAssignmentMemberKey",
-  "validVersions": "0",
+  "validVersions": "7",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "0",
+    { "name": "GroupId", "type": "string", "versions": "7",
       "about": "The group id." },
-    { "name": "MemberId", "type": "string", "versions": "0",
+    { "name": "MemberId", "type": "string", "versions": "7",
       "about": "The member id." }
   ]
 }

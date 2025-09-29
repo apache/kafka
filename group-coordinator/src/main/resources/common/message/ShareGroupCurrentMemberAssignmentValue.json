@@ -15,8 +15,7 @@
 
 // KIP-932 is in development. This schema is subject to non-backwards-compatible changes.
 {
-  "apiKey": 14,
-  "type": "coordinator-value",
+  "type": "data",
   "name": "ShareGroupCurrentMemberAssignmentValue",
   "validVersions": "0",
   "flexibleVersions": "0+",

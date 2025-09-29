@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.nio.ByteBuffer
+import java.util.Collections
 import java.util.concurrent.atomic.AtomicReference
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.TestControllerRequestCompletionHandler
@@ -94,7 +95,7 @@ class NodeToControllerRequestThreadTest {
 
     when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo(Some(activeController)))
 
-    val expectedResponse = RequestTestUtils.metadataUpdateWith(2, java.util.Map.of("a", 2))
+    val expectedResponse = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap("a", 2))
     val testRequestThread = new NodeToControllerRequestThread(
       mockClient,  new ManualMetadataUpdater(),
       controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
@@ -138,7 +139,7 @@ class NodeToControllerRequestThreadTest {
     when(controllerNodeProvider.getControllerInfo()).thenReturn(
       controllerInfo(Some(oldController)), controllerInfo(Some(newController)))
 
-    val expectedResponse = RequestTestUtils.metadataUpdateWith(3, java.util.Map.of("a", 2))
+    val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
     val testRequestThread = new NodeToControllerRequestThread(
       mockClient, new ManualMetadataUpdater(),
       controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
@@ -188,9 +189,9 @@ class NodeToControllerRequestThreadTest {
       controllerInfo(Some(oldController)), controllerInfo(Some(newController)))
 
     val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
-      java.util.Map.of("a", Errors.NOT_CONTROLLER),
-      java.util.Map.of("a", 2))
-    val expectedResponse = RequestTestUtils.metadataUpdateWith(3, java.util.Map.of("a", 2))
+      Collections.singletonMap("a", Errors.NOT_CONTROLLER),
+      Collections.singletonMap("a", 2))
+    val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
     val testRequestThread = new NodeToControllerRequestThread(
       mockClient, new ManualMetadataUpdater(),
       controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
@@ -256,7 +257,7 @@ class NodeToControllerRequestThreadTest {
       new EnvelopeResponseData().setErrorCode(Errors.NOT_CONTROLLER.code()))
 
     // response for retry request after receiving NOT_CONTROLLER error
-    val expectedResponse = RequestTestUtils.metadataUpdateWith(3, java.util.Map.of("a", 2))
+    val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
 
     val testRequestThread = new NodeToControllerRequestThread(
       mockClient,  new ManualMetadataUpdater(),
@@ -319,8 +320,8 @@ class NodeToControllerRequestThreadTest {
 
     val retryTimeoutMs = 30000
     val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
-      java.util.Map.of("a", Errors.NOT_CONTROLLER),
-      java.util.Map.of("a", 2))
+      Collections.singletonMap("a", Errors.NOT_CONTROLLER),
+      Collections.singletonMap("a", 2))
     val testRequestThread = new NodeToControllerRequestThread(
       mockClient, new ManualMetadataUpdater(),
       controllerNodeProvider, config, time, "", retryTimeoutMs)

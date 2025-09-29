@@ -64,6 +64,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class MetricsTest {
     private static final Logger log = LoggerFactory.getLogger(MetricsTest.class);
@@ -97,9 +98,12 @@ public class MetricsTest {
         MetricName n2 = metrics.metricName("name", "group", "description", tags);
         assertEquals(n1, n2, "metric names created in two different ways should be equal");
 
-        assertThrows(IllegalArgumentException.class,
-            () -> metrics.metricName("name", "group", "description", "key1"),
-            "Creating MetricName with an odd number of keyValue should fail, IllegalArgumentException expected.");
+        try {
+            metrics.metricName("name", "group", "description", "key1");
+            fail("Creating MetricName with an odd number of keyValue should fail");
+        } catch (IllegalArgumentException e) {
+            // this is expected
+        }
     }
 
     @Test
@@ -415,14 +419,20 @@ public class MetricsTest {
         sensor.add(metrics.metricName("test1.total", "grp1"), new CumulativeSum(), new MetricConfig().quota(Quota.upperBound(5.0)));
         sensor.add(metrics.metricName("test2.total", "grp1"), new CumulativeSum(), new MetricConfig().quota(Quota.lowerBound(0.0)));
         sensor.record(5.0);
-        assertThrows(QuotaViolationException.class,
-            () -> sensor.record(1.0),
-            "Should have gotten a quota violation.");
+        try {
+            sensor.record(1.0);
+            fail("Should have gotten a quota violation.");
+        } catch (QuotaViolationException e) {
+            // this is good
+        }
         assertEquals(6.0, (Double) metrics.metrics().get(metrics.metricName("test1.total", "grp1")).metricValue(), EPS);
         sensor.record(-6.0);
-        assertThrows(QuotaViolationException.class,
-            () -> sensor.record(-1.0),
-            "Should have gotten a quota violation.");
+        try {
+            sensor.record(-1.0);
+            fail("Should have gotten a quota violation.");
+        } catch (QuotaViolationException e) {
+            // this is good
+        }
     }
 
     @Test
@@ -660,7 +670,7 @@ public class MetricsTest {
     private Double measure(Measurable rate, MetricConfig config) {
         return rate.measure(config, time.milliseconds());
     }
-
+    
     @Test
     public void testMetricInstances() {
         MetricName n1 = metrics.metricInstance(SampleMetrics.METRIC1, "key1", "value1", "key2", "value2");
@@ -670,10 +680,13 @@ public class MetricsTest {
         MetricName n2 = metrics.metricInstance(SampleMetrics.METRIC2, tags);
         assertEquals(n1, n2, "metric names created in two different ways should be equal");
 
-        assertThrows(IllegalArgumentException.class,
-            () -> metrics.metricInstance(SampleMetrics.METRIC1, "key1"),
-            "Creating MetricName with an odd number of keyValue should fail, IllegalArgumentException expected.");
-
+        try {
+            metrics.metricInstance(SampleMetrics.METRIC1, "key1");
+            fail("Creating MetricName with an odd number of keyValue should fail");
+        } catch (IllegalArgumentException e) {
+            // this is expected
+        }
+        
         Map<String, String> parentTagsWithValues = new HashMap<>();
         parentTagsWithValues.put("parent-tag", "parent-tag-value");
 
@@ -684,20 +697,27 @@ public class MetricsTest {
             MetricName inheritedMetric = inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, childTagsWithValues);
 
             Map<String, String> filledOutTags = inheritedMetric.tags();
-            assertEquals("parent-tag-value", filledOutTags.get("parent-tag"), "parent-tag should be set properly");
-            assertEquals("child-tag-value", filledOutTags.get("child-tag"), "child-tag should be set properly");
+            assertEquals(filledOutTags.get("parent-tag"), "parent-tag-value", "parent-tag should be set properly");
+            assertEquals(filledOutTags.get("child-tag"), "child-tag-value", "child-tag should be set properly");
 
-            assertThrows(IllegalArgumentException.class,
-                () -> inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, parentTagsWithValues),
-                "Creating MetricName should throw IllegalArgumentException if the child metrics are not defined at runtime.");
+            try {
+                inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, parentTagsWithValues);
+                fail("Creating MetricName should fail if the child metrics are not defined at runtime");
+            } catch (IllegalArgumentException e) {
+                // this is expected
+            }
 
-            Map<String, String> runtimeTags = new HashMap<>();
-            runtimeTags.put("child-tag", "child-tag-value");
-            runtimeTags.put("tag-not-in-template", "unexpected-value");
+            try {
 
-            assertThrows(IllegalArgumentException.class,
-                () -> inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, runtimeTags),
-                "Creating MetricName should throw IllegalArgumentException if there is a tag at runtime that is not in the template.");
+                Map<String, String> runtimeTags = new HashMap<>();
+                runtimeTags.put("child-tag", "child-tag-value");
+                runtimeTags.put("tag-not-in-template", "unexpected-value");
+
+                inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, runtimeTags);
+                fail("Creating MetricName should fail if there is a tag at runtime that is not in the template");
+            } catch (IllegalArgumentException e) {
+                // this is expected
+            }
         }
     }
 

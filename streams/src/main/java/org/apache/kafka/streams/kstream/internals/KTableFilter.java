@@ -175,7 +175,7 @@ public class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn,
         if (queryableName != null) {
             return new KTableMaterializedValueGetterSupplier<>(queryableName);
         } else {
-            return new KTableValueGetterSupplier<>() {
+            return new KTableValueGetterSupplier<KIn, VIn>() {
                 final KTableValueGetterSupplier<KIn, VIn> parentValueGetterSupplier = parent.valueGetterSupplier();
 
                 public KTableValueGetter<KIn, VIn> get() {

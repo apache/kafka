@@ -17,27 +17,35 @@
 
 package org.apache.kafka.coordinator.share;
 
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
-import org.apache.kafka.coordinator.share.generated.CoordinatorRecordType;
+import org.apache.kafka.coordinator.share.generated.ShareSnapshotKey;
+import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
+import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
+import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 
 public class ShareCoordinatorRecordSerde extends CoordinatorRecordSerde {
     @Override
-    protected ApiMessage apiMessageKeyFor(short recordType) {
-        try {
-            return CoordinatorRecordType.fromId(recordType).newRecordKey();
-        } catch (UnsupportedVersionException ex) {
-            throw new UnknownRecordTypeException(recordType);
+    protected ApiMessage apiMessageKeyFor(short recordVersion) {
+        switch (recordVersion) {
+            case 0:
+                return new ShareSnapshotKey();
+            case 1:
+                return new ShareUpdateKey();
+            default:
+                throw new UnknownRecordTypeException(recordVersion);
         }
     }
 
     @Override
-    protected ApiMessage apiMessageValueFor(short recordType) {
-        try {
-            return CoordinatorRecordType.fromId(recordType).newRecordValue();
-        } catch (UnsupportedVersionException ex) {
-            throw new UnknownRecordTypeException(recordType);
+    protected ApiMessage apiMessageValueFor(short recordVersion) {
+        switch (recordVersion) {
+            case 0:
+                return new ShareSnapshotValue();
+            case 1:
+                return new ShareUpdateValue();
+            default:
+                throw new UnknownRecordTypeException(recordVersion);
         }
     }
 }

@@ -39,12 +39,12 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
-import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
-import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
+import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
@@ -57,6 +57,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -80,6 +82,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 public class ClassicGroupTest {
     private final String protocolType = "consumer";
@@ -400,7 +403,7 @@ public class ClassicGroupTest {
             .setName("range")
             .setMetadata(ConsumerProtocol.serializeSubscription(
                 new ConsumerPartitionAssignor.Subscription(
-                    List.of("foo")
+                    Collections.singletonList("foo")
                 )).array()));
 
         ClassicGroupMember member = new ClassicGroupMember(
@@ -419,7 +422,7 @@ public class ClassicGroupTest {
 
         group.initNextGeneration();
 
-        Set<String> expectedTopics = Set.of("foo");
+        Set<String> expectedTopics = new HashSet<>(Collections.singleton("foo"));
         assertEquals(expectedTopics, group.subscribedTopics().get());
 
         group.transitionTo(PREPARING_REBALANCE);
@@ -427,7 +430,7 @@ public class ClassicGroupTest {
 
         group.initNextGeneration();
 
-        assertEquals(Optional.of(Set.of()), group.subscribedTopics());
+        assertEquals(Optional.of(Collections.emptySet()), group.subscribedTopics());
 
         protocols = new JoinGroupRequestProtocolCollection();
         protocols.add(new JoinGroupRequestProtocol()
@@ -558,8 +561,8 @@ public class ClassicGroupTest {
         int newSessionTimeoutMs = 20000;
         group.updateMember(member, newProtocols, newRebalanceTimeoutMs, newSessionTimeoutMs, null);
 
-        assertEquals(newRebalanceTimeoutMs, group.rebalanceTimeoutMs());
-        assertEquals(newSessionTimeoutMs, member.sessionTimeoutMs());
+        assertEquals(group.rebalanceTimeoutMs(), newRebalanceTimeoutMs);
+        assertEquals(member.sessionTimeoutMs(), newSessionTimeoutMs);
         assertEquals(newProtocols, member.supportedProtocols());
     }
 
@@ -848,9 +851,9 @@ public class ClassicGroupTest {
 
         group.add(member);
         assertTrue(group.addPendingSyncMember(memberId));
-        assertEquals(Set.of(memberId), group.allPendingSyncMembers());
+        assertEquals(Collections.singleton(memberId), group.allPendingSyncMembers());
         group.removePendingSyncMember(memberId);
-        assertEquals(Set.of(), group.allPendingSyncMembers());
+        assertEquals(Collections.emptySet(), group.allPendingSyncMembers());
     }
 
     @Test
@@ -873,9 +876,9 @@ public class ClassicGroupTest {
 
         group.add(member);
         assertTrue(group.addPendingSyncMember(memberId));
-        assertEquals(Set.of(memberId), group.allPendingSyncMembers());
+        assertEquals(Collections.singleton(memberId), group.allPendingSyncMembers());
         group.remove(memberId);
-        assertEquals(Set.of(), group.allPendingSyncMembers());
+        assertEquals(Collections.emptySet(), group.allPendingSyncMembers());
     }
 
     @Test
@@ -899,9 +902,9 @@ public class ClassicGroupTest {
         group.add(member);
         group.transitionTo(PREPARING_REBALANCE);
         assertTrue(group.addPendingSyncMember(memberId));
-        assertEquals(Set.of(memberId), group.allPendingSyncMembers());
+        assertEquals(Collections.singleton(memberId), group.allPendingSyncMembers());
         group.initNextGeneration();
-        assertEquals(Set.of(), group.allPendingSyncMembers());
+        assertEquals(Collections.emptySet(), group.allPendingSyncMembers());
     }
 
     @Test
@@ -1007,7 +1010,7 @@ public class ClassicGroupTest {
             100,
             100,
             "consumer",
-            new JoinGroupRequestProtocolCollection(List.of(
+            new JoinGroupRequestProtocolCollection(Collections.singletonList(
                 new JoinGroupRequestProtocol()
                     .setName("roundrobin")
                     .setMetadata(new byte[0])).iterator())
@@ -1123,7 +1126,7 @@ public class ClassicGroupTest {
         long currentTimestamp = 30000L;
         long commitTimestamp = 20000L;
         long offsetsRetentionMs = 10000L;
-        OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty(), Uuid.ZERO_UUID);
+        OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty());
         MockTime time = new MockTime();
         long currentStateTimestamp = time.milliseconds();
         ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, time);
@@ -1141,7 +1144,7 @@ public class ClassicGroupTest {
         protocols.add(new JoinGroupRequestProtocol()
             .setName("range")
             .setMetadata(ConsumerProtocol.serializeSubscription(
-                new ConsumerPartitionAssignor.Subscription(List.of("topic"))).array()));
+                new ConsumerPartitionAssignor.Subscription(Collections.singletonList("topic"))).array()));
 
         ClassicGroupMember memberWithNonConsumerProtocol = new ClassicGroupMember(
             "memberWithNonConsumerProtocol",
@@ -1211,7 +1214,7 @@ public class ClassicGroupTest {
         protocols.add(new JoinGroupRequestProtocol()
             .setName("range")
             .setMetadata(ConsumerProtocol.serializeSubscription(
-                new ConsumerPartitionAssignor.Subscription(List.of("topic"))).array()));
+                new ConsumerPartitionAssignor.Subscription(Collections.singletonList("topic"))).array()));
 
         ClassicGroupMember memberWithNonConsumerProtocol = new ClassicGroupMember(
             "memberWithNonConsumerProtocol",
@@ -1249,7 +1252,7 @@ public class ClassicGroupTest {
         group.transitionTo(PREPARING_REBALANCE);
         group.initNextGeneration();
         assertTrue(group.isInState(EMPTY));
-        assertEquals(Optional.of(Set.of()), group.computeSubscribedTopics());
+        assertEquals(Optional.of(Collections.emptySet()), group.computeSubscribedTopics());
         assertTrue(group.usesConsumerGroupProtocol());
         assertFalse(group.isSubscribedToTopic("topic"));
 
@@ -1258,7 +1261,7 @@ public class ClassicGroupTest {
         group.transitionTo(PREPARING_REBALANCE);
         group.initNextGeneration();
         assertTrue(group.isInState(COMPLETING_REBALANCE));
-        assertEquals(Optional.of(Set.of("topic")), group.computeSubscribedTopics());
+        assertEquals(Optional.of(Collections.singleton("topic")), group.computeSubscribedTopics());
         assertTrue(group.usesConsumerGroupProtocol());
         assertTrue(group.isSubscribedToTopic("topic"));
     }
@@ -1266,22 +1269,22 @@ public class ClassicGroupTest {
     @Test
     public void testIsInStates() {
         ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM);
-        assertTrue(group.isInStates(Set.of("empty"), 0));
+        assertTrue(group.isInStates(Collections.singleton("empty"), 0));
 
         group.transitionTo(PREPARING_REBALANCE);
-        assertTrue(group.isInStates(Set.of("preparingrebalance"), 0));
-        assertFalse(group.isInStates(Set.of("PreparingRebalance"), 0));
+        assertTrue(group.isInStates(Collections.singleton("preparingrebalance"), 0));
+        assertFalse(group.isInStates(Collections.singleton("PreparingRebalance"), 0));
 
 
         group.transitionTo(COMPLETING_REBALANCE);
-        assertTrue(group.isInStates(Set.of("completingrebalance"), 0));
+        assertTrue(group.isInStates(new HashSet<>(Collections.singletonList("completingrebalance")), 0));
 
         group.transitionTo(STABLE);
-        assertTrue(group.isInStates(Set.of("stable"), 0));
-        assertFalse(group.isInStates(Set.of("empty"), 0));
+        assertTrue(group.isInStates(Collections.singleton("stable"), 0));
+        assertFalse(group.isInStates(Collections.singleton("empty"), 0));
 
         group.transitionTo(DEAD);
-        assertTrue(group.isInStates(Set.of("dead", " "), 0));
+        assertTrue(group.isInStates(new HashSet<>(Arrays.asList("dead", " ")), 0));
     }
 
     @Test
@@ -1381,7 +1384,8 @@ public class ClassicGroupTest {
 
         ConsumerGroup consumerGroup = new ConsumerGroup(
             new SnapshotRegistry(logContext),
-            groupId
+            groupId,
+            mock(GroupCoordinatorMetricsShard.class)
         );
         consumerGroup.setGroupEpoch(10);
         consumerGroup.setTargetAssignmentEpoch(10);
@@ -1393,15 +1397,15 @@ public class ClassicGroupTest {
             mkTopicAssignment(fooTopicId, 1)
         )));
 
-        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols1 = List.of(createClassicProtocol(
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols1 = Collections.singletonList(createClassicProtocol(
             "range",
-            List.of(fooTopicName),
-            List.of(new TopicPartition(fooTopicName, 0))
+            Collections.singletonList(fooTopicName),
+            Collections.singletonList(new TopicPartition(fooTopicName, 0))
         ));
-        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols2 = List.of(createClassicProtocol(
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols2 = Collections.singletonList(createClassicProtocol(
             "range",
-            List.of(fooTopicName),
-            List.of(new TopicPartition(fooTopicName, 1))
+            Collections.singletonList(fooTopicName),
+            Collections.singletonList(new TopicPartition(fooTopicName, 1))
         ));
 
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
@@ -1410,7 +1414,7 @@ public class ClassicGroupTest {
             .setPreviousMemberEpoch(9)
             .setClientId("client-id")
             .setClientHost("client-host")
-            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
             .setServerAssignorName("range")
             .setRebalanceTimeoutMs(45000)
             .setClassicMemberMetadata(
@@ -1429,7 +1433,7 @@ public class ClassicGroupTest {
             .setPreviousMemberEpoch(9)
             .setClientId("client-id")
             .setClientHost("client-host")
-            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
             .setServerAssignorName("range")
             .setRebalanceTimeoutMs(45000)
             .setAssignedPartitions(mkAssignment(
@@ -1442,7 +1446,7 @@ public class ClassicGroupTest {
             .setPreviousMemberEpoch(0)
             .setClientId("client-id")
             .setClientHost("client-host")
-            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
             .setServerAssignorName("range")
             .setRebalanceTimeoutMs(45000)
             .setClassicMemberMetadata(
@@ -1455,11 +1459,11 @@ public class ClassicGroupTest {
 
         ClassicGroup classicGroup = ClassicGroup.fromConsumerGroup(
             consumerGroup,
-            Set.of(),
+            Collections.emptySet(),
             newMember2,
             logContext,
             time,
-            new KRaftCoordinatorMetadataImage(metadataImage)
+            metadataImage
         );
 
         ClassicGroup expectedClassicGroup = new ClassicGroup(
@@ -1482,13 +1486,13 @@ public class ClassicGroupTest {
                 member1.rebalanceTimeoutMs(),
                 member1.classicProtocolSessionTimeout().get(),
                 ConsumerProtocol.PROTOCOL_TYPE,
-                new JoinGroupRequestData.JoinGroupRequestProtocolCollection(List.of(
+                new JoinGroupRequestData.JoinGroupRequestProtocolCollection(Collections.singletonList(
                     new JoinGroupRequestData.JoinGroupRequestProtocol()
                         .setName(protocols1.get(0).name())
                         .setMetadata(protocols1.get(0).metadata())
                 ).iterator()),
                 Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(
-                    List.of(new TopicPartition(fooTopicName, 0))
+                    Collections.singletonList(new TopicPartition(fooTopicName, 0))
                 )))
             )
         );
@@ -1501,13 +1505,13 @@ public class ClassicGroupTest {
                 newMember2.rebalanceTimeoutMs(),
                 newMember2.classicProtocolSessionTimeout().get(),
                 ConsumerProtocol.PROTOCOL_TYPE,
-                new JoinGroupRequestData.JoinGroupRequestProtocolCollection(List.of(
+                new JoinGroupRequestData.JoinGroupRequestProtocolCollection(Collections.singletonList(
                     new JoinGroupRequestData.JoinGroupRequestProtocol()
                         .setName(protocols2.get(0).name())
                         .setMetadata(protocols2.get(0).metadata())
                 ).iterator()),
                 Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(
-                    List.of(new TopicPartition(fooTopicName, 1))
+                    Collections.singletonList(new TopicPartition(fooTopicName, 1))
                 )))
             )
         );
@@ -1533,7 +1537,8 @@ public class ClassicGroupTest {
 
         ConsumerGroup consumerGroup = new ConsumerGroup(
             new SnapshotRegistry(logContext),
-            groupId
+            groupId,
+            mock(GroupCoordinatorMetricsShard.class)
         );
         consumerGroup.setGroupEpoch(10);
         consumerGroup.setTargetAssignmentEpoch(10);
@@ -1544,10 +1549,10 @@ public class ClassicGroupTest {
             mkTopicAssignment(fooTopicId, 1)
         )));
 
-        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols1 = List.of(createClassicProtocol(
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols1 = Collections.singletonList(createClassicProtocol(
             "range",
-            List.of(fooTopicName),
-            List.of(new TopicPartition(fooTopicName, 0))
+            Collections.singletonList(fooTopicName),
+            Collections.singletonList(new TopicPartition(fooTopicName, 0))
         ));
 
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
@@ -1556,7 +1561,7 @@ public class ClassicGroupTest {
             .setPreviousMemberEpoch(9)
             .setClientId("client-id")
             .setClientHost("client-host")
-            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
             .setServerAssignorName("range")
             .setRebalanceTimeoutMs(45000)
             .setClassicMemberMetadata(
@@ -1575,7 +1580,7 @@ public class ClassicGroupTest {
             .setPreviousMemberEpoch(9)
             .setClientId("client-id")
             .setClientHost("client-host")
-            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
             .setServerAssignorName("range")
             .setRebalanceTimeoutMs(45000)
             .setAssignedPartitions(mkAssignment(
@@ -1589,7 +1594,7 @@ public class ClassicGroupTest {
             null,
             logContext,
             time,
-            new KRaftCoordinatorMetadataImage(metadataImage)
+            metadataImage
         );
 
         ClassicGroup expectedClassicGroup = new ClassicGroup(
@@ -1612,13 +1617,13 @@ public class ClassicGroupTest {
                 member1.rebalanceTimeoutMs(),
                 member1.classicProtocolSessionTimeout().get(),
                 ConsumerProtocol.PROTOCOL_TYPE,
-                new JoinGroupRequestData.JoinGroupRequestProtocolCollection(List.of(
+                new JoinGroupRequestData.JoinGroupRequestProtocolCollection(Collections.singletonList(
                     new JoinGroupRequestData.JoinGroupRequestProtocol()
                         .setName(protocols1.get(0).name())
                         .setMetadata(protocols1.get(0).metadata())
                 ).iterator()),
                 Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(
-                    List.of(new TopicPartition(fooTopicName, 0))
+                    Collections.singletonList(new TopicPartition(fooTopicName, 0))
                 )))
             )
         );

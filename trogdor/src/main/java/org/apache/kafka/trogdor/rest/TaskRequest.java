@@ -23,9 +23,16 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 /**
  * The request to /coordinator/tasks/{taskId}
  */
-public record TaskRequest(String taskId) {
+public class TaskRequest {
+    private final String taskId;
+
     @JsonCreator
     public TaskRequest(@JsonProperty("taskId") String taskId) {
         this.taskId = taskId == null ? "" : taskId;
+    }
+
+    @JsonProperty
+    public String taskId() {
+        return taskId;
     }
 }

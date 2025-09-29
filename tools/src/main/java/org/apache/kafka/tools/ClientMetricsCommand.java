@@ -21,9 +21,9 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
+import org.apache.kafka.clients.admin.ClientMetricsResourceListing;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
-import org.apache.kafka.clients.admin.ListConfigResourcesOptions;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.utils.Exit;
@@ -37,20 +37,18 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import joptsimple.ArgumentAcceptingOptionSpec;
-import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
 
@@ -91,7 +89,11 @@ public class ClientMetricsCommand {
             }
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
-            printException(Objects.requireNonNullElse(cause, e));
+            if (cause != null) {
+                printException(cause);
+            } else {
+                printException(e);
+            }
             exitCode = 1;
         } catch (Throwable t) {
             printException(t);
@@ -117,7 +119,7 @@ public class ClientMetricsCommand {
             String entityName = opts.hasGenerateNameOption() ? Uuid.randomUuid().toString() : opts.name().get();
 
             Map<String, String> configsToBeSet = new HashMap<>();
-            opts.interval().map(intervalVal -> configsToBeSet.put("interval.ms", intervalVal));
+            opts.interval().map(intervalVal -> configsToBeSet.put("interval.ms", intervalVal.toString()));
             opts.metrics().map(metricslist -> configsToBeSet.put("metrics", String.join(",", metricslist)));
             opts.match().map(matchlist -> configsToBeSet.put("match", String.join(",", matchlist)));
 
@@ -126,8 +128,8 @@ public class ClientMetricsCommand {
             Collection<AlterConfigOp> alterEntries = configsToBeSet.entrySet().stream()
                     .map(entry -> new AlterConfigOp(new ConfigEntry(entry.getKey(), entry.getValue()),
                             entry.getValue().isEmpty() ? AlterConfigOp.OpType.DELETE : AlterConfigOp.OpType.SET))
-                    .toList();
-            adminClient.incrementalAlterConfigs(Map.of(configResource, alterEntries), alterOptions).all()
+                    .collect(Collectors.toList());
+            adminClient.incrementalAlterConfigs(Collections.singletonMap(configResource, alterEntries), alterOptions).all()
                     .get(30, TimeUnit.SECONDS);
 
             System.out.println("Altered client metrics config for " + entityName + ".");
@@ -140,8 +142,8 @@ public class ClientMetricsCommand {
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, entityName);
             AlterConfigsOptions alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false);
             Collection<AlterConfigOp> alterEntries = oldConfigs.stream()
-                    .map(entry -> new AlterConfigOp(entry, AlterConfigOp.OpType.DELETE)).toList();
-            adminClient.incrementalAlterConfigs(Map.of(configResource, alterEntries), alterOptions)
+                    .map(entry -> new AlterConfigOp(entry, AlterConfigOp.OpType.DELETE)).collect(Collectors.toList());
+            adminClient.incrementalAlterConfigs(Collections.singletonMap(configResource, alterEntries), alterOptions)
                     .all().get(30, TimeUnit.SECONDS);
 
             System.out.println("Deleted client metrics config for " + entityName + ".");
@@ -152,19 +154,11 @@ public class ClientMetricsCommand {
 
             List<String> entities;
             if (entityNameOpt.isPresent()) {
-                if (adminClient.listConfigResources(Set.of(ConfigResource.Type.CLIENT_METRICS), new ListConfigResourcesOptions())
-                        .all().get(30, TimeUnit.SECONDS).stream()
-                        .noneMatch(resource -> resource.name().equals(entityNameOpt.get()))) {
-                    System.out.println("The client metric resource " + entityNameOpt.get() + " doesn't exist and doesn't have dynamic config.");
-                    return;
-                }
-                entities = List.of(entityNameOpt.get());
+                entities = Collections.singletonList(entityNameOpt.get());
             } else {
-                Collection<ConfigResource> resources = adminClient
-                    .listConfigResources(Set.of(ConfigResource.Type.CLIENT_METRICS), new ListConfigResourcesOptions())
-                    .all()
-                    .get(30, TimeUnit.SECONDS);
-                entities = resources.stream().map(ConfigResource::name).toList();
+                Collection<ClientMetricsResourceListing> resources = adminClient.listClientMetricsResources()
+                        .all().get(30, TimeUnit.SECONDS);
+                entities = resources.stream().map(ClientMetricsResourceListing::name).collect(Collectors.toList());
             }
 
             for (String entity : entities) {
@@ -175,17 +169,15 @@ public class ClientMetricsCommand {
         }
 
         public void listClientMetrics() throws Exception {
-            Collection<ConfigResource> resources = adminClient
-                .listConfigResources(Set.of(ConfigResource.Type.CLIENT_METRICS), new ListConfigResourcesOptions())
-                .all()
-                .get(30, TimeUnit.SECONDS);
-            String results = resources.stream().map(ConfigResource::name).collect(Collectors.joining("\n"));
+            Collection<ClientMetricsResourceListing> resources = adminClient.listClientMetricsResources()
+                    .all().get(30, TimeUnit.SECONDS);
+            String results = resources.stream().map(ClientMetricsResourceListing::name).collect(Collectors.joining("\n"));
             System.out.println(results);
         }
 
         private Collection<ConfigEntry> getClientMetricsConfig(String entityName) throws Exception {
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, entityName);
-            Map<ConfigResource, Config> result = adminClient.describeConfigs(Set.of(configResource))
+            Map<ConfigResource, Config> result = adminClient.describeConfigs(Collections.singleton(configResource))
                     .all().get(30, TimeUnit.SECONDS);
             return result.get(configResource).entries();
         }
@@ -218,7 +210,7 @@ public class ClientMetricsCommand {
 
         private final OptionSpecBuilder generateNameOpt;
 
-        private final ArgumentAcceptingOptionSpec<String> intervalOpt;
+        private final ArgumentAcceptingOptionSpec<Integer> intervalOpt;
 
         private final ArgumentAcceptingOptionSpec<String> matchOpt;
 
@@ -245,35 +237,30 @@ public class ClientMetricsCommand {
                 .describedAs("name")
                 .ofType(String.class);
             generateNameOpt = parser.accepts("generate-name", "Generate a UUID to use as the name.");
-            String nl = System.lineSeparator();
-
-            intervalOpt = parser.accepts("interval", "The metrics push interval in milliseconds." + nl + "Leave empty to reset the interval.")
+            intervalOpt = parser.accepts("interval", "The metrics push interval in milliseconds.")
                 .withRequiredArg()
                 .describedAs("push interval")
-                .ofType(String.class);
+                .ofType(java.lang.Integer.class);
 
+            String nl = System.lineSeparator();
 
             String[] matchSelectors = new String[] {
                 "client_id", "client_instance_id", "client_software_name",
                 "client_software_version", "client_source_address", "client_source_port"
             };
             String matchSelectorNames = Arrays.stream(matchSelectors).map(config -> "\t" + config).collect(Collectors.joining(nl));
-            matchOpt = parser.accepts("match", "Matching selector 'k1=v1,k2=v2'. The following is a list of valid selector names: " + nl + matchSelectorNames)
+            matchOpt = parser.accepts("match",  "Matching selector 'k1=v1,k2=v2'. The following is a list of valid selector names: " + nl + matchSelectorNames)
                 .withRequiredArg()
                 .describedAs("k1=v1,k2=v2")
                 .ofType(String.class)
                 .withValuesSeparatedBy(',');
-            metricsOpt = parser.accepts("metrics", "Telemetry metric name prefixes 'm1,m2'.")
+            metricsOpt = parser.accepts("metrics",  "Telemetry metric name prefixes 'm1,m2'.")
                 .withRequiredArg()
                 .describedAs("m1,m2")
                 .ofType(String.class)
                 .withValuesSeparatedBy(',');
 
-            try {
-                options = parser.parse(args);
-            } catch (OptionException oe) {
-                CommandLineUtils.printUsageAndExit(parser, oe.getMessage());
-            }
+            options = parser.parse(args);
 
             checkArgs();
         }
@@ -342,7 +329,7 @@ public class ClientMetricsCommand {
             return valuesAsOption(metricsOpt);
         }
 
-        public Optional<String> interval() {
+        public Optional<Integer> interval() {
             return valueAsOption(intervalOpt);
         }
 
@@ -375,18 +362,6 @@ public class ClientMetricsCommand {
             if (has(alterOpt)) {
                 if ((isNamePresent && has(generateNameOpt)) || (!isNamePresent && !has(generateNameOpt)))
                     throw new IllegalArgumentException("One of --name or --generate-name must be specified with --alter.");
-
-                interval().ifPresent(intervalStr -> {
-                    if (!intervalStr.isEmpty()) {
-                        try {
-                            Integer.parseInt(intervalStr);
-                        } catch (NumberFormatException e) {
-                            throw new IllegalArgumentException(
-                                    "Invalid interval value. Enter an integer, or leave empty to reset.");
-                        }
-                    }
-
-                });
             }
 
             if (has(deleteOpt) && !isNamePresent)

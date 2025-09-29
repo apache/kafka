@@ -86,12 +86,7 @@ public class StreamsSmokeTest {
                     // do their bounces, etc.
                     final Map<String, Set<Integer>> allData =
                         generate(kafka, numKeys, maxRecordsPerKey, Duration.ofSeconds(90));
-                    SmokeTestDriver.verify(
-                        kafka,
-                        allData,
-                        maxRecordsPerKey,
-                        StreamsConfig.EXACTLY_ONCE_V2.equals(processingGuarantee)
-                    );
+                    SmokeTestDriver.verify(kafka, allData, maxRecordsPerKey);
                 }
                 break;
             case "process":

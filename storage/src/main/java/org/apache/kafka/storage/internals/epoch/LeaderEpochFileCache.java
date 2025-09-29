@@ -26,6 +26,7 @@ import org.slf4j.Logger;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -92,7 +93,7 @@ public final class LeaderEpochFileCache {
         LogContext logContext = new LogContext("[LeaderEpochCache " + topicPartition + "] ");
         log = logContext.logger(LeaderEpochFileCache.class);
         for (EpochEntry entry : epochEntries) {
-            epochs.put(entry.epoch(), entry);
+            epochs.put(entry.epoch, entry);
         }
     }
 
@@ -118,11 +119,11 @@ public final class LeaderEpochFileCache {
     }
 
     private boolean isUpdateNeeded(EpochEntry entry) {
-        return latestEntry().map(epochEntry -> entry.epoch() != epochEntry.epoch() || entry.startOffset() < epochEntry.startOffset()).orElse(true);
+        return latestEntry().map(epochEntry -> entry.epoch != epochEntry.epoch || entry.startOffset < epochEntry.startOffset).orElse(true);
     }
 
     private boolean assign(EpochEntry entry) {
-        if (entry.epoch() < 0 || entry.startOffset() < 0) {
+        if (entry.epoch < 0 || entry.startOffset < 0) {
             throw new IllegalArgumentException("Received invalid partition leader epoch entry " + entry);
         }
 
@@ -134,7 +135,7 @@ public final class LeaderEpochFileCache {
         try {
             if (isUpdateNeeded(entry)) {
                 maybeTruncateNonMonotonicEntries(entry);
-                epochs.put(entry.epoch(), entry);
+                epochs.put(entry.epoch, entry);
                 return true;
             } else {
                 return false;
@@ -150,9 +151,9 @@ public final class LeaderEpochFileCache {
     private void maybeTruncateNonMonotonicEntries(EpochEntry newEntry) {
         List<EpochEntry> removedEpochs = removeWhileMatching(
                 epochs.descendingMap().entrySet().iterator(),
-                entry -> entry.epoch() >= newEntry.epoch() || entry.startOffset() >= newEntry.startOffset());
+                entry -> entry.epoch >= newEntry.epoch || entry.startOffset >= newEntry.startOffset);
 
-        if (removedEpochs.size() > 1 || (!removedEpochs.isEmpty() && removedEpochs.get(0).startOffset() != newEntry.startOffset())) {
+        if (removedEpochs.size() > 1 || (!removedEpochs.isEmpty() && removedEpochs.get(0).startOffset != newEntry.startOffset)) {
 
             // Only log a warning if there were non-trivial removals. If the start offset of the new entry
             // matches the start offset of the removed epoch, then no data has been written and the truncation
@@ -199,14 +200,14 @@ public final class LeaderEpochFileCache {
      * Returns the current Leader Epoch if one exists. This is the latest epoch
      * which has messages assigned to it.
      */
-    public Optional<Integer> latestEpoch() {
-        return latestEntry().map(epochEntry -> epochEntry.epoch());
+    public OptionalInt latestEpoch() {
+        return latestEntry().map(epochEntry -> OptionalInt.of(epochEntry.epoch)).orElseGet(OptionalInt::empty);
     }
 
     public OptionalInt previousEpoch() {
         lock.readLock().lock();
         try {
-            return latestEntry().flatMap(entry -> Optional.ofNullable(epochs.lowerEntry(entry.epoch())))
+            return latestEntry().flatMap(entry -> Optional.ofNullable(epochs.lowerEntry(entry.epoch)))
                     .map(integerEpochEntryEntry -> OptionalInt.of(integerEpochEntryEntry.getKey())).orElseGet(OptionalInt::empty);
         } finally {
             lock.readLock().unlock();
@@ -289,7 +290,7 @@ public final class LeaderEpochFileCache {
                 // This may happen if a bootstrapping follower sends a request with undefined epoch or
                 // a follower is on the older message format where leader epochs are not recorded
                 epochAndOffset = new AbstractMap.SimpleImmutableEntry<>(UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET);
-            } else if (latestEpoch().isPresent() && latestEpoch().get() == requestedEpoch) {
+            } else if (latestEpoch().isPresent() && latestEpoch().getAsInt() == requestedEpoch) {
                 // For the leader, the latest epoch is always the current leader epoch that is still being written to.
                 // Followers should not have any reason to query for the end offset of the current epoch, but a consumer
                 // might if it is verifying its committed offset following a group rebalance. In this case, we return
@@ -309,11 +310,11 @@ public final class LeaderEpochFileCache {
                         // epochs in between, but the point is that the data has already been removed from the log
                         // and we want to ensure that the follower can replicate correctly beginning from the leader's
                         // start offset.
-                        epochAndOffset = new AbstractMap.SimpleImmutableEntry<>(requestedEpoch, higherEntry.getValue().startOffset());
+                        epochAndOffset = new AbstractMap.SimpleImmutableEntry<>(requestedEpoch, higherEntry.getValue().startOffset);
                     } else {
                         // We have at least one previous epoch and one subsequent epoch. The result is the first
                         // prior epoch and the starting offset of the first subsequent epoch.
-                        epochAndOffset = new AbstractMap.SimpleImmutableEntry<>(floorEntry.getValue().epoch(), higherEntry.getValue().startOffset());
+                        epochAndOffset = new AbstractMap.SimpleImmutableEntry<>(floorEntry.getValue().epoch, higherEntry.getValue().startOffset);
                     }
                 }
             }
@@ -389,12 +390,12 @@ public final class LeaderEpochFileCache {
 
     private static List<EpochEntry> truncateFromStart(TreeMap<Integer, EpochEntry> epochs, long startOffset) {
         List<EpochEntry> removedEntries = removeWhileMatching(
-                epochs.entrySet().iterator(), entry -> entry.startOffset() <= startOffset);
+                epochs.entrySet().iterator(), entry -> entry.startOffset <= startOffset);
 
         if (!removedEntries.isEmpty()) {
             EpochEntry firstBeforeStartOffset = removedEntries.get(removedEntries.size() - 1);
-            EpochEntry updatedFirstEntry = new EpochEntry(firstBeforeStartOffset.epoch(), startOffset);
-            epochs.put(updatedFirstEntry.epoch(), updatedFirstEntry);
+            EpochEntry updatedFirstEntry = new EpochEntry(firstBeforeStartOffset.epoch, startOffset);
+            epochs.put(updatedFirstEntry.epoch, updatedFirstEntry);
         }
 
         return removedEntries;
@@ -402,10 +403,10 @@ public final class LeaderEpochFileCache {
 
     private static List<EpochEntry> truncateFromEnd(TreeMap<Integer, EpochEntry> epochs, long endOffset) {
         Optional<EpochEntry> epochEntry = Optional.ofNullable(epochs.lastEntry()).map(Entry::getValue);
-        if (endOffset >= 0 && epochEntry.isPresent() && epochEntry.get().startOffset() >= endOffset) {
-            return removeWhileMatching(epochs.descendingMap().entrySet().iterator(), x -> x.startOffset() >= endOffset);
+        if (endOffset >= 0 && epochEntry.isPresent() && epochEntry.get().startOffset >= endOffset) {
+            return removeWhileMatching(epochs.descendingMap().entrySet().iterator(), x -> x.startOffset >= endOffset);
         }
-        return List.of();
+        return Collections.emptyList();
     }
 
     public OptionalInt epochForOffset(long offset) {
@@ -413,8 +414,8 @@ public final class LeaderEpochFileCache {
         try {
             OptionalInt previousEpoch = OptionalInt.empty();
             for (EpochEntry epochEntry : epochs.values()) {
-                int epoch = epochEntry.epoch();
-                long startOffset = epochEntry.startOffset();
+                int epoch = epochEntry.epoch;
+                long startOffset = epochEntry.startOffset;
 
                 // Found the exact offset, return the respective epoch.
                 if (startOffset == offset) return OptionalInt.of(epoch);
@@ -505,7 +506,7 @@ public final class LeaderEpochFileCache {
         try {
             NavigableMap<Integer, Long> epochWithOffsets = new TreeMap<>();
             for (EpochEntry epochEntry : epochs.values()) {
-                epochWithOffsets.put(epochEntry.epoch(), epochEntry.startOffset());
+                epochWithOffsets.put(epochEntry.epoch, epochEntry.startOffset);
             }
             return epochWithOffsets;
         } finally {

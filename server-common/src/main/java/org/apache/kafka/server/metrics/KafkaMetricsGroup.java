@@ -24,6 +24,7 @@ import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.Timer;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -84,7 +85,7 @@ public class KafkaMetricsGroup {
     }
 
     public <T> Gauge<T> newGauge(String name, Supplier<T> metric) {
-        return newGauge(name, metric, Map.of());
+        return newGauge(name, metric, Collections.emptyMap());
     }
 
     public <T> Gauge<T> newGauge(MetricName name, Supplier<T> metric) {
@@ -103,7 +104,7 @@ public class KafkaMetricsGroup {
 
     public final Meter newMeter(String name, String eventType,
                                 TimeUnit timeUnit) {
-        return newMeter(name, eventType, timeUnit, Map.of());
+        return newMeter(name, eventType, timeUnit, Collections.emptyMap());
     }
 
     public final Meter newMeter(MetricName metricName, String eventType, TimeUnit timeUnit) {
@@ -115,7 +116,7 @@ public class KafkaMetricsGroup {
     }
 
     public final Histogram newHistogram(String name) {
-        return newHistogram(name, true, Map.of());
+        return newHistogram(name, true, Collections.emptyMap());
     }
 
     public final Timer newTimer(String name, TimeUnit durationUnit, TimeUnit rateUnit, Map<String, String> tags) {
@@ -123,7 +124,7 @@ public class KafkaMetricsGroup {
     }
 
     public final Timer newTimer(String name, TimeUnit durationUnit, TimeUnit rateUnit) {
-        return newTimer(name, durationUnit, rateUnit, Map.of());
+        return newTimer(name, durationUnit, rateUnit, Collections.emptyMap());
     }
 
     public final Timer newTimer(MetricName metricName, TimeUnit durationUnit, TimeUnit rateUnit) {
@@ -135,7 +136,7 @@ public class KafkaMetricsGroup {
     }
 
     public final void removeMetric(String name) {
-        removeMetric(name, Map.of());
+        removeMetric(name, Collections.emptyMap());
     }
 
     public final void removeMetric(MetricName metricName) {
@@ -145,7 +146,7 @@ public class KafkaMetricsGroup {
     private static Optional<String> toMBeanName(Map<String, String> tags) {
         List<Map.Entry<String, String>> filteredTags = tags.entrySet().stream()
                 .filter(entry -> !entry.getValue().isEmpty())
-                .toList();
+                .collect(Collectors.toList());
         if (!filteredTags.isEmpty()) {
             String tagsString = filteredTags.stream()
                     .map(entry -> entry.getKey() + "=" + Sanitizer.jmxSanitize(entry.getValue()))
@@ -159,7 +160,7 @@ public class KafkaMetricsGroup {
     private static Optional<String> toScope(Map<String, String> tags) {
         List<Map.Entry<String, String>> filteredTags = tags.entrySet().stream()
                 .filter(entry -> !entry.getValue().isEmpty())
-                .toList();
+                .collect(Collectors.toList());
         if (!filteredTags.isEmpty()) {
             // convert dot to _ since reporters like Graphite typically use dot to represent hierarchy
             String tagsString = filteredTags.stream()

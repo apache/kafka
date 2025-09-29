@@ -16,28 +16,82 @@
  */
 package org.apache.kafka.server.common;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-public record FinalizedFeatures(
-    MetadataVersion metadataVersion,
-    Map<String, Short> finalizedFeatures,
-    long finalizedFeaturesEpoch
-) {
+public final class FinalizedFeatures {
+    private final MetadataVersion metadataVersion;
+    private final Map<String, Short> finalizedFeatures;
+    private final long finalizedFeaturesEpoch;
+
     public static FinalizedFeatures fromKRaftVersion(MetadataVersion version) {
-        return new FinalizedFeatures(version, Map.of(), -1);
+        return new FinalizedFeatures(version, Collections.emptyMap(), -1, true);
     }
 
     public FinalizedFeatures(
         MetadataVersion metadataVersion,
         Map<String, Short> finalizedFeatures,
-        long finalizedFeaturesEpoch
+        long finalizedFeaturesEpoch,
+        boolean kraftMode
     ) {
-        this.metadataVersion = Objects.requireNonNull(metadataVersion);
+        this.metadataVersion = metadataVersion;
         this.finalizedFeatures = new HashMap<>(finalizedFeatures);
         this.finalizedFeaturesEpoch = finalizedFeaturesEpoch;
-        this.finalizedFeatures.put(MetadataVersion.FEATURE_NAME, metadataVersion.featureLevel());
+        // In KRaft mode, we always include the metadata version in the features map.
+        // In ZK mode, we never include it.
+        if (kraftMode) {
+            this.finalizedFeatures.put(MetadataVersion.FEATURE_NAME, metadataVersion.featureLevel());
+        } else {
+            this.finalizedFeatures.remove(MetadataVersion.FEATURE_NAME);
+        }
+    }
+
+    // Internal constructor only for copying FinalizedFeatures.
+    private FinalizedFeatures(
+        MetadataVersion metadataVersion,
+        Map<String, Short> finalizedFeatures,
+        long finalizedFeaturesEpoch
+    ) {
+        this.metadataVersion = metadataVersion;
+        this.finalizedFeatures = new HashMap<>(finalizedFeatures);
+        this.finalizedFeaturesEpoch = finalizedFeaturesEpoch;
+    }
+
+    public MetadataVersion metadataVersion() {
+        return metadataVersion;
+    }
+
+    public Map<String, Short> finalizedFeatures() {
+        return finalizedFeatures;
+    }
+
+    public long finalizedFeaturesEpoch() {
+        return finalizedFeaturesEpoch;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || !(o.getClass().equals(FinalizedFeatures.class))) return false;
+        FinalizedFeatures other = (FinalizedFeatures) o;
+        return metadataVersion == other.metadataVersion &&
+            finalizedFeatures.equals(other.finalizedFeatures) &&
+                finalizedFeaturesEpoch == other.finalizedFeaturesEpoch;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(metadataVersion, finalizedFeatures, finalizedFeaturesEpoch);
+    }
+
+    @Override
+    public String toString() {
+        return "Features" +
+                "(metadataVersion=" + metadataVersion +
+                ", finalizedFeatures=" + finalizedFeatures +
+                ", finalizedFeaturesEpoch=" + finalizedFeaturesEpoch +
+                ")";
     }
 
     public FinalizedFeatures setFinalizedLevel(String key, short level) {

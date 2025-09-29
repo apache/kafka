@@ -25,7 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -42,7 +42,7 @@ public class BooleanConverterTest {
 
     @BeforeEach
     public void setUp() {
-        converter.configure(Map.of(), false);
+        converter.configure(Collections.emptyMap(), false);
     }
 
     @Test

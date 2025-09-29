@@ -24,6 +24,7 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -40,18 +41,18 @@ public class HoistFieldTest {
 
     @Test
     public void schemaless() {
-        xform.configure(Map.of("field", "magic"));
+        xform.configure(Collections.singletonMap("field", "magic"));
 
         final SinkRecord record = new SinkRecord("test", 0, null, 42, null, null, 0);
         final SinkRecord transformedRecord = xform.apply(record);
 
         assertNull(transformedRecord.keySchema());
-        assertEquals(Map.of("magic", 42), transformedRecord.key());
+        assertEquals(Collections.singletonMap("magic", 42), transformedRecord.key());
     }
 
     @Test
     public void withSchema() {
-        xform.configure(Map.of("field", "magic"));
+        xform.configure(Collections.singletonMap("field", "magic"));
 
         final SinkRecord record = new SinkRecord("test", 0, Schema.INT32_SCHEMA, 42, null, null, 0);
         final SinkRecord transformedRecord = xform.apply(record);
@@ -63,7 +64,7 @@ public class HoistFieldTest {
 
     @Test
     public void testSchemalessMapIsMutable() {
-        xform.configure(Map.of("field", "magic"));
+        xform.configure(Collections.singletonMap("field", "magic"));
 
         final SinkRecord record = new SinkRecord("test", 0, null, 420, null, null, 0);
         final SinkRecord transformedRecord = xform.apply(record);

@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -31,7 +32,7 @@ public class NoneConnectorClientConfigOverridePolicyTest extends BaseConnectorCl
 
     @Test
     public void testNoOverrides() {
-        testValidOverride(Map.of());
+        testValidOverride(Collections.emptyMap());
     }
 
     @Test

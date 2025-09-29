@@ -17,14 +17,12 @@
 package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.ProcessorContext;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
-
-import static org.apache.kafka.streams.errors.internals.ExceptionHandlerUtils.maybeBuildDeadLetterQueueRecords;
 
 /**
  * Deserialization handler that logs a deserialization exception and then
@@ -32,12 +30,17 @@ import static org.apache.kafka.streams.errors.internals.ExceptionHandlerUtils.ma
  */
 public class LogAndContinueExceptionHandler implements DeserializationExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(LogAndContinueExceptionHandler.class);
-    private String deadLetterQueueTopic = null;
 
+    /**
+     * @deprecated Since 3.9. Use {@link #handle(ErrorHandlerContext, ConsumerRecord, Exception)} instead.
+     */
+    @SuppressWarnings("deprecation")
+    @Deprecated
     @Override
-    public Response handleError(final ErrorHandlerContext context,
-                                final ConsumerRecord<byte[], byte[]> record,
-                                final Exception exception) {
+    public DeserializationHandlerResponse handle(final ProcessorContext context,
+                                                 final ConsumerRecord<byte[], byte[]> record,
+                                                 final Exception exception) {
+
         log.warn(
             "Exception caught during Deserialization, taskId: {}, topic: {}, partition: {}, offset: {}",
             context.taskId(),
@@ -47,12 +50,28 @@ public class LogAndContinueExceptionHandler implements DeserializationExceptionH
             exception
         );
 
-        return Response.resume(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, context.sourceRawKey(), context.sourceRawValue(), context, exception));
+        return DeserializationHandlerResponse.CONTINUE;
+    }
+
+    @Override
+    public DeserializationHandlerResponse handle(final ErrorHandlerContext context,
+                                                 final ConsumerRecord<byte[], byte[]> record,
+                                                 final Exception exception) {
+
+        log.warn(
+            "Exception caught during Deserialization, taskId: {}, topic: {}, partition: {}, offset: {}",
+            context.taskId(),
+            record.topic(),
+            record.partition(),
+            record.offset(),
+            exception
+        );
+
+        return DeserializationHandlerResponse.CONTINUE;
     }
 
     @Override
     public void configure(final Map<String, ?> configs) {
-        if (configs.get(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG) != null)
-            deadLetterQueueTopic = String.valueOf(configs.get(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG));
+        // ignore
     }
 }

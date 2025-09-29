@@ -21,8 +21,9 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.image.node.MetadataLeafNode;
 import org.apache.kafka.image.node.MetadataNode;
 
+import java.util.Arrays;
 import java.util.Collection;
-import java.util.List;
+
 
 /**
  * The /local node of the metadata shell, which contains information about the shell itself.
@@ -45,7 +46,7 @@ public class LocalShellNode implements MetadataNode {
 
     @Override
     public Collection<String> childNames() {
-        return List.of(VERSION, COMMIT_ID);
+        return Arrays.asList(VERSION, COMMIT_ID);
     }
 
     @Override

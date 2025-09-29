@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -36,25 +37,25 @@ public class ClientMetricsInstanceMetadataTest {
         Uuid uuid = Uuid.randomUuid();
         ClientMetricsInstanceMetadata instanceMetadata = new ClientMetricsInstanceMetadata(uuid, ClientMetricsTestUtils.requestContext());
         // We consider empty/missing client matching patterns as valid
-        assertTrue(instanceMetadata.isMatch(Map.of()));
+        assertTrue(instanceMetadata.isMatch(Collections.emptyMap()));
 
         assertTrue(instanceMetadata.isMatch(
-            Map.of(ClientMetricsConfigs.CLIENT_ID, Pattern.compile(".*"))));
+            Collections.singletonMap(ClientMetricsConfigs.CLIENT_ID, Pattern.compile(".*"))));
         assertTrue(instanceMetadata.isMatch(
-            Map.of(ClientMetricsConfigs.CLIENT_ID, Pattern.compile("producer-1"))));
+            Collections.singletonMap(ClientMetricsConfigs.CLIENT_ID, Pattern.compile("producer-1"))));
         assertTrue(instanceMetadata.isMatch(
-            Map.of(ClientMetricsConfigs.CLIENT_ID, Pattern.compile("producer.*"))));
+            Collections.singletonMap(ClientMetricsConfigs.CLIENT_ID, Pattern.compile("producer.*"))));
         assertTrue(instanceMetadata.isMatch(
-            Map.of(ClientMetricsConfigs.CLIENT_INSTANCE_ID, Pattern.compile(uuid.toString()))));
+            Collections.singletonMap(ClientMetricsConfigs.CLIENT_INSTANCE_ID, Pattern.compile(uuid.toString()))));
         assertTrue(instanceMetadata.isMatch(
-            Map.of(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, Pattern.compile("apache-kafka-java"))));
+            Collections.singletonMap(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, Pattern.compile("apache-kafka-java"))));
         assertTrue(instanceMetadata.isMatch(
-            Map.of(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, Pattern.compile("3.5.2"))));
+            Collections.singletonMap(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, Pattern.compile("3.5.2"))));
         assertTrue(instanceMetadata.isMatch(
-            Map.of(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, Pattern.compile(
+            Collections.singletonMap(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, Pattern.compile(
                 InetAddress.getLocalHost().getHostAddress()))));
         assertTrue(instanceMetadata.isMatch(
-            Map.of(ClientMetricsConfigs.CLIENT_SOURCE_PORT, Pattern.compile(
+            Collections.singletonMap(ClientMetricsConfigs.CLIENT_SOURCE_PORT, Pattern.compile(
                 String.valueOf(ClientMetricsTestUtils.CLIENT_PORT)))));
     }
 
@@ -64,14 +65,13 @@ public class ClientMetricsInstanceMetadataTest {
         ClientMetricsInstanceMetadata instanceMetadata = new ClientMetricsInstanceMetadata(uuid,
             ClientMetricsTestUtils.requestContext());
 
-        Map<String, Pattern> patternMap = Map.of(
-                ClientMetricsConfigs.CLIENT_ID, Pattern.compile("producer-1"),
-                ClientMetricsConfigs.CLIENT_INSTANCE_ID, Pattern.compile(uuid.toString()),
-                ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, Pattern.compile("apache-kafka-.*"),
-                ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, Pattern.compile("3.5.2"),
-                ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, Pattern.compile(InetAddress.getLocalHost().getHostAddress()),
-                ClientMetricsConfigs.CLIENT_SOURCE_PORT, Pattern.compile(String.valueOf(ClientMetricsTestUtils.CLIENT_PORT))
-        );
+        Map<String, Pattern> patternMap = new HashMap<>();
+        patternMap.put(ClientMetricsConfigs.CLIENT_ID, Pattern.compile("producer-1"));
+        patternMap.put(ClientMetricsConfigs.CLIENT_INSTANCE_ID, Pattern.compile(uuid.toString()));
+        patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, Pattern.compile("apache-kafka-.*"));
+        patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, Pattern.compile("3.5.2"));
+        patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, Pattern.compile(InetAddress.getLocalHost().getHostAddress()));
+        patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_PORT, Pattern.compile(String.valueOf(ClientMetricsTestUtils.CLIENT_PORT)));
 
         assertTrue(instanceMetadata.isMatch(patternMap));
     }
@@ -125,9 +125,9 @@ public class ClientMetricsInstanceMetadataTest {
             ClientMetricsTestUtils.requestContext());
 
         // Unknown key in pattern map
-        assertFalse(instanceMetadata.isMatch(Map.of("unknown", Pattern.compile(".*"))));
+        assertFalse(instanceMetadata.isMatch(Collections.singletonMap("unknown", Pattern.compile(".*"))));
         // '*' key is considered as invalid regex pattern
-        assertFalse(instanceMetadata.isMatch(Map.of("*", Pattern.compile(".*"))));
+        assertFalse(instanceMetadata.isMatch(Collections.singletonMap("*", Pattern.compile(".*"))));
     }
 
     @Test
@@ -136,9 +136,9 @@ public class ClientMetricsInstanceMetadataTest {
         ClientMetricsInstanceMetadata instanceMetadata = new ClientMetricsInstanceMetadata(uuid,
             ClientMetricsTestUtils.requestContextWithNullClientInfo());
 
-        assertFalse(instanceMetadata.isMatch(Map.of(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME,
+        assertFalse(instanceMetadata.isMatch(Collections.singletonMap(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME,
             Pattern.compile(".*"))));
-        assertFalse(instanceMetadata.isMatch(Map.of(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION,
+        assertFalse(instanceMetadata.isMatch(Collections.singletonMap(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION,
             Pattern.compile(".*"))));
     }
 }

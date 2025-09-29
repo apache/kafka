@@ -24,6 +24,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -269,13 +270,17 @@ public class BrokersToIsrs {
     PartitionsOnReplicaIterator iterator(int brokerId, boolean leadersOnly) {
         Map<Uuid, int[]> topicMap = isrMembers.get(brokerId);
         if (topicMap == null) {
-            topicMap = Map.of();
+            topicMap = Collections.emptyMap();
         }
         return new PartitionsOnReplicaIterator(topicMap, leadersOnly);
     }
 
     PartitionsOnReplicaIterator partitionsWithNoLeader() {
         return iterator(NO_LEADER, true);
+    }
+
+    PartitionsOnReplicaIterator partitionsLedByBroker(int brokerId) {
+        return iterator(brokerId, true);
     }
 
     PartitionsOnReplicaIterator partitionsWithBrokerInIsr(int brokerId) {

@@ -28,7 +28,6 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateUpdater.ExceptionAndTask;
 import org.apache.kafka.streams.processor.internals.Task.State;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import org.hamcrest.Matcher;
 import org.junit.jupiter.api.AfterEach;
@@ -106,7 +105,7 @@ class DefaultStateUpdaterTest {
 
     // need an auto-tick timer to work for draining with timeout
     private final Time time = new MockTime(1L);
-    private final StreamsMetricsImpl metrics = new StreamsMetricsImpl(new Metrics(time), "", "", time);
+    private final Metrics metrics = new Metrics(time);
     private final StreamsConfig config = new StreamsConfig(configProps(COMMIT_INTERVAL));
     private final ChangelogReader changelogReader = mock(ChangelogReader.class);
     private final TopologyMetadata topologyMetadata = unnamedTopology().build();
@@ -204,7 +203,7 @@ class DefaultStateUpdaterTest {
         verifyRestoredActiveTasks(restoredTask);
         stateUpdater.shutdown(Duration.ofMinutes(1));
 
-        final IllegalStateException exception = assertThrows(IllegalStateException.class, stateUpdater::start);
+        final IllegalStateException exception = assertThrows(IllegalStateException.class, () -> stateUpdater.start());
 
         assertEquals("State updater started with non-empty output queues."
             + " This indicates a bug. Please report at https://issues.apache.org/jira/projects/KAFKA/issues or to the"
@@ -221,7 +220,7 @@ class DefaultStateUpdaterTest {
         verifyExceptionsAndFailedTasks(new ExceptionAndTask(taskCorruptedException, failedTask));
         stateUpdater.shutdown(Duration.ofMinutes(1));
 
-        final IllegalStateException exception = assertThrows(IllegalStateException.class, stateUpdater::start);
+        final IllegalStateException exception = assertThrows(IllegalStateException.class, () -> stateUpdater.start());
 
         assertEquals("State updater started with non-empty output queues."
             + " This indicates a bug. Please report at https://issues.apache.org/jira/projects/KAFKA/issues or to the"
@@ -291,11 +290,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task2);
 
         verifyFailedTasks(IllegalStateException.class, task1);
-        waitForCondition(
-            () -> !stateUpdater.isRunning(),
-            VERIFICATION_TIMEOUT,
-            "Did not switch to non-running within the given timeout!"
-        );
+        assertFalse(stateUpdater.isRunning());
     }
 
     @Test
@@ -1020,8 +1015,6 @@ class DefaultStateUpdaterTest {
         verifyRestoredActiveTasks();
         verifyUpdatingTasks(task2);
         verifyExceptionsAndFailedTasks();
-        // shutdown ensures that the test does not end before changelog reader methods verified below are called
-        stateUpdater.shutdown(Duration.ofMinutes(1));
         verify(changelogReader, times(1)).enforceRestoreActive();
         verify(changelogReader, times(1)).transitToUpdateStandby();
     }
@@ -1159,8 +1152,6 @@ class DefaultStateUpdaterTest {
     public void shouldResumeStandbyTask() throws Exception {
         final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
         shouldResumeStatefulTask(task);
-        // shutdown ensures that the test does not end before changelog reader methods verified below are called
-        stateUpdater.shutdown(Duration.ofMinutes(1));
         verify(changelogReader, times(2)).transitToUpdateStandby();
     }
 
@@ -1681,59 +1672,8 @@ class DefaultStateUpdaterTest {
         assertThat(metrics.metrics().size(), is(1));
     }
 
-    @Test
-    public void shouldRemoveMetricsWithoutInterference() {
-        final DefaultStateUpdater stateUpdater2 =
-            new DefaultStateUpdater("test-state-updater2", metrics, config, null, changelogReader, topologyMetadata, time);
-        final List<MetricName> threadMetrics = getMetricNames("test-state-updater");
-        final List<MetricName> threadMetrics2 = getMetricNames("test-state-updater2");
-
-        stateUpdater.start();
-        stateUpdater2.start();
-
-        for (final MetricName metricName : threadMetrics) {
-            assertTrue(metrics.metrics().containsKey(metricName));
-        }
-        for (final MetricName metricName : threadMetrics2) {
-            assertTrue(metrics.metrics().containsKey(metricName));
-        }
-
-        stateUpdater2.shutdown(Duration.ofMinutes(1));
-
-        for (final MetricName metricName : threadMetrics) {
-            assertTrue(metrics.metrics().containsKey(metricName));
-        }
-        for (final MetricName metricName : threadMetrics2) {
-            assertFalse(metrics.metrics().containsKey(metricName));
-        }
-
-        stateUpdater.shutdown(Duration.ofMinutes(1));
-
-        for (final MetricName metricName : threadMetrics) {
-            assertFalse(metrics.metrics().containsKey(metricName));
-        }
-        for (final MetricName metricName : threadMetrics2) {
-            assertFalse(metrics.metrics().containsKey(metricName));
-        }
-    }
-
-    private static List<MetricName> getMetricNames(final String threadId) {
-        final Map<String, String> tagMap = Map.of("thread-id", threadId);
-        return List.of(
-            new MetricName("active-restoring-tasks", "stream-state-updater-metrics", "", tagMap),
-            new MetricName("standby-updating-tasks", "stream-state-updater-metrics", "", tagMap),
-            new MetricName("active-paused-tasks", "stream-state-updater-metrics", "", tagMap),
-            new MetricName("standby-paused-tasks", "stream-state-updater-metrics", "", tagMap),
-            new MetricName("idle-ratio", "stream-state-updater-metrics", "", tagMap),
-            new MetricName("standby-update-ratio", "stream-state-updater-metrics", "", tagMap),
-            new MetricName("checkpoint-ratio", "stream-state-updater-metrics", "", tagMap),
-            new MetricName("restore-records-rate", "stream-state-updater-metrics", "", tagMap),
-            new MetricName("restore-call-rate", "stream-state-updater-metrics", "", tagMap)
-        );
-    }
-
     @SuppressWarnings("unchecked")
-    private static <T> void verifyMetric(final StreamsMetricsImpl metrics,
+    private static <T> void verifyMetric(final Metrics metrics,
                                          final MetricName metricName,
                                          final Matcher<T> matcher) {
         assertThat(metrics.metrics().get(metricName).metricName().description(), is(metricName.description()));
@@ -1837,7 +1777,7 @@ class DefaultStateUpdaterTest {
 
     private void verifyIdle() throws Exception {
         waitForCondition(
-            stateUpdater::isIdle,
+            () -> stateUpdater.isIdle(),
             VERIFICATION_TIMEOUT,
             "State updater did not enter an idling state!"
         );
@@ -1915,5 +1855,27 @@ class DefaultStateUpdaterTest {
         );
         assertFalse(stateUpdater.hasExceptionsAndFailedTasks());
         assertTrue(stateUpdater.drainExceptionsAndFailedTasks().isEmpty());
+    }
+    
+    private void verifyRemovedTasks(final Task... tasks) throws Exception {
+        if (tasks.length == 0) {
+            waitForCondition(
+                () -> stateUpdater.removedTasks().isEmpty(),
+                VERIFICATION_TIMEOUT,
+                "Did not get empty removed task within the given timeout!"
+            );
+        } else {
+            final Set<Task> expectedRemovedTasks = Set.of(tasks);
+            final Set<Task> removedTasks = new HashSet<>();
+            waitForCondition(
+                () -> {
+                    removedTasks.addAll(stateUpdater.removedTasks());
+                    return removedTasks.containsAll(expectedRemovedTasks)
+                        && removedTasks.size() == expectedRemovedTasks.size();
+                },
+                VERIFICATION_TIMEOUT,
+                "Did not get all removed task within the given timeout!"
+            );
+        }
     }
 }

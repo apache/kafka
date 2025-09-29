@@ -54,7 +54,6 @@ public class SmokeTestClient extends SmokeTestUtil {
     private KafkaStreams streams;
     private boolean uncaughtException = false;
     private volatile boolean closed;
-    private volatile boolean error;
 
     private static void addShutdownHook(final String name, final Runnable runnable) {
         if (name != null) {
@@ -72,10 +71,6 @@ public class SmokeTestClient extends SmokeTestUtil {
         return closed;
     }
 
-    public boolean error() {
-        return error;
-    }
-
     public void start(final Properties streamsProperties) {
         final Topology build = getTopology();
         streams = new KafkaStreams(build, getStreamsConfig(streamsProperties));
@@ -89,10 +84,6 @@ public class SmokeTestClient extends SmokeTestUtil {
 
             if (newState == KafkaStreams.State.NOT_RUNNING) {
                 closed = true;
-            }
-
-            if (newState == KafkaStreams.State.ERROR) {
-                error = true;
             }
         });
 
@@ -138,9 +129,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
     private Properties getStreamsConfig(final Properties props) {
         final Properties fullProps = new Properties(props);
-        if (!props.containsKey(StreamsConfig.APPLICATION_ID_CONFIG)) {
-            fullProps.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
-        }
+        fullProps.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
         fullProps.put(StreamsConfig.CLIENT_ID_CONFIG, "SmokeTest-" + name);
         fullProps.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         fullProps.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
@@ -183,7 +172,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         final KTable<Windowed<String>, Integer> smallWindowSum = groupedData
             .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(2), Duration.ofSeconds(30)).advanceBy(Duration.ofSeconds(1)))
-            .reduce(Integer::sum);
+            .reduce((l, r) -> l + r);
 
         streamify(smallWindowSum, "sws-raw");
         streamify(smallWindowSum.suppress(untilWindowCloses(BufferConfig.unbounded())), "sws-suppressed");

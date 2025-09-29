@@ -74,7 +74,7 @@ public class EvolutionVerifier {
             verifyVersionsMatchTopLevelMessage(what, topLevelMessage, field);
         }
         for (StructSpec struct : topLevelMessage.commonStructs()) {
-            for (FieldSpec field : struct.fields()) {
+            for (FieldSpec field : topLevelMessage.fields()) {
                 verifyVersionsMatchTopLevelMessage(what, topLevelMessage, field);
             }
         }

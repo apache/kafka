@@ -41,13 +41,11 @@ import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * {@link ShareCompletedFetch} represents a {@link RecordBatch batch} of {@link Record records}
@@ -57,7 +55,7 @@ import java.util.Set;
  * to keep track of aborted transactions or the need to keep track of fetch position.
  */
 public class ShareCompletedFetch {
-    final int nodeId;
+
     final TopicIdPartition partition;
     final ShareFetchResponseData.PartitionData partitionData;
     final short requestVersion;
@@ -81,14 +79,12 @@ public class ShareCompletedFetch {
 
     ShareCompletedFetch(final LogContext logContext,
                         final BufferSupplier decompressionBufferSupplier,
-                        final int nodeId,
                         final TopicIdPartition partition,
                         final ShareFetchResponseData.PartitionData partitionData,
                         final ShareFetchMetricsAggregator metricAggregator,
                         final short requestVersion) {
         this.log = logContext.logger(org.apache.kafka.clients.consumer.internals.ShareCompletedFetch.class);
         this.decompressionBufferSupplier = decompressionBufferSupplier;
-        this.nodeId = nodeId;
         this.partition = partition;
         this.partitionData = partitionData;
         this.metricAggregator = metricAggregator;
@@ -154,25 +150,25 @@ public class ShareCompletedFetch {
      * @param maxRecords The number of records to return; the number returned may be {@code 0 <= maxRecords}
      * @param checkCrcs Whether to check the CRC of fetched records
      *
-     * @return {@link ShareInFlightBatch The ShareInFlightBatch containing records and their acknowledgements}
+     * @return {@link ShareInFlightBatch The ShareInFlightBatch containing records and their acknowledgments}
      */
     <K, V> ShareInFlightBatch<K, V> fetchRecords(final Deserializers<K, V> deserializers,
                                                  final int maxRecords,
                                                  final boolean checkCrcs) {
         // Creating an empty ShareInFlightBatch
-        ShareInFlightBatch<K, V> inFlightBatch = new ShareInFlightBatch<>(nodeId, partition);
+        ShareInFlightBatch<K, V> inFlightBatch = new ShareInFlightBatch<>(partition);
 
         if (cachedBatchException != null) {
             // If the event that a CRC check fails, reject the entire record batch because it is corrupt.
-            Set<Long> offsets = rejectRecordBatch(inFlightBatch, currentBatch);
-            inFlightBatch.setException(new ShareInFlightBatchException(cachedBatchException, offsets));
+            rejectRecordBatch(inFlightBatch, currentBatch);
+            inFlightBatch.setException(cachedBatchException);
             cachedBatchException = null;
             return inFlightBatch;
         }
 
         if (cachedRecordException != null) {
             inFlightBatch.addAcknowledgement(lastRecord.offset(), AcknowledgeType.RELEASE);
-            inFlightBatch.setException(new ShareInFlightBatchException(cachedRecordException, Set.of(lastRecord.offset())));
+            inFlightBatch.setException(cachedRecordException);
             cachedRecordException = null;
             return inFlightBatch;
         }
@@ -226,7 +222,7 @@ public class ShareCompletedFetch {
             nextAcquired = nextAcquiredRecord();
             if (inFlightBatch.isEmpty()) {
                 inFlightBatch.addAcknowledgement(lastRecord.offset(), AcknowledgeType.RELEASE);
-                inFlightBatch.setException(new ShareInFlightBatchException(se, Set.of(lastRecord.offset())));
+                inFlightBatch.setException(se);
             } else {
                 cachedRecordException = se;
                 inFlightBatch.setHasCachedException(true);
@@ -234,8 +230,8 @@ public class ShareCompletedFetch {
         } catch (CorruptRecordException e) {
             if (inFlightBatch.isEmpty()) {
                 // If the event that a CRC check fails, reject the entire record batch because it is corrupt.
-                Set<Long> offsets = rejectRecordBatch(inFlightBatch, currentBatch);
-                inFlightBatch.setException(new ShareInFlightBatchException(e, offsets));
+                rejectRecordBatch(inFlightBatch, currentBatch);
+                inFlightBatch.setException(e);
             } else {
                 cachedBatchException = e;
                 inFlightBatch.setHasCachedException(true);
@@ -263,13 +259,12 @@ public class ShareCompletedFetch {
         return null;
     }
 
-    private <K, V> Set<Long> rejectRecordBatch(final ShareInFlightBatch<K, V> inFlightBatch,
+    private <K, V> void rejectRecordBatch(final ShareInFlightBatch<K, V> inFlightBatch,
                                           final RecordBatch currentBatch) {
         // Rewind the acquiredRecordIterator to the start, so we are in a known state
         acquiredRecordIterator = acquiredRecordList.listIterator();
 
         OffsetAndDeliveryCount nextAcquired = nextAcquiredRecord();
-        Set<Long> offsets = new HashSet<>();
         for (long offset = currentBatch.baseOffset(); offset <= currentBatch.lastOffset(); offset++) {
             if (nextAcquired == null) {
                 // No more acquired records, so we are done
@@ -277,7 +272,6 @@ public class ShareCompletedFetch {
             } else if (offset == nextAcquired.offset) {
                 // It's acquired, so we reject it
                 inFlightBatch.addAcknowledgement(offset, AcknowledgeType.REJECT);
-                offsets.add(offset);
             } else if (offset < nextAcquired.offset) {
                 // It's not acquired, so we skip it
                 continue;
@@ -285,7 +279,6 @@ public class ShareCompletedFetch {
 
             nextAcquired = nextAcquiredRecord();
         }
-        return offsets;
     }
 
     /**
@@ -303,13 +296,13 @@ public class ShareCompletedFetch {
         K key;
         V value;
         try {
-            key = keyBytes == null ? null : deserializers.keyDeserializer().deserialize(partition.topic(), headers, keyBytes);
+            key = keyBytes == null ? null : deserializers.keyDeserializer.deserialize(partition.topic(), headers, keyBytes);
         } catch (RuntimeException e) {
             log.error("Key Deserializers with error: {}", deserializers);
             throw newRecordDeserializationException(RecordDeserializationException.DeserializationExceptionOrigin.KEY, partition.topicPartition(), timestampType, record, e, headers);
         }
         try {
-            value = valueBytes == null ? null : deserializers.valueDeserializer().deserialize(partition.topic(), headers, valueBytes);
+            value = valueBytes == null ? null : deserializers.valueDeserializer.deserialize(partition.topic(), headers, valueBytes);
         } catch (RuntimeException e) {
             log.error("Value Deserializers with error: {}", deserializers);
             throw newRecordDeserializationException(RecordDeserializationException.DeserializationExceptionOrigin.VALUE, partition.topicPartition(), timestampType, record, e, headers);

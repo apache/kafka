@@ -18,7 +18,6 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Objects;
 
-@Deprecated(since = "4.1")
 public class ClientMetricsResourceListing {
     private final String name;
 

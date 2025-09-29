@@ -187,8 +187,4 @@ public class KafkaScheduler implements Scheduler {
         ScheduledThreadPoolExecutor e = executor;
         return e != null && e.getQueue().contains(task);
     }
-
-    public int pendingTaskSize() {
-        return isStarted() ? executor.getQueue().size() : 0;
-    }
 }

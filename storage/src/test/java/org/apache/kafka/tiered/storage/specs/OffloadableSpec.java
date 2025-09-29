@@ -19,9 +19,33 @@ package org.apache.kafka.tiered.storage.specs;
 import org.apache.kafka.clients.producer.ProducerRecord;
 
 import java.util.List;
+import java.util.Objects;
 
-public record OffloadableSpec(int sourceBrokerId, int baseOffset,
-                              List<ProducerRecord<String, String>> records) {
+public final class OffloadableSpec {
+
+    private final Integer sourceBrokerId;
+    private final Integer baseOffset;
+    private final List<ProducerRecord<String, String>> records;
+
+    public OffloadableSpec(Integer sourceBrokerId,
+                           Integer baseOffset,
+                           List<ProducerRecord<String, String>> records) {
+        this.sourceBrokerId = sourceBrokerId;
+        this.baseOffset = baseOffset;
+        this.records = records;
+    }
+
+    public Integer getSourceBrokerId() {
+        return sourceBrokerId;
+    }
+
+    public Integer getBaseOffset() {
+        return baseOffset;
+    }
+
+    public List<ProducerRecord<String, String>> getRecords() {
+        return records;
+    }
 
     @Override
     public String toString() {
@@ -32,4 +56,18 @@ public record OffloadableSpec(int sourceBrokerId, int baseOffset,
                 '}';
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        OffloadableSpec that = (OffloadableSpec) o;
+        return Objects.equals(sourceBrokerId, that.sourceBrokerId)
+                && Objects.equals(baseOffset, that.baseOffset)
+                && Objects.equals(records, that.records);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(sourceBrokerId, baseOffset, records);
+    }
 }

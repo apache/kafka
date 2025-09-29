@@ -18,5 +18,12 @@ package org.apache.kafka.storage.internals.log;
 
 import java.util.Optional;
 
-public record RemoteLogReadResult(Optional<FetchDataInfo> fetchDataInfo, Optional<Throwable> error) {
+public class RemoteLogReadResult {
+    public final Optional<FetchDataInfo> fetchDataInfo;
+    public final Optional<Throwable> error;
+
+    public RemoteLogReadResult(Optional<FetchDataInfo> fetchDataInfo, Optional<Throwable> error) {
+        this.fetchDataInfo = fetchDataInfo;
+        this.error = error;
+    }
 }

@@ -21,22 +21,22 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import java.util.Arrays;
 import java.util.Objects;
 
-public class SubscriptionResponseWrapper<VRight> {
+public class SubscriptionResponseWrapper<FV> {
     static final byte CURRENT_VERSION = 0;
     // v0 fields:
     private final long[] originalValueHash;
-    private final VRight foreignValue;
+    private final FV foreignValue;
     private final byte version;
     // non-serializing fields
     private final Integer primaryPartition;
 
-    public SubscriptionResponseWrapper(final long[] originalValueHash, final VRight foreignValue, final Integer primaryPartition) {
+    public SubscriptionResponseWrapper(final long[] originalValueHash, final FV foreignValue, final Integer primaryPartition) {
         this(originalValueHash, foreignValue, CURRENT_VERSION, primaryPartition);
     }
 
     public SubscriptionResponseWrapper(
         final long[] originalValueHash,
-        final VRight foreignValue,
+        final FV foreignValue,
         final byte version,
         final Integer primaryPartition) {
         if (version < 0 || version > CURRENT_VERSION) {
@@ -52,7 +52,7 @@ public class SubscriptionResponseWrapper<VRight> {
         return originalValueHash;
     }
 
-    public VRight foreignValue() {
+    public FV foreignValue() {
         return foreignValue;
     }
 

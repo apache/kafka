@@ -109,9 +109,12 @@ public final class VoterSetHistory {
      * @return the offset storing the last voter set
      */
     public OptionalLong lastVoterSetOffset() {
-        return votersHistory.lastEntry()
-            .map(voterSetEntry -> OptionalLong.of(voterSetEntry.offset()))
-            .orElseGet(OptionalLong::empty);
+        Optional<LogHistory.Entry<VoterSet>> lastEntry = votersHistory.lastEntry();
+        if (lastEntry.isPresent()) {
+            return OptionalLong.of(lastEntry.get().offset());
+        } else {
+            return OptionalLong.empty();
+        }
     }
 
     /**
@@ -139,7 +142,7 @@ public final class VoterSetHistory {
     }
 
     /**
-     * Removes all the values from this object.
+     * Removes all of the values from this object.
      */
     public void clear() {
         votersHistory.clear();

@@ -38,32 +38,24 @@ public class ShareGroupDescription {
     private final Collection<ShareMemberDescription> members;
     private final GroupState groupState;
     private final Node coordinator;
-    private final int groupEpoch;
-    private final int targetAssignmentEpoch;
     private final Set<AclOperation> authorizedOperations;
 
     public ShareGroupDescription(String groupId,
                                  Collection<ShareMemberDescription> members,
                                  GroupState groupState,
-                                 Node coordinator,
-                                 int groupEpoch,
-                                 int targetAssignmentEpoch) {
-        this(groupId, members, groupState, coordinator, groupEpoch, targetAssignmentEpoch, Collections.emptySet());
+                                 Node coordinator) {
+        this(groupId, members, groupState, coordinator, Collections.emptySet());
     }
 
     public ShareGroupDescription(String groupId,
                                  Collection<ShareMemberDescription> members,
                                  GroupState groupState,
                                  Node coordinator,
-                                 int groupEpoch,
-                                 int targetAssignmentEpoch,
                                  Set<AclOperation> authorizedOperations) {
         this.groupId = groupId == null ? "" : groupId;
         this.members = members == null ? Collections.emptyList() : List.copyOf(members);
         this.groupState = groupState;
         this.coordinator = coordinator;
-        this.groupEpoch = groupEpoch;
-        this.targetAssignmentEpoch = targetAssignmentEpoch;
         this.authorizedOperations = authorizedOperations;
     }
 
@@ -76,14 +68,12 @@ public class ShareGroupDescription {
             Objects.equals(members, that.members) &&
             groupState == that.groupState &&
             Objects.equals(coordinator, that.coordinator) &&
-            groupEpoch == that.groupEpoch &&
-            targetAssignmentEpoch == that.targetAssignmentEpoch &&
             Objects.equals(authorizedOperations, that.authorizedOperations);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(groupId, members, groupState, coordinator, groupEpoch, targetAssignmentEpoch, authorizedOperations);
+        return Objects.hash(groupId, members, groupState, coordinator, authorizedOperations);
     }
 
     /**
@@ -121,28 +111,12 @@ public class ShareGroupDescription {
         return authorizedOperations;
     }
 
-    /**
-     * The epoch of the share group.
-     */
-    public int groupEpoch() {
-        return groupEpoch;
-    }
-
-    /**
-     * The epoch of the target assignment.
-     */
-    public int targetAssignmentEpoch() {
-        return targetAssignmentEpoch;
-    }
-
     @Override
     public String toString() {
         return "(groupId=" + groupId +
             ", members=" + members.stream().map(ShareMemberDescription::toString).collect(Collectors.joining(",")) +
             ", groupState=" + groupState +
             ", coordinator=" + coordinator +
-            ", groupEpoch=" + groupEpoch +
-            ", targetAssignmentEpoch=" + targetAssignmentEpoch +
             ", authorizedOperations=" + authorizedOperations +
             ")";
     }

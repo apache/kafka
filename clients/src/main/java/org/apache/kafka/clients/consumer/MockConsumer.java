@@ -36,7 +36,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -79,8 +78,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private boolean telemetryDisabled = false;
     private Uuid clientInstanceId;
     private int injectTimeoutExceptionCounter;
-
-    private long maxPollRecords = Long.MAX_VALUE;
 
     private final List<KafkaMetric> addedMetrics = new ArrayList<>();
 
@@ -278,21 +275,13 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         // update the consumed offset
         final Map<TopicPartition, List<ConsumerRecord<K, V>>> results = new HashMap<>();
         final Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadata = new HashMap<>();
-        long numPollRecords = 0L;
+        final List<TopicPartition> toClear = new ArrayList<>();
 
-        final Iterator<Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>>> partitionsIter = this.records.entrySet().iterator();
-        while (partitionsIter.hasNext() && numPollRecords < this.maxPollRecords) {
-            Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry = partitionsIter.next();
-
+        for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : this.records.entrySet()) {
             if (!subscriptions.isPaused(entry.getKey())) {
-                final Iterator<ConsumerRecord<K, V>> recIterator = entry.getValue().iterator();
-                while (recIterator.hasNext()) {
-                    if (numPollRecords >= this.maxPollRecords) {
-                        break;
-                    }
+                final List<ConsumerRecord<K, V>> recs = entry.getValue();
+                for (final ConsumerRecord<K, V> rec : recs) {
                     long position = subscriptions.position(entry.getKey()).offset;
-
-                    final ConsumerRecord<K, V> rec = recIterator.next();
 
                     if (beginningOffsets.get(entry.getKey()) != null && beginningOffsets.get(entry.getKey()) > position) {
                         throw new OffsetOutOfRangeException(Collections.singletonMap(entry.getKey(), position));
@@ -305,17 +294,13 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
                                 rec.offset() + 1, rec.leaderEpoch(), leaderAndEpoch);
                         subscriptions.position(entry.getKey(), newPosition);
                         nextOffsetAndMetadata.put(entry.getKey(), new OffsetAndMetadata(rec.offset() + 1, rec.leaderEpoch(), ""));
-                        numPollRecords++;
-                        recIterator.remove();
                     }
                 }
-
-                if (entry.getValue().isEmpty()) {
-                    partitionsIter.remove();
-                }
+                toClear.add(entry.getKey());
             }
         }
 
+        toClear.forEach(records::remove);
         return new ConsumerRecords<>(results, nextOffsetAndMetadata);
     }
 
@@ -327,18 +312,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             throw new IllegalStateException("Cannot add records for a partition that is not assigned to the consumer");
         List<ConsumerRecord<K, V>> recs = records.computeIfAbsent(tp, k -> new ArrayList<>());
         recs.add(record);
-    }
-
-    /**
-     * Sets the maximum number of records returned in a single call to {@link #poll(Duration)}.
-     *
-     * @param maxPollRecords the max.poll.records.
-     */
-    public synchronized void setMaxPollRecords(long maxPollRecords) {
-        if (maxPollRecords < 1) {
-            throw new IllegalArgumentException("MaxPollRecords must be strictly superior to 0");
-        }
-        this.maxPollRecords = maxPollRecords;
     }
 
     public synchronized void setPollException(KafkaException exception) {
@@ -575,7 +548,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         close(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS));
     }
 
-    @Deprecated
     @Override
     public synchronized void close(Duration timeout) {
         this.closed = true;
@@ -588,11 +560,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Override
     public synchronized void wakeup() {
         wakeup.set(true);
-    }
-
-    @Override
-    public void close(CloseOptions option) {
-        this.closed = true;
     }
 
     /**

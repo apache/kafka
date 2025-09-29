@@ -20,10 +20,11 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartition;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
-import java.util.EnumMap;
+import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -139,7 +140,7 @@ public class OffsetDeleteResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
+        Map<Errors, Integer> counts = new HashMap<>();
         updateErrorCounts(counts, Errors.forCode(data.errorCode()));
         data.topics().forEach(topic ->
             topic.partitions().forEach(partition ->
@@ -149,8 +150,8 @@ public class OffsetDeleteResponse extends AbstractResponse {
         return counts;
     }
 
-    public static OffsetDeleteResponse parse(Readable readable, short version) {
-        return new OffsetDeleteResponse(new OffsetDeleteResponseData(readable, version));
+    public static OffsetDeleteResponse parse(ByteBuffer buffer, short version) {
+        return new OffsetDeleteResponse(new OffsetDeleteResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

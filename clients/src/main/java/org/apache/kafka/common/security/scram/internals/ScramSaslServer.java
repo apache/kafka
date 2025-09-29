@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
@@ -204,14 +205,14 @@ public class ScramSaslServer implements SaslServer {
     public byte[] unwrap(byte[] incoming, int offset, int len) {
         if (!isComplete())
             throw new IllegalStateException("Authentication exchange has not completed");
-        throw new IllegalStateException("SCRAM supports neither integrity nor privacy");
+        return Arrays.copyOfRange(incoming, offset, offset + len);
     }
 
     @Override
     public byte[] wrap(byte[] outgoing, int offset, int len) {
         if (!isComplete())
             throw new IllegalStateException("Authentication exchange has not completed");
-        throw new IllegalStateException("SCRAM supports neither integrity nor privacy");
+        return Arrays.copyOfRange(outgoing, offset, offset + len);
     }
 
     @Override

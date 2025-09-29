@@ -23,11 +23,11 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
@@ -47,16 +47,16 @@ public final class EndpointReadyFuturesTest {
     private static final KafkaAuthorizerServerInfo INFO = new KafkaAuthorizerServerInfo(
         new ClusterResource("S6-01LPiQOCBhhFIunQUcQ"),
         1,
-        List.of(EXTERNAL, INTERNAL),
+        Arrays.asList(EXTERNAL, INTERNAL),
         INTERNAL,
-        List.of("INTERNAL"));
+        Arrays.asList("INTERNAL"));
 
     static void assertComplete(
             EndpointReadyFutures readyFutures,
             Endpoint... endpoints
     ) {
         for (Endpoint endpoint : endpoints) {
-            String name = endpoint.listener();
+            String name = endpoint.listenerName().get();
             CompletableFuture<Void> future = readyFutures.futures().get(endpoint);
             assertNotNull(future, "Unable to find future for " + name);
             assertTrue(future.isDone(), "Future for " + name + " is not done.");
@@ -98,7 +98,7 @@ public final class EndpointReadyFuturesTest {
     public void testImmediateCompletion() {
         EndpointReadyFutures readyFutures = new EndpointReadyFutures.Builder().
                 build(Optional.empty(), INFO);
-        assertEquals(Set.of(EXTERNAL, INTERNAL),
+        assertEquals(new HashSet<>(Arrays.asList(EXTERNAL, INTERNAL)),
                 readyFutures.futures().keySet());
         assertComplete(readyFutures, EXTERNAL, INTERNAL);
     }
@@ -109,7 +109,7 @@ public final class EndpointReadyFuturesTest {
         EndpointReadyFutures readyFutures = new EndpointReadyFutures.Builder().
                 addReadinessFuture("foo", foo).
                 build(Optional.empty(), INFO);
-        assertEquals(Set.of(EXTERNAL, INTERNAL),
+        assertEquals(new HashSet<>(Arrays.asList(EXTERNAL, INTERNAL)),
                 readyFutures.futures().keySet());
         assertIncomplete(readyFutures, EXTERNAL, INTERNAL);
         foo.complete(null);
@@ -124,7 +124,7 @@ public final class EndpointReadyFuturesTest {
                 addReadinessFuture("foo", foo).
                 addReadinessFuture("bar", bar).
                 build(Optional.empty(), INFO);
-        assertEquals(Set.of(EXTERNAL, INTERNAL),
+        assertEquals(new HashSet<>(Arrays.asList(EXTERNAL, INTERNAL)),
                 readyFutures.futures().keySet());
         assertIncomplete(readyFutures, EXTERNAL, INTERNAL);
         foo.complete(null);
@@ -141,7 +141,7 @@ public final class EndpointReadyFuturesTest {
         EndpointReadyFutures readyFutures = new EndpointReadyFutures.Builder().
                 addReadinessFutures("baz", bazFutures).
                 build(Optional.empty(), INFO);
-        assertEquals(Set.of(EXTERNAL, INTERNAL),
+        assertEquals(new HashSet<>(Arrays.asList(EXTERNAL, INTERNAL)),
                 readyFutures.futures().keySet());
         assertIncomplete(readyFutures, EXTERNAL, INTERNAL);
         bazFutures.get(EXTERNAL).complete(null);
@@ -159,7 +159,7 @@ public final class EndpointReadyFuturesTest {
                 addReadinessFuture("foo", foo).
                 addReadinessFuture("bar", bar).
                 build(Optional.empty(), INFO);
-        assertEquals(Set.of(EXTERNAL, INTERNAL),
+        assertEquals(new HashSet<>(Arrays.asList(EXTERNAL, INTERNAL)),
                 readyFutures.futures().keySet());
         assertIncomplete(readyFutures, EXTERNAL, INTERNAL);
         foo.complete(null);

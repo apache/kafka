@@ -65,10 +65,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
@@ -160,8 +162,8 @@ public class TopicAdminTest {
         NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), List.of());
-            mockAdminClient.addTopic(false, "myTopic", List.of(topicPartitionInfo), null);
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
+            mockAdminClient.addTopic(false, "myTopic", Collections.singletonList(topicPartitionInfo), null);
             TopicAdmin admin = new TopicAdmin(mockAdminClient);
             assertFalse(admin.createTopic(newTopic));
             assertTrue(admin.createTopics(newTopic).isEmpty());
@@ -306,12 +308,12 @@ public class TopicAdminTest {
         NewTopic newTopic = TopicAdmin.defineTopic(topicName).partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), List.of());
-            mockAdminClient.addTopic(false, topicName, List.of(topicPartitionInfo), null);
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
+            mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), null);
             TopicAdmin admin = new TopicAdmin(mockAdminClient);
             Map<String, TopicDescription> desc = admin.describeTopics(newTopic.name());
             assertFalse(desc.isEmpty());
-            TopicDescription topicDesc = new TopicDescription(topicName, false, List.of(topicPartitionInfo));
+            TopicDescription topicDesc = new TopicDescription(topicName, false, Collections.singletonList(topicPartitionInfo));
             assertEquals(desc.get("myTopic"), topicDesc);
         }
     }
@@ -380,14 +382,14 @@ public class TopicAdminTest {
     public void describeTopicConfigShouldReturnTopicConfigWhenTopicExists() {
         String topicName = "myTopic";
         NewTopic newTopic = TopicAdmin.defineTopic(topicName)
-                                      .config(Map.of("foo", "bar"))
+                                      .config(Collections.singletonMap("foo", "bar"))
                                       .partitions(1)
                                       .compacted()
                                       .build();
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), List.of());
-            mockAdminClient.addTopic(false, topicName, List.of(topicPartitionInfo), null);
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
+            mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), null);
             TopicAdmin admin = new TopicAdmin(mockAdminClient);
             Map<String, Config> result = admin.describeTopicConfigs(newTopic.name());
             assertFalse(result.isEmpty());
@@ -437,11 +439,11 @@ public class TopicAdminTest {
     @Test
     public void verifyingTopicCleanupPolicyShouldReturnTrueWhenTopicHasCorrectPolicy() {
         String topicName = "myTopic";
-        Map<String, String> topicConfigs = Map.of("cleanup.policy", "compact");
+        Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "compact");
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), List.of());
-            mockAdminClient.addTopic(false, topicName, List.of(topicPartitionInfo), topicConfigs);
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
+            mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
             TopicAdmin admin = new TopicAdmin(mockAdminClient);
             boolean result = admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
             assertTrue(result);
@@ -451,11 +453,11 @@ public class TopicAdminTest {
     @Test
     public void verifyingTopicCleanupPolicyShouldFailWhenTopicHasDeletePolicy() {
         String topicName = "myTopic";
-        Map<String, String> topicConfigs = Map.of("cleanup.policy", "delete");
+        Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "delete");
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), List.of());
-            mockAdminClient.addTopic(false, topicName, List.of(topicPartitionInfo), topicConfigs);
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
+            mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
             TopicAdmin admin = new TopicAdmin(mockAdminClient);
             ConfigException e = assertThrows(ConfigException.class, () -> admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose"));
             assertTrue(e.getMessage().contains("to guarantee consistency and durability"));
@@ -465,11 +467,11 @@ public class TopicAdminTest {
     @Test
     public void verifyingTopicCleanupPolicyShouldFailWhenTopicHasDeleteAndCompactPolicy() {
         String topicName = "myTopic";
-        Map<String, String> topicConfigs = Map.of("cleanup.policy", "delete,compact");
+        Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "delete,compact");
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), List.of());
-            mockAdminClient.addTopic(false, topicName, List.of(topicPartitionInfo), topicConfigs);
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
+            mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
             TopicAdmin admin = new TopicAdmin(mockAdminClient);
             ConfigException e = assertThrows(ConfigException.class, () -> admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose"));
             assertTrue(e.getMessage().contains("to guarantee consistency and durability"));
@@ -479,11 +481,11 @@ public class TopicAdminTest {
     @Test
     public void verifyingGettingTopicCleanupPolicies() {
         String topicName = "myTopic";
-        Map<String, String> topicConfigs = Map.of("cleanup.policy", "compact");
+        Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "compact");
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), List.of());
-            mockAdminClient.addTopic(false, topicName, List.of(topicPartitionInfo), topicConfigs);
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
+            mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
             TopicAdmin admin = new TopicAdmin(mockAdminClient);
             Set<String> policies = admin.topicCleanupPolicy("myTopic");
             assertEquals(1, policies.size());
@@ -500,7 +502,7 @@ public class TopicAdminTest {
     public void retryEndOffsetsShouldRethrowUnknownVersionException() {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
-        Set<TopicPartition> tps = Set.of(tp1);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
         Long offset = null; // response should use error
         Cluster cluster = createCluster(1, topicName, 1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
@@ -518,7 +520,7 @@ public class TopicAdminTest {
     public void retryEndOffsetsShouldWrapNonRetriableExceptionsWithConnectException() {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
-        Set<TopicPartition> tps = Set.of(tp1);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
         Long offset = 1000L;
         Cluster cluster = createCluster(1, "myTopic", 1);
 
@@ -547,7 +549,7 @@ public class TopicAdminTest {
     public void retryEndOffsetsShouldRetryWhenTopicNotFound() {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
-        Set<TopicPartition> tps = Set.of(tp1);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
         Long offset = 1000L;
         Cluster cluster = createCluster(1, "myTopic", 1);
 
@@ -559,7 +561,7 @@ public class TopicAdminTest {
 
             TopicAdmin admin = new TopicAdmin(env.adminClient());
             Map<TopicPartition, Long> endoffsets = admin.retryEndOffsets(tps, Duration.ofMillis(100), 1);
-            assertEquals(Map.of(tp1, offset), endoffsets);
+            assertEquals(Collections.singletonMap(tp1, offset), endoffsets);
         }
     }
 
@@ -567,7 +569,7 @@ public class TopicAdminTest {
     public void endOffsetsShouldFailWithNonRetriableWhenAuthorizationFailureOccurs() {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
-        Set<TopicPartition> tps = Set.of(tp1);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
         Long offset = null; // response should use error
         Cluster cluster = createCluster(1, topicName, 1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
@@ -584,7 +586,7 @@ public class TopicAdminTest {
     public void endOffsetsShouldFailWithUnsupportedVersionWhenVersionUnsupportedErrorOccurs() {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
-        Set<TopicPartition> tps = Set.of(tp1);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
         Long offset = null; // response should use error
         Cluster cluster = createCluster(1, topicName, 1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
@@ -600,7 +602,7 @@ public class TopicAdminTest {
     public void endOffsetsShouldFailWithTimeoutExceptionWhenTimeoutErrorOccurs() {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
-        Set<TopicPartition> tps = Set.of(tp1);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
         Long offset = null; // response should use error
         Cluster cluster = createCluster(1, topicName, 1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(
@@ -618,7 +620,7 @@ public class TopicAdminTest {
     public void endOffsetsShouldFailWithNonRetriableWhenUnknownErrorOccurs() {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
-        Set<TopicPartition> tps = Set.of(tp1);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
         Long offset = null; // response should use error
         Cluster cluster = createCluster(1, topicName, 1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
@@ -637,7 +639,7 @@ public class TopicAdminTest {
         Cluster cluster = createCluster(1, topicName, 1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
             TopicAdmin admin = new TopicAdmin(env.adminClient());
-            Map<TopicPartition, Long> offsets = admin.endOffsets(Set.of());
+            Map<TopicPartition, Long> offsets = admin.endOffsets(Collections.emptySet());
             assertTrue(offsets.isEmpty());
         }
     }
@@ -646,7 +648,7 @@ public class TopicAdminTest {
     public void endOffsetsShouldReturnOffsetsForOnePartition() {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
-        Set<TopicPartition> tps = Set.of(tp1);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
         long offset = 1000L;
         Cluster cluster = createCluster(1, topicName, 1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
@@ -665,7 +667,7 @@ public class TopicAdminTest {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
         TopicPartition tp2 = new TopicPartition(topicName, 1);
-        Set<TopicPartition> tps = Set.of(tp1, tp2);
+        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(tp1, tp2));
         long offset1 = 1001;
         long offset2 = 1002;
         Cluster cluster = createCluster(1, topicName, 2);
@@ -685,7 +687,7 @@ public class TopicAdminTest {
     public void endOffsetsShouldFailWhenAnyTopicPartitionHasError() {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
-        Set<TopicPartition> tps = Set.of(tp1);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
         Cluster cluster = createCluster(1, topicName, 1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -717,8 +719,8 @@ public class TopicAdminTest {
                 "mockClusterId",
                 nodes.values(),
                 pInfos,
-                Set.of(),
-                Set.of(),
+                Collections.emptySet(),
+                Collections.emptySet(),
                 leader);
     }
 
@@ -736,9 +738,9 @@ public class TopicAdminTest {
                         .setPartitionIndex(pInfo.partition())
                         .setLeaderId(pInfo.leader().id())
                         .setLeaderEpoch(234)
-                        .setReplicaNodes(Arrays.stream(pInfo.replicas()).map(Node::id).toList())
-                        .setIsrNodes(Arrays.stream(pInfo.inSyncReplicas()).map(Node::id).toList())
-                        .setOfflineReplicas(Arrays.stream(pInfo.offlineReplicas()).map(Node::id).toList());
+                        .setReplicaNodes(Arrays.stream(pInfo.replicas()).map(Node::id).collect(Collectors.toList()))
+                        .setIsrNodes(Arrays.stream(pInfo.inSyncReplicas()).map(Node::id).collect(Collectors.toList()))
+                        .setOfflineReplicas(Arrays.stream(pInfo.offlineReplicas()).map(Node::id).collect(Collectors.toList()));
                 pms.add(pm);
             }
             MetadataResponseTopic tm = new MetadataResponseTopic()
@@ -786,7 +788,7 @@ public class TopicAdminTest {
     }
 
     private ListOffsetsResponse listOffsetsResult(TopicPartition tp1, Long offset1) {
-        return listOffsetsResult(null, Map.of(tp1, offset1));
+        return listOffsetsResult(null, Collections.singletonMap(tp1, offset1));
     }
 
     private ListOffsetsResponse listOffsetsResult(TopicPartition tp1, Long offset1, TopicPartition tp2, Long offset2) {
@@ -888,7 +890,7 @@ public class TopicAdminTest {
 
     protected TopicDescription topicDescription(MockAdminClient admin, String topicName)
             throws ExecutionException, InterruptedException {
-        DescribeTopicsResult result = admin.describeTopics(Set.of(topicName));
+        DescribeTopicsResult result = admin.describeTopics(Collections.singleton(topicName));
         Map<String, KafkaFuture<TopicDescription>> byName = result.topicNameValues();
         return byName.get(topicName).get();
     }
@@ -957,8 +959,8 @@ public class TopicAdminTest {
                                 .map(e -> new DescribeConfigsResponseData.DescribeConfigsResourceResult()
                                         .setName(e.getKey())
                                         .setValue(e.getValue()))
-                                .toList()))
-                .toList();
+                                .collect(Collectors.toList())))
+                .collect(Collectors.toList());
         return new DescribeConfigsResponse(new DescribeConfigsResponseData().setThrottleTimeMs(1000).setResults(results));
     }
 

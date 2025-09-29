@@ -18,7 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.util.Objects;
 
-public class Stamped<V> implements Comparable<Stamped<V>> {
+public class Stamped<V> implements Comparable {
 
     public final V value;
     public final long timestamp;
@@ -29,8 +29,8 @@ public class Stamped<V> implements Comparable<Stamped<V>> {
     }
 
     @Override
-    public int compareTo(final Stamped<V> other) {
-        final long otherTimestamp = other.timestamp;
+    public int compareTo(final Object other) {
+        final long otherTimestamp = ((Stamped<?>) other).timestamp;
 
         if (timestamp < otherTimestamp) {
             return -1;

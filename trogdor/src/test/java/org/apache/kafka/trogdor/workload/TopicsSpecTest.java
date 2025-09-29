@@ -22,6 +22,7 @@ import org.apache.kafka.trogdor.common.JsonUtil;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,8 +44,8 @@ public class TopicsSpecTest {
         FOO.set("topicA[0-2]", PARTSA);
 
         Map<Integer, List<Integer>> assignmentsB = new HashMap<>();
-        assignmentsB.put(0, List.of(0, 1, 2));
-        assignmentsB.put(1, List.of(2, 3, 4));
+        assignmentsB.put(0, Arrays.asList(0, 1, 2));
+        assignmentsB.put(1, Arrays.asList(2, 3, 4));
         PARTSB = new PartitionsSpec(0, (short) 0, assignmentsB, null);
         FOO.set("topicB", PARTSB);
     }
@@ -66,14 +67,14 @@ public class TopicsSpecTest {
     @Test
     public void testPartitionNumbers() {
         List<Integer> partsANumbers = PARTSA.partitionNumbers();
-        assertTrue(partsANumbers.contains(0));
-        assertTrue(partsANumbers.contains(1));
-        assertTrue(partsANumbers.contains(2));
+        assertEquals(Integer.valueOf(0), partsANumbers.get(0));
+        assertEquals(Integer.valueOf(1), partsANumbers.get(1));
+        assertEquals(Integer.valueOf(2), partsANumbers.get(2));
         assertEquals(3, partsANumbers.size());
 
         List<Integer> partsBNumbers = PARTSB.partitionNumbers();
-        assertTrue(partsBNumbers.contains(0));
-        assertTrue(partsBNumbers.contains(1));
+        assertEquals(Integer.valueOf(0), partsBNumbers.get(0));
+        assertEquals(Integer.valueOf(1), partsBNumbers.get(1));
         assertEquals(2, partsBNumbers.size());
     }
 

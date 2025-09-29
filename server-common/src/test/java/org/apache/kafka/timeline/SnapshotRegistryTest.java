@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
@@ -41,7 +42,7 @@ public class SnapshotRegistryTest {
 
     private static void assertIteratorContains(Iterator<Snapshot> iter,
                                                Snapshot... snapshots) {
-        List<Snapshot> expected = List.of(snapshots);
+        List<Snapshot> expected = Arrays.asList(snapshots);
         List<Snapshot> actual = new ArrayList<>();
         while (iter.hasNext()) {
             Snapshot snapshot = iter.next();

@@ -59,6 +59,7 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -66,7 +67,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
@@ -291,13 +291,13 @@ public class ClientCompatibilityTest {
             tryFeature("createTopics", testConfig.createTopicsSupported,
                 () -> {
                     try {
-                        client.createTopics(Set.of(
+                        client.createTopics(Collections.singleton(
                             new NewTopic("newtopic", 1, (short) 1))).all().get();
                     } catch (ExecutionException e) {
                         throw e.getCause();
                     }
                 },
-                () ->  createTopicsResultTest(client, Set.of("newtopic"))
+                () ->  createTopicsResultTest(client, Collections.singleton("newtopic"))
             );
 
             while (true) {
@@ -337,7 +337,7 @@ public class ClientCompatibilityTest {
                     );
 
                     Map<ConfigResource, Config> brokerConfig =
-                        client.describeConfigs(Set.of(configResource)).all().get();
+                        client.describeConfigs(Collections.singleton(configResource)).all().get();
 
                     if (brokerConfig.get(configResource).entries().isEmpty()) {
                         throw new KafkaException("Expected to see config entries, but got zero entries");

@@ -20,8 +20,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.AddRaftVoterRequestData;
 import org.apache.kafka.common.message.AddRaftVoterResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
+
+import java.nio.ByteBuffer;
 
 public class AddRaftVoterRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<AddRaftVoterRequest> {
@@ -65,9 +67,9 @@ public class AddRaftVoterRequest extends AbstractRequest {
             setThrottleTimeMs(throttleTimeMs));
     }
 
-    public static AddRaftVoterRequest parse(Readable readable, short version) {
+    public static AddRaftVoterRequest parse(ByteBuffer buffer, short version) {
         return new AddRaftVoterRequest(
-            new AddRaftVoterRequestData(readable, version),
+            new AddRaftVoterRequestData(new ByteBufferAccessor(buffer), version),
             version);
     }
 }

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,7 +42,7 @@ public interface SamplingTestPlugin {
      * @return All known instances of this class, including this instance.
      */
     default List<SamplingTestPlugin> allInstances() {
-        return List.of(this);
+        return Collections.singletonList(this);
     }
 
     /**
@@ -49,7 +50,7 @@ public interface SamplingTestPlugin {
      * This should only return direct children, and not reference this instance directly
      */
     default Map<String, SamplingTestPlugin> otherSamples() {
-        return Map.of();
+        return Collections.emptyMap();
     }
 
     /**

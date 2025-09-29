@@ -23,12 +23,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
@@ -281,8 +283,8 @@ public class ConnectorHandle {
         List<StartAndStopLatch> taskLatches = includeTasks
                 ? taskHandles.values().stream()
                 .map(task -> task.expectedStarts(expectedStarts))
-                .toList()
-                : List.of();
+                .collect(Collectors.toList())
+                : Collections.emptyList();
         return startAndStopCounter.expectedStarts(expectedStarts, taskLatches);
     }
 
@@ -290,8 +292,8 @@ public class ConnectorHandle {
         List<StartAndStopLatch> taskLatches = includeTasks
                 ? taskHandles.values().stream()
                 .map(task -> task.expectedStarts(expectedTasksStarts.get(task.taskId())))
-                .toList()
-                : List.of();
+                .collect(Collectors.toList())
+                : Collections.emptyList();
         return startAndStopCounter.expectedStarts(expectedStarts, taskLatches);
     }
 
@@ -343,8 +345,8 @@ public class ConnectorHandle {
         List<StartAndStopLatch> taskLatches = includeTasks
                 ? taskHandles.values().stream()
                 .map(task -> task.expectedStops(expectedStops))
-                .toList()
-                : List.of();
+                .collect(Collectors.toList())
+                : Collections.emptyList();
         return startAndStopCounter.expectedStops(expectedStops, taskLatches);
     }
 
@@ -352,8 +354,8 @@ public class ConnectorHandle {
         List<StartAndStopLatch> taskLatches = includeTasks
                 ? taskHandles.values().stream()
                 .map(task -> task.expectedStops(expectedTasksStops.get(task.taskId())))
-                .toList()
-                : List.of();
+                .collect(Collectors.toList())
+                : Collections.emptyList();
         return startAndStopCounter.expectedStops(expectedStops, taskLatches);
     }
 

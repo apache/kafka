@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.common.internals.FatalExitError;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 
@@ -53,8 +55,14 @@ public final class RemoteStorageThreadPool extends ThreadPoolExecutor {
 
     @Override
     protected void afterExecute(Runnable runnable, Throwable th) {
-        if (th != null && !isShutdown()) {
-            LOGGER.error("Error occurred while executing task: {}", runnable, th);
+        if (th != null) {
+            if (th instanceof FatalExitError) {
+                LOGGER.error("Stopping the server as it encountered a fatal error.");
+                Exit.exit(((FatalExitError) th).statusCode());
+            } else {
+                if (!isShutdown())
+                    LOGGER.error("Error occurred while executing task: {}", runnable, th);
+            }
         }
     }
 

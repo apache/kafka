@@ -34,12 +34,6 @@ import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Iterator;
 
-/**
- * @param <R1> The type of records used to formulate the expectations.
- * @param <R2> The type of records compared against the expectations.
- * @param <K> The type of the record keys.
- * @param <V> The type of the record values.
- */
 public final class RecordsKeyValueMatcher<R1, R2, K, V> extends TypeSafeDiagnosingMatcher<Collection<R2>> {
 
     private final Collection<R1> expectedRecords;
@@ -49,10 +43,10 @@ public final class RecordsKeyValueMatcher<R1, R2, K, V> extends TypeSafeDiagnosi
 
     /**
      * Heterogeneous matcher between alternative types of records:
-     * {@link ProducerRecord}, {@link ConsumerRecord} or {@link Record}.
+     * [[ProducerRecord]], [[ConsumerRecord]] or [[Record]].
      *
      * It is conceptually incorrect to try to match records of different natures.
-     * Only a committed {@link Record} is univoque, whereas a {@link ProducerRecord} or {@link ConsumerRecord} is
+     * Only a committed [[Record]] is univoque, whereas a [[ProducerRecord]] or [[ConsumerRecord]] is
      * a physical representation of a record-to-be or viewed record.
      *
      * This matcher breaches that semantic so that testers can avoid performing manual comparisons on
@@ -61,8 +55,12 @@ public final class RecordsKeyValueMatcher<R1, R2, K, V> extends TypeSafeDiagnosi
      *
      * @param expectedRecords The records expected.
      * @param topicPartition The topic-partition which the records belong to.
-     * @param keySerde The {@link Serde} for the keys of the records.
-     * @param valueSerde The {@link Serde} for the values of the records.
+     * @param keySerde The [[Serde]] for the keys of the records.
+     * @param valueSerde The [[Serde]] for the values of the records.
+     * @tparam R1 The type of records used to formulate the expectations.
+     * @tparam R2 The type of records compared against the expectations.
+     * @tparam K The type of the record keys.
+     * @tparam V The type of the record values.
      */
     public RecordsKeyValueMatcher(Collection<R1> expectedRecords,
                                   TopicPartition topicPartition,
@@ -138,7 +136,8 @@ public final class RecordsKeyValueMatcher<R1, R2, K, V> extends TypeSafeDiagnosi
 
     @SuppressWarnings("unchecked")
     private SimpleRecord convert(Object recordCandidate) {
-        if (recordCandidate instanceof ProducerRecord<?, ?> record) {
+        if (recordCandidate instanceof ProducerRecord) {
+            ProducerRecord<?, ?> record = (ProducerRecord<?, ?>) recordCandidate;
             long timestamp = record.timestamp() != null ? record.timestamp() : RecordBatch.NO_TIMESTAMP;
             ByteBuffer keyBytes =
                     Utils.wrapNullable(keySerde.serializer().serialize(topicPartition.topic(), (K) record.key()));
@@ -146,14 +145,16 @@ public final class RecordsKeyValueMatcher<R1, R2, K, V> extends TypeSafeDiagnosi
                     Utils.wrapNullable(valueSerde.serializer().serialize(topicPartition.topic(), (V) record.value()));
             Header[] headers = record.headers() != null ? record.headers().toArray() : Record.EMPTY_HEADERS;
             return new SimpleRecord(timestamp, keyBytes, valueBytes, headers);
-        } else if (recordCandidate instanceof ConsumerRecord<?, ?> record) {
+        } else if (recordCandidate instanceof ConsumerRecord) {
+            ConsumerRecord<?, ?> record = (ConsumerRecord<?, ?>) recordCandidate;
             ByteBuffer keyBytes =
                     Utils.wrapNullable(keySerde.serializer().serialize(topicPartition.topic(), (K) record.key()));
             ByteBuffer valueBytes =
                     Utils.wrapNullable(valueSerde.serializer().serialize(topicPartition.topic(), (V) record.value()));
             Header[] headers = record.headers() != null ? record.headers().toArray() : Record.EMPTY_HEADERS;
             return new SimpleRecord(record.timestamp(), keyBytes, valueBytes, headers);
-        } else if (recordCandidate instanceof Record record) {
+        } else if (recordCandidate instanceof Record) {
+            Record record = (Record) recordCandidate;
             return new SimpleRecord(record.timestamp(), record.key(), record.value(), record.headers());
         } else {
             return null;
@@ -166,8 +167,12 @@ public final class RecordsKeyValueMatcher<R1, R2, K, V> extends TypeSafeDiagnosi
      *
      * @param expectedRecords The records expected.
      * @param topicPartition The topic-partition which the records belong to.
-     * @param keySerde The {@link Serde} for the keys of the records.
-     * @param valueSerde The {@link Serde} for the values of the records.
+     * @param keySerde The [[Serde]] for the keys of the records.
+     * @param valueSerde The [[Serde]] for the values of the records.
+     * @tparam R1 The type of records used to formulate the expectations.
+     * @tparam R2 The type of records compared against the expectations.
+     * @tparam K The type of the record keys.
+     * @tparam V The type of the record values.
      */
     public static <R1, R2, K, V> RecordsKeyValueMatcher<R1, R2, K, V> correspondTo(Collection<R1> expectedRecords,
                                                                                    TopicPartition topicPartition,

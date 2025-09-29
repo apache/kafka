@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.IntStream;
@@ -33,8 +34,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class UnionSetTest {
     @Test
     public void testSetsCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new UnionSet<String>(Set.of(), null));
-        assertThrows(NullPointerException.class, () -> new UnionSet<String>(null, Set.of()));
+        assertThrows(NullPointerException.class, () -> new UnionSet<String>(Collections.emptySet(), null));
+        assertThrows(NullPointerException.class, () -> new UnionSet<String>(null, Collections.emptySet()));
     }
 
     @Test
@@ -71,21 +72,21 @@ public class UnionSetTest {
 
         union = new UnionSet<>(
             Set.of(1, 2, 3),
-            Set.of()
+            Collections.emptySet()
         );
 
         assertFalse(union.isEmpty());
 
         union = new UnionSet<>(
-            Set.of(),
+            Collections.emptySet(),
             Set.of(2, 3, 4, 5)
         );
 
         assertFalse(union.isEmpty());
 
         union = new UnionSet<>(
-            Set.of(),
-            Set.of()
+            Collections.emptySet(),
+            Collections.emptySet()
         );
         assertTrue(union.isEmpty());
     }

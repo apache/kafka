@@ -23,6 +23,7 @@ import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -36,15 +37,15 @@ public class ClusterConfigState {
     public static final ClusterConfigState EMPTY = new ClusterConfigState(
             NO_OFFSET,
             null,
-            Map.of(),
-            Map.of(),
-            Map.of(),
-            Map.of(),
-            Map.of(),
-            Map.of(),
-            Map.of(),
-            Set.of(),
-            Set.of());
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptySet(),
+            Collections.emptySet());
 
     private final long offset;
     private final SessionKey sessionKey;
@@ -231,12 +232,12 @@ public class ClusterConfigState {
      */
     public List<ConnectorTaskId> tasks(String connectorName) {
         if (inconsistentConnectors.contains(connectorName)) {
-            return List.of();
+            return Collections.emptyList();
         }
 
         Integer numTasks = connectorTaskCounts.get(connectorName);
         if (numTasks == null) {
-            return List.of();
+            return Collections.emptyList();
         }
 
         List<ConnectorTaskId> taskIds = new ArrayList<>(numTasks);
@@ -244,7 +245,7 @@ public class ClusterConfigState {
             ConnectorTaskId taskId = new ConnectorTaskId(connectorName, taskIndex);
             taskIds.add(taskId);
         }
-        return List.copyOf(taskIds);
+        return Collections.unmodifiableList(taskIds);
     }
 
     /**

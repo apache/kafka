@@ -44,4 +44,5 @@ public class TableTest {
         assertNull(table.get("foo", 6));
         assertTrue(table.row("foo").isEmpty());
     }
+
 }

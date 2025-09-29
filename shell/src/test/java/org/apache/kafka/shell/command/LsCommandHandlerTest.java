@@ -27,7 +27,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.OptionalInt;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,16 +39,16 @@ public class LsCommandHandlerTest {
     public void testCalculateColumnSchema() {
         assertEquals(new ColumnSchema(1, 3),
             LsCommandHandler.calculateColumnSchema(OptionalInt.empty(),
-                List.of("abc", "def", "ghi")));
+                Arrays.asList("abc", "def", "ghi")));
         assertEquals(new ColumnSchema(1, 2),
             LsCommandHandler.calculateColumnSchema(OptionalInt.of(0),
-                List.of("abc", "def")));
+                Arrays.asList("abc", "def")));
         assertEquals(new ColumnSchema(3, 1).setColumnWidths(3, 8, 6),
             LsCommandHandler.calculateColumnSchema(OptionalInt.of(80),
-                List.of("a", "abcdef", "beta")));
+                Arrays.asList("a", "abcdef", "beta")));
         assertEquals(new ColumnSchema(2, 3).setColumnWidths(10, 7),
             LsCommandHandler.calculateColumnSchema(OptionalInt.of(18),
-                List.of("alphabet", "beta", "gamma", "theta", "zeta")));
+                Arrays.asList("alphabet", "beta", "gamma", "theta", "zeta")));
     }
 
     @Test
@@ -56,9 +57,9 @@ public class LsCommandHandlerTest {
             try (PrintWriter writer = new PrintWriter(new OutputStreamWriter(
                     stream, StandardCharsets.UTF_8))) {
                 LsCommandHandler.printEntries(writer, "", OptionalInt.of(18),
-                    List.of("alphabet", "beta", "gamma", "theta", "zeta"));
+                    Arrays.asList("alphabet", "beta", "gamma", "theta", "zeta"));
             }
-            assertEquals(String.join(String.format("%n"), List.of(
+            assertEquals(String.join(String.format("%n"), Arrays.asList(
                 "alphabet  theta",
                 "beta      zeta",
                 "gamma")), stream.toString().trim());
@@ -71,14 +72,14 @@ public class LsCommandHandlerTest {
             try (PrintWriter writer = new PrintWriter(new OutputStreamWriter(
                     stream, StandardCharsets.UTF_8))) {
                 LsCommandHandler.printTargets(writer, OptionalInt.of(18),
-                    List.of("foo", "foobarbaz", "quux"), List.of(
+                    Arrays.asList("foo", "foobarbaz", "quux"), Arrays.asList(
                         new TargetDirectory("/some/dir",
-                            List.of("supercalifragalistic")),
+                            Collections.singletonList("supercalifragalistic")),
                         new TargetDirectory("/some/other/dir",
-                            List.of("capability", "delegation", "elephant",
+                            Arrays.asList("capability", "delegation", "elephant",
                                 "fungible", "green"))));
             }
-            assertEquals(String.join(String.format("%n"), List.of(
+            assertEquals(String.join(String.format("%n"), Arrays.asList(
                 "foo        quux",
                 "foobarbaz  ",
                 "",

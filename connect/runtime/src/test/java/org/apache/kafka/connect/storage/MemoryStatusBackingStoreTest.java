@@ -22,7 +22,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Set;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -44,7 +44,7 @@ public class MemoryStatusBackingStoreTest {
         TaskStatus status = new TaskStatus(taskId, ConnectorStatus.State.RUNNING, "localhost:8083", 0);
         store.put(status);
         assertEquals(status, store.get(taskId));
-        assertEquals(Set.of(status), store.getAll("connector"));
+        assertEquals(Collections.singleton(status), store.getAll("connector"));
     }
 
     @Test
@@ -63,4 +63,5 @@ public class MemoryStatusBackingStoreTest {
         store.put(new TaskStatus(taskId, ConnectorStatus.State.DESTROYED, "localhost:8083", 0));
         assertNull(store.get(taskId));
     }
+
 }

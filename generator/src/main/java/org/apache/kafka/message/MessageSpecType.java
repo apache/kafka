@@ -48,11 +48,5 @@ public enum MessageSpecType {
      * Other message spec types.
      */
     @JsonProperty("data")
-    DATA,
-
-    @JsonProperty("coordinator-key")
-    COORDINATOR_KEY,
-
-    @JsonProperty("coordinator-value")
-    COORDINATOR_VALUE
+    DATA
 }

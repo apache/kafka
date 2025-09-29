@@ -145,11 +145,6 @@ public class ByteBufferAccessor implements Readable, Writable {
         return buf.remaining();
     }
 
-    @Override
-    public Readable slice() {
-        return new ByteBufferAccessor(buf.slice());
-    }
-
     public void flip() {
         buf.flip();
     }

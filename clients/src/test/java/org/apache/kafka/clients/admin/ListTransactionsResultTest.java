@@ -42,9 +42,9 @@ public class ListTransactionsResultTest {
     @Test
     public void testAllFuturesFailIfLookupFails() {
         future.completeExceptionally(new KafkaException());
-        assertFutureThrows(KafkaException.class, result.all());
-        assertFutureThrows(KafkaException.class, result.allByBrokerId());
-        assertFutureThrows(KafkaException.class, result.byBrokerId());
+        assertFutureThrows(result.all(), KafkaException.class);
+        assertFutureThrows(result.allByBrokerId(), KafkaException.class);
+        assertFutureThrows(result.byBrokerId(), KafkaException.class);
     }
 
     @Test
@@ -111,9 +111,9 @@ public class ListTransactionsResultTest {
         assertEquals(broker1Listings, resultBrokerFutures.get(1).get());
 
         // Everything else should fail
-        assertFutureThrows(KafkaException.class, result.all());
-        assertFutureThrows(KafkaException.class, result.allByBrokerId());
-        assertFutureThrows(KafkaException.class, resultBrokerFutures.get(2));
+        assertFutureThrows(result.all(), KafkaException.class);
+        assertFutureThrows(result.allByBrokerId(), KafkaException.class);
+        assertFutureThrows(resultBrokerFutures.get(2), KafkaException.class);
     }
 
 }

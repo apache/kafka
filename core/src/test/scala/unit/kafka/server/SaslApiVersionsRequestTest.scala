@@ -22,12 +22,15 @@ import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.test.api.{ClusterTest, Type}
 import org.apache.kafka.common.test.ClusterInstance
-import org.apache.kafka.server.IntegrationTestUtils
+import org.apache.kafka.common.test.junit.ClusterTestExtensions
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.extension.ExtendWith
 
 import java.net.Socket
 import java.util.Collections
+import scala.jdk.CollectionConverters._
 
+@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersionsRequestTest(cluster) {
 
   @ClusterTest(types = Array(Type.KRAFT),
@@ -35,7 +38,7 @@ class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVe
     controllerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
   )
   def testApiVersionsRequestBeforeSaslHandshakeRequest(): Unit = {
-    val socket = IntegrationTestUtils.connect(cluster.brokerBoundPorts().get(0))
+    val socket = IntegrationTestUtils.connect(cluster.brokerSocketServers().asScala.head, cluster.clientListener())
     try {
       val apiVersionsResponse = IntegrationTestUtils.sendAndReceive[ApiVersionsResponse](
         new ApiVersionsRequest.Builder().build(0), socket)
@@ -56,7 +59,7 @@ class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVe
     controllerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
   )
   def testApiVersionsRequestAfterSaslHandshakeRequest(): Unit = {
-    val socket = IntegrationTestUtils.connect(cluster.brokerBoundPorts().get(0))
+    val socket = IntegrationTestUtils.connect(cluster.brokerSocketServers().asScala.head, cluster.clientListener())
     try {
       sendSaslHandshakeRequestValidateResponse(socket)
       val response = IntegrationTestUtils.sendAndReceive[ApiVersionsResponse](
@@ -72,7 +75,7 @@ class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVe
     controllerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
   )
   def testApiVersionsRequestWithUnsupportedVersion(): Unit = {
-    val socket = IntegrationTestUtils.connect(cluster.brokerBoundPorts().get(0))
+    val socket = IntegrationTestUtils.connect(cluster.brokerSocketServers().asScala.head, cluster.clientListener())
     try {
       val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0)
       val apiVersionsResponse = sendUnsupportedApiVersionRequest(apiVersionsRequest)

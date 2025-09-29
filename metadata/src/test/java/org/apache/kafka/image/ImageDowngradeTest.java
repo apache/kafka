@@ -33,6 +33,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -57,14 +59,14 @@ public class ImageDowngradeTest {
         }
     }
 
-    static final List<ApiMessageAndVersion> TEST_RECORDS = List.of(
+    static final List<ApiMessageAndVersion> TEST_RECORDS = Arrays.asList(
             new ApiMessageAndVersion(new TopicRecord().
                     setName("foo").
                     setTopicId(Uuid.fromString("5JPuABiJTPu2pQjpZWM6_A")), (short) 0),
             new ApiMessageAndVersion(new PartitionRecord().
                     setTopicId(Uuid.fromString("5JPuABiJTPu2pQjpZWM6_A")).
-                    setReplicas(List.of(0, 1)).
-                    setIsr(List.of(0, 1)).
+                    setReplicas(Arrays.asList(0, 1)).
+                    setIsr(Arrays.asList(0, 1)).
                     setLeader(0).
                     setLeaderEpoch(1).
                     setPartitionEpoch(2), (short) 0));
@@ -81,9 +83,9 @@ public class ImageDowngradeTest {
     @Test
     public void testPreZkMigrationSupportVersion() {
         writeWithExpectedLosses(MetadataVersion.IBP_3_3_IV3,
-            List.of(
+            Collections.singletonList(
                 "the isMigratingZkBroker state of one or more brokers"),
-            List.of(
+            Arrays.asList(
                 metadataVersionRecord(MetadataVersion.IBP_3_4_IV0),
                 new ApiMessageAndVersion(new RegisterBrokerRecord().
                     setBrokerId(123).
@@ -95,7 +97,7 @@ public class ImageDowngradeTest {
                     setIsMigratingZkBroker(true), (short) 2),
                 TEST_RECORDS.get(0),
                 TEST_RECORDS.get(1)),
-            List.of(
+            Arrays.asList(
                 metadataVersionRecord(MetadataVersion.IBP_3_3_IV3),
                 new ApiMessageAndVersion(new RegisterBrokerRecord().
                     setBrokerId(123).
@@ -115,21 +117,21 @@ public class ImageDowngradeTest {
         MetadataVersion inputMetadataVersion = outputMetadataVersion;
         PartitionRecord testPartitionRecord = (PartitionRecord) TEST_RECORDS.get(1).message();
         writeWithExpectedLosses(outputMetadataVersion,
-            List.of(
+            Collections.singletonList(
                     "the directory assignment state of one or more replicas"),
-            List.of(
+            Arrays.asList(
                 metadataVersionRecord(inputMetadataVersion),
                 TEST_RECORDS.get(0),
                 new ApiMessageAndVersion(
-                    testPartitionRecord.duplicate().setDirectories(List.of(
+                    testPartitionRecord.duplicate().setDirectories(Arrays.asList(
                         Uuid.fromString("c7QfSi6xSIGQVh3Qd5RJxA"),
                         Uuid.fromString("rWaCHejCRRiptDMvW5Xw0g"))),
                     (short) 2)),
-            List.of(
+            Arrays.asList(
                 metadataVersionRecord(outputMetadataVersion),
                 TEST_RECORDS.get(0),
                 new ApiMessageAndVersion(
-                    testPartitionRecord.duplicate().setDirectories(List.of()),
+                    testPartitionRecord.duplicate().setDirectories(Collections.emptyList()),
                     (short) 0))
         );
     }

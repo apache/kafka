@@ -19,15 +19,14 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.JoinGroupRequestData;
-import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class JoinGroupRequestTest {
 
@@ -48,9 +47,12 @@ public class JoinGroupRequestTest {
         String[] invalidGroupInstanceIds = {"", "foo bar", "..", "foo:bar", "foo=bar", ".", new String(longString)};
 
         for (String instanceId : invalidGroupInstanceIds) {
-            assertThrows(InvalidConfigurationException.class,
-                () -> JoinGroupRequest.validateGroupInstanceId(instanceId),
-                "InvalidConfigurationException expected as instance id is invalid.");
+            try {
+                JoinGroupRequest.validateGroupInstanceId(instanceId);
+                fail("No exception was thrown for invalid instance id: " + instanceId);
+            } catch (InvalidConfigurationException e) {
+                // Good
+            }
         }
     }
     @Test
@@ -62,21 +64,5 @@ public class JoinGroupRequestTest {
                 .setGroupInstanceId("groupInstanceId")
                 .setProtocolType("consumer")
         ).build((short) 4));
-    }
-
-    @Test
-    public void testRebalanceTimeoutDefaultsToSessionTimeoutV0() {
-        int sessionTimeoutMs = 30000;
-        short version = 0;
-
-        var buffer = MessageUtil.toByteBufferAccessor(new JoinGroupRequestData()
-                .setGroupId("groupId")
-                .setMemberId("consumerId")
-                .setProtocolType("consumer")
-                .setSessionTimeoutMs(sessionTimeoutMs), version);
-
-        JoinGroupRequest request = JoinGroupRequest.parse(buffer, version);
-        assertEquals(sessionTimeoutMs, request.data().sessionTimeoutMs());
-        assertEquals(sessionTimeoutMs, request.data().rebalanceTimeoutMs());
     }
 }

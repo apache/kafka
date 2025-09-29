@@ -19,9 +19,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.ConsumerGroupDescribeRequestData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -78,9 +79,9 @@ public class ConsumerGroupDescribeRequest extends AbstractRequest {
         return data;
     }
 
-    public static ConsumerGroupDescribeRequest parse(Readable readable, short version) {
+    public static ConsumerGroupDescribeRequest parse(ByteBuffer buffer, short version) {
         return new ConsumerGroupDescribeRequest(
-            new ConsumerGroupDescribeRequestData(readable, version),
+            new ConsumerGroupDescribeRequestData(new ByteBufferAccessor(buffer), version),
             version
         );
     }

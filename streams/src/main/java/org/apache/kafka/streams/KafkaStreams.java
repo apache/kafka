@@ -60,7 +60,6 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
-import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
@@ -68,6 +67,7 @@ import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
 import org.apache.kafka.streams.query.FailureReason;
@@ -109,7 +109,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
@@ -185,7 +184,6 @@ public class KafkaStreams implements AutoCloseable {
     protected final TopologyMetadata topologyMetadata;
     private final QueryableStoreProvider queryableStoreProvider;
     private final DelegatingStandbyUpdateListener delegatingStandbyUpdateListener;
-    private final LogContext logContext;
 
     GlobalStreamThread globalStreamThread;
     protected StateDirectory stateDirectory = null;
@@ -236,7 +234,7 @@ public class KafkaStreams implements AutoCloseable {
      *   </li>
      *   <li>
      *     REBALANCING state will transit to RUNNING if all of its threads are in RUNNING state
-     *     (Note: a thread transits to RUNNING state, if all active tasks got restored are ready for processing.
+     *     (Note: a thread transits to RUNNING state, if all active tasks got restored are are ready for processing.
      *     Standby tasks are not considered.)
      *   </li>
      *   <li>
@@ -294,14 +292,13 @@ public class KafkaStreams implements AutoCloseable {
     private final Object stateLock = new Object();
     protected volatile State state = State.CREATED;
 
-    private boolean waitOnStates(final long waitMs, final State... targetStates) {
-        final Set<State> targetStateSet = Set.of(targetStates);
+    private boolean waitOnState(final State targetState, final long waitMs) {
         final long begin = time.milliseconds();
         synchronized (stateLock) {
             boolean interrupted = false;
             long elapsedMs = 0L;
             try {
-                while (!targetStateSet.contains(state)) {
+                while (state != targetState) {
                     if (waitMs > elapsedMs) {
                         final long remainingMs = waitMs - elapsedMs;
                         try {
@@ -310,11 +307,7 @@ public class KafkaStreams implements AutoCloseable {
                             interrupted = true;
                         }
                     } else {
-                        log.debug(
-                            "Cannot transit to {} within {}ms",
-                            Arrays.stream(targetStates).map(State::toString).collect(Collectors.joining(" or ")),
-                            waitMs
-                        );
+                        log.debug("Cannot transit to {} within {}ms", targetState, waitMs);
                         return false;
                     }
                     elapsedMs = time.milliseconds() - begin;
@@ -353,9 +346,8 @@ public class KafkaStreams implements AutoCloseable {
             } else if (state == State.REBALANCING && newState == State.REBALANCING) {
                 // when the state is already in REBALANCING, it should not transit to REBALANCING again
                 return false;
-            } else if (state == State.ERROR && (newState == State.PENDING_ERROR || newState == State.ERROR || newState == State.PENDING_SHUTDOWN)) {
-                // when the state is already in ERROR, its transition attempts to PENDING_SHUTDOWN, PENDING_ERROR or ERROR will
-                // not throw an exception.
+            } else if (state == State.ERROR && (newState == State.PENDING_ERROR || newState == State.ERROR)) {
+                // when the state is already in ERROR, its transition to PENDING_ERROR or ERROR (due to consecutive close calls)
                 return false;
             } else if (state == State.PENDING_ERROR && newState != State.ERROR) {
                 // when the state is already in PENDING_ERROR, all other transitions than ERROR (due to thread dying) will be
@@ -518,7 +510,7 @@ public class KafkaStreams implements AutoCloseable {
                 break;
             case SHUTDOWN_CLIENT:
                 log.error(
-                    "Encountered the following exception during processing and the registered exception handler " +
+                    "Encountered the following exception during processing and the registered exception handler" +
                         "opted to {}. The streams client is going to shut down now.",
                     action,
                     throwable
@@ -542,7 +534,7 @@ public class KafkaStreams implements AutoCloseable {
                     closeToError();
                     break;
                 }
-                processStreamThread(StreamThread::sendShutdownRequest);
+                processStreamThread(thread -> thread.sendShutdownRequest(AssignorError.SHUTDOWN_REQUESTED));
                 log.error("Encountered the following exception during processing " +
                         "and sent shutdown request for the entire application.", throwable);
                 break;
@@ -642,9 +634,6 @@ public class KafkaStreams implements AutoCloseable {
             if (globalThreadState != null && globalThreadState != GlobalStreamThread.State.RUNNING) {
                 return;
             }
-
-            // all (alive) threads have received their assignment, close any remaining startup tasks, they're not needed
-            stateDirectory.closeStartupTasks();
 
             setState(State.RUNNING);
         }
@@ -968,20 +957,17 @@ public class KafkaStreams implements AutoCloseable {
         } else {
             clientId = userClientId;
         }
-        logContext = new LogContext(String.format("stream-client [%s] ", clientId));
+        final LogContext logContext = new LogContext(String.format("stream-client [%s] ", clientId));
         this.log = logContext.logger(getClass());
         topologyMetadata.setLog(logContext);
 
+        // use client id instead of thread client id since this admin client may be shared among threads
         this.clientSupplier = clientSupplier;
+        adminClient = clientSupplier.getAdmin(applicationConfigs.getAdminConfigs(ClientUtils.adminClientId(clientId)));
 
         log.info("Kafka Streams version: {}", ClientMetrics.version());
         log.info("Kafka Streams commit ID: {}", ClientMetrics.commitId());
 
-        throwIfUnsupportedFeatureIsUsedWithStreamsRebalanceProtocol();
-
-        // use client id instead of thread client id since this admin client may be shared among threads
-        adminClient = clientSupplier.getAdmin(applicationConfigs.getAdminConfigs(ClientUtils.adminClientId(clientId)));
-        
         metrics = createMetrics(applicationConfigs, time, clientId);
         final StreamsClientMetricsDelegatingReporter reporter = new StreamsClientMetricsDelegatingReporter(adminClient, clientId);
         metrics.addReporter(reporter);
@@ -997,7 +983,7 @@ public class KafkaStreams implements AutoCloseable {
         ClientMetrics.addCommitIdMetric(streamsMetrics);
         ClientMetrics.addApplicationIdMetric(streamsMetrics, applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG));
         ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, (metricsConfig, now) -> this.topologyMetadata.topologyDescriptionString());
-        ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state.name());
+        ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state);
         ClientMetrics.addClientStateTelemetryMetric(streamsMetrics, (metricsConfig, now) -> state.ordinal());
         ClientMetrics.addClientRecordingLevelMetric(streamsMetrics, calculateMetricsRecordingLevel());
         threads = Collections.synchronizedList(new LinkedList<>());
@@ -1049,22 +1035,6 @@ public class KafkaStreams implements AutoCloseable {
 
         stateDirCleaner = setupStateDirCleaner();
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, applicationConfigs);
-    }
-
-    private void throwIfUnsupportedFeatureIsUsedWithStreamsRebalanceProtocol() {
-        if (applicationConfigs.isStreamsProtocolEnabled()) {
-            log.info("Streams rebalance protocol enabled");
-            if (topologyMetadata.hasNamedTopologies()) {
-                throw new UnsupportedOperationException("Named topologies are not supported with the STREAMS protocol.");
-            }
-            if (topologyMetadata.usesPatternSubscription()) {
-                throw new UnsupportedOperationException("Pattern subscriptions are not supported with the STREAMS protocol.");
-            }
-            if (!(clientSupplier instanceof DefaultKafkaClientSupplier)) {
-                log.warn("A non-default kafka client supplier was supplied. Note that supplying a custom main consumer" +
-                    " is not supported with the STREAMS protocol.");
-            }
-        }
     }
 
     private StreamThread createAndAddStreamThread(final long cacheSizePerThread, final int threadIdx) {
@@ -1422,9 +1392,6 @@ public class KafkaStreams implements AutoCloseable {
      */
     public synchronized void start() throws IllegalStateException, StreamsException {
         if (setState(State.REBALANCING)) {
-            log.debug("Initializing STANDBY tasks for existing local state");
-            stateDirectory.initializeStartupTasks(topologyMetadata, streamsMetrics, logContext);
-
             log.debug("Starting Streams client");
 
             if (globalStreamThread != null) {
@@ -1569,34 +1536,38 @@ public class KafkaStreams implements AutoCloseable {
             timeoutMs = Long.MAX_VALUE;
         }
 
-        if (!setState(State.PENDING_SHUTDOWN)) {
-            // Copy the state so that we can atomically check if we are shut down and act on it (log it)
-            final State immutableStateCopy = state;
-            if (immutableStateCopy.isShuttingDown()) {
-                log.info("Skipping shutdown since Streams client is already in {}, waiting for a terminal state", immutableStateCopy);
-                if (!waitOnStates(timeoutMs, State.ERROR, State.NOT_RUNNING)) {
-                    log.warn("Streams client did transition to a terminal state (ERROR or NOT_RUNNING) within the {}ms timeout", timeoutMs);
-                    return false;
-                }
-                log.info("Streams client stopped completely and transitioned to the terminal {} state", state);
+        if (state.hasCompletedShutdown()) {
+            log.info("Streams client is already in the terminal {} state, all resources are closed and the client has stopped.", state);
+            return true;
+        }
+        if (state.isShuttingDown()) {
+            log.info("Streams client is in {}, all resources are being closed and the client will be stopped.", state);
+            if (state == State.PENDING_ERROR && waitOnState(State.ERROR, timeoutMs)) {
+                log.info("Streams client stopped to ERROR completely");
                 return true;
-            }
-
-            if (state.hasCompletedShutdown()) {
-                log.info("Skipping shutdown since Streams client is already in the terminal {} state", state);
+            } else if (state == State.PENDING_SHUTDOWN && waitOnState(State.NOT_RUNNING, timeoutMs)) {
+                log.info("Streams client stopped to NOT_RUNNING completely");
                 return true;
+            } else {
+                log.warn("Streams client cannot transition to {} completely within the timeout",
+                         state == State.PENDING_SHUTDOWN ? State.NOT_RUNNING : State.ERROR);
+                return false;
             }
-
-            throw new IllegalStateException("If transitioning to PENDING_SHUTDOWN fails, the state should be either in "
-                + "PENDING_SHUTDOWN, PENDING_ERROR, ERROR, or NOT_RUNNING");
         }
 
-        final Thread shutdownThread = shutdownHelper(false, timeoutMs, leaveGroup);
+        if (!setState(State.PENDING_SHUTDOWN)) {
+            // if we can't transition to PENDING_SHUTDOWN but not because we're already shutting down, then it must be fatal
+            log.error("Failed to transition to PENDING_SHUTDOWN, current state is {}", state);
+            throw new StreamsException("Failed to shut down while in state " + state);
+        } else {
 
-        shutdownThread.setDaemon(true);
-        shutdownThread.start();
+            final Thread shutdownThread = shutdownHelper(false, timeoutMs, leaveGroup);
 
-        if (waitOnStates(timeoutMs, State.NOT_RUNNING)) {
+            shutdownThread.setDaemon(true);
+            shutdownThread.start();
+        }
+
+        if (waitOnState(State.NOT_RUNNING, timeoutMs)) {
             log.info("Streams client stopped completely");
             return true;
         } else {

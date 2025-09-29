@@ -20,9 +20,10 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
+import java.util.stream.Collectors;
 
 public class PredicateDoc {
 
@@ -38,7 +39,7 @@ public class PredicateDoc {
         }
     }
 
-    private static final List<DocInfo> PREDICATES = new Plugins(Map.of()).predicates().stream()
+    private static final List<DocInfo> PREDICATES = new Plugins(Collections.emptyMap()).predicates().stream()
         .map(p -> {
             try {
                 String overviewDoc = (String) p.pluginClass().getDeclaredField("OVERVIEW_DOC").get(null);
@@ -49,7 +50,7 @@ public class PredicateDoc {
             }
         })
         .sorted(Comparator.comparing(docInfo -> docInfo.predicateName))
-        .toList();
+        .collect(Collectors.toList());
 
     private static String toHtml() {
         StringBuilder b = new StringBuilder();

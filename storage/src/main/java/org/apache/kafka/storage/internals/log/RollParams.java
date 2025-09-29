@@ -19,8 +19,29 @@ package org.apache.kafka.storage.internals.log;
 /**
  * A class used to hold params required to decide to rotate a log segment or not.
  */
-public record RollParams(long maxSegmentMs, int maxSegmentBytes, long maxTimestampInMessages, long maxOffsetInMessages,
-                         int messagesSize, long now) {
+public class RollParams {
+
+    public final long maxSegmentMs;
+    public final int maxSegmentBytes;
+    public final long maxTimestampInMessages;
+    public final long maxOffsetInMessages;
+    public final int messagesSize;
+    public final long now;
+
+    public RollParams(long maxSegmentMs,
+               int maxSegmentBytes,
+               long maxTimestampInMessages,
+               long maxOffsetInMessages,
+               int messagesSize,
+               long now) {
+
+        this.maxSegmentMs = maxSegmentMs;
+        this.maxSegmentBytes = maxSegmentBytes;
+        this.maxTimestampInMessages = maxTimestampInMessages;
+        this.maxOffsetInMessages = maxOffsetInMessages;
+        this.messagesSize = messagesSize;
+        this.now = now;
+    }
 
     @Override
     public String toString() {

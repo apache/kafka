@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.server.common.OffsetAndEpoch;
-
 import java.util.Objects;
 
 public final class ValidOffsetAndEpoch {

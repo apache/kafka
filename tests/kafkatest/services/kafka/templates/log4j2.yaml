@@ -254,21 +254,7 @@ Configuration:
           - ref: ControllerInfoAppender
           - ref: ControllerDebugAppender
 
-      - name: org.apache.kafka.storage.internals.log.LogCleaner
-        level: {{ log_level|default("DEBUG") }}
-        additivity: false
-        AppenderRef:
-          - ref: CleanerInfoAppender
-          - ref: CleanerDebugAppender
-
-      - name: org.apache.kafka.storage.internals.log.LogCleaner$CleanerThread
-        level: {{ log_level|default("DEBUG") }}
-        additivity: false
-        AppenderRef:
-          - ref: CleanerInfoAppender
-          - ref: CleanerDebugAppender
-
-      - name: org.apache.kafka.storage.internals.log.Cleaner
+      - name: kafka.log.LogCleaner
         level: {{ log_level|default("DEBUG") }}
         additivity: false
         AppenderRef:

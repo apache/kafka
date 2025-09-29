@@ -24,9 +24,11 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.Meter;
 
-import java.util.EnumMap;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -37,9 +39,6 @@ public class RequestMetrics {
     public static final String CONSUMER_FETCH_METRIC_NAME = ApiKeys.FETCH.name + "Consumer";
     public static final String FOLLOW_FETCH_METRIC_NAME = ApiKeys.FETCH.name + "Follower";
     public static final String VERIFY_PARTITIONS_IN_TXN_METRIC_NAME = ApiKeys.ADD_PARTITIONS_TO_TXN.name + "Verification";
-    // The ListClientMetricsResourcesRequest (v0) is renamed to ListConfigResourcesRequest (v1) in 4.1.
-    // To record correct request name, we keep the old name for v0 and use the new name for v1+.
-    public static final String LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME = "ListClientMetricsResources";
     public static final String REQUESTS_PER_SEC = "RequestsPerSec";
     public static final String DEPRECATED_REQUESTS_PER_SEC = "DeprecatedRequestsPerSec";
     public static final String MESSAGE_CONVERSIONS_TIME_MS = "MessageConversionsTimeMs";
@@ -84,11 +83,11 @@ public class RequestMetrics {
     private final Map<String, String> tags;
     private final ConcurrentMap<Short, Meter> requestRateInternal = new ConcurrentHashMap<>();
     private final ConcurrentMap<DeprecatedRequestRateKey, Meter> deprecatedRequestRateInternal = new ConcurrentHashMap<>();
-    private final Map<Errors, ErrorMeter> errorMeters = new EnumMap<>(Errors.class);
+    private final Map<Errors, ErrorMeter> errorMeters = new HashMap<>();
 
     public RequestMetrics(String name) {
         this.name = name;
-        tags = Map.of("request", name);
+        tags = Collections.singletonMap("request", name);
         // time a request spent in a request queue
         requestQueueTimeHist = metricsGroup.newHistogram(REQUEST_QUEUE_TIME_MS, true, tags);
         // time a request takes to be processed at the local broker
@@ -207,6 +206,27 @@ public class RequestMetrics {
         }
     }
 
-    private record DeprecatedRequestRateKey(short version, ClientInformation clientInformation) {
+    private static class DeprecatedRequestRateKey {
+
+        private final short version;
+        private final ClientInformation clientInformation;
+
+        private DeprecatedRequestRateKey(short version, ClientInformation clientInformation) {
+            this.version = version;
+            this.clientInformation = clientInformation;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            DeprecatedRequestRateKey that = (DeprecatedRequestRateKey) o;
+            return version == that.version && Objects.equals(clientInformation, that.clientInformation);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(version, clientInformation);
+        }
     }
 }

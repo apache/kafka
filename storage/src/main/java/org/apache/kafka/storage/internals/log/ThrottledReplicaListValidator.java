@@ -20,6 +20,9 @@ import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigException;
 
 import java.util.List;
+import java.util.stream.Collectors;
+
+import static java.util.Arrays.asList;
 
 public class ThrottledReplicaListValidator implements Validator {
     public static final Validator INSTANCE = new ThrottledReplicaListValidator();
@@ -27,13 +30,13 @@ public class ThrottledReplicaListValidator implements Validator {
     private ThrottledReplicaListValidator() { }
 
     public static void ensureValidString(String name, String value) {
-        INSTANCE.ensureValid(name, List.of(value.split(",")));
+        INSTANCE.ensureValid(name, asList(value.split(",")));
     }
 
     @Override
     public void ensureValid(String name, Object value) {
         if (value instanceof java.util.List<?>) {
-            List<String> proposed = ((List<?>) value).stream().map(element -> element.toString().trim()).toList();
+            List<String> proposed = ((List<?>) value).stream().map(element -> element.toString().trim()).collect(Collectors.toList());
             if (!(proposed.stream().allMatch(s -> s.matches("([0-9]+:[0-9]+)?"))
                     || String.join("", proposed).equals("*")))
                 throw new ConfigException(name, value, name +

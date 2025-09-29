@@ -35,11 +35,13 @@ import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
@@ -58,7 +60,7 @@ public class BatchAccumulator<T> implements Closeable {
     private final int epoch;
     private final Time time;
     private final int lingerMs;
-    private final int maxBatchSizeBytes;
+    private final int maxBatchSize;
     private final int maxNumberOfBatches;
     private final Compression compression;
     private final MemoryPool memoryPool;
@@ -82,7 +84,7 @@ public class BatchAccumulator<T> implements Closeable {
         int epoch,
         long baseOffset,
         int lingerMs,
-        int maxBatchSizeBytes,
+        int maxBatchSize,
         int maxNumberOfBatches,
         MemoryPool memoryPool,
         Time time,
@@ -91,7 +93,7 @@ public class BatchAccumulator<T> implements Closeable {
     ) {
         this.epoch = epoch;
         this.lingerMs = lingerMs;
-        this.maxBatchSizeBytes = maxBatchSizeBytes;
+        this.maxBatchSize = maxBatchSize;
         this.maxNumberOfBatches = maxNumberOfBatches;
         this.memoryPool = memoryPool;
         this.time = time;
@@ -182,12 +184,12 @@ public class BatchAccumulator<T> implements Closeable {
 
         if (currentBatch != null) {
             OptionalInt bytesNeeded = currentBatch.bytesNeeded(records, serializationCache);
-            if (bytesNeeded.isPresent() && bytesNeeded.getAsInt() > maxBatchSizeBytes) {
+            if (bytesNeeded.isPresent() && bytesNeeded.getAsInt() > maxBatchSize) {
                 throw new RecordBatchTooLargeException(
                     String.format(
                         "The total record(s) size of %d exceeds the maximum allowed batch size of %d",
                         bytesNeeded.getAsInt(),
-                        maxBatchSizeBytes
+                        maxBatchSize
                     )
                 );
             } else if (bytesNeeded.isPresent()) {
@@ -231,7 +233,7 @@ public class BatchAccumulator<T> implements Closeable {
     public long appendControlMessages(MemoryRecordsCreator valueCreator) {
         appendLock.lock();
         try {
-            ByteBuffer buffer = memoryPool.tryAllocate(maxBatchSizeBytes);
+            ByteBuffer buffer = memoryPool.tryAllocate(maxBatchSize);
             if (buffer != null) {
                 try {
                     forceDrain();
@@ -421,7 +423,7 @@ public class BatchAccumulator<T> implements Closeable {
     }
 
     private void startNewBatch() {
-        ByteBuffer buffer = memoryPool.tryAllocate(maxBatchSizeBytes);
+        ByteBuffer buffer = memoryPool.tryAllocate(maxBatchSize);
         if (buffer != null) {
             currentBatch = new BatchBuilder<>(
                 buffer,
@@ -430,7 +432,7 @@ public class BatchAccumulator<T> implements Closeable {
                 nextOffset,
                 time.milliseconds(),
                 epoch,
-                maxBatchSizeBytes
+                maxBatchSize
             );
         }
     }
@@ -482,7 +484,7 @@ public class BatchAccumulator<T> implements Closeable {
      * This call will not block, but the drain may require multiple attempts before
      * it can be completed if the thread responsible for appending is holding the
      * append lock. In the worst case, the append will be completed on the next
-     * call to {@link #append(int, List, boolean)} following the
+     * call to {@link #append(int, List, OptionalLong, boolean)} following the
      * initial call to this method.
      *
      * The caller should respect the time to the next flush as indicated by
@@ -514,7 +516,7 @@ public class BatchAccumulator<T> implements Closeable {
             drainStatus = DrainStatus.NONE;
             return drainCompleted(drainOffset);
         } else {
-            return List.of();
+            return Collections.emptyList();
         }
     }
 

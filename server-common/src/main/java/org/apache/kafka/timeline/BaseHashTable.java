@@ -150,7 +150,8 @@ class BaseHashTable<T> {
         Object object = elements[slot];
         if (object == null) {
             return null;
-        } else if (object instanceof Object[] curArray) {
+        } else if (object instanceof Object[]) {
+            Object[] curArray = (Object[]) object;
             for (int i = 0; i < curArray.length; i++) {
                 if (curArray[i].equals(key)) {
                     size--;
@@ -190,7 +191,8 @@ class BaseHashTable<T> {
                 Object cur = elements[newSlot];
                 if (cur == null) {
                     elements[newSlot] = object;
-                } else if (cur instanceof Object[] curArray) {
+                } else if (cur instanceof Object[]) {
+                    Object[] curArray = (Object[]) cur;
                     Object[] newArray = new Object[curArray.length + 1];
                     System.arraycopy(curArray, 0, newArray, 0, curArray.length);
                     newArray[curArray.length] = object;
@@ -223,7 +225,8 @@ class BaseHashTable<T> {
     static <T> void unpackSlot(List<T> out, Object[] elements, int slot) {
         Object value = elements[slot];
         if (value != null) {
-            if (value instanceof Object[] array) {
+            if (value instanceof Object[]) {
+                Object[] array = (Object[]) value;
                 for (Object object : array) {
                     out.add((T) object);
                 }
@@ -241,7 +244,8 @@ class BaseHashTable<T> {
             bld.append(String.format("%n%d: ", i));
             if (slotObject == null) {
                 bld.append("null");
-            } else if (slotObject instanceof Object[] array) {
+            } else if (slotObject instanceof Object[]) {
+                Object[] array = (Object[]) slotObject;
                 String prefix = "";
                 for (Object object : array) {
                     bld.append(prefix);

@@ -18,16 +18,14 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.SendBuilder;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -53,8 +51,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
     }
 
     // Visible for testing
-    final ByteBufferAccessor serialize(short version) {
-        return MessageUtil.toByteBufferAccessor(data(), version);
+    final ByteBuffer serialize(short version) {
+        return MessageUtil.toByteBuffer(data(), version);
     }
 
     /**
@@ -73,14 +71,14 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
     }
 
     protected static Map<Errors, Integer> errorCounts(Collection<Errors> errors) {
-        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
+        Map<Errors, Integer> errorCounts = new HashMap<>();
         for (Errors error : errors)
             updateErrorCounts(errorCounts, error);
         return errorCounts;
     }
 
     protected static Map<Errors, Integer> apiErrorCounts(Map<?, ApiError> errors) {
-        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
+        Map<Errors, Integer> errorCounts = new HashMap<>();
         for (ApiError apiError : errors.values())
             updateErrorCounts(errorCounts, apiError.error());
         return errorCounts;
@@ -108,189 +106,179 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 requestHeader.correlationId(), responseHeader.correlationId());
         }
 
-        return AbstractResponse.parseResponse(apiKey, new ByteBufferAccessor(buffer), apiVersion);
+        return AbstractResponse.parseResponse(apiKey, buffer, apiVersion);
     }
 
-    public static AbstractResponse parseResponse(ApiKeys apiKey, Readable readable, short version) {
+    public static AbstractResponse parseResponse(ApiKeys apiKey, ByteBuffer responseBuffer, short version) {
         switch (apiKey) {
             case PRODUCE:
-                return ProduceResponse.parse(readable, version);
+                return ProduceResponse.parse(responseBuffer, version);
             case FETCH:
-                return FetchResponse.parse(readable, version);
+                return FetchResponse.parse(responseBuffer, version);
             case LIST_OFFSETS:
-                return ListOffsetsResponse.parse(readable, version);
+                return ListOffsetsResponse.parse(responseBuffer, version);
             case METADATA:
-                return MetadataResponse.parse(readable, version);
+                return MetadataResponse.parse(responseBuffer, version);
             case OFFSET_COMMIT:
-                return OffsetCommitResponse.parse(readable, version);
+                return OffsetCommitResponse.parse(responseBuffer, version);
             case OFFSET_FETCH:
-                return OffsetFetchResponse.parse(readable, version);
+                return OffsetFetchResponse.parse(responseBuffer, version);
             case FIND_COORDINATOR:
-                return FindCoordinatorResponse.parse(readable, version);
+                return FindCoordinatorResponse.parse(responseBuffer, version);
             case JOIN_GROUP:
-                return JoinGroupResponse.parse(readable, version);
+                return JoinGroupResponse.parse(responseBuffer, version);
             case HEARTBEAT:
-                return HeartbeatResponse.parse(readable, version);
+                return HeartbeatResponse.parse(responseBuffer, version);
             case LEAVE_GROUP:
-                return LeaveGroupResponse.parse(readable, version);
+                return LeaveGroupResponse.parse(responseBuffer, version);
             case SYNC_GROUP:
-                return SyncGroupResponse.parse(readable, version);
+                return SyncGroupResponse.parse(responseBuffer, version);
             case DESCRIBE_GROUPS:
-                return DescribeGroupsResponse.parse(readable, version);
+                return DescribeGroupsResponse.parse(responseBuffer, version);
             case LIST_GROUPS:
-                return ListGroupsResponse.parse(readable, version);
+                return ListGroupsResponse.parse(responseBuffer, version);
             case SASL_HANDSHAKE:
-                return SaslHandshakeResponse.parse(readable, version);
+                return SaslHandshakeResponse.parse(responseBuffer, version);
             case API_VERSIONS:
-                return ApiVersionsResponse.parse(readable, version);
+                return ApiVersionsResponse.parse(responseBuffer, version);
             case CREATE_TOPICS:
-                return CreateTopicsResponse.parse(readable, version);
+                return CreateTopicsResponse.parse(responseBuffer, version);
             case DELETE_TOPICS:
-                return DeleteTopicsResponse.parse(readable, version);
+                return DeleteTopicsResponse.parse(responseBuffer, version);
             case DELETE_RECORDS:
-                return DeleteRecordsResponse.parse(readable, version);
+                return DeleteRecordsResponse.parse(responseBuffer, version);
             case INIT_PRODUCER_ID:
-                return InitProducerIdResponse.parse(readable, version);
+                return InitProducerIdResponse.parse(responseBuffer, version);
             case OFFSET_FOR_LEADER_EPOCH:
-                return OffsetsForLeaderEpochResponse.parse(readable, version);
+                return OffsetsForLeaderEpochResponse.parse(responseBuffer, version);
             case ADD_PARTITIONS_TO_TXN:
-                return AddPartitionsToTxnResponse.parse(readable, version);
+                return AddPartitionsToTxnResponse.parse(responseBuffer, version);
             case ADD_OFFSETS_TO_TXN:
-                return AddOffsetsToTxnResponse.parse(readable, version);
+                return AddOffsetsToTxnResponse.parse(responseBuffer, version);
             case END_TXN:
-                return EndTxnResponse.parse(readable, version);
+                return EndTxnResponse.parse(responseBuffer, version);
             case WRITE_TXN_MARKERS:
-                return WriteTxnMarkersResponse.parse(readable, version);
+                return WriteTxnMarkersResponse.parse(responseBuffer, version);
             case TXN_OFFSET_COMMIT:
-                return TxnOffsetCommitResponse.parse(readable, version);
+                return TxnOffsetCommitResponse.parse(responseBuffer, version);
             case DESCRIBE_ACLS:
-                return DescribeAclsResponse.parse(readable, version);
+                return DescribeAclsResponse.parse(responseBuffer, version);
             case CREATE_ACLS:
-                return CreateAclsResponse.parse(readable, version);
+                return CreateAclsResponse.parse(responseBuffer, version);
             case DELETE_ACLS:
-                return DeleteAclsResponse.parse(readable, version);
+                return DeleteAclsResponse.parse(responseBuffer, version);
             case DESCRIBE_CONFIGS:
-                return DescribeConfigsResponse.parse(readable, version);
+                return DescribeConfigsResponse.parse(responseBuffer, version);
             case ALTER_CONFIGS:
-                return AlterConfigsResponse.parse(readable, version);
+                return AlterConfigsResponse.parse(responseBuffer, version);
             case ALTER_REPLICA_LOG_DIRS:
-                return AlterReplicaLogDirsResponse.parse(readable, version);
+                return AlterReplicaLogDirsResponse.parse(responseBuffer, version);
             case DESCRIBE_LOG_DIRS:
-                return DescribeLogDirsResponse.parse(readable, version);
+                return DescribeLogDirsResponse.parse(responseBuffer, version);
             case SASL_AUTHENTICATE:
-                return SaslAuthenticateResponse.parse(readable, version);
+                return SaslAuthenticateResponse.parse(responseBuffer, version);
             case CREATE_PARTITIONS:
-                return CreatePartitionsResponse.parse(readable, version);
+                return CreatePartitionsResponse.parse(responseBuffer, version);
             case CREATE_DELEGATION_TOKEN:
-                return CreateDelegationTokenResponse.parse(readable, version);
+                return CreateDelegationTokenResponse.parse(responseBuffer, version);
             case RENEW_DELEGATION_TOKEN:
-                return RenewDelegationTokenResponse.parse(readable, version);
+                return RenewDelegationTokenResponse.parse(responseBuffer, version);
             case EXPIRE_DELEGATION_TOKEN:
-                return ExpireDelegationTokenResponse.parse(readable, version);
+                return ExpireDelegationTokenResponse.parse(responseBuffer, version);
             case DESCRIBE_DELEGATION_TOKEN:
-                return DescribeDelegationTokenResponse.parse(readable, version);
+                return DescribeDelegationTokenResponse.parse(responseBuffer, version);
             case DELETE_GROUPS:
-                return DeleteGroupsResponse.parse(readable, version);
+                return DeleteGroupsResponse.parse(responseBuffer, version);
             case ELECT_LEADERS:
-                return ElectLeadersResponse.parse(readable, version);
+                return ElectLeadersResponse.parse(responseBuffer, version);
             case INCREMENTAL_ALTER_CONFIGS:
-                return IncrementalAlterConfigsResponse.parse(readable, version);
+                return IncrementalAlterConfigsResponse.parse(responseBuffer, version);
             case ALTER_PARTITION_REASSIGNMENTS:
-                return AlterPartitionReassignmentsResponse.parse(readable, version);
+                return AlterPartitionReassignmentsResponse.parse(responseBuffer, version);
             case LIST_PARTITION_REASSIGNMENTS:
-                return ListPartitionReassignmentsResponse.parse(readable, version);
+                return ListPartitionReassignmentsResponse.parse(responseBuffer, version);
             case OFFSET_DELETE:
-                return OffsetDeleteResponse.parse(readable, version);
+                return OffsetDeleteResponse.parse(responseBuffer, version);
             case DESCRIBE_CLIENT_QUOTAS:
-                return DescribeClientQuotasResponse.parse(readable, version);
+                return DescribeClientQuotasResponse.parse(responseBuffer, version);
             case ALTER_CLIENT_QUOTAS:
-                return AlterClientQuotasResponse.parse(readable, version);
+                return AlterClientQuotasResponse.parse(responseBuffer, version);
             case DESCRIBE_USER_SCRAM_CREDENTIALS:
-                return DescribeUserScramCredentialsResponse.parse(readable, version);
+                return DescribeUserScramCredentialsResponse.parse(responseBuffer, version);
             case ALTER_USER_SCRAM_CREDENTIALS:
-                return AlterUserScramCredentialsResponse.parse(readable, version);
+                return AlterUserScramCredentialsResponse.parse(responseBuffer, version);
             case VOTE:
-                return VoteResponse.parse(readable, version);
+                return VoteResponse.parse(responseBuffer, version);
             case BEGIN_QUORUM_EPOCH:
-                return BeginQuorumEpochResponse.parse(readable, version);
+                return BeginQuorumEpochResponse.parse(responseBuffer, version);
             case END_QUORUM_EPOCH:
-                return EndQuorumEpochResponse.parse(readable, version);
+                return EndQuorumEpochResponse.parse(responseBuffer, version);
             case DESCRIBE_QUORUM:
-                return DescribeQuorumResponse.parse(readable, version);
+                return DescribeQuorumResponse.parse(responseBuffer, version);
             case ALTER_PARTITION:
-                return AlterPartitionResponse.parse(readable, version);
+                return AlterPartitionResponse.parse(responseBuffer, version);
             case UPDATE_FEATURES:
-                return UpdateFeaturesResponse.parse(readable, version);
+                return UpdateFeaturesResponse.parse(responseBuffer, version);
             case ENVELOPE:
-                return EnvelopeResponse.parse(readable, version);
+                return EnvelopeResponse.parse(responseBuffer, version);
             case FETCH_SNAPSHOT:
-                return FetchSnapshotResponse.parse(readable, version);
+                return FetchSnapshotResponse.parse(responseBuffer, version);
             case DESCRIBE_CLUSTER:
-                return DescribeClusterResponse.parse(readable, version);
+                return DescribeClusterResponse.parse(responseBuffer, version);
             case DESCRIBE_PRODUCERS:
-                return DescribeProducersResponse.parse(readable, version);
+                return DescribeProducersResponse.parse(responseBuffer, version);
             case BROKER_REGISTRATION:
-                return BrokerRegistrationResponse.parse(readable, version);
+                return BrokerRegistrationResponse.parse(responseBuffer, version);
             case BROKER_HEARTBEAT:
-                return BrokerHeartbeatResponse.parse(readable, version);
+                return BrokerHeartbeatResponse.parse(responseBuffer, version);
             case UNREGISTER_BROKER:
-                return UnregisterBrokerResponse.parse(readable, version);
+                return UnregisterBrokerResponse.parse(responseBuffer, version);
             case DESCRIBE_TRANSACTIONS:
-                return DescribeTransactionsResponse.parse(readable, version);
+                return DescribeTransactionsResponse.parse(responseBuffer, version);
             case LIST_TRANSACTIONS:
-                return ListTransactionsResponse.parse(readable, version);
+                return ListTransactionsResponse.parse(responseBuffer, version);
             case ALLOCATE_PRODUCER_IDS:
-                return AllocateProducerIdsResponse.parse(readable, version);
+                return AllocateProducerIdsResponse.parse(responseBuffer, version);
             case CONSUMER_GROUP_HEARTBEAT:
-                return ConsumerGroupHeartbeatResponse.parse(readable, version);
+                return ConsumerGroupHeartbeatResponse.parse(responseBuffer, version);
             case CONSUMER_GROUP_DESCRIBE:
-                return ConsumerGroupDescribeResponse.parse(readable, version);
+                return ConsumerGroupDescribeResponse.parse(responseBuffer, version);
             case CONTROLLER_REGISTRATION:
-                return ControllerRegistrationResponse.parse(readable, version);
+                return ControllerRegistrationResponse.parse(responseBuffer, version);
             case GET_TELEMETRY_SUBSCRIPTIONS:
-                return GetTelemetrySubscriptionsResponse.parse(readable, version);
+                return GetTelemetrySubscriptionsResponse.parse(responseBuffer, version);
             case PUSH_TELEMETRY:
-                return PushTelemetryResponse.parse(readable, version);
+                return PushTelemetryResponse.parse(responseBuffer, version);
             case ASSIGN_REPLICAS_TO_DIRS:
-                return AssignReplicasToDirsResponse.parse(readable, version);
-            case LIST_CONFIG_RESOURCES:
-                return ListConfigResourcesResponse.parse(readable, version);
+                return AssignReplicasToDirsResponse.parse(responseBuffer, version);
+            case LIST_CLIENT_METRICS_RESOURCES:
+                return ListClientMetricsResourcesResponse.parse(responseBuffer, version);
             case DESCRIBE_TOPIC_PARTITIONS:
-                return DescribeTopicPartitionsResponse.parse(readable, version);
+                return DescribeTopicPartitionsResponse.parse(responseBuffer, version);
             case SHARE_GROUP_HEARTBEAT:
-                return ShareGroupHeartbeatResponse.parse(readable, version);
+                return ShareGroupHeartbeatResponse.parse(responseBuffer, version);
             case SHARE_GROUP_DESCRIBE:
-                return ShareGroupDescribeResponse.parse(readable, version);
+                return ShareGroupDescribeResponse.parse(responseBuffer, version);
             case SHARE_FETCH:
-                return ShareFetchResponse.parse(readable, version);
+                return ShareFetchResponse.parse(responseBuffer, version);
             case SHARE_ACKNOWLEDGE:
-                return ShareAcknowledgeResponse.parse(readable, version);
+                return ShareAcknowledgeResponse.parse(responseBuffer, version);
             case ADD_RAFT_VOTER:
-                return AddRaftVoterResponse.parse(readable, version);
+                return AddRaftVoterResponse.parse(responseBuffer, version);
             case REMOVE_RAFT_VOTER:
-                return RemoveRaftVoterResponse.parse(readable, version);
+                return RemoveRaftVoterResponse.parse(responseBuffer, version);
             case UPDATE_RAFT_VOTER:
-                return UpdateRaftVoterResponse.parse(readable, version);
+                return UpdateRaftVoterResponse.parse(responseBuffer, version);
             case INITIALIZE_SHARE_GROUP_STATE:
-                return InitializeShareGroupStateResponse.parse(readable, version);
+                return InitializeShareGroupStateResponse.parse(responseBuffer, version);
             case READ_SHARE_GROUP_STATE:
-                return ReadShareGroupStateResponse.parse(readable, version);
+                return ReadShareGroupStateResponse.parse(responseBuffer, version);
             case WRITE_SHARE_GROUP_STATE:
-                return WriteShareGroupStateResponse.parse(readable, version);
+                return WriteShareGroupStateResponse.parse(responseBuffer, version);
             case DELETE_SHARE_GROUP_STATE:
-                return DeleteShareGroupStateResponse.parse(readable, version);
+                return DeleteShareGroupStateResponse.parse(responseBuffer, version);
             case READ_SHARE_GROUP_STATE_SUMMARY:
-                return ReadShareGroupStateSummaryResponse.parse(readable, version);
-            case STREAMS_GROUP_HEARTBEAT:
-                return StreamsGroupHeartbeatResponse.parse(readable, version);
-            case STREAMS_GROUP_DESCRIBE:
-                return StreamsGroupDescribeResponse.parse(readable, version);
-            case DESCRIBE_SHARE_GROUP_OFFSETS:
-                return DescribeShareGroupOffsetsResponse.parse(readable, version);
-            case ALTER_SHARE_GROUP_OFFSETS:
-                return AlterShareGroupOffsetsResponse.parse(readable, version);
-            case DELETE_SHARE_GROUP_OFFSETS:
-                return DeleteShareGroupOffsetsResponse.parse(readable, version);
+                return ReadShareGroupStateSummaryResponse.parse(responseBuffer, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

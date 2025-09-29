@@ -25,8 +25,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -36,14 +37,18 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class QuorumFeaturesTest {
-    private static final Map<String, VersionRange> LOCAL = Map.of(
-        "foo", VersionRange.of(0, 3),
-        "bar", VersionRange.of(0, 4),
-        "baz", VersionRange.of(2, 2)
-    );
+    private static final Map<String, VersionRange> LOCAL;
 
-    private static final QuorumFeatures QUORUM_FEATURES = new QuorumFeatures(0, LOCAL,
-        List.of(0, 1, 2));
+    private static final QuorumFeatures QUORUM_FEATURES;
+
+    static {
+        Map<String, VersionRange> local = new HashMap<>();
+        local.put("foo", VersionRange.of(0, 3));
+        local.put("bar", VersionRange.of(0, 4));
+        local.put("baz", VersionRange.of(2, 2));
+        LOCAL = Collections.unmodifiableMap(local);
+        QUORUM_FEATURES = new QuorumFeatures(0, LOCAL, Arrays.asList(0, 1, 2));
+    }
 
     @Test
     public void testDefaultFeatureMap() {

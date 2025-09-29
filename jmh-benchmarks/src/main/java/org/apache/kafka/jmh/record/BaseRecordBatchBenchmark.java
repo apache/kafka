@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.jmh.record;
 
+import kafka.log.UnifiedLog;
+
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -26,7 +28,6 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.storage.internals.log.LogValidator;
-import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.openjdk.jmh.annotations.Param;

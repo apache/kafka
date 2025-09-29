@@ -48,7 +48,7 @@ public abstract class GraphNode {
     }
 
     public Collection<GraphNode> parentNodes() {
-        return new LinkedHashSet<>(parentNodes);
+        return parentNodes;
     }
 
     String[] parentNodeNames() {
@@ -113,7 +113,7 @@ public abstract class GraphNode {
         this.valueChangingOperation = valueChangingOperation;
     }
 
-    public void setKeyChangingOperation(final boolean keyChangingOperation) {
+    public void keyChangingOperation(final boolean keyChangingOperation) {
         this.keyChangingOperation = keyChangingOperation;
     }
 

@@ -28,6 +28,8 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -38,10 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class LogSegmentsTest {
@@ -50,7 +49,7 @@ public class LogSegmentsTest {
 
     /* create a segment with the given base offset */
     private static LogSegment createSegment(Long offset) throws IOException {
-        return spy(LogTestUtils.createSegment(offset, logDir, 10, Time.SYSTEM));
+        return LogTestUtils.createSegment(offset, logDir, 10, Time.SYSTEM);
     }
 
     @BeforeEach
@@ -133,7 +132,7 @@ public class LogSegmentsTest {
             LogSegment seg4 = createSegment(offset4);
 
             // Test firstEntry, lastEntry
-            List<LogSegment> segmentList = List.of(seg1, seg2, seg3, seg4);
+            List<LogSegment> segmentList = Arrays.asList(seg1, seg2, seg3, seg4);
             for (LogSegment seg : segmentList) {
                 segments.add(seg);
                 assertEntry(seg1, segments.firstEntry().get());
@@ -144,28 +143,28 @@ public class LogSegmentsTest {
             }
 
             // Test baseOffsets
-            assertEquals(List.of(offset1, offset2, offset3, offset4), segments.baseOffsets());
+            assertEquals(Arrays.asList(offset1, offset2, offset3, offset4), segments.baseOffsets());
 
             // Test values
-            assertEquals(List.of(seg1, seg2, seg3, seg4), new ArrayList<>(segments.values()));
+            assertEquals(Arrays.asList(seg1, seg2, seg3, seg4), new ArrayList<>(segments.values()));
 
             // Test values(to, from)
             assertThrows(IllegalArgumentException.class, () -> segments.values(2, 1));
-            assertEquals(List.of(), segments.values(1, 1));
-            assertEquals(List.of(seg1), new ArrayList<>(segments.values(1, 2)));
-            assertEquals(List.of(seg1, seg2), new ArrayList<>(segments.values(1, 3)));
-            assertEquals(List.of(seg1, seg2, seg3), new ArrayList<>(segments.values(1, 4)));
-            assertEquals(List.of(seg2, seg3), new ArrayList<>(segments.values(2, 4)));
-            assertEquals(List.of(seg3), new ArrayList<>(segments.values(3, 4)));
-            assertEquals(List.of(), new ArrayList<>(segments.values(4, 4)));
-            assertEquals(List.of(seg4), new ArrayList<>(segments.values(4, 5)));
+            assertEquals(Collections.emptyList(), segments.values(1, 1));
+            assertEquals(Collections.singletonList(seg1), new ArrayList<>(segments.values(1, 2)));
+            assertEquals(Arrays.asList(seg1, seg2), new ArrayList<>(segments.values(1, 3)));
+            assertEquals(Arrays.asList(seg1, seg2, seg3), new ArrayList<>(segments.values(1, 4)));
+            assertEquals(Arrays.asList(seg2, seg3), new ArrayList<>(segments.values(2, 4)));
+            assertEquals(Collections.singletonList(seg3), new ArrayList<>(segments.values(3, 4)));
+            assertEquals(Collections.emptyList(), new ArrayList<>(segments.values(4, 4)));
+            assertEquals(Collections.singletonList(seg4), new ArrayList<>(segments.values(4, 5)));
 
             // Test activeSegment
             assertEquals(seg4, segments.activeSegment());
 
             // Test nonActiveLogSegmentsFrom
-            assertEquals(List.of(seg2, seg3), new ArrayList<>(segments.nonActiveLogSegmentsFrom(2)));
-            assertEquals(List.of(), new ArrayList<>(segments.nonActiveLogSegmentsFrom(4)));
+            assertEquals(Arrays.asList(seg2, seg3), new ArrayList<>(segments.nonActiveLogSegmentsFrom(2)));
+            assertEquals(Collections.emptyList(), new ArrayList<>(segments.nonActiveLogSegmentsFrom(4)));
         }
     }
 
@@ -177,7 +176,7 @@ public class LogSegmentsTest {
             LogSegment seg3 = createSegment(5L);
             LogSegment seg4 = createSegment(7L);
 
-            List.of(seg1, seg2, seg3, seg4).forEach(segments::add);
+            Arrays.asList(seg1, seg2, seg3, seg4).forEach(segments::add);
 
             // Test floorSegment
             assertEquals(Optional.of(seg1), segments.floorSegment(2));
@@ -204,12 +203,12 @@ public class LogSegmentsTest {
             LogSegment seg4 = createSegment(7L);
             LogSegment seg5 = createSegment(9L);
 
-            List.of(seg1, seg2, seg3, seg4, seg5).forEach(segments::add);
+            Arrays.asList(seg1, seg2, seg3, seg4, seg5).forEach(segments::add);
 
             // higherSegments(0) should return all segments in order
             {
                 final Iterator<LogSegment> iterator = segments.higherSegments(0).iterator();
-                List.of(seg1, seg2, seg3, seg4, seg5).forEach(segment -> {
+                Arrays.asList(seg1, seg2, seg3, seg4, seg5).forEach(segment -> {
                     assertTrue(iterator.hasNext());
                     assertEquals(segment, iterator.next());
                 });
@@ -219,7 +218,7 @@ public class LogSegmentsTest {
             // higherSegments(1) should return all segments in order except seg1
             {
                 final Iterator<LogSegment> iterator = segments.higherSegments(1).iterator();
-                List.of(seg2, seg3, seg4, seg5).forEach(segment -> {
+                Arrays.asList(seg2, seg3, seg4, seg5).forEach(segment -> {
                     assertTrue(iterator.hasNext());
                     assertEquals(segment, iterator.next());
                 });
@@ -249,9 +248,9 @@ public class LogSegmentsTest {
 
             when(logSegment.size()).thenReturn(Integer.MAX_VALUE);
 
-            assertEquals(Integer.MAX_VALUE, LogSegments.sizeInBytes(List.of(logSegment)));
-            assertEquals(largeSize, LogSegments.sizeInBytes(List.of(logSegment, logSegment)));
-            assertTrue(LogSegments.sizeInBytes(List.of(logSegment, logSegment)) > Integer.MAX_VALUE);
+            assertEquals(Integer.MAX_VALUE, LogSegments.sizeInBytes(Collections.singletonList(logSegment)));
+            assertEquals(largeSize, LogSegments.sizeInBytes(Arrays.asList(logSegment, logSegment)));
+            assertTrue(LogSegments.sizeInBytes(Arrays.asList(logSegment, logSegment)) > Integer.MAX_VALUE);
 
             try (LogSegments logSegments = new LogSegments(topicPartition)) {
                 logSegments.add(logSegment);
@@ -275,24 +274,6 @@ public class LogSegmentsTest {
 
             Utils.delete(newDir);
         }
-    }
-
-    @Test
-    public void testCloseClosesAllLogSegmentsOnExceptionWhileClosingOne() throws IOException {
-        LogSegment seg1 = createSegment(0L);
-        LogSegment seg2 = createSegment(100L);
-        LogSegment seg3 = createSegment(200L);
-        LogSegments segments = new LogSegments(topicPartition);
-        segments.add(seg1);
-        segments.add(seg2);
-        segments.add(seg3);
-
-        doThrow(new IOException("Failure")).when(seg2).close();
-
-        assertThrows(IOException.class, segments::close, "Expected IOException to be thrown");
-        verify(seg1).close();
-        verify(seg2).close();
-        verify(seg3).close();
     }
 
 }

@@ -34,7 +34,6 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
-import java.util.function.UnaryOperator;
 
 
 public final class KafkaEventQueue implements EventQueue {
@@ -338,7 +337,7 @@ public final class KafkaEventQueue implements EventQueue {
                         }
                         break;
                     case DEFERRED:
-                        if (deadlineNs.isEmpty()) {
+                        if (!deadlineNs.isPresent()) {
                             return new RuntimeException(
                                 "You must specify a deadline for deferred events.");
                         }
@@ -445,7 +444,7 @@ public final class KafkaEventQueue implements EventQueue {
         LogContext logContext,
         String threadNamePrefix
     ) {
-        this(time, logContext, threadNamePrefix, VoidEvent.INSTANCE);
+        this(time, logContext, threadNamePrefix, VoidEvent::new);
     }
 
     public KafkaEventQueue(
@@ -473,7 +472,7 @@ public final class KafkaEventQueue implements EventQueue {
     @Override
     public void enqueue(EventInsertionType insertionType,
                         String tag,
-                        UnaryOperator<OptionalLong> deadlineNsCalculator,
+                        Function<OptionalLong, OptionalLong> deadlineNsCalculator,
                         Event event) {
         EventContext eventContext = new EventContext(event, insertionType, tag);
         Exception e = eventHandler.enqueue(eventContext, deadlineNsCalculator);

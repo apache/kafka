@@ -36,7 +36,6 @@ import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
  * @deprecated Since 4.0. Use {@link FixedKeyProcessorSupplier} instead.
  */
 @Deprecated
-@FunctionalInterface
 public interface ValueTransformerSupplier<V, VR> extends ConnectedStoreProvider {
 
     /**

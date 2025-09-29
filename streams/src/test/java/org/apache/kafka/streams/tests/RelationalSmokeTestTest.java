@@ -45,7 +45,6 @@ public class RelationalSmokeTestTest extends SmokeTestUtil {
                                             "test",
                                             "test",
                                             StreamsConfig.AT_LEAST_ONCE,
-                                            "classic",
                                             TestUtils.tempDirectory().getAbsolutePath()
                                         ))) {
 

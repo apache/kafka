@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
@@ -48,12 +47,6 @@ public interface RecordCollector {
                      final String processorNodeId,
                      final InternalProcessorContext<Void, Void> context,
                      final StreamPartitioner<? super K, ? super V> partitioner);
-
-    <K, V> void send(K key,
-                     V value,
-                     String processorNodeId,
-                     InternalProcessorContext<?, ?> context,
-                     ProducerRecord<byte[], byte[]> serializedRecord);
 
     /**
      * Initialize the internal {@link Producer}; note this function should be made idempotent

@@ -26,6 +26,7 @@ import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.loader.LoaderManifestType;
 import org.apache.kafka.metadata.ControllerRegistration;
 
+import java.util.Collections;
 import java.util.Map;
 
 
@@ -36,7 +37,7 @@ public class ControllerRegistrationsPublisher implements MetadataPublisher {
     private volatile Map<Integer, ControllerRegistration> controllers;
 
     public ControllerRegistrationsPublisher() {
-        this.controllers = Map.of();
+        this.controllers = Collections.emptyMap();
     }
 
     @Override

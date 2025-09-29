@@ -73,7 +73,8 @@ public final class GlobVisitor implements Consumer<MetadataShellState> {
 
         @Override
         public boolean equals(Object o) {
-            if (!(o instanceof MetadataNodeInfo other)) return false;
+            if (!(o instanceof MetadataNodeInfo)) return false;
+            MetadataNodeInfo other = (MetadataNodeInfo) o;
             if (!Arrays.equals(path, other.path)) return false;
             return node.equals(other.node);
         }

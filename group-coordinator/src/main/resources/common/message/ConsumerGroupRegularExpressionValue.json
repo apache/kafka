@@ -14,8 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 16,
-  "type": "coordinator-value",
+  "type": "data",
   "name": "ConsumerGroupRegularExpressionValue",
   "validVersions": "0",
   "flexibleVersions": "0+",

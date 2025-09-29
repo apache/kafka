@@ -343,15 +343,15 @@ public class SustainedConnectionWorker implements TaskWorker {
                     this.consumer = new KafkaConsumer<>(this.props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
                     List<TopicPartition> partitions = this.consumer.partitionsFor(this.topicName).stream()
                             .map(partitionInfo -> new TopicPartition(partitionInfo.topic(), partitionInfo.partition()))
-                            .toList();
+                            .collect(Collectors.toList());
 
                     // Select a random partition and assign it.
                     this.activePartition = partitions.get(this.rand.nextInt(partitions.size()));
-                    this.consumer.assign(List.of(this.activePartition));
+                    this.consumer.assign(Collections.singletonList(this.activePartition));
                 }
 
                 // The behavior when passing in an empty list is to seek to the end of all subscribed partitions.
-                this.consumer.seekToEnd(List.of());
+                this.consumer.seekToEnd(Collections.emptyList());
 
                 // Poll to keep the connection alive, ignoring any records returned.
                 this.consumer.poll(Duration.ofMillis(50));

@@ -26,10 +26,12 @@ import org.apache.kafka.tiered.storage.TieredStorageTestAction;
 import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 
 import java.io.PrintStream;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.describeTopic;
 
@@ -49,7 +51,7 @@ public final class ReassignReplicaAction implements TieredStorageTestAction {
         String topic = topicPartition.topic();
         int partition = topicPartition.partition();
         Map<TopicPartition, Optional<NewPartitionReassignment>> proposed =
-                Map.of(topicPartition, Optional.of(new NewPartitionReassignment(replicaIds)));
+                Collections.singletonMap(topicPartition, Optional.of(new NewPartitionReassignment(replicaIds)));
         context.admin().alterPartitionReassignments(proposed);
 
         TestUtils.waitForCondition(() -> {
@@ -58,7 +60,7 @@ public final class ReassignReplicaAction implements TieredStorageTestAction {
                 List<Integer> actualReplicaIds = description.partitions().get(partition).replicas()
                         .stream()
                         .map(Node::id)
-                        .toList();
+                        .collect(Collectors.toList());
                 return replicaIds.equals(actualReplicaIds);
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof UnknownTopicOrPartitionException) {

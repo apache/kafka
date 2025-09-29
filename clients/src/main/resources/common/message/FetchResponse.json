@@ -48,9 +48,7 @@
   // Version 16 adds the 'NodeEndpoints' field (KIP-951).
   //
   // Version 17 no changes to the response (KIP-853).
-  //
-  // Version 18 no changes to the response (KIP-1166)
-  "validVersions": "4-18",
+  "validVersions": "4-17",
   "flexibleVersions": "12+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,

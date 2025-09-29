@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.Converter;
 
-import org.apache.maven.artifact.versioning.VersionRange;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,6 +42,7 @@ import java.lang.management.MonitorInfo;
 import java.lang.management.ThreadInfo;
 import java.net.URL;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.BrokenBarrierException;
@@ -70,7 +70,7 @@ public class SynchronizationTest {
 
     @BeforeEach
     public void setup(TestInfo testInfo) {
-        Map<String, String> pluginProps = Map.of(
+        Map<String, String> pluginProps = Collections.singletonMap(
             WorkerConfig.PLUGIN_PATH_CONFIG,
             TestPlugins.pluginPathJoined()
         );
@@ -190,10 +190,10 @@ public class SynchronizationTest {
         }
 
         @Override
-        public PluginClassLoader pluginClassLoader(String name, VersionRange range) {
+        public PluginClassLoader pluginClassLoader(String name) {
             dclBreakpoint.await(name);
             dclBreakpoint.await(name);
-            return super.pluginClassLoader(name, range);
+            return super.pluginClassLoader(name);
         }
     }
 
@@ -240,7 +240,7 @@ public class SynchronizationTest {
                 // 4. Load the isolated plugin class and return
                 new AbstractConfig(
                         new ConfigDef().define("a.class", Type.CLASS, Importance.HIGH, ""),
-                        Map.of("a.class", t1Class));
+                        Collections.singletonMap("a.class", t1Class));
             }
         };
 
@@ -258,7 +258,7 @@ public class SynchronizationTest {
                 // 3. Enter the DelegatingClassLoader
                 // 4. Load the non-isolated class and return
                 new AbstractConfig(new ConfigDef().define("a.class", Type.CLASS, Importance.HIGH, ""),
-                        Map.of("a.class", t2Class));
+                        Collections.singletonMap("a.class", t2Class));
             }
         };
 
@@ -456,6 +456,7 @@ public class SynchronizationTest {
         }
     }
 
+    @SuppressWarnings("removal")
     private static ThreadFactory threadFactoryWithNamedThreads(String threadPrefix) {
         AtomicInteger threadNumber = new AtomicInteger(1);
         return r -> {

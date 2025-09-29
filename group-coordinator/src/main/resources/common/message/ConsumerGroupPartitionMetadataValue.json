@@ -14,10 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 4,
-  "type": "coordinator-value",
-  // This message is replaced by ConsumerGroupMetadataValue#MetadataHash
-  // in 4.1 (KIP-1101).
+  "type": "data",
   "name": "ConsumerGroupPartitionMetadataValue",
   "validVersions": "0",
   "flexibleVersions": "0+",

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 
@@ -26,7 +27,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 
 import static java.util.Arrays.asList;
@@ -67,12 +67,22 @@ public class FilteredCacheIteratorTest {
     @BeforeEach
     public void before() {
         store.putAll(entries);
-        final HasNextCondition allCondition = Iterator::hasNext;
+        final HasNextCondition allCondition = new HasNextCondition() {
+            @Override
+            public boolean hasNext(final KeyValueIterator<Bytes, ?> iterator) {
+                return iterator.hasNext();
+            }
+        };
         allIterator = new FilteredCacheIterator(
             new DelegatingPeekingKeyValueIterator<>("",
                                                     store.all()), allCondition, IDENTITY_FUNCTION);
 
-        final HasNextCondition firstEntryCondition = iterator -> iterator.hasNext() && iterator.peekNextKey().equals(firstEntry.key);
+        final HasNextCondition firstEntryCondition = new HasNextCondition() {
+            @Override
+            public boolean hasNext(final KeyValueIterator<Bytes, ?> iterator) {
+                return iterator.hasNext() && iterator.peekNextKey().equals(firstEntry.key);
+            }
+        };
         firstEntryIterator = new FilteredCacheIterator(
                 new DelegatingPeekingKeyValueIterator<>("",
                                                         store.all()), firstEntryCondition, IDENTITY_FUNCTION);

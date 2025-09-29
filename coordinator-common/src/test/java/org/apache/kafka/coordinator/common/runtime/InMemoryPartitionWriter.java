@@ -89,7 +89,7 @@ public class InMemoryPartitionWriter implements PartitionWriter {
 
     @Override
     public LogConfig config(TopicPartition tp) {
-        return new LogConfig(Map.of());
+        return new LogConfig(Collections.emptyMap());
     }
 
     @Override
@@ -129,7 +129,7 @@ public class InMemoryPartitionWriter implements PartitionWriter {
         String transactionalId,
         long producerId,
         short producerEpoch,
-        int apiVersion
+        short apiVersion
     ) throws KafkaException {
         return CompletableFuture.completedFuture(new VerificationGuard());
     }

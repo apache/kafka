@@ -634,7 +634,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         appendControlRecord(
             timestamp,
             ControlRecordType.LEADER_CHANGE,
-            MessageUtil.toByteBufferAccessor(leaderChangeMessage, ControlRecordUtils.LEADER_CHANGE_CURRENT_VERSION).buffer()
+            MessageUtil.toByteBuffer(leaderChangeMessage, ControlRecordUtils.LEADER_CHANGE_CURRENT_VERSION)
         );
     }
 
@@ -642,7 +642,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         appendControlRecord(
             timestamp,
             ControlRecordType.SNAPSHOT_HEADER,
-            MessageUtil.toByteBufferAccessor(snapshotHeaderRecord, ControlRecordUtils.SNAPSHOT_HEADER_CURRENT_VERSION).buffer()
+            MessageUtil.toByteBuffer(snapshotHeaderRecord, ControlRecordUtils.SNAPSHOT_HEADER_CURRENT_VERSION)
         );
     }
 
@@ -650,7 +650,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         appendControlRecord(
             timestamp,
             ControlRecordType.SNAPSHOT_FOOTER,
-            MessageUtil.toByteBufferAccessor(snapshotHeaderRecord, ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION).buffer()
+            MessageUtil.toByteBuffer(snapshotHeaderRecord, ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION)
         );
     }
 
@@ -658,7 +658,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         appendControlRecord(
             timestamp,
             ControlRecordType.KRAFT_VERSION,
-            MessageUtil.toByteBufferAccessor(kraftVersionRecord, ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION).buffer()
+            MessageUtil.toByteBuffer(kraftVersionRecord, ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
         );
     }
 
@@ -666,7 +666,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         appendControlRecord(
             timestamp,
             ControlRecordType.KRAFT_VOTERS,
-            MessageUtil.toByteBufferAccessor(votersRecord, ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION).buffer()
+            MessageUtil.toByteBuffer(votersRecord, ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
         );
     }
 

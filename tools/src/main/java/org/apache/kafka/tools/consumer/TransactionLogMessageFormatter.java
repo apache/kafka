@@ -16,29 +16,34 @@
  */
 package org.apache.kafka.tools.consumer;
 
-import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.coordinator.transaction.TransactionCoordinatorRecordSerde;
-import org.apache.kafka.coordinator.transaction.generated.CoordinatorRecordJsonConverters;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
+import org.apache.kafka.coordinator.transaction.generated.TransactionLogKeyJsonConverter;
+import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
+import org.apache.kafka.coordinator.transaction.generated.TransactionLogValueJsonConverter;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.NullNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 
-public class TransactionLogMessageFormatter extends CoordinatorRecordMessageFormatter {
-    public TransactionLogMessageFormatter() {
-        super(new TransactionCoordinatorRecordSerde());
+import java.nio.ByteBuffer;
+
+public class TransactionLogMessageFormatter extends ApiMessageFormatter {
+    @Override
+    protected JsonNode readToKeyJson(ByteBuffer byteBuffer) {
+        short version = byteBuffer.getShort();
+        if (version >= TransactionLogKey.LOWEST_SUPPORTED_VERSION && version <= TransactionLogKey.HIGHEST_SUPPORTED_VERSION) {
+            return TransactionLogKeyJsonConverter.write(new TransactionLogKey(new ByteBufferAccessor(byteBuffer), version), version);
+        }
+        return NullNode.getInstance();
     }
 
     @Override
-    protected boolean isRecordTypeAllowed(short recordType) {
-        return true;
-    }
-
-    @Override
-    protected JsonNode keyAsJson(ApiMessage message) {
-        return CoordinatorRecordJsonConverters.writeRecordKeyAsJson(message);
-    }
-
-    @Override
-    protected JsonNode valueAsJson(ApiMessage message, short version) {
-        return CoordinatorRecordJsonConverters.writeRecordValueAsJson(message, version);
+    protected JsonNode readToValueJson(ByteBuffer byteBuffer) {
+        short version = byteBuffer.getShort();
+        if (version >= TransactionLogValue.LOWEST_SUPPORTED_VERSION && version <= TransactionLogValue.HIGHEST_SUPPORTED_VERSION) {
+            return TransactionLogValueJsonConverter.write(new TransactionLogValue(new ByteBufferAccessor(byteBuffer), version), version);
+        }
+        return new TextNode(UNKNOWN);
     }
 }

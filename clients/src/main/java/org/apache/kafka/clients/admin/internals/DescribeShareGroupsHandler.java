@@ -92,7 +92,7 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
         ShareGroupDescribeRequestData data = new ShareGroupDescribeRequestData()
             .setGroupIds(groupIds)
             .setIncludeAuthorizedOperations(includeAuthorizedOperations);
-        return new ShareGroupDescribeRequest.Builder(data);
+        return new ShareGroupDescribeRequest.Builder(data, true);
     }
 
     @Override
@@ -121,8 +121,7 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
                     groupMember.memberId(),
                     groupMember.clientId(),
                     groupMember.clientHost(),
-                    new ShareMemberAssignment(convertAssignment(groupMember.assignment())),
-                    groupMember.memberEpoch()
+                    new ShareMemberAssignment(convertAssignment(groupMember.assignment()))
                 ))
             );
 
@@ -131,8 +130,6 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
                     memberDescriptions,
                     GroupState.parse(describedGroup.groupState()),
                     coordinator,
-                    describedGroup.groupEpoch(),
-                    describedGroup.assignmentEpoch(),
                     authorizedOperations);
             completed.put(groupIdKey, shareGroupDescription);
         }
@@ -159,9 +156,7 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
             Set<CoordinatorKey> groupsToUnmap) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
-            case TOPIC_AUTHORIZATION_FAILED:
                 log.debug("`DescribeShareGroups` request for group id {} failed due to error {}", groupId.idValue, error);
-                // The topic auth response received on DescribeShareGroup is a generic one not including topic names, so we just pass it on unchanged here.
                 failed.put(groupId, error.exception(errorMsg));
                 break;
 

@@ -74,12 +74,12 @@ class EventPerformanceMonitor {
     /**
      * The period in nanoseconds.
      */
-    private final long periodNs;
+    private long periodNs;
 
     /**
      * The always-log threshold in nanoseconds.
      */
-    private final long alwaysLogThresholdNs;
+    private long alwaysLogThresholdNs;
 
     /**
      * The name of the slowest event we've seen so far, or null if none has been seen.

@@ -25,7 +25,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.components.Versioned;
@@ -34,7 +33,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.RetriableException;
-import org.apache.kafka.connect.integration.TestableSourceConnector;
+import org.apache.kafka.connect.integration.MonitorableSourceConnector;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
@@ -44,7 +43,6 @@ import org.apache.kafka.connect.runtime.errors.ToleranceType;
 import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
-import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -76,13 +74,16 @@ import org.mockito.quality.Strictness;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static java.util.Collections.emptyMap;
+import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
-import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -184,7 +185,6 @@ public class ErrorHandlingTaskTest {
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
-        workerProps.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(enableTopicCreation));
         workerConfig = new StandaloneConfig(workerProps);
         sourceConfig = new SourceConnectorConfig(plugins, sourceConnectorProps(TOPIC), true);
@@ -195,7 +195,7 @@ public class ErrorHandlingTaskTest {
         // setup up props for the source connector
         Map<String, String> props = new HashMap<>();
         props.put("name", "foo-connector");
-        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(1));
         props.put(TOPIC_CONFIG, topic);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -224,7 +224,7 @@ public class ErrorHandlingTaskTest {
         LogReporter<ConsumerRecord<byte[], byte[]>> reporter = new LogReporter.Sink(taskId, connConfig(reportProps), errorHandlingMetrics);
 
         RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = operator();
-        createSinkTask(initialState, retryWithToleranceOperator, List.of(reporter));
+        createSinkTask(initialState, retryWithToleranceOperator, singletonList(reporter));
 
         // valid json
         ConsumerRecord<byte[], byte[]> record1 = new ConsumerRecord<>(
@@ -276,14 +276,14 @@ public class ErrorHandlingTaskTest {
         LogReporter<SourceRecord> reporter = new LogReporter.Source(taskId, connConfig(reportProps), errorHandlingMetrics);
 
         RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = operator();
-        createSourceTask(initialState, retryWithToleranceOperator, List.of(reporter));
+        createSourceTask(initialState, retryWithToleranceOperator, singletonList(reporter));
 
         // valid json
         Schema valSchema = SchemaBuilder.struct().field("val", Schema.INT32_SCHEMA).build();
         Struct struct1 = new Struct(valSchema).put("val", 1234);
-        SourceRecord record1 = new SourceRecord(Map.of(), Map.of(), TOPIC, PARTITION1, valSchema, struct1);
+        SourceRecord record1 = new SourceRecord(emptyMap(), emptyMap(), TOPIC, PARTITION1, valSchema, struct1);
         Struct struct2 = new Struct(valSchema).put("val", 6789);
-        SourceRecord record2 = new SourceRecord(Map.of(), Map.of(), TOPIC, PARTITION1, valSchema, struct2);
+        SourceRecord record2 = new SourceRecord(emptyMap(), emptyMap(), TOPIC, PARTITION1, valSchema, struct2);
 
         when(workerSourceTask.isStopping())
                 .thenReturn(false)
@@ -293,8 +293,8 @@ public class ErrorHandlingTaskTest {
         doReturn(true).when(workerSourceTask).commitOffsets();
 
         when(sourceTask.poll())
-                .thenReturn(List.of(record1))
-                .thenReturn(List.of(record2));
+                .thenReturn(singletonList(record1))
+                .thenReturn(singletonList(record2));
 
         expectTopicCreation(TOPIC);
 
@@ -338,14 +338,14 @@ public class ErrorHandlingTaskTest {
         LogReporter<SourceRecord> reporter = new LogReporter.Source(taskId, connConfig(reportProps), errorHandlingMetrics);
 
         RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = operator();
-        createSourceTask(initialState, retryWithToleranceOperator, List.of(reporter), badConverter());
+        createSourceTask(initialState, retryWithToleranceOperator, singletonList(reporter), badConverter());
 
         // valid json
         Schema valSchema = SchemaBuilder.struct().field("val", Schema.INT32_SCHEMA).build();
         Struct struct1 = new Struct(valSchema).put("val", 1234);
-        SourceRecord record1 = new SourceRecord(Map.of(), Map.of(), TOPIC, PARTITION1, valSchema, struct1);
+        SourceRecord record1 = new SourceRecord(emptyMap(), emptyMap(), TOPIC, PARTITION1, valSchema, struct1);
         Struct struct2 = new Struct(valSchema).put("val", 6789);
-        SourceRecord record2 = new SourceRecord(Map.of(), Map.of(), TOPIC, PARTITION1, valSchema, struct2);
+        SourceRecord record2 = new SourceRecord(emptyMap(), emptyMap(), TOPIC, PARTITION1, valSchema, struct2);
 
         when(workerSourceTask.isStopping())
                 .thenReturn(false)
@@ -355,8 +355,8 @@ public class ErrorHandlingTaskTest {
         doReturn(true).when(workerSourceTask).commitOffsets();
 
         when(sourceTask.poll())
-                .thenReturn(List.of(record1))
-                .thenReturn(List.of(record2));
+                .thenReturn(singletonList(record1))
+                .thenReturn(singletonList(record2));
         expectTopicCreation(TOPIC);
         workerSourceTask.initialize(TASK_CONFIG);
         workerSourceTask.initializeAndStart();
@@ -390,7 +390,7 @@ public class ErrorHandlingTaskTest {
     private void verifyInitializeSink() {
         verify(sinkTask).start(TASK_PROPS);
         verify(sinkTask).initialize(any(WorkerSinkTaskContext.class));
-        verify(consumer).subscribe(eq(List.of(TOPIC)),
+        verify(consumer).subscribe(eq(singletonList(TOPIC)),
                 any(ConsumerRebalanceListener.class));
     }
 
@@ -408,9 +408,9 @@ public class ErrorHandlingTaskTest {
 
     private void expectTopicCreation(String topic) {
         if (enableTopicCreation) {
-            when(admin.describeTopics(topic)).thenReturn(Map.of());
-            Set<String> created = Set.of(topic);
-            Set<String> existing = Set.of();
+            when(admin.describeTopics(topic)).thenReturn(Collections.emptyMap());
+            Set<String> created = Collections.singleton(topic);
+            Set<String> existing = Collections.emptySet();
             TopicAdmin.TopicCreationResponse response = new TopicAdmin.TopicCreationResponse(created, existing);
             when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(response);
         }
@@ -424,19 +424,15 @@ public class ErrorHandlingTaskTest {
         oo.put("schemas.enable", "false");
         converter.configure(oo);
 
-        Plugin<Transformation<SinkRecord>> transformationPlugin = metrics.wrap(new FaultyPassthrough<SinkRecord>(), taskId, "test");
         TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> sinkTransforms =
-                new TransformationChain<>(List.of(new TransformationStage<>(transformationPlugin, "test", null, TestPlugins.noOpLoaderSwap())), retryWithToleranceOperator);
+                new TransformationChain<>(singletonList(new TransformationStage<>(new FaultyPassthrough<SinkRecord>())), retryWithToleranceOperator);
 
-        Plugin<Converter> keyConverterPlugin = metrics.wrap(converter, taskId,  true);
-        Plugin<Converter> valueConverterPlugin = metrics.wrap(converter, taskId,  false);
-        Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
         workerSinkTask = new WorkerSinkTask(
             taskId, sinkTask, statusListener, initialState, workerConfig,
-            ClusterConfigState.EMPTY, metrics, keyConverterPlugin, valueConverterPlugin, errorHandlingMetrics,
-                headerConverterPlugin, sinkTransforms, consumer, pluginLoader, time,
+            ClusterConfigState.EMPTY, metrics, converter, converter, errorHandlingMetrics,
+            headerConverter, sinkTransforms, consumer, pluginLoader, time,
             retryWithToleranceOperator, workerErrantRecordReporter,
-                statusBackingStore, () -> errorReporters, null, TestPlugins.noOpLoaderSwap());
+                statusBackingStore, () -> errorReporters);
     }
 
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator, List<ErrorReporter<SourceRecord>> errorReporters) {
@@ -460,22 +456,18 @@ public class ErrorHandlingTaskTest {
 
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
                                   List<ErrorReporter<SourceRecord>> errorReporters, Converter converter) {
-        Plugin<Transformation<SourceRecord>> transformationPlugin = metrics.wrap(new FaultyPassthrough<SourceRecord>(), taskId, "test");
-        TransformationChain<SourceRecord, SourceRecord> sourceTransforms = new TransformationChain<>(List.of(
-                new TransformationStage<>(transformationPlugin, "test", null, TestPlugins.noOpLoaderSwap())), retryWithToleranceOperator);
+        TransformationChain<SourceRecord, SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(
+                new TransformationStage<>(new FaultyPassthrough<SourceRecord>())), retryWithToleranceOperator);
 
-        Plugin<Converter> keyConverterPlugin = metrics.wrap(converter, taskId,  true);
-        Plugin<Converter> valueConverterPlugin = metrics.wrap(converter, taskId,  false);
-        Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
         workerSourceTask = spy(new WorkerSourceTask(
-            taskId, sourceTask, statusListener, initialState, keyConverterPlugin,
-                valueConverterPlugin, errorHandlingMetrics, headerConverterPlugin,
+            taskId, sourceTask, statusListener, initialState, converter,
+                converter, errorHandlingMetrics, headerConverter,
                 sourceTransforms, producer, admin,
                 TopicCreationGroup.configuredGroups(sourceConfig),
                 offsetReader, offsetWriter, offsetStore, workerConfig,
                 ClusterConfigState.EMPTY, metrics, pluginLoader, time,
                 retryWithToleranceOperator,
-                statusBackingStore, Runnable::run, () -> errorReporters, null, TestPlugins.noOpLoaderSwap()));
+                statusBackingStore, Runnable::run, () -> errorReporters));
 
     }
 

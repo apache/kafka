@@ -17,7 +17,6 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestPartition;
@@ -46,8 +45,6 @@ public class OffsetCommitRequestTest {
     protected static String groupId = "groupId";
     protected static String memberId = "consumerId";
     protected static String groupInstanceId = "groupInstanceId";
-    protected static Uuid topicIdOne = Uuid.randomUuid();
-    protected static Uuid topicIdTwo = Uuid.randomUuid();
     protected static String topicOne = "topicOne";
     protected static String topicTwo = "topicTwo";
     protected static int partitionOne = 1;
@@ -64,7 +61,6 @@ public class OffsetCommitRequestTest {
     public void setUp() {
         List<OffsetCommitRequestTopic> topics = Arrays.asList(
             new OffsetCommitRequestTopic()
-                .setTopicId(topicIdOne)
                 .setName(topicOne)
                 .setPartitions(Collections.singletonList(
                     new OffsetCommitRequestPartition()
@@ -74,7 +70,6 @@ public class OffsetCommitRequestTest {
                         .setCommittedMetadata(metadata)
                 )),
             new OffsetCommitRequestTopic()
-                .setTopicId(topicIdTwo)
                 .setName(topicTwo)
                 .setPartitions(Collections.singletonList(
                     new OffsetCommitRequestPartition()
@@ -95,7 +90,7 @@ public class OffsetCommitRequestTest {
         expectedOffsets.put(new TopicPartition(topicOne, partitionOne), offset);
         expectedOffsets.put(new TopicPartition(topicTwo, partitionTwo), offset);
 
-        OffsetCommitRequest.Builder builder = OffsetCommitRequest.Builder.forTopicNames(data);
+        OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(data);
 
         for (short version : ApiKeys.OFFSET_COMMIT.allVersions()) {
             OffsetCommitRequest request = builder.build(version);
@@ -110,7 +105,7 @@ public class OffsetCommitRequestTest {
 
     @Test
     public void testVersionSupportForGroupInstanceId() {
-        OffsetCommitRequest.Builder builder = OffsetCommitRequest.Builder.forTopicNames(
+        OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
             new OffsetCommitRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
@@ -132,14 +127,12 @@ public class OffsetCommitRequestTest {
         OffsetCommitResponseData expectedResponse = new OffsetCommitResponseData()
             .setTopics(Arrays.asList(
                 new OffsetCommitResponseTopic()
-                    .setTopicId(topicIdOne)
                     .setName(topicOne)
                     .setPartitions(Collections.singletonList(
                         new OffsetCommitResponsePartition()
                             .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
                             .setPartitionIndex(partitionOne))),
                 new OffsetCommitResponseTopic()
-                    .setTopicId(topicIdTwo)
                     .setName(topicTwo)
                     .setPartitions(Collections.singletonList(
                         new OffsetCommitResponsePartition()

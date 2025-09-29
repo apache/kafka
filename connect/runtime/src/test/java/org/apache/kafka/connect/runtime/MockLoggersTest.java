@@ -22,7 +22,7 @@ import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.LoggerContext;
 import org.apache.logging.log4j.core.config.Configuration;
 import org.apache.logging.log4j.core.config.Configurator;
@@ -34,6 +34,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class MockLoggersTest {
     private static final long INITIAL_TIME = 1696951712135L;
+    private final LoggerContext context = (LoggerContext) LogManager.getContext(false);
     private Time time;
 
     @BeforeEach
@@ -70,7 +73,7 @@ public class MockLoggersTest {
 
         Loggers loggers = new TestLoggers(root, a, b);
 
-        Map<String, LoggerLevel> expectedLevels = Map.of(
+        Map<String, LoggerLevel> expectedLevels = Collections.singletonMap(
                 "b",
                 new LoggerLevel(Level.INFO.toString(), null)
         );
@@ -134,8 +137,8 @@ public class MockLoggersTest {
         // one should be created by the Loggers instance when we set the level
         TestLoggers loggers = new TestLoggers(root, x, y, z, w);
 
-        List<String> modified = loggers.setLevel("a.b.c.p", Level.WARN.name());
-        assertEquals(List.of("a.b.c.p", "a.b.c.p.X", "a.b.c.p.Y", "a.b.c.p.Z"), modified);
+        List<String> modified = loggers.setLevel("a.b.c.p", Level.WARN);
+        assertEquals(Arrays.asList("a.b.c.p", "a.b.c.p.X", "a.b.c.p.Y", "a.b.c.p.Z"), modified);
         assertEquals(Level.WARN.toString(), loggers.level("a.b.c.p").level());
         assertEquals(Level.WARN, x.getLevel());
         assertEquals(Level.WARN, y.getLevel());
@@ -147,7 +150,7 @@ public class MockLoggersTest {
 
         // Sleep a little and adjust the level of a leaf logger
         time.sleep(10);
-        loggers.setLevel("a.b.c.p.X", Level.ERROR.name());
+        loggers.setLevel("a.b.c.p.X", Level.ERROR);
         expectedLevel = new LoggerLevel(Level.ERROR.toString(), INITIAL_TIME + 10);
         actualLevel = loggers.level("a.b.c.p.X");
         assertEquals(expectedLevel, actualLevel);
@@ -163,7 +166,7 @@ public class MockLoggersTest {
 
         // Set the same level again, and verify that the last modified time hasn't been altered
         time.sleep(10);
-        loggers.setLevel("a.b.c.p.X", Level.ERROR.name());
+        loggers.setLevel("a.b.c.p.X", Level.ERROR);
         expectedLevel = new LoggerLevel(Level.ERROR.toString(), INITIAL_TIME + 10);
         actualLevel = loggers.level("a.b.c.p.X");
         assertEquals(expectedLevel, actualLevel);
@@ -182,7 +185,7 @@ public class MockLoggersTest {
         config.addLogger(rootLoggerName, rootConfig);
         loggerContext.updateLoggers();
 
-        Logger root = loggerContext.getLogger(rootLoggerName);
+        Logger root = LogManager.getLogger(rootLoggerName);
         Configurator.setLevel(root, Level.ERROR);
 
         Logger p = loggerContext.getLogger("a.b.c.p");
@@ -198,8 +201,8 @@ public class MockLoggersTest {
 
         Loggers loggers = new TestLoggers(root, x, y, z, w);
 
-        List<String> modified = loggers.setLevel(rootLoggerName, Level.DEBUG.name());
-        assertEquals(List.of("a.b.c.p.X", "a.b.c.p.Y", "a.b.c.p.Z", "a.b.c.s.W", rootLoggerName), modified);
+        List<String> modified = loggers.setLevel(rootLoggerName, Level.DEBUG);
+        assertEquals(Arrays.asList("a.b.c.p.X", "a.b.c.p.Y", "a.b.c.p.Z", "a.b.c.s.W", rootLoggerName), modified);
 
         assertEquals(Level.DEBUG, p.getLevel());
 
@@ -227,17 +230,17 @@ public class MockLoggersTest {
         LoggerContext loggerContext = (LoggerContext) LogManager.getContext(false);
         Logger root = loggerContext.getRootLogger();
         Loggers loggers = new TestLoggers(root);
-        assertThrows(NullPointerException.class, () -> loggers.setLevel(null, Level.INFO.name()));
+        assertThrows(NullPointerException.class, () -> loggers.setLevel(null, Level.INFO));
         assertThrows(NullPointerException.class, () -> loggers.setLevel("root", null));
     }
 
-    private class TestLoggers extends Loggers.Log4jLoggers {
+    private class TestLoggers extends Loggers {
 
         private final Logger rootLogger;
         private final Map<String, Logger> currentLoggers;
 
         public TestLoggers(Logger rootLogger, Logger... knownLoggers) {
-            super(MockLoggersTest.this.time);
+            super(time);
             this.rootLogger = rootLogger;
             this.currentLoggers = new HashMap<>(Stream.of(knownLoggers)
                     .collect(Collectors.toMap(
@@ -249,7 +252,7 @@ public class MockLoggersTest {
 
         @Override
         Logger lookupLogger(String logger) {
-            return currentLoggers.computeIfAbsent(logger, loggerContext::getLogger);
+            return currentLoggers.computeIfAbsent(logger, LogManager::getLogger);
         }
 
         @Override

@@ -25,7 +25,9 @@ import org.apache.kafka.streams.state.internals.CompositeReadOnlySessionStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStore;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -92,15 +94,16 @@ public final class QueryableStoreTypes {
 
     private abstract static class QueryableStoreTypeMatcher<T> implements QueryableStoreType<T> {
 
-        private final Set<Class<?>> matchTo;
+        private final Set<Class> matchTo;
 
-        QueryableStoreTypeMatcher(final Set<Class<?>> matchTo) {
+        QueryableStoreTypeMatcher(final Set<Class> matchTo) {
             this.matchTo = matchTo;
         }
 
+        @SuppressWarnings("unchecked")
         @Override
         public boolean accepts(final StateStore stateStore) {
-            for (final Class<?> matchToClass : matchTo) {
+            for (final Class matchToClass : matchTo) {
                 if (!matchToClass.isAssignableFrom(stateStore.getClass())) {
                     return false;
                 }
@@ -127,9 +130,9 @@ public final class QueryableStoreTypes {
         extends QueryableStoreTypeMatcher<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> {
 
         TimestampedKeyValueStoreType() {
-            super(Set.of(
+            super(new HashSet<>(Arrays.asList(
                 TimestampedKeyValueStore.class,
-                ReadOnlyKeyValueStore.class));
+                ReadOnlyKeyValueStore.class)));
         }
 
         @Override
@@ -156,9 +159,9 @@ public final class QueryableStoreTypes {
         extends QueryableStoreTypeMatcher<ReadOnlyWindowStore<K, ValueAndTimestamp<V>>> {
 
         TimestampedWindowStoreType() {
-            super(Set.of(
+            super(new HashSet<>(Arrays.asList(
                 TimestampedWindowStore.class,
-                ReadOnlyWindowStore.class));
+                ReadOnlyWindowStore.class)));
         }
 
         @Override

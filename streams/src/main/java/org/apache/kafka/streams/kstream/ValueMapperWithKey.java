@@ -38,7 +38,6 @@ package org.apache.kafka.streams.kstream;
  * @see KTable#mapValues(ValueMapperWithKey)
  */
 
-@FunctionalInterface
 public interface ValueMapperWithKey<K, V, VR> {
 
     /**

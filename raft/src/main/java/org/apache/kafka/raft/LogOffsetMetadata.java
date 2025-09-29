@@ -51,7 +51,8 @@ public class LogOffsetMetadata {
 
     @Override
     public boolean equals(Object obj) {
-        if (obj instanceof LogOffsetMetadata other) {
+        if (obj instanceof LogOffsetMetadata) {
+            LogOffsetMetadata other = (LogOffsetMetadata) obj;
             return this.offset == other.offset &&
                    this.metadata.equals(other.metadata);
         } else {

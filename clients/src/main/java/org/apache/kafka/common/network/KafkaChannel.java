@@ -681,14 +681,4 @@ public class KafkaChannel implements AutoCloseable {
     public ChannelMetadataRegistry channelMetadataRegistry() {
         return metadataRegistry;
     }
-
-
-    /**
-     * Maybe add write interest after re-authentication. This is to ensure that any pending write operation
-     * is resumed.
-     */
-    public void maybeAddWriteInterestAfterReauth() {
-        if (send != null)
-            this.transportLayer.addInterestOps(SelectionKey.OP_WRITE);
-    }
 }

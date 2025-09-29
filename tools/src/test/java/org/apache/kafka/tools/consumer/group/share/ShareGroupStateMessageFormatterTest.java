@@ -30,8 +30,6 @@ import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.PersisterStateBatch;
-import org.apache.kafka.tools.consumer.CoordinatorRecordMessageFormatter;
-import org.apache.kafka.tools.consumer.CoordinatorRecordMessageFormatterTest;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -39,15 +37,16 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
-import java.util.List;
-import java.util.Map;
+import java.util.Arrays;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.util.Collections.emptyMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class ShareGroupStateMessageFormatterTest extends CoordinatorRecordMessageFormatterTest {
+public class ShareGroupStateMessageFormatterTest {
     private static final SharePartitionKey KEY_1 = SharePartitionKey.getInstance("gs1", Uuid.fromString("gtb2stGYRk-vWZ2zAozmoA"), 0);
     private static final ShareGroupOffset SHARE_GROUP_OFFSET_1 = new ShareGroupOffset.Builder()
         .setSnapshotEpoch(0)
@@ -55,7 +54,7 @@ public class ShareGroupStateMessageFormatterTest extends CoordinatorRecordMessag
         .setLeaderEpoch(20)
         .setStartOffset(50)
         .setStateBatches(
-            List.of(
+            Arrays.asList(
                 new PersisterStateBatch(
                     100,
                     200,
@@ -78,7 +77,7 @@ public class ShareGroupStateMessageFormatterTest extends CoordinatorRecordMessag
         .setLeaderEpoch(25)
         .setStartOffset(55)
         .setStateBatches(
-            List.of(
+            Arrays.asList(
                 new PersisterStateBatch(
                     100,
                     150,
@@ -104,8 +103,6 @@ public class ShareGroupStateMessageFormatterTest extends CoordinatorRecordMessag
         .setStateEpoch(SHARE_GROUP_OFFSET_1.stateEpoch())
         .setLeaderEpoch(SHARE_GROUP_OFFSET_1.leaderEpoch())
         .setStartOffset(SHARE_GROUP_OFFSET_1.startOffset())
-        .setCreateTimestamp(1744279603)
-        .setWriteTimestamp(1744279603)
         .setStateBatches(
             SHARE_GROUP_OFFSET_1.stateBatches().stream()
                 .map(batch -> new ShareSnapshotValue.StateBatch()
@@ -113,7 +110,7 @@ public class ShareGroupStateMessageFormatterTest extends CoordinatorRecordMessag
                     .setLastOffset(batch.lastOffset())
                     .setDeliveryState(batch.deliveryState())
                     .setDeliveryCount(batch.deliveryCount()))
-                .toList()
+                .collect(Collectors.toList())
         );
 
     private static final ShareUpdateKey SHARE_UPDATE_KEY = new ShareUpdateKey()
@@ -132,63 +129,31 @@ public class ShareGroupStateMessageFormatterTest extends CoordinatorRecordMessag
                     .setLastOffset(batch.lastOffset())
                     .setDeliveryState(batch.deliveryState())
                     .setDeliveryCount(batch.deliveryCount()))
-                .toList()
+                .collect(Collectors.toList())
         );
 
-    @Override
-    protected CoordinatorRecordMessageFormatter formatter() {
-        return new ShareGroupStateMessageFormatter();
-    }
-
-    @Override
-    protected Stream<Arguments> parameters() {
+    private static Stream<Arguments> parameters() {
         return Stream.of(
             Arguments.of(
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_SNAPSHOT_KEY).array(),
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_SNAPSHOT_VALUE).array(),
-                """
-                    {"key":{"type":0,"data":{"groupId":"gs1","topicId":"gtb2stGYRk-vWZ2zAozmoA","partition":0}},
-                     "value":{"version":0,
-                              "data":{"snapshotEpoch":0,
-                                      "stateEpoch":1,
-                                      "leaderEpoch":20,
-                                      "startOffset":50,
-                                      "createTimestamp": 1744279603,
-                                      "writeTimestamp": 1744279603,
-                                      "stateBatches":[{"firstOffset":100,"lastOffset":200,"deliveryState":1,"deliveryCount":10},
-                                                      {"firstOffset":201,"lastOffset":210,"deliveryState":2,"deliveryCount":10}]}}}
-                """
-            ),
-            Arguments.of(
-                MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_SNAPSHOT_KEY).array(),
-                null,
-                """
-                    {"key":{"type":0,"data":{"groupId":"gs1","topicId":"gtb2stGYRk-vWZ2zAozmoA","partition":0}},"value":null}
-                """
+                "{\"key\":{\"version\":0,\"data\":{\"groupId\":\"gs1\",\"topicId\":\"gtb2stGYRk-vWZ2zAozmoA\",\"partition\":0}},\"value\":{\"version\":0,\"data\":{\"snapshotEpoch\":0,\"stateEpoch\":1,\"leaderEpoch\":20,\"startOffset\":50,\"stateBatches\":[{\"firstOffset\":100,\"lastOffset\":200,\"deliveryState\":1,\"deliveryCount\":10},{\"firstOffset\":201,\"lastOffset\":210,\"deliveryState\":2,\"deliveryCount\":10}]}}}"
             ),
             Arguments.of(
                 MessageUtil.toVersionPrefixedByteBuffer((short) 1, SHARE_UPDATE_KEY).array(),
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_UPDATE_VALUE).array(),
-                """
-                    {"key":{"type":1,"data":{"groupId":"gs2","topicId":"r9Nq4xGAQf28jvu36t7gQQ","partition":0}},
-                     "value":{"version":0,
-                              "data":{"snapshotEpoch":1,
-                                      "leaderEpoch":25,
-                                      "startOffset":55,
-                                      "stateBatches":[{"firstOffset":100,"lastOffset":150,"deliveryState":1,"deliveryCount":12},
-                                                      {"firstOffset":151,"lastOffset":200,"deliveryState":2,"deliveryCount":15}]}}}
-                """
+                "{\"key\":{\"version\":1,\"data\":{\"groupId\":\"gs2\",\"topicId\":\"r9Nq4xGAQf28jvu36t7gQQ\",\"partition\":0}},\"value\":{\"version\":0,\"data\":{\"snapshotEpoch\":1,\"leaderEpoch\":25,\"startOffset\":55,\"stateBatches\":[{\"firstOffset\":100,\"lastOffset\":150,\"deliveryState\":1,\"deliveryCount\":12},{\"firstOffset\":151,\"lastOffset\":200,\"deliveryState\":2,\"deliveryCount\":15}]}}}"
             ),
             // wrong versions
             Arguments.of(
                 MessageUtil.toVersionPrefixedByteBuffer((short) 10, SHARE_SNAPSHOT_KEY).array(),
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_SNAPSHOT_VALUE).array(),
-                ""
+                "{\"key\":{\"version\":10,\"data\":\"unknown\"},\"value\":{\"version\":0,\"data\":\"unknown\"}}"
             ),
             Arguments.of(
                 MessageUtil.toVersionPrefixedByteBuffer((short) 15, SHARE_UPDATE_KEY).array(),
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_UPDATE_VALUE).array(),
-                ""
+                "{\"key\":{\"version\":15,\"data\":\"unknown\"},\"value\":{\"version\":0,\"data\":\"unknown\"}}"
             )
         );
     }
@@ -199,20 +164,35 @@ public class ShareGroupStateMessageFormatterTest extends CoordinatorRecordMessag
             Arguments.of(
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_SNAPSHOT_KEY).array(),
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_UPDATE_VALUE).array(),
-                new RuntimeException("""
-                    Could not read record at offset 0 due to: \
-                    Could not read record with version 0 from value's buffer due to: \
-                    non-nullable field stateBatches was serialized as null.""")
+                new RuntimeException("non-nullable field stateBatches was serialized as null")
             ),
             Arguments.of(
                 MessageUtil.toVersionPrefixedByteBuffer((short) 1, SHARE_UPDATE_KEY).array(),
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_SNAPSHOT_VALUE).array(),
-                new RuntimeException("""
-                    Could not read record at offset 0 due to: \
-                    Could not read record with version 0 from value's buffer due to: \
-                    non-nullable field stateBatches was serialized as null.""")
+                new RuntimeException("non-nullable field stateBatches was serialized as null")
             )
         );
+    }
+
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testShareGroupStateMessageFormatter(
+        byte[] keyBuffer,
+        byte[] valueBuffer,
+        String expectedOutput
+    ) {
+        ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
+            Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0, 0,
+            0L, TimestampType.CREATE_TIME, 0,
+            0, keyBuffer, valueBuffer,
+            new RecordHeaders(), Optional.empty());
+
+        try (MessageFormatter formatter = new ShareGroupStateMessageFormatter()) {
+            formatter.configure(emptyMap());
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            formatter.writeTo(record, new PrintStream(out));
+            assertEquals(expectedOutput, out.toString());
+        }
     }
 
     @ParameterizedTest
@@ -229,7 +209,7 @@ public class ShareGroupStateMessageFormatterTest extends CoordinatorRecordMessag
             new RecordHeaders(), Optional.empty());
 
         try (MessageFormatter formatter = new ShareGroupStateMessageFormatter()) {
-            formatter.configure(Map.of());
+            formatter.configure(emptyMap());
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             RuntimeException re = assertThrows(RuntimeException.class, () -> formatter.writeTo(record, new PrintStream(out)));
             assertEquals(expectedOutput.getMessage(), re.getMessage());

@@ -386,8 +386,9 @@ public class TimelineHashMap<K, V>
     public boolean equals(Object o) {
         if (o == this)
             return true;
-        if (!(o instanceof Map<?, ?> m))
+        if (!(o instanceof Map))
             return false;
+        Map<?, ?> m = (Map<?, ?>) o;
         if (m.size() != size())
             return false;
         try {

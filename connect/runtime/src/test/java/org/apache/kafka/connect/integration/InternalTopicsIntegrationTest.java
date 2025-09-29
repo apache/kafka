@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -285,15 +286,15 @@ public class InternalTopicsIntegrationTest {
     }
 
     protected Map<String, String> compactCleanupPolicy() {
-        return Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
+        return Collections.singletonMap(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
     }
 
     protected Map<String, String> deleteCleanupPolicy() {
-        return Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
+        return Collections.singletonMap(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
     }
 
     protected Map<String, String> noTopicSettings() {
-        return Map.of();
+        return Collections.emptyMap();
     }
 
     protected Map<String, String> compactAndDeleteCleanupPolicy() {

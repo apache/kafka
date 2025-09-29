@@ -61,8 +61,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -152,7 +150,6 @@ public class TaskManagerTest {
     private final TopicPartition t1p1 = new TopicPartition(topic1, 1);
     private final TopicPartition t2p2 = new TopicPartition(topic2, 1);
     private final TopicPartition t1p1changelog = new TopicPartition("changelog", 1);
-    private final TopicPartition t1p1changelog2 = new TopicPartition("changelog2", 1);
     private final Set<TopicPartition> taskId01Partitions = Set.of(t1p1);
     private final Set<TopicPartition> taskId01ChangelogPartitions = Set.of(t1p1changelog);
     private final Map<TaskId, Set<TopicPartition>> taskId01Assignment = singletonMap(taskId01, taskId01Partitions);
@@ -219,10 +216,6 @@ public class TaskManagerTest {
         taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, null, false);
     }
 
-    private TaskManager setUpTaskManager(final ProcessingMode processingMode, final TasksRegistry tasks) {
-        return setUpTaskManager(processingMode, tasks, false);
-    }
-
     private TaskManager setUpTaskManager(final ProcessingMode processingMode, final boolean stateUpdaterEnabled) {
         return setUpTaskManager(processingMode, null, stateUpdaterEnabled, false);
     }
@@ -254,6 +247,52 @@ public class TaskManagerTest {
         return taskManager;
     }
 
+    @Test
+    public void shouldClassifyExistingTasksWithoutStateUpdater() {
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, false);
+        final Map<TaskId, Set<TopicPartition>> runningActiveTasks = mkMap(mkEntry(taskId01, Set.of(t1p1)));
+        final Map<TaskId, Set<TopicPartition>> standbyTasks = mkMap(mkEntry(taskId02, Set.of(t2p2)));
+        final Map<TaskId, Set<TopicPartition>> restoringActiveTasks = mkMap(mkEntry(taskId03, Set.of(t1p3)));
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>(runningActiveTasks);
+        activeTasks.putAll(restoringActiveTasks);
+        handleAssignment(runningActiveTasks, standbyTasks, restoringActiveTasks);
+
+        taskManager.handleAssignment(activeTasks, standbyTasks);
+
+        verifyNoInteractions(stateUpdater);
+    }
+
+    @Test
+    public void shouldNotUpdateExistingStandbyTaskIfStandbyIsReassignedWithSameInputPartitionWithoutStateUpdater() {
+        final StandbyTask standbyTask = standbyTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId03Partitions).build();
+        updateExistingStandbyTaskIfStandbyIsReassignedWithoutStateUpdater(standbyTask, taskId03Partitions);
+        verify(standbyTask, never()).updateInputPartitions(eq(taskId03Partitions), any());
+    }
+
+    @Test
+    public void shouldUpdateExistingStandbyTaskIfStandbyIsReassignedWithDifferentInputPartitionWithoutStateUpdater() {
+        final StandbyTask standbyTask = standbyTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId03Partitions).build();
+        updateExistingStandbyTaskIfStandbyIsReassignedWithoutStateUpdater(standbyTask, taskId04Partitions);
+        verify(standbyTask).updateInputPartitions(eq(taskId04Partitions), any());
+    }
+
+    private void updateExistingStandbyTaskIfStandbyIsReassignedWithoutStateUpdater(final Task standbyTask,
+                                                                                   final Set<TopicPartition> newInputPartition) {
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.allTasks()).thenReturn(Set.of(standbyTask));
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false);
+
+        taskManager.handleAssignment(
+            Collections.emptyMap(),
+            mkMap(mkEntry(standbyTask.id(), newInputPartition))
+        );
+
+        verify(standbyTask).resume();
+    }
 
     @Test
     public void shouldLockAllTasksOnCorruptionWithProcessingThreads() {
@@ -420,7 +459,7 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
 
-        verify(activeTaskToClose).prepareCommit(false);
+        verify(activeTaskToClose).prepareCommit();
         verify(activeTaskToClose).suspend();
         verify(activeTaskToClose).closeDirty();
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
@@ -461,7 +500,7 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
 
-        verify(standbyTaskToClose).prepareCommit(false);
+        verify(standbyTaskToClose).prepareCommit();
         verify(standbyTaskToClose).suspend();
         verify(standbyTaskToClose).closeDirty();
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
@@ -957,7 +996,7 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(emptyMap(), mkMap(mkEntry(taskId01, taskId01Partitions)));
 
-        verify(activeTaskToRecycle).prepareCommit(true);
+        verify(activeTaskToRecycle).prepareCommit();
         verify(tasks).addPendingTasksToInit(Set.of(standbyTask));
         verify(tasks).removeTask(activeTaskToRecycle);
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
@@ -980,7 +1019,7 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(emptyMap(), mkMap(mkEntry(taskId01, taskId01Partitions)));
 
-        verify(activeTaskToRecycle).prepareCommit(true);
+        verify(activeTaskToRecycle).prepareCommit();
         verify(tasks).replaceActiveWithStandby(standbyTask);
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
@@ -1020,7 +1059,7 @@ public class TaskManagerTest {
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
 
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
-        verify(activeTaskToClose).prepareCommit(true);
+        verify(activeTaskToClose).prepareCommit();
         verify(activeTaskToClose).closeClean();
         verify(tasks).removeTask(activeTaskToClose);
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
@@ -1497,10 +1536,10 @@ public class TaskManagerTest {
 
         taskManager.handleLostAll();
 
-        verify(task1).prepareCommit(false);
+        verify(task1).prepareCommit();
         verify(task1).suspend();
         verify(task1).closeDirty();
-        verify(task2).prepareCommit(false);
+        verify(task2).prepareCommit();
         verify(task2).suspend();
         verify(task2).closeDirty();
     }
@@ -1530,7 +1569,7 @@ public class TaskManagerTest {
 
         verify(task1).suspend();
         verify(task1).closeClean();
-        verify(task2).prepareCommit(false);
+        verify(task2).prepareCommit();
         verify(task2).suspend();
         verify(task2).closeDirty();
         verify(task3).suspend();
@@ -1639,7 +1678,7 @@ public class TaskManagerTest {
         );
 
         assertEquals(exception, thrown);
-        assertEquals(statefulTask.id(), thrown.taskId().orElseThrow());
+        assertEquals(statefulTask.id(), thrown.taskId().get());
     }
 
     @Test
@@ -1786,6 +1825,9 @@ public class TaskManagerTest {
         final StandbyTask standbyTask = standbyTask(taskId02, taskId02ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId02Partitions).build();
+        final StandbyTask unassignedStandbyTask = standbyTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.CREATED)
+            .withInputPartitions(taskId03Partitions).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, runningStatefulTask)));
@@ -1812,20 +1854,14 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldComputeOffsetSumForRunningStatefulTask() {
-        final StreamTask runningStatefulTask = statefulTask(taskId00, taskId00ChangelogPartitions)
-            .inState(State.RUNNING).build();
-        final long changelogOffsetOfRunningTask = Task.LATEST_OFFSET;
-        when(runningStatefulTask.changelogOffsets())
-            .thenReturn(mkMap(mkEntry(t1p0changelog, changelogOffsetOfRunningTask)));
-        final TasksRegistry tasks = mock(TasksRegistry.class);
-        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
-        when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, runningStatefulTask)));
-
-        assertThat(
-            taskManager.taskOffsetSums(),
-            is(mkMap(mkEntry(taskId00, changelogOffsetOfRunningTask)))
+    public void shouldReportLatestOffsetAsOffsetSumForRunningTask() throws Exception {
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), Task.LATEST_OFFSET),
+            mkEntry(new TopicPartition("changelog", 1), Task.LATEST_OFFSET)
         );
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, Task.LATEST_OFFSET));
+
+        computeOffsetSumAndVerify(changelogOffsets, expectedOffsetSums);
     }
 
     @Test
@@ -1876,14 +1912,14 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldComputeOffsetSumForRunningStatefulTaskAndRestoringTask() {
+    public void shouldComputeOffsetSumForRunningStatefulTaskAndRestoringTaskWithStateUpdater() {
         final StreamTask runningStatefulTask = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RUNNING).build();
         final StreamTask restoringStatefulTask = statefulTask(taskId01, taskId01ChangelogPartitions)
             .inState(State.RESTORING).build();
         final StandbyTask restoringStandbyTask = standbyTask(taskId02, taskId02ChangelogPartitions)
             .inState(State.RUNNING).build();
-        final long changelogOffsetOfRunningTask = Task.LATEST_OFFSET;
+        final long changelogOffsetOfRunningTask = 42L;
         final long changelogOffsetOfRestoringStatefulTask = 24L;
         final long changelogOffsetOfRestoringStandbyTask = 84L;
         when(runningStatefulTask.changelogOffsets())
@@ -1908,26 +1944,14 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldSkipUnknownOffsetsWhenComputingOffsetSum() {
-        final StreamTask restoringStatefulTask = statefulTask(taskId01, taskId01ChangelogPartitions)
-            .inState(State.RESTORING).build();
-        final long changelogOffsetOfRestoringStandbyTask = 84L;
-        when(restoringStatefulTask.changelogOffsets())
-            .thenReturn(mkMap(
-                mkEntry(t1p1changelog, changelogOffsetOfRestoringStandbyTask),
-                mkEntry(t1p1changelog2, OffsetCheckpoint.OFFSET_UNKNOWN)
-            ));
-        final TasksRegistry tasks = mock(TasksRegistry.class);
-        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
-        when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId01, restoringStatefulTask)));
-        when(stateUpdater.tasks()).thenReturn(Set.of(restoringStatefulTask));
-
-        assertThat(
-            taskManager.taskOffsetSums(),
-            is(mkMap(
-                mkEntry(taskId01, changelogOffsetOfRestoringStandbyTask)
-            ))
+    public void shouldSkipUnknownOffsetsWhenComputingOffsetSum() throws Exception {
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), OffsetCheckpoint.OFFSET_UNKNOWN),
+            mkEntry(new TopicPartition("changelog", 1), 10L)
         );
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 10L));
+
+        computeOffsetSumAndVerify(changelogOffsets, expectedOffsetSums);
     }
 
     private void computeOffsetSumAndVerify(final Map<TopicPartition, Long> changelogOffsets,
@@ -2128,7 +2152,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCloseActiveTasksWhenHandlingLostTasks() {
+    public void shouldCloseActiveTasksWhenHandlingLostTasks() throws Exception {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false, stateManager);
 
@@ -2365,10 +2389,10 @@ public class TaskManagerTest {
         taskManager.handleCorruption(Set.of(taskId02));
 
         verify(activeRestoringTask, never()).commitNeeded();
-        verify(activeRestoringTask, never()).prepareCommit(true);
+        verify(activeRestoringTask, never()).prepareCommit();
         verify(activeRestoringTask, never()).postCommit(anyBoolean());
         verify(standbyTask, never()).commitNeeded();
-        verify(standbyTask, never()).prepareCommit(true);
+        verify(standbyTask, never()).prepareCommit();
         verify(standbyTask, never()).postCommit(anyBoolean());
     }
 
@@ -2397,9 +2421,9 @@ public class TaskManagerTest {
         taskManager.handleCorruption(Set.of(taskId02));
 
         verify(activeRestoringTask, never()).commitNeeded();
-        verify(activeRestoringTask, never()).prepareCommit(true);
+        verify(activeRestoringTask, never()).prepareCommit();
         verify(activeRestoringTask, never()).postCommit(anyBoolean());
-        verify(standbyTask).prepareCommit(true);
+        verify(standbyTask).prepareCommit();
         verify(standbyTask).postCommit(anyBoolean());
     }
 
@@ -2410,7 +2434,7 @@ public class TaskManagerTest {
         final StateMachineTask corruptedStandby = new StateMachineTask(taskId00, taskId00Partitions, false, stateManager);
         final StateMachineTask runningNonCorruptedActive = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
             @Override
-            public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
+            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
                 throw new TaskMigratedException("You dropped out of the group!", new RuntimeException());
             }
         };
@@ -3373,7 +3397,7 @@ public class TaskManagerTest {
 
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false, stateManager) {
             @Override
-            public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
+            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
                 throw new RuntimeException("task 0_1 prepare commit boom!");
             }
         };
@@ -3539,7 +3563,7 @@ public class TaskManagerTest {
 
         verify(activeTaskCreator).close();
         verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
-        verify(failedStatefulTask).prepareCommit(false);
+        verify(failedStatefulTask).prepareCommit();
         verify(failedStatefulTask).suspend();
         verify(failedStatefulTask).closeDirty();
     }
@@ -3613,16 +3637,16 @@ public class TaskManagerTest {
         verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
         verify(tasks).addTask(removedStatefulTask);
         verify(tasks).addTask(removedStandbyTask);
-        verify(removedFailedStatefulTask).prepareCommit(false);
+        verify(removedFailedStatefulTask).prepareCommit();
         verify(removedFailedStatefulTask).suspend();
         verify(removedFailedStatefulTask).closeDirty();
-        verify(removedFailedStandbyTask).prepareCommit(false);
+        verify(removedFailedStandbyTask).prepareCommit();
         verify(removedFailedStandbyTask).suspend();
         verify(removedFailedStandbyTask).closeDirty();
-        verify(removedFailedStatefulTaskDuringRemoval).prepareCommit(false);
+        verify(removedFailedStatefulTaskDuringRemoval).prepareCommit();
         verify(removedFailedStatefulTaskDuringRemoval).suspend();
         verify(removedFailedStatefulTaskDuringRemoval).closeDirty();
-        verify(removedFailedStandbyTaskDuringRemoval).prepareCommit(false);
+        verify(removedFailedStandbyTaskDuringRemoval).prepareCommit();
         verify(removedFailedStandbyTaskDuringRemoval).suspend();
         verify(removedFailedStandbyTaskDuringRemoval).closeDirty();
     }
@@ -3848,7 +3872,7 @@ public class TaskManagerTest {
     public void shouldPropagateExceptionFromActiveCommit() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
             @Override
-            public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
+            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
                 throw new RuntimeException("opsh.");
             }
         };
@@ -3872,7 +3896,7 @@ public class TaskManagerTest {
     public void shouldPropagateExceptionFromStandbyCommit() {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false, stateManager) {
             @Override
-            public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
+            public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
                 throw new RuntimeException("opsh.");
             }
         };
@@ -4668,7 +4692,7 @@ public class TaskManagerTest {
         final StandbyTask standbyTask = mock(StandbyTask.class);
         when(standbyTask.id()).thenReturn(taskId00);
         when(standbyTask.isActive()).thenReturn(false);
-        when(standbyTask.prepareCommit(true)).thenReturn(Collections.emptyMap());
+        when(standbyTask.prepareCommit()).thenReturn(Collections.emptyMap());
 
         final StreamTask activeTask = mock(StreamTask.class);
         when(activeTask.id()).thenReturn(taskId00);
@@ -4694,138 +4718,6 @@ public class TaskManagerTest {
         topologyMetadata.pauseTopology(UNNAMED_TOPOLOGY);
 
         assertEquals(taskManager.notPausedTasks().size(), 0);
-    }
-
-    @Test
-    public void shouldRecycleStartupTasksFromStateDirectoryAsActive() {
-        final StandbyTask startupTask = standbyTask(taskId00, taskId00ChangelogPartitions).build();
-        final StreamTask activeTask = statefulTask(taskId00, taskId00ChangelogPartitions).build();
-        when(activeTaskCreator.createActiveTaskFromStandby(eq(startupTask), eq(taskId00Partitions), any()))
-            .thenReturn(activeTask);
-
-        when(stateDirectory.hasStartupTasks()).thenReturn(true, false);
-        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(startupTask, (Task) null);
-
-        taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
-
-        // ensure we recycled our existing startup Standby into an Active task
-        verify(activeTaskCreator).createActiveTaskFromStandby(eq(startupTask), eq(taskId00Partitions), any());
-
-        // ensure we didn't construct any new Tasks
-        verify(activeTaskCreator).createTasks(any(), eq(Collections.emptyMap()));
-        verify(standbyTaskCreator).createTasks(Collections.emptyMap());
-        verifyNoMoreInteractions(activeTaskCreator);
-        verifyNoMoreInteractions(standbyTaskCreator);
-
-        // verify the recycled task is now being used as an assigned Active
-        assertEquals(Collections.singletonMap(taskId00, activeTask), taskManager.activeTaskMap());
-        assertEquals(Collections.emptyMap(), taskManager.standbyTaskMap());
-    }
-
-    @Test
-    public void shouldUseStartupTasksFromStateDirectoryAsStandby() {
-        final StandbyTask startupTask = standbyTask(taskId00, taskId00ChangelogPartitions).build();
-
-        when(stateDirectory.hasStartupTasks()).thenReturn(true, true, false);
-        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(startupTask, (Task) null);
-
-        taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
-
-        // ensure we used our existing startup Task directly as a Standby
-        verify(startupTask).resume();
-
-        // ensure we didn't construct any new Tasks, or recycle an existing Task; we only used the one we already have
-        verify(activeTaskCreator).createTasks(any(), eq(Collections.emptyMap()));
-        verify(standbyTaskCreator).createTasks(Collections.emptyMap());
-        verifyNoMoreInteractions(activeTaskCreator);
-        verifyNoMoreInteractions(standbyTaskCreator);
-
-        // verify the startup Standby is now being used as an assigned Standby
-        assertEquals(Collections.emptyMap(), taskManager.activeTaskMap());
-        assertEquals(Collections.singletonMap(taskId00, startupTask), taskManager.standbyTaskMap());
-    }
-
-    @Test
-    public void shouldRecycleStartupTasksFromStateDirectoryAsActiveWithStateUpdater() {
-        final Tasks taskRegistry = new Tasks(new LogContext());
-        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, taskRegistry, true);
-        final StandbyTask startupTask = standbyTask(taskId00, taskId00ChangelogPartitions).build();
-
-        final StreamTask activeTask = statefulTask(taskId00, taskId00ChangelogPartitions).build();
-        when(activeTaskCreator.createActiveTaskFromStandby(eq(startupTask), eq(taskId00Partitions), any()))
-                .thenReturn(activeTask);
-
-        when(stateDirectory.hasStartupTasks()).thenReturn(true, false);
-        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(startupTask, (Task) null);
-
-        taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
-
-        // ensure we used our existing startup Task directly as a Standby
-        assertTrue(taskRegistry.hasPendingTasksToInit());
-        assertEquals(Collections.singleton(activeTask), taskRegistry.drainPendingTasksToInit());
-
-        // we're using a mock StateUpdater here, so now that we've drained the task from the queue of startup tasks to init
-        // let's "add" it to our mock StateUpdater
-        when(stateUpdater.tasks()).thenReturn(Collections.singleton(activeTask));
-        when(stateUpdater.standbyTasks()).thenReturn(Collections.emptySet());
-
-        // ensure we recycled our existing startup Standby into an Active task
-        verify(activeTaskCreator).createActiveTaskFromStandby(eq(startupTask), eq(taskId00Partitions), any());
-
-        // ensure we didn't construct any new Tasks
-        verify(activeTaskCreator).createTasks(any(), eq(Collections.emptyMap()));
-        verify(standbyTaskCreator).createTasks(Collections.emptyMap());
-        verifyNoMoreInteractions(activeTaskCreator);
-        verifyNoMoreInteractions(standbyTaskCreator);
-
-        // verify the recycled task is now being used as an assigned Active
-        assertEquals(Collections.singletonMap(taskId00, activeTask), taskManager.activeTaskMap());
-        assertEquals(Collections.emptyMap(), taskManager.standbyTaskMap());
-    }
-
-    @Test
-    public void shouldUseStartupTasksFromStateDirectoryAsStandbyWithStateUpdater() {
-        final Tasks taskRegistry = new Tasks(new LogContext());
-        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, taskRegistry, true);
-        final StandbyTask startupTask = standbyTask(taskId00, taskId00ChangelogPartitions).build();
-
-        when(stateDirectory.hasStartupTasks()).thenReturn(true, true, false);
-        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(startupTask, (Task) null);
-
-        assertFalse(taskRegistry.hasPendingTasksToInit());
-
-        taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
-
-        // ensure we used our existing startup Task directly as a Standby
-        assertTrue(taskRegistry.hasPendingTasksToInit());
-        assertEquals(Collections.singleton(startupTask), taskRegistry.drainPendingTasksToInit());
-
-        // we're using a mock StateUpdater here, so now that we've drained the task from the queue of startup tasks to init
-        // let's "add" it to our mock StateUpdater
-        when(stateUpdater.tasks()).thenReturn(Collections.singleton(startupTask));
-        when(stateUpdater.standbyTasks()).thenReturn(Collections.singleton(startupTask));
-
-        // ensure we didn't construct any new Tasks, or recycle an existing Task; we only used the one we already have
-        verify(activeTaskCreator).createTasks(any(), eq(Collections.emptyMap()));
-        verify(standbyTaskCreator).createTasks(Collections.emptyMap());
-        verifyNoMoreInteractions(activeTaskCreator);
-        verifyNoMoreInteractions(standbyTaskCreator);
-
-        // verify the startup Standby is now being used as an assigned Standby
-        assertEquals(Collections.emptyMap(), taskManager.activeTaskMap());
-        assertEquals(Collections.singletonMap(taskId00, startupTask), taskManager.standbyTaskMap());
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldStartStateUpdaterOnInit(final boolean stateUpdaterEnabled) {
-        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, stateUpdaterEnabled);
-        taskManager.init();
-        if (stateUpdaterEnabled) {
-            verify(stateUpdater).start();
-        } else {
-            verify(stateUpdater, never()).start();
-        }
     }
 
     private static KafkaFutureImpl<DeletedRecords> completedFuture() {
@@ -4930,13 +4822,10 @@ public class TaskManagerTest {
         }
 
         @Override
-        public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
+        public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
             commitPrepared = true;
 
             if (commitNeeded) {
-                if (!clean) {
-                    return null;
-                }
                 return committableOffsets;
             } else {
                 return Collections.emptyMap();

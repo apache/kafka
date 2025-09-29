@@ -20,14 +20,12 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.api.Test;
 
-import java.util.Set;
-import java.util.stream.Stream;
+import java.util.Arrays;
+import java.util.HashSet;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -38,13 +36,6 @@ public class AsyncConsumerMetricsTest {
     private final Metrics metrics = new Metrics();
     private AsyncConsumerMetrics consumerMetrics;
 
-    public static Stream<String> groupNameProvider() {
-        return Stream.of(
-            CONSUMER_METRIC_GROUP,
-            CONSUMER_SHARE_METRIC_GROUP
-        );
-    }
-
     @AfterEach
     public void tearDown() {
         if (consumerMetrics != null) {
@@ -53,29 +44,43 @@ public class AsyncConsumerMetricsTest {
         metrics.close();
     }
 
-    @ParameterizedTest
-    @MethodSource("groupNameProvider")
-    public void shouldMetricNames(String groupName) {
+    @Test
+    public void shouldMetricNames() {
         // create
-        consumerMetrics = new AsyncConsumerMetrics(metrics, groupName);
-        Set<MetricName> expectedMetrics = Set.of(
-            metrics.metricName("time-between-network-thread-poll-avg", groupName),
-            metrics.metricName("time-between-network-thread-poll-max", groupName),
-            metrics.metricName("application-event-queue-size", groupName),
-            metrics.metricName("application-event-queue-time-avg", groupName),
-            metrics.metricName("application-event-queue-time-max", groupName),
-            metrics.metricName("application-event-queue-processing-time-avg", groupName),
-            metrics.metricName("application-event-queue-processing-time-max", groupName),
-            metrics.metricName("unsent-requests-queue-size", groupName),
-            metrics.metricName("unsent-requests-queue-time-avg", groupName),
-            metrics.metricName("unsent-requests-queue-time-max", groupName),
-            metrics.metricName("background-event-queue-size", groupName),
-            metrics.metricName("background-event-queue-time-avg", groupName),
-            metrics.metricName("background-event-queue-time-max", groupName),
-            metrics.metricName("background-event-queue-processing-time-avg", groupName),
-            metrics.metricName("background-event-queue-processing-time-max", groupName)
-        );
+        consumerMetrics = new AsyncConsumerMetrics(metrics);
+        HashSet<MetricName> expectedMetrics = new HashSet<>(Arrays.asList(
+            metrics.metricName("last-poll-seconds-ago", CONSUMER_METRIC_GROUP),
+            metrics.metricName("time-between-poll-avg", CONSUMER_METRIC_GROUP),
+            metrics.metricName("time-between-poll-max", CONSUMER_METRIC_GROUP),
+            metrics.metricName("poll-idle-ratio-avg", CONSUMER_METRIC_GROUP),
+            metrics.metricName("commit-sync-time-ns-total", CONSUMER_METRIC_GROUP),
+            metrics.metricName("committed-time-ns-total", CONSUMER_METRIC_GROUP)
+        ));
         expectedMetrics.forEach(
+            metricName -> assertTrue(
+                metrics.metrics().containsKey(metricName),
+                "Missing metric: " + metricName
+            )
+        );
+
+        HashSet<MetricName> expectedConsumerMetrics = new HashSet<>(Arrays.asList(
+            metrics.metricName("time-between-network-thread-poll-avg", CONSUMER_METRIC_GROUP),
+            metrics.metricName("time-between-network-thread-poll-max", CONSUMER_METRIC_GROUP),
+            metrics.metricName("application-event-queue-size", CONSUMER_METRIC_GROUP),
+            metrics.metricName("application-event-queue-time-avg", CONSUMER_METRIC_GROUP),
+            metrics.metricName("application-event-queue-time-max", CONSUMER_METRIC_GROUP),
+            metrics.metricName("application-event-queue-processing-time-avg", CONSUMER_METRIC_GROUP),
+            metrics.metricName("application-event-queue-processing-time-max", CONSUMER_METRIC_GROUP),
+            metrics.metricName("unsent-requests-queue-size", CONSUMER_METRIC_GROUP),
+            metrics.metricName("unsent-requests-queue-time-avg", CONSUMER_METRIC_GROUP),
+            metrics.metricName("unsent-requests-queue-time-max", CONSUMER_METRIC_GROUP),
+            metrics.metricName("background-event-queue-size", CONSUMER_METRIC_GROUP),
+            metrics.metricName("background-event-queue-time-avg", CONSUMER_METRIC_GROUP),
+            metrics.metricName("background-event-queue-time-max", CONSUMER_METRIC_GROUP),
+            metrics.metricName("background-event-queue-processing-time-avg", CONSUMER_METRIC_GROUP),
+            metrics.metricName("background-event-queue-processing-time-max", CONSUMER_METRIC_GROUP)
+        ));
+        expectedConsumerMetrics.forEach(
             metricName -> assertTrue(
                 metrics.metrics().containsKey(metricName),
                 "Missing metric: " + metricName
@@ -90,146 +95,143 @@ public class AsyncConsumerMetricsTest {
                 "Metric present after close: " + metricName
             )
         );
+        expectedConsumerMetrics.forEach(
+            metricName -> assertFalse(
+                metrics.metrics().containsKey(metricName),
+                "Metric present after close: " + metricName
+            )
+        );
     }
 
-    @ParameterizedTest
-    @MethodSource("groupNameProvider")
-    public void shouldRecordTimeBetweenNetworkThreadPoll(String groupName) {
-        consumerMetrics = new AsyncConsumerMetrics(metrics, groupName);
+    @Test
+    public void shouldRecordTimeBetweenNetworkThreadPoll() {
+        consumerMetrics = new AsyncConsumerMetrics(metrics);
         // When:
         consumerMetrics.recordTimeBetweenNetworkThreadPoll(METRIC_VALUE);
 
         // Then:
-        assertMetricValue("time-between-network-thread-poll-avg", groupName);
-        assertMetricValue("time-between-network-thread-poll-max", groupName);
+        assertMetricValue("time-between-network-thread-poll-avg");
+        assertMetricValue("time-between-network-thread-poll-max");
     }
 
-    @ParameterizedTest
-    @MethodSource("groupNameProvider")
-    public void shouldRecordApplicationEventQueueSize(String groupName) {
-        consumerMetrics = new AsyncConsumerMetrics(metrics, groupName);
+    @Test
+    public void shouldRecordApplicationEventQueueSize() {
+        consumerMetrics = new AsyncConsumerMetrics(metrics);
         // When:
         consumerMetrics.recordApplicationEventQueueSize(10);
 
         // Then:
         assertEquals(
-            (double) 10,
             metrics.metric(
                 metrics.metricName(
                     "application-event-queue-size",
-                    groupName
+                    CONSUMER_METRIC_GROUP
                 )
-            ).metricValue()
+            ).metricValue(),
+            (double) 10
         );
     }
 
-    @ParameterizedTest
-    @MethodSource("groupNameProvider")
-    public void shouldRecordApplicationEventQueueTime(String groupName) {
-        consumerMetrics = new AsyncConsumerMetrics(metrics, groupName);
+    @Test
+    public void shouldRecordApplicationEventQueueTime() {
+        consumerMetrics = new AsyncConsumerMetrics(metrics);
         // When:
         consumerMetrics.recordApplicationEventQueueTime(METRIC_VALUE);
 
         // Then:
-        assertMetricValue("application-event-queue-time-avg", groupName);
-        assertMetricValue("application-event-queue-time-max", groupName);
+        assertMetricValue("application-event-queue-time-avg");
+        assertMetricValue("application-event-queue-time-max");
     }
 
-    @ParameterizedTest
-    @MethodSource("groupNameProvider")
-    public void shouldRecordApplicationEventQueueProcessingTime(String groupName) {
-        consumerMetrics = new AsyncConsumerMetrics(metrics, groupName);
+    @Test
+    public void shouldRecordApplicationEventQueueProcessingTime() {
+        consumerMetrics = new AsyncConsumerMetrics(metrics);
         // When:
         consumerMetrics.recordApplicationEventQueueProcessingTime(METRIC_VALUE);
 
         // Then:
-        assertMetricValue("application-event-queue-processing-time-avg", groupName);
-        assertMetricValue("application-event-queue-processing-time-max", groupName);
+        assertMetricValue("application-event-queue-processing-time-avg");
+        assertMetricValue("application-event-queue-processing-time-max");
     }
 
-    @ParameterizedTest
-    @MethodSource("groupNameProvider")
-    public void shouldRecordUnsentRequestsQueueSize(String groupName) {
-        consumerMetrics = new AsyncConsumerMetrics(metrics, groupName);
+    @Test
+    public void shouldRecordUnsentRequestsQueueSize() {
+        consumerMetrics = new AsyncConsumerMetrics(metrics);
         // When:
         consumerMetrics.recordUnsentRequestsQueueSize(10, 100);
 
         // Then:
         assertEquals(
-            (double) 10,
             metrics.metric(
                 metrics.metricName(
                     "unsent-requests-queue-size",
-                    groupName
+                    CONSUMER_METRIC_GROUP
                 )
-            ).metricValue()
+            ).metricValue(),
+            (double) 10
         );
     }
 
-    @ParameterizedTest
-    @MethodSource("groupNameProvider")
-    public void shouldRecordUnsentRequestsQueueTime(String groupName) {
-        consumerMetrics = new AsyncConsumerMetrics(metrics, groupName);
+    @Test
+    public void shouldRecordUnsentRequestsQueueTime() {
+        consumerMetrics = new AsyncConsumerMetrics(metrics);
         // When:
         consumerMetrics.recordUnsentRequestsQueueTime(METRIC_VALUE);
 
         // Then:
-        assertMetricValue("unsent-requests-queue-time-avg", groupName);
-        assertMetricValue("unsent-requests-queue-time-max", groupName);
+        assertMetricValue("unsent-requests-queue-time-avg");
+        assertMetricValue("unsent-requests-queue-time-max");
     }
 
-    @ParameterizedTest
-    @MethodSource("groupNameProvider")
-    public void shouldRecordBackgroundEventQueueSize(String groupName) {
-        consumerMetrics = new AsyncConsumerMetrics(metrics, groupName);
+    @Test
+    public void shouldRecordBackgroundEventQueueSize() {
+        consumerMetrics = new AsyncConsumerMetrics(metrics);
         // When:
         consumerMetrics.recordBackgroundEventQueueSize(10);
 
         // Then:
         assertEquals(
-            (double) 10,
             metrics.metric(
                 metrics.metricName(
                     "background-event-queue-size",
-                    groupName
+                    CONSUMER_METRIC_GROUP
                 )
-            ).metricValue()
+            ).metricValue(),
+            (double) 10
         );
     }
 
-    @ParameterizedTest
-    @MethodSource("groupNameProvider")
-    public void shouldRecordBackgroundEventQueueTime(String groupName) {
-        consumerMetrics = new AsyncConsumerMetrics(metrics, groupName);
+    @Test
+    public void shouldRecordBackgroundEventQueueTime() {
+        consumerMetrics = new AsyncConsumerMetrics(metrics);
         // When:
         consumerMetrics.recordBackgroundEventQueueTime(METRIC_VALUE);
 
         // Then:
-        assertMetricValue("background-event-queue-time-avg", groupName);
-        assertMetricValue("background-event-queue-time-max", groupName);
+        assertMetricValue("background-event-queue-time-avg");
+        assertMetricValue("background-event-queue-time-max");
     }
 
-    @ParameterizedTest
-    @MethodSource("groupNameProvider")
-    public void shouldRecordBackgroundEventQueueProcessingTime(String groupName) {
-        consumerMetrics = new AsyncConsumerMetrics(metrics, groupName);
+    @Test
+    public void shouldRecordBackgroundEventQueueProcessingTime() {
+        consumerMetrics = new AsyncConsumerMetrics(metrics);
         // When:
         consumerMetrics.recordBackgroundEventQueueProcessingTime(METRIC_VALUE);
 
         // Then:
-        assertMetricValue("background-event-queue-processing-time-avg", groupName);
-        assertMetricValue("background-event-queue-processing-time-max", groupName);
+        assertMetricValue("background-event-queue-processing-time-avg");
+        assertMetricValue("background-event-queue-processing-time-avg");
     }
 
-    private void assertMetricValue(final String name, final String groupName) {
+    private void assertMetricValue(final String name) {
         assertEquals(
-            (double) METRIC_VALUE,
             metrics.metric(
                 metrics.metricName(
                     name,
-                    groupName
+                    CONSUMER_METRIC_GROUP
                 )
-            ).metricValue()
+            ).metricValue(),
+            (double) METRIC_VALUE
         );
     }
 }

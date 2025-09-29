@@ -22,12 +22,12 @@ import java.util.concurrent.{CompletableFuture, Executors, LinkedBlockingQueue, 
 import java.util.{Optional, Properties}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
+import kafka.server.metadata.MockConfigRepository
 import kafka.utils.TestUtils.waitUntilTrue
 import kafka.utils.{CoreUtils, Logging, TestUtils}
-import org.apache.kafka.common
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionChangeRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.{FetchRequest, ProduceResponse}
@@ -35,7 +35,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
-import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MetadataCache, MockConfigRepository}
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.raft.QuorumConfig
@@ -83,7 +83,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
   def testIsrExpandAndShrinkWithConcurrentProduce(): Unit = {
     val localId = 0
     val remoteId = 1
-    val metadataCache = new KRaftMetadataCache(localId, () => KRaftVersion.KRAFT_VERSION_0)
+    val metadataCache = MetadataCache.kRaftMetadataCache(localId, () => KRaftVersion.KRAFT_VERSION_0)
     channel = new ControllerChannel
     replicaManager = buildReplicaManager(localId, channel, metadataCache)
 
@@ -184,7 +184,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
       time = time
     )
 
-    quotaManagers = QuotaFactory.instantiate(config, metrics, time, "", "")
+    quotaManagers = QuotaFactory.instantiate(config, metrics, time, "")
 
     new ReplicaManager(
       metrics = metrics,
@@ -200,6 +200,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
       override def createReplicaFetcherManager(
         metrics: Metrics,
         time: Time,
+        threadNamePrefix: Option[String],
         quotaManager: ReplicationQuotaManager
       ): ReplicaFetcherManager = {
         Mockito.mock(classOf[ReplicaFetcherManager])
@@ -253,6 +254,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
       }
 
       val fetchParams = new FetchParams(
+        ApiKeys.FETCH.latestVersion,
         replicaId,
         defaultBrokerEpoch(replicaId),
         random.nextInt(100),
@@ -292,13 +294,11 @@ class ReplicaManagerConcurrencyTest extends Logging {
       }
 
       val future = new CompletableFuture[ProduceResponse.PartitionResponse]()
-      val topicIdPartition: common.TopicIdPartition = replicaManager.topicIdPartition(topicPartition)
-
-      def produceCallback(results: collection.Map[common.TopicIdPartition, ProduceResponse.PartitionResponse]): Unit = {
+      def produceCallback(results: collection.Map[TopicPartition, ProduceResponse.PartitionResponse]): Unit = {
         try {
           assertEquals(1, results.size)
           val (topicPartition, result) = results.head
-          assertEquals(topicIdPartition, topicPartition)
+          assertEquals(this.topicPartition, topicPartition)
           assertEquals(Errors.NONE, result.error)
           future.complete(result)
         } catch {
@@ -311,7 +311,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
         requiredAcks = (-1).toShort,
         internalTopicsAllowed = false,
         origin = AppendOrigin.CLIENT,
-        entriesPerPartition = collection.Map(topicIdPartition -> TestUtils.records(records)),
+        entriesPerPartition = collection.Map(topicPartition -> TestUtils.records(records)),
         responseCallback = produceCallback
       )
 

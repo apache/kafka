@@ -34,8 +34,6 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
-import org.apache.kafka.common.message.OffsetFetchRequestData;
-import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
@@ -44,7 +42,6 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
-import org.apache.kafka.common.requests.RequestUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -541,7 +538,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             boolean inflightRemoved = pendingRequests.inflightOffsetFetches.remove(fetchRequest);
             if (!inflightRemoved) {
                 log.warn("A duplicated, inflight, request was identified, but unable to find it in the " +
-                    "outbound buffer: {}", fetchRequest);
+                    "outbound buffer:" + fetchRequest);
             }
             if (error == null) {
                 maybeUpdateLastSeenEpochIfNewer(res);
@@ -589,8 +586,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         if (memberEpoch.isEmpty() && memberInfo.memberEpoch.isPresent()) {
             log.info("Member {} won't include epoch in following offset " +
                 "commit/fetch requests because it has left the group.", memberInfo.memberId);
-        } else if (memberEpoch.isPresent()) {
-            log.debug("Member {} will include new member epoch {} in following offset commit/fetch requests.", memberId, memberEpoch);
         }
         memberInfo.memberId = memberId;
         memberInfo.memberEpoch = memberEpoch;
@@ -732,7 +727,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 lastEpochSentOnCommit = Optional.empty();
             }
 
-            OffsetCommitRequest.Builder builder = OffsetCommitRequest.Builder.forTopicNames(data);
+            OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(data);
 
             return buildRequestWithResponseHandling(builder);
         }
@@ -975,37 +970,21 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         public NetworkClientDelegate.UnsentRequest toUnsentRequest() {
-            List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = requestedPartitions.stream()
-                .collect(Collectors.groupingBy(TopicPartition::topic))
-                .entrySet()
-                .stream()
-                .map(entry -> new OffsetFetchRequestData.OffsetFetchRequestTopics()
-                    .setName(entry.getKey())
-                    .setPartitionIndexes(entry.getValue().stream()
-                        .map(TopicPartition::partition)
-                        .collect(Collectors.toList())))
-                .collect(Collectors.toList());
 
-            OffsetFetchRequest.Builder builder = memberInfo.memberEpoch
-                .map(epoch -> OffsetFetchRequest.Builder.forTopicNames(
-                    new OffsetFetchRequestData()
-                        .setRequireStable(true)
-                        .setGroups(List.of(
-                            new OffsetFetchRequestData.OffsetFetchRequestGroup()
-                                .setGroupId(groupId)
-                                .setMemberId(memberInfo.memberId)
-                                .setMemberEpoch(epoch)
-                                .setTopics(topics))),
-                            throwOnFetchStableOffsetUnsupported))
+            OffsetFetchRequest.Builder builder = memberInfo.memberEpoch.
+                map(epoch -> new OffsetFetchRequest.Builder(
+                    groupId,
+                    memberInfo.memberId,
+                    epoch,
+                    true,
+                    new ArrayList<>(this.requestedPartitions),
+                    throwOnFetchStableOffsetUnsupported))
                 // Building request without passing member ID/epoch to leave the logic to choose
                 // default values when not present on the request builder.
-                .orElseGet(() -> OffsetFetchRequest.Builder.forTopicNames(
-                    new OffsetFetchRequestData()
-                        .setRequireStable(true)
-                        .setGroups(List.of(
-                            new OffsetFetchRequestData.OffsetFetchRequestGroup()
-                                .setGroupId(groupId)
-                                .setTopics(topics))),
+                .orElseGet(() -> new OffsetFetchRequest.Builder(
+                    groupId,
+                    true,
+                    new ArrayList<>(this.requestedPartitions),
                     throwOnFetchStableOffsetUnsupported));
             return buildRequestWithResponseHandling(builder);
         }
@@ -1016,14 +995,13 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         @Override
         void onResponse(final ClientResponse response) {
             long currentTimeMs = response.receivedTimeMs();
-            var fetchResponse = (OffsetFetchResponse) response.responseBody();
-            var groupResponse = fetchResponse.group(groupId);
-            var error = Errors.forCode(groupResponse.errorCode());
-            if (error != Errors.NONE) {
-                onFailure(currentTimeMs, error);
+            OffsetFetchResponse fetchResponse = (OffsetFetchResponse) response.responseBody();
+            Errors responseError = fetchResponse.groupLevelError(groupId);
+            if (responseError != Errors.NONE) {
+                onFailure(currentTimeMs, responseError);
                 return;
             }
-            onSuccess(currentTimeMs, groupResponse);
+            onSuccess(currentTimeMs, fetchResponse);
         }
 
         /**
@@ -1088,58 +1066,53 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * offsets contained in the response, and record a successful request attempt.
          */
         private void onSuccess(final long currentTimeMs,
-                               final OffsetFetchResponseData.OffsetFetchResponseGroup response) {
-            var offsets = new HashMap<TopicPartition, OffsetAndMetadata>();
-            var unstableTxnOffsetTopicPartitions = new HashSet<TopicPartition>();
-            var unauthorizedTopics = new HashSet<String>();
-            var failedRequestRegistered = false;
+                               final OffsetFetchResponse response) {
+            Set<String> unauthorizedTopics = null;
+            Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData =
+                    response.partitionDataMap(groupId);
+            Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(responseData.size());
+            Set<TopicPartition> unstableTxnOffsetTopicPartitions = new HashSet<>();
+            boolean failedRequestRegistered = false;
+            for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : responseData.entrySet()) {
+                TopicPartition tp = entry.getKey();
+                OffsetFetchResponse.PartitionData partitionData = entry.getValue();
+                if (partitionData.hasError()) {
+                    Errors error = partitionData.error;
+                    log.debug("Failed to fetch offset for partition {}: {}", tp, error.message());
 
-            for (var topic : response.topics()) {
-                for (var partition : topic.partitions()) {
-                    var tp = new TopicPartition(
-                        topic.name(),
-                        partition.partitionIndex()
-                    );
-                    var error = Errors.forCode(partition.errorCode());
-                    if (error != Errors.NONE) {
-                        log.debug("Failed to fetch offset for partition {}: {}", tp, error.message());
-
-                        if (!failedRequestRegistered) {
-                            onFailedAttempt(currentTimeMs);
-                            failedRequestRegistered = true;
-                        }
-
-                        if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-                            future.completeExceptionally(new KafkaException("Topic or Partition " + tp + " does not exist"));
-                            return;
-                        } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
-                            unauthorizedTopics.add(tp.topic());
-                        } else if (error == Errors.UNSTABLE_OFFSET_COMMIT) {
-                            unstableTxnOffsetTopicPartitions.add(tp);
-                        } else {
-                            // Fail with a non-retriable KafkaException for all unexpected partition
-                            // errors (even if they are retriable)
-                            future.completeExceptionally(new KafkaException("Unexpected error in fetch offset " +
-                                "response for partition " + tp + ": " + error.message()));
-                            return;
-                        }
-                    } else if (partition.committedOffset() >= 0) {
-                        // record the position with the offset (-1 indicates no committed offset to fetch);
-                        // if there's no committed offset, record as null
-                        offsets.put(tp, new OffsetAndMetadata(
-                            partition.committedOffset(),
-                            RequestUtils.getLeaderEpoch(partition.committedLeaderEpoch()),
-                            partition.metadata()
-                        ));
-                    } else {
-                        log.info("Found no committed offset for partition {}", tp);
-                        offsets.put(tp, null);
+                    if (!failedRequestRegistered) {
+                        onFailedAttempt(currentTimeMs);
+                        failedRequestRegistered = true;
                     }
 
+                    if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                        future.completeExceptionally(new KafkaException("Topic or Partition " + tp + " does not exist"));
+                        return;
+                    } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
+                        if (unauthorizedTopics == null) {
+                            unauthorizedTopics = new HashSet<>();
+                        }
+                        unauthorizedTopics.add(tp.topic());
+                    } else if (error == Errors.UNSTABLE_OFFSET_COMMIT) {
+                        unstableTxnOffsetTopicPartitions.add(tp);
+                    } else {
+                        // Fail with a non-retriable KafkaException for all unexpected partition
+                        // errors (even if they are retriable)
+                        future.completeExceptionally(new KafkaException("Unexpected error in fetch offset " +
+                                "response for partition " + tp + ": " + error.message()));
+                        return;
+                    }
+                } else if (partitionData.offset >= 0) {
+                    // record the position with the offset (-1 indicates no committed offset to fetch);
+                    // if there's no committed offset, record as null
+                    offsets.put(tp, new OffsetAndMetadata(partitionData.offset, partitionData.leaderEpoch, partitionData.metadata));
+                } else {
+                    log.info("Found no committed offset for partition {}", tp);
+                    offsets.put(tp, null);
                 }
             }
 
-            if (!unauthorizedTopics.isEmpty()) {
+            if (unauthorizedTopics != null) {
                 future.completeExceptionally(new TopicAuthorizationException(unauthorizedTopics));
             } else if (!unstableTxnOffsetTopicPartitions.isEmpty()) {
                 // TODO: Optimization question: Do we need to retry all partitions upon a single partition error?

@@ -20,18 +20,15 @@ package org.apache.kafka.server.share.fetch;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.server.storage.log.FetchParams;
-import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 /**
  * The ShareFetch class is used to store the fetch parameters for a share fetch request.
@@ -56,22 +53,13 @@ public class ShareFetch {
      */
     private final String memberId;
     /**
-     * The topic partitions to be fetched.
+     * The maximum number of bytes that can be fetched for each partition.
      */
-    private final List<TopicIdPartition> topicIdPartitions;
-    /**
-     * The batch size of the fetch request.
-     */
-    private final int batchSize;
+    private final Map<TopicIdPartition, Integer> partitionMaxBytes;
     /**
      * The maximum number of records that can be fetched for the request.
      */
     private final int maxFetchRecords;
-    /**
-     * The handler to update the failed share fetch metrics.
-     */
-    private final BrokerTopicStats brokerTopicStats;
-
     /**
      * The partitions that had an error during the fetch.
      */
@@ -82,19 +70,15 @@ public class ShareFetch {
         String groupId,
         String memberId,
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
-        List<TopicIdPartition> topicIdPartitions,
-        int batchSize,
-        int maxFetchRecords,
-        BrokerTopicStats brokerTopicStats
+        Map<TopicIdPartition, Integer> partitionMaxBytes,
+        int maxFetchRecords
     ) {
         this.fetchParams = fetchParams;
         this.groupId = groupId;
         this.memberId = memberId;
         this.future = future;
-        this.topicIdPartitions = topicIdPartitions;
-        this.batchSize = batchSize;
+        this.partitionMaxBytes = partitionMaxBytes;
         this.maxFetchRecords = maxFetchRecords;
-        this.brokerTopicStats = brokerTopicStats;
     }
 
     public String groupId() {
@@ -105,16 +89,12 @@ public class ShareFetch {
         return memberId;
     }
 
-    public List<TopicIdPartition> topicIdPartitions() {
-        return topicIdPartitions;
+    public Map<TopicIdPartition, Integer> partitionMaxBytes() {
+        return partitionMaxBytes;
     }
 
     public FetchParams fetchParams() {
         return fetchParams;
-    }
-
-    public int batchSize() {
-        return batchSize;
     }
 
     public int maxFetchRecords() {
@@ -152,7 +132,7 @@ public class ShareFetch {
      * @return true if all the partitions in the request have errored, false otherwise.
      */
     public synchronized boolean errorInAllPartitions() {
-        return erroneous != null && erroneous.size() == topicIdPartitions().size();
+        return erroneous != null && erroneous.size() == partitionMaxBytes().size();
     }
 
     /**
@@ -184,9 +164,10 @@ public class ShareFetch {
         if (isCompleted()) {
             return;
         }
-        Map<TopicIdPartition, PartitionData> response = new HashMap<>();
-        // Add the exception to erroneous partitions to track the error.
-        topicIdPartitions.forEach(tp -> addErroneous(tp, throwable));
+        Map<TopicIdPartition, PartitionData> response = topicIdPartitions.stream().collect(
+            Collectors.toMap(tp -> tp, tp -> new PartitionData()
+                .setErrorCode(Errors.forException(throwable).code())
+                .setErrorMessage(throwable.getMessage())));
         // Add any erroneous partitions to the response.
         addErroneousToResponse(response);
         future.complete(response);
@@ -211,19 +192,10 @@ public class ShareFetch {
 
     private synchronized void addErroneousToResponse(Map<TopicIdPartition, PartitionData> response) {
         if (erroneous != null) {
-            // Track the failed topics for metrics.
-            Set<String> erroneousTopics = new HashSet<>();
             erroneous.forEach((topicIdPartition, throwable) -> {
-                erroneousTopics.add(topicIdPartition.topic());
                 response.put(topicIdPartition, new PartitionData()
-                    .setPartitionIndex(topicIdPartition.partition())
                     .setErrorCode(Errors.forException(throwable).code())
-                    .setErrorMessage(throwable.getMessage())
-                    .setRecords(MemoryRecords.EMPTY));
-            });
-            erroneousTopics.forEach(topic -> {
-                brokerTopicStats.allTopicsStats().failedShareFetchRequestRate().mark();
-                brokerTopicStats.topicStats(topic).failedShareFetchRequestRate().mark();
+                    .setErrorMessage(throwable.getMessage()));
             });
         }
     }

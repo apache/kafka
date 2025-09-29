@@ -20,9 +20,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DescribeTopicPartitionsRequestData;
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 
@@ -90,9 +91,9 @@ public class DescribeTopicPartitionsRequest extends AbstractRequest {
         return new DescribeTopicPartitionsResponse(responseData);
     }
 
-    public static DescribeTopicPartitionsRequest parse(Readable readable, short version) {
+    public static DescribeTopicPartitionsRequest parse(ByteBuffer buffer, short version) {
         return new DescribeTopicPartitionsRequest(
-            new DescribeTopicPartitionsRequestData(readable, version),
+            new DescribeTopicPartitionsRequestData(new ByteBufferAccessor(buffer), version),
             version);
     }
 }

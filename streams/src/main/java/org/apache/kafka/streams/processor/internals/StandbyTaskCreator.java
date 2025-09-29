@@ -52,20 +52,20 @@ class StandbyTaskCreator {
                        final StateDirectory stateDirectory,
                        final ChangelogReader storeChangelogReader,
                        final String threadId,
-                       final LogContext logContext,
+                       final Logger log,
                        final boolean stateUpdaterEnabled) {
         this.topologyMetadata = topologyMetadata;
         this.applicationConfig = applicationConfig;
         this.streamsMetrics = streamsMetrics;
         this.stateDirectory = stateDirectory;
         this.storeChangelogReader = storeChangelogReader;
-        this.log = logContext.logger(getClass());
+        this.log = log;
         this.stateUpdaterEnabled = stateUpdaterEnabled;
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
 
         dummyCache = new ThreadCache(
-            logContext,
+            new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName())),
             0,
             streamsMetrics
         );

@@ -19,7 +19,7 @@ package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
-import org.apache.kafka.server.common.OffsetAndEpoch;
+import org.apache.kafka.raft.OffsetAndEpoch;
 
 /**
  * Interface for writing snapshot as a sequence of records.

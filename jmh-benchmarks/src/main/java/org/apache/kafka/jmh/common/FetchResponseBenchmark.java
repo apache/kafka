@@ -48,7 +48,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -104,19 +103,19 @@ public class FetchResponseBenchmark {
         }
 
         this.header = new ResponseHeader(100, ApiKeys.FETCH.responseHeaderVersion(ApiKeys.FETCH.latestVersion()));
-        this.fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData, List.of());
+        this.fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData);
         this.fetchResponseData = this.fetchResponse.data();
     }
 
     @Benchmark
     public int testConstructFetchResponse() {
-        FetchResponse fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData, List.of());
+        FetchResponse fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData);
         return fetchResponse.data().responses().size();
     }
 
     @Benchmark
     public int testPartitionMapFromData() {
-        return FetchResponse.of(fetchResponseData).responseData(topicNames, ApiKeys.FETCH.latestVersion()).size();
+        return new FetchResponse(fetchResponseData).responseData(topicNames, ApiKeys.FETCH.latestVersion()).size();
     }
 
     @Benchmark

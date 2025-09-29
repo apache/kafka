@@ -46,6 +46,7 @@ import com.yammer.metrics.core.MetricsRegistry;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -180,7 +181,7 @@ public final class AssignmentsManager {
         this.directoryIdToDescription = directoryIdToDescription;
         this.metadataImageSupplier = metadataImageSupplier;
         this.ready = new ConcurrentHashMap<>();
-        this.inflight = Map.of();
+        this.inflight = Collections.emptyMap();
         this.metricsRegistry = metricsRegistry;
         this.metricsRegistry.newGauge(QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC, new Gauge<Integer>() {
                 @Override
@@ -362,13 +363,13 @@ public final class AssignmentsManager {
         Map<TopicIdPartition, Assignment> sent,
         Optional<ClientResponse> assignmentResponse
     ) {
-        inflight = Map.of();
+        inflight = Collections.emptyMap();
         Optional<String> globalResponseError = globalResponseError(assignmentResponse);
         if (globalResponseError.isPresent()) {
             previousGlobalFailures++;
             log.error("handleResponse: {} assignments failed; global error: {}. Retrying.",
                 sent.size(), globalResponseError.get());
-            sent.forEach(ready::putIfAbsent);
+            sent.entrySet().forEach(e -> ready.putIfAbsent(e.getKey(), e.getValue()));
             return;
         }
         previousGlobalFailures = 0;
@@ -428,14 +429,14 @@ public final class AssignmentsManager {
     }
 
     static Optional<String> globalResponseError(Optional<ClientResponse> response) {
-        if (response.isEmpty()) {
+        if (!response.isPresent()) {
             return Optional.of("Timeout");
         }
         if (response.get().authenticationException() != null) {
             return Optional.of("AuthenticationException");
         }
         if (response.get().wasTimedOut()) {
-            return Optional.of("Disconnected[Timeout]");
+            return Optional.of("Disonnected[Timeout]");
         }
         if (response.get().wasDisconnected()) {
             return Optional.of("Disconnected");

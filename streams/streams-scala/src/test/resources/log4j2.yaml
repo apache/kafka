@@ -21,12 +21,20 @@ Configuration:
 
   Appenders:
     Console:
-      name: STDOUT
-      PatternLayout:
-        pattern: "${logPattern}"
+      name: A1
+    RollingFile:
+      - name: R
+        fileName: logs/kafka-streams-scala.log
+        filePattern: "streams-scala-%d{yyyy-MM-dd}.log"
+        PatternLayout:
+          pattern: "${logPattern}"
+        SizeBasedTriggeringPolicy:
+          size: "100KB"
+        DefaultRolloverStrategy:
+          max: 1
 
   Loggers:
     Root:
       level: INFO
       AppenderRef:
-        - ref: STDOUT
+        - ref: R

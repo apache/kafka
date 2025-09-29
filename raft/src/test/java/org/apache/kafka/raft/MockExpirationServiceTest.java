@@ -39,18 +39,18 @@ class MockExpirationServiceTest {
         CompletableFuture<Object> future4 = expirationService.failAfter(50);
 
         time.sleep(25);
-        TestUtils.assertFutureThrows(TimeoutException.class, future2);
+        TestUtils.assertFutureThrows(future2, TimeoutException.class);
         assertFalse(future1.isDone());
         assertFalse(future3.isDone());
         assertFalse(future4.isDone());
 
         time.sleep(25);
-        TestUtils.assertFutureThrows(TimeoutException.class, future1);
-        TestUtils.assertFutureThrows(TimeoutException.class, future4);
+        TestUtils.assertFutureThrows(future1, TimeoutException.class);
+        TestUtils.assertFutureThrows(future4, TimeoutException.class);
         assertFalse(future3.isDone());
 
         time.sleep(25);
-        TestUtils.assertFutureThrows(TimeoutException.class, future3);
+        TestUtils.assertFutureThrows(future3, TimeoutException.class);
     }
 
 }

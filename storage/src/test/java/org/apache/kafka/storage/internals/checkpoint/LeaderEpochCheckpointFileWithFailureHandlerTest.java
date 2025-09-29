@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,7 +38,7 @@ class LeaderEpochCheckpointFileWithFailureHandlerTest {
         LeaderEpochCheckpointFile checkpoint = new LeaderEpochCheckpointFile(file, new LogDirFailureChannel(1));
 
         //Given
-        List<EpochEntry> epochs = List.of(
+        List<EpochEntry> epochs = Arrays.asList(
                 new EpochEntry(0, 1L),
                 new EpochEntry(1, 2L),
                 new EpochEntry(2, 3L));
@@ -49,7 +50,7 @@ class LeaderEpochCheckpointFileWithFailureHandlerTest {
         assertEquals(epochs, checkpoint.read());
 
         //Given overwrite
-        List<EpochEntry> epochs2 = List.of(
+        List<EpochEntry> epochs2 = Arrays.asList(
                 new EpochEntry(3, 4L),
                 new EpochEntry(4, 5L));
 
@@ -66,7 +67,7 @@ class LeaderEpochCheckpointFileWithFailureHandlerTest {
 
         //Given a file with data in
         LeaderEpochCheckpointFile checkpoint = new LeaderEpochCheckpointFile(file, new LogDirFailureChannel(1));
-        List<EpochEntry> epochs = List.of(
+        List<EpochEntry> epochs = Arrays.asList(
                 new EpochEntry(0, 1L),
                 new EpochEntry(1, 2L),
                 new EpochEntry(2, 3L));

@@ -22,20 +22,18 @@ import kafka.cluster.DelayedOperations;
 import kafka.cluster.Partition;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
+import kafka.server.MetadataCache;
 import kafka.server.builders.LogManagerBuilder;
+import kafka.server.metadata.MockConfigRepository;
 
-import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.metadata.LeaderRecoveryState;
-import org.apache.kafka.metadata.MetadataCache;
-import org.apache.kafka.metadata.MockConfigRepository;
-import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
@@ -60,6 +58,8 @@ import org.openjdk.jmh.annotations.Warmup;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -80,7 +80,7 @@ import scala.jdk.javaapi.OptionConverters;
 public class PartitionMakeFollowerBenchmark {
     private final File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
     private final KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
-    private final int[] replicas = {0, 1, 2};
+    private final List<Integer> replicas = Arrays.asList(0, 1, 2);
     private final OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
     private final DelayedOperations delayedOperations  = Mockito.mock(DelayedOperations.class);
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
@@ -99,8 +99,8 @@ public class PartitionMakeFollowerBenchmark {
         BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
         logManager = new LogManagerBuilder().
-            setLogDirs(List.of(logDir)).
-            setInitialOfflineDirs(List.of()).
+            setLogDirs(Collections.singletonList(logDir)).
+            setInitialOfflineDirs(Collections.emptyList()).
             setConfigRepository(new MockConfigRepository()).
             setInitialDefaultConfig(logConfig).
             setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false)).
@@ -113,7 +113,7 @@ public class PartitionMakeFollowerBenchmark {
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(logDirFailureChannel).
-            setTime(Time.SYSTEM).
+            setTime(Time.SYSTEM).setKeepPartitionMetadataFile(true).
             build();
 
         TopicPartition tp = new TopicPartition("topic", 0);
@@ -134,7 +134,7 @@ public class PartitionMakeFollowerBenchmark {
             int initialOffSet = 0;
             while (true) {
                 MemoryRecords memoryRecords =  MemoryRecords.withRecords(initialOffSet, Compression.NONE, 0, simpleRecords);
-                partition.appendRecordsToFollowerOrFutureReplica(memoryRecords, false, Integer.MAX_VALUE);
+                partition.appendRecordsToFollowerOrFutureReplica(memoryRecords, false);
                 initialOffSet = initialOffSet + 2;
             }
         });
@@ -150,15 +150,14 @@ public class PartitionMakeFollowerBenchmark {
 
     @Benchmark
     public boolean testMakeFollower() {
-        PartitionRegistration partitionRegistration = new PartitionRegistration.Builder()
+        LeaderAndIsrRequest.PartitionState partitionState = new LeaderAndIsrRequest.PartitionState()
+            .setControllerEpoch(0)
             .setLeader(0)
-            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
             .setLeaderEpoch(0)
             .setIsr(replicas)
             .setPartitionEpoch(1)
             .setReplicas(replicas)
-            .setDirectories(DirectoryId.unassignedArray(replicas.length))
-            .build();
-        return partition.makeFollower(partitionRegistration, true, offsetCheckpoints, topicId, Option.empty());
+            .setIsNew(true);
+        return partition.makeFollower(partitionState, offsetCheckpoints, topicId, Option.empty());
     }
 }

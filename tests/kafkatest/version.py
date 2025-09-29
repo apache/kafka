@@ -62,6 +62,9 @@ class KafkaVersion(LooseVersion):
 
         return LooseVersion._cmp(self, other)
 
+    def acl_command_supports_bootstrap_server(self):
+        return self >= V_2_1_0
+
     def topic_command_supports_bootstrap_server(self):
         return self >= V_2_3_0
 
@@ -97,27 +100,6 @@ class KafkaVersion(LooseVersion):
     def supports_feature_command(self):
         return self >= V_3_8_0
 
-    def supports_command_config(self):
-        # According to KIP-1147, --producer.config and --consumer.config have been deprecated and will be removed in future versions
-        # For backward compatibility, we select the configuration based on node version:
-        # - For versions 4.2.0 and above, use --command-config
-        # - For older versions, continue using --producer.config or --consumer.config
-        return self >= V_4_2_0
-
-    def supports_command_property(self):
-        # According to KIP-1147, --producer-property and --consumer-property have been deprecated and will be removed in future versions
-        # For backward compatibility, we select the configuration based on node version:
-        # - For versions 4.2.0 and above, use --command-property
-        # - For older versions, continue using --producer-property or --consumer-property
-        return self >= V_4_2_0
-
-    def supports_formatter_property(self):
-        # According to KIP-1147, --property has been deprecated and will be removed in future versions
-        # For backward compatibility, we select the configuration based on node version:
-        # - For versions 4.2.0 and above, use --formatter-property
-        # - For older versions, continue using --property
-        return self >= V_4_2_0
-
 def get_version(node=None):
     """Return the version attached to the given node.
     Default to DEV_BRANCH if node or node.version is undefined (aka None)
@@ -128,11 +110,27 @@ def get_version(node=None):
         return DEV_BRANCH
 
 DEV_BRANCH = KafkaVersion("dev")
-DEV_VERSION = KafkaVersion("4.2.0-SNAPSHOT")
+DEV_VERSION = KafkaVersion("4.0.0-SNAPSHOT")
 
 LATEST_STABLE_TRANSACTION_VERSION = 2
 # This should match the LATEST_PRODUCTION version defined in MetadataVersion.java
-LATEST_STABLE_METADATA_VERSION = "4.1-IV1"
+LATEST_STABLE_METADATA_VERSION = "4.0-IV3"
+
+# 0.11.0.x versions
+V_0_11_0_3 = KafkaVersion("0.11.0.3")
+LATEST_0_11 = V_0_11_0_3
+
+# 1.0.x versions
+V_1_0_2 = KafkaVersion("1.0.2")
+LATEST_1_0 = V_1_0_2
+
+# 1.1.x versions
+V_1_1_1 = KafkaVersion("1.1.1")
+LATEST_1_1 = V_1_1_1
+
+# 2.0.x versions
+V_2_0_1 = KafkaVersion("2.0.1")
+LATEST_2_0 = V_2_0_1
 
 # 2.1.x versions
 V_2_1_0 = KafkaVersion("2.1.0")
@@ -234,17 +232,8 @@ LATEST_3_8 = V_3_8_1
 
 # 3.9.x version
 V_3_9_0 = KafkaVersion("3.9.0")
-V_3_9_1 = KafkaVersion("3.9.1")
-LATEST_3_9 = V_3_9_1
+LATEST_3_9 = V_3_9_0
 
 # 4.0.x version
 V_4_0_0 = KafkaVersion("4.0.0")
 LATEST_4_0 = V_4_0_0
-
-# 4.1.x version
-V_4_1_0 = KafkaVersion("4.1.0")
-LATEST_4_1 = V_4_1_0
-
-# 4.2.x version
-V_4_2_0 = KafkaVersion("4.2.0")
-LATEST_4_2 = V_4_2_0

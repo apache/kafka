@@ -29,7 +29,9 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.LinkedHashMap;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -41,13 +43,13 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 @Timeout(value = 40)
 public class ControllerRegistrationTest {
     static <K, V> Map<K, V> doubleMap(K k1, V v1, K k2, V v2) {
-        LinkedHashMap<K, V> map = new LinkedHashMap<>();
+        HashMap<K, V> map = new HashMap<>();
         map.put(k1, v1);
         map.put(k2, v2);
-        return map;
+        return Collections.unmodifiableMap(map);
     }
 
-    private static final List<ControllerRegistration> REGISTRATIONS = List.of(
+    private static final List<ControllerRegistration> REGISTRATIONS = Arrays.asList(
         new ControllerRegistration.Builder().
             setId(0).
             setIncarnationId(Uuid.fromString("ycRmGrOFQru7HXf6fOybZQ")).
@@ -55,7 +57,7 @@ public class ControllerRegistrationTest {
             setListeners(doubleMap(
                 "PLAINTEXT", new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9107),
                 "SSL", new Endpoint("SSL", SecurityProtocol.SSL, "localhost", 9207))).
-            setSupportedFeatures(Map.of(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 10))).
+            setSupportedFeatures(Collections.singletonMap(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 10))).
             build(),
         new ControllerRegistration.Builder().
             setId(1).
@@ -64,7 +66,7 @@ public class ControllerRegistrationTest {
             setListeners(doubleMap(
                 "PLAINTEXT", new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9108),
                 "SSL", new Endpoint("SSL", SecurityProtocol.SSL, "localhost", 9208))).
-            setSupportedFeatures(Map.of(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 10))).
+            setSupportedFeatures(Collections.singletonMap(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 10))).
             build(),
         new ControllerRegistration.Builder().
             setId(2).
@@ -73,7 +75,7 @@ public class ControllerRegistrationTest {
             setListeners(doubleMap(
                 "PLAINTEXT", new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9109),
                 "SSL", new Endpoint("SSL", SecurityProtocol.SSL, "localhost", 9209))).
-            setSupportedFeatures(Map.of(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 10))).
+            setSupportedFeatures(Collections.singletonMap(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 10))).
             build()
     );
 

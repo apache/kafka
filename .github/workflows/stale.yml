@@ -35,6 +35,22 @@ permissions:
   pull-requests: write
 
 jobs:
+  needs-attention:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          debug-only: ${{ inputs.dryRun || false }}
+          operations-per-run: ${{ inputs.operationsPerRun || 500 }}
+          days-before-stale: 7
+          days-before-close: -1
+          ignore-pr-updates: true
+          only-pr-labels: 'triage'
+          stale-pr-label: 'needs-attention'
+          stale-pr-message: |
+            A label of 'needs-attention' was automatically added to this PR in order to raise the
+            attention of the committers. Once this issue has been triaged, the `triage` label
+            should be removed to prevent this automation from happening again.
   stale:
     runs-on: ubuntu-latest
     steps:

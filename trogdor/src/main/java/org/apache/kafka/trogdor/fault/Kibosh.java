@@ -29,6 +29,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeMap;
@@ -122,7 +123,7 @@ public final class Kibosh {
         private final List<KiboshFaultSpec> faults;
 
         public static final KiboshControlFile EMPTY =
-            new KiboshControlFile(List.of());
+            new KiboshControlFile(Collections.emptyList());
 
         public static KiboshControlFile read(Path controlPath) throws IOException {
             byte[] controlFileBytes = Files.readAllBytes(controlPath);

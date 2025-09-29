@@ -21,14 +21,16 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.server.common.Feature;
-import org.apache.kafka.server.common.KRaftVersion;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.InetSocketAddress;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -46,7 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public final class VoterSetTest {
     @Test
     void testEmptyVoterSet() {
-        assertEquals(VoterSet.empty(), VoterSet.fromMap(Map.of()));
+        assertEquals(VoterSet.empty(), VoterSet.fromMap(Collections.emptyMap()));
     }
 
     @Test
@@ -83,7 +85,7 @@ public final class VoterSetTest {
     @Test
     void testVoterIds() {
         VoterSet voterSet = VoterSet.fromMap(voterMap(IntStream.of(1, 2, 3), true));
-        assertEquals(Set.of(1, 2, 3), voterSet.voterIds());
+        assertEquals(new HashSet<>(Arrays.asList(1, 2, 3)), voterSet.voterIds());
     }
 
     @Test
@@ -127,7 +129,7 @@ public final class VoterSetTest {
         VoterSet.VoterNode newVoter3 = VoterSet.VoterNode.of(
             voter3.voterKey(),
             Endpoints.fromInetSocketAddresses(
-                Map.of(
+                Collections.singletonMap(
                     ListenerName.normalised("ABC"),
                     InetSocketAddress.createUnresolved("abc", 1234)
                 )
@@ -143,34 +145,6 @@ public final class VoterSetTest {
         );
     }
 
-    @Test
-    void testUpdateVoterIgnoringDirectoryId() {
-        Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(IntStream.of(1, 2, 3), false);
-        VoterSet voterSet = VoterSet.fromMap(new HashMap<>(aVoterMap));
-
-        // Cannot override node id not contianed in the voter set
-        assertEquals(Optional.empty(), voterSet.updateVoterIgnoringDirectoryId(voterNode(4, true)));
-
-        // Test that it can override voter set with different directory ids
-        VoterSet.VoterNode newVoter3 = voterNode(3, true);
-        assertNotEquals(aVoterMap.get(3).voterKey(), newVoter3.voterKey());
-        aVoterMap.put(3, newVoter3);
-
-        assertEquals(
-            Optional.of(VoterSet.fromMap(new HashMap<>(aVoterMap))),
-            voterSet.updateVoterIgnoringDirectoryId(newVoter3)
-        );
-
-        // Test that it can continue to override voter set with different directory ids
-        newVoter3 = voterNode(3, true);
-        assertNotEquals(aVoterMap.get(3).voterKey(), newVoter3.voterKey());
-        aVoterMap.put(3, newVoter3);
-
-        assertEquals(
-            Optional.of(VoterSet.fromMap(new HashMap<>(aVoterMap))),
-            voterSet.updateVoterIgnoringDirectoryId(newVoter3)
-        );
-    }
 
     @Test
     void testCannotRemoveToEmptyVoterSet() {
@@ -308,7 +282,7 @@ public final class VoterSetTest {
     }
 
     @Test
-    void testNonOverlappingMajority() {
+    void testNonoverlappingMajority() {
         Map<Integer, VoterSet.VoterNode> startingVoterMap = voterMap(IntStream.of(1, 2, 3, 4, 5), true);
         VoterSet startingVoterSet = voterSet(startingVoterMap);
 
@@ -339,17 +313,6 @@ public final class VoterSetTest {
             .addVoter(voterNode(2, true))
             .get();
         assertMajorities(false, startingVoterSet, replacedVoterSet);
-    }
-
-    @Test
-    void testSupportsVersion() {
-        VoterSet voterSet = voterSet(voterMap(IntStream.of(1, 2, 3), false));
-        assertTrue(voterSet.supportsVersion(KRaftVersion.KRAFT_VERSION_0));
-        assertFalse(voterSet.supportsVersion(KRaftVersion.KRAFT_VERSION_1));
-
-        voterSet = voterSet(voterMap(IntStream.of(1, 2, 3), true));
-        assertTrue(voterSet.supportsVersion(KRaftVersion.KRAFT_VERSION_0));
-        assertTrue(voterSet.supportsVersion(KRaftVersion.KRAFT_VERSION_1));
     }
 
     private void assertMajorities(boolean overlap, VoterSet a, VoterSet b) {
@@ -399,7 +362,7 @@ public final class VoterSetTest {
         return voterNode(
             replicaKey,
             Endpoints.fromInetSocketAddresses(
-                Map.of(
+                Collections.singletonMap(
                     DEFAULT_LISTENER_NAME,
                     InetSocketAddress.createUnresolved(
                         "localhost",
@@ -411,11 +374,11 @@ public final class VoterSetTest {
     }
 
     public static VoterSet.VoterNode voterNode(ReplicaKey replicaKey, Endpoints endpoints) {
-        var supportedVersionRange = replicaKey.directoryId().isEmpty() ?
-            new SupportedVersionRange((short) 0) :
-            Feature.KRAFT_VERSION.supportedVersionRange();
-
-        return new VoterSet.VoterNode(replicaKey, endpoints, supportedVersionRange);
+        return new VoterSet.VoterNode(
+            replicaKey,
+            endpoints,
+            Feature.KRAFT_VERSION.supportedVersionRange()
+        );
     }
 
     public static VoterSet voterSet(Map<Integer, VoterSet.VoterNode> voters) {

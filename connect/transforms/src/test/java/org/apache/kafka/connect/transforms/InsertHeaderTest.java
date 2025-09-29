@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import java.util.HashMap;
 import java.util.Map;
 
+import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -104,8 +105,8 @@ public class InsertHeaderTest {
     }
 
     private SourceRecord sourceRecord(ConnectHeaders headers) {
-        Map<String, ?> sourcePartition = Map.of("foo", "bar");
-        Map<String, ?> sourceOffset = Map.of("baz", "quxx");
+        Map<String, ?> sourcePartition = singletonMap("foo", "bar");
+        Map<String, ?> sourceOffset = singletonMap("baz", "quxx");
         String topic = "topic";
         Integer partition = 0;
         Schema keySchema = null;

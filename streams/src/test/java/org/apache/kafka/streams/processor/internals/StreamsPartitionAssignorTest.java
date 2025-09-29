@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
@@ -893,8 +894,8 @@ public class StreamsPartitionAssignorTest {
         // then metadata gets populated
         assignments = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
         // check assigned partitions
-        assertEquals(Set.of(t1p0, t2p0, t1p1, t2p1, t1p2, t2p2),
-                     new HashSet<>(assignments.get("consumer10").partitions()));
+        assertEquals(Set.of(new HashSet<>(List.of(t1p0, t2p0, t1p0, t2p0, t1p1, t2p1, t1p2, t2p2))),
+                     Set.of(new HashSet<>(assignments.get("consumer10").partitions())));
 
         // the first consumer
         info10 = checkAssignment(allTopics, assignments.get("consumer10"));
@@ -2622,7 +2623,7 @@ public class StreamsPartitionAssignorTest {
         builder = new CorruptedInternalTopologyBuilder();
         topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configProps(parameterizedConfig)));
 
-        final InternalStreamsBuilder streamsBuilder = new InternalStreamsBuilder(builder, false);
+        final InternalStreamsBuilder streamsBuilder = new InternalStreamsBuilder(builder);
 
         final KStream<String, String> inputTopic = streamsBuilder.stream(singleton("topic1"), new ConsumedInternal<>(Consumed.with(null, null)));
         final KTable<String, String> inputTable = streamsBuilder.table("topic2", new ConsumedInternal<>(Consumed.with(null, null)), new MaterializedInternal<>(Materialized.as("store")));
@@ -2817,6 +2818,23 @@ public class StreamsPartitionAssignorTest {
         }
         return changelogEndOffsets;
     }
+
+    private static Map<String, TopicDescription> getTopicDescriptionMap(final List<String> changelogTopics,
+                                                                        final List<List<TopicPartitionInfo>> topicPartitionInfos) {
+        if (changelogTopics.size() != topicPartitionInfos.size()) {
+            throw new IllegalStateException("Passed in " + changelogTopics.size() + " changelog topic names, but " +
+                topicPartitionInfos.size() + " different topicPartitionInfo for the topics");
+        }
+        final Map<String, TopicDescription> changeLogTopicDescriptions = new HashMap<>();
+        for (int i = 0; i < changelogTopics.size(); i++) {
+            final String topic = changelogTopics.get(i);
+            final List<TopicPartitionInfo> topicPartitionInfo = topicPartitionInfos.get(i);
+            changeLogTopicDescriptions.put(topic, new TopicDescription(topic, false, topicPartitionInfo));
+        }
+
+        return changeLogTopicDescriptions;
+    }
+
 
     private static SubscriptionInfo getInfoForOlderVersion(final int version,
                                                            final ProcessId processId,

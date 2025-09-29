@@ -42,6 +42,12 @@ public abstract class RemotePartitionMetadataEventHandler {
 
     protected abstract void handleRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata);
 
+    public void syncLogMetadataSnapshot(TopicIdPartition topicIdPartition,
+                                        int metadataPartition,
+                                        Long metadataPartitionOffset) {
+        // no-op by default
+    }
+
     public abstract void clearTopicPartition(TopicIdPartition topicIdPartition);
 
     public abstract void markInitialized(TopicIdPartition partition);

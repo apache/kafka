@@ -23,7 +23,6 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.server.common.FinalizedFeatures;
-import org.apache.kafka.server.fault.FaultHandler;
 
 import org.slf4j.Logger;
 
@@ -32,15 +31,12 @@ import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 
 public class FeaturesPublisher implements MetadataPublisher {
     private final Logger log;
-    private final FaultHandler faultHandler;
     private volatile FinalizedFeatures finalizedFeatures = FinalizedFeatures.fromKRaftVersion(MINIMUM_VERSION);
 
     public FeaturesPublisher(
-        LogContext logContext,
-        FaultHandler faultHandler
+        LogContext logContext
     ) {
-        this.log = logContext.logger(FeaturesPublisher.class);
-        this.faultHandler = faultHandler;
+        log = logContext.logger(FeaturesPublisher.class);
     }
 
     public FinalizedFeatures features() {
@@ -58,20 +54,15 @@ public class FeaturesPublisher implements MetadataPublisher {
         MetadataImage newImage,
         LoaderManifest manifest
     ) {
-        try {
-            if (delta.featuresDelta() != null) {
-                FinalizedFeatures newFinalizedFeatures = new FinalizedFeatures(newImage.features().metadataVersionOrThrow(),
+        if (delta.featuresDelta() != null) {
+            FinalizedFeatures newFinalizedFeatures = new FinalizedFeatures(newImage.features().metadataVersionOrThrow(),
                     newImage.features().finalizedVersions(),
-                    newImage.provenance().lastContainedOffset()
-                );
-                if (!newFinalizedFeatures.equals(finalizedFeatures)) {
-                    log.info("Loaded new metadata {}.", newFinalizedFeatures);
-                    finalizedFeatures = newFinalizedFeatures;
-                }
+                    newImage.provenance().lastContainedOffset(),
+                    true);
+            if (!newFinalizedFeatures.equals(finalizedFeatures)) {
+                log.info("Loaded new metadata {}.", newFinalizedFeatures);
+                finalizedFeatures = newFinalizedFeatures;
             }
-        } catch (Throwable t) {
-            faultHandler.handleFault("Uncaught exception while publishing SCRAM changes from MetadataDelta up to "
-                + newImage.highestOffsetAndEpoch().offset(), t);
         }
     }
 }

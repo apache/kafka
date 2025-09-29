@@ -36,7 +36,7 @@ public class OffsetMapTest {
         SkimpyOffsetMap map = new SkimpyOffsetMap(items * 48);
         IntStream.range(0, items).forEach(i -> assertDoesNotThrow(() -> map.put(key(i), i)));
         for (int i = 0; i < items; i++) {
-            assertEquals(i, map.get(key(i)));
+            assertEquals(map.get(key(i)), i);
         }
     }
 
@@ -45,7 +45,7 @@ public class OffsetMapTest {
         SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE);
         IntStream.range(0, 10).forEach(i -> assertDoesNotThrow(() -> map.put(key(i), i)));
         for (int i = 0; i < 10; i++) {
-            assertEquals(i, map.get(key(i)));
+            assertEquals(map.get(key(i)), i);
         }
         map.clear();
         for (int i = 0; i < 10; i++) {
@@ -61,8 +61,8 @@ public class OffsetMapTest {
             map.put(key(i), i);
             i++;
         }
-        assertEquals(-1, map.get(key(i)));
-        assertEquals(i - 1, map.get(key(i - 1)));
+        assertEquals(map.get(key(i)), -1);
+        assertEquals(map.get(key(i - 1)), i - 1);
     }
 
     @Test
@@ -74,9 +74,9 @@ public class OffsetMapTest {
             i++;
         }
         int lastOffsets = 40;
-        assertEquals(i - 1, map.get(key(i - 1)));
+        assertEquals(map.get(key(i - 1)), i - 1);
         map.updateLatestOffset(lastOffsets);
-        assertEquals(lastOffsets, map.get(key(lastOffsets)));
+        assertEquals(map.get(key(lastOffsets)), lastOffsets);
     }
 
     @Test
@@ -87,17 +87,17 @@ public class OffsetMapTest {
             map.put(key(i), i);
             i++;
         }
-        assertEquals(i - 1, map.latestOffset());
+        assertEquals(map.latestOffset(), i - 1);
     }
     
     @Test
     public void testUtilization() throws Exception {
         SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE);
         int i = 37;
-        assertEquals(0.0, map.utilization());
+        assertEquals(map.utilization(), 0.0);
         while (map.size() < map.slots()) {
             map.put(key(i), i);
-            assertEquals((double) map.size() / map.slots(), map.utilization());
+            assertEquals(map.utilization(), (double) map.size() / map.slots());
             i++;
         }
     }

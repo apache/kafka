@@ -121,8 +121,8 @@ class KafkaProducerMetricsTest {
 
     private void assertMetricValue(final String name) {
         assertEquals(
-            (double) METRIC_VALUE,
-            metrics.metric(metrics.metricName(name, KafkaProducerMetrics.GROUP)).metricValue()
+            metrics.metric(metrics.metricName(name, KafkaProducerMetrics.GROUP)).metricValue(),
+            (double) METRIC_VALUE
         );
     }
 }

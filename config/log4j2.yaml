@@ -44,7 +44,7 @@ Configuration:
       # State Change appender
       - name: StateChangeAppender
         fileName: "${sys:kafka.logs.dir}/state-change.log"
-        filePattern: "${sys:kafka.logs.dir}/state-change.log.%d{yyyy-MM-dd-HH}"
+        filePattern: "${sys:kafka.logs.dir}/stage-change.log.%d{yyyy-MM-dd-HH}"
         PatternLayout:
           pattern: "${logPattern}"
         TimeBasedTriggeringPolicy:
@@ -133,17 +133,7 @@ Configuration:
         AppenderRef:
           ref: ControllerAppender
       # LogCleaner logger
-      - name: org.apache.kafka.storage.internals.log.LogCleaner
-        level: INFO
-        additivity: false
-        AppenderRef:
-          ref: CleanerAppender
-      - name: org.apache.kafka.storage.internals.log.LogCleaner$CleanerThread
-        level: INFO
-        additivity: false
-        AppenderRef:
-          ref: CleanerAppender
-      - name: org.apache.kafka.storage.internals.log.Cleaner
+      - name: kafka.log.LogCleaner
         level: INFO
         additivity: false
         AppenderRef:

@@ -25,7 +25,7 @@ import org.apache.kafka.common.metrics.stats.Max;
 
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRICS_SUFFIX;
 
 public class KafkaShareConsumerMetrics implements AutoCloseable {
     private final Metrics metrics;
@@ -36,9 +36,9 @@ public class KafkaShareConsumerMetrics implements AutoCloseable {
     private long pollStartMs;
     private long timeSinceLastPollMs;
 
-    public KafkaShareConsumerMetrics(Metrics metrics) {
+    public KafkaShareConsumerMetrics(Metrics metrics, String metricGrpPrefix) {
         this.metrics = metrics;
-        final String metricGroupName = CONSUMER_SHARE_METRIC_GROUP;
+        final String metricGroupName = metricGrpPrefix + CONSUMER_METRICS_SUFFIX;
         Measurable lastPoll = (mConfig, now) -> {
             if (lastPollMs == 0L)
                 // if no poll is ever triggered, just return -1.

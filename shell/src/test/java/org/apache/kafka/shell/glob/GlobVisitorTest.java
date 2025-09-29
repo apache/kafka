@@ -25,7 +25,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -103,7 +105,7 @@ public class GlobVisitorTest {
 
         @Override
         public void accept(Optional<MetadataNodeInfo> info) {
-            if (infos.isEmpty()) {
+            if (!infos.isPresent()) {
                 if (info.isPresent()) {
                     infos = Optional.of(new ArrayList<>());
                     infos.get().add(info.get());
@@ -125,7 +127,7 @@ public class GlobVisitorTest {
         InfoConsumer consumer = new InfoConsumer();
         GlobVisitor visitor = new GlobVisitor("*", consumer);
         visitor.accept(DATA);
-        assertEquals(Optional.of(List.of(
+        assertEquals(Optional.of(Arrays.asList(
             new MetadataNodeInfo(new String[] {"foo", "a"},
                 DATA.root().child("foo").child("a")),
             new MetadataNodeInfo(new String[] {"foo", "beta"},
@@ -137,7 +139,7 @@ public class GlobVisitorTest {
         InfoConsumer consumer = new InfoConsumer();
         GlobVisitor visitor = new GlobVisitor("..", consumer);
         visitor.accept(DATA);
-        assertEquals(Optional.of(List.of(
+        assertEquals(Optional.of(Collections.singletonList(
             new MetadataNodeInfo(new String[0], DATA.root()))), consumer.infos);
     }
 
@@ -146,7 +148,7 @@ public class GlobVisitorTest {
         InfoConsumer consumer = new InfoConsumer();
         GlobVisitor visitor = new GlobVisitor("../..", consumer);
         visitor.accept(DATA);
-        assertEquals(Optional.of(List.of(
+        assertEquals(Optional.of(Collections.singletonList(
             new MetadataNodeInfo(new String[0], DATA.root()))), consumer.infos);
     }
 
@@ -155,7 +157,7 @@ public class GlobVisitorTest {
         InfoConsumer consumer = new InfoConsumer();
         GlobVisitor visitor = new GlobVisitor("../z*", consumer);
         visitor.accept(DATA);
-        assertEquals(Optional.of(List.of(
+        assertEquals(Optional.of(Arrays.asList(
             new MetadataNodeInfo(new String[] {"zeta"},
                 DATA.root().child("zeta")),
             new MetadataNodeInfo(new String[] {"zzz"},
@@ -167,7 +169,7 @@ public class GlobVisitorTest {
         InfoConsumer consumer = new InfoConsumer();
         GlobVisitor visitor = new GlobVisitor("../*/{beta,theta}", consumer);
         visitor.accept(DATA);
-        assertEquals(Optional.of(List.of(
+        assertEquals(Optional.of(Arrays.asList(
             new MetadataNodeInfo(new String[] {"alpha", "beta"},
                 DATA.root().child("alpha").child("beta")),
             new MetadataNodeInfo(new String[] {"alpha", "theta"},
@@ -189,7 +191,7 @@ public class GlobVisitorTest {
         InfoConsumer consumer = new InfoConsumer();
         GlobVisitor visitor = new GlobVisitor("/a?pha", consumer);
         visitor.accept(DATA);
-        assertEquals(Optional.of(List.of(
+        assertEquals(Optional.of(Collections.singletonList(
             new MetadataNodeInfo(new String[]{"alpha"},
                 DATA.root().child("alpha")))), consumer.infos);
     }

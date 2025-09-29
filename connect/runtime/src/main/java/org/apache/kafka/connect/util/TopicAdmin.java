@@ -56,6 +56,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -72,8 +73,8 @@ import java.util.stream.Collectors;
  */
 public class TopicAdmin implements AutoCloseable {
 
-    public static final TopicCreationResponse EMPTY_CREATION = new TopicCreationResponse(Set.of(), Set.of());
-    private static final List<Class<? extends Exception>> CAUSES_TO_RETRY_TOPIC_CREATION = List.of(
+    public static final TopicCreationResponse EMPTY_CREATION = new TopicCreationResponse(Collections.emptySet(), Collections.emptySet());
+    private static final List<Class<? extends Exception>> CAUSES_TO_RETRY_TOPIC_CREATION = Arrays.asList(
             InvalidReplicationFactorException.class,
             TimeoutException.class);
 
@@ -83,8 +84,8 @@ public class TopicAdmin implements AutoCloseable {
         private final Set<String> existing;
 
         public TopicCreationResponse(Set<String> createdTopicNames, Set<String> existingTopicNames) {
-            this.created = Set.copyOf(createdTopicNames);
-            this.existing = Set.copyOf(existingTopicNames);
+            this.created = Collections.unmodifiableSet(createdTopicNames);
+            this.existing = Collections.unmodifiableSet(existingTopicNames);
         }
 
         public Set<String> createdTopics() {
@@ -472,12 +473,12 @@ public class TopicAdmin implements AutoCloseable {
      */
     public Map<String, TopicDescription> describeTopics(String... topics) {
         if (topics == null) {
-            return Map.of();
+            return Collections.emptyMap();
         }
         String topicNameList = String.join(", ", topics);
 
         Map<String, KafkaFuture<TopicDescription>> newResults =
-                admin.describeTopics(List.of(topics), new DescribeTopicsOptions()).topicNameValues();
+                admin.describeTopics(Arrays.asList(topics), new DescribeTopicsOptions()).topicNameValues();
 
         // Iterate over each future so that we can handle individual failures like when some topics don't exist
         Map<String, TopicDescription> existingTopics = new HashMap<>();
@@ -535,7 +536,7 @@ public class TopicAdmin implements AutoCloseable {
                       + "describe topic configurations.", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
             return false;
         }
-        Set<String> expectedPolicies = Set.of(TopicConfig.CLEANUP_POLICY_COMPACT);
+        Set<String> expectedPolicies = Collections.singleton(TopicConfig.CLEANUP_POLICY_COMPACT);
         if (!cleanupPolicies.equals(expectedPolicies)) {
             String expectedPolicyStr = String.join(",", expectedPolicies);
             String cleanupPolicyStr = String.join(",", cleanupPolicies);
@@ -565,7 +566,7 @@ public class TopicAdmin implements AutoCloseable {
         if (topicConfig == null) {
             // The topic must not exist
             log.debug("Unable to find topic '{}' when getting cleanup policy", topic);
-            return Set.of();
+            return Collections.emptySet();
         }
         ConfigEntry entry = topicConfig.get(CLEANUP_POLICY_CONFIG);
         if (entry != null && entry.value() != null) {
@@ -580,7 +581,7 @@ public class TopicAdmin implements AutoCloseable {
         // This is unexpected, as the topic config should include the cleanup.policy even if
         // the topic settings don't override the broker's log.cleanup.policy. But just to be safe.
         log.debug("Found no cleanup.policy for topic '{}'", topic);
-        return Set.of();
+        return Collections.emptySet();
     }
 
     /**
@@ -619,7 +620,7 @@ public class TopicAdmin implements AutoCloseable {
      */
     public Map<String, Config> describeTopicConfigs(String... topicNames) {
         if (topicNames == null) {
-            return Map.of();
+            return Collections.emptyMap();
         }
         Collection<String> topics = Arrays.stream(topicNames)
                                           .filter(Objects::nonNull)
@@ -627,7 +628,7 @@ public class TopicAdmin implements AutoCloseable {
                                           .filter(s -> !s.isEmpty())
                                           .collect(Collectors.toList());
         if (topics.isEmpty()) {
-            return Map.of();
+            return Collections.emptyMap();
         }
         String topicNameList = String.join(", ", topics);
         Collection<ConfigResource> resources = topics.stream()
@@ -685,7 +686,7 @@ public class TopicAdmin implements AutoCloseable {
      */
     public Map<TopicPartition, Long> endOffsets(Set<TopicPartition> partitions) {
         if (partitions == null || partitions.isEmpty()) {
-            return Map.of();
+            return Collections.emptyMap();
         }
         Map<TopicPartition, OffsetSpec> offsetSpecMap = partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()));
         ListOffsetsResult resultFuture = admin.listOffsets(offsetSpecMap, new ListOffsetsOptions(IsolationLevel.READ_UNCOMMITTED));

@@ -31,6 +31,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -93,7 +94,7 @@ public class VerifiableSourceTask extends SourceTask {
             throw new ConnectException("Invalid VerifiableSourceTask configuration", e);
         }
 
-        partition = Map.of(ID_FIELD, id);
+        partition = Collections.singletonMap(ID_FIELD, id);
         Map<String, Object> previousOffset = this.context.offsetStorageReader().offset(partition);
         if (previousOffset != null)
             seqno = (Long) previousOffset.get(SEQNO_FIELD) + 1;
@@ -128,11 +129,11 @@ public class VerifiableSourceTask extends SourceTask {
         }
         System.out.println(dataJson);
 
-        Map<String, Long> ccOffset = Map.of(SEQNO_FIELD, seqno);
+        Map<String, Long> ccOffset = Collections.singletonMap(SEQNO_FIELD, seqno);
         Schema valueSchema = completeRecordData ? COMPLETE_VALUE_SCHEMA : Schema.INT64_SCHEMA;
         Object value = completeRecordData ? completeValue(data) : seqno;
         SourceRecord srcRecord = new SourceRecord(partition, ccOffset, topic, Schema.INT32_SCHEMA, id, valueSchema, value);
-        List<SourceRecord> result = List.of(srcRecord);
+        List<SourceRecord> result = Collections.singletonList(srcRecord);
         seqno++;
         return result;
     }

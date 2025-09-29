@@ -19,8 +19,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
+
+import java.nio.ByteBuffer;
 
 public class BrokerHeartbeatRequest extends AbstractRequest {
 
@@ -63,8 +65,8 @@ public class BrokerHeartbeatRequest extends AbstractRequest {
                 .setErrorCode(error.code()));
     }
 
-    public static BrokerHeartbeatRequest parse(Readable readable, short version) {
-        return new BrokerHeartbeatRequest(new BrokerHeartbeatRequestData(readable, version),
+    public static BrokerHeartbeatRequest parse(ByteBuffer buffer, short version) {
+        return new BrokerHeartbeatRequest(new BrokerHeartbeatRequestData(new ByteBufferAccessor(buffer), version),
                 version);
     }
 }

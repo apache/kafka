@@ -33,7 +33,6 @@ public class ReplicaInfo {
 
     /**
      * The total size of the log segments in this replica in bytes.
-     * This value does not include the size of data stored in remote storage.
      */
     public long size() {
         return size;

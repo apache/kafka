@@ -32,11 +32,10 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
-import org.apache.maven.artifact.versioning.VersionRange;
-
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * <p>
@@ -323,8 +322,6 @@ public interface Herder {
      */
     List<ConfigKeyInfo> connectorPluginConfig(String pluginName);
 
-    List<ConfigKeyInfo> connectorPluginConfig(String pluginName, VersionRange version);
-
     /**
      * Get the current offsets for a connector.
      * @param connName the name of the connector whose offsets are to be retrieved
@@ -380,17 +377,40 @@ public interface Herder {
      */
     void setClusterLoggerLevel(String namespace, String level);
 
-    /**
-     * Get the ConnectMetrics from the worker for this herder
-     * @return the ConnectMetrics
-     */
-    ConnectMetrics connectMetrics();
-
     enum ConfigReloadAction {
         NONE,
         RESTART
     }
 
-    record Created<T>(boolean created, T result) {
+    class Created<T> {
+        private final boolean created;
+        private final T result;
+
+        public Created(boolean created, T result) {
+            this.created = created;
+            this.result = result;
+        }
+
+        public boolean created() {
+            return created;
+        }
+
+        public T result() {
+            return result;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Created<?> created1 = (Created<?>) o;
+            return Objects.equals(created, created1.created) &&
+                    Objects.equals(result, created1.result);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(created, result);
+        }
     }
 }

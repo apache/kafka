@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.util.ArrayList;
@@ -36,11 +35,8 @@ public class Acknowledgements {
     // The acknowledgements keyed by offset. If the record is a gap, the AcknowledgeType will be null.
     private final Map<Long, AcknowledgeType> acknowledgements;
 
-    // When the broker responds to the acknowledgements, this is the exception thrown.
-    private KafkaException acknowledgeException;
-
-    // Set when the broker has responded to the acknowledgements.
-    private boolean completed;
+    // When the broker responds to the acknowledgements, this is the error code returned.
+    private Errors acknowledgeErrorCode;
 
     public static Acknowledgements empty() {
         return new Acknowledgements(new TreeMap<>());
@@ -48,8 +44,6 @@ public class Acknowledgements {
 
     private Acknowledgements(Map<Long, AcknowledgeType> acknowledgements) {
         this.acknowledgements = acknowledgements;
-        this.acknowledgeException = null;
-        this.completed = false;
     }
 
     /**
@@ -121,26 +115,25 @@ public class Acknowledgements {
      * @return Whether the acknowledgements were sent to the broker and a response received
      */
     public boolean isCompleted() {
-        return completed;
+        return acknowledgeErrorCode != null;
     }
 
     /**
-     * Completes the acknowledgements when the response has been received from the broker.
+     * Set the acknowledgement error code when the response has been received from the broker.
      *
-     * @param acknowledgeException the exception (will be null if successful)
+     * @param acknowledgeErrorCode the error code
      */
-    public void complete(KafkaException acknowledgeException) {
-        this.acknowledgeException = acknowledgeException;
-        completed = true;
+    public void setAcknowledgeErrorCode(Errors acknowledgeErrorCode) {
+        this.acknowledgeErrorCode = acknowledgeErrorCode;
     }
 
     /**
-     * Get the acknowledgement exception when the response has been received from the broker.
+     * Get the acknowledgement error code when the response has been received from the broker.
      *
      * @return the error code
      */
-    public KafkaException getAcknowledgeException() {
-        return acknowledgeException;
+    public Errors getAcknowledgeErrorCode() {
+        return acknowledgeErrorCode;
     }
 
     /**
@@ -185,7 +178,7 @@ public class Acknowledgements {
                 currentBatch.acknowledgeTypes().add(ACKNOWLEDGE_TYPE_GAP);
             }
         }
-        List<AcknowledgementBatch> optimalBatches = maybeOptimiseAcknowledgeTypes(currentBatch);
+        List<AcknowledgementBatch> optimalBatches = maybeOptimiseAcknowledgementTypes(currentBatch);
 
         optimalBatches.forEach(batch -> {
             if (canOptimiseForSingleAcknowledgeType(batch)) {
@@ -204,7 +197,7 @@ public class Acknowledgements {
      */
     private AcknowledgementBatch maybeCreateNewBatch(AcknowledgementBatch currentBatch, Long nextOffset, List<AcknowledgementBatch> batches) {
         if (nextOffset != currentBatch.lastOffset() + 1) {
-            List<AcknowledgementBatch> optimalBatches = maybeOptimiseAcknowledgeTypes(currentBatch);
+            List<AcknowledgementBatch> optimalBatches = maybeOptimiseAcknowledgementTypes(currentBatch);
 
             optimalBatches.forEach(batch -> {
                 if (canOptimiseForSingleAcknowledgeType(batch)) {
@@ -228,7 +221,7 @@ public class Acknowledgements {
      * whose count exceeds the default value. In this case, the batch is split into 2 such that the
      * batch with the continuous records has only 1 acknowledge type in its array.
      */
-    private List<AcknowledgementBatch> maybeOptimiseAcknowledgeTypes(AcknowledgementBatch currentAcknowledgeBatch) {
+    private List<AcknowledgementBatch> maybeOptimiseAcknowledgementTypes(AcknowledgementBatch currentAcknowledgeBatch) {
         List<AcknowledgementBatch> batches = new ArrayList<>();
         if (currentAcknowledgeBatch == null) return batches;
 
@@ -308,10 +301,10 @@ public class Acknowledgements {
     public String toString() {
         StringBuilder sb = new StringBuilder("Acknowledgements(");
         sb.append(acknowledgements);
-        sb.append(", acknowledgeException=");
-        sb.append(acknowledgeException != null ? Errors.forException(acknowledgeException) : "null");
-        sb.append(", completed=");
-        sb.append(completed);
+        if (acknowledgeErrorCode != null) {
+            sb.append(", errorCode=");
+            sb.append(acknowledgeErrorCode.code());
+        }
         sb.append(")");
         return sb.toString();
     }

@@ -25,8 +25,11 @@ import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -48,9 +51,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
     private final OptionSpec<Integer> partitionIdOpt;
     private final OptionSpec<String> offsetOpt;
     private final OptionSpec<String> messageFormatterOpt;
-    @Deprecated(since = "4.2", forRemoval = true)
-    private final OptionSpec<String> messageFormatterArgOptDeprecated;
-    private OptionSpec<String> messageFormatterArgOpt;
+    private final OptionSpec<String> messageFormatterArgOpt;
     private final OptionSpec<String> messageFormatterConfigOpt;
     private final OptionSpec<?> resetBeginningOpt;
     private final OptionSpec<Integer> maxMessagesOpt;
@@ -68,10 +69,9 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
     private final long timeoutMs;
     private final MessageFormatter formatter;
 
-    @SuppressWarnings("deprecation")
     public ConsoleConsumerOptions(String[] args) throws IOException {
         super(args);
-        topicOpt = parser.accepts("topic", "The topic to consume from.")
+        topicOpt = parser.accepts("topic", "The topic to consume on.")
                 .withRequiredArg()
                 .describedAs("topic")
                 .ofType(String.class);
@@ -90,23 +90,11 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
                 .describedAs("consume offset")
                 .ofType(String.class)
                 .defaultsTo("latest");
-        @Deprecated(since = "4.2", forRemoval = true)
-        OptionSpec<String> consumerPropertyOpt = parser.accepts("consumer-property", "(DEPRECATED) Consumer config properties in the form key=value. " +
-                        "This option will be removed in a future version. Use --command-property instead.")
+        OptionSpec<String> consumerPropertyOpt = parser.accepts("consumer-property", "A mechanism to pass user-defined properties in the form key=value to the consumer.")
                 .withRequiredArg()
                 .describedAs("consumer_prop")
                 .ofType(String.class);
-        OptionSpec<String> commandPropertyOpt = parser.accepts("command-property", "Consumer config properties in the form key=value.")
-                .withRequiredArg()
-                .describedAs("consumer_prop")
-                .ofType(String.class);
-        @Deprecated(since = "4.2", forRemoval = true) 
-        OptionSpec<String> consumerConfigOpt = parser.accepts("consumer.config", "(DEPRECATED) Consumer config properties file. Note that " + commandPropertyOpt + " takes precedence over this config. " +
-                        "This option will be removed in a future version. Use --command-config instead.")
-                .withRequiredArg()
-                .describedAs("config file")
-                .ofType(String.class);
-        OptionSpec<String> commandConfigOpt = parser.accepts("command-config", "Consumer config properties file. Note that " + commandPropertyOpt + " takes precedence over this config.")
+        OptionSpec<String> consumerConfigOpt = parser.accepts("consumer.config", "Consumer config properties file. Note that " + consumerPropertyOpt + " takes precedence over this config.")
                 .withRequiredArg()
                 .describedAs("config file")
                 .ofType(String.class);
@@ -115,28 +103,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
                 .describedAs("class")
                 .ofType(String.class)
                 .defaultsTo(DefaultMessageFormatter.class.getName());
-        messageFormatterArgOptDeprecated = parser.accepts("property",
-                        "(DEPRECATED) The properties to initialize the message formatter. Default properties include: \n" +
-                            " print.timestamp=true|false\n" +
-                            " print.key=true|false\n" +
-                            " print.offset=true|false\n" +
-                            " print.epoch=true|false\n" +
-                            " print.partition=true|false\n" +
-                            " print.headers=true|false\n" +
-                            " print.value=true|false\n" +
-                            " key.separator=<key.separator>\n" +
-                            " line.separator=<line.separator>\n" +
-                            " headers.separator=<headers.separator>\n" +
-                            " null.literal=<null.literal>\n" +
-                            " key.deserializer=<key.deserializer>\n" +
-                            " value.deserializer=<value.deserializer>\n" +
-                            " header.deserializer=<header.deserializer>\n" +
-                            "\nUsers can also pass in customized properties for their formatter; more specifically, users can pass in properties keyed with 'key.deserializer.', 'value.deserializer.' and 'headers.deserializer.' prefixes to configure their deserializers. " +
-                                "\nThis option will be removed in a future version. Use --formatter-property instead.")
-                .withRequiredArg()
-                .describedAs("prop")
-                .ofType(String.class);
-        messageFormatterArgOpt = parser.accepts("formatter-property",
+        messageFormatterArgOpt = parser.accepts("property",
                         "The properties to initialize the message formatter. Default properties include: \n" +
                             " print.timestamp=true|false\n" +
                             " print.key=true|false\n" +
@@ -147,7 +114,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
                             " print.value=true|false\n" +
                             " key.separator=<key.separator>\n" +
                             " line.separator=<line.separator>\n" +
-                            " headers.separator=<headers.separator>\n" +
+                            " headers.separator=<line.separator>\n" +
                             " null.literal=<null.literal>\n" +
                             " key.deserializer=<key.deserializer>\n" +
                             " value.deserializer=<value.deserializer>\n" +
@@ -176,11 +143,11 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
                 .withRequiredArg()
                 .describedAs("server to connect to")
                 .ofType(String.class);
-        keyDeserializerOpt = parser.accepts("key-deserializer", "The name of the class to use for deserializing keys.")
+        keyDeserializerOpt = parser.accepts("key-deserializer")
                 .withRequiredArg()
-                .describedAs("deserializer for keys")
+                .describedAs("deserializer for key")
                 .ofType(String.class);
-        valueDeserializerOpt = parser.accepts("value-deserializer", "The name of the class to use for deserializing values.")
+        valueDeserializerOpt = parser.accepts("value-deserializer")
                 .withRequiredArg()
                 .describedAs("deserializer for values")
                 .ofType(String.class);
@@ -206,25 +173,11 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
         CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to read data from Kafka topics and outputs it to standard output.");
 
         checkRequiredArgs();
-        if (options.has(consumerPropertyOpt) && options.has(commandPropertyOpt)) {
-            CommandLineUtils.printUsageAndExit(parser, "Options --consumer-property and --command-property cannot be specified together.");
-        }
-        if (options.has(consumerConfigOpt) && options.has(commandConfigOpt)) {
-            CommandLineUtils.printUsageAndExit(parser, "Options --consumer.config and --command-config cannot be specified together.");
-        }
 
-        if (options.has(consumerPropertyOpt)) {
-            System.out.println("Option --consumer-property is deprecated and will be removed in a future version. Use --command-property instead.");
-            commandPropertyOpt = consumerPropertyOpt;
-        }
-        if (options.has(consumerConfigOpt)) {
-            System.out.println("Option --consumer.config is deprecated and will be removed in a future version. Use --command-config instead.");
-            commandConfigOpt = consumerConfigOpt;
-        }
-        Properties consumerPropsFromFile = options.has(commandConfigOpt)
-                ? Utils.loadProps(options.valueOf(commandConfigOpt))
+        Properties consumerPropsFromFile = options.has(consumerConfigOpt)
+                ? Utils.loadProps(options.valueOf(consumerConfigOpt))
                 : new Properties();
-        Properties extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(commandPropertyOpt));
+        Properties extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt));
         Set<String> groupIdsProvided = checkConsumerGroup(consumerPropsFromFile, extraConsumerProps);
         consumerProps = buildConsumerProps(consumerPropsFromFile, extraConsumerProps, groupIdsProvided);
         offset = parseOffset();
@@ -233,8 +186,12 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
     }
 
     private void checkRequiredArgs() {
-        // user need to specify value for either --topic or --include options
-        CommandLineUtils.checkOneOfArgs(parser, options, topicOpt, includeOpt);
+        List<Optional<String>> topicOrFilterArgs = new ArrayList<>(Arrays.asList(topicArg(), includedTopicsArg()));
+        topicOrFilterArgs.removeIf(arg -> !arg.isPresent());
+        // user need to specify value for either --topic or --include options)
+        if (topicOrFilterArgs.size() != 1) {
+            CommandLineUtils.printUsageAndExit(parser, "Exactly one of --include/--topic is required. ");
+        }
 
         if (partitionArg().isPresent()) {
             if (!options.has(topicOpt)) {
@@ -373,13 +330,6 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
             Class<?> messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt));
             formatter = (MessageFormatter) messageFormatterClass.getDeclaredConstructor().newInstance();
 
-            if (options.has(messageFormatterArgOpt) && options.has(messageFormatterArgOptDeprecated)) {
-                CommandLineUtils.printUsageAndExit(parser, "Options --property and --formatter-property cannot be specified together.");
-            }
-            if (options.has(messageFormatterArgOptDeprecated)) {
-                System.out.println("Option --property is deprecated and will be removed in a future version. Use --formatter-property instead.");
-                messageFormatterArgOpt = messageFormatterArgOptDeprecated;
-            }
             Properties formatterArgs = formatterArgs();
             Map<String, String> formatterConfigs = new HashMap<>();
             for (final String name : formatterArgs.stringPropertyNames()) {

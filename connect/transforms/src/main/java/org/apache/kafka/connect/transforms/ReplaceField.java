@@ -31,6 +31,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -55,19 +56,11 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
     }
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(ConfigName.EXCLUDE, 
-                    ConfigDef.Type.LIST, 
-                    List.of(), 
-                    ConfigDef.ValidList.anyNonDuplicateValues(true, false), 
-                    ConfigDef.Importance.MEDIUM,
+            .define(ConfigName.EXCLUDE, ConfigDef.Type.LIST, Collections.emptyList(), ConfigDef.Importance.MEDIUM,
                     "Fields to exclude. This takes precedence over the fields to include.")
-            .define(ConfigName.INCLUDE, 
-                    ConfigDef.Type.LIST, 
-                    List.of(), 
-                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                    ConfigDef.Importance.MEDIUM,
+            .define(ConfigName.INCLUDE, ConfigDef.Type.LIST, Collections.emptyList(), ConfigDef.Importance.MEDIUM,
                     "Fields to include. If specified, only these fields will be used.")
-            .define(ConfigName.RENAMES, ConfigDef.Type.LIST, List.of(),
+            .define(ConfigName.RENAMES, ConfigDef.Type.LIST, Collections.emptyList(),
                 ConfigDef.LambdaValidator.with(
                     (name, value) -> {
                         @SuppressWarnings("unchecked")

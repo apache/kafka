@@ -31,7 +31,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -62,7 +61,6 @@ import org.apache.kafka.streams.processor.internals.GlobalStateUpdateTask;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
@@ -449,6 +447,7 @@ public class TopologyTestDriver implements Closeable {
                 streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG)
             );
             globalStateTask.initialize();
+            globalProcessorContext.setRecordContext(null);
         } else {
             globalStateManager = null;
             globalStateTask = null;
@@ -493,7 +492,6 @@ public class TopologyTestDriver implements Closeable {
                 streamsMetrics,
                 cache
             );
-            context.setRecordContext(new ProcessorRecordContext(0L, -1L, -1, null, new RecordHeaders()));
 
             task = new StreamTask(
                 TASK_ID,
@@ -513,6 +511,7 @@ public class TopologyTestDriver implements Closeable {
                 );
             task.initializeIfNeeded();
             task.completeRestoration(noOpResetter -> { });
+            task.processorContext().setRecordContext(null);
             for (final TopicPartition tp: task.inputPartitions()) {
                 task.updateNextOffsets(tp, new OffsetAndMetadata(0, Optional.empty(), ""));
             }
@@ -591,7 +590,7 @@ public class TopologyTestDriver implements Closeable {
                 // Process the record ...
                 task.process(mockWallClockTime.milliseconds());
                 task.maybePunctuateStreamTime();
-                commit(task.prepareCommit(true));
+                commit(task.prepareCommit());
                 task.postCommit(true);
                 captureOutputsAndReEnqueueInternalResults();
             }
@@ -709,7 +708,7 @@ public class TopologyTestDriver implements Closeable {
         mockWallClockTime.sleep(advance.toMillis());
         if (task != null) {
             task.maybePunctuateSystemTime();
-            commit(task.prepareCommit(true));
+            commit(task.prepareCommit());
             task.postCommit(true);
         }
         completeAllProcessableWork();
@@ -1130,7 +1129,7 @@ public class TopologyTestDriver implements Closeable {
     public void close() {
         if (task != null) {
             task.suspend();
-            task.prepareCommit(true);
+            task.prepareCommit();
             task.postCommit(true);
             task.closeClean();
         }

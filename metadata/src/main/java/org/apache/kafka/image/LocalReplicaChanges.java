@@ -92,6 +92,26 @@ public final class LocalReplicaChanges {
         );
     }
 
-    public record PartitionInfo(Uuid topicId, PartitionRegistration partition) {
+    public static final class PartitionInfo {
+        private final Uuid topicId;
+        private final PartitionRegistration partition;
+
+        public PartitionInfo(Uuid topicId, PartitionRegistration partition) {
+            this.topicId = topicId;
+            this.partition = partition;
+        }
+
+        public Uuid topicId() {
+            return topicId;
+        }
+
+        public PartitionRegistration partition() {
+            return partition;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("PartitionInfo(topicId = %s, partition = %s)", topicId, partition);
+        }
     }
 }

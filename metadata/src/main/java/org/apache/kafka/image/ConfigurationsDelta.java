@@ -23,6 +23,7 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.server.common.MetadataVersion;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -61,7 +62,7 @@ public final class ConfigurationsDelta {
         ConfigResource resource =
             new ConfigResource(Type.forId(record.resourceType()), record.resourceName());
         ConfigurationImage configImage = image.resourceData().getOrDefault(resource,
-                new ConfigurationImage(resource, Map.of()));
+                new ConfigurationImage(resource, Collections.emptyMap()));
         ConfigurationDelta delta = changes.computeIfAbsent(resource,
             __ -> new ConfigurationDelta(configImage));
         delta.replay(record);

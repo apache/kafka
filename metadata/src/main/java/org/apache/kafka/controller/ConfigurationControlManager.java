@@ -44,6 +44,7 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -84,7 +85,7 @@ public class ConfigurationControlManager {
         private Consumer<ConfigResource> existenceChecker = __ -> { };
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator validator = ConfigurationValidator.NO_OP;
-        private Map<String, Object> staticConfig = Map.of();
+        private Map<String, Object> staticConfig = Collections.emptyMap();
         private int nodeId = 0;
         private FeatureControlManager featureControl = null;
 
@@ -173,7 +174,7 @@ public class ConfigurationControlManager {
         this.validator = validator;
         this.configData = new TimelineHashMap<>(snapshotRegistry, 0);
         this.brokersWithConfigs = new TimelineHashSet<>(snapshotRegistry, 0);
-        this.staticConfig = Map.copyOf(staticConfig);
+        this.staticConfig = Collections.unmodifiableMap(new HashMap<>(staticConfig));
         this.currentController = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
         this.featureControl = featureControl;
     }
@@ -216,7 +217,7 @@ public class ConfigurationControlManager {
 
     List<ApiMessageAndVersion> createClearElrRecordsAsNeeded(List<ApiMessageAndVersion> input) {
         if (!featureControl.isElrFeatureEnabled()) {
-            return List.of();
+            return Collections.emptyList();
         }
         List<ApiMessageAndVersion> output = new ArrayList<>();
         for (ApiMessageAndVersion messageAndVersion : input) {
@@ -308,7 +309,7 @@ public class ConfigurationControlManager {
                     setValue(newValue), (short) 0));
             }
         }
-        ApiError error = validateAlterConfig(configResource, newRecords, List.of(), newlyCreatedResource);
+        ApiError error = validateAlterConfig(configResource, newRecords, Collections.emptyList(), newlyCreatedResource);
         if (error.isFailure()) {
             return error;
         }
@@ -338,10 +339,6 @@ public class ConfigurationControlManager {
                 return DISALLOWED_CLUSTER_MIN_ISR_REMOVAL_ERROR;
             } else if (configRecord.value() == null) {
                 allConfigs.remove(configRecord.name());
-            } else if (configRecord.value().length() > Short.MAX_VALUE) {
-                // In KRaft mode, large config values cannot be created by appending.
-                // If the size exceeds Short.MAX_VALUE, this error will be thrown to notify the user.
-                return DISALLOWED_CONFIG_VALUE_SIZE_ERROR;
             } else {
                 allConfigs.put(configRecord.name(), configRecord.value());
             }
@@ -364,7 +361,9 @@ public class ConfigurationControlManager {
             if (!newlyCreatedResource) {
                 existenceChecker.accept(configResource);
             }
-            alterConfigPolicy.ifPresent(policy -> policy.validate(new RequestMetadata(configResource, alteredConfigsForAlterConfigPolicyCheck)));
+            if (alterConfigPolicy.isPresent()) {
+                alterConfigPolicy.get().validate(new RequestMetadata(configResource, alteredConfigsForAlterConfigPolicyCheck));
+            }
         } catch (ConfigException e) {
             return new ApiError(INVALID_CONFIG, e.getMessage());
         } catch (Throwable e) {
@@ -385,10 +384,6 @@ public class ConfigurationControlManager {
     private static final ApiError DISALLOWED_CLUSTER_MIN_ISR_REMOVAL_ERROR =
         new ApiError(INVALID_CONFIG, "Cluster-level " + MIN_IN_SYNC_REPLICAS_CONFIG +
             " cannot be removed while ELR is enabled.");
-
-    private static final ApiError DISALLOWED_CONFIG_VALUE_SIZE_ERROR =
-        new ApiError(INVALID_CONFIG, "The configuration value cannot be added because " +
-            "it exceeds the maximum value size of " + Short.MAX_VALUE + " bytes.");
 
     boolean isDisallowedBrokerMinIsrTransition(ConfigRecord configRecord) {
         if (configRecord.name().equals(MIN_IN_SYNC_REPLICAS_CONFIG) &&
@@ -449,7 +444,7 @@ public class ConfigurationControlManager {
         List<ApiMessageAndVersion> recordsExplicitlyAltered = new ArrayList<>();
         Map<String, String> currentConfigs = configData.get(configResource);
         if (currentConfigs == null) {
-            currentConfigs = Map.of();
+            currentConfigs = Collections.emptyMap();
         }
         for (Entry<String, String> entry : newConfigs.entrySet()) {
             String key = entry.getKey();
@@ -541,9 +536,9 @@ public class ConfigurationControlManager {
     Map<String, String> getConfigs(ConfigResource configResource) {
         Map<String, String> map = configData.get(configResource);
         if (map == null) {
-            return Map.of();
+            return Collections.emptyMap();
         } else {
-            return Map.copyOf(map);
+            return Collections.unmodifiableMap(new HashMap<>(map));
         }
     }
 
@@ -611,7 +606,7 @@ public class ConfigurationControlManager {
 
     /**
      * Generate any configuration records that are needed to make it safe to enable ELR.
-     * Specifically, we need to remove all broker-level configurations for min.insync.replicas,
+     * Specifically, we need to remove all cluster-level configurations for min.insync.replicas,
      * and create a cluster-level configuration for min.insync.replicas. It is always safe to call
      * this function if ELR is already enabled; it will simply do nothing if the necessary
      * configurations already exist.
@@ -663,17 +658,15 @@ public class ConfigurationControlManager {
      * @param updates       The user-requested updates.
      * @param upgradeTypes  The user-requested upgrade types.
      * @param validateOnly  True if we should validate the request but not make changes.
-     * @param currentClaimEpoch the currently claimed epoch
      *
      * @return              The result.
      */
     ControllerResult<ApiError> updateFeatures(
         Map<String, Short> updates,
         Map<String, FeatureUpdate.UpgradeType> upgradeTypes,
-        boolean validateOnly,
-        int currentClaimEpoch
+        boolean validateOnly
     ) {
-        ControllerResult<ApiError> result = featureControl.updateFeatures(updates, upgradeTypes, validateOnly, currentClaimEpoch);
+        ControllerResult<ApiError> result = featureControl.updateFeatures(updates, upgradeTypes, validateOnly);
         if (result.response().isSuccess() &&
             !validateOnly &&
             updates.getOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) > 0
@@ -710,17 +703,17 @@ public class ConfigurationControlManager {
 
     Map<String, String> clusterConfig() {
         Map<String, String> result = configData.get(DEFAULT_NODE);
-        return (result == null) ? Map.of() : result;
+        return (result == null) ? Collections.emptyMap() : result;
     }
 
     Map<String, String> currentControllerConfig() {
         Map<String, String> result = configData.get(currentController);
-        return (result == null) ? Map.of() : result;
+        return (result == null) ? Collections.emptyMap() : result;
     }
 
     Map<String, String> currentTopicConfig(String topicName) {
         Map<String, String> result = configData.get(new ConfigResource(Type.TOPIC, topicName));
-        return (result == null) ? Map.of() : result;
+        return (result == null) ? Collections.emptyMap() : result;
     }
 
     // Visible to test

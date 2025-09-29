@@ -26,6 +26,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -226,15 +227,16 @@ public class CompletedFetchTest {
                 TP,
                 partitionData,
                 metricAggregator,
-                fetchOffset);
+                fetchOffset,
+                ApiKeys.FETCH.latestVersion());
     }
 
     private static Deserializers<UUID, UUID> newUuidDeserializers() {
-        return new Deserializers<>(new UUIDDeserializer(), new UUIDDeserializer(), null);
+        return new Deserializers<>(new UUIDDeserializer(), new UUIDDeserializer());
     }
 
     private static Deserializers<String, String> newStringDeserializers() {
-        return new Deserializers<>(new StringDeserializer(), new StringDeserializer(), null);
+        return new Deserializers<>(new StringDeserializer(), new StringDeserializer());
     }
 
     private static FetchConfig newFetchConfig(IsolationLevel isolationLevel, boolean checkCrcs) {

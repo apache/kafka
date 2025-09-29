@@ -23,6 +23,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ShareFetchRequest;
+import org.apache.kafka.common.requests.ShareFetchRequest.SharePartitionData;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.server.share.CachedSharePartition;
@@ -32,12 +34,10 @@ import org.apache.kafka.server.share.session.ShareSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
@@ -51,7 +51,7 @@ public class ShareSessionContext extends ShareFetchContext {
 
     private final ShareRequestMetadata reqMetadata;
     private final boolean isSubsequent;
-    private List<TopicIdPartition> shareFetchData;
+    private Map<TopicIdPartition, SharePartitionData> shareFetchData;
     private ShareSession session;
 
     /**
@@ -61,7 +61,7 @@ public class ShareSessionContext extends ShareFetchContext {
      * @param shareFetchData     The share partition data from the share fetch request.
      */
     public ShareSessionContext(ShareRequestMetadata reqMetadata,
-                               List<TopicIdPartition> shareFetchData) {
+                               Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData) {
         this.reqMetadata = reqMetadata;
         this.shareFetchData = shareFetchData;
         this.isSubsequent = false;
@@ -80,7 +80,7 @@ public class ShareSessionContext extends ShareFetchContext {
     }
 
     // Visible for testing
-    public List<TopicIdPartition> shareFetchData() {
+    public Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData() {
         return shareFetchData;
     }
 
@@ -102,7 +102,8 @@ public class ShareSessionContext extends ShareFetchContext {
     @Override
     public ShareFetchResponse throttleResponse(int throttleTimeMs) {
         if (!isSubsequent) {
-            return ShareFetchResponse.of(Errors.NONE, throttleTimeMs, new LinkedHashMap<>(), List.of(), 0);
+            return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
+                    Collections.emptyIterator(), Collections.emptyList()));
         }
         int expectedEpoch = ShareRequestMetadata.nextEpoch(reqMetadata.epoch());
         int sessionEpoch;
@@ -112,9 +113,11 @@ public class ShareSessionContext extends ShareFetchContext {
         if (sessionEpoch != expectedEpoch) {
             log.debug("Subsequent share session {} expected epoch {}, but got {}. " +
                     "Possible duplicate request.", session.key(), expectedEpoch, sessionEpoch);
-            return ShareFetchResponse.of(Errors.INVALID_SHARE_SESSION_EPOCH, throttleTimeMs, new LinkedHashMap<>(), List.of(), 0);
+            return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.INVALID_SHARE_SESSION_EPOCH,
+                    throttleTimeMs, Collections.emptyIterator(), Collections.emptyList()));
         }
-        return ShareFetchResponse.of(Errors.NONE, throttleTimeMs, new LinkedHashMap<>(), List.of(), 0);
+        return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
+                Collections.emptyIterator(), Collections.emptyList()));
     }
 
     /**
@@ -192,7 +195,8 @@ public class ShareSessionContext extends ShareFetchContext {
     public ShareFetchResponse updateAndGenerateResponseData(String groupId, Uuid memberId,
                                                      LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates) {
         if (!isSubsequent) {
-            return ShareFetchResponse.of(Errors.NONE, 0, updates, List.of(), 0);
+            return new ShareFetchResponse(ShareFetchResponse.toMessage(
+                    Errors.NONE, 0, updates.entrySet().iterator(), Collections.emptyList()));
         } else {
             int expectedEpoch = ShareRequestMetadata.nextEpoch(reqMetadata.epoch());
             int sessionEpoch;
@@ -202,7 +206,8 @@ public class ShareSessionContext extends ShareFetchContext {
             if (sessionEpoch != expectedEpoch) {
                 log.debug("Subsequent share session {} expected epoch {}, but got {}. Possible duplicate request.",
                         session.key(), expectedEpoch, sessionEpoch);
-                return ShareFetchResponse.of(Errors.INVALID_SHARE_SESSION_EPOCH, 0, new LinkedHashMap<>(), List.of(), 0);
+                return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.INVALID_SHARE_SESSION_EPOCH,
+                        0, Collections.emptyIterator(), Collections.emptyList()));
             }
             // Iterate over the update list using PartitionIterator. This will prune updates which don't need to be sent
             Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partitionIterator = new PartitionIterator(
@@ -212,7 +217,8 @@ public class ShareSessionContext extends ShareFetchContext {
             }
             log.debug("Subsequent share session context with session key {} returning {}", session.key(),
                     partitionsToLogString(updates.keySet()));
-            return ShareFetchResponse.of(Errors.NONE, 0, updates, List.of(), 0);
+            return new ShareFetchResponse(ShareFetchResponse.toMessage(
+                    Errors.NONE, 0, updates.entrySet().iterator(), Collections.emptyList()));
         }
     }
 
@@ -222,16 +228,17 @@ public class ShareSessionContext extends ShareFetchContext {
             return new ErroneousAndValidPartitionData(shareFetchData);
         }
         Map<TopicIdPartition, PartitionData> erroneous = new HashMap<>();
-        List<TopicIdPartition> valid = new ArrayList<>();
+        Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> valid = new HashMap<>();
         // Take the session lock and iterate over all the cached partitions.
         synchronized (session) {
             session.partitionMap().forEach(cachedSharePartition -> {
                 TopicIdPartition topicIdPartition = new TopicIdPartition(cachedSharePartition.topicId(), new
                         TopicPartition(cachedSharePartition.topic(), cachedSharePartition.partition()));
+                ShareFetchRequest.SharePartitionData reqData = cachedSharePartition.reqData();
                 if (topicIdPartition.topic() == null) {
                     erroneous.put(topicIdPartition, ShareFetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_ID));
                 } else {
-                    valid.add(topicIdPartition);
+                    valid.put(topicIdPartition, reqData);
                 }
             });
             return new ErroneousAndValidPartitionData(erroneous, valid);

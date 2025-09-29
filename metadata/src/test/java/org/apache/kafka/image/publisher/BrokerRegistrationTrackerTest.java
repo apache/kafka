@@ -32,7 +32,8 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.List;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -97,7 +98,7 @@ public class BrokerRegistrationTrackerTest {
         delta.replay(new RegisterBrokerRecord().
             setBrokerId(1).
             setIncarnationId(INCARNATION_ID).
-            setLogDirs(List.of(A, B, C)));
+            setLogDirs(Arrays.asList(A, B, C)));
         delta.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
             setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel()));
@@ -113,7 +114,7 @@ public class BrokerRegistrationTrackerTest {
         delta.replay(new RegisterBrokerRecord().
             setBrokerId(1).
             setIncarnationId(INCARNATION_ID).
-            setLogDirs(List.of()));
+            setLogDirs(Collections.emptyList()));
         delta.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
             setFeatureLevel(jbodMv ? MetadataVersion.IBP_3_7_IV2.featureLevel() :
@@ -134,7 +135,7 @@ public class BrokerRegistrationTrackerTest {
         delta.replay(new RegisterBrokerRecord().
             setBrokerId(1).
             setIncarnationId(INCARNATION_ID).
-            setLogDirs(List.of()));
+            setLogDirs(Collections.emptyList()));
         delta.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
             setFeatureLevel(MetadataVersion.IBP_3_7_IV1.featureLevel()));

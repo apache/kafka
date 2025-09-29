@@ -40,7 +40,6 @@ package org.apache.kafka.streams.kstream;
  * @see KTable#leftJoin(KTable, ValueJoiner)
  * @see KTable#outerJoin(KTable, ValueJoiner)
  */
-@FunctionalInterface
 public interface ValueJoiner<V1, V2, VR> {
 
     /**

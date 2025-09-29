@@ -25,6 +25,8 @@ import org.apache.kafka.common.errors.ElectionNotNeededException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.AdminCommandFailedException;
+import org.apache.kafka.server.common.AdminOperationException;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.Json;
@@ -40,6 +42,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -92,24 +95,19 @@ public class LeaderElectionCommand {
         Optional<Integer> partitionOption = Optional.ofNullable(commandOptions.getPartition());
         final Optional<Set<TopicPartition>> singleTopicPartition =
             (topicOption.isPresent() && partitionOption.isPresent()) ?
-                Optional.of(Set.of(new TopicPartition(topicOption.get(), partitionOption.get()))) :
+                Optional.of(Collections.singleton(new TopicPartition(topicOption.get(), partitionOption.get()))) :
                 Optional.empty();
 
         /* Note: No need to look at --all-topic-partitions as we want this to be null if it is use.
          * The validate function should be checking that this option is required if the --topic and --path-to-json-file
          * are not specified.
          */
-        Optional<Set<TopicPartition>> topicPartitions = jsonFileTopicPartitions.or(() -> singleTopicPartition);
+        Optional<Set<TopicPartition>> topicPartitions = jsonFileTopicPartitions.map(Optional::of).orElse(singleTopicPartition);
 
-        String commandConfigFile;
+        Properties props = new Properties();
         if (commandOptions.hasAdminClientConfig()) {
-            System.out.println("Option --admin.config has been deprecated and will be removed in a future version. Use --command-config instead.");
-            commandConfigFile = commandOptions.getAdminClientConfig();
-        } else {
-            commandConfigFile = commandOptions.getCommandConfig();
+            props.putAll(Utils.loadProps(commandOptions.getAdminClientConfig()));
         }
-        Properties props = (commandConfigFile != null) ? Utils.loadProps(commandConfigFile) : new Properties();
-
         props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, commandOptions.getBootstrapServer());
         if (!props.containsKey(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG)) {
             props.setProperty(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, Integer.toString((int) timeoutMs.toMillis()));
@@ -247,9 +245,7 @@ public class LeaderElectionCommand {
 
     static class LeaderElectionCommandOptions extends CommandDefaultOptions {
         private final ArgumentAcceptingOptionSpec<String> bootstrapServer;
-        @Deprecated(since = "4.2", forRemoval = true)
         private final ArgumentAcceptingOptionSpec<String> adminClientConfig;
-        private final ArgumentAcceptingOptionSpec<String> commandConfig;
         private final ArgumentAcceptingOptionSpec<String> pathToJsonFile;
         private final ArgumentAcceptingOptionSpec<String> topic;
         private final ArgumentAcceptingOptionSpec<Integer> partition;
@@ -267,17 +263,9 @@ public class LeaderElectionCommand {
             adminClientConfig = parser
                 .accepts(
                     "admin.config",
-                    "(DEPRECATED) Configuration properties files to pass to the admin client. " +
-                    "This option will be removed in a future version. Use --command-config instead.")
+                    "Configuration properties files to pass to the admin client")
                 .withRequiredArg()
                 .describedAs("config file")
-                .ofType(String.class);
-            commandConfig = parser
-                .accepts(
-                    "command-config",
-                    "Config properties file to pass to the admin client.")
-                .withRequiredArg()
-                .describedAs("Config file")
                 .ofType(String.class);
             pathToJsonFile = parser
                 .accepts(
@@ -337,10 +325,6 @@ public class LeaderElectionCommand {
             return options.valueOf(adminClientConfig);
         }
 
-        public String getCommandConfig() {
-            return options.valueOf(commandConfig);
-        }
-
         public String getTopic() {
             return options.valueOf(topic);
         }
@@ -363,10 +347,8 @@ public class LeaderElectionCommand {
                 throw new AdminCommandFailedException("Missing required option(s): " + String.join(", ", missingOptions));
             }
 
-            CommandLineUtils.checkInvalidArgs(parser, options, adminClientConfig, commandConfig);
-
             // One and only one is required: --topic, --all-topic-partitions or --path-to-json-file
-            List<AbstractOptionSpec<?>> mutuallyExclusiveOptions = List.of(
+            List<AbstractOptionSpec<?>> mutuallyExclusiveOptions = Arrays.asList(
                 topic,
                 allTopicPartitions,
                 pathToJsonFile

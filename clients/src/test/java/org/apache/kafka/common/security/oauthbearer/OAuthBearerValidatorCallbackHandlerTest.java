@@ -17,29 +17,27 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidatorFactory;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
+import org.apache.kafka.common.utils.Utils;
 
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
 import javax.security.auth.callback.Callback;
-import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
@@ -55,16 +53,7 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         String accessToken = builder.build();
 
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_EXPECTED_AUDIENCE, allAudiences);
-        CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
-        JwtValidator jwtValidator = createJwtValidator(verificationKeyResolver);
-        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
-        handler.configure(
-            configs,
-            OAUTHBEARER_MECHANISM,
-            getJaasConfigEntries(),
-            verificationKeyResolver,
-            jwtValidator
-        );
+        OAuthBearerValidatorCallbackHandler handler = createHandler(configs, builder);
 
         try {
             OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(accessToken);
@@ -88,90 +77,13 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         String substring = "invalid_token";
         assertInvalidAccessTokenFails("this isn't valid", substring);
         assertInvalidAccessTokenFails("this.isn't.valid", substring);
-        assertInvalidAccessTokenFails(createJwt("this", "isn't", "valid"), substring);
-        assertInvalidAccessTokenFails(createJwt("{}", "{}", "{}"), substring);
-    }
-
-    @Test
-    public void testHandlerConfigureThrowsException() throws IOException {
-        KafkaException configureError = new KafkaException("configure() error");
-
-        AccessTokenBuilder builder = new AccessTokenBuilder()
-            .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
-        CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
-        JwtValidator jwtValidator = new JwtValidator() {
-            @Override
-            public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-                throw configureError;
-            }
-
-            @Override
-            public OAuthBearerToken validate(String accessToken) throws JwtValidatorException {
-                return null;
-            }
-        };
-
-        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
-
-        // An error initializing the JwtValidator should cause OAuthBearerValidatorCallbackHandler.init() to fail.
-        KafkaException error = assertThrows(
-            KafkaException.class,
-            () -> handler.configure(
-                getSaslConfigs(),
-                OAUTHBEARER_MECHANISM,
-                getJaasConfigEntries(),
-                verificationKeyResolver,
-                jwtValidator
-            )
-        );
-        assertEquals(configureError, error);
-    }
-
-    @Test
-    public void testHandlerCloseDoesNotThrowException() throws IOException {
-        AccessTokenBuilder builder = new AccessTokenBuilder()
-            .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
-        CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
-        JwtValidator jwtValidator = new JwtValidator() {
-            @Override
-            public void close() throws IOException {
-                throw new IOException("close() error");
-            }
-
-            @Override
-            public OAuthBearerToken validate(String accessToken) throws JwtValidatorException {
-                return null;
-            }
-        };
-
-        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
-        handler.configure(
-            getSaslConfigs(),
-            OAUTHBEARER_MECHANISM,
-            getJaasConfigEntries(),
-            verificationKeyResolver,
-            jwtValidator
-        );
-
-        // An error closings the JwtValidator should *not* cause OAuthBearerValidatorCallbackHandler.close() to fail.
-        assertDoesNotThrow(handler::close);
+        assertInvalidAccessTokenFails(createAccessKey("this", "isn't", "valid"), substring);
+        assertInvalidAccessTokenFails(createAccessKey("{}", "{}", "{}"), substring);
     }
 
     private void assertInvalidAccessTokenFails(String accessToken, String expectedMessageSubstring) throws Exception {
-        AccessTokenBuilder builder = new AccessTokenBuilder()
-            .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
         Map<String, ?> configs = getSaslConfigs();
-        CloseableVerificationKeyResolver verificationKeyResolver = createVerificationKeyResolver(builder);
-        JwtValidator jwtValidator = createJwtValidator(verificationKeyResolver);
-
-        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
-        handler.configure(
-            configs,
-            OAUTHBEARER_MECHANISM,
-            getJaasConfigEntries(),
-            verificationKeyResolver,
-            jwtValidator
-        );
+        OAuthBearerValidatorCallbackHandler handler = createHandler(configs, new AccessTokenBuilder());
 
         try {
             OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(accessToken);
@@ -186,11 +98,22 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         }
     }
 
-    private JwtValidator createJwtValidator(CloseableVerificationKeyResolver verificationKeyResolver) {
-        return new DefaultJwtValidator(verificationKeyResolver);
+    private OAuthBearerValidatorCallbackHandler createHandler(Map<String, ?> options,
+        AccessTokenBuilder builder) {
+        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
+        CloseableVerificationKeyResolver verificationKeyResolver = (jws, nestingContext) ->
+                builder.jwk().getPublicKey();
+        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(options, verificationKeyResolver);
+        handler.init(verificationKeyResolver, accessTokenValidator);
+        return handler;
     }
 
-    private CloseableVerificationKeyResolver createVerificationKeyResolver(AccessTokenBuilder builder) {
-        return (jws, nestingContext) -> builder.jwk().getPublicKey();
+    private String createAccessKey(String header, String payload, String signature) {
+        Base64.Encoder enc = Base64.getEncoder();
+        header = enc.encodeToString(Utils.utf8(header));
+        payload = enc.encodeToString(Utils.utf8(payload));
+        signature = enc.encodeToString(Utils.utf8(signature));
+        return String.format("%s.%s.%s", header, payload, signature);
     }
+
 }

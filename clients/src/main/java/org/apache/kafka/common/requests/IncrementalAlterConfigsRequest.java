@@ -21,15 +21,12 @@ import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterConfigsResource;
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestDataJsonConverter;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Readable;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-
+import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Map;
 
@@ -87,9 +84,9 @@ public class IncrementalAlterConfigsRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public static IncrementalAlterConfigsRequest parse(Readable readable, short version) {
+    public static IncrementalAlterConfigsRequest parse(ByteBuffer buffer, short version) {
         return new IncrementalAlterConfigsRequest(new IncrementalAlterConfigsRequestData(
-            readable, version), version);
+            new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
@@ -109,17 +106,5 @@ public class IncrementalAlterConfigsRequest extends AbstractRequest {
                     .setErrorMessage(apiError.message()));
         }
         return new IncrementalAlterConfigsResponse(response);
-    }
-
-    // It is not safe to print all config values
-    @Override
-    public String toString() {
-        JsonNode json = IncrementalAlterConfigsRequestDataJsonConverter.write(data, version()).deepCopy();
-        for (JsonNode resource : json.get("resources")) {
-            for (JsonNode config : resource.get("configs")) {
-                ((ObjectNode) config).put("value", "REDACTED");
-            }
-        }
-        return IncrementalAlterConfigsRequestDataJsonConverter.read(json, version()).toString();
     }
 }

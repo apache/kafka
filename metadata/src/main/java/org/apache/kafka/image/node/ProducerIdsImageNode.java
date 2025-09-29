@@ -20,7 +20,7 @@ package org.apache.kafka.image.node;
 import org.apache.kafka.image.ProducerIdsImage;
 
 import java.util.Collection;
-import java.util.List;
+import java.util.Collections;
 
 
 public class ProducerIdsImageNode implements MetadataNode {
@@ -40,7 +40,7 @@ public class ProducerIdsImageNode implements MetadataNode {
 
     @Override
     public Collection<String> childNames() {
-        return List.of("nextProducerId");
+        return Collections.singletonList("nextProducerId");
     }
 
     @Override

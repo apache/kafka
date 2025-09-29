@@ -102,8 +102,8 @@ public class OffsetForLeaderEpochClientTest {
         assertTrue(result.partitionsToRetry().isEmpty());
         assertTrue(result.endOffsets().containsKey(tp0));
         assertEquals(result.endOffsets().get(tp0).errorCode(), Errors.NONE.code());
-        assertEquals(1, result.endOffsets().get(tp0).leaderEpoch());
-        assertEquals(10L, result.endOffsets().get(tp0).endOffset());
+        assertEquals(result.endOffsets().get(tp0).leaderEpoch(), 1);
+        assertEquals(result.endOffsets().get(tp0).endOffset(), 10L);
     }
 
     @Test
@@ -121,7 +121,7 @@ public class OffsetForLeaderEpochClientTest {
         consumerClient.pollNoWakeup();
 
         assertTrue(future.failed());
-        assertEquals(TopicAuthorizationException.class, future.exception().getClass());
+        assertEquals(future.exception().getClass(), TopicAuthorizationException.class);
         assertTrue(((TopicAuthorizationException) future.exception()).unauthorizedTopics().contains(tp0.topic()));
     }
 

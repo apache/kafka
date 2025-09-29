@@ -21,6 +21,8 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 
@@ -67,7 +69,8 @@ public class TasksRequest extends Message {
             @JsonProperty("firstEndMs") long firstEndMs,
             @JsonProperty("lastEndMs") long lastEndMs,
             @JsonProperty("state") Optional<TaskStateType> state) {
-        this.taskIds = taskIds == null ? Set.of() : Set.copyOf(taskIds);
+        this.taskIds = Collections.unmodifiableSet((taskIds == null) ?
+            new HashSet<>() : new HashSet<>(taskIds));
         this.firstStartMs = Math.max(0, firstStartMs);
         this.lastStartMs = Math.max(0, lastStartMs);
         this.firstEndMs = Math.max(0, firstEndMs);

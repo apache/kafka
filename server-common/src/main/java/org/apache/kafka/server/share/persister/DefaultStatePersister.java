@@ -19,20 +19,19 @@ package org.apache.kafka.server.share.persister;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.DeleteShareGroupStateResponse;
-import org.apache.kafka.common.requests.InitializeShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
-import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 /**
  * The default implementation of the {@link Persister} interface which is used by the
@@ -69,48 +68,7 @@ public class DefaultStatePersister implements Persister {
      * @return A completable future of InitializeShareGroupStateResult
      */
     public CompletableFuture<InitializeShareGroupStateResult> initializeState(InitializeShareGroupStateParameters request) {
-        try {
-            validate(request);
-        } catch (Exception e) {
-            log.error("Unable to validate initialize state request", e);
-            return CompletableFuture.failedFuture(e);
-        }
-        GroupTopicPartitionData<PartitionStateData> gtp = request.groupTopicPartitionData();
-        String groupId = gtp.groupId();
-
-        Map<Uuid, Map<Integer, CompletableFuture<InitializeShareGroupStateResponse>>> futureMap = new HashMap<>();
-        List<PersisterStateManager.InitializeStateHandler> handlers = new ArrayList<>();
-
-        gtp.topicsData().forEach(topicData -> {
-            topicData.partitions().forEach(partitionData -> {
-                CompletableFuture<InitializeShareGroupStateResponse> future = futureMap
-                    .computeIfAbsent(topicData.topicId(), k -> new HashMap<>())
-                    .computeIfAbsent(partitionData.partition(), k -> new CompletableFuture<>());
-
-                handlers.add(
-                    stateManager.new InitializeStateHandler(
-                        groupId,
-                        topicData.topicId(),
-                        partitionData.partition(),
-                        partitionData.stateEpoch(),
-                        partitionData.startOffset(),
-                        future,
-                        null
-                    )
-                );
-            });
-        });
-
-        for (PersisterStateManager.PersisterStateManagerHandler handler : handlers) {
-            stateManager.enqueue(handler);
-        }
-
-        CompletableFuture<Void> combinedFuture = CompletableFuture.allOf(
-            handlers.stream()
-                .map(PersisterStateManager.InitializeStateHandler::result)
-                .toArray(CompletableFuture[]::new));
-
-        return combinedFuture.thenApply(v -> initializeResponsesToResult(futureMap));
+        throw new RuntimeException("not implemented");
     }
 
     /**
@@ -138,9 +96,6 @@ public class DefaultStatePersister implements Persister {
                 CompletableFuture<WriteShareGroupStateResponse> future = futureMap
                     .computeIfAbsent(topicData.topicId(), k -> new HashMap<>())
                     .computeIfAbsent(partitionData.partition(), k -> new CompletableFuture<>());
-
-                log.debug("{}-{}-{}: stateEpoch - {}, leaderEpoch - {}.",
-                    groupId, topicData.topicId(), partitionData.partition(), partitionData.stateEpoch(), partitionData.leaderEpoch());
 
                 handlers.add(
                     stateManager.new WriteStateHandler(
@@ -170,54 +125,8 @@ public class DefaultStatePersister implements Persister {
 
     /**
      * Takes in a list of COMPLETED futures and combines the results,
-     * taking care of errors if any, into a single InitializeShareGroupStateResult
-     *
-     * @param futureMap - HashMap of {topic -> {partition -> future}}
-     * @return Object representing combined result of type InitializeShareGroupStateResult
-     */
-    // visible for testing
-    InitializeShareGroupStateResult initializeResponsesToResult(
-        Map<Uuid, Map<Integer, CompletableFuture<InitializeShareGroupStateResponse>>> futureMap
-    ) {
-        List<TopicData<PartitionErrorData>> topicsData = futureMap.keySet().stream()
-            .map(topicId -> {
-                List<PartitionErrorData> partitionErrData = futureMap.get(topicId).entrySet().stream()
-                    .map(partitionFuture -> {
-                        int partition = partitionFuture.getKey();
-                        CompletableFuture<InitializeShareGroupStateResponse> future = partitionFuture.getValue();
-                        try {
-                            // already completed because of allOf application in the caller
-                            InitializeShareGroupStateResponse partitionResponse = future.join();
-                            return partitionResponse.data().results().get(0).partitions().stream()
-                                .map(partitionResult -> PartitionFactory.newPartitionErrorData(
-                                    partitionResult.partition(),
-                                    partitionResult.errorCode(),
-                                    partitionResult.errorMessage()))
-                                .toList();
-                        } catch (Exception e) {
-                            log.error("Unexpected exception while initializing data in share coordinator", e);
-                            return List.of(PartitionFactory.newPartitionErrorData(
-                                partition,
-                                Errors.UNKNOWN_SERVER_ERROR.code(),   // No specific public error code exists for InterruptedException / ExecutionException
-                                "Error initializing state in share coordinator: " + e.getMessage())
-                            );
-                        }
-                    })
-                    .flatMap(List::stream)
-                    .toList();
-                return new TopicData<>(topicId, partitionErrData);
-            })
-            .toList();
-        return new InitializeShareGroupStateResult.Builder()
-            .setTopicsData(topicsData)
-            .build();
-    }
-
-    /**
-     * Takes in a list of COMPLETED futures and combines the results,
      * taking care of errors if any, into a single WriteShareGroupStateResult
-     *
-     * @param futureMap - HashMap of {topic -> {partition -> future}}
+     * @param futureMap - HashMap of {topic -> {part -> future}}
      * @return Object representing combined result of type WriteShareGroupStateResult
      */
     // visible for testing
@@ -238,10 +147,10 @@ public class DefaultStatePersister implements Persister {
                                     partitionResult.partition(),
                                     partitionResult.errorCode(),
                                     partitionResult.errorMessage()))
-                                .toList();
+                                .collect(Collectors.toList());
                         } catch (Exception e) {
                             log.error("Unexpected exception while writing data to share coordinator", e);
-                            return List.of(PartitionFactory.newPartitionErrorData(
+                            return Collections.singletonList(PartitionFactory.newPartitionErrorData(
                                 partition,
                                 Errors.UNKNOWN_SERVER_ERROR.code(),   // No specific public error code exists for InterruptedException / ExecutionException
                                 "Error writing state to share coordinator: " + e.getMessage())
@@ -249,10 +158,10 @@ public class DefaultStatePersister implements Persister {
                         }
                     })
                     .flatMap(List::stream)
-                    .toList();
+                    .collect(Collectors.toList());
                 return new TopicData<>(topicId, partitionErrData);
             })
-            .toList();
+            .collect(Collectors.toList());
         return new WriteShareGroupStateResult.Builder()
             .setTopicsData(topicsData)
             .build();
@@ -312,8 +221,7 @@ public class DefaultStatePersister implements Persister {
     /**
      * Takes in a list of COMPLETED futures and combines the results,
      * taking care of errors if any, into a single ReadShareGroupStateResult
-     *
-     * @param futureMap - HashMap of {topic -> {partition -> future}}
+     * @param futureMap - HashMap of {topic -> {part -> future}}
      * @return Object representing combined result of type ReadShareGroupStateResult
      */
     // visible for testing
@@ -336,26 +244,26 @@ public class DefaultStatePersister implements Persister {
                                     partitionResult.startOffset(),
                                     partitionResult.errorCode(),
                                     partitionResult.errorMessage(),
-                                    partitionResult.stateBatches().stream().map(PersisterStateBatch::from).toList()
+                                    partitionResult.stateBatches().stream().map(PersisterStateBatch::from).collect(Collectors.toList())
                                 ))
-                                .toList();
+                                .collect(Collectors.toList());
                         } catch (Exception e) {
                             log.error("Unexpected exception while getting data from share coordinator", e);
-                            return List.of(PartitionFactory.newPartitionAllData(
+                            return Collections.singletonList(PartitionFactory.newPartitionAllData(
                                 partition,
                                 -1,
                                 -1,
                                 Errors.UNKNOWN_SERVER_ERROR.code(),   // No specific public error code exists for InterruptedException / ExecutionException
                                 "Error reading state from share coordinator: " + e.getMessage(),
-                                List.of())
+                                Collections.emptyList())
                             );
                         }
                     })
                     .flatMap(List::stream)
-                    .toList();
+                    .collect(Collectors.toList());
                 return new TopicData<>(topicId, partitionAllData);
             })
-            .toList();
+            .collect(Collectors.toList());
         return new ReadShareGroupStateResult.Builder()
             .setTopicsData(topicsData)
             .build();
@@ -369,46 +277,7 @@ public class DefaultStatePersister implements Persister {
      * @return A completable future of DeleteShareGroupStateResult
      */
     public CompletableFuture<DeleteShareGroupStateResult> deleteState(DeleteShareGroupStateParameters request) {
-        try {
-            validate(request);
-        } catch (Exception e) {
-            log.error("Unable to validate delete state request", e);
-            return CompletableFuture.failedFuture(e);
-        }
-        GroupTopicPartitionData<PartitionIdData> gtp = request.groupTopicPartitionData();
-        String groupId = gtp.groupId();
-
-        Map<Uuid, Map<Integer, CompletableFuture<DeleteShareGroupStateResponse>>> futureMap = new HashMap<>();
-        List<PersisterStateManager.DeleteStateHandler> handlers = new ArrayList<>();
-
-        gtp.topicsData().forEach(topicData -> {
-            topicData.partitions().forEach(partitionData -> {
-                CompletableFuture<DeleteShareGroupStateResponse> future = futureMap
-                    .computeIfAbsent(topicData.topicId(), k -> new HashMap<>())
-                    .computeIfAbsent(partitionData.partition(), k -> new CompletableFuture<>());
-
-                handlers.add(
-                    stateManager.new DeleteStateHandler(
-                        groupId,
-                        topicData.topicId(),
-                        partitionData.partition(),
-                        future,
-                        null
-                    )
-                );
-            });
-        });
-
-        for (PersisterStateManager.PersisterStateManagerHandler handler : handlers) {
-            stateManager.enqueue(handler);
-        }
-
-        CompletableFuture<Void> combinedFuture = CompletableFuture.allOf(
-            handlers.stream()
-                .map(PersisterStateManager.DeleteStateHandler::result)
-                .toArray(CompletableFuture[]::new));
-
-        return combinedFuture.thenApply(v -> deleteResponsesToResult(futureMap));
+        throw new RuntimeException("not implemented");
     }
 
     /**
@@ -419,162 +288,9 @@ public class DefaultStatePersister implements Persister {
      * @return A completable future of  ReadShareGroupStateSummaryResult
      */
     public CompletableFuture<ReadShareGroupStateSummaryResult> readSummary(ReadShareGroupStateSummaryParameters request) {
-        try {
-            validate(request);
-        } catch (Exception e) {
-            log.error("Unable to validate read state summary request", e);
-            return CompletableFuture.failedFuture(e);
-        }
-
-        GroupTopicPartitionData<PartitionIdLeaderEpochData> gtp = request.groupTopicPartitionData();
-        String groupId = gtp.groupId();
-        Map<Uuid, Map<Integer, CompletableFuture<ReadShareGroupStateSummaryResponse>>> futureMap = new HashMap<>();
-        List<PersisterStateManager.ReadStateSummaryHandler> handlers = new ArrayList<>();
-
-        gtp.topicsData().forEach(topicData -> {
-            topicData.partitions().forEach(partitionData -> {
-                CompletableFuture<ReadShareGroupStateSummaryResponse> future = futureMap
-                    .computeIfAbsent(topicData.topicId(), k -> new HashMap<>())
-                    .computeIfAbsent(partitionData.partition(), k -> new CompletableFuture<>());
-
-                handlers.add(
-                    stateManager.new ReadStateSummaryHandler(
-                        groupId,
-                        topicData.topicId(),
-                        partitionData.partition(),
-                        partitionData.leaderEpoch(),
-                        future,
-                        null
-                    )
-                );
-            });
-        });
-
-        for (PersisterStateManager.PersisterStateManagerHandler handler : handlers) {
-            stateManager.enqueue(handler);
-        }
-
-        // Combine all futures into a single CompletableFuture<Void>
-        CompletableFuture<Void> combinedFuture = CompletableFuture.allOf(
-            handlers.stream()
-                .map(PersisterStateManager.ReadStateSummaryHandler::result)
-                .toArray(CompletableFuture[]::new));
-
-        // Transform the combined CompletableFuture<Void> into CompletableFuture<ReadShareGroupStateResult>
-        return combinedFuture.thenApply(v -> readSummaryResponsesToResult(futureMap));
+        throw new RuntimeException("not implemented");
     }
 
-    /**
-     * Takes in a list of COMPLETED futures and combines the results,
-     * taking care of errors if any, into a single ReadShareGroupStateSummaryResult
-     *
-     * @param futureMap - HashMap of {topic -> {partition -> future}}
-     * @return Object representing combined result of type ReadShareGroupStateSummaryResult
-     */
-    // visible for testing
-    ReadShareGroupStateSummaryResult readSummaryResponsesToResult(
-        Map<Uuid, Map<Integer, CompletableFuture<ReadShareGroupStateSummaryResponse>>> futureMap
-    ) {
-        List<TopicData<PartitionStateSummaryData>> topicsData = futureMap.keySet().stream()
-            .map(topicId -> {
-                List<PartitionStateSummaryData> partitionStateErrorData = futureMap.get(topicId).entrySet().stream()
-                    .map(partitionFuture -> {
-                        int partition = partitionFuture.getKey();
-                        CompletableFuture<ReadShareGroupStateSummaryResponse> future = partitionFuture.getValue();
-                        try {
-                            // already completed because of allOf call in the caller
-                            ReadShareGroupStateSummaryResponse partitionResponse = future.join();
-                            return partitionResponse.data().results().get(0).partitions().stream()
-                                .map(partitionResult -> PartitionFactory.newPartitionStateSummaryData(
-                                    partitionResult.partition(),
-                                    partitionResult.stateEpoch(),
-                                    partitionResult.startOffset(),
-                                    partitionResult.leaderEpoch(),
-                                    partitionResult.errorCode(),
-                                    partitionResult.errorMessage()))
-                                .toList();
-                        } catch (Exception e) {
-                            log.error("Unexpected exception while getting data from share coordinator", e);
-                            return List.of(PartitionFactory.newPartitionStateSummaryData(
-                                partition,
-                                -1,
-                                -1,
-                                -1,
-                                Errors.UNKNOWN_SERVER_ERROR.code(),   // No specific public error code exists for InterruptedException / ExecutionException
-                                "Error reading state from share coordinator: " + e.getMessage()));
-                        }
-                    })
-                    .flatMap(List::stream)
-                    .toList();
-                return new TopicData<>(topicId, partitionStateErrorData);
-            })
-            .toList();
-        return new ReadShareGroupStateSummaryResult.Builder()
-            .setTopicsData(topicsData)
-            .build();
-    }
-
-    /**
-     * Takes in a list of COMPLETED futures and combines the results,
-     * taking care of errors if any, into a single DeleteShareGroupStateResult
-     *
-     * @param futureMap - HashMap of {topic -> {partition -> future}}
-     * @return Object representing combined result of type DeleteShareGroupStateResult
-     */
-    // visible for testing
-    DeleteShareGroupStateResult deleteResponsesToResult(
-        Map<Uuid, Map<Integer, CompletableFuture<DeleteShareGroupStateResponse>>> futureMap
-    ) {
-        List<TopicData<PartitionErrorData>> topicsData = futureMap.keySet().stream()
-            .map(topicId -> {
-                List<PartitionErrorData> partitionErrorData = futureMap.get(topicId).entrySet().stream()
-                    .map(partitionFuture -> {
-                        int partition = partitionFuture.getKey();
-                        CompletableFuture<DeleteShareGroupStateResponse> future = partitionFuture.getValue();
-                        try {
-                            // already completed because of allOf call in the caller
-                            DeleteShareGroupStateResponse partitionResponse = future.join();
-                            return partitionResponse.data().results().get(0).partitions().stream()
-                                .map(partitionResult -> PartitionFactory.newPartitionErrorData(
-                                        partitionResult.partition(),
-                                        partitionResult.errorCode(),
-                                        partitionResult.errorMessage()
-                                    )
-                                )
-                                .toList();
-                        } catch (Exception e) {
-                            log.error("Unexpected exception while getting data from share coordinator", e);
-                            return List.of(
-                                PartitionFactory.newPartitionErrorData(
-                                    partition,
-                                    Errors.UNKNOWN_SERVER_ERROR.code(),   // No specific public error code exists for InterruptedException / ExecutionException
-                                    "Error deleting state from share coordinator: " + e.getMessage()
-                                )
-                            );
-                        }
-                    })
-                    .flatMap(List::stream)
-                    .toList();
-                return new TopicData<>(topicId, partitionErrorData);
-            })
-            .toList();
-        return new DeleteShareGroupStateResult.Builder()
-            .setTopicsData(topicsData)
-            .build();
-    }
-
-    private static void validate(InitializeShareGroupStateParameters params) {
-        String prefix = "Initialize share group parameters";
-        if (params == null) {
-            throw new IllegalArgumentException(prefix + " cannot be null.");
-        }
-        if (params.groupTopicPartitionData() == null) {
-            throw new IllegalArgumentException(prefix + " data cannot be null.");
-        }
-
-        validateGroupTopicPartitionData(prefix, params.groupTopicPartitionData());
-    }
-    
     private static void validate(WriteShareGroupStateParameters params) {
         String prefix = "Write share group parameters";
         if (params == null) {
@@ -589,30 +305,6 @@ public class DefaultStatePersister implements Persister {
 
     private static void validate(ReadShareGroupStateParameters params) {
         String prefix = "Read share group parameters";
-        if (params == null) {
-            throw new IllegalArgumentException(prefix + " cannot be null.");
-        }
-        if (params.groupTopicPartitionData() == null) {
-            throw new IllegalArgumentException(prefix + " data cannot be null.");
-        }
-
-        validateGroupTopicPartitionData(prefix, params.groupTopicPartitionData());
-    }
-
-    private static void validate(ReadShareGroupStateSummaryParameters params) {
-        String prefix = "Read share group summary parameters";
-        if (params == null) {
-            throw new IllegalArgumentException(prefix + " cannot be null.");
-        }
-        if (params.groupTopicPartitionData() == null) {
-            throw new IllegalArgumentException(prefix + " data cannot be null.");
-        }
-
-        validateGroupTopicPartitionData(prefix, params.groupTopicPartitionData());
-    }
-
-    private static void validate(DeleteShareGroupStateParameters params) {
-        String prefix = "Delete share group parameters";
         if (params == null) {
             throw new IllegalArgumentException(prefix + " cannot be null.");
         }

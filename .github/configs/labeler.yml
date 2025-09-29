@@ -92,12 +92,6 @@ transactions:
       - any-glob-to-any-file:
           - 'transaction-coordinator/**'
 
-group-coordinator:
-  - changed-files:
-      - any-glob-to-any-file:
-          - 'group-coordinator/**'
-          - 'coordinator-common/**'
-
 kip-932:
   - changed-files:
       - any-glob-to-any-file:

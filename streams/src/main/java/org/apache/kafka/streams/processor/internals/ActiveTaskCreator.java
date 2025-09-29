@@ -64,7 +64,6 @@ class ActiveTaskCreator {
     private final StreamsProducer streamsProducer;
     private final boolean stateUpdaterEnabled;
     private final boolean processingThreadsEnabled;
-    private boolean isClosed = false;
 
     ActiveTaskCreator(final TopologyMetadata topologyMetadata,
                       final StreamsConfig applicationConfig,
@@ -77,7 +76,7 @@ class ActiveTaskCreator {
                       final String threadId,
                       final int threadIdx,
                       final UUID processId,
-                      final LogContext logContext,
+                      final Logger log,
                       final boolean stateUpdaterEnabled,
                       final boolean processingThreadsEnabled) {
         this.topologyMetadata = topologyMetadata;
@@ -91,11 +90,14 @@ class ActiveTaskCreator {
         this.threadId = threadId;
         this.threadIdx = threadIdx;
         this.processId = processId;
-        this.log = logContext.logger(getClass());
+        this.log = log;
         this.stateUpdaterEnabled = stateUpdaterEnabled;
         this.processingThreadsEnabled = processingThreadsEnabled;
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
+
+        final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
+        final LogContext logContext = new LogContext(threadIdPrefix);
 
         streamsProducer = new StreamsProducer(
             producer(),
@@ -116,25 +118,12 @@ class ActiveTaskCreator {
         return clientSupplier.getProducer(producerConfig);
     }
 
-
-    /**
-     * When {@link org.apache.kafka.streams.processor.internals.StreamThread} is shutting down,
-     * subsequent calls to reInitializeProducer() will not recreate
-     * the producer instance, avoiding resource leak.
-     */
     public void reInitializeProducer() {
-        if (!isClosed) {
-            streamsProducer.resetProducer(producer());
-        }
+        streamsProducer.resetProducer(producer());
     }
 
     StreamsProducer streamsProducer() {
         return streamsProducer;
-    }
-
-    // visible for test
-    boolean isClosed() {
-        return isClosed;
     }
 
     // TODO: convert to StreamTask when we remove TaskManager#StateMachineTask with mocks
@@ -266,7 +255,6 @@ class ActiveTaskCreator {
 
     void close() {
         try {
-            isClosed = true;
             streamsProducer.close();
         } catch (final RuntimeException e) {
             throw new StreamsException("Thread producer encounter error trying to close.", e);

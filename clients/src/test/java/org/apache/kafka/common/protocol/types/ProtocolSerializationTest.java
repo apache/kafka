@@ -195,9 +195,12 @@ public class ProtocolSerializationTest {
         for (int i = 0; i < size; i++)
             invalidBuffer.put((byte) i);
         invalidBuffer.rewind();
-        assertThrows(SchemaException.class,
-            () -> type.read(invalidBuffer),
-            "Array size not validated");
+        try {
+            type.read(invalidBuffer);
+            fail("Array size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
     }
 
     @Test
@@ -210,9 +213,12 @@ public class ProtocolSerializationTest {
         for (int i = 0; i < size; i++)
             invalidBuffer.put((byte) i);
         invalidBuffer.rewind();
-        assertThrows(SchemaException.class,
-            () -> type.read(invalidBuffer),
-            "Array size not validated");
+        try {
+            type.read(invalidBuffer);
+            fail("Array size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
     }
 
     @Test
@@ -246,9 +252,12 @@ public class ProtocolSerializationTest {
         for (int i = 0; i < size; i++)
             invalidBuffer.put((byte) i);
         invalidBuffer.rewind();
-        assertThrows(SchemaException.class,
-            () -> type.read(invalidBuffer),
-            "Array size not validated");
+        try {
+            type.read(invalidBuffer);
+            fail("Array size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
     }
 
     @Test
@@ -261,9 +270,12 @@ public class ProtocolSerializationTest {
         for (int i = 0; i < size; i++)
             invalidBuffer.put((byte) i);
         invalidBuffer.rewind();
-        assertThrows(SchemaException.class,
-            () -> type.read(invalidBuffer),
-            "Array size not validated");
+        try {
+            type.read(invalidBuffer);
+            fail("Array size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
     }
 
     @Test
@@ -273,14 +285,19 @@ public class ProtocolSerializationTest {
         invalidBuffer.putShort((short) (stringBytes.length * 5));
         invalidBuffer.put(stringBytes);
         invalidBuffer.rewind();
-        assertThrows(SchemaException.class,
-            () -> Type.STRING.read(invalidBuffer),
-            "String size not validated");
-
+        try {
+            Type.STRING.read(invalidBuffer);
+            fail("String size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
         invalidBuffer.rewind();
-        assertThrows(SchemaException.class,
-            () -> Type.NULLABLE_STRING.read(invalidBuffer),
-            "String size not validated");
+        try {
+            Type.NULLABLE_STRING.read(invalidBuffer);
+            fail("String size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
     }
 
     @Test
@@ -290,10 +307,12 @@ public class ProtocolSerializationTest {
         invalidBuffer.putShort((short) -1);
         invalidBuffer.put(stringBytes);
         invalidBuffer.rewind();
-
-        assertThrows(SchemaException.class,
-            () -> Type.STRING.read(invalidBuffer),
-            "String size not validated");
+        try {
+            Type.STRING.read(invalidBuffer);
+            fail("String size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
     }
 
     @Test
@@ -303,14 +322,19 @@ public class ProtocolSerializationTest {
         invalidBuffer.putInt(stringBytes.length * 5);
         invalidBuffer.put(stringBytes);
         invalidBuffer.rewind();
-        assertThrows(SchemaException.class,
-            () -> Type.BYTES.read(invalidBuffer),
-            "Bytes size not validated");
-
+        try {
+            Type.BYTES.read(invalidBuffer);
+            fail("Bytes size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
         invalidBuffer.rewind();
-        assertThrows(SchemaException.class,
-            () -> Type.NULLABLE_BYTES.read(invalidBuffer),
-            "Bytes size not validated");
+        try {
+            Type.NULLABLE_BYTES.read(invalidBuffer);
+            fail("Bytes size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
     }
 
     @Test
@@ -320,10 +344,12 @@ public class ProtocolSerializationTest {
         invalidBuffer.putInt(-20);
         invalidBuffer.put(stringBytes);
         invalidBuffer.rewind();
-
-        assertThrows(SchemaException.class,
-            () -> Type.BYTES.read(invalidBuffer),
-            "Bytes size not validated");
+        try {
+            Type.BYTES.read(invalidBuffer);
+            fail("Bytes size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
     }
 
     @Test

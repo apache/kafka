@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -45,7 +46,10 @@ public class JsonUtilTest {
         assertFalse(JsonUtil.openBraceComesFirst(" blah{}"));
     }
 
-    record Foo(@JsonProperty int bar) {
+    static final class Foo {
+        @JsonProperty
+        final int bar;
+
         @JsonCreator
         Foo(@JsonProperty("bar") int bar) {
             this.bar = bar;
@@ -58,7 +62,7 @@ public class JsonUtilTest {
         assertEquals(1, JsonUtil.objectFromCommandLineArgument("   {\"bar\": 1}   ", Foo.class).bar);
         File tempFile = TestUtils.tempFile();
         try {
-            Files.writeString(tempFile.toPath(), "{\"bar\": 456}");
+            Files.write(tempFile.toPath(), "{\"bar\": 456}".getBytes(StandardCharsets.UTF_8));
             assertEquals(456, JsonUtil.objectFromCommandLineArgument(tempFile.getAbsolutePath(), Foo.class).bar);
         } finally {
             Files.delete(tempFile.toPath());

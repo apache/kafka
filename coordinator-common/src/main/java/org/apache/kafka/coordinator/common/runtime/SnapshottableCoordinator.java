@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.common.runtime;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -61,7 +62,7 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
      */
     private long lastCommittedOffset;
 
-    public SnapshottableCoordinator(
+    SnapshottableCoordinator(
         LogContext logContext,
         SnapshotRegistry snapshotRegistry,
         S coordinator,
@@ -137,7 +138,7 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
      * @param offset The new last written offset.
      */
     @Override
-    public synchronized void updateLastWrittenOffset(long offset) {
+    public synchronized void updateLastWrittenOffset(Long offset) {
         if (offset <= lastWrittenOffset) {
             throw new IllegalStateException("New last written offset " + offset + " of " + tp +
                 " must be greater than " + lastWrittenOffset + ".");
@@ -156,7 +157,7 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
      * @param offset The new last committed offset.
      */
     @Override
-    public synchronized void updateLastCommittedOffset(long offset) {
+    public synchronized void updateLastCommittedOffset(Long offset) {
         if (offset < lastCommittedOffset) {
             throw new IllegalStateException("New committed offset " + offset + " of " + tp +
                 " must be greater than or equal to " + lastCommittedOffset + ".");
@@ -178,7 +179,7 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
      *
      * @param newImage  The metadata image.
      */
-    synchronized void onLoaded(CoordinatorMetadataImage newImage) {
+    synchronized void onLoaded(MetadataImage newImage) {
         this.coordinator.onLoaded(newImage);
     }
 
@@ -206,7 +207,7 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
      * @param newImage  The new metadata image.
      * @param delta     The delta image.
      */
-    synchronized void onNewMetadataImage(CoordinatorMetadataImage newImage, CoordinatorMetadataDelta delta) {
+    synchronized void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
         this.coordinator.onNewMetadataImage(newImage, delta);
     }
 

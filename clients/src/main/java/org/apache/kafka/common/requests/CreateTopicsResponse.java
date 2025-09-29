@@ -19,10 +19,11 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
-import java.util.EnumMap;
+import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.Map;
 
 public class CreateTopicsResponse extends AbstractResponse {
@@ -66,15 +67,15 @@ public class CreateTopicsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
+        HashMap<Errors, Integer> counts = new HashMap<>();
         data.topics().forEach(result ->
             updateErrorCounts(counts, Errors.forCode(result.errorCode()))
         );
         return counts;
     }
 
-    public static CreateTopicsResponse parse(Readable readable, short version) {
-        return new CreateTopicsResponse(new CreateTopicsResponseData(readable, version));
+    public static CreateTopicsResponse parse(ByteBuffer buffer, short version) {
+        return new CreateTopicsResponse(new CreateTopicsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

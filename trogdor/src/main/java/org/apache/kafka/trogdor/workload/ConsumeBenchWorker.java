@@ -58,6 +58,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 
 public class ConsumeBenchWorker implements TaskWorker {
@@ -131,7 +132,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                 }
             } else {
                 List<TopicPartition> partitions = populatePartitionsByTopic(consumer.consumer(), partitionsByTopic)
-                    .values().stream().flatMap(List::stream).toList();
+                    .values().stream().flatMap(List::stream).collect(Collectors.toList());
                 tasks.add(new ConsumeMessages(consumer, spec.recordProcessor(), partitions));
 
                 for (int i = 0; i < consumerCount - 1; i++) {
@@ -181,7 +182,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                 if (partitions.isEmpty()) {
                     List<TopicPartition> fetchedPartitions = consumer.partitionsFor(topicName).stream()
                         .map(partitionInfo -> new TopicPartition(partitionInfo.topic(), partitionInfo.partition()))
-                        .toList();
+                        .collect(Collectors.toList());
                     partitions.addAll(fetchedPartitions);
                 }
 
@@ -549,7 +550,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             this.consumerLock.lock();
             try {
                 return consumer.assignment().stream()
-                    .map(TopicPartition::toString).toList();
+                    .map(TopicPartition::toString).collect(Collectors.toList());
             } finally {
                 this.consumerLock.unlock();
             }

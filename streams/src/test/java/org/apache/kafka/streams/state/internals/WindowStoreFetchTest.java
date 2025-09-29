@@ -31,6 +31,7 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
@@ -86,6 +87,8 @@ public class WindowStoreFetchTest {
     private String innerHigh;
     private String innerLowBetween;
     private String innerHighBetween;
+
+    private TimeWindowedKStream<String, String> windowedStream;
 
     public void setup(final StoreType storeType, 
                       final boolean enableLogging, 

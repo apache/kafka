@@ -20,8 +20,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
+
+import java.nio.ByteBuffer;
 
 public class GetTelemetrySubscriptionsRequest extends AbstractRequest {
 
@@ -69,8 +71,8 @@ public class GetTelemetrySubscriptionsRequest extends AbstractRequest {
         return data;
     }
 
-    public static GetTelemetrySubscriptionsRequest parse(Readable readable, short version) {
+    public static GetTelemetrySubscriptionsRequest parse(ByteBuffer buffer, short version) {
         return new GetTelemetrySubscriptionsRequest(new GetTelemetrySubscriptionsRequestData(
-                readable, version), version);
+                new ByteBufferAccessor(buffer), version), version);
     }
 }

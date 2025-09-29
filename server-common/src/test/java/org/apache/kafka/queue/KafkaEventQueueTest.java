@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
@@ -208,7 +209,7 @@ public class KafkaEventQueueTest {
         MockTime time = new MockTime(0, 100000, 1);
         try (KafkaEventQueue queue = new KafkaEventQueue(time, logContext, "testDeferredIsQueuedAfterTriggering")) {
             AtomicInteger count = new AtomicInteger(0);
-            List<CompletableFuture<Integer>> futures = List.of(
+            List<CompletableFuture<Integer>> futures = Arrays.asList(
                     new CompletableFuture<>(),
                     new CompletableFuture<>(),
                     new CompletableFuture<>());

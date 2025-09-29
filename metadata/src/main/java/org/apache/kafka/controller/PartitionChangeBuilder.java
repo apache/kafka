@@ -33,6 +33,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -311,10 +312,9 @@ public class PartitionChangeBuilder {
                     topicId, partitionId, Arrays.toString(partition.lastKnownElr));
             return false;
         }
-        if (!isAcceptableLeader.test(partition.lastKnownElr[0])) {
+        if (isAcceptableLeader.test(partition.lastKnownElr[0])) {
             log.trace("Try to elect last known leader for {}-{} but last known leader is not alive. last known leader={}",
                     topicId, partitionId, partition.lastKnownElr[0]);
-            return false;
         }
         return true;
     }
@@ -332,14 +332,14 @@ public class PartitionChangeBuilder {
             // so only log clean elections at TRACE level; log unclean elections at INFO level
             // to ensure the message is emitted since an unclean election can lead to data loss;
             if (targetElr.contains(electionResult.node)) {
-                targetIsr = List.of(electionResult.node);
+                targetIsr = Collections.singletonList(electionResult.node);
                 targetElr = targetElr.stream().filter(replica -> replica != electionResult.node)
                     .collect(Collectors.toList());
-                log.info("Setting new leader for topicId {}, partition {} to {} using ELR. Previous partition: {}, change record: {}",
-                        topicId, partitionId, electionResult.node, partition, record);
+                log.trace("Setting new leader for topicId {}, partition {} to {} using ELR",
+                        topicId, partitionId, electionResult.node);
             } else if (electionResult.unclean) {
-                log.info("Setting new leader for topicId {}, partition {} to {} using an unclean election. Previous partition: {}, change record: {}",
-                    topicId, partitionId, electionResult.node, partition, record);
+                log.info("Setting new leader for topicId {}, partition {} to {} using an unclean election",
+                    topicId, partitionId, electionResult.node);
             } else {
                 log.trace("Setting new leader for topicId {}, partition {} to {} using a clean election",
                     topicId, partitionId, electionResult.node);
@@ -348,7 +348,7 @@ public class PartitionChangeBuilder {
             if (electionResult.unclean) {
                 // If the election was unclean, we have to forcibly set the ISR to just the
                 // new leader. This can result in data loss!
-                record.setIsr(List.of(electionResult.node));
+                record.setIsr(Collections.singletonList(electionResult.node));
                 if (partition.leaderRecoveryState != LeaderRecoveryState.RECOVERING) {
                     // And mark the leader recovery state as RECOVERING
                     record.setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value());
@@ -421,10 +421,10 @@ public class PartitionChangeBuilder {
 
         PartitionReassignmentReplicas.CompletedReassignment completedReassignment = completedReassignmentOpt.get();
 
-        targetIsr = completedReassignment.isr();
-        targetReplicas = completedReassignment.replicas();
-        targetRemoving = List.of();
-        targetAdding = List.of();
+        targetIsr = completedReassignment.isr;
+        targetReplicas = completedReassignment.replicas;
+        targetRemoving = Collections.emptyList();
+        targetAdding = Collections.emptyList();
     }
 
     public Optional<ApiMessageAndVersion> build() {
@@ -476,7 +476,7 @@ public class PartitionChangeBuilder {
                 for (int replica : targetReplicas) {
                     directories.add(this.targetDirectories.getOrDefault(replica, defaultDirProvider.defaultDir(replica)));
                 }
-                if (!directories.equals(List.of(partition.directories))) {
+                if (!directories.equals(Arrays.asList(partition.directories))) {
                     record.setDirectories(directories);
                 }
             }
@@ -497,11 +497,11 @@ public class PartitionChangeBuilder {
         if (record.isr() != null && record.isr().isEmpty() && (partition.lastKnownElr.length != 1 ||
             partition.lastKnownElr[0] != partition.leader)) {
             // Only update the last known leader when the first time the partition becomes leaderless.
-            record.setLastKnownElr(List.of(partition.leader));
+            record.setLastKnownElr(Collections.singletonList(partition.leader));
         } else if ((record.leader() >= 0 || (partition.leader != NO_LEADER && record.leader() != NO_LEADER))
             && partition.lastKnownElr.length > 0) {
             // Clear the LastKnownElr field if the partition will have or continues to have a valid leader.
-            record.setLastKnownElr(List.of());
+            record.setLastKnownElr(Collections.emptyList());
         }
     }
 
@@ -511,8 +511,8 @@ public class PartitionChangeBuilder {
 
         // Clean the ELR related fields if it is an unclean election or ELR is disabled.
         if (!isCleanLeaderElection || !eligibleLeaderReplicasEnabled) {
-            targetElr = List.of();
-            targetLastKnownElr = List.of();
+            targetElr = Collections.emptyList();
+            targetLastKnownElr = Collections.emptyList();
         }
 
         if (!targetElr.equals(Replicas.toList(partition.elr))) {
@@ -540,8 +540,8 @@ public class PartitionChangeBuilder {
 
         // If the ISR is larger or equal to the min ISR, clear the ELR and LastKnownElr.
         if (targetIsr.size() >= minISR) {
-            targetElr = List.of();
-            targetLastKnownElr = List.of();
+            targetElr = Collections.emptyList();
+            targetLastKnownElr = Collections.emptyList();
             return;
         }
 

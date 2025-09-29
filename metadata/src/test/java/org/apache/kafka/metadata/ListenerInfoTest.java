@@ -26,8 +26,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -58,7 +59,7 @@ public class ListenerInfoTest {
         "example2.com",
         9094);
 
-    private static final List<Endpoint> ALL = List.of(
+    private static final List<Endpoint> ALL = Arrays.asList(
         INTERNAL,
         EXTERNAL,
         SSL,
@@ -66,23 +67,23 @@ public class ListenerInfoTest {
 
     @Test
     public void testNullHostname() {
-        assertNull(ListenerInfo.create(List.of(INTERNAL)).firstListener().host());
+        assertNull(ListenerInfo.create(Collections.singletonList(INTERNAL)).firstListener().host());
     }
 
     @Test
     public void testNullHostnameGetsResolved() throws Exception {
-        assertNotNull(ListenerInfo.create(List.of(INTERNAL)).
+        assertNotNull(ListenerInfo.create(Collections.singletonList(INTERNAL)).
                 withWildcardHostnamesResolved().firstListener().host());
     }
 
     @Test
     public void testEmptyHostname() {
-        assertEquals("", ListenerInfo.create(List.of(SSL)).firstListener().host());
+        assertEquals("", ListenerInfo.create(Collections.singletonList(SSL)).firstListener().host());
     }
 
     @Test
     public void testEmptyHostnameGetsResolved() throws Exception {
-        assertNotEquals("", ListenerInfo.create(List.of(SSL)).
+        assertNotEquals("", ListenerInfo.create(Collections.singletonList(SSL)).
                 withWildcardHostnamesResolved().firstListener().host());
     }
 
@@ -94,16 +95,16 @@ public class ListenerInfoTest {
             endpoints.add(ALL.get((i + startIndex) % ALL.size()));
         }
         ListenerInfo listenerInfo = ListenerInfo.create(endpoints);
-        assertEquals(ALL.get(startIndex).listener(),
-            listenerInfo.firstListener().listener());
+        assertEquals(ALL.get(startIndex).listenerName().get(),
+            listenerInfo.firstListener().listenerName().get());
     }
 
     @ParameterizedTest
     @ValueSource(ints = {0, 1, 2, 3})
     public void testCreateWithExplicitFirstListener(int startIndex) {
-        ListenerInfo listenerInfo = ListenerInfo.create(Optional.of(ALL.get(startIndex).listener()), ALL);
-        assertEquals(ALL.get(startIndex).listener(),
-            listenerInfo.firstListener().listener());
+        ListenerInfo listenerInfo = ListenerInfo.create(ALL.get(startIndex).listenerName(), ALL);
+        assertEquals(ALL.get(startIndex).listenerName().get(),
+            listenerInfo.firstListener().listenerName().get());
     }
 
     @Test
@@ -119,14 +120,14 @@ public class ListenerInfoTest {
     @Test
     public void testToControllerRegistrationRequestFailsOnNullHost() {
         assertThrows(RuntimeException.class,
-            () -> ListenerInfo.create(List.of(INTERNAL)).
+            () -> ListenerInfo.create(Collections.singletonList(INTERNAL)).
                 toControllerRegistrationRequest());
     }
 
     @Test
     public void testToControllerRegistrationRequestFailsOnZeroPort() {
         assertThrows(RuntimeException.class,
-            () -> ListenerInfo.create(List.of(INTERNAL)).
+            () -> ListenerInfo.create(Collections.singletonList(INTERNAL)).
                 withWildcardHostnamesResolved().
                 toControllerRegistrationRequest());
     }
@@ -144,14 +145,14 @@ public class ListenerInfoTest {
     @Test
     public void testToControllerRegistrationRecordFailsOnNullHost() {
         assertThrows(RuntimeException.class,
-            () -> ListenerInfo.create(List.of(INTERNAL)).
+            () -> ListenerInfo.create(Collections.singletonList(INTERNAL)).
                 toControllerRegistrationRecord());
     }
 
     @Test
     public void testToControllerRegistrationRecordFailsOnZeroPort() {
         assertThrows(RuntimeException.class,
-            () -> ListenerInfo.create(List.of(INTERNAL)).
+            () -> ListenerInfo.create(Collections.singletonList(INTERNAL)).
                 withWildcardHostnamesResolved().
                 toControllerRegistrationRecord());
     }
@@ -169,14 +170,14 @@ public class ListenerInfoTest {
     @Test
     public void testToBrokerRegistrationRequestFailsOnNullHost() {
         assertThrows(RuntimeException.class,
-            () -> ListenerInfo.create(List.of(INTERNAL)).
+            () -> ListenerInfo.create(Collections.singletonList(INTERNAL)).
                 toBrokerRegistrationRequest());
     }
 
     @Test
     public void testToBrokerRegistrationRequestFailsOnZeroPort() {
         assertThrows(RuntimeException.class,
-            () -> ListenerInfo.create(List.of(INTERNAL)).
+            () -> ListenerInfo.create(Collections.singletonList(INTERNAL)).
                 withWildcardHostnamesResolved().
                 toBrokerRegistrationRequest());
     }
@@ -194,21 +195,21 @@ public class ListenerInfoTest {
     @Test
     public void testToBrokerRegistrationRecordFailsOnNullHost() {
         assertThrows(RuntimeException.class,
-            () -> ListenerInfo.create(List.of(INTERNAL)).
+            () -> ListenerInfo.create(Collections.singletonList(INTERNAL)).
                 toBrokerRegistrationRecord());
     }
 
     @Test
     public void testToBrokerRegistrationRecordFailsOnZeroPort() {
         assertThrows(RuntimeException.class,
-            () -> ListenerInfo.create(List.of(INTERNAL)).
+            () -> ListenerInfo.create(Collections.singletonList(INTERNAL)).
                 withWildcardHostnamesResolved().
                 toBrokerRegistrationRecord());
     }
 
     @Test
     public void testToString() {
-        ListenerInfo listenerInfo = ListenerInfo.create(List.of(EXTERNAL, SASL_PLAINTEXT));
+        ListenerInfo listenerInfo = ListenerInfo.create(Arrays.asList(EXTERNAL, SASL_PLAINTEXT));
         assertEquals("ListenerInfo(Endpoint(listenerName='EXTERNAL', securityProtocol=SASL_SSL, host='example.com', port=9092), " +
             "Endpoint(listenerName='SASL_PLAINTEXT', securityProtocol=SASL_PLAINTEXT, host='example2.com', port=9094))",
             listenerInfo.toString());

@@ -21,7 +21,7 @@ import kafka.coordinator.transaction.TransactionMarkerChannelManager.{LogAppendR
 
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
-import kafka.server.KafkaConfig
+import kafka.server.{KafkaConfig, MetadataCache}
 import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.common.metrics.Metrics
@@ -32,15 +32,12 @@ import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersReque
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, Reconfigurable, TopicPartition}
-import org.apache.kafka.coordinator.transaction.{TransactionMetadata, TxnTransitMetadata}
-import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
 import scala.collection.{concurrent, immutable}
 import scala.jdk.CollectionConverters._
-import scala.jdk.javaapi.OptionConverters
 
 object TransactionMarkerChannelManager {
   private val UnknownDestinationQueueSizeMetricName = "UnknownDestinationQueueSize"
@@ -326,16 +323,16 @@ class TransactionMarkerChannelManager(
       info(s"Replaced an existing pending complete txn $prev with $pendingCompleteTxn while adding markers to send.")
     }
     addTxnMarkersToBrokerQueue(txnMetadata.producerId,
-      txnMetadata.producerEpoch, txnResult, pendingCompleteTxn, txnMetadata.topicPartitions.asScala.toSet)
+      txnMetadata.producerEpoch, txnResult, pendingCompleteTxn, txnMetadata.topicPartitions.toSet)
     maybeWriteTxnCompletion(transactionalId)
   }
 
   def numTxnsWithPendingMarkers: Int = transactionsWithPendingMarkers.size
 
   private def hasPendingMarkersToWrite(txnMetadata: TransactionMetadata): Boolean = {
-    txnMetadata.inLock(() =>
-      !txnMetadata.topicPartitions.isEmpty
-    )
+    txnMetadata.inLock {
+      txnMetadata.topicPartitions.nonEmpty
+    }
   }
 
   def maybeWriteTxnCompletion(transactionalId: String): Unit = {
@@ -385,7 +382,7 @@ class TransactionMarkerChannelManager(
                                  topicPartitions: immutable.Set[TopicPartition]): Unit = {
     val txnTopicPartition = txnStateManager.partitionFor(pendingCompleteTxn.transactionalId)
     val partitionsByDestination: immutable.Map[Option[Node], immutable.Set[TopicPartition]] = topicPartitions.groupBy { topicPartition: TopicPartition =>
-      OptionConverters.toScala(metadataCache.getPartitionLeaderEndpoint(topicPartition.topic, topicPartition.partition, interBrokerListenerName))
+      metadataCache.getPartitionLeaderEndpoint(topicPartition.topic, topicPartition.partition, interBrokerListenerName)
     }
 
     val coordinatorEpoch = pendingCompleteTxn.coordinatorEpoch
@@ -422,9 +419,9 @@ class TransactionMarkerChannelManager(
 
                 val txnMetadata = epochAndMetadata.transactionMetadata
 
-                txnMetadata.inLock(() =>
+                txnMetadata.inLock {
                   topicPartitions.foreach(txnMetadata.removePartition)
-                )
+                }
 
                 maybeWriteTxnCompletion(transactionalId)
               }

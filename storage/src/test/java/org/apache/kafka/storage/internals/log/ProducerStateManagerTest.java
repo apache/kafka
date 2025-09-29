@@ -44,6 +44,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -54,6 +55,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.emptySet;
+import static java.util.Collections.singleton;
+import static java.util.Collections.singletonList;
+import static org.apache.kafka.coordinator.transaction.TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT;
 import static org.apache.kafka.storage.internals.log.ProducerStateManager.LATE_TRANSACTION_BUFFER_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -83,7 +89,7 @@ public class ProducerStateManagerTest {
     public ProducerStateManagerTest() throws IOException {
         logDir = TestUtils.tempDirectory();
         partition = new TopicPartition("test", 0);
-        producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true);
+        producerStateManagerConfig = new ProducerStateManagerConfig(PRODUCER_ID_EXPIRATION_MS_DEFAULT, true);
         time = new MockTime();
         stateManager = new ProducerStateManager(partition, logDir, maxTransactionTimeoutMs,
                 producerStateManagerConfig, time);
@@ -382,10 +388,10 @@ public class ProducerStateManagerTest {
         CompletedTxn completedTxn = appendInfo.appendEndTxnMarker(endTxnMarker, epoch, 40L, time.milliseconds())
                 .orElseThrow(() -> new RuntimeException("The transaction should be completed"));
 
-        assertEquals(producerId, completedTxn.producerId());
-        assertEquals(16L, completedTxn.firstOffset());
-        assertEquals(40L, completedTxn.lastOffset());
-        assertFalse(completedTxn.isAborted());
+        assertEquals(producerId, completedTxn.producerId);
+        assertEquals(16L, completedTxn.firstOffset);
+        assertEquals(40L, completedTxn.lastOffset);
+        assertFalse(completedTxn.isAborted);
 
         ProducerStateEntry lastEntry = appendInfo.toEntry();
         // verify that appending the transaction marker doesn't affect the metadata of the cached record batches.
@@ -601,20 +607,20 @@ public class ProducerStateManagerTest {
         appendClientEntry(stateManager, producerId, epoch, 1, 1L, false);
         stateManager.takeSnapshot();
         assertEquals(1, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(Set.of(2L), currentSnapshotOffsets());
+        assertEquals(singleton(2L), currentSnapshotOffsets());
 
         appendClientEntry(stateManager, producerId, epoch, 2, 2L, false);
         stateManager.takeSnapshot();
         assertEquals(2, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(Set.of(2L, 3L), currentSnapshotOffsets());
+        assertEquals(new HashSet<>(asList(2L, 3L)), currentSnapshotOffsets());
 
         stateManager.deleteSnapshotsBefore(3L);
         assertEquals(1, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(Set.of(3L), currentSnapshotOffsets());
+        assertEquals(singleton(3L), currentSnapshotOffsets());
 
         stateManager.deleteSnapshotsBefore(4L);
         assertEquals(0, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(Set.of(), currentSnapshotOffsets());
+        assertEquals(emptySet(), currentSnapshotOffsets());
     }
 
     @Test
@@ -623,22 +629,22 @@ public class ProducerStateManagerTest {
         appendClientEntry(stateManager, producerId, epoch, 1, 1L, false);
         stateManager.takeSnapshot();
         assertEquals(1, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(Set.of(2L), currentSnapshotOffsets());
+        assertEquals(singleton(2L), currentSnapshotOffsets());
 
         appendClientEntry(stateManager, producerId, epoch, 2, 2L, false);
         stateManager.takeSnapshot();
         assertEquals(2, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(Set.of(2L, 3L), currentSnapshotOffsets());
+        assertEquals(new HashSet<>(asList(2L, 3L)), currentSnapshotOffsets());
 
         stateManager.truncateFullyAndStartAt(0L);
 
         assertEquals(0, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(Set.of(), currentSnapshotOffsets());
+        assertEquals(emptySet(), currentSnapshotOffsets());
 
         appendClientEntry(stateManager, producerId, epoch, 0, 0L, false);
         stateManager.takeSnapshot();
         assertEquals(1, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(Set.of(1L), currentSnapshotOffsets());
+        assertEquals(singleton(1L), currentSnapshotOffsets());
     }
 
     @Test
@@ -654,12 +660,12 @@ public class ProducerStateManagerTest {
         appendClientEntry(stateManager, producerId, epoch, 4, 4L, false);
         stateManager.takeSnapshot();
         assertEquals(2, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(Set.of(3L, 5L), currentSnapshotOffsets());
+        assertEquals(new HashSet<>(asList(3L, 5L)), currentSnapshotOffsets());
 
         // Truncate to the range (3, 5), this will delete the earlier snapshot until offset 3.
         stateManager.truncateAndReload(3, 5, time.milliseconds());
         assertEquals(1, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(Set.of(5L), currentSnapshotOffsets());
+        assertEquals(singleton(5L), currentSnapshotOffsets());
 
         // Add the snapshot files until offset 3 to the log dir.
         pathAndDataList.forEach((path, data) -> assertDoesNotThrow(() -> Files.write(path, data)));
@@ -668,7 +674,7 @@ public class ProducerStateManagerTest {
         stateManager.truncateFullyAndReloadSnapshots();
 
         assertEquals(OptionalLong.of(3), stateManager.latestSnapshotOffset());
-        assertEquals(Set.of(3L), currentSnapshotOffsets());
+        assertEquals(singleton(3L), currentSnapshotOffsets());
     }
 
     @Test
@@ -722,12 +728,12 @@ public class ProducerStateManagerTest {
 
         stateManager.takeSnapshot();
         assertEquals(1, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(Set.of(1L), currentSnapshotOffsets());
+        assertEquals(singleton(1L), currentSnapshotOffsets());
 
         // nothing changed so there should be no new snapshot
         stateManager.takeSnapshot();
         assertEquals(1, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(Set.of(1L), currentSnapshotOffsets());
+        assertEquals(singleton(1L), currentSnapshotOffsets());
     }
 
     @Test
@@ -915,17 +921,17 @@ public class ProducerStateManagerTest {
         Files.createFile(LogFileUtils.producerSnapshotFile(logDir, 42).toPath()); // not stray
 
         // claim that we only have one segment with a base offset of 5
-        stateManager.removeStraySnapshots(List.of(5L));
+        stateManager.removeStraySnapshots(singletonList(5L));
 
         // The snapshot file at offset 2 should be considered a stray, but the snapshot at 42 should be kept
         // around because it is the largest snapshot.
         assertEquals(OptionalLong.of(42), stateManager.latestSnapshotOffset());
         assertEquals(OptionalLong.of(5), stateManager.oldestSnapshotOffset());
-        assertEquals(List.of(5L, 42L), ProducerStateManager.listSnapshotFiles(logDir)
+        assertEquals(asList(5L, 42L), ProducerStateManager.listSnapshotFiles(logDir)
                 .stream()
                 .map(file -> file.offset)
                 .sorted()
-                .toList());
+                .collect(Collectors.toList()));
     }
 
     @Test
@@ -938,12 +944,12 @@ public class ProducerStateManagerTest {
         Files.createFile(LogFileUtils.producerSnapshotFile(logDir, 2).toPath()); // stray
         Files.createFile(LogFileUtils.producerSnapshotFile(logDir, 42).toPath()); // not stray
 
-        stateManager.removeStraySnapshots(List.of(42L));
-        assertEquals(List.of(42L), ProducerStateManager.listSnapshotFiles(logDir)
+        stateManager.removeStraySnapshots(singletonList(42L));
+        assertEquals(singletonList(42L), ProducerStateManager.listSnapshotFiles(logDir)
                 .stream()
                 .map(file -> file.offset)
                 .sorted()
-                .toList());
+                .collect(Collectors.toList()));
 
     }
 
@@ -1046,136 +1052,6 @@ public class ProducerStateManagerTest {
         time.sleep((producerStateManagerConfig.producerIdExpirationMs() / 2) + 1);
         stateManager.removeExpiredProducers(time.milliseconds());
         assertNull(stateManager.verificationStateEntry(producerId));
-    }
-
-    @Test
-    public void testRejectNonZeroSequenceForTransactionsV2WithEmptyState() {
-        // Create a verification state entry that supports epoch bump (transactions v2)
-        VerificationStateEntry verificationEntry = stateManager.maybeCreateVerificationStateEntry(
-            producerId,
-            0,
-            epoch,
-            true
-        );
-        
-        // Verify this is actually transactions v2
-        assertTrue(
-            verificationEntry.supportsEpochBump(),
-            "Should be using transactions v2 (supports epoch bump)"
-        );
-        
-        // Create ProducerAppendInfo with empty producer state
-        ProducerAppendInfo appendInfo = new ProducerAppendInfo(
-            partition,
-            producerId,
-            ProducerStateEntry.empty(producerId),
-            AppendOrigin.CLIENT,
-            verificationEntry
-        );
-        
-        // Attempting to append with non-zero sequence number should fail for transactions v2
-        OutOfOrderSequenceException exception = assertThrows(
-            OutOfOrderSequenceException.class,
-            () -> appendInfo.appendDataBatch(
-                epoch,
-                5,
-                5,
-                time.milliseconds(),
-                new LogOffsetMetadata(0L), 0L, false
-            )
-        );
-        
-        assertTrue(exception.getMessage().contains("Expected sequence 0 for " +
-            "transactions v2 idempotent producer"
-        ));
-        assertTrue(exception.getMessage().contains("5 (incoming seq. number)"));
-        
-        // Attempting to append with sequence 0 should succeed
-        assertDoesNotThrow(() -> appendInfo.appendDataBatch(
-            epoch,
-            0,
-            0,
-            time.milliseconds(),
-            new LogOffsetMetadata(0L), 0L, false)
-        );
-    }
-
-    @Test
-    public void testAllowNonZeroSequenceForTransactionsV1WithEmptyState() {
-        // Create a verification state entry that does NOT support epoch bump (transactions v1)
-        // Set lowest sequence to 5 to allow our test sequence to pass the verification check
-        VerificationStateEntry verificationEntry = stateManager.maybeCreateVerificationStateEntry(
-            producerId + 1,
-            5,
-            epoch,
-            false
-        );
-        
-        // Verify this is transactions v1
-        assertFalse(
-            verificationEntry.supportsEpochBump(),
-            "Should be using transactions v1 (does not support epoch bump)"
-        );
-        
-        // Create ProducerAppendInfo with empty producer state
-        ProducerAppendInfo appendInfo = new ProducerAppendInfo(
-            partition,
-            producerId + 1,
-            ProducerStateEntry.empty(producerId + 1),
-            AppendOrigin.CLIENT,
-            verificationEntry
-        );
-        
-        // Attempting to append with non-zero sequence number should succeed for transactions v1
-        // (our validation should not trigger)
-        assertDoesNotThrow(() -> appendInfo.appendDataBatch(
-            epoch,
-            5,
-            5,
-            time.milliseconds(),
-            new LogOffsetMetadata(0L), 0L, false)
-        );
-    }
-
-    @Test
-    public void testRejectNonZeroSequenceForDirectEpochBump() {
-        // Setup: Establish producer with epoch 0 and some sequence history
-        appendClientEntry(stateManager, producerId, epoch, 0, 0L, false);
-        appendClientEntry(stateManager, producerId, epoch, 1, 1L, false);
-        appendClientEntry(stateManager, producerId, epoch, 2, 2L, false);
-        
-        // Verify initial state
-        ProducerStateEntry initialEntry = getLastEntryOrElseThrownByProducerId(stateManager, producerId);
-        assertEquals(0, initialEntry.producerEpoch());
-        assertEquals(2, initialEntry.lastSeq());
-        assertFalse(initialEntry.isEmpty()); // Has batch metadata
-
-        ProducerAppendInfo appendInfo = stateManager.prepareUpdate(producerId, AppendOrigin.CLIENT);
-        
-        // Test Case 1: Epoch bump (0 -> 1) with non-zero sequence should be rejected
-        OutOfOrderSequenceException exception = assertThrows(OutOfOrderSequenceException.class,
-                () -> appendInfo.appendDataBatch(
-                    (short) 1,
-                    5,
-                    5,
-                    time.milliseconds(),
-                    new LogOffsetMetadata(3L), 3L, false)
-        );
-        
-        assertTrue(exception.getMessage().contains("Invalid sequence number for new epoch"));
-        assertTrue(exception.getMessage().contains("1 (request epoch)"));
-        assertTrue(exception.getMessage().contains("5 (seq. number)"));
-        assertTrue(exception.getMessage().contains("0 (current producer epoch)"));
-        
-        // Test Case 2: Epoch bump (0 -> 1) with sequence 0 should succeed
-        ProducerAppendInfo appendInfo2 = stateManager.prepareUpdate(producerId, AppendOrigin.CLIENT);
-        assertDoesNotThrow(() -> appendInfo2.appendDataBatch(
-                (short) 1,
-                0,
-                0,
-                time.milliseconds(),
-                new LogOffsetMetadata(3L), 3L, false)
-        );
     }
 
     @Test
@@ -1362,7 +1238,7 @@ public class ProducerStateManagerTest {
         assertEquals(expectedFirstDataOffset, lastEntry.firstDataOffset());
         assertEquals(expectedLastDataOffset, lastEntry.lastDataOffset());
         assertEquals(expectedCurrentTxnFirstOffset, lastEntry.currentTxnFirstOffset());
-        assertTxnMetadataEquals(List.of(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions());
+        assertTxnMetadataEquals(singletonList(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions());
     }
 
     private void assertTxnMetadataEquals(List<TxnMetadata> expected, List<TxnMetadata> actual) {

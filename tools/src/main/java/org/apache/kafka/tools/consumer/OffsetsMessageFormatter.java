@@ -16,40 +16,37 @@
  */
 package org.apache.kafka.tools.consumer;
 
-import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde;
-import org.apache.kafka.coordinator.group.generated.CoordinatorRecordJsonConverters;
-import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitKeyJsonConverter;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
+import org.apache.kafka.coordinator.group.generated.OffsetCommitValueJsonConverter;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.NullNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 
-import java.util.Set;
+import java.nio.ByteBuffer;
 
 /**
  * Formatter for use with tools such as console consumer: Consumer should also set exclude.internal.topics to false.
  */
-public class OffsetsMessageFormatter extends CoordinatorRecordMessageFormatter {
-    private static final Set<Short> ALLOWED_RECORDS = Set.of(
-        CoordinatorRecordType.LEGACY_OFFSET_COMMIT.id(),
-        CoordinatorRecordType.OFFSET_COMMIT.id()
-    );
-
-    public OffsetsMessageFormatter() {
-        super(new GroupCoordinatorRecordSerde());
+public class OffsetsMessageFormatter extends ApiMessageFormatter {
+    @Override
+    protected JsonNode readToKeyJson(ByteBuffer byteBuffer) {
+        short version = byteBuffer.getShort();
+        if (version >= OffsetCommitKey.LOWEST_SUPPORTED_VERSION && version <= OffsetCommitKey.HIGHEST_SUPPORTED_VERSION) {
+            return OffsetCommitKeyJsonConverter.write(new OffsetCommitKey(new ByteBufferAccessor(byteBuffer), version), version);
+        }
+        return NullNode.getInstance();
     }
 
     @Override
-    protected boolean isRecordTypeAllowed(short recordType) {
-        return ALLOWED_RECORDS.contains(recordType);
-    }
-
-    @Override
-    protected JsonNode keyAsJson(ApiMessage message) {
-        return CoordinatorRecordJsonConverters.writeRecordKeyAsJson(message);
-    }
-
-    @Override
-    protected JsonNode valueAsJson(ApiMessage message, short version) {
-        return CoordinatorRecordJsonConverters.writeRecordValueAsJson(message, version);
+    protected JsonNode readToValueJson(ByteBuffer byteBuffer) {
+        short version = byteBuffer.getShort();
+        if (version >= OffsetCommitValue.LOWEST_SUPPORTED_VERSION && version <= OffsetCommitValue.HIGHEST_SUPPORTED_VERSION) {
+            return OffsetCommitValueJsonConverter.write(new OffsetCommitValue(new ByteBufferAccessor(byteBuffer), version), version);
+        }
+        return new TextNode(UNKNOWN);
     }
 }

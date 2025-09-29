@@ -25,7 +25,7 @@ import java.util.Objects;
 /**
  * This class contains the information for a single batch of state information for use by the {@link Persister}.
  */
-public class PersisterStateBatch implements Comparable<PersisterStateBatch> {
+public class PersisterStateBatch implements Comparable {
     private final long firstOffset;
     private final long lastOffset;
     private final short deliveryCount;
@@ -114,18 +114,19 @@ public class PersisterStateBatch implements Comparable<PersisterStateBatch> {
      * in containers which allow a Comparator argument or various sort algorithms
      * in the java library.
      *
-     * @param other - object representing another PersisterStateBatch
+     * @param o - object representing another PersisterStateBatch
      * @return -INT, 0, +INT based on "this" being smaller, equal or larger than the argument.
      */
     @Override
-    public int compareTo(PersisterStateBatch other) {
-        int deltaFirst = Long.compare(this.firstOffset(), other.firstOffset());
+    public int compareTo(Object o) {
+        PersisterStateBatch that = (PersisterStateBatch) o;
+        int deltaFirst = Long.compare(this.firstOffset(), that.firstOffset());
         if (deltaFirst == 0) {
-            int deltaLast = Long.compare(this.lastOffset(), other.lastOffset());
+            int deltaLast = Long.compare(this.lastOffset(), that.lastOffset());
             if (deltaLast == 0) {
-                int deltaCount = this.deliveryCount() - other.deliveryCount();
+                int deltaCount = this.deliveryCount() - that.deliveryCount();
                 if (deltaCount == 0) {
-                    return Byte.compare(this.deliveryState(), other.deliveryState());
+                    return Byte.compare(this.deliveryState(), that.deliveryState());
                 }
                 return deltaCount;
             }

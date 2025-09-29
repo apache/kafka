@@ -33,16 +33,14 @@ public class RecordsToDelete {
     /**
      * Delete all the records before the given {@code offset}
      *
-     * @param offset    The offset before which all records will be deleted.
-     *                  Use {@code -1} to truncate to the high watermark.
+     * @param offset    the offset before which all records will be deleted
      */
     public static RecordsToDelete beforeOffset(long offset) {
         return new RecordsToDelete(offset);
     }
 
     /**
-     * The offset before which all records will be deleted.
-     * Use {@code -1} to truncate to the high watermark.
+     * The offset before which all records will be deleted
      */
     public long beforeOffset() {
         return offset;

@@ -27,8 +27,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.pcollections.HashTreePSet;
 import org.pcollections.TreePSet;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Random;
 import java.util.Spliterator;
 import java.util.function.Consumer;
@@ -144,7 +145,7 @@ public class PCollectionsImmutableNavigableSetTest {
 
     @Test
     public void testDelegationOfDescendingSet() {
-        TreePSet<Integer> testSet = TreePSet.from(List.of(2, 3, 4));
+        TreePSet<Integer> testSet = TreePSet.from(Arrays.asList(2, 3, 4));
         new PCollectionsTreeSetWrapperDelegationChecker<>()
                 .defineMockConfigurationForFunctionInvocation(TreePSet::descendingSet, testSet.descendingSet())
                 .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsImmutableNavigableSet::descendingSet, identity())
@@ -154,7 +155,7 @@ public class PCollectionsImmutableNavigableSetTest {
 
     @Test
     public void testDelegationOfDescendingIterator() {
-        TreePSet<Integer> testSet = TreePSet.from(List.of(2, 3, 4));
+        TreePSet<Integer> testSet = TreePSet.from(Arrays.asList(2, 3, 4));
         new PCollectionsTreeSetWrapperDelegationChecker<>()
                 .defineMockConfigurationForFunctionInvocation(TreePSet::descendingIterator, testSet.descendingIterator())
                 .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsImmutableNavigableSet::descendingIterator, identity())
@@ -190,7 +191,7 @@ public class PCollectionsImmutableNavigableSetTest {
 
     @Test
     public void testDelegationOfComparator() {
-        TreePSet<Integer> testSet = TreePSet.from(List.of(3, 4, 5));
+        TreePSet<Integer> testSet = TreePSet.from(Arrays.asList(3, 4, 5));
         new PCollectionsTreeSetWrapperDelegationChecker<>()
                 .defineMockConfigurationForFunctionInvocation(TreePSet::comparator, testSet.comparator())
                 .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsImmutableNavigableSet::comparator, identity())
@@ -323,32 +324,32 @@ public class PCollectionsImmutableNavigableSetTest {
     @ValueSource(booleans = {true, false})
     public void testDelegationOfContainsAll(boolean mockFunctionReturnValue) {
         new PCollectionsTreeSetWrapperDelegationChecker<>()
-                .defineMockConfigurationForFunctionInvocation(mock -> mock.containsAll(eq(List.of())), mockFunctionReturnValue)
-                .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.containsAll(List.of()), identity())
+                .defineMockConfigurationForFunctionInvocation(mock -> mock.containsAll(eq(Collections.emptyList())), mockFunctionReturnValue)
+                .defineWrapperFunctionInvocationAndMockReturnValueTransformation(wrapper -> wrapper.containsAll(Collections.emptyList()), identity())
                 .doFunctionDelegationCheck();
     }
 
     @Test
     public void testDelegationOfUnsupportedFunctionAddAll() {
         new PCollectionsTreeSetWrapperDelegationChecker<>()
-                .defineMockConfigurationForUnsupportedFunction(mock -> mock.addAll(eq(List.of())))
-                .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.addAll(List.of()))
+                .defineMockConfigurationForUnsupportedFunction(mock -> mock.addAll(eq(Collections.emptyList())))
+                .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.addAll(Collections.emptyList()))
                 .doUnsupportedFunctionDelegationCheck();
     }
 
     @Test
     public void testDelegationOfUnsupportedFunctionRetainAll() {
         new PCollectionsTreeSetWrapperDelegationChecker<>()
-                .defineMockConfigurationForUnsupportedFunction(mock -> mock.retainAll(eq(List.of())))
-                .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.retainAll(List.of()))
+                .defineMockConfigurationForUnsupportedFunction(mock -> mock.retainAll(eq(Collections.emptyList())))
+                .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.retainAll(Collections.emptyList()))
                 .doUnsupportedFunctionDelegationCheck();
     }
 
     @Test
     public void testDelegationOfUnsupportedFunctionRemoveAll() {
         new PCollectionsTreeSetWrapperDelegationChecker<>()
-                .defineMockConfigurationForUnsupportedFunction(mock -> mock.removeAll(eq(List.of())))
-                .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.removeAll(List.of()))
+                .defineMockConfigurationForUnsupportedFunction(mock -> mock.removeAll(eq(Collections.emptyList())))
+                .defineWrapperUnsupportedFunctionInvocation(wrapper -> wrapper.removeAll(Collections.emptyList()))
                 .doUnsupportedFunctionDelegationCheck();
     }
 

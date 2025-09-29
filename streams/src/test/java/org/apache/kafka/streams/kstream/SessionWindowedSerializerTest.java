@@ -44,66 +44,29 @@ public class SessionWindowedSerializerTest {
         assertInstanceOf(StringSerializer.class, inner, "Inner serializer type should be StringSerializer");
     }
 
-    @Deprecated
     @Test
-    public void shouldSetSerializerThroughWindowedInnerClassSerdeConfig() {
+    public void shouldSetWindowedInnerClassSerialiserThroughConfig() {
         props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, Serdes.ByteArraySerde.class.getName());
-        try (final SessionWindowedSerializer<?> serializer = new SessionWindowedSerializer<>()) {
-            serializer.configure(props, false);
-            assertInstanceOf(ByteArraySerializer.class, serializer.innerSerializer());
-        }
+        final SessionWindowedSerializer<?> serializer = new SessionWindowedSerializer<>();
+        serializer.configure(props, false);
+        assertInstanceOf(ByteArraySerializer.class, serializer.innerSerializer());
     }
 
     @Test
-    public void shouldSetSerializerThroughWindowedInnerSerializerClassConfig() {
-        props.put(SessionWindowedSerializer.WINDOWED_INNER_SERIALIZER_CLASS, Serdes.ByteArraySerde.class.getName());
-        try (final SessionWindowedSerializer<?> serializer = new SessionWindowedSerializer<>()) {
-            serializer.configure(props, false);
-            assertInstanceOf(ByteArraySerializer.class, serializer.innerSerializer());
-        }
-    }
-
-    @Deprecated
-    @Test
-    public void shouldIgnoreWindowedInnerClassSerdeConfigIfWindowedInnerSerializerClassConfigIsSet() {
-        props.put(SessionWindowedSerializer.WINDOWED_INNER_SERIALIZER_CLASS, Serdes.ByteArraySerde.class.getName());
-        props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, "some.non.existent.class");
-        try (final SessionWindowedSerializer<?> serializer = new SessionWindowedSerializer<>()) {
-            serializer.configure(props, false);
-            assertInstanceOf(ByteArraySerializer.class, serializer.innerSerializer());
-        }
+    public void shouldThrowErrorIfWindowInnerClassSerialiserIsNotSet() {
+        final SessionWindowedSerializer<?> serializer = new SessionWindowedSerializer<>();
+        assertThrows(IllegalArgumentException.class, () -> serializer.configure(props, false));
     }
 
     @Test
-    public void shouldThrowErrorIfWindowedInnerClassSerdeAndWindowedInnerSerializerClassAreNotSet() {
-        try (final SessionWindowedSerializer<?> serializer = new SessionWindowedSerializer<>()) {
-            assertThrows(IllegalArgumentException.class, () -> serializer.configure(props, false));
-        }
-    }
-
-    @Deprecated
-    @Test
-    public void shouldThrowErrorIfSerializersConflictInConstructorAndWindowedInnerClassSerdeConfig() {
+    public void shouldThrowErrorIfSerialisersConflictInConstructorAndConfig() {
         props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, Serdes.ByteArraySerde.class.getName());
         assertThrows(IllegalArgumentException.class, () -> sessionWindowedSerializer.configure(props, false));
     }
 
     @Test
-    public void shouldThrowErrorIfSerializersConflictInConstructorAndWindowedInnerSerializerClassConfig() {
-        props.put(SessionWindowedSerializer.WINDOWED_INNER_SERIALIZER_CLASS, Serdes.ByteArraySerde.class.getName());
-        assertThrows(IllegalArgumentException.class, () -> sessionWindowedSerializer.configure(props, false));
-    }
-
-    @Deprecated
-    @Test
-    public void shouldThrowConfigExceptionWhenInvalidWindowedInnerClassSerdeSupplied() {
+    public void shouldThrowConfigExceptionWhenInvalidWindowInnerClassSerialiserSupplied() {
         props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, "some.non.existent.class");
-        assertThrows(ConfigException.class, () -> sessionWindowedSerializer.configure(props, false));
-    }
-
-    @Test
-    public void shouldThrowConfigExceptionWhenInvalidWindowedInnerSerializerClassSupplied() {
-        props.put(SessionWindowedSerializer.WINDOWED_INNER_SERIALIZER_CLASS, "some.non.existent.class");
         assertThrows(ConfigException.class, () -> sessionWindowedSerializer.configure(props, false));
     }
 }

@@ -21,8 +21,9 @@ import kafka.utils.TestUtils.{consumeRecords, waitUntilTrue}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{ConcurrentTransactionsException, InvalidProducerEpochException, ProducerFencedException, TimeoutException}
+import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
@@ -110,9 +111,9 @@ class TransactionsTest extends IntegrationTestHarness {
     super.tearDown()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testBasicTransactions(groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testBasicTransactions(quorum: String, groupProtocol: String): Unit = {
     val producer = transactionalProducers.head
     val consumer = transactionalConsumers.head
     val unCommittedConsumer = nonTransactionalConsumers.head
@@ -156,8 +157,8 @@ class TransactionsTest extends IntegrationTestHarness {
     verifyLogStartOffsets(Map((tp11, 0), (tp22, 0)))
     maybeVerifyLocalLogStartOffsets(Map((tp11, 3L), (tp22, 3L)))
 
-    consumer.subscribe(java.util.List.of(topic1, topic2))
-    unCommittedConsumer.subscribe(java.util.List.of(topic1, topic2))
+    consumer.subscribe(List(topic1, topic2).asJava)
+    unCommittedConsumer.subscribe(List(topic1, topic2).asJava)
 
     val records = consumeRecords(consumer, 2)
     records.foreach { record =>
@@ -171,9 +172,10 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testReadCommittedConsumerShouldNotSeeUndecidedData(groupProtocol: String): Unit = {
+  @Flaky("KAFKA-18036")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testReadCommittedConsumerShouldNotSeeUndecidedData(quorum: String, groupProtocol: String): Unit = {
     val producer1 = transactionalProducers.head
     val producer2 = createTransactionalProducer("other")
     val readCommittedConsumer = transactionalConsumers.head
@@ -204,19 +206,19 @@ class TransactionsTest extends IntegrationTestHarness {
     // ensure the records are visible to the read uncommitted consumer
     val tp1 = new TopicPartition(topic1, 0)
     val tp2 = new TopicPartition(topic2, 0)
-    readUncommittedConsumer.assign(java.util.Set.of(tp1, tp2))
+    readUncommittedConsumer.assign(Set(tp1, tp2).asJava)
     consumeRecords(readUncommittedConsumer, 8)
-    val readUncommittedOffsetsForTimes = readUncommittedConsumer.offsetsForTimes(java.util.Map.of(
-      tp1, latestWrittenTimestamp: JLong,
-      tp2, latestWrittenTimestamp: JLong
-    ))
+    val readUncommittedOffsetsForTimes = readUncommittedConsumer.offsetsForTimes(Map(
+      tp1 -> (latestWrittenTimestamp: JLong),
+      tp2 -> (latestWrittenTimestamp: JLong)
+    ).asJava)
     assertEquals(2, readUncommittedOffsetsForTimes.size)
     assertEquals(latestWrittenTimestamp, readUncommittedOffsetsForTimes.get(tp1).timestamp)
     assertEquals(latestWrittenTimestamp, readUncommittedOffsetsForTimes.get(tp2).timestamp)
     readUncommittedConsumer.unsubscribe()
 
     // we should only see the first two records which come before the undecided second transaction
-    readCommittedConsumer.assign(java.util.Set.of(tp1, tp2))
+    readCommittedConsumer.assign(Set(tp1, tp2).asJava)
     val records = consumeRecords(readCommittedConsumer, 2)
     records.foreach { record =>
       assertEquals("x", new String(record.key))
@@ -231,17 +233,17 @@ class TransactionsTest extends IntegrationTestHarness {
     }
 
     // undecided timestamps should not be searchable either
-    val readCommittedOffsetsForTimes = readCommittedConsumer.offsetsForTimes(java.util.Map.of(
-      tp1, latestWrittenTimestamp: JLong,
-      tp2, latestWrittenTimestamp: JLong
-    ))
+    val readCommittedOffsetsForTimes = readCommittedConsumer.offsetsForTimes(Map(
+      tp1 -> (latestWrittenTimestamp: JLong),
+      tp2 -> (latestWrittenTimestamp: JLong)
+    ).asJava)
     assertNull(readCommittedOffsetsForTimes.get(tp1))
     assertNull(readCommittedOffsetsForTimes.get(tp2))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testDelayedFetchIncludesAbortedTransaction(groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDelayedFetchIncludesAbortedTransaction(quorum: String, groupProtocol: String): Unit = {
     val producer1 = transactionalProducers.head
     val producer2 = createTransactionalProducer("other")
     val tp10 = new TopicPartition(topic1, 0)
@@ -282,7 +284,7 @@ class TransactionsTest extends IntegrationTestHarness {
     consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "100")
     val readCommittedConsumer = createReadCommittedConsumer(props = consumerProps)
 
-    readCommittedConsumer.assign(java.util.Set.of(tp10))
+    readCommittedConsumer.assign(Set(tp10).asJava)
     val records = consumeRecords(readCommittedConsumer, numRecords = 2)
     assertEquals(2, records.size)
 
@@ -297,9 +299,9 @@ class TransactionsTest extends IntegrationTestHarness {
     assertEquals(3L, second.offset)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testSendOffsetsWithGroupMetadata(groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testSendOffsetsWithGroupMetadata(quorum: String, groupProtocol: String): Unit = {
     sendOffset((producer, _, consumer) =>
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
   }
@@ -324,7 +326,7 @@ class TransactionsTest extends IntegrationTestHarness {
     val producer = transactionalProducers.head
 
     val consumer = createReadCommittedConsumer(consumerGroupId, maxPollRecords = numSeedMessages / 4)
-    consumer.subscribe(java.util.List.of(topic1))
+    consumer.subscribe(List(topic1).asJava)
     producer.initTransactions()
 
     var shouldCommit = false
@@ -368,7 +370,7 @@ class TransactionsTest extends IntegrationTestHarness {
     // In spite of random aborts, we should still have exactly 500 messages in topic2. I.e. we should not
     // re-copy or miss any messages from topic1, since the consumed offsets were committed transactionally.
     val verifyingConsumer = transactionalConsumers(0)
-    verifyingConsumer.subscribe(java.util.List.of(topic2))
+    verifyingConsumer.subscribe(List(topic2).asJava)
     val valueSeq = TestUtils.pollUntilAtLeastNumRecords(verifyingConsumer, numSeedMessages).map { record =>
       TestUtils.assertCommittedAndGetValue(record).toInt
     }
@@ -377,14 +379,14 @@ class TransactionsTest extends IntegrationTestHarness {
     assertEquals(valueSeq.size, valueSet.size, s"Expected ${valueSeq.size} unique messages in $topic2.")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testFencingOnCommit(groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testFencingOnCommit(quorum: String, groupProtocol: String): Unit = {
     val producer1 = transactionalProducers(0)
     val producer2 = transactionalProducers(1)
     val consumer = transactionalConsumers(0)
 
-    consumer.subscribe(java.util.List.of(topic1, topic2))
+    consumer.subscribe(List(topic1, topic2).asJava)
 
     producer1.initTransactions()
 
@@ -408,14 +410,14 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testFencingOnSendOffsets(groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testFencingOnSendOffsets(quorum: String, groupProtocol: String): Unit = {
     val producer1 = transactionalProducers(0)
     val producer2 = transactionalProducers(1)
     val consumer = transactionalConsumers(0)
 
-    consumer.subscribe(java.util.List.of(topic1, topic2))
+    consumer.subscribe(List(topic1, topic2).asJava)
 
     producer1.initTransactions()
 
@@ -429,8 +431,8 @@ class TransactionsTest extends IntegrationTestHarness {
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "4", willBeCommitted = true))
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "4", willBeCommitted = true))
 
-    assertThrows(classOf[ProducerFencedException], () => producer1.sendOffsetsToTransaction(java.util.Map.of(new TopicPartition(topic1, 0),
-      new OffsetAndMetadata(110L)), new ConsumerGroupMetadata("foobarGroup")))
+    assertThrows(classOf[ProducerFencedException], () => producer1.sendOffsetsToTransaction(Map(new TopicPartition(topic1, 0)
+      -> new OffsetAndMetadata(110L)).asJava, new ConsumerGroupMetadata("foobarGroup")))
 
     producer2.commitTransaction()  // ok
 
@@ -440,22 +442,22 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testOffsetMetadataInSendOffsetsToTransaction(groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testOffsetMetadataInSendOffsetsToTransaction(quorum: String, groupProtocol: String): Unit = {
     val tp = new TopicPartition(topic1, 0)
     val groupId = "group"
 
     val producer = transactionalProducers.head
     val consumer = createReadCommittedConsumer(groupId)
 
-    consumer.subscribe(java.util.List.of(topic1))
+    consumer.subscribe(List(topic1).asJava)
 
     producer.initTransactions()
 
     producer.beginTransaction()
     val offsetAndMetadata = new OffsetAndMetadata(110L, Optional.of(15), "some metadata")
-    producer.sendOffsetsToTransaction(java.util.Map.of(tp, offsetAndMetadata), new ConsumerGroupMetadata(groupId))
+    producer.sendOffsetsToTransaction(Map(tp -> offsetAndMetadata).asJava, new ConsumerGroupMetadata(groupId))
     producer.commitTransaction()  // ok
 
     // The call to commit the transaction may return before all markers are visible, so we initialize a second
@@ -463,31 +465,31 @@ class TransactionsTest extends IntegrationTestHarness {
     val producer2 = transactionalProducers(1)
     producer2.initTransactions()
 
-    TestUtils.waitUntilTrue(() => offsetAndMetadata.equals(consumer.committed(java.util.Set.of(tp)).get(tp)), "cannot read committed offset")
+    TestUtils.waitUntilTrue(() => offsetAndMetadata.equals(consumer.committed(Set(tp).asJava).get(tp)), "cannot read committed offset")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testInitTransactionsTimeout(groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testInitTransactionsTimeout(quorum: String, groupProtocol: String): Unit = {
     testTimeout(needInitAndSendMsg = false, producer => producer.initTransactions())
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testSendOffsetsToTransactionTimeout(groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testSendOffsetsToTransactionTimeout(quorum: String, groupProtocol: String): Unit = {
     testTimeout(needInitAndSendMsg = true, producer => producer.sendOffsetsToTransaction(
-      java.util.Map.of(new TopicPartition(topic1, 0), new OffsetAndMetadata(0)), new ConsumerGroupMetadata("test-group")))
+      Map(new TopicPartition(topic1, 0) -> new OffsetAndMetadata(0)).asJava, new ConsumerGroupMetadata("test-group")))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testCommitTransactionTimeout(groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testCommitTransactionTimeout(quorum: String, groupProtocol: String): Unit = {
     testTimeout(needInitAndSendMsg = true, producer => producer.commitTransaction())
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testAbortTransactionTimeout(groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testAbortTransactionTimeout(quorum: String, groupProtocol: String): Unit = {
     testTimeout(needInitAndSendMsg = true, producer => producer.abortTransaction())
   }
 
@@ -506,14 +508,14 @@ class TransactionsTest extends IntegrationTestHarness {
     producer.close(Duration.ZERO)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testFencingOnSend(groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testFencingOnSend(quorum: String, groupProtocol: String): Unit = {
     val producer1 = transactionalProducers(0)
     val producer2 = transactionalProducers(1)
     val consumer = transactionalConsumers(0)
 
-    consumer.subscribe(java.util.List.of(topic1, topic2))
+    consumer.subscribe(List(topic1, topic2).asJava)
 
     producer1.initTransactions()
 
@@ -551,14 +553,14 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testFencingOnAddPartitions(groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testFencingOnAddPartitions(quorum: String, groupProtocol: String): Unit = {
     val producer1 = transactionalProducers(0)
     val producer2 = transactionalProducers(1)
     val consumer = transactionalConsumers(0)
 
-    consumer.subscribe(java.util.List.of(topic1, topic2))
+    consumer.subscribe(List(topic1, topic2).asJava)
     TestUtils.waitUntilLeaderIsKnown(brokers, new TopicPartition(topic1, 0))
     TestUtils.waitUntilLeaderIsKnown(brokers, new TopicPartition(topic2, 0))
 
@@ -586,9 +588,14 @@ class TransactionsTest extends IntegrationTestHarness {
       fail("Should not be able to send messages from a fenced producer.")
     } catch {
       case _: InvalidProducerEpochException =>
-      case e: ExecutionException =>
-        // In kraft mode, transactionV2 is used.
-        assertTrue(e.getCause.isInstanceOf[InvalidProducerEpochException])
+      case e: ExecutionException => {
+        if (quorum == "zk") {
+          assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
+        } else {
+          // In kraft mode, transactionV2 is used.
+          assertTrue(e.getCause.isInstanceOf[InvalidProducerEpochException])
+        }
+      }
       case e: Exception =>
         throw new AssertionError("Got an unexpected exception from a fenced producer.", e)
     }
@@ -601,9 +608,9 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testFencingOnTransactionExpiration(groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testFencingOnTransactionExpiration(quorum: String, groupProtocol: String): Unit = {
     val producer = createTransactionalProducer("expiringProducer", transactionTimeoutMs = 300)
 
     producer.initTransactions()
@@ -629,7 +636,7 @@ class TransactionsTest extends IntegrationTestHarness {
 
     // Verify that the first message was aborted and the second one was never written at all.
     val nonTransactionalConsumer = nonTransactionalConsumers.head
-    nonTransactionalConsumer.subscribe(java.util.List.of(topic1))
+    nonTransactionalConsumer.subscribe(List(topic1).asJava)
 
     // Attempt to consume the one written record. We should not see the second. The
     // assertion does not strictly guarantee that the record wasn't written, but the
@@ -639,15 +646,15 @@ class TransactionsTest extends IntegrationTestHarness {
     assertEquals("1", TestUtils.recordValueAsString(records.head))
 
     val transactionalConsumer = transactionalConsumers.head
-    transactionalConsumer.subscribe(java.util.List.of(topic1))
+    transactionalConsumer.subscribe(List(topic1).asJava)
 
     val transactionalRecords = consumeRecordsFor(transactionalConsumer)
     assertTrue(transactionalRecords.isEmpty)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testMultipleMarkersOneLeader(groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testMultipleMarkersOneLeader(quorum: String, groupProtocol: String): Unit = {
     val firstProducer = transactionalProducers.head
     val consumer = transactionalConsumers.head
     val unCommittedConsumer = nonTransactionalConsumers.head
@@ -668,8 +675,8 @@ class TransactionsTest extends IntegrationTestHarness {
     sendTransactionalMessagesWithValueRange(firstProducer, topicWith10Partitions, 10000, 11000, willBeCommitted = true)
     firstProducer.commitTransaction()
 
-    consumer.subscribe(java.util.List.of(topicWith10PartitionsAndOneReplica, topicWith10Partitions))
-    unCommittedConsumer.subscribe(java.util.List.of(topicWith10PartitionsAndOneReplica, topicWith10Partitions))
+    consumer.subscribe(List(topicWith10PartitionsAndOneReplica, topicWith10Partitions).asJava)
+    unCommittedConsumer.subscribe(List(topicWith10PartitionsAndOneReplica, topicWith10Partitions).asJava)
 
     val records = consumeRecords(consumer, 1000)
     records.foreach { record =>
@@ -683,9 +690,9 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testConsecutivelyRunInitTransactions(groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testConsecutivelyRunInitTransactions(quorum: String, groupProtocol: String): Unit = {
     val producer = createTransactionalProducer(transactionalId = "normalProducer")
 
     producer.initTransactions()
@@ -694,11 +701,11 @@ class TransactionsTest extends IntegrationTestHarness {
 
   @ParameterizedTest
   @CsvSource(Array(
-    "classic,false",
-    "consumer,false",
+    "kraft,classic,false",
+    "kraft,consumer,false",
   ))
-  def testBumpTransactionalEpochWithTV2Disabled(groupProtocol: String, isTV2Enabled: Boolean): Unit = {
-    val defaultLinger = 5
+  def testBumpTransactionalEpochWithTV2Disabled(quorum: String, groupProtocol: String, isTV2Enabled: Boolean): Unit = {
+    val defaultLinger = 5;
     val producer = createTransactionalProducer("transactionalProducer",
       deliveryTimeoutMs = 5000 + defaultLinger, requestTimeoutMs = 5000)
     val consumer = transactionalConsumers.head
@@ -730,20 +737,7 @@ class TransactionsTest extends IntegrationTestHarness {
       Thread.sleep(6000) // Wait for the record to time out
       restartDeadBrokers()
 
-      org.apache.kafka.test.TestUtils.assertFutureThrows(classOf[TimeoutException], failedFuture)
-      // Ensure the producer transitions to abortable_error state.
-      TestUtils.waitUntilTrue(() => {
-        var failed = false
-        try {
-          producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = false))
-        } catch {
-          case e: Exception =>
-            if (e.isInstanceOf[KafkaException])
-              failed = true
-        }
-        failed
-      }, "The send request never failed as expected.")
-      assertThrows(classOf[KafkaException], () => producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = false)))
+      org.apache.kafka.test.TestUtils.assertFutureThrows(failedFuture, classOf[TimeoutException])
       producer.abortTransaction()
 
       producer.beginTransaction()
@@ -753,7 +747,7 @@ class TransactionsTest extends IntegrationTestHarness {
       producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = true))
       producer.commitTransaction()
 
-      consumer.subscribe(java.util.List.of(topic1, topic2, testTopic))
+      consumer.subscribe(List(topic1, topic2, testTopic).asJava)
 
       val records = consumeRecords(consumer, 5)
       records.foreach { record =>
@@ -766,7 +760,7 @@ class TransactionsTest extends IntegrationTestHarness {
       producerStateEntry =
         brokers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0)).get.producerStateManager.activeProducers.get(producerId)
       assertNotNull(producerStateEntry)
-      assertTrue(producerStateEntry.producerEpoch > initialProducerEpoch, "InitialProduceEpoch: " + initialProducerEpoch + " ProducerStateEntry: " + producerStateEntry)
+      assertTrue(producerStateEntry.producerEpoch > initialProducerEpoch)
     } finally {
       producer.close(Duration.ZERO)
     }
@@ -774,11 +768,11 @@ class TransactionsTest extends IntegrationTestHarness {
 
   @ParameterizedTest
   @CsvSource(Array(
-    "classic, true",
-    "consumer, true"
+    "kraft, classic, true",
+    "kraft, consumer, true"
   ))
-  def testBumpTransactionalEpochWithTV2Enabled(groupProtocol: String, isTV2Enabled: Boolean): Unit = {
-    val defaultLinger = 5
+  def testBumpTransactionalEpochWithTV2Enabled(quorum: String, groupProtocol: String, isTV2Enabled: Boolean): Unit = {
+    val defaultLinger = 5;
     val producer = createTransactionalProducer("transactionalProducer",
       deliveryTimeoutMs = 5000 + defaultLinger, requestTimeoutMs = 5000)
     val consumer = transactionalConsumers.head
@@ -815,7 +809,7 @@ class TransactionsTest extends IntegrationTestHarness {
       Thread.sleep(6000) // Wait for the record to time out
       restartDeadBrokers()
 
-      org.apache.kafka.test.TestUtils.assertFutureThrows(classOf[TimeoutException], failedFuture)
+      org.apache.kafka.test.TestUtils.assertFutureThrows(failedFuture, classOf[TimeoutException])
       producer.abortTransaction()
 
       // Third transaction: commit
@@ -834,7 +828,7 @@ class TransactionsTest extends IntegrationTestHarness {
       producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = true))
       producer.commitTransaction()
 
-      consumer.subscribe(java.util.List.of(topic1, topic2, testTopic))
+      consumer.subscribe(List(topic1, topic2, testTopic).asJava)
 
       val records = consumeRecords(consumer, 5)
       records.foreach { record =>
@@ -846,14 +840,14 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @ParameterizedTest(name = "{displayName}.groupProtocol={0}.isTV2Enabled={1}")
+  @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}.isTV2Enabled={2}")
   @CsvSource(Array(
-    "classic, false",
-    "consumer, false",
-    "classic, true",
-    "consumer, true",
+    "kraft, classic, false",
+    "kraft, consumer, false",
+    "kraft, classic, true",
+    "kraft, consumer, true",
   ))
-  def testFailureToFenceEpoch(groupProtocol: String, isTV2Enabled: Boolean): Unit = {
+  def testFailureToFenceEpoch(quorum: String, groupProtocol: String, isTV2Enabled: Boolean): Unit = {
     val producer1 = transactionalProducers.head
     val producer2 = createTransactionalProducer("transactional-producer", maxBlockMs = 1000)
     val initialProducerEpoch = 0
@@ -920,11 +914,11 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
-  @ParameterizedTest(name = "{displayName}.groupProtocol={0}.isTV2Enabled={1}")
+  @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}.isTV2Enabled={2}")
   @CsvSource(Array(
-    "consumer, true",
+    "kraft, consumer, true",
   ))
-  def testEmptyAbortAfterCommit(groupProtocol: String, isTV2Enabled: Boolean): Unit = {
+  def testEmptyAbortAfterCommit(quorum: String, groupProtocol: String, isTV2Enabled: Boolean): Unit = {
     val producer = transactionalProducers.head
 
     producer.initTransactions()
@@ -991,10 +985,11 @@ class TransactionsTest extends IntegrationTestHarness {
     waitUntilTrue(() => {
       brokers.forall(broker => {
         partitionStartOffsets.forall {
-          case (partition, offset) =>
+          case (partition, offset) => {
             val lso = broker.replicaManager.localLog(partition).get.logStartOffset
             offsets.put(broker.config.brokerId, lso)
             offset == lso
+          }
         }
       })
     }, s"log start offset doesn't change to the expected position: $partitionStartOffsets, current position: $offsets")

@@ -19,6 +19,8 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
+import scala.jdk.CollectionConverters._
+
 @Timeout(600)
 class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
   private val kafkaClientSaslMechanism = "PLAIN"
@@ -41,9 +43,9 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
     closeSasl()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testMultipleBrokerMechanisms(groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testMultipleBrokerMechanisms(quorum: String, groupProtocol: String): Unit = {
     val plainSaslProducer = createProducer()
     val plainSaslConsumer = createConsumer()
 
@@ -56,7 +58,7 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
     // Test SASL/PLAIN producer and consumer
     var startingTimestamp = System.currentTimeMillis()
     sendRecords(plainSaslProducer, numRecords, tp, startingTimestamp = startingTimestamp)
-    plainSaslConsumer.assign(java.util.List.of(tp))
+    plainSaslConsumer.assign(List(tp).asJava)
     plainSaslConsumer.seek(tp, 0)
     consumeAndVerifyRecords(consumer = plainSaslConsumer, numRecords = numRecords, startingOffset = startingOffset,
       startingTimestamp = startingTimestamp)
@@ -66,7 +68,7 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
     // Test SASL/GSSAPI producer and consumer
     startingTimestamp = System.currentTimeMillis()
     sendRecords(gssapiSaslProducer, numRecords, tp, startingTimestamp = startingTimestamp)
-    gssapiSaslConsumer.assign(java.util.List.of(tp))
+    gssapiSaslConsumer.assign(List(tp).asJava)
     gssapiSaslConsumer.seek(tp, startingOffset)
     consumeAndVerifyRecords(consumer = gssapiSaslConsumer, numRecords = numRecords, startingOffset = startingOffset,
       startingTimestamp = startingTimestamp)
@@ -76,7 +78,7 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
     // Test SASL/PLAIN producer and SASL/GSSAPI consumer
     startingTimestamp = System.currentTimeMillis()
     sendRecords(plainSaslProducer, numRecords, tp, startingTimestamp = startingTimestamp)
-    gssapiSaslConsumer.assign(java.util.List.of(tp))
+    gssapiSaslConsumer.assign(List(tp).asJava)
     gssapiSaslConsumer.seek(tp, startingOffset)
     consumeAndVerifyRecords(consumer = gssapiSaslConsumer, numRecords = numRecords, startingOffset = startingOffset,
       startingTimestamp = startingTimestamp)
@@ -85,7 +87,7 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
     // Test SASL/GSSAPI producer and SASL/PLAIN consumer
     startingTimestamp = System.currentTimeMillis()
     sendRecords(gssapiSaslProducer, numRecords, tp, startingTimestamp = startingTimestamp)
-    plainSaslConsumer.assign(java.util.List.of(tp))
+    plainSaslConsumer.assign(List(tp).asJava)
     plainSaslConsumer.seek(tp, startingOffset)
     consumeAndVerifyRecords(consumer = plainSaslConsumer, numRecords = numRecords, startingOffset = startingOffset,
       startingTimestamp = startingTimestamp)

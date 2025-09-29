@@ -25,6 +25,7 @@ import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import java.io.PrintStream;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.describeTopic;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -45,7 +46,7 @@ public final class ExpectTopicIdToMatchInRemoteStorageAction implements TieredSt
             List<TopicPartition> partitions = snapshot.getTopicPartitions()
                     .stream()
                     .filter(tp -> tp.topic().equals(topic))
-                    .toList();
+                    .collect(Collectors.toList());
             partitions.forEach(partition ->
                 snapshot.getFilesets(partition)
                         .forEach(fileset -> assertEquals(topicId, fileset.getRemoteLogSegmentId().id()))

@@ -28,6 +28,7 @@ import org.eclipse.jetty.util.StringUtil;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -53,7 +54,7 @@ public abstract class RestServerConfig extends AbstractConfig {
             " Leave hostname empty to bind to default interface.\n" +
             " Examples of legal listener lists: HTTP://myhost:8083,HTTPS://myhost:8084";
     // Visible for testing
-    static final List<String> LISTENERS_DEFAULT = List.of("http://:8083");
+    static final List<String> LISTENERS_DEFAULT = Collections.singletonList("http://:8083");
 
     public static final String REST_ADVERTISED_HOST_NAME_CONFIG = "rest.advertised.host.name";
     private static final String REST_ADVERTISED_HOST_NAME_DOC
@@ -85,8 +86,7 @@ public abstract class RestServerConfig extends AbstractConfig {
     private static final String ADMIN_LISTENERS_DOC = "List of comma-separated URIs the Admin REST API will listen on." +
             " The supported protocols are HTTP and HTTPS." +
             " An empty or blank string will disable this feature." +
-            " The default behavior is to use the regular listener (specified by the 'listeners' property)." +
-            " A comma-separated list of valid URLs, e.g., http://localhost:8080,https://localhost:8443.";
+            " The default behavior is to use the regular listener (specified by the 'listeners' property).";
     public static final String ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX = "admin.listeners.https.";
 
     public static final String REST_EXTENSION_CLASSES_CONFIG = "rest.extension.classes";
@@ -102,7 +102,9 @@ public abstract class RestServerConfig extends AbstractConfig {
     static final String RESPONSE_HTTP_HEADERS_DOC = "Rules for REST API HTTP response headers";
     // Visible for testing
     static final String RESPONSE_HTTP_HEADERS_DEFAULT = "";
-    private static final Collection<String> HEADER_ACTIONS = List.of("set", "add", "setDate", "addDate");
+    private static final Collection<String> HEADER_ACTIONS = Collections.unmodifiableList(
+            Arrays.asList("set", "add", "setDate", "addDate")
+    );
 
 
     /**
@@ -140,15 +142,15 @@ public abstract class RestServerConfig extends AbstractConfig {
     public static void addPublicConfig(ConfigDef configDef) {
         addInternalConfig(configDef);
         configDef
-                .define(REST_EXTENSION_CLASSES_CONFIG,
+                .define(
+                        REST_EXTENSION_CLASSES_CONFIG,
                         ConfigDef.Type.LIST,
-                        List.of(),
-                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                        ConfigDef.Importance.LOW, REST_EXTENSION_CLASSES_DOC)
-                .define(ADMIN_LISTENERS_CONFIG,
+                        "",
+                        ConfigDef.Importance.LOW, REST_EXTENSION_CLASSES_DOC
+                ).define(ADMIN_LISTENERS_CONFIG,
                         ConfigDef.Type.LIST,
                         null,
-                        ConfigDef.ValidList.anyNonDuplicateValues(true, true),
+                        new AdminListenersValidator(),
                         ConfigDef.Importance.LOW,
                         ADMIN_LISTENERS_DOC);
     }
@@ -305,10 +307,11 @@ public abstract class RestServerConfig extends AbstractConfig {
     private static class ListenersValidator implements ConfigDef.Validator {
         @Override
         public void ensureValid(String name, Object value) {
-            if (!(value instanceof List<?> items)) {
+            if (!(value instanceof List)) {
                 throw new ConfigException("Invalid value type for listeners (expected list of URLs , ex: http://localhost:8080,https://localhost:8443).");
             }
 
+            List<?> items = (List<?>) value;
             if (items.isEmpty()) {
                 throw new ConfigException("Invalid value for listeners, at least one URL is expected, ex: http://localhost:8080,https://localhost:8443.");
             }
@@ -319,6 +322,38 @@ public abstract class RestServerConfig extends AbstractConfig {
                 }
                 if (Utils.isBlank((String) item)) {
                     throw new ConfigException("Empty URL found when parsing listeners list.");
+                }
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "List of comma-separated URLs, ex: http://localhost:8080,https://localhost:8443.";
+        }
+    }
+
+    private static class AdminListenersValidator implements ConfigDef.Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            if (value == null) {
+                return;
+            }
+
+            if (!(value instanceof List)) {
+                throw new ConfigException("Invalid value type for admin.listeners (expected list).");
+            }
+
+            List<?> items = (List<?>) value;
+            if (items.isEmpty()) {
+                return;
+            }
+
+            for (Object item : items) {
+                if (!(item instanceof String)) {
+                    throw new ConfigException("Invalid type for admin.listeners (expected String).");
+                }
+                if (Utils.isBlank((String) item)) {
+                    throw new ConfigException("Empty URL found when parsing admin.listeners list.");
                 }
             }
         }
@@ -360,7 +395,7 @@ public abstract class RestServerConfig extends AbstractConfig {
         @Override
         public List<String> adminListeners() {
             // Disable admin resources (such as the logging resource)
-            return List.of();
+            return Collections.emptyList();
         }
 
         @Override

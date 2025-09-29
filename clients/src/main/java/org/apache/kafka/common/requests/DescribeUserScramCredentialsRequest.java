@@ -19,7 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Readable;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+
+import java.nio.ByteBuffer;
 
 public class DescribeUserScramCredentialsRequest extends AbstractRequest {
 
@@ -49,9 +51,9 @@ public class DescribeUserScramCredentialsRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public static DescribeUserScramCredentialsRequest parse(Readable readable, short version) {
+    public static DescribeUserScramCredentialsRequest parse(ByteBuffer buffer, short version) {
         return new DescribeUserScramCredentialsRequest(new DescribeUserScramCredentialsRequestData(
-                readable, version), version);
+                new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
@@ -66,12 +68,11 @@ public class DescribeUserScramCredentialsRequest extends AbstractRequest {
                 .setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(apiError.error().code())
                 .setErrorMessage(apiError.message());
-
-        data.users().forEach(__ ->
+        for (DescribeUserScramCredentialsRequestData.UserName user : data.users()) {
             response.results().add(new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
-                .setErrorCode(apiError.error().code())
-                .setErrorMessage(apiError.message()))
-        );
+                    .setErrorCode(apiError.error().code())
+                    .setErrorMessage(apiError.message()));
+        }
         return new DescribeUserScramCredentialsResponse(response);
     }
 }

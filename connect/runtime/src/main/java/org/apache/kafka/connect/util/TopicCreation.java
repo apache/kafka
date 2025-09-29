@@ -18,6 +18,7 @@ package org.apache.kafka.connect.util;
 
 import org.apache.kafka.connect.runtime.WorkerConfig;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -31,7 +32,7 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC
  */
 public class TopicCreation {
     private static final TopicCreation EMPTY =
-            new TopicCreation(false, null, Map.of(), Set.of());
+            new TopicCreation(false, null, Collections.emptyMap(), Collections.emptySet());
 
     private final boolean isTopicCreationEnabled;
     private final TopicCreationGroup defaultTopicGroup;

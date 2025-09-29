@@ -31,6 +31,8 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -213,9 +215,14 @@ public final class MirrorMakerConfig extends AbstractConfig {
 
     Set<String> allConfigNames() {
         Set<String> allNames = new HashSet<>();
-        allNames.addAll(MirrorCheckpointConfig.CONNECTOR_CONFIG_DEF.names());
-        allNames.addAll(MirrorSourceConfig.CONNECTOR_CONFIG_DEF.names());
-        allNames.addAll(MirrorHeartbeatConfig.CONNECTOR_CONFIG_DEF.names());
+        List<ConfigDef> connectorConfigDefs = Arrays.asList(
+                MirrorCheckpointConfig.CONNECTOR_CONFIG_DEF,
+                MirrorSourceConfig.CONNECTOR_CONFIG_DEF,
+                MirrorHeartbeatConfig.CONNECTOR_CONFIG_DEF
+        );
+        for (ConfigDef cd : connectorConfigDefs) {
+            allNames.addAll(cd.names());
+        }
         return allNames;
     }
 
@@ -277,11 +284,11 @@ public final class MirrorMakerConfig extends AbstractConfig {
         return transformed;
     }
 
-    private static ConfigDef config() {
+    protected static ConfigDef config() {
         ConfigDef result = new ConfigDef()
-                .define(CLUSTERS_CONFIG, Type.LIST, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.ValidList.anyNonDuplicateValues(true, false), Importance.HIGH, CLUSTERS_DOC)
+                .define(CLUSTERS_CONFIG, Type.LIST, Importance.HIGH, CLUSTERS_DOC)
                 .define(ENABLE_INTERNAL_REST_CONFIG, Type.BOOLEAN, false, Importance.HIGH, ENABLE_INTERNAL_REST_DOC)
-                .define(CONFIG_PROVIDERS_CONFIG, Type.LIST, List.of(), ConfigDef.ValidList.anyNonDuplicateValues(true, false), Importance.LOW, CONFIG_PROVIDERS_DOC)
+                .define(CONFIG_PROVIDERS_CONFIG, Type.LIST, Collections.emptyList(), Importance.LOW, CONFIG_PROVIDERS_DOC)
                 // security support
                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                         Type.STRING,

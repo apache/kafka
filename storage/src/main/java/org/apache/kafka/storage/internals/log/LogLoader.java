@@ -169,7 +169,6 @@ public class LogLoader {
                     long offset = LogFileUtils.offsetFromFile(file);
                     if (offset >= minSwapFileOffset && offset < maxSwapFileOffset) {
                         logger.info("Deleting segment files {} that is compacted but has not been deleted yet.", file.getName());
-                        @SuppressWarnings("UnusedLocalVariable")
                         boolean ignore = file.delete();
                     }
                 }
@@ -187,7 +186,6 @@ public class LogLoader {
             }
             if (file.getName().endsWith(LogFileUtils.SWAP_FILE_SUFFIX)) {
                 logger.info("Recovering file {} by renaming from {} files.", file.getName(), LogFileUtils.SWAP_FILE_SUFFIX);
-                @SuppressWarnings("UnusedLocalVariable")
                 boolean ignore = file.renameTo(new File(Utils.replaceSuffix(file.getPath(), LogFileUtils.SWAP_FILE_SUFFIX, "")));
             }
         }
@@ -338,7 +336,7 @@ public class LogLoader {
                         scheduler,
                         logDirFailureChannel,
                         logPrefix);
-                deleteProducerSnapshotsAsync(result.deletedSegments());
+                deleteProducerSnapshotsAsync(result.deletedSegments);
             }
         }
     }
@@ -359,7 +357,7 @@ public class LogLoader {
         // segments that come before it
         File[] files = dir.listFiles();
         if (files == null) files = new File[0];
-        List<File> sortedFiles = Arrays.stream(files).filter(File::isFile).sorted().toList();
+        List<File> sortedFiles = Arrays.stream(files).filter(File::isFile).sorted().collect(Collectors.toList());
         for (File file : sortedFiles) {
             if (LogFileUtils.isIndexFile(file)) {
                 // if it is an index file, make sure it has a corresponding .log file
@@ -438,7 +436,15 @@ public class LogLoader {
         return Optional.empty();
     }
 
-    record RecoveryOffsets(long newRecoveryPoint, long nextOffset) {
+    static class RecoveryOffsets {
+
+        final long newRecoveryPoint;
+        final long nextOffset;
+
+        RecoveryOffsets(long newRecoveryPoint, long nextOffset) {
+            this.newRecoveryPoint = newRecoveryPoint;
+            this.nextOffset = nextOffset;
+        }
     }
 
     /**

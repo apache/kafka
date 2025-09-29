@@ -20,10 +20,8 @@ import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 
-import java.util.Arrays;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
  * Represents the strategy for resetting offsets in share consumer groups when no previous offset is found
@@ -65,12 +63,20 @@ public class ShareGroupAutoOffsetResetStrategy {
         AutoOffsetResetStrategy baseStrategy = AutoOffsetResetStrategy.fromString(offsetStrategy);
         AutoOffsetResetStrategy.StrategyType baseType = baseStrategy.type();
 
-        StrategyType shareGroupType = switch (baseType) {
-            case EARLIEST -> StrategyType.EARLIEST;
-            case LATEST -> StrategyType.LATEST;
-            case BY_DURATION -> StrategyType.BY_DURATION;
-            default -> throw new IllegalArgumentException("Unsupported strategy for ShareGroup: " + baseType);
-        };
+        StrategyType shareGroupType;
+        switch (baseType) {
+            case EARLIEST:
+                shareGroupType = StrategyType.EARLIEST;
+                break;
+            case LATEST:
+                shareGroupType = StrategyType.LATEST;
+                break;
+            case BY_DURATION:
+                shareGroupType = StrategyType.BY_DURATION;
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported strategy for ShareGroup: " + baseType);
+        }
 
         return new ShareGroupAutoOffsetResetStrategy(baseStrategy, shareGroupType);
     }
@@ -142,19 +148,12 @@ public class ShareGroupAutoOffsetResetStrategy {
                 fromString(offsetStrategy);
             } catch (Exception e) {
                 throw new ConfigException(name, value, "Invalid value `" + offsetStrategy + "` for configuration " +
-                        name + ". The value must be either 'earliest', 'latest' or of the format 'by_duration:<PnDTnHnMn.nS>'.");
+                        name + ". The value must be either 'earliest', 'latest' or of the format 'by_duration:<PnDTnHnMn.nS.>'.");
             }
         }
 
         public String toString() {
-            String values = Arrays.stream(StrategyType.values())
-                .map(strategyType -> {
-                    if (strategyType == StrategyType.BY_DURATION) {
-                        return strategyType + ":PnDTnHnMn.nS";
-                    }
-                    return strategyType.toString();
-                }).collect(Collectors.joining(", "));
-            return "[" + values + "]";
+            return "[earliest, latest, by_duration:PnDTnHnMn.nS]";  
         }
     }
 }

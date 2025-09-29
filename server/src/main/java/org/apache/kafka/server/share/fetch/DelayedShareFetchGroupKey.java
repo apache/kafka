@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.share.fetch;
 
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 
 import java.util.Objects;
@@ -28,10 +27,6 @@ public class DelayedShareFetchGroupKey implements DelayedShareFetchKey {
     private final String groupId;
     private final Uuid topicId;
     private final int partition;
-
-    public DelayedShareFetchGroupKey(String groupId, TopicIdPartition topicIdPartition) {
-        this(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
-    }
 
     public DelayedShareFetchGroupKey(String groupId, Uuid topicId, int partition) {
         this.groupId = groupId;

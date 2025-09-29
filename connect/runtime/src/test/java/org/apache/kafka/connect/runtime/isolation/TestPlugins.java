@@ -39,7 +39,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
@@ -296,9 +295,9 @@ public class TestPlugins {
         try {
             for (TestPackage testPackage : TestPackage.values()) {
                 if (pluginJars.containsKey(testPackage)) {
-                    log.debug("Skipping recompilation of {}", testPackage.resourceDir());
+                    log.debug("Skipping recompilation of " + testPackage.resourceDir());
                 }
-                pluginJars.put(testPackage, createPluginJar(testPackage.resourceDir(), testPackage.removeRuntimeClasses(), Map.of()));
+                pluginJars.put(testPackage, createPluginJar(testPackage.resourceDir(), testPackage.removeRuntimeClasses()));
             }
         } catch (Throwable e) {
             log.error("Could not set up plugin test jars", e);
@@ -372,11 +371,7 @@ public class TestPlugins {
                 .filter(Objects::nonNull)
                 .map(TestPlugin::className)
                 .distinct()
-                .toList();
-    }
-
-    public static Function<ClassLoader, LoaderSwap> noOpLoaderSwap() {
-        return classLoader -> new LoaderSwap(Thread.currentThread().getContextClassLoader());
+                .collect(Collectors.toList());
     }
 
     private static TestPlugin[] defaultPlugins() {
@@ -385,11 +380,10 @@ public class TestPlugins {
                 .toArray(TestPlugin[]::new);
     }
 
-
-    static Path createPluginJar(String resourceDir, Predicate<String> removeRuntimeClasses, Map<String, String> replacements) throws IOException {
+    private static Path createPluginJar(String resourceDir, Predicate<String> removeRuntimeClasses) throws IOException {
         Path inputDir = resourceDirectoryPath("test-plugins/" + resourceDir);
         Path binDir = Files.createTempDirectory(resourceDir + ".bin.");
-        compileJavaSources(inputDir, binDir, replacements);
+        compileJavaSources(inputDir, binDir);
         Path jarFile = Files.createTempFile(resourceDir + ".", ".jar");
         try (JarOutputStream jar = openJarFile(jarFile)) {
             writeJar(jar, inputDir, removeRuntimeClasses);
@@ -429,7 +423,7 @@ public class TestPlugins {
             classFiles = stream
                     .sorted(Comparator.reverseOrder())
                     .map(Path::toFile)
-                    .toList();
+                    .collect(Collectors.toList());
         }
         for (File classFile : classFiles) {
             if (!classFile.delete()) {
@@ -449,7 +443,7 @@ public class TestPlugins {
      * @param sourceDir Directory containing java source files
      * @throws IOException if the files cannot be compiled
      */
-    private static void compileJavaSources(Path sourceDir, Path binDir, Map<String, String> replacements) throws IOException {
+    private static void compileJavaSources(Path sourceDir, Path binDir) throws IOException {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         List<File> sourceFiles;
         try (Stream<Path> stream = Files.walk(sourceDir)) {
@@ -457,14 +451,13 @@ public class TestPlugins {
                     .filter(Files::isRegularFile)
                     .map(Path::toFile)
                     .filter(file -> file.getName().endsWith(".java"))
-                    .map(file -> replacements.isEmpty() ? file : copyAndReplace(file, replacements))
-                    .toList();
+                    .collect(Collectors.toList());
         }
-
         StringWriter writer = new StringWriter();
-        List<String> options = List.of(
+        List<String> options = Arrays.asList(
             "-d", binDir.toString() // Write class output to a different directory.
         );
+
         try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(null, null, null)) {
             boolean success = compiler.getTask(
                 writer,
@@ -480,21 +473,6 @@ public class TestPlugins {
         }
     }
 
-    private static File copyAndReplace(File source, Map<String, String> replacements) throws RuntimeException {
-        try {
-            String content = Files.readString(source.toPath());
-            for (Map.Entry<String, String> entry : replacements.entrySet()) {
-                content = content.replace(entry.getKey(), entry.getValue());
-            }
-            File tmpFile = new File(System.getProperty("java.io.tmpdir") + File.separator + source.getName());
-            Files.writeString(tmpFile.toPath(), content);
-            tmpFile.deleteOnExit();
-            return tmpFile;
-        } catch (IOException e) {
-            throw new RuntimeException("Could not copy and replace file: " + source, e);
-        }
-    }
-
     private static void writeJar(JarOutputStream jar, Path inputDir, Predicate<String> removeRuntimeClasses) throws IOException {
         List<Path> paths;
         try (Stream<Path> stream = Files.walk(inputDir)) {
@@ -502,7 +480,7 @@ public class TestPlugins {
                     .filter(Files::isRegularFile)
                     .filter(path -> !path.toFile().getName().endsWith(".java"))
                     .filter(path -> !removeRuntimeClasses.test(path.toFile().getName()))
-                    .toList();
+                    .collect(Collectors.toList());
         }
         for (Path path : paths) {
             try (InputStream in = new BufferedInputStream(Files.newInputStream(path))) {
@@ -520,4 +498,5 @@ public class TestPlugins {
             }
         }
     }
+
 }

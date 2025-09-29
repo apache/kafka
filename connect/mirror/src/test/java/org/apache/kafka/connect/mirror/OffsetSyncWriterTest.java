@@ -55,11 +55,11 @@ public class OffsetSyncWriterTest {
         offsetSyncWriter.maybeQueueOffsetSyncs(topicPartition, 0, 1);
         assertFalse(offsetSyncWriter.getDelayedOffsetSyncs().containsKey(topicPartition));
         assertTrue(offsetSyncWriter.getPendingOffsetSyncs().containsKey(topicPartition));
-        assertEquals(1, offsetSyncWriter.partitionStates().get(topicPartition).lastSyncDownstreamOffset);
+        assertEquals(offsetSyncWriter.partitionStates().get(topicPartition).lastSyncDownstreamOffset, 1);
 
         offsetSyncWriter.maybeQueueOffsetSyncs(topicPartition, 1, 2);
         assertTrue(offsetSyncWriter.getDelayedOffsetSyncs().containsKey(topicPartition));
-        assertEquals(1, offsetSyncWriter.partitionStates().get(topicPartition).lastSyncDownstreamOffset);
+        assertEquals(offsetSyncWriter.partitionStates().get(topicPartition).lastSyncDownstreamOffset, 1);
     }
     
     @Test
@@ -71,7 +71,7 @@ public class OffsetSyncWriterTest {
         OffsetSyncWriter offsetSyncWriter = new OffsetSyncWriter(producer, topicName, outstandingOffsetSyncs, maxOffsetLag);
 
         offsetSyncWriter.maybeQueueOffsetSyncs(topicPartition, 0, 100);
-        assertEquals(100, offsetSyncWriter.partitionStates().get(topicPartition).lastSyncDownstreamOffset);
+        assertEquals(offsetSyncWriter.partitionStates().get(topicPartition).lastSyncDownstreamOffset, 100);
 
         offsetSyncWriter.firePendingOffsetSyncs();
 
@@ -85,7 +85,7 @@ public class OffsetSyncWriterTest {
         verify(producer, times(1)).send(any(), any());
 
         offsetSyncWriter.maybeQueueOffsetSyncs(topicPartition, 2, 102);
-        assertEquals(102, offsetSyncWriter.partitionStates().get(topicPartition).lastSyncDownstreamOffset);
+        assertEquals(offsetSyncWriter.partitionStates().get(topicPartition).lastSyncDownstreamOffset, 102);
         offsetSyncWriter.firePendingOffsetSyncs();
 
         // in-flight offset syncs; will not try to send remaining offset syncs immediately

@@ -17,14 +17,11 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
-import org.apache.kafka.common.message.AlterUserScramCredentialsRequestDataJsonConverter;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Readable;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -58,8 +55,8 @@ public class AlterUserScramCredentialsRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public static AlterUserScramCredentialsRequest parse(Readable readable, short version) {
-        return new AlterUserScramCredentialsRequest(new AlterUserScramCredentialsRequestData(readable, version), version);
+    public static AlterUserScramCredentialsRequest parse(ByteBuffer buffer, short version) {
+        return new AlterUserScramCredentialsRequest(new AlterUserScramCredentialsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
@@ -84,17 +81,5 @@ public class AlterUserScramCredentialsRequest extends AbstractRequest {
                                 .setErrorMessage(errorMessage))
                         .collect(Collectors.toList());
         return new AlterUserScramCredentialsResponse(new AlterUserScramCredentialsResponseData().setResults(results));
-    }
-
-    // Do not print salt or saltedPassword
-    @Override
-    public String toString() {
-        JsonNode json = AlterUserScramCredentialsRequestDataJsonConverter.write(data, version()).deepCopy();
-
-        for (JsonNode upsertion : json.get("upsertions")) {
-            ((ObjectNode) upsertion).put("salt", "");
-            ((ObjectNode) upsertion).put("saltedPassword", "");
-        }
-        return AlterUserScramCredentialsRequestDataJsonConverter.read(json, version()).toString();
     }
 }

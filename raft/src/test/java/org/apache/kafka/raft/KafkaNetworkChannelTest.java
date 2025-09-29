@@ -22,14 +22,12 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.feature.SupportedVersionRange;
-import org.apache.kafka.common.message.AddRaftVoterResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
-import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.message.UpdateRaftVoterResponseData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.network.ListenerName;
@@ -38,7 +36,6 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
-import org.apache.kafka.common.requests.AddRaftVoterResponse;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.BeginQuorumEpochRequest;
 import org.apache.kafka.common.requests.BeginQuorumEpochResponse;
@@ -47,24 +44,24 @@ import org.apache.kafka.common.requests.EndQuorumEpochResponse;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
-import org.apache.kafka.common.requests.RemoveRaftVoterResponse;
 import org.apache.kafka.common.requests.UpdateRaftVoterResponse;
 import org.apache.kafka.common.requests.VoteRequest;
 import org.apache.kafka.common.requests.VoteResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
-import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
+import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -74,7 +71,7 @@ public class KafkaNetworkChannelTest {
 
         @Override
         public List<Node> fetchNodes() {
-            return List.of();
+            return Collections.emptyList();
         }
 
         @Override
@@ -86,15 +83,13 @@ public class KafkaNetworkChannelTest {
         public void update(Time time, MockClient.MetadataUpdate update) { }
     }
 
-    private static final List<ApiKeys> RAFT_APIS = List.of(
+    private static final List<ApiKeys> RAFT_APIS = asList(
         ApiKeys.VOTE,
         ApiKeys.BEGIN_QUORUM_EPOCH,
         ApiKeys.END_QUORUM_EPOCH,
         ApiKeys.FETCH,
         ApiKeys.FETCH_SNAPSHOT,
-        ApiKeys.UPDATE_RAFT_VOTER,
-        ApiKeys.ADD_RAFT_VOTER,
-        ApiKeys.REMOVE_RAFT_VOTER
+        ApiKeys.UPDATE_RAFT_VOTER
     );
 
     private final int requestTimeoutMs = 30000;
@@ -285,7 +280,7 @@ public class KafkaNetworkChannelTest {
                     clusterId,
                     leaderId,
                     leaderEpoch,
-                    List.of(2)
+                    Collections.singletonList(2)
                 );
 
             case VOTE:
@@ -322,54 +317,44 @@ public class KafkaNetworkChannelTest {
                     Endpoints.empty()
                 );
 
-            case ADD_RAFT_VOTER:
-                return RaftUtil.addVoterRequest(
-                    clusterId,
-                    requestTimeoutMs,
-                    ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID),
-                    Endpoints.empty(),
-                    true
-                );
-
-            case REMOVE_RAFT_VOTER:
-                return RaftUtil.removeVoterRequest(
-                    clusterId,
-                    ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID)
-                );
-
             default:
                 throw new AssertionError("Unexpected api " + key);
         }
     }
 
     private ApiMessage buildTestErrorResponse(ApiKeys key, Errors error) {
-        return switch (key) {
-            case BEGIN_QUORUM_EPOCH -> new BeginQuorumEpochResponseData().setErrorCode(error.code());
-            case END_QUORUM_EPOCH -> new EndQuorumEpochResponseData().setErrorCode(error.code());
-            case VOTE -> new VoteResponseData()
-                .setErrorCode(error.code())
-                .setTopics(
-                    List.of(
-                        new VoteResponseData.TopicData()
-                            .setTopicName(topicPartition.topic())
-                            .setPartitions(
-                                List.of(
-                                    new VoteResponseData.PartitionData()
-                                        .setErrorCode(Errors.NONE.code())
-                                        .setLeaderId(1)
-                                        .setLeaderEpoch(5)
-                                        .setVoteGranted(false)
+        switch (key) {
+            case BEGIN_QUORUM_EPOCH:
+                return new BeginQuorumEpochResponseData().setErrorCode(error.code());
+            case END_QUORUM_EPOCH:
+                return new EndQuorumEpochResponseData().setErrorCode(error.code());
+            case VOTE:
+                return new VoteResponseData()
+                    .setErrorCode(error.code())
+                    .setTopics(
+                        Collections.singletonList(
+                            new VoteResponseData.TopicData()
+                                .setTopicName(topicPartition.topic())
+                                .setPartitions(
+                                    Collections.singletonList(
+                                        new VoteResponseData.PartitionData()
+                                            .setErrorCode(Errors.NONE.code())
+                                            .setLeaderId(1)
+                                            .setLeaderEpoch(5)
+                                            .setVoteGranted(false)
+                                    )
                                 )
-                            )
-                    )
-                );
-            case FETCH -> new FetchResponseData().setErrorCode(error.code());
-            case FETCH_SNAPSHOT -> new FetchSnapshotResponseData().setErrorCode(error.code());
-            case UPDATE_RAFT_VOTER -> new UpdateRaftVoterResponseData().setErrorCode(error.code());
-            case ADD_RAFT_VOTER -> new AddRaftVoterResponseData().setErrorCode(error.code());
-            case REMOVE_RAFT_VOTER -> new RemoveRaftVoterResponseData().setErrorCode(error.code());
-            default -> throw new AssertionError("Unexpected api " + key);
-        };
+                        )
+                    );
+            case FETCH:
+                return new FetchResponseData().setErrorCode(error.code());
+            case FETCH_SNAPSHOT:
+                return new FetchSnapshotResponseData().setErrorCode(error.code());
+            case UPDATE_RAFT_VOTER:
+                return new UpdateRaftVoterResponseData().setErrorCode(error.code());
+            default:
+                throw new AssertionError("Unexpected api " + key);
+        }
     }
 
     private Errors extractError(ApiMessage response) {
@@ -386,10 +371,6 @@ public class KafkaNetworkChannelTest {
             code = ((FetchSnapshotResponseData) response).errorCode();
         } else if (response instanceof UpdateRaftVoterResponseData) {
             code = ((UpdateRaftVoterResponseData) response).errorCode();
-        } else if (response instanceof AddRaftVoterResponseData) {
-            code = ((AddRaftVoterResponseData) response).errorCode();
-        } else if (response instanceof RemoveRaftVoterResponseData) {
-            code = ((RemoveRaftVoterResponseData) response).errorCode();
         } else {
             throw new IllegalArgumentException("Unexpected type for responseData: " + response);
         }
@@ -405,15 +386,11 @@ public class KafkaNetworkChannelTest {
         } else if (responseData instanceof EndQuorumEpochResponseData) {
             return new EndQuorumEpochResponse((EndQuorumEpochResponseData) responseData);
         } else if (responseData instanceof FetchResponseData) {
-            return FetchResponse.of((FetchResponseData) responseData);
+            return new FetchResponse((FetchResponseData) responseData);
         } else if (responseData instanceof FetchSnapshotResponseData) {
             return new FetchSnapshotResponse((FetchSnapshotResponseData) responseData);
         } else if (responseData instanceof UpdateRaftVoterResponseData) {
             return new UpdateRaftVoterResponse((UpdateRaftVoterResponseData) responseData);
-        } else if (responseData instanceof AddRaftVoterResponseData) {
-            return new AddRaftVoterResponse((AddRaftVoterResponseData) responseData);
-        } else if (responseData instanceof RemoveRaftVoterResponseData) {
-            return new RemoveRaftVoterResponse((RemoveRaftVoterResponseData) responseData);
         } else {
             throw new IllegalArgumentException("Unexpected type for responseData: " + responseData);
         }

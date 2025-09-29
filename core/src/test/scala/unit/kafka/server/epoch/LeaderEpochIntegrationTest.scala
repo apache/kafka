@@ -34,8 +34,10 @@ import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.test.{TestUtils => JTestUtils}
-import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Map, Seq}
@@ -62,8 +64,9 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     super.tearDown()
   }
 
-  @Test
-  def shouldAddCurrentLeaderEpochToMessagesAsTheyAreWrittenToLeader(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def shouldAddCurrentLeaderEpochToMessagesAsTheyAreWrittenToLeader(quorum: String): Unit = {
     brokers ++= (0 to 1).map { id => createBroker(fromProps(createBrokerConfig(id))) }
 
     // Given two topics with replication of a single partition
@@ -94,8 +97,9 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     waitUntilTrue(() => messagesHaveLeaderEpoch(brokers(0), expectedLeaderEpoch, 4), "Leader epoch should be 1")
   }
 
-  @Test
-  def shouldSendLeaderEpochRequestAndGetAResponse(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def shouldSendLeaderEpochRequestAndGetAResponse(quorum: String): Unit = {
 
     //3 brokers, put partition on 100/101 and then pretend to be 102
     brokers ++= (100 to 102).map { id => createBroker(fromProps(createBrokerConfig(id))) }
@@ -141,8 +145,9 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     fetcher1.close()
   }
 
-  @Test
-  def shouldIncreaseLeaderEpochBetweenLeaderRestarts(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def shouldIncreaseLeaderEpochBetweenLeaderRestarts(quorum: String): Unit = {
     //Setup: we are only interested in the single partition on broker 101
     brokers += createBroker(fromProps(createBrokerConfig(100)))
     assertEquals(controllerServer.config.nodeId, waitUntilQuorumLeaderElected(controllerServer))
@@ -240,7 +245,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
 
   private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Unit = {
     TestUtils.waitUntilTrue(() => {
-      brokers(0).metadataCache.getLeaderAndIsr(topic, partition).filter(_.leaderEpoch == epoch).isPresent()
+      brokers(0).metadataCache.getLeaderAndIsr(topic, partition).exists(_.leaderEpoch == epoch)
     }, "Epoch didn't change")
   }
 
@@ -293,7 +298,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   }
 
   private def waitUntilQuorumLeaderElected(controllerServer: ControllerServer, timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
-    val (leaderAndEpoch, _) = computeUntilTrue(controllerServer.raftManager.client.leaderAndEpoch, waitTime = timeout)(_.leaderId().isPresent)
+    val (leaderAndEpoch, _) = computeUntilTrue(controllerServer.raftManager.leaderAndEpoch, waitTime = timeout)(_.leaderId().isPresent)
     leaderAndEpoch.leaderId().orElseThrow(() => new AssertionError(s"Quorum Controller leader not elected after $timeout ms"))
   }
 

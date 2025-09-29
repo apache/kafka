@@ -26,22 +26,22 @@ import org.apache.kafka.streams.processor.internals.SerdeGetter;
 
 import java.nio.ByteBuffer;
 
-public class SubscriptionResponseWrapperSerde<VRight> implements Serde<SubscriptionResponseWrapper<VRight>> {
-    private final SubscriptionResponseWrapperSerializer<VRight> serializer;
-    private final SubscriptionResponseWrapperDeserializer<VRight> deserializer;
+public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionResponseWrapper<V>> {
+    private final SubscriptionResponseWrapperSerializer<V> serializer;
+    private final SubscriptionResponseWrapperDeserializer<V> deserializer;
 
-    public SubscriptionResponseWrapperSerde(final Serde<VRight> foreignValueSerde) {
+    public SubscriptionResponseWrapperSerde(final Serde<V> foreignValueSerde) {
         serializer = new SubscriptionResponseWrapperSerializer<>(foreignValueSerde == null ? null : foreignValueSerde.serializer());
         deserializer = new SubscriptionResponseWrapperDeserializer<>(foreignValueSerde == null ? null : foreignValueSerde.deserializer());
     }
 
     @Override
-    public Serializer<SubscriptionResponseWrapper<VRight>> serializer() {
+    public Serializer<SubscriptionResponseWrapper<V>> serializer() {
         return serializer;
     }
 
     @Override
-    public Deserializer<SubscriptionResponseWrapper<VRight>> deserializer() {
+    public Deserializer<SubscriptionResponseWrapper<V>> deserializer() {
         return deserializer;
     }
 
@@ -54,7 +54,7 @@ public class SubscriptionResponseWrapperSerde<VRight> implements Serde<Subscript
             this.serializer = serializer;
         }
 
-        @SuppressWarnings({"unchecked", "resource"})
+        @SuppressWarnings("unchecked")
         @Override
         public void setIfUnset(final SerdeGetter getter) {
             if (serializer == null) {
@@ -101,7 +101,7 @@ public class SubscriptionResponseWrapperSerde<VRight> implements Serde<Subscript
             this.deserializer = deserializer;
         }
 
-        @SuppressWarnings({"unchecked", "resource"})
+        @SuppressWarnings("unchecked")
         @Override
         public void setIfUnset(final SerdeGetter getter) {
             if (deserializer == null) {

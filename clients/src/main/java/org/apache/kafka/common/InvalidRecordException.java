@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common;
 
-import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.ApiException;
 
-public class InvalidRecordException extends InvalidConfigurationException {
+public class InvalidRecordException extends ApiException {
 
     private static final long serialVersionUID = 1;
 

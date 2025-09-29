@@ -20,7 +20,6 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
-import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -32,7 +31,6 @@ import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
-import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceTask.TransactionBoundary;
@@ -58,7 +56,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 
@@ -81,9 +78,9 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                                        SourceTask task,
                                        TaskStatus.Listener statusListener,
                                        TargetState initialState,
-                                       Plugin<Converter> keyConverterPlugin,
-                                       Plugin<Converter> valueConverterPlugin,
-                                       Plugin<HeaderConverter> headerConverterPlugin,
+                                       Converter keyConverter,
+                                       Converter valueConverter,
+                                       HeaderConverter headerConverter,
                                        TransformationChain<SourceRecord, SourceRecord> transformationChain,
                                        Producer<byte[], byte[]> producer,
                                        TopicAdmin admin,
@@ -103,13 +100,11 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                                        Executor closeExecutor,
                                        Runnable preProducerCheck,
                                        Runnable postProducerCheck,
-                                       Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier,
-                                       TaskPluginsMetadata pluginsMetadata,
-                                       Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
-        super(id, task, statusListener, initialState, configState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, transformationChain,
-                buildTransactionContext(sourceConfig),
+                                       Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier) {
+        super(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, transformationChain,
+                new WorkerSourceTaskContext(offsetReader, id, configState, buildTransactionContext(sourceConfig)),
                 producer, admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics, errorMetrics,
-                loader, time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier, pluginsMetadata, pluginLoaderSwapper);
+                loader, time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier);
 
         this.transactionOpen = false;
         this.committableRecords = new LinkedHashMap<>();
@@ -429,22 +424,24 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
             SourceConnectorConfig sourceConfig,
             WorkerTransactionContext transactionContext) {
         TransactionBoundary boundary = sourceConfig.transactionBoundary();
-        return switch (boundary) {
-            case POLL -> new TransactionBoundaryManager() {
-                @Override
-                protected boolean shouldCommitTransactionForBatch(long currentTimeMs) {
-                    return true;
-                }
+        switch (boundary) {
+            case POLL:
+                return new TransactionBoundaryManager() {
+                    @Override
+                    protected boolean shouldCommitTransactionForBatch(long currentTimeMs) {
+                        return true;
+                    }
 
-                @Override
-                protected boolean shouldCommitFinalTransaction() {
-                    return true;
-                }
-            };
-            case INTERVAL -> {
+                    @Override
+                    protected boolean shouldCommitFinalTransaction() {
+                        return true;
+                    }
+                };
+
+            case INTERVAL:
                 long transactionBoundaryInterval = Optional.ofNullable(sourceConfig.transactionBoundaryInterval())
                         .orElse(workerConfig.offsetCommitInterval());
-                yield new TransactionBoundaryManager() {
+                return new TransactionBoundaryManager() {
                     private final long commitInterval = transactionBoundaryInterval;
                     private long lastCommit;
 
@@ -464,14 +461,14 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                     }
 
                     @Override
-                    protected boolean shouldCommitFinalTransaction() {
+                    protected  boolean shouldCommitFinalTransaction() {
                         return true;
                     }
                 };
-            }
-            case CONNECTOR -> {
+
+            case CONNECTOR:
                 Objects.requireNonNull(transactionContext, "Transaction context must be provided when using connector-defined transaction boundaries");
-                yield new TransactionBoundaryManager() {
+                return new TransactionBoundaryManager() {
                     @Override
                     protected boolean shouldCommitFinalTransaction() {
                         return shouldCommitTransactionForBatch(time.milliseconds());
@@ -512,8 +509,9 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                         transactionOpen = false;
                     }
                 };
-            }
-        };
+            default:
+                throw new IllegalArgumentException("Unrecognized transaction boundary: " + boundary);
+        }
     }
 
     TransactionMetricsGroup transactionMetricsGroup() {

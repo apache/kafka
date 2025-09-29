@@ -32,9 +32,9 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartitionsToTxnResponse, FindCoordinatorRequest, FindCoordinatorResponse, InitProducerIdRequest, InitProducerIdResponse}
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.{Arguments, MethodSource, ValueSource}
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -55,7 +55,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
 
   @ParameterizedTest
   @MethodSource(value = Array("parameters"))
-  def shouldReceiveOperationNotAttemptedWhenOtherPartitionHasError(version: Short): Unit = {
+  def shouldReceiveOperationNotAttemptedWhenOtherPartitionHasError(quorum: String, version: Short): Unit = {
     // The basic idea is that we have one unknown topic and one created topic. We should get the 'UNKNOWN_TOPIC_OR_PARTITION'
     // error for the unknown topic and the 'OPERATION_NOT_ATTEMPTED' error for the known and authorized topic.
     val nonExistentTopic = new TopicPartition("unknownTopic", 0)
@@ -110,8 +110,9 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, errors.get(nonExistentTopic))
   }
 
-  @Test
-  def testOneSuccessOneErrorInBatchedRequest(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testOneSuccessOneErrorInBatchedRequest(quorum: String): Unit = {
     val tp0 = new TopicPartition(topic1, 0)
     val transactionalId1 = "foobar"
     val transactionalId2 = "barfoo" // "barfoo" maps to the same transaction coordinator
@@ -148,8 +149,9 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     assertEquals(expectedErrors, errors)
   }
 
-  @Test
-  def testVerifyOnly(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testVerifyOnly(quorum: String): Unit = {
     val tp0 = new TopicPartition(topic1, 0)
 
     val transactionalId = "foobar"
@@ -207,7 +209,7 @@ object AddPartitionsToTxnRequestServerTest {
    def parameters: JStream[Arguments] = {
     val arguments = mutable.ListBuffer[Arguments]()
     ApiKeys.ADD_PARTITIONS_TO_TXN.allVersions().forEach { version =>
-      arguments += Arguments.of(version)
+      arguments += Arguments.of("kraft", version)
     }
     arguments.asJava.stream()
   }

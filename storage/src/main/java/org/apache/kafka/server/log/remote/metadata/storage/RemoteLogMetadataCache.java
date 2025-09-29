@@ -34,7 +34,6 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 /**
  * This class provides an in-memory cache of remote log segment metadata. This maintains the lineage of segments
@@ -109,16 +108,12 @@ public class RemoteLogMetadataCache {
 
     private final CountDownLatch initializedLatch = new CountDownLatch(1);
 
-    void markInitialized() {
+    public void markInitialized() {
         initializedLatch.countDown();
     }
 
-    boolean isInitialized() {
+    public boolean isInitialized() {
         return initializedLatch.getCount() == 0;
-    }
-
-    boolean awaitInitialized(long timeout, TimeUnit unit) throws InterruptedException {
-        return initializedLatch.await(timeout, unit);
     }
 
     /**
@@ -129,7 +124,7 @@ public class RemoteLogMetadataCache {
      * @param offset      offset
      * @return the requested remote log segment metadata if it exists.
      */
-    Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(int leaderEpoch, long offset) {
+    public Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(int leaderEpoch, long offset) {
         RemoteLogSegmentMetadata metadata = getSegmentMetadata(leaderEpoch, offset);
         long epochEndOffset = -1L;
         if (metadata != null) {
@@ -144,7 +139,7 @@ public class RemoteLogMetadataCache {
         return offset > epochEndOffset ? Optional.empty() : Optional.ofNullable(metadata);
     }
 
-    Optional<RemoteLogSegmentMetadata> nextSegmentWithTxnIndex(int leaderEpoch, long offset) {
+    public Optional<RemoteLogSegmentMetadata> nextSegmentWithTxnIndex(int leaderEpoch, long offset) {
         boolean txnIdxEmpty = true;
         Optional<RemoteLogSegmentMetadata> metadataOpt = remoteLogSegmentMetadata(leaderEpoch, offset);
         while (metadataOpt.isPresent() && txnIdxEmpty) {
@@ -171,7 +166,7 @@ public class RemoteLogMetadataCache {
         return null;
     }
 
-    void updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate metadataUpdate)
+    public void updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate metadataUpdate)
             throws RemoteResourceNotFoundException {
         log.debug("Updating remote log segment metadata: [{}]", metadataUpdate);
         Objects.requireNonNull(metadataUpdate, "metadataUpdate can not be null");
@@ -278,7 +273,7 @@ public class RemoteLogMetadataCache {
      *
      * @return
      */
-    Iterator<RemoteLogSegmentMetadata> listAllRemoteLogSegments() {
+    public Iterator<RemoteLogSegmentMetadata> listAllRemoteLogSegments() {
         // Return all the segments including unreferenced metadata.
         return Collections.unmodifiableCollection(idToSegmentMetadata.values()).iterator();
     }
@@ -288,7 +283,7 @@ public class RemoteLogMetadataCache {
      *
      * @param leaderEpoch leader epoch.
      */
-    Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(int leaderEpoch)
+    public Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(int leaderEpoch)
             throws RemoteResourceNotFoundException {
         RemoteLogLeaderEpochState remoteLogLeaderEpochState = leaderEpochEntries.get(leaderEpoch);
         if (remoteLogLeaderEpochState == null) {
@@ -304,7 +299,7 @@ public class RemoteLogMetadataCache {
      *
      * @param leaderEpoch leader epoch
      */
-    Optional<Long> highestOffsetForEpoch(int leaderEpoch) {
+    public Optional<Long> highestOffsetForEpoch(int leaderEpoch) {
         RemoteLogLeaderEpochState entry = leaderEpochEntries.get(leaderEpoch);
         return entry != null ? Optional.ofNullable(entry.highestLogOffset()) : Optional.empty();
     }
@@ -315,7 +310,7 @@ public class RemoteLogMetadataCache {
      *
      * @param remoteLogSegmentMetadata RemoteLogSegmentMetadata instance
      */
-    void addCopyInProgressSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+    public void addCopyInProgressSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         log.debug("Adding to in-progress state: [{}]", remoteLogSegmentMetadata);
         Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
 

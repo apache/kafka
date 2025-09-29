@@ -21,10 +21,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
-import java.util.EnumMap;
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,7 +69,7 @@ public class ElectLeadersResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
+        HashMap<Errors, Integer> counts = new HashMap<>();
         updateErrorCounts(counts, Errors.forCode(data.errorCode()));
         data.replicaElectionResults().forEach(result ->
             result.partitionResult().forEach(partitionResult ->
@@ -79,8 +79,8 @@ public class ElectLeadersResponse extends AbstractResponse {
         return counts;
     }
 
-    public static ElectLeadersResponse parse(Readable readable, short version) {
-        return new ElectLeadersResponse(new ElectLeadersResponseData(readable, version));
+    public static ElectLeadersResponse parse(ByteBuffer buffer, short version) {
+        return new ElectLeadersResponse(new ElectLeadersResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

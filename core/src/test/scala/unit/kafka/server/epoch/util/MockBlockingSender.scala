@@ -116,8 +116,7 @@ class MockBlockingSender(offsets: java.util.Map[TopicPartition, EpochEndOffset],
         topicIds = Map.empty
         FetchResponse.of(Errors.NONE, 0,
           if (partitionData.isEmpty) JFetchMetadata.INVALID_SESSION_ID else 1,
-          partitionData,  List.empty.asJava
-        )
+          partitionData)
 
       case ApiKeys.LIST_OFFSETS =>
         listOffsetsCount += 1

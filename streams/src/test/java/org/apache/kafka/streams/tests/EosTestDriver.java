@@ -19,7 +19,6 @@ package org.apache.kafka.streams.tests;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
-import org.apache.kafka.clients.admin.StreamsGroupDescription;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -49,7 +48,6 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
@@ -173,7 +171,7 @@ public class EosTestDriver extends SmokeTestUtil {
         }
     }
 
-    public static void verify(final String kafka, final boolean withRepartitioning, final String groupProtocol) {
+    public static void verify(final String kafka, final boolean withRepartitioning) {
         final Properties props = new Properties();
         props.put(ConsumerConfig.CLIENT_ID_CONFIG, "verifier");
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
@@ -191,7 +189,7 @@ public class EosTestDriver extends SmokeTestUtil {
 
         final Map<TopicPartition, Long> committedOffsets;
         try (final Admin adminClient = Admin.create(props)) {
-            ensureStreamsApplicationDown(adminClient, groupProtocol);
+            ensureStreamsApplicationDown(adminClient);
 
             committedOffsets = getCommittedOffsets(adminClient, withRepartitioning);
         }
@@ -250,33 +248,23 @@ public class EosTestDriver extends SmokeTestUtil {
         System.out.flush();
     }
 
-    private static void ensureStreamsApplicationDown(final Admin adminClient, final String groupProtocol) {
+    private static void ensureStreamsApplicationDown(final Admin adminClient) {
+
         final long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
-        boolean isEmpty;
+        ConsumerGroupDescription description;
         do {
-            if (Objects.equals(groupProtocol, "streams")) {
-                final StreamsGroupDescription description = getStreamsGroupDescription(adminClient);
-                isEmpty = description.members().isEmpty();
-                if (System.currentTimeMillis() > maxWaitTime && !isEmpty) {
-                    throwNotDownException(description);
-                }
-            } else {
-                final ConsumerGroupDescription description = getConsumerGroupDescription(adminClient);
-                isEmpty = description.members().isEmpty();
-                if (System.currentTimeMillis() > maxWaitTime && !isEmpty) {
-                    throwNotDownException(description);
-                }
+            description = getConsumerGroupDescription(adminClient);
+
+            if (System.currentTimeMillis() > maxWaitTime && !description.members().isEmpty()) {
+                throw new RuntimeException(
+                    "Streams application not down after " + (MAX_IDLE_TIME_MS / 1000L) + " seconds. " +
+                        "Group: " + description
+                );
             }
             sleep(1000L);
-        } while (!isEmpty);
+        } while (!description.members().isEmpty());
     }
 
-    private static void throwNotDownException(final Object description) {
-        throw new RuntimeException(
-            "Streams application not down after " + MAX_IDLE_TIME_MS / 1000L + " seconds. " +
-                "Group: " + description
-        );
-    }
 
     private static Map<TopicPartition, Long> getCommittedOffsets(final Admin adminClient,
                                                                  final boolean withRepartitioning) {
@@ -648,24 +636,11 @@ public class EosTestDriver extends SmokeTestUtil {
         return partitions;
     }
 
+
     private static ConsumerGroupDescription getConsumerGroupDescription(final Admin adminClient) {
         final ConsumerGroupDescription description;
         try {
             description = adminClient.describeConsumerGroups(Collections.singleton(EosTestClient.APP_ID))
-                .describedGroups()
-                .get(EosTestClient.APP_ID)
-                .get(10, TimeUnit.SECONDS);
-        } catch (final InterruptedException | ExecutionException | java.util.concurrent.TimeoutException e) {
-            e.printStackTrace();
-            throw new RuntimeException("Unexpected Exception getting group description", e);
-        }
-        return description;
-    }
-
-    private static StreamsGroupDescription getStreamsGroupDescription(final Admin adminClient) {
-        final StreamsGroupDescription description;
-        try {
-            description = adminClient.describeStreamsGroups(Collections.singleton(EosTestClient.APP_ID))
                 .describedGroups()
                 .get(EosTestClient.APP_ID)
                 .get(10, TimeUnit.SECONDS);

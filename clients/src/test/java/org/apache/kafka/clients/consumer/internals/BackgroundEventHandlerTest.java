@@ -23,23 +23,22 @@ import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP;
 import static org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics.BACKGROUND_EVENT_QUEUE_SIZE_SENSOR_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class BackgroundEventHandlerTest {
     private final BlockingQueue<BackgroundEvent> backgroundEventsQueue =  new LinkedBlockingQueue<>();
 
-    @ParameterizedTest
-    @MethodSource("org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetricsTest#groupNameProvider")
-    public void testRecordBackgroundEventQueueSize(String groupName) {
+    @Test
+    public void testRecordBackgroundEventQueueSize() {
         try (Metrics metrics = new Metrics();
-             AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, groupName)) {
+             AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics)) {
             BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(
                 backgroundEventsQueue,
                 new MockTime(0),
@@ -49,7 +48,7 @@ public class BackgroundEventHandlerTest {
             assertEquals(
                 1,
                 (double) metrics.metric(
-                    metrics.metricName(BACKGROUND_EVENT_QUEUE_SIZE_SENSOR_NAME, groupName)
+                    metrics.metricName(BACKGROUND_EVENT_QUEUE_SIZE_SENSOR_NAME, CONSUMER_METRIC_GROUP)
                 ).metricValue()
             );
 
@@ -58,7 +57,7 @@ public class BackgroundEventHandlerTest {
             assertEquals(
                 0,
                 (double) metrics.metric(
-                    metrics.metricName(BACKGROUND_EVENT_QUEUE_SIZE_SENSOR_NAME, groupName)
+                    metrics.metricName(BACKGROUND_EVENT_QUEUE_SIZE_SENSOR_NAME, CONSUMER_METRIC_GROUP)
                 ).metricValue()
             );
         }

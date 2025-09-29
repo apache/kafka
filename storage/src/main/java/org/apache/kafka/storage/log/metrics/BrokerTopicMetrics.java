@@ -21,6 +21,7 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 
 import com.yammer.metrics.core.Meter;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -44,10 +45,6 @@ public final class BrokerTopicMetrics {
     public static final String PRODUCE_MESSAGE_CONVERSIONS_PER_SEC = "ProduceMessageConversionsPerSec";
     public static final String REASSIGNMENT_BYTES_IN_PER_SEC = "ReassignmentBytesInPerSec";
     public static final String REASSIGNMENT_BYTES_OUT_PER_SEC = "ReassignmentBytesOutPerSec";
-    public static final String TOTAL_SHARE_FETCH_REQUESTS_PER_SEC = "TotalShareFetchRequestsPerSec";
-    public static final String FAILED_SHARE_FETCH_REQUESTS_PER_SEC = "FailedShareFetchRequestsPerSec";
-    public static final String TOTAL_SHARE_ACKNOWLEDGEMENTS_REQUESTS_PER_SEC = "TotalShareAcknowledgementRequestsPerSec";
-    public static final String FAILED_SHARE_ACKNOWLEDGEMENTS_REQUESTS_PER_SEC = "FailedShareAcknowledgementRequestsPerSec";
     // These following topics are for LogValidator for better debugging on failed records
     public static final String NO_KEY_COMPACTED_TOPIC_RECORDS_PER_SEC = "NoKeyCompactedTopicRecordsPerSec";
     public static final String INVALID_MAGIC_NUMBER_RECORDS_PER_SEC = "InvalidMagicNumberRecordsPerSec";
@@ -70,7 +67,7 @@ public final class BrokerTopicMetrics {
     }
 
     private BrokerTopicMetrics(Optional<String> name, boolean remoteStorageEnabled) {
-        this.tags = name.map(s -> Map.of("topic", s)).orElse(Map.of());
+        this.tags = name.map(s -> Collections.singletonMap("topic", s)).orElse(Collections.emptyMap());
 
         metricTypeMap.put(MESSAGE_IN_PER_SEC, new MeterWrapper(MESSAGE_IN_PER_SEC, "messages"));
         metricTypeMap.put(BYTES_IN_PER_SEC, new MeterWrapper(BYTES_IN_PER_SEC, "bytes"));
@@ -78,12 +75,8 @@ public final class BrokerTopicMetrics {
         metricTypeMap.put(BYTES_REJECTED_PER_SEC, new MeterWrapper(BYTES_REJECTED_PER_SEC, "bytes"));
         metricTypeMap.put(FAILED_PRODUCE_REQUESTS_PER_SEC, new MeterWrapper(FAILED_PRODUCE_REQUESTS_PER_SEC, "requests"));
         metricTypeMap.put(FAILED_FETCH_REQUESTS_PER_SEC, new MeterWrapper(FAILED_FETCH_REQUESTS_PER_SEC, "requests"));
-        metricTypeMap.put(FAILED_SHARE_FETCH_REQUESTS_PER_SEC, new MeterWrapper(FAILED_SHARE_FETCH_REQUESTS_PER_SEC, "requests"));
-        metricTypeMap.put(FAILED_SHARE_ACKNOWLEDGEMENTS_REQUESTS_PER_SEC, new MeterWrapper(FAILED_SHARE_ACKNOWLEDGEMENTS_REQUESTS_PER_SEC, "requests"));
         metricTypeMap.put(TOTAL_PRODUCE_REQUESTS_PER_SEC, new MeterWrapper(TOTAL_PRODUCE_REQUESTS_PER_SEC, "requests"));
         metricTypeMap.put(TOTAL_FETCH_REQUESTS_PER_SEC, new MeterWrapper(TOTAL_FETCH_REQUESTS_PER_SEC, "requests"));
-        metricTypeMap.put(TOTAL_SHARE_FETCH_REQUESTS_PER_SEC, new MeterWrapper(TOTAL_SHARE_FETCH_REQUESTS_PER_SEC, "requests"));
-        metricTypeMap.put(TOTAL_SHARE_ACKNOWLEDGEMENTS_REQUESTS_PER_SEC, new MeterWrapper(TOTAL_SHARE_ACKNOWLEDGEMENTS_REQUESTS_PER_SEC, "requests"));
         metricTypeMap.put(FETCH_MESSAGE_CONVERSIONS_PER_SEC, new MeterWrapper(FETCH_MESSAGE_CONVERSIONS_PER_SEC, "requests"));
         metricTypeMap.put(PRODUCE_MESSAGE_CONVERSIONS_PER_SEC, new MeterWrapper(PRODUCE_MESSAGE_CONVERSIONS_PER_SEC, "requests"));
         metricTypeMap.put(NO_KEY_COMPACTED_TOPIC_RECORDS_PER_SEC, new MeterWrapper(NO_KEY_COMPACTED_TOPIC_RECORDS_PER_SEC, "requests"));
@@ -91,7 +84,7 @@ public final class BrokerTopicMetrics {
         metricTypeMap.put(INVALID_MESSAGE_CRC_RECORDS_PER_SEC, new MeterWrapper(INVALID_MESSAGE_CRC_RECORDS_PER_SEC, "requests"));
         metricTypeMap.put(INVALID_OFFSET_OR_SEQUENCE_RECORDS_PER_SEC, new MeterWrapper(INVALID_OFFSET_OR_SEQUENCE_RECORDS_PER_SEC, "requests"));
 
-        if (name.isEmpty()) {
+        if (!name.isPresent()) {
             metricTypeMap.put(REPLICATION_BYTES_IN_PER_SEC, new MeterWrapper(REPLICATION_BYTES_IN_PER_SEC, "bytes"));
             metricTypeMap.put(REPLICATION_BYTES_OUT_PER_SEC, new MeterWrapper(REPLICATION_BYTES_OUT_PER_SEC, "bytes"));
             metricTypeMap.put(REASSIGNMENT_BYTES_IN_PER_SEC, new MeterWrapper(REASSIGNMENT_BYTES_IN_PER_SEC, "bytes"));
@@ -197,28 +190,12 @@ public final class BrokerTopicMetrics {
         return metricTypeMap.get(FAILED_FETCH_REQUESTS_PER_SEC).meter();
     }
 
-    public Meter failedShareFetchRequestRate() {
-        return metricTypeMap.get(FAILED_SHARE_FETCH_REQUESTS_PER_SEC).meter();
-    }
-
-    public Meter failedShareAcknowledgementRequestRate() {
-        return metricTypeMap.get(FAILED_SHARE_ACKNOWLEDGEMENTS_REQUESTS_PER_SEC).meter();
-    }
-
     public Meter totalProduceRequestRate() {
         return metricTypeMap.get(TOTAL_PRODUCE_REQUESTS_PER_SEC).meter();
     }
 
     public Meter totalFetchRequestRate() {
         return metricTypeMap.get(TOTAL_FETCH_REQUESTS_PER_SEC).meter();
-    }
-
-    public Meter totalShareFetchRequestRate() {
-        return metricTypeMap.get(TOTAL_SHARE_FETCH_REQUESTS_PER_SEC).meter();
-    }
-
-    public Meter totalShareAcknowledgementRequestRate() {
-        return metricTypeMap.get(TOTAL_SHARE_ACKNOWLEDGEMENTS_REQUESTS_PER_SEC).meter();
     }
 
     public Meter fetchMessageConversionsRate() {

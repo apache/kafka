@@ -62,7 +62,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
-import java.util.Set;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItems;
@@ -411,8 +410,6 @@ public class KTableTransformValuesTest {
 
         final KeyValueStore<String, Integer> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
         assertThat(keyValueStore.get("A"), is(3));
-        assertThat(driver.getAllStateStores().keySet(),
-            equalTo(Set.of(QUERYABLE_NAME, "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
     }
 
     @Test
@@ -437,8 +434,6 @@ public class KTableTransformValuesTest {
         assertThat(output(), equalTo(Arrays.asList(new KeyValueTimestamp<>("A", "1", 5),
                 new KeyValueTimestamp<>("A", "2", 15),
                 new KeyValueTimestamp<>("A", "3", 15))));
-        assertThat(driver.getAllStateStores().keySet(),
-            equalTo(Set.of("inputTopic-STATE-STORE-0000000000", "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
     }
 
     @Test
@@ -465,8 +460,6 @@ public class KTableTransformValuesTest {
         assertThat(output(), equalTo(Arrays.asList(new KeyValueTimestamp<>("A", "1", 5),
             new KeyValueTimestamp<>("A", "2", 15),
             new KeyValueTimestamp<>("A", "3", 15))));
-        assertThat(driver.getAllStateStores().keySet(),
-            equalTo(Set.of("inputTopic-STATE-STORE-0000000000", "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
     }
 
     private ArrayList<KeyValueTimestamp<String, String>> output() {

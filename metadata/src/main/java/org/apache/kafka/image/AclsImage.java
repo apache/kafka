@@ -30,11 +30,13 @@ import java.util.Map.Entry;
 
 /**
  * Represents the ACLs in the metadata image.
- * <p>
+ *
  * This class is thread-safe.
  */
-public record AclsImage(Map<Uuid, StandardAcl> acls) {
-    public static final AclsImage EMPTY = new AclsImage(Map.of());
+public final class AclsImage {
+    public static final AclsImage EMPTY = new AclsImage(Collections.emptyMap());
+
+    private final Map<Uuid, StandardAcl> acls;
 
     public AclsImage(Map<Uuid, StandardAcl> acls) {
         this.acls = Collections.unmodifiableMap(acls);
@@ -44,11 +46,27 @@ public record AclsImage(Map<Uuid, StandardAcl> acls) {
         return acls.isEmpty();
     }
 
+    public Map<Uuid, StandardAcl> acls() {
+        return acls;
+    }
+
     public void write(ImageWriter writer) {
         for (Entry<Uuid, StandardAcl> entry : acls.entrySet()) {
             StandardAclWithId aclWithId = new StandardAclWithId(entry.getKey(), entry.getValue());
             writer.write(0, aclWithId.toRecord());
         }
+    }
+
+    @Override
+    public int hashCode() {
+        return acls.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof AclsImage)) return false;
+        AclsImage other = (AclsImage) o;
+        return acls.equals(other.acls);
     }
 
     @Override

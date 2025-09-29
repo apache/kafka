@@ -359,6 +359,7 @@ public abstract class SslFactoryTest {
         sslConfig = new TestSecurityConfig(props);
         sslFactory.reconfigure(sslConfig.values());
         assertNotSame(sslEngineFactory, sslFactory.sslEngineFactory(), "SslEngineFactory not recreated");
+        sslEngineFactory = sslFactory.sslEngineFactory();
     }
 
     @Test
@@ -399,15 +400,15 @@ public abstract class SslFactoryTest {
 
     @Test
     public void testKeystoreVerifiableUsingTruststore() throws Exception {
-        verifyKeystoreVerifiableUsingTruststore(false);
+        verifyKeystoreVerifiableUsingTruststore(false, tlsProtocol);
     }
 
     @Test
     public void testPemKeystoreVerifiableUsingTruststore() throws Exception {
-        verifyKeystoreVerifiableUsingTruststore(true);
+        verifyKeystoreVerifiableUsingTruststore(true, tlsProtocol);
     }
 
-    private void verifyKeystoreVerifiableUsingTruststore(boolean usePem) throws Exception {
+    private void verifyKeystoreVerifiableUsingTruststore(boolean usePem, String tlsProtocol) throws Exception {
         File trustStoreFile1 = usePem ? null : TestUtils.tempFile("truststore1", ".jks");
         Map<String, Object> sslConfig1 = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile1)
@@ -435,15 +436,15 @@ public abstract class SslFactoryTest {
 
     @Test
     public void testCertificateEntriesValidation() throws Exception {
-        verifyCertificateEntriesValidation(false);
+        verifyCertificateEntriesValidation(false, tlsProtocol);
     }
 
     @Test
     public void testPemCertificateEntriesValidation() throws Exception {
-        verifyCertificateEntriesValidation(true);
+        verifyCertificateEntriesValidation(true, tlsProtocol);
     }
 
-    private void verifyCertificateEntriesValidation(boolean usePem) throws Exception {
+    private void verifyCertificateEntriesValidation(boolean usePem, String tlsProtocol) throws Exception {
         File trustStoreFile = usePem ? null : TestUtils.tempFile("truststore", ".jks");
         Map<String, Object> serverSslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
                 .createNewTrustStore(trustStoreFile)

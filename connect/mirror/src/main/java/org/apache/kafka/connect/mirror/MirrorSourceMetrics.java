@@ -27,6 +27,8 @@ import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.metrics.stats.Value;
 
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -60,7 +62,7 @@ class MirrorSourceMetrics implements AutoCloseable {
         this.source = taskConfig.sourceClusterAlias();
         this.metrics = new Metrics();
 
-        Set<String> partitionTags = Set.of("source", "target", "topic", "partition");
+        Set<String> partitionTags = new HashSet<>(Arrays.asList("source", "target", "topic", "partition"));
 
         recordCount = new MetricNameTemplate(
                 "record-count", SOURCE_CONNECTOR_GROUP,

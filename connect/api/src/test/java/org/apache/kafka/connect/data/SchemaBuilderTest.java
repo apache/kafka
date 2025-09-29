@@ -21,6 +21,8 @@ import org.apache.kafka.connect.errors.SchemaBuilderException;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -232,14 +234,14 @@ public class SchemaBuilderTest {
     public void testArrayBuilder() {
         Schema schema = SchemaBuilder.array(Schema.INT8_SCHEMA).build();
         assertTypeAndDefault(schema, Schema.Type.ARRAY, false, null);
-        assertEquals(Schema.INT8_SCHEMA, schema.valueSchema());
+        assertEquals(schema.valueSchema(), Schema.INT8_SCHEMA);
         assertNoMetadata(schema);
 
         // Default value
-        List<Byte> defArray = List.of((byte) 1, (byte) 2);
+        List<Byte> defArray = Arrays.asList((byte) 1, (byte) 2);
         schema = SchemaBuilder.array(Schema.INT8_SCHEMA).defaultValue(defArray).build();
         assertTypeAndDefault(schema, Schema.Type.ARRAY, false, defArray);
-        assertEquals(Schema.INT8_SCHEMA, schema.valueSchema());
+        assertEquals(schema.valueSchema(), Schema.INT8_SCHEMA);
         assertNoMetadata(schema);
     }
 
@@ -247,7 +249,7 @@ public class SchemaBuilderTest {
     public void testArrayBuilderInvalidDefault() {
         // Array, but wrong embedded type
         assertThrows(SchemaBuilderException.class,
-            () -> SchemaBuilder.array(Schema.INT8_SCHEMA).defaultValue(List.of("string")).build());
+            () -> SchemaBuilder.array(Schema.INT8_SCHEMA).defaultValue(Collections.singletonList("string")).build());
     }
 
     @Test
@@ -255,30 +257,30 @@ public class SchemaBuilderTest {
         // SchemaBuilder should also pass the check
         Schema schema = SchemaBuilder.map(Schema.INT8_SCHEMA, Schema.INT8_SCHEMA);
         assertTypeAndDefault(schema, Schema.Type.MAP, false, null);
-        assertEquals(Schema.INT8_SCHEMA, schema.keySchema());
-        assertEquals(Schema.INT8_SCHEMA, schema.valueSchema());
+        assertEquals(schema.keySchema(), Schema.INT8_SCHEMA);
+        assertEquals(schema.valueSchema(), Schema.INT8_SCHEMA);
         assertNoMetadata(schema);
 
         schema = SchemaBuilder.map(Schema.INT8_SCHEMA, Schema.INT8_SCHEMA).build();
         assertTypeAndDefault(schema, Schema.Type.MAP, false, null);
-        assertEquals(Schema.INT8_SCHEMA, schema.keySchema());
-        assertEquals(Schema.INT8_SCHEMA, schema.valueSchema());
+        assertEquals(schema.keySchema(), Schema.INT8_SCHEMA);
+        assertEquals(schema.valueSchema(), Schema.INT8_SCHEMA);
         assertNoMetadata(schema);
 
         // Default value
-        Map<Byte, Byte> defMap = Map.of((byte) 5, (byte) 10);
+        Map<Byte, Byte> defMap = Collections.singletonMap((byte) 5, (byte) 10);
         schema = SchemaBuilder.map(Schema.INT8_SCHEMA, Schema.INT8_SCHEMA)
                 .defaultValue(defMap).build();
         assertTypeAndDefault(schema, Schema.Type.MAP, false, defMap);
-        assertEquals(Schema.INT8_SCHEMA, schema.keySchema());
-        assertEquals(Schema.INT8_SCHEMA, schema.valueSchema());
+        assertEquals(schema.keySchema(), Schema.INT8_SCHEMA);
+        assertEquals(schema.valueSchema(), Schema.INT8_SCHEMA);
         assertNoMetadata(schema);
     }
 
     @Test
     public void testMapBuilderInvalidDefault() {
         // Map, but wrong embedded type
-        Map<Byte, String> defMap = Map.of((byte) 5, "foo");
+        Map<Byte, String> defMap = Collections.singletonMap((byte) 5, "foo");
         assertThrows(SchemaBuilderException.class, () -> SchemaBuilder.map(Schema.INT8_SCHEMA, Schema.INT8_SCHEMA)
                 .defaultValue(defMap).build());
     }

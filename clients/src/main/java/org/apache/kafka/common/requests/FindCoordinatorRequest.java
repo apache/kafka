@@ -22,9 +22,10 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 
 public class FindCoordinatorRequest extends AbstractRequest {
@@ -104,8 +105,8 @@ public class FindCoordinatorRequest extends AbstractRequest {
         }
     }
 
-    public static FindCoordinatorRequest parse(Readable readable, short version) {
-        return new FindCoordinatorRequest(new FindCoordinatorRequestData(readable, version),
+    public static FindCoordinatorRequest parse(ByteBuffer buffer, short version) {
+        return new FindCoordinatorRequest(new FindCoordinatorRequestData(new ByteBufferAccessor(buffer), version),
             version);
     }
 

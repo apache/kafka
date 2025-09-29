@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.StickyAssignor;
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.RackConfig;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
 
@@ -742,7 +741,6 @@ public abstract class AbstractStickyAssignorTest {
         assignor.assignPartitions(partitionsPerTopic, subscriptions);
     }
 
-    @Flaky("KAFKA-13514")
     @Timeout(90)
     @ParameterizedTest(name = TEST_NAME_WITH_CONSUMER_RACK)
     @ValueSource(booleans = {false, true})
@@ -1025,7 +1023,7 @@ public abstract class AbstractStickyAssignorTest {
 
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
         assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
-        assertEquals(1 + 100, assignment.values().stream().mapToInt(List::size).sum());
+        assertEquals(assignment.values().stream().mapToInt(List::size).sum(), 1 + 100);
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(isFullyBalanced(assignment));
     }
@@ -1043,7 +1041,7 @@ public abstract class AbstractStickyAssignorTest {
 
         assignment = assignor.assign(Collections.emptyMap(), subscriptions);
         assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
-        assertEquals(1, assignment.size());
+        assertEquals(assignment.size(), 1);
         assertTrue(assignment.get(consumerId).isEmpty());
     }
 
@@ -1428,8 +1426,14 @@ public abstract class AbstractStickyAssignorTest {
     }
 
     private String pad(int num, int digits) {
+        StringBuilder sb = new StringBuilder();
         int iDigits = Integer.toString(num).length();
-        return "0".repeat(Math.max(0, digits - iDigits)) + num;
+
+        for (int i = 1; i <= digits - iDigits; ++i)
+            sb.append("0");
+
+        sb.append(num);
+        return sb.toString();
     }
 
     protected static List<String> topics(String... topics) {

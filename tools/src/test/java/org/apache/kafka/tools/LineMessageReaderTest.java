@@ -25,12 +25,15 @@ import org.apache.kafka.tools.api.RecordReader;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Properties;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.propsToStringMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -54,7 +57,7 @@ public class LineMessageReaderTest {
         ProducerRecord<String, String> expected = record(
                 "key0",
                 "value0",
-                List.of(
+                asList(
                         new RecordHeader("headerKey0", "headerValue0".getBytes(UTF_8)),
                         new RecordHeader("headerKey1", "headerValue1".getBytes(UTF_8))
                 )
@@ -64,7 +67,7 @@ public class LineMessageReaderTest {
 
     @Test
     public void testMinimalValidInputWithHeaderKeyAndValue() {
-        runTest(defaultTestProps(), ":\t\t", record("", "", List.of(new RecordHeader("", "".getBytes(UTF_8)))));
+        runTest(defaultTestProps(), ":\t\t", record("", "", singletonList(new RecordHeader("", "".getBytes(UTF_8)))));
     }
 
     @Test
@@ -87,7 +90,7 @@ public class LineMessageReaderTest {
                 "headerKey0.0::::headerValue0.0---headerKey1.0::::\t\tkey\t\tvalue",
                 record("key",
                         "value",
-                        List.of(
+                        asList(
                                 new RecordHeader("headerKey0.0", "headerValue0.0".getBytes(UTF_8)),
                                 new RecordHeader("headerKey1.0", "".getBytes(UTF_8))
                         )
@@ -102,7 +105,7 @@ public class LineMessageReaderTest {
         Properties props = defaultTestProps();
         props.put("parse.key", "false");
 
-        runTest(props, input, record(null, "value", List.of(new RecordHeader("headerKey", "headerValue".getBytes(UTF_8)))));
+        runTest(props, input, record(null, "value", singletonList(new RecordHeader("headerKey", "headerValue".getBytes(UTF_8)))));
     }
 
     @Test
@@ -129,7 +132,7 @@ public class LineMessageReaderTest {
         ProducerRecord<String, String> record0 = record(
                 "key0",
                 "value0",
-                List.of(
+                asList(
                         new RecordHeader("headerKey0.0", "headerValue0.0".getBytes(UTF_8)),
                         new RecordHeader("headerKey0.1", "headerValue0.1".getBytes(UTF_8))
                 )
@@ -137,7 +140,7 @@ public class LineMessageReaderTest {
         ProducerRecord<String, String> record1 = record(
                 "key1",
                 "value1",
-                List.of(new RecordHeader("headerKey1.0", "headerValue1.0".getBytes(UTF_8)))
+                singletonList(new RecordHeader("headerKey1.0", "headerValue1.0".getBytes(UTF_8)))
         );
 
         runTest(props, input, record0, record1);
@@ -205,12 +208,12 @@ public class LineMessageReaderTest {
         props.put("ignore.error", "true");
 
         ProducerRecord<String, String> validRecord = record("key0", "value0",
-                List.of(new RecordHeader("headerKey0.0", "headerValue0.0".getBytes(UTF_8))));
+                singletonList(new RecordHeader("headerKey0.0", "headerValue0.0".getBytes(UTF_8))));
 
         ProducerRecord<String, String> missingHeaderDelimiter = record(
                 null,
                 "value1",
-                List.of(
+                asList(
                         new RecordHeader("headerKey1.0", "headerValue1.0".getBytes(UTF_8)),
                         new RecordHeader("headerKey1.1", "headerValue1.1[MISSING-HEADER-DELIMITER]key1".getBytes(UTF_8))
                 )
@@ -219,13 +222,13 @@ public class LineMessageReaderTest {
         ProducerRecord<String, String> missingKeyDelimiter = record(
                 null,
                 "key2[MISSING-KEY-DELIMITER]value2",
-                List.of(new RecordHeader("headerKey2.0", "headerValue2.0".getBytes(UTF_8)))
+                singletonList(new RecordHeader("headerKey2.0", "headerValue2.0".getBytes(UTF_8)))
         );
 
         ProducerRecord<String, String> missingKeyHeaderDelimiter = record(
                 null,
                 "headerKey3.0:headerValue3.0[MISSING-HEADER-DELIMITER]key3[MISSING-KEY-DELIMITER]value3",
-                List.of()
+                Collections.emptyList()
         );
 
         runTest(props, input, validRecord, missingHeaderDelimiter, missingKeyDelimiter, missingKeyHeaderDelimiter);
@@ -238,7 +241,7 @@ public class LineMessageReaderTest {
         Properties props = defaultTestProps();
         props.put("ignore.error", "true");
 
-        ProducerRecord<String, String> expected = record("key0", "value0", List.of(new RecordHeader("key-val", null)));
+        ProducerRecord<String, String> expected = record("key0", "value0", singletonList(new RecordHeader("key-val", null)));
 
         runTest(props, input, expected);
     }
@@ -285,11 +288,11 @@ public class LineMessageReaderTest {
         Properties props = defaultTestProps();
         props.put("null.marker", "<NULL>");
         runTest(props, input,
-                record(null, "value", List.of(new RecordHeader("h0", "v0".getBytes(UTF_8)), header)),
+                record(null, "value", asList(new RecordHeader("h0", "v0".getBytes(UTF_8)), header)),
                 record("key", null),
-                record(null, null, List.of(new RecordHeader("h0", "".getBytes(UTF_8)), header)),
-                record("key", null, List.of(new RecordHeader("h0", null), header)),
-                record("key", null, List.of(new RecordHeader("h0", null), new RecordHeader("h1", "<NULL>value".getBytes(UTF_8))))
+                record(null, null, asList(new RecordHeader("h0", "".getBytes(UTF_8)), header)),
+                record("key", null, asList(new RecordHeader("h0", null), header)),
+                record("key", null, asList(new RecordHeader("h0", null), new RecordHeader("h1", "<NULL>value".getBytes(UTF_8))))
         );
 
         // If the null marker is not set
@@ -297,16 +300,16 @@ public class LineMessageReaderTest {
         props.remove("null.marker");
         lineReader.configure(propsToStringMap(props));
         Iterator<ProducerRecord<byte[], byte[]>> iter = lineReader.readRecords(new ByteArrayInputStream(input.getBytes()));
-        assertRecordEquals(record("<NULL>", "value", List.of(new RecordHeader("h0", "v0".getBytes(UTF_8)), header)), iter.next());
+        assertRecordEquals(record("<NULL>", "value", asList(new RecordHeader("h0", "v0".getBytes(UTF_8)), header)), iter.next());
         // line 2 is not valid anymore
         KafkaException expectedException = assertThrows(KafkaException.class, iter::next);
         assertEquals(
                 "No header key separator found in pair '<NULL>' on line number 2",
                 expectedException.getMessage()
         );
-        assertRecordEquals(record("<NULL>", "<NULL>", List.of(new RecordHeader("h0", "".getBytes(UTF_8)), header)), iter.next());
-        assertRecordEquals(record("key", "<NULL>", List.of(new RecordHeader("h0", "<NULL>".getBytes(UTF_8)), header)), iter.next());
-        assertRecordEquals(record("key", "<NULL>", List.of(
+        assertRecordEquals(record("<NULL>", "<NULL>", asList(new RecordHeader("h0", "".getBytes(UTF_8)), header)), iter.next());
+        assertRecordEquals(record("key", "<NULL>", asList(new RecordHeader("h0", "<NULL>".getBytes(UTF_8)), header)), iter.next());
+        assertRecordEquals(record("key", "<NULL>", asList(
                 new RecordHeader("h0", "<NULL>".getBytes(UTF_8)),
                 new RecordHeader("h1", "<NULL>value".getBytes(UTF_8)))), iter.next()
         );
@@ -329,7 +332,7 @@ public class LineMessageReaderTest {
 
         // If the null marker is not set
         props.remove("null.marker");
-        runTest(props, input, record("key", "value", List.of(
+        runTest(props, input, record("key", "value", asList(
                 new RecordHeader("<NULL>", "v0".getBytes(UTF_8)),
                 new RecordHeader("h1", "v1".getBytes(UTF_8))))
         );

@@ -191,7 +191,7 @@ public final class LsCommandHandler implements Commands.Handler {
 
     static ColumnSchema calculateColumnSchema(OptionalInt screenWidth,
                                               List<String> entries) {
-        if (screenWidth.isEmpty()) {
+        if (!screenWidth.isPresent()) {
             return new ColumnSchema(1, entries.size());
         }
         int maxColumns = screenWidth.getAsInt() / 4;
@@ -268,7 +268,8 @@ public final class LsCommandHandler implements Commands.Handler {
 
         @Override
         public boolean equals(Object o) {
-            if (!(o instanceof ColumnSchema other)) return false;
+            if (!(o instanceof ColumnSchema)) return false;
+            ColumnSchema other = (ColumnSchema) o;
             if (entriesPerColumn != other.entriesPerColumn) return false;
             return Arrays.equals(columnWidths, other.columnWidths);
         }
@@ -294,7 +295,8 @@ public final class LsCommandHandler implements Commands.Handler {
 
     @Override
     public boolean equals(Object other) {
-        if (!(other instanceof LsCommandHandler o)) return false;
+        if (!(other instanceof LsCommandHandler)) return false;
+        LsCommandHandler o = (LsCommandHandler) other;
         return Objects.equals(o.targets, targets);
     }
 }

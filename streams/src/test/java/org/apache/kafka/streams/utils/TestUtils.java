@@ -90,7 +90,7 @@ public class TestUtils {
         return safeUniqueTestName(methodName);
     }
 
-    public static String safeUniqueTestName(final String testName) {
+    private static String safeUniqueTestName(final String testName) {
         return sanitize(testName + Uuid.randomUuid().toString());
     }
 

@@ -25,10 +25,11 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.record.RecordBatch;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -216,9 +217,9 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         return response;
     }
 
-    public static TxnOffsetCommitRequest parse(Readable readable, short version) {
+    public static TxnOffsetCommitRequest parse(ByteBuffer buffer, short version) {
         return new TxnOffsetCommitRequest(new TxnOffsetCommitRequestData(
-            readable, version), version);
+            new ByteBufferAccessor(buffer), version), version);
     }
 
     public static class CommittedOffset {

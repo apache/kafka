@@ -25,6 +25,7 @@ import java.util.Optional;
 import static org.apache.kafka.common.requests.FetchRequest.FUTURE_LOCAL_REPLICA_ID;
 
 public class FetchParams {
+    public final short requestVersion;
     public final int replicaId;
     public final long replicaEpoch;
     public final long maxWaitMs;
@@ -34,17 +35,19 @@ public class FetchParams {
     public final Optional<ClientMetadata> clientMetadata;
     public final boolean shareFetchRequest;
 
-    public FetchParams(int replicaId,
+    public FetchParams(short requestVersion,
+                       int replicaId,
                        long replicaEpoch,
                        long maxWaitMs,
                        int minBytes,
                        int maxBytes,
                        FetchIsolation isolation,
                        Optional<ClientMetadata> clientMetadata) {
-        this(replicaId, replicaEpoch, maxWaitMs, minBytes, maxBytes, isolation, clientMetadata, false);
+        this(requestVersion, replicaId, replicaEpoch, maxWaitMs, minBytes, maxBytes, isolation, clientMetadata, false);
     }
 
-    public FetchParams(int replicaId,
+    public FetchParams(short requestVersion,
+                       int replicaId,
                        long replicaEpoch,
                        long maxWaitMs,
                        int minBytes,
@@ -54,6 +57,7 @@ public class FetchParams {
                        boolean shareFetchRequest) {
         Objects.requireNonNull(isolation);
         Objects.requireNonNull(clientMetadata);
+        this.requestVersion = requestVersion;
         this.replicaId = replicaId;
         this.replicaEpoch = replicaEpoch;
         this.maxWaitMs = maxWaitMs;
@@ -77,7 +81,11 @@ public class FetchParams {
     }
 
     public boolean fetchOnlyLeader() {
-        return isFromFollower() || (isFromConsumer() && clientMetadata.isEmpty()) || shareFetchRequest;
+        return isFromFollower() || (isFromConsumer() && !clientMetadata.isPresent()) || shareFetchRequest;
+    }
+
+    public boolean hardMaxBytesLimit() {
+        return requestVersion <= 2;
     }
 
     @Override
@@ -85,7 +93,8 @@ public class FetchParams {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         FetchParams that = (FetchParams) o;
-        return replicaId == that.replicaId
+        return requestVersion == that.requestVersion
+                && replicaId == that.replicaId
                 && replicaEpoch == that.replicaEpoch
                 && maxWaitMs == that.maxWaitMs
                 && minBytes == that.minBytes
@@ -97,7 +106,8 @@ public class FetchParams {
 
     @Override
     public int hashCode() {
-        int result = replicaId;
+        int result = requestVersion;
+        result = 31 * result + replicaId;
         result = 31 * result + (int) replicaEpoch;
         result = 31 * result + Long.hashCode(32);
         result = 31 * result + minBytes;
@@ -111,7 +121,8 @@ public class FetchParams {
     @Override
     public String toString() {
         return "FetchParams(" +
-                "replicaId=" + replicaId +
+                "requestVersion=" + requestVersion +
+                ", replicaId=" + replicaId +
                 ", replicaEpoch=" + replicaEpoch +
                 ", maxWaitMs=" + maxWaitMs +
                 ", minBytes=" + minBytes +

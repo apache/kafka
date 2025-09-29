@@ -22,13 +22,11 @@ import kafka.utils.Logging
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.server.LogReadResult
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.purgatory.DelayedOperation
 import org.apache.kafka.server.storage.log.{FetchParams, FetchPartitionData}
 import org.apache.kafka.storage.internals.log.{LogOffsetMetadata, RemoteLogReadResult, RemoteStorageFetchInfo}
 
-import java.util
 import java.util.concurrent.{CompletableFuture, Future, TimeUnit}
 import java.util.{Optional, OptionalInt, OptionalLong}
 import scala.collection._
@@ -37,9 +35,9 @@ import scala.collection._
  * A remote fetch operation that can be created by the replica manager and watched
  * in the remote fetch operation purgatory
  */
-class DelayedRemoteFetch(remoteFetchTasks: util.Map[TopicIdPartition, Future[Void]],
-                         remoteFetchResults: util.Map[TopicIdPartition, CompletableFuture[RemoteLogReadResult]],
-                         remoteFetchInfos: util.Map[TopicIdPartition, RemoteStorageFetchInfo],
+class DelayedRemoteFetch(remoteFetchTask: Future[Void],
+                         remoteFetchResult: CompletableFuture[RemoteLogReadResult],
+                         remoteFetchInfo: RemoteStorageFetchInfo,
                          remoteFetchMaxWaitMs: Long,
                          fetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)],
                          fetchParams: FetchParams,
@@ -57,7 +55,7 @@ class DelayedRemoteFetch(remoteFetchTasks: util.Map[TopicIdPartition, Future[Voi
    *
    * Case a: This broker is no longer the leader of the partition it tries to fetch
    * Case b: This broker does not know the partition it tries to fetch
-   * Case c: All the remote storage read request completed (succeeded or failed)
+   * Case c: The remote storage read request completed (succeeded or failed)
    * Case d: The partition is in an offline log directory on this broker
    *
    * Upon completion, should return whatever data is available for each valid partition
@@ -82,23 +80,16 @@ class DelayedRemoteFetch(remoteFetchTasks: util.Map[TopicIdPartition, Future[Voi
             return forceComplete()
         }
     }
-    // Case c
-    if (remoteFetchResults.values().stream().allMatch(taskResult => taskResult.isDone))
+    if (remoteFetchResult.isDone) // Case c
       forceComplete()
     else
       false
   }
 
   override def onExpiration(): Unit = {
-    // cancel the remote storage read task, if it has not been executed yet and
-    // avoid interrupting the task if it is already running as it may force closing opened/cached resources as transaction index.
-    remoteFetchTasks.forEach { (topicIdPartition, task) =>
-      if (task != null && !task.isDone) {
-         if (!task.cancel(false)) {
-           debug(s"Remote fetch task for remoteFetchInfo: ${remoteFetchInfos.get(topicIdPartition)} could not be cancelled.")
-         }
-      }
-    }
+    // cancel the remote storage read task, if it has not been executed yet
+    val cancelled = remoteFetchTask.cancel(true)
+    if (!cancelled) debug(s"Remote fetch task for RemoteStorageFetchInfo: $remoteFetchInfo could not be cancelled and its isDone value is ${remoteFetchTask.isDone}")
 
     DelayedRemoteFetchMetrics.expiredRequestMeter.mark()
   }
@@ -108,8 +99,7 @@ class DelayedRemoteFetch(remoteFetchTasks: util.Map[TopicIdPartition, Future[Voi
    */
   override def onComplete(): Unit = {
     val fetchPartitionData = localReadResults.map { case (tp, result) =>
-      val remoteFetchResult = remoteFetchResults.get(tp)
-      if (remoteFetchInfos.containsKey(tp)
+      if (tp.topicPartition().equals(remoteFetchInfo.topicPartition)
         && remoteFetchResult.isDone
         && result.error == Errors.NONE
         && result.info.delayedRemoteStorageFetch.isPresent) {
@@ -123,9 +113,9 @@ class DelayedRemoteFetch(remoteFetchTasks: util.Map[TopicIdPartition, Future[Voi
             result.leaderLogStartOffset,
             info.records,
             Optional.empty(),
-            if (result.lastStableOffset.isPresent) OptionalLong.of(result.lastStableOffset.getAsLong) else OptionalLong.empty(),
+            if (result.lastStableOffset.isDefined) OptionalLong.of(result.lastStableOffset.get) else OptionalLong.empty(),
             info.abortedTransactions,
-            if (result.preferredReadReplica.isPresent) OptionalInt.of(result.preferredReadReplica.getAsInt) else OptionalInt.empty(),
+            if (result.preferredReadReplica.isDefined) OptionalInt.of(result.preferredReadReplica.get) else OptionalInt.empty(),
             false)
         }
       } else {

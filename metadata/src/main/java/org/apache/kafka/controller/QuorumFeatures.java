@@ -84,6 +84,10 @@ public final class QuorumFeatures {
         return nodeId;
     }
 
+    public Map<String, VersionRange> localSupportedFeatures() {
+        return localSupportedFeatures;
+    }
+
     public List<Integer> quorumNodeIds() {
         return quorumNodeIds;
     }

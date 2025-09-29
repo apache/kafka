@@ -44,6 +44,7 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
@@ -161,7 +162,7 @@ public class StandardAuthorizerPropertyTest {
 
     private StandardAuthorizer buildAuthorizer() {
         StandardAuthorizer authorizer = new StandardAuthorizer();
-        authorizer.start(new StandardAuthorizerTest.AuthorizerTestServerInfo(List.of(PLAINTEXT)));
+        authorizer.start(new StandardAuthorizerTest.AuthorizerTestServerInfo(Collections.singletonList(PLAINTEXT)));
         authorizer.completeInitialLoad();
         return authorizer;
     }
@@ -175,7 +176,7 @@ public class StandardAuthorizerPropertyTest {
         Action action = new Action(operation, pattern, 1, false, false);
         List<AuthorizationResult> results = authorizer.authorize(
             newRequestContext(),
-            List.of(action)
+            Collections.singletonList(action)
         );
 
         assertEquals(1, results.size());

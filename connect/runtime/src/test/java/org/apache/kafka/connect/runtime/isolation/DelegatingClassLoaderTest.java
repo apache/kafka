@@ -27,6 +27,7 @@ import org.mockito.quality.Strictness;
 
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.Collections;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
@@ -72,15 +73,15 @@ public class DelegatingClassLoaderTest {
         assertTrue(PluginUtils.shouldLoadInIsolation(pluginDesc.className()));
         sinkConnectors.add(pluginDesc);
         scanResult = new PluginScanResult(
-            sinkConnectors,
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>()
+                sinkConnectors,
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet()
         );
     }
 

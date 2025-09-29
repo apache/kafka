@@ -24,7 +24,6 @@ import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Materialized.StoreType;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.StreamJoined;
@@ -59,8 +58,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.internal.util.collections.Sets;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -68,6 +65,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -425,8 +423,10 @@ public class TopologyTest {
         }
     }
 
+    @Deprecated // testing old PAPI
     @Test
     public void shouldNotAllowToAddGlobalStoreWithSourceNameEqualsProcessorName() {
+        when(globalStoreBuilder.name()).thenReturn("anyName");
         assertThrows(TopologyException.class, () -> topology.addGlobalStore(
             globalStoreBuilder,
             "sameName",
@@ -1205,14 +1205,13 @@ public class TopologyTest {
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
-    @ParameterizedTest
-    @EnumSource(StoreType.class)
-    public void kGroupedStreamNamedMaterializedCountShouldPreserveTopologyStructure(final StoreType storeType) {
+    @Test
+    public void kGroupedStreamNamedMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
             .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count-store")
-                .withStoreType(storeType));
+                .withStoreType(Materialized.StoreType.IN_MEMORY));
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
         assertEquals(
@@ -1227,17 +1226,17 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
-    @ParameterizedTest
-    @EnumSource(StoreType.class)
-    public void kGroupedStreamAnonymousMaterializedCountShouldPreserveTopologyStructure(final StoreType storeType) {
+    @Test
+    public void kGroupedStreamAnonymousMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
             .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>with(null, Serdes.Long())
-                .withStoreType(storeType));
+                // set store type explicitly with default rocksDB
+                .withStoreType(Materialized.StoreType.ROCKS_DB));
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
         assertEquals(
@@ -1252,16 +1251,15 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
-    @ParameterizedTest
-    @EnumSource(StoreType.class)
-    public void kGroupedStreamAnonymousStoreTypedMaterializedCountShouldPreserveTopologyStructure(final StoreType storeType) {
+    @Test
+    public void kGroupedStreamAnonymousStoreTypedMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
-            .count(Materialized.as(storeType));
+            .count(Materialized.as(Materialized.StoreType.IN_MEMORY));
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
         assertEquals(
@@ -1276,7 +1274,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
     @SuppressWarnings("deprecation")
@@ -1329,14 +1327,13 @@ public class TopologyTest {
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
-    @ParameterizedTest
-    @EnumSource(StoreType.class)
-    public void timeWindowNamedMaterializedCountShouldPreserveTopologyStructure(final StoreType storeType) {
+    @Test
+    public void timeWindowNamedMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
             .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(1)))
-            .count(Materialized.<Object, Long, WindowStore<Bytes, byte[]>>as("count-store").withStoreType(storeType));
+            .count(Materialized.<Object, Long, WindowStore<Bytes, byte[]>>as("count-store").withStoreType(Materialized.StoreType.IN_MEMORY));
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
         assertEquals(
@@ -1351,18 +1348,17 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
-    @ParameterizedTest
-    @EnumSource(StoreType.class)
-    public void timeWindowAnonymousMaterializedCountShouldPreserveTopologyStructure(final StoreType storeType) {
+    @Test
+    public void timeWindowAnonymousMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
             .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(1)))
             .count(Materialized.<Object, Long, WindowStore<Bytes, byte[]>>with(null, Serdes.Long())
-                .withStoreType(storeType));
+                .withStoreType(Materialized.StoreType.ROCKS_DB));
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
         assertEquals(
@@ -1377,17 +1373,16 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
-    @ParameterizedTest
-    @EnumSource(StoreType.class)
-    public void timeWindowAnonymousStoreTypeMaterializedCountShouldPreserveTopologyStructure(final StoreType storeType) {
+    @Test
+    public void timeWindowAnonymousStoreTypeMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
             .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(1)))
-            .count(Materialized.as(storeType));
+            .count(Materialized.as(Materialized.StoreType.IN_MEMORY));
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
         assertEquals(
@@ -1402,7 +1397,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
     @SuppressWarnings("deprecation")
@@ -1455,14 +1450,13 @@ public class TopologyTest {
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
-    @ParameterizedTest
-    @EnumSource(StoreType.class)
-    public void slidingWindowNamedMaterializedCountShouldPreserveTopologyStructure(final StoreType storeType) {
+    @Test
+    public void slidingWindowNamedMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
             .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(1)))
-            .count(Materialized.<Object, Long, WindowStore<Bytes, byte[]>>as("count-store").withStoreType(storeType));
+            .count(Materialized.<Object, Long, WindowStore<Bytes, byte[]>>as("count-store").withStoreType(Materialized.StoreType.IN_MEMORY));
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
         assertEquals(
@@ -1477,7 +1471,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
     @SuppressWarnings("deprecation")
@@ -1535,16 +1529,15 @@ public class TopologyTest {
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
-    @ParameterizedTest
-    @EnumSource(StoreType.class)
-    public void timeWindowedCogroupedNamedMaterializedCountShouldPreserveTopologyStructure(final StoreType storeType) {
+    @Test
+    public void timeWindowedCogroupedNamedMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
             .cogroup((key, value, aggregate) -> value)
             .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(1)))
             .aggregate(() -> "", Materialized.<Object, Object, WindowStore<Bytes, byte[]>>as("aggregate-store")
-                .withStoreType(storeType));
+                .withStoreType(Materialized.StoreType.IN_MEMORY));
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
 
@@ -1563,7 +1556,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
     @SuppressWarnings("deprecation")
@@ -1626,16 +1619,15 @@ public class TopologyTest {
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
-    @ParameterizedTest
-    @EnumSource(StoreType.class)
-    public void slidingWindowedCogroupedNamedMaterializedCountShouldPreserveTopologyStructure(final StoreType storeType) {
+    @Test
+    public void slidingWindowedCogroupedNamedMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
             .cogroup((key, value, aggregate) -> value)
             .windowedBy(SlidingWindows.ofTimeDifferenceWithNoGrace(ofMillis(1)))
             .aggregate(() -> "", Materialized.<Object, Object, WindowStore<Bytes, byte[]>>as("aggregate-store")
-                .withStoreType(storeType));
+                .withStoreType(Materialized.StoreType.IN_MEMORY));
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
 
@@ -1654,7 +1646,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
     @SuppressWarnings("deprecation")
@@ -1716,16 +1708,15 @@ public class TopologyTest {
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
-    @ParameterizedTest
-    @EnumSource(StoreType.class)
-    public void sessionWindowedCogroupedNamedMaterializedCountShouldPreserveTopologyStructure(final StoreType storeType) {
+    @Test
+    public void sessionWindowedCogroupedNamedMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
             .cogroup((key, value, aggregate) -> value)
             .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)))
             .aggregate(() -> "", (aggKey, aggOne, aggTwo) -> "", Materialized.<Object, Object, SessionStore<Bytes, byte[]>>as("aggregate-store")
-                .withStoreType(storeType));
+                .withStoreType(Materialized.StoreType.IN_MEMORY));
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
 
@@ -1744,7 +1735,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
     @SuppressWarnings("deprecation")
@@ -1801,15 +1792,14 @@ public class TopologyTest {
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
-    @ParameterizedTest
-    @EnumSource(StoreType.class)
-    public void sessionWindowNamedMaterializedCountShouldPreserveTopologyStructure(final StoreType storeType) {
+    @Test
+    public void sessionWindowNamedMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
             .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)))
             .count(Materialized.<Object, Long, SessionStore<Bytes, byte[]>>as("count-store")
-                .withStoreType(storeType));
+                .withStoreType(Materialized.StoreType.IN_MEMORY));
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
         assertEquals(
@@ -1824,18 +1814,17 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
-    @ParameterizedTest
-    @EnumSource(StoreType.class)
-    public void sessionWindowAnonymousMaterializedCountShouldPreserveTopologyStructure(final StoreType storeType) {
+    @Test
+    public void sessionWindowAnonymousMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
             .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)))
             .count(Materialized.<Object, Long, SessionStore<Bytes, byte[]>>with(null, Serdes.Long())
-                .withStoreType(storeType));
+                .withStoreType(Materialized.StoreType.ROCKS_DB));
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
         assertEquals(
@@ -1850,17 +1839,16 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(true));
     }
 
-    @ParameterizedTest
-    @EnumSource(StoreType.class)
-    public void sessionWindowAnonymousStoreTypedMaterializedCountShouldPreserveTopologyStructure(final StoreType storeType) {
+    @Test
+    public void sessionWindowAnonymousStoreTypedMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
             .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)))
-            .count(Materialized.as(storeType));
+            .count(Materialized.as(Materialized.StoreType.IN_MEMORY));
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
         assertEquals(
@@ -1875,7 +1863,7 @@ public class TopologyTest {
         );
 
         topology.internalTopologyBuilder.setStreamsConfig(streamsConfig);
-        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(storeType == StoreType.ROCKS_DB));
+        assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
     @SuppressWarnings("deprecation")
@@ -1946,14 +1934,13 @@ public class TopologyTest {
         assertThat(processorTopology.stateStores().get(1).persistent(), is(true));
     }
 
-    @ParameterizedTest
-    @EnumSource(StoreType.class)
-    public void tableNamedMaterializedCountShouldPreserveTopologyStructure(final StoreType storeType) {
+    @Test
+    public void tableNamedMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table("input-topic")
             .groupBy((key, value) -> null)
             .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count-store")
-                .withStoreType(storeType));
+                .withStoreType(Materialized.StoreType.IN_MEMORY));
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
         assertEquals(
@@ -1986,20 +1973,19 @@ public class TopologyTest {
         assertThat(processorTopology.stateStores().size(), is(2));
         // ktable store is rocksDB (default)
         assertThat(processorTopology.stateStores().get(0).persistent(), is(true));
-        // count store is storeType
-        assertThat(processorTopology.stateStores().get(1).persistent(), is(storeType == StoreType.ROCKS_DB));
+        // count store is in-memory
+        assertThat(processorTopology.stateStores().get(1).persistent(), is(false));
     }
 
     @SuppressWarnings("deprecation")
-    @ParameterizedTest
-    @EnumSource(StoreType.class)
-    public void tableNamedMaterializedCountWithTopologyConfigShouldPreserveTopologyStructure(final StoreType storeType) {
+    @Test
+    public void tableNamedMaterializedCountWithTopologyConfigShouldPreserveTopologyStructure() {
         // override the default store into in-memory
         final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStore(StreamsConfig.IN_MEMORY));
         builder.table("input-topic")
             .groupBy((key, value) -> null)
             // can still override the default store dynamically
-            .count(Materialized.as(storeType));
+            .count(Materialized.as(Materialized.StoreType.ROCKS_DB));
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
         assertEquals(
@@ -2032,18 +2018,17 @@ public class TopologyTest {
         assertThat(processorTopology.stateStores().size(), is(2));
         // ktable store is in-memory (default is in-memory)
         assertThat(processorTopology.stateStores().get(0).persistent(), is(false));
-        // count store is storeType
-        assertThat(processorTopology.stateStores().get(1).persistent(), is(storeType == StoreType.ROCKS_DB));
+        // count store is rocksDB
+        assertThat(processorTopology.stateStores().get(1).persistent(), is(true));
     }
 
-    @ParameterizedTest
-    @EnumSource(StoreType.class)
-    public void tableAnonymousMaterializedCountShouldPreserveTopologyStructure(final StoreType storeType) {
+    @Test
+    public void tableAnonymousMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table("input-topic")
             .groupBy((key, value) -> null)
             .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>with(null, Serdes.Long())
-                .withStoreType(storeType));
+                .withStoreType(Materialized.StoreType.ROCKS_DB));
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
         assertEquals(
@@ -2076,17 +2061,16 @@ public class TopologyTest {
         assertThat(processorTopology.stateStores().size(), is(2));
         // ktable store is rocksDB (default)
         assertThat(processorTopology.stateStores().get(0).persistent(), is(true));
-        // count store is storeType
-        assertThat(processorTopology.stateStores().get(1).persistent(), is(storeType == StoreType.ROCKS_DB));
+        // count store is rocksDB
+        assertThat(processorTopology.stateStores().get(1).persistent(), is(true));
     }
 
-    @ParameterizedTest
-    @EnumSource(StoreType.class)
-    public void tableAnonymousStoreTypedMaterializedCountShouldPreserveTopologyStructure(final StoreType storeType) {
+    @Test
+    public void tableAnonymousStoreTypedMaterializedCountShouldPreserveTopologyStructure() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table("input-topic")
             .groupBy((key, value) -> null)
-            .count(Materialized.as(storeType));
+            .count(Materialized.as(Materialized.StoreType.IN_MEMORY));
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
         assertEquals(
@@ -2119,8 +2103,8 @@ public class TopologyTest {
         assertThat(processorTopology.stateStores().size(), is(2));
         // ktable store is rocksDB (default)
         assertThat(processorTopology.stateStores().get(0).persistent(), is(true));
-        // count store is storeType
-        assertThat(processorTopology.stateStores().get(1).persistent(), is(storeType == StoreType.ROCKS_DB));
+        // count store is in-memory
+        assertThat(processorTopology.stateStores().get(1).persistent(), is(false));
     }
 
     @Test
@@ -2274,7 +2258,7 @@ public class TopologyTest {
     private TopologyDescription.Source addSource(final String sourceName,
                                                  final String... sourceTopic) {
         topology.addSource((AutoOffsetReset) null, sourceName, null, null, null, sourceTopic);
-        return new InternalTopologyBuilder.Source(sourceName, Set.of(sourceTopic), null);
+        return new InternalTopologyBuilder.Source(sourceName, new HashSet<>(Arrays.asList(sourceTopic)), null);
     }
 
     @SuppressWarnings("deprecation")
@@ -2324,7 +2308,7 @@ public class TopologyTest {
             topology.connectProcessorAndStateStores(processorName, storeNames);
         }
         final TopologyDescription.Processor expectedProcessorNode =
-            new InternalTopologyBuilder.Processor(processorName, Set.of(storeNames));
+            new InternalTopologyBuilder.Processor(processorName, new HashSet<>(Arrays.asList(storeNames)));
 
         for (final TopologyDescription.Node parent : parents) {
             ((InternalTopologyBuilder.AbstractNode) parent).addSuccessor(expectedProcessorNode);

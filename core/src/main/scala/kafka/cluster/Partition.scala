@@ -16,13 +16,14 @@
  */
 package kafka.cluster
 
-import java.lang.{Long => JLong}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.Optional
-import java.util.concurrent.{CompletableFuture, ConcurrentHashMap, CopyOnWriteArrayList}
+import java.util.concurrent.{CompletableFuture, CopyOnWriteArrayList}
 import kafka.controller.StateChangeLogger
 import kafka.log._
+import kafka.log.remote.RemoteLogManager
 import kafka.server._
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.share.DelayedShareFetch
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
@@ -37,14 +38,11 @@ import org.apache.kafka.common.record.{FileRecords, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MetadataCache, PartitionRegistration}
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.server.common.RequestLocal
-import org.apache.kafka.server.log.remote.TopicPartitionLog
-import org.apache.kafka.server.log.remote.storage.RemoteLogManager
-import org.apache.kafka.storage.internals.log.{AppendOrigin, AsyncOffsetReader, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetsListener, LogOffsetSnapshot, LogReadInfo, LogStartOffsetIncrementReason, OffsetResultHolder, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, OffsetResultHolder, VerificationGuard}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
-import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, TopicPartitionOperationKey}
-import org.apache.kafka.server.replica.Replica
+import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, TopicPartitionOperationKey}
 import org.apache.kafka.server.share.fetch.DelayedShareFetchPartitionKey
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, UnexpectedAppendOffsetException}
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
@@ -52,7 +50,6 @@ import org.slf4j.event.Level
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.{RichOption, RichOptional}
 import scala.jdk.javaapi.OptionConverters
 
 /**
@@ -316,14 +313,14 @@ class Partition(val topicPartition: TopicPartition,
                 logManager: LogManager,
                 alterIsrManager: AlterPartitionManager,
                 @volatile private var _topicId: Option[Uuid] = None // TODO: merge topicPartition and _topicId into TopicIdPartition once TopicId persist in most of the code by KAFKA-16212
-               ) extends Logging with TopicPartitionLog {
+               ) extends Logging {
 
   import Partition.metricsGroup
   def topic: String = topicPartition.topic
   def partitionId: Int = topicPartition.partition
 
   private val stateChangeLogger = new StateChangeLogger(localBrokerId, inControllerContext = false, None)
-  private val remoteReplicasMap = new ConcurrentHashMap[Int, Replica]
+  private val remoteReplicasMap = new Pool[Int, Replica]
   // The read lock is only required when multiple reads are executed and needs to be in a consistent manner
   private val leaderIsrUpdateLock = new ReentrantReadWriteLock
 
@@ -369,8 +366,6 @@ class Partition(val topicPartition: TopicPartition,
   metricsGroup.newGauge("AtMinIsr", () => if (isAtMinIsr) 1 else 0, tags)
   metricsGroup.newGauge("ReplicasCount", () => if (isLeader) assignmentState.replicationFactor else 0, tags)
   metricsGroup.newGauge("LastStableOffsetLag", () => log.map(_.lastStableOffsetLag).getOrElse(0), tags)
-
-  def unifiedLog(): Optional[UnifiedLog] = log.toJava
 
   def hasLateTransaction(currentTimeMs: Long): Boolean = leaderLogIfLocal.exists(_.hasLateTransaction(currentTimeMs))
 
@@ -499,7 +494,7 @@ class Partition(val topicPartition: TopicPartition,
     logManager.initializingLog(topicPartition)
     var maybeLog: Option[UnifiedLog] = None
     try {
-      val log = logManager.getOrCreateLog(topicPartition, isNew, isFutureReplica, topicId.toJava, targetLogDirectoryId)
+      val log = logManager.getOrCreateLog(topicPartition, isNew, isFutureReplica, topicId, targetLogDirectoryId)
       if (!isFutureReplica) log.setLogOffsetsListener(logOffsetsListener)
       maybeLog = Some(log)
       updateHighWatermark(log)
@@ -598,14 +593,14 @@ class Partition(val topicPartition: TopicPartition,
    */
   def topicId: Option[Uuid] = {
     if (_topicId.isEmpty || _topicId.contains(Uuid.ZERO_UUID)) {
-      _topicId = this.log.orElse(logManager.getLog(topicPartition)).flatMap(_.topicId.toScala)
+      _topicId = this.log.orElse(logManager.getLog(topicPartition)).flatMap(_.topicId)
     }
     _topicId
   }
 
   // remoteReplicas will be called in the hot path, and must be inexpensive
   def remoteReplicas: Iterable[Replica] =
-    remoteReplicasMap.values.asScala
+    remoteReplicasMap.values
 
   def futureReplicaDirChanged(newDestinationDir: String): Boolean = {
     inReadLock(leaderIsrUpdateLock) {
@@ -730,8 +725,7 @@ class Partition(val topicPartition: TopicPartition,
    * from the time when this broker was the leader last time) and setting the new leader and ISR.
    * If the leader replica id does not change, return false to indicate the replica manager.
    */
-  def makeLeader(partitionRegistration: PartitionRegistration,
-                 isNew: Boolean,
+  def makeLeader(partitionState: LeaderAndIsrRequest.PartitionState,
                  highWatermarkCheckpoints: OffsetCheckpoints,
                  topicId: Option[Uuid],
                  targetDirectoryId: Option[Uuid] = None): Boolean = {
@@ -739,23 +733,23 @@ class Partition(val topicPartition: TopicPartition,
       // Partition state changes are expected to have a partition epoch larger or equal
       // to the current partition epoch. The latter is allowed because the partition epoch
       // is also updated by the AlterPartition response so the new epoch might be known
-      // before a partitionRegistration is received or before an update is received via
+      // before a LeaderAndIsr request is received or before an update is received via
       // the metadata log.
-      if (partitionRegistration.partitionEpoch < partitionEpoch) {
-        stateChangeLogger.info(s"Skipped the become-leader state change for $topicPartition with topic id $topicId, " +
-          s"partition registration $partitionRegistration and isNew=$isNew since the leader is already at a newer partition epoch $partitionEpoch.")
+      if (partitionState.partitionEpoch < partitionEpoch) {
+        stateChangeLogger.info(s"Skipped the become-leader state change for $topicPartition with topic id $topicId " +
+          s"and partition state $partitionState since the leader is already at a newer partition epoch $partitionEpoch.")
         return false
       }
 
       val currentTimeMs = time.milliseconds
       val isNewLeader = !isLeader
-      val isNewLeaderEpoch = partitionRegistration.leaderEpoch > leaderEpoch
-      val replicas = partitionRegistration.replicas
-      val isr = partitionRegistration.isr.toSet
-      val addingReplicas = partitionRegistration.addingReplicas
-      val removingReplicas = partitionRegistration.removingReplicas
+      val isNewLeaderEpoch = partitionState.leaderEpoch > leaderEpoch
+      val replicas = partitionState.replicas.asScala.map(_.toInt)
+      val isr = partitionState.isr.asScala.map(_.toInt).toSet
+      val addingReplicas = partitionState.addingReplicas.asScala.map(_.toInt)
+      val removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
 
-      if (partitionRegistration.leaderRecoveryState == LeaderRecoveryState.RECOVERING) {
+      if (partitionState.leaderRecoveryState == LeaderRecoveryState.RECOVERING.value) {
         stateChangeLogger.info(s"The topic partition $topicPartition was marked as RECOVERING. " +
           "Marking the topic partition as RECOVERED.")
       }
@@ -771,7 +765,7 @@ class Partition(val topicPartition: TopicPartition,
         LeaderRecoveryState.RECOVERED
       )
 
-      createLogInAssignedDirectoryId(isNew, highWatermarkCheckpoints, topicId, targetDirectoryId)
+      createLogInAssignedDirectoryId(partitionState, highWatermarkCheckpoints, topicId, targetDirectoryId)
 
       val leaderLog = localLogOrException
 
@@ -780,8 +774,8 @@ class Partition(val topicPartition: TopicPartition,
       if (isNewLeaderEpoch) {
         val leaderEpochStartOffset = leaderLog.logEndOffset
         stateChangeLogger.info(s"Leader $topicPartition with topic id $topicId starts at " +
-          s"leader epoch ${partitionRegistration.leaderEpoch} from offset $leaderEpochStartOffset " +
-          s"with partition epoch ${partitionRegistration.partitionEpoch}, high watermark ${leaderLog.highWatermark}, " +
+          s"leader epoch ${partitionState.leaderEpoch} from offset $leaderEpochStartOffset " +
+          s"with partition epoch ${partitionState.partitionEpoch}, high watermark ${leaderLog.highWatermark}, " +
           s"ISR ${isr.mkString("[", ",", "]")}, adding replicas ${addingReplicas.mkString("[", ",", "]")} and " +
           s"removing replicas ${removingReplicas.mkString("[", ",", "]")} ${if (isUnderMinIsr) "(under-min-isr)" else ""}. " +
           s"Previous leader $leaderReplicaIdOpt and previous leader epoch was $leaderEpoch.")
@@ -791,32 +785,32 @@ class Partition(val topicPartition: TopicPartition,
         // to ensure that these followers can truncate to the right offset, we must cache the new
         // leader epoch and the start offset since it should be larger than any epoch that a follower
         // would try to query.
-        leaderLog.assignEpochStartOffset(partitionRegistration.leaderEpoch, leaderEpochStartOffset)
+        leaderLog.assignEpochStartOffset(partitionState.leaderEpoch, leaderEpochStartOffset)
 
         // Initialize lastCaughtUpTime of replicas as well as their lastFetchTimeMs and
         // lastFetchLeaderLogEndOffset.
         remoteReplicas.foreach { replica =>
           replica.resetReplicaState(
-            currentTimeMs,
-            leaderEpochStartOffset,
-            isNewLeader,
-            isr.contains(replica.brokerId)
+            currentTimeMs = currentTimeMs,
+            leaderEndOffset = leaderEpochStartOffset,
+            isNewLeader = isNewLeader,
+            isFollowerInSync = partitionState.isr.contains(replica.brokerId)
           )
         }
 
         // We update the leader epoch and the leader epoch start offset iff the
         // leader epoch changed.
-        leaderEpoch = partitionRegistration.leaderEpoch
+        leaderEpoch = partitionState.leaderEpoch
         leaderEpochStartOffsetOpt = Some(leaderEpochStartOffset)
       } else {
-        stateChangeLogger.info(s"Skipped the become-leader state change for $topicPartition with topic id $topicId, " +
-          s"partition registration $partitionRegistration and isNew=$isNew since it is already the leader with leader epoch $leaderEpoch. " +
+        stateChangeLogger.info(s"Skipped the become-leader state change for $topicPartition with topic id $topicId " +
+          s"and partition state $partitionState since it is already the leader with leader epoch $leaderEpoch. " +
           s"Current high watermark ${leaderLog.highWatermark}, ISR ${isr.mkString("[", ",", "]")}, " +
           s"adding replicas ${addingReplicas.mkString("[", ",", "]")} and " +
           s"removing replicas ${removingReplicas.mkString("[", ",", "]")}.")
       }
 
-      partitionEpoch = partitionRegistration.partitionEpoch
+      partitionEpoch = partitionState.partitionEpoch
       leaderReplicaIdOpt = Some(localBrokerId)
 
       // We may need to increment high watermark since ISR could be down to 1.
@@ -837,47 +831,46 @@ class Partition(val topicPartition: TopicPartition,
    * replica manager that state is already correct and the become-follower steps can
    * be skipped.
    */
-  def makeFollower(partitionRegistration: PartitionRegistration,
-                   isNew: Boolean,
+  def makeFollower(partitionState: LeaderAndIsrRequest.PartitionState,
                    highWatermarkCheckpoints: OffsetCheckpoints,
                    topicId: Option[Uuid],
                    targetLogDirectoryId: Option[Uuid] = None): Boolean = {
     inWriteLock(leaderIsrUpdateLock) {
-      if (partitionRegistration.partitionEpoch < partitionEpoch) {
-        stateChangeLogger.info(s"Skipped the become-follower state change for $topicPartition with topic id $topicId, " +
-          s"partition registration $partitionRegistration and isNew=$isNew since the follower is already at a newer partition epoch $partitionEpoch.")
+      if (partitionState.partitionEpoch < partitionEpoch) {
+        stateChangeLogger.info(s"Skipped the become-follower state change for $topicPartition with topic id $topicId " +
+          s"and partition state $partitionState since the follower is already at a newer partition epoch $partitionEpoch.")
         return false
       }
 
-      val isNewLeaderEpoch = partitionRegistration.leaderEpoch > leaderEpoch
+      val isNewLeaderEpoch = partitionState.leaderEpoch > leaderEpoch
       // The leader should be updated before updateAssignmentAndIsr where we clear the ISR. Or it is possible to meet
       // the under min isr condition during the makeFollower process and emits the wrong metric.
-      leaderReplicaIdOpt = Option(partitionRegistration.leader)
-      leaderEpoch = partitionRegistration.leaderEpoch
+      leaderReplicaIdOpt = Option(partitionState.leader)
+      leaderEpoch = partitionState.leaderEpoch
       leaderEpochStartOffsetOpt = None
-      partitionEpoch = partitionRegistration.partitionEpoch
+      partitionEpoch = partitionState.partitionEpoch
 
       updateAssignmentAndIsr(
-        replicas = partitionRegistration.replicas,
+        replicas = partitionState.replicas.asScala.iterator.map(_.toInt).toSeq,
         isLeader = false,
         isr = Set.empty,
-        addingReplicas = partitionRegistration.addingReplicas,
-        removingReplicas = partitionRegistration.removingReplicas,
-        partitionRegistration.leaderRecoveryState
+        addingReplicas = partitionState.addingReplicas.asScala.map(_.toInt),
+        removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt),
+        LeaderRecoveryState.of(partitionState.leaderRecoveryState)
       )
 
-      createLogInAssignedDirectoryId(isNew, highWatermarkCheckpoints, topicId, targetLogDirectoryId)
+      createLogInAssignedDirectoryId(partitionState, highWatermarkCheckpoints, topicId, targetLogDirectoryId)
 
       val followerLog = localLogOrException
       if (isNewLeaderEpoch) {
         val leaderEpochEndOffset = followerLog.logEndOffset
-        stateChangeLogger.info(s"Follower $topicPartition starts at leader epoch ${partitionRegistration.leaderEpoch} from " +
-          s"offset $leaderEpochEndOffset with partition epoch ${partitionRegistration.partitionEpoch} and " +
-          s"high watermark ${followerLog.highWatermark}. Current leader is ${partitionRegistration.leader}. " +
+        stateChangeLogger.info(s"Follower $topicPartition starts at leader epoch ${partitionState.leaderEpoch} from " +
+          s"offset $leaderEpochEndOffset with partition epoch ${partitionState.partitionEpoch} and " +
+          s"high watermark ${followerLog.highWatermark}. Current leader is ${partitionState.leader}. " +
           s"Previous leader $leaderReplicaIdOpt and previous leader epoch was $leaderEpoch.")
       } else {
-        stateChangeLogger.info(s"Skipped the become-follower state change for $topicPartition with topic id $topicId, " +
-          s"partition registration $partitionRegistration and isNew=$isNew since it is already a follower with leader epoch $leaderEpoch.")
+        stateChangeLogger.info(s"Skipped the become-follower state change for $topicPartition with topic id $topicId " +
+          s"and partition state $partitionState since it is already a follower with leader epoch $leaderEpoch.")
       }
 
       // We must restart the fetchers when the leader epoch changed regardless of
@@ -886,11 +879,11 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  private def createLogInAssignedDirectoryId(isNew: Boolean, highWatermarkCheckpoints: OffsetCheckpoints, topicId: Option[Uuid], targetLogDirectoryId: Option[Uuid]): Unit = {
+  private def createLogInAssignedDirectoryId(partitionState: LeaderAndIsrRequest.PartitionState, highWatermarkCheckpoints: OffsetCheckpoints, topicId: Option[Uuid], targetLogDirectoryId: Option[Uuid]): Unit = {
     targetLogDirectoryId match {
       case Some(directoryId) =>
         if (logManager.onlineLogDirId(directoryId) || !logManager.hasOfflineLogDirs() || directoryId == DirectoryId.UNASSIGNED) {
-          createLogIfNotExists(isNew, isFutureReplica = false, highWatermarkCheckpoints, topicId, targetLogDirectoryId)
+          createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints, topicId, targetLogDirectoryId)
         } else {
           warn(s"Skipping creation of log because there are potentially offline log " +
             s"directories and log may already exist there. directoryId=$directoryId, " +
@@ -898,7 +891,7 @@ class Partition(val topicPartition: TopicPartition,
         }
 
       case None =>
-        createLogIfNotExists(isNew, isFutureReplica = false, highWatermarkCheckpoints, topicId)
+        createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints, topicId)
     }
   }
 
@@ -986,11 +979,12 @@ class Partition(val topicPartition: TopicPartition,
   ): Unit = {
     if (isLeader) {
       val followers = replicas.filter(_ != localBrokerId)
+      val removedReplicas = remoteReplicasMap.keys.filterNot(followers.contains(_))
 
       // Due to code paths accessing remoteReplicasMap without a lock,
       // first add the new replicas and then remove the old ones.
-      followers.foreach(id => remoteReplicasMap.computeIfAbsent(id, _ => new Replica(id, topicPartition, metadataCache)))
-      remoteReplicasMap.keySet.removeIf(replica => !followers.contains(replica))
+      followers.foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition, metadataCache)))
+      remoteReplicasMap.removeAll(removedReplicas)
     } else {
       remoteReplicasMap.clear()
     }
@@ -1056,28 +1050,33 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def isReplicaIsrEligible(followerReplicaId: Int): Boolean = {
-    // A replica which meets all of the following requirements is allowed to join the ISR.
-    // 1. It is not fenced.
-    // 2. It is not in controlled shutdown.
-    // 3. Its metadata cached broker epoch matches its Fetch request broker epoch. Or the Fetch
-    //    request broker epoch is -1 which bypasses the epoch verification.
-    val mayBeReplica = getReplica(followerReplicaId)
-    // The topic is already deleted and we don't have any replica information. In this case, we can return false
-    // so as to avoid NPE
-    if (mayBeReplica.isEmpty) {
-      warn(s"The replica state of replica ID:[$followerReplicaId] doesn't exist in the leader node. It might because the topic is already deleted.")
-      return false
+    metadataCache match {
+      // In KRaft mode, only a replica which meets all of the following requirements is allowed to join the ISR.
+      // 1. It is not fenced.
+      // 2. It is not in controlled shutdown.
+      // 3. Its metadata cached broker epoch matches its Fetch request broker epoch. Or the Fetch
+      //    request broker epoch is -1 which bypasses the epoch verification.
+      case kRaftMetadataCache: KRaftMetadataCache =>
+        val mayBeReplica = getReplica(followerReplicaId)
+        // The topic is already deleted and we don't have any replica information. In this case, we can return false
+        // so as to avoid NPE
+        if (mayBeReplica.isEmpty) {
+          warn(s"The replica state of replica ID:[$followerReplicaId] doesn't exist in the leader node. It might because the topic is already deleted.")
+          return false
+        }
+        val storedBrokerEpoch = mayBeReplica.get.stateSnapshot.brokerEpoch
+        val cachedBrokerEpoch = kRaftMetadataCache.getAliveBrokerEpoch(followerReplicaId)
+        !kRaftMetadataCache.isBrokerFenced(followerReplicaId) &&
+          !kRaftMetadataCache.isBrokerShuttingDown(followerReplicaId) &&
+          isBrokerEpochIsrEligible(storedBrokerEpoch, cachedBrokerEpoch)
+
+      case _ => true
     }
-    val storedBrokerEpoch = mayBeReplica.get.stateSnapshot.brokerEpoch
-    val cachedBrokerEpoch = metadataCache.getAliveBrokerEpoch(followerReplicaId)
-    !metadataCache.isBrokerFenced(followerReplicaId) &&
-      !metadataCache.isBrokerShuttingDown(followerReplicaId) &&
-      isBrokerEpochIsrEligible(storedBrokerEpoch, cachedBrokerEpoch)
   }
 
-  private def isBrokerEpochIsrEligible(storedBrokerEpoch: Optional[java.lang.Long], cachedBrokerEpoch: Optional[java.lang.Long]): Boolean = {
-    storedBrokerEpoch.isPresent && cachedBrokerEpoch.isPresent &&
-      (storedBrokerEpoch.get == -1 || storedBrokerEpoch.get == cachedBrokerEpoch.get)
+  private def isBrokerEpochIsrEligible(storedBrokerEpoch: Option[Long], cachedBrokerEpoch: Option[Long]): Boolean = {
+    storedBrokerEpoch.isDefined && cachedBrokerEpoch.isDefined &&
+      (storedBrokerEpoch.get == -1 || storedBrokerEpoch == cachedBrokerEpoch)
   }
 
   /*
@@ -1160,7 +1159,7 @@ class Partition(val topicPartition: TopicPartition,
     // avoid unnecessary collection generation
     val leaderLogEndOffset = leaderLog.logEndOffsetMetadata
     var newHighWatermark = leaderLogEndOffset
-    remoteReplicasMap.forEach { (_, replica) =>
+    remoteReplicasMap.values.foreach { replica =>
       val replicaState = replica.stateSnapshot
 
       def shouldWaitForReplicaToJoinIsr: Boolean = {
@@ -1176,7 +1175,7 @@ class Partition(val topicPartition: TopicPartition,
       }
     }
 
-    leaderLog.maybeIncrementHighWatermark(newHighWatermark).toScala match {
+    leaderLog.maybeIncrementHighWatermark(newHighWatermark) match {
       case Some(oldHighWatermark) =>
         debug(s"High watermark updated from $oldHighWatermark to $newHighWatermark")
         true
@@ -1308,35 +1307,27 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  private def doAppendRecordsToFollowerOrFutureReplica(
-    records: MemoryRecords,
-    isFuture: Boolean,
-    partitionLeaderEpoch: Int
-  ): Option[LogAppendInfo] = {
+  private def doAppendRecordsToFollowerOrFutureReplica(records: MemoryRecords, isFuture: Boolean): Option[LogAppendInfo] = {
     if (isFuture) {
       // The read lock is needed to handle race condition if request handler thread tries to
       // remove future replica after receiving AlterReplicaLogDirsRequest.
       inReadLock(leaderIsrUpdateLock) {
         // Note the replica may be undefined if it is removed by a non-ReplicaAlterLogDirsThread before
         // this method is called
-        futureLog.map { _.appendAsFollower(records, partitionLeaderEpoch) }
+        futureLog.map { _.appendAsFollower(records) }
       }
     } else {
       // The lock is needed to prevent the follower replica from being updated while ReplicaAlterDirThread
       // is executing maybeReplaceCurrentWithFutureReplica() to replace follower replica with the future replica.
       futureLogLock.synchronized {
-        Some(localLogOrException.appendAsFollower(records, partitionLeaderEpoch))
+        Some(localLogOrException.appendAsFollower(records))
       }
     }
   }
 
-  def appendRecordsToFollowerOrFutureReplica(
-    records: MemoryRecords,
-    isFuture: Boolean,
-    partitionLeaderEpoch: Int
-  ): Option[LogAppendInfo] = {
+  def appendRecordsToFollowerOrFutureReplica(records: MemoryRecords, isFuture: Boolean): Option[LogAppendInfo] = {
     try {
-      doAppendRecordsToFollowerOrFutureReplica(records, isFuture, partitionLeaderEpoch)
+      doAppendRecordsToFollowerOrFutureReplica(records, isFuture)
     } catch {
       case e: UnexpectedAppendOffsetException =>
         val log = if (isFuture) futureLocalLogOrException else localLogOrException
@@ -1354,7 +1345,7 @@ class Partition(val topicPartition: TopicPartition,
           info(s"Unexpected offset in append to $topicPartition. First offset ${e.firstOffset} is less than log start offset ${log.logStartOffset}." +
                s" Since this is the first record to be appended to the $replicaName's log, will start the log from offset ${e.firstOffset}.")
           truncateFullyAndStartAt(e.firstOffset, isFuture)
-          doAppendRecordsToFollowerOrFutureReplica(records, isFuture, partitionLeaderEpoch)
+          doAppendRecordsToFollowerOrFutureReplica(records, isFuture)
         } else
           throw e
     }
@@ -1370,12 +1361,12 @@ class Partition(val topicPartition: TopicPartition,
 
           // Avoid writing to leader if there are not enough insync replicas to make it safe
           if (inSyncSize < minIsr && requiredAcks == -1) {
-            throw new NotEnoughReplicasException(s"The size of the current ISR : $inSyncSize " +
-              s"is insufficient to satisfy the min.isr requirement of $minIsr for partition $topicPartition, " +
-              s"live replica(s) broker.id are : $inSyncReplicaIds")
+            throw new NotEnoughReplicasException(s"The size of the current ISR ${partitionState.isr} " +
+              s"is insufficient to satisfy the min.isr requirement of $minIsr for partition $topicPartition")
           }
 
-          val info = leaderLog.appendAsLeader(records, this.leaderEpoch, origin, requestLocal, verificationGuard)
+          val info = leaderLog.appendAsLeader(records, leaderEpoch = this.leaderEpoch, origin,
+            requestLocal, verificationGuard)
 
           // we may need to increment high watermark since ISR could be down to 1
           (info, maybeIncrementLeaderHW(leaderLog))
@@ -1599,7 +1590,7 @@ class Partition(val topicPartition: TopicPartition,
 
     def getOffsetByTimestamp: OffsetResultHolder = {
       logManager.getLog(topicPartition)
-        .map(log => log.fetchOffsetByTimestamp(timestamp, remoteLogManager.asInstanceOf[Option[AsyncOffsetReader]].toJava))
+        .map(log => log.fetchOffsetByTimestamp(timestamp, remoteLogManager))
         .getOrElse(new OffsetResultHolder(Optional.empty[FileRecords.TimestampAndOffset]()))
     }
 
@@ -1627,7 +1618,7 @@ class Partition(val topicPartition: TopicPartition,
       case Some(producers) =>
         producerState
           .setErrorCode(Errors.NONE.code)
-          .setActiveProducers(producers)
+          .setActiveProducers(producers.asJava)
       case None =>
         producerState
           .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code)
@@ -1701,7 +1692,7 @@ class Partition(val topicPartition: TopicPartition,
     */
   def truncateFullyAndStartAt(newOffset: Long,
                               isFuture: Boolean,
-                              logStartOffsetOpt: Optional[JLong] = Optional.empty): Unit = {
+                              logStartOffsetOpt: Option[Long] = None): Unit = {
     // The read lock is needed to prevent the follower replica from being truncated while ReplicaAlterDirThread
     // is executing maybeReplaceCurrentWithFutureReplica() to replace follower replica with the future replica.
     inReadLock(leaderIsrUpdateLock) {
@@ -1729,11 +1720,11 @@ class Partition(val topicPartition: TopicPartition,
       val localLogOrError = getLocalLog(currentLeaderEpoch, fetchOnlyFromLeader)
       localLogOrError match {
         case Left(localLog) =>
-          localLog.endOffsetForEpoch(leaderEpoch).toScala match {
+          localLog.endOffsetForEpoch(leaderEpoch) match {
             case Some(epochAndOffset) => new EpochEndOffset()
               .setPartition(partitionId)
               .setErrorCode(Errors.NONE.code)
-              .setLeaderEpoch(epochAndOffset.epoch())
+              .setLeaderEpoch(epochAndOffset.leaderEpoch)
               .setEndOffset(epochAndOffset.offset)
             case None => new EpochEndOffset()
               .setPartition(partitionId)
@@ -1801,11 +1792,13 @@ class Partition(val topicPartition: TopicPartition,
   private def addBrokerEpochToIsr(isr: List[Int]): List[BrokerState] = {
     isr.map { brokerId =>
       val brokerState = new BrokerState().setBrokerId(brokerId)
-      if (brokerId == localBrokerId) {
+      if (!metadataCache.isInstanceOf[KRaftMetadataCache]) {
+        brokerState.setBrokerEpoch(-1)
+      } else if (brokerId == localBrokerId) {
         brokerState.setBrokerEpoch(localBrokerEpochSupplier())
       } else {
         val replica = remoteReplicasMap.get(brokerId)
-        val brokerEpoch = if (replica == null) Optional.empty else replica.stateSnapshot.brokerEpoch
+        val brokerEpoch = if (replica == null) Option.empty else replica.stateSnapshot.brokerEpoch
         if (brokerEpoch.isEmpty) {
           // There are two cases where the broker epoch can be missing:
           // 1. During ISR expansion, we already held lock for the partition and did the broker epoch check, so the new

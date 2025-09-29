@@ -20,9 +20,10 @@ import org.apache.kafka.common.message.DescribeProducersResponseData;
 import org.apache.kafka.common.message.DescribeProducersResponseData.PartitionResponse;
 import org.apache.kafka.common.message.DescribeProducersResponseData.TopicResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -50,9 +51,9 @@ public class DescribeProducersResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    public static DescribeProducersResponse parse(Readable readable, short version) {
+    public static DescribeProducersResponse parse(ByteBuffer buffer, short version) {
         return new DescribeProducersResponse(new DescribeProducersResponseData(
-            readable, version));
+            new ByteBufferAccessor(buffer), version));
     }
 
     @Override

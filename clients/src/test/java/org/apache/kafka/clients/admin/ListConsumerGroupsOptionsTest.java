@@ -20,6 +20,8 @@ import org.apache.kafka.common.ConsumerGroupState;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -27,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class ListConsumerGroupsOptionsTest {
     @Test
     public void testState() {
-        Set<ConsumerGroupState> consumerGroupStates = Set.of(ConsumerGroupState.values());
+        Set<ConsumerGroupState> consumerGroupStates = new HashSet<>(Arrays.asList(ConsumerGroupState.values()));
         ListConsumerGroupsOptions options = new ListConsumerGroupsOptions().inStates(consumerGroupStates);
         assertEquals(consumerGroupStates, options.states());
     }

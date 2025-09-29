@@ -24,8 +24,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
-
 public class ConsumerMetrics {
     
     public FetchMetricsRegistry fetcherMetrics;
@@ -34,8 +32,8 @@ public class ConsumerMetrics {
         this.fetcherMetrics = new FetchMetricsRegistry(metricsTags, metricGrpPrefix);
     }
 
-    public ConsumerMetrics() {
-        this(new HashSet<>(), CONSUMER_METRIC_GROUP_PREFIX);
+    public ConsumerMetrics(String metricGroupPrefix) {
+        this(new HashSet<>(), metricGroupPrefix);
     }
 
     private List<MetricNameTemplate> getAllTemplates() {

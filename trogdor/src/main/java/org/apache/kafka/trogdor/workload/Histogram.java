@@ -18,6 +18,7 @@
 package org.apache.kafka.trogdor.workload;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -174,7 +175,7 @@ public class Histogram {
     private List<PercentileSummary> summarizePercentiles(int[] countsCopy, float[] percentiles,
                                                          long numSamples) {
         if (percentiles.length == 0) {
-            return List.of();
+            return Collections.emptyList();
         }
         List<PercentileSummary> summaries = new ArrayList<>(percentiles.length);
         int i = 0, j = 0;

@@ -1,22 +1,15 @@
-<p align="center">
-<picture>
-  <source media="(prefers-color-scheme: light)" srcset="docs/images/kafka-logo-readme-light.svg">
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/kafka-logo-readme-dark.svg">
-  <img src="docs/images/kafka-logo-readme-light.svg" alt="Kafka Logo" width="50%"> 
-</picture>
-</p>
+Apache Kafka
+=================
 
 [![CI](https://github.com/apache/kafka/actions/workflows/ci.yml/badge.svg?branch=trunk&event=push)](https://github.com/apache/kafka/actions/workflows/ci.yml?query=event%3Apush+branch%3Atrunk)
 [![Flaky Test Report](https://github.com/apache/kafka/actions/workflows/generate-reports.yml/badge.svg?branch=trunk&event=schedule)](https://github.com/apache/kafka/actions/workflows/generate-reports.yml?query=event%3Aschedule+branch%3Atrunk)
 
-[**Apache Kafka**](https://kafka.apache.org) is an open-source distributed event streaming platform used by thousands of companies for high-performance data pipelines, streaming analytics, data integration, and mission-critical applications.
+See our [web site](https://kafka.apache.org) for details on the project.
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-We build and test Apache Kafka with 17 and 24. The `release` parameter in javac is set to `11` for the clients 
-and streams modules, and `17` for the rest, ensuring compatibility with their respective
-minimum Java versions. Similarly, the `release` parameter in scalac is set to `11` for the streams modules and `17`
-for the rest.
+We build and test Apache Kafka with 17 and 23. The `release` parameter in javac and scalac is set to `11` for the clients 
+and streams modules, and `17` for the broker and tools, ensuring compatibility with their respective minimum Java versions. 
 
 Scala 2.13 is the only supported version in Apache Kafka.
 
@@ -42,7 +35,7 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew test  # runs both unit and integration tests
     ./gradlew unitTest
     ./gradlew integrationTest
-    ./gradlew test -Pkafka.test.run.flaky=true  # runs tests that are marked as flaky
+    ./gradlew quarantinedTest  # runs the quarantined tests
 
     
 ### Force re-running tests without code change ###
@@ -52,7 +45,6 @@ Follow instructions in https://kafka.apache.org/quickstart
 
 ### Running a particular unit/integration test ###
     ./gradlew clients:test --tests RequestResponseTest
-    ./gradlew streams:integration-tests:test --tests RestoreIntegrationTest
 
 ### Repeatedly running a particular unit/integration test with specific times by setting N ###
     N=500; I=0; while [ $I -lt $N ] && ./gradlew clients:test --tests RequestResponseTest --rerun --fail-fast; do (( I=$I+1 )); echo "Completed run: $I"; sleep 1; done
@@ -60,7 +52,6 @@ Follow instructions in https://kafka.apache.org/quickstart
 ### Running a particular test method within a unit/integration test ###
     ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
     ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testTimeToNextUpdate
-    ./gradlew streams:integration-tests:test --tests org.apache.kafka.streams.integration.RestoreIntegrationTest.shouldRestoreNullRecord
 
 ### Running a particular unit/integration test with log4j output ###
 By default, there will be only small number of logs output while testing. You can adjust it by changing the `log4j2.yaml` file in the module's `src/test/resources` directory.
@@ -78,6 +69,10 @@ Retries are disabled by default, but you can set maxTestRetryFailures and maxTes
 The following example declares -PmaxTestRetries=1 and -PmaxTestRetryFailures=3 to enable a failed test to be retried once, with a total retry limit of 3.
 
     ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=3
+
+The quarantinedTest task also has no retries by default, but you can set maxQuarantineTestRetries and maxQuarantineTestRetryFailures to enable retries, similar to the test task.
+
+    ./gradlew quarantinedTest -PmaxQuarantineTestRetries=3 -PmaxQuarantineTestRetryFailures=20
 
 See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for and [build.yml](.github/workflows/build.yml) more details.
 
@@ -101,9 +96,7 @@ fail due to code changes. You can just run:
  
     ./gradlew processMessages processTestMessages
 
-See [Apache Kafka Message Definitions](clients/src/main/resources/common/message/README.md) for details on Apache Kafka message protocol.
-
-### Running a Kafka broker
+### Running a Kafka broker in KRaft mode
 
 Using compiled files:
 
@@ -113,9 +106,7 @@ Using compiled files:
 
 Using docker image:
 
-    docker run -p 9092:9092 apache/kafka:latest
-
-See [docker/README.md](docker/README.md) for detailed information.
+    docker run -p 9092:9092 apache/kafka:3.7.0
 
 ### Cleaning the build ###
     ./gradlew clean
@@ -136,16 +127,19 @@ Streams has multiple sub-projects, but you can run all the tests:
 ### Building IDE project ####
 *Note Please ensure that JDK17 is used when developing Kafka.*
 
-IntelliJ supports Gradle natively and it will automatically check Java syntax and compatibility for each module, even if
-the Java version shown in the `Structure > Project Settings > Modules` may not be the correct one.
-
-When it comes to Eclipse, run:
+*Note that this is not strictly necessary (IntelliJ IDEA has good built-in support for Gradle projects, for example).*
 
     ./gradlew eclipse
+    ./gradlew idea
 
 The `eclipse` task has been configured to use `${project_dir}/build_eclipse` as Eclipse's build directory. Eclipse's default
 build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory and we don't use Gradle's build directory
 to avoid known issues with this configuration.
+
+IntelliJ Language Level awareness:
+
+IntelliJ will automatically check Java syntax and compatibility for each module, even if the Java version is not 
+explicitly set in the Structure > Project Settings > Modules.
 
 ### Publishing the streams quickstart archetype artifact to maven ###
 For the Streams archetype project, one cannot use gradle to upload to maven; instead the `mvn deploy` command needs to be called at the quickstart folder:
@@ -175,10 +169,6 @@ Please note for this to work you should create/update user maven settings (typic
         ...
      </servers>
      ...
-
-### Installing all projects to the local Maven repository ###
-
-    ./gradlew -PskipSigning=true publishToMavenLocal
 
 ### Installing specific projects to the local Maven repository ###
 
@@ -269,19 +259,9 @@ default. See https://www.lightbend.com/blog/scala-inliner-optimizer for more det
 
 See [tests/README.md](tests/README.md).
 
-### Using Trogdor for testing ###
-
-We use Trogdor as a test framework for Apache Kafka. You can use it to run benchmarks and other workloads.
-
-See [trogdor/README.md](trogdor/README.md).
-
 ### Running in Vagrant ###
 
 See [vagrant/README.md](vagrant/README.md).
-
-### Kafka client examples ###
-
-See [examples/README.md](examples/README.md).
 
 ### Contribution ###
 

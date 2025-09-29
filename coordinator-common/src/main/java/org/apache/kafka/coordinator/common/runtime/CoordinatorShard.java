@@ -17,6 +17,8 @@
 package org.apache.kafka.coordinator.common.runtime;
 
 import org.apache.kafka.common.requests.TransactionResult;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
 
 /**
  * CoordinatorShard is basically a replicated state machine managed by the
@@ -30,16 +32,16 @@ public interface CoordinatorShard<U> {
      *
      * @param newImage  The metadata image.
      */
-    default void onLoaded(CoordinatorMetadataImage newImage) {}
+    default void onLoaded(MetadataImage newImage) {}
 
     /**
-     * A new metadata image is available. This is only called after {@link CoordinatorShard#onLoaded(CoordinatorMetadataImage)}
+     * A new metadata image is available. This is only called after {@link CoordinatorShard#onLoaded(MetadataImage)}
      * is called to signal that the coordinator has been fully loaded.
      *
      * @param newImage  The new metadata image.
      * @param delta     The delta image.
      */
-    default void onNewMetadataImage(CoordinatorMetadataImage newImage, CoordinatorMetadataDelta delta) {}
+    default void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {}
 
     /**
      * The coordinator has been unloaded. This is used to apply

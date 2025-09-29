@@ -26,9 +26,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader}
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
-import org.apache.kafka.server.metrics.ForwardingManagerMetrics
 
-import java.util.Optional
 import java.util.concurrent.TimeUnit
 import scala.jdk.OptionConverters.RichOptional
 
@@ -87,7 +85,7 @@ trait ForwardingManager {
     responseCallback: Option[AbstractResponse] => Unit
   ): Unit
 
-  def controllerApiVersions: Optional[NodeApiVersions]
+  def controllerApiVersions: Option[NodeApiVersions]
 }
 
 object ForwardingManager {
@@ -118,7 +116,7 @@ class ForwardingManagerImpl(
   metrics: Metrics
 ) extends ForwardingManager with AutoCloseable with Logging {
 
-  val forwardingManagerMetrics: ForwardingManagerMetrics = new ForwardingManagerMetrics(metrics, channelManager.getTimeoutMs)
+  val forwardingManagerMetrics: ForwardingManagerMetrics = ForwardingManagerMetrics(metrics, channelManager.getTimeoutMs)
 
   override def forwardRequest(
     requestContext: RequestContext,
@@ -134,7 +132,7 @@ class ForwardingManagerImpl(
     class ForwardingResponseHandler extends ControllerRequestCompletionHandler {
       override def onComplete(clientResponse: ClientResponse): Unit = {
 
-        forwardingManagerMetrics.decrementQueueLength()
+        forwardingManagerMetrics.queueLength.getAndDecrement()
         forwardingManagerMetrics.remoteTimeMsHist.record(clientResponse.requestLatencyMs())
         forwardingManagerMetrics.queueTimeMsHist.record(clientResponse.receivedTimeMs() - clientResponse.requestLatencyMs() - requestCreationTimeMs)
 
@@ -175,22 +173,22 @@ class ForwardingManagerImpl(
 
       override def onTimeout(): Unit = {
         debug(s"Forwarding of the request ${requestToString()} failed due to timeout exception")
-        forwardingManagerMetrics.decrementQueueLength()
+        forwardingManagerMetrics.queueLength.getAndDecrement()
         forwardingManagerMetrics.queueTimeMsHist.record(channelManager.getTimeoutMs)
         val response = requestBody.getErrorResponse(new TimeoutException())
         responseCallback(Option(response))
       }
     }
 
-    forwardingManagerMetrics.incrementQueueLength()
+    forwardingManagerMetrics.queueLength.getAndIncrement()
     channelManager.sendRequest(envelopeRequest, new ForwardingResponseHandler)
   }
 
   override def close(): Unit =
     forwardingManagerMetrics.close()
 
-  override def controllerApiVersions: Optional[NodeApiVersions] =
-    channelManager.controllerApiVersions
+  override def controllerApiVersions: Option[NodeApiVersions] =
+    channelManager.controllerApiVersions.toScala
 
   private def parseResponse(
     buffer: ByteBuffer,

@@ -18,7 +18,6 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.InvalidRecordException;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.ProduceRequestData;
@@ -55,7 +54,7 @@ public class ProduceRequestTest {
         final ProduceRequest request = ProduceRequest.builder(new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
                 new ProduceRequestData.TopicProduceData()
-                    .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
+                    .setName("topic")
                     .setPartitionData(Collections.singletonList(
                         new ProduceRequestData.PartitionProduceData()
                             .setIndex(1)
@@ -84,7 +83,7 @@ public class ProduceRequestTest {
         final ProduceRequest request = ProduceRequest.builder(new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
                 new ProduceRequestData.TopicProduceData()
-                    .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
+                    .setName("topic")
                     .setPartitionData(Collections.singletonList(
                         new ProduceRequestData.PartitionProduceData()
                             .setIndex(1)
@@ -103,36 +102,13 @@ public class ProduceRequestTest {
         ProduceRequest.Builder requestBuilder = ProduceRequest.builder(
             new ProduceRequestData()
                 .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
-                    new ProduceRequestData.TopicProduceData()
-                            .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
-                            .setPartitionData(Collections.singletonList(
-                                    new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
+                    new ProduceRequestData.TopicProduceData().setName("test").setPartitionData(Collections.singletonList(
+                        new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
                     .iterator()))
                 .setAcks((short) 1)
                 .setTimeoutMs(5000),
             false);
-        assertEquals(ApiKeys.PRODUCE.oldestVersion(), requestBuilder.oldestAllowedVersion());
-        assertEquals(ApiKeys.PRODUCE.latestVersion(), requestBuilder.latestAllowedVersion());
-    }
-
-    @Test
-    public void testBuildWithCurrentMessageFormatWithoutTopicId() {
-        ByteBuffer buffer = ByteBuffer.allocate(256);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE,
-                Compression.NONE, TimestampType.CREATE_TIME, 0L);
-        builder.append(10L, null, "a".getBytes());
-        ProduceRequest.Builder requestBuilder = ProduceRequest.builder(
-                new ProduceRequestData()
-                        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
-                                        new ProduceRequestData.TopicProduceData()
-                                                .setName("topic")  // TopicId will default to Uuid.ZERO and client will get UNKNOWN_TOPIC_ID error.
-                                                .setPartitionData(Collections.singletonList(
-                                                        new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
-                                .iterator()))
-                        .setAcks((short) 1)
-                        .setTimeoutMs(5000),
-                false);
-        assertEquals(ApiKeys.PRODUCE.oldestVersion(), requestBuilder.oldestAllowedVersion());
+        assertEquals(3, requestBuilder.oldestAllowedVersion());
         assertEquals(ApiKeys.PRODUCE.latestVersion(), requestBuilder.latestAllowedVersion());
     }
 
@@ -153,7 +129,7 @@ public class ProduceRequestTest {
         ProduceRequest.Builder requestBuilder = ProduceRequest.builder(new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
                 new ProduceRequestData.TopicProduceData()
-                    .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
+                    .setName("test")
                     .setPartitionData(Collections.singletonList(
                         new ProduceRequestData.PartitionProduceData()
                             .setIndex(0)
@@ -168,7 +144,7 @@ public class ProduceRequestTest {
         ProduceRequest.Builder requestBuilder = ProduceRequest.builder(new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
                 new ProduceRequestData.TopicProduceData()
-                    .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
+                    .setName("test")
                     .setPartitionData(Collections.singletonList(
                         new ProduceRequestData.PartitionProduceData()
                             .setIndex(0)
@@ -188,7 +164,7 @@ public class ProduceRequestTest {
         ProduceRequest.Builder requestBuilder = ProduceRequest.builder(new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
                 new ProduceRequestData.TopicProduceData()
-                    .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
+                    .setName("test")
                     .setPartitionData(Collections.singletonList(
                         new ProduceRequestData.PartitionProduceData()
                             .setIndex(0)
@@ -208,7 +184,7 @@ public class ProduceRequestTest {
         ProduceRequest.Builder requestBuilder = ProduceRequest.builder(new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
                 new ProduceRequestData.TopicProduceData()
-                    .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
+                    .setName("test")
                     .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
                         .setIndex(0)
                         .setRecords(builder.build()))))
@@ -228,7 +204,7 @@ public class ProduceRequestTest {
         ProduceRequestData produceData = new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
                 new ProduceRequestData.TopicProduceData()
-                    .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
+                    .setName("test")
                     .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
                         .setIndex(0)
                         .setRecords(builder.build()))))
@@ -259,12 +235,10 @@ public class ProduceRequestTest {
         ProduceRequest.Builder builder = ProduceRequest.builder(
             new ProduceRequestData()
                 .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Arrays.asList(
-                    new ProduceRequestData.TopicProduceData().setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
-                            .setPartitionData(Collections.singletonList(
-                                    new ProduceRequestData.PartitionProduceData().setIndex(0).setRecords(txnRecords))),
-                    new ProduceRequestData.TopicProduceData().setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
-                            .setPartitionData(Collections.singletonList(
-                                    new ProduceRequestData.PartitionProduceData().setIndex(1).setRecords(nonTxnRecords))))
+                    new ProduceRequestData.TopicProduceData().setName("foo").setPartitionData(Collections.singletonList(
+                        new ProduceRequestData.PartitionProduceData().setIndex(0).setRecords(txnRecords))),
+                    new ProduceRequestData.TopicProduceData().setName("foo").setPartitionData(Collections.singletonList(
+                        new ProduceRequestData.PartitionProduceData().setIndex(1).setRecords(nonTxnRecords))))
                     .iterator()))
                 .setAcks((short) -1)
                 .setTimeoutMs(5000),
@@ -288,12 +262,10 @@ public class ProduceRequestTest {
         ProduceRequest.Builder builder = ProduceRequest.builder(
             new ProduceRequestData()
                 .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Arrays.asList(
-                    new ProduceRequestData.TopicProduceData().setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
-                            .setPartitionData(Collections.singletonList(
-                                    new ProduceRequestData.PartitionProduceData().setIndex(0).setRecords(idempotentRecords))),
-                    new ProduceRequestData.TopicProduceData().setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
-                            .setPartitionData(Collections.singletonList(
-                                    new ProduceRequestData.PartitionProduceData().setIndex(1).setRecords(nonIdempotentRecords))))
+                    new ProduceRequestData.TopicProduceData().setName("foo").setPartitionData(Collections.singletonList(
+                        new ProduceRequestData.PartitionProduceData().setIndex(0).setRecords(idempotentRecords))),
+                    new ProduceRequestData.TopicProduceData().setName("foo").setPartitionData(Collections.singletonList(
+                        new ProduceRequestData.PartitionProduceData().setIndex(1).setRecords(nonIdempotentRecords))))
                     .iterator()))
                 .setAcks((short) -1)
                 .setTimeoutMs(5000),
@@ -309,7 +281,7 @@ public class ProduceRequestTest {
         ProduceRequest.Builder builder = ProduceRequest.builder(new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
                 new ProduceRequestData.TopicProduceData()
-                    .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
+                    .setName("topic")
                     .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
                         .setIndex(1)
                         .setRecords(MemoryRecords.withRecords(Compression.NONE, simpleRecord))))
@@ -330,7 +302,7 @@ public class ProduceRequestTest {
         return ProduceRequest.builder(new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
                 new ProduceRequestData.TopicProduceData()
-                     .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
+                    .setName("topic")
                     .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
                         .setIndex(1)
                         .setRecords(MemoryRecords.withRecords(Compression.NONE, simpleRecord)))))

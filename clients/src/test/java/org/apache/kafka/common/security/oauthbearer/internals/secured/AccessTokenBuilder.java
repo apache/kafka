@@ -36,10 +36,6 @@ import java.util.Map;
 
 public class AccessTokenBuilder {
 
-    private final String scopeClaimName = "scope";
-
-    private final Long issuedAtSeconds;
-
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private String alg;
@@ -51,6 +47,10 @@ public class AccessTokenBuilder {
     private String subjectClaimName = ReservedClaimNames.SUBJECT;
 
     private Object scope = "engineering";
+
+    private final String scopeClaimName = "scope";
+
+    private final Long issuedAtSeconds;
 
     private Long expirationSeconds;
 

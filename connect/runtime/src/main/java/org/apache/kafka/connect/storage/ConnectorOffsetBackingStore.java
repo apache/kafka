@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -209,7 +210,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
         Future<Map<ByteBuffer, ByteBuffer>> workerGetFuture = getFromStore(workerStore, keys);
         Future<Map<ByteBuffer, ByteBuffer>> connectorGetFuture = getFromStore(connectorStore, keys);
 
-        return new Future<>() {
+        return new Future<Map<ByteBuffer, ByteBuffer>>() {
             @Override
             public boolean cancel(boolean mayInterruptIfRunning) {
                 // Note the use of | instead of || here; this causes cancel to be invoked on both futures,
@@ -397,7 +398,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
     }
 
     private static Future<Map<ByteBuffer, ByteBuffer>> getFromStore(Optional<? extends OffsetBackingStore> store, Collection<ByteBuffer> keys) {
-        return store.map(s -> s.get(keys)).orElseGet(() -> CompletableFuture.completedFuture(Map.of()));
+        return store.map(s -> s.get(keys)).orElseGet(() -> CompletableFuture.completedFuture(Collections.emptyMap()));
     }
 
     private class ChainedOffsetWriteFuture implements Future<Void> {

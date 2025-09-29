@@ -14,8 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 6,
-  "type": "coordinator-value",
+  "type": "data",
   "name": "ConsumerGroupTargetAssignmentMetadataValue",
   "validVersions": "0",
   "flexibleVersions": "0+",

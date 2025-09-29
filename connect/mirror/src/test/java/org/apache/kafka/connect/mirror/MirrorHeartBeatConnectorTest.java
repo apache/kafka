@@ -20,6 +20,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -66,8 +67,8 @@ public class MirrorHeartBeatConnectorTest {
     @Test
     public void testAlterOffsetsIncorrectPartitionKey() {
         MirrorHeartbeatConnector connector = new MirrorHeartbeatConnector();
-        assertThrows(ConnectException.class, () -> connector.alterOffsets(null, Map.of(
-                Map.of("unused_partition_key", "unused_partition_value"),
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(null, Collections.singletonMap(
+                Collections.singletonMap("unused_partition_key", "unused_partition_value"),
                 SOURCE_OFFSET
         )));
 
@@ -82,7 +83,7 @@ public class MirrorHeartBeatConnectorTest {
     public void testAlterOffsetsMissingPartitionKey() {
         MirrorHeartbeatConnector connector = new MirrorHeartbeatConnector();
 
-        Function<Map<String, ?>, Boolean> alterOffsets = partition -> connector.alterOffsets(null, Map.of(
+        Function<Map<String, ?>, Boolean> alterOffsets = partition -> connector.alterOffsets(null, Collections.singletonMap(
                 partition,
                 SOURCE_OFFSET
         ));
@@ -91,7 +92,7 @@ public class MirrorHeartBeatConnectorTest {
         // Sanity check to make sure our valid partition is actually valid
         assertTrue(alterOffsets.apply(validPartition));
 
-        for (String key : List.of(SOURCE_CLUSTER_ALIAS_KEY, TARGET_CLUSTER_ALIAS_KEY)) {
+        for (String key : Arrays.asList(SOURCE_CLUSTER_ALIAS_KEY, TARGET_CLUSTER_ALIAS_KEY)) {
             Map<String, ?> invalidPartition = new HashMap<>(validPartition);
             invalidPartition.remove(key);
             assertThrows(ConnectException.class, () -> alterOffsets.apply(invalidPartition));
@@ -116,9 +117,9 @@ public class MirrorHeartBeatConnectorTest {
     public void testAlterOffsetsIncorrectOffsetKey() {
         MirrorHeartbeatConnector connector = new MirrorHeartbeatConnector();
 
-        Map<Map<String, ?>, Map<String, ?>> offsets = Map.of(
+        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
                 sourcePartition("primary", "backup"),
-                Map.of("unused_offset_key", 0)
+                Collections.singletonMap("unused_offset_key", 0)
         );
         assertThrows(ConnectException.class, () -> connector.alterOffsets(null, offsets));
     }
@@ -127,7 +128,7 @@ public class MirrorHeartBeatConnectorTest {
     public void testAlterOffsetsOffsetValues() {
         MirrorHeartbeatConnector connector = new MirrorHeartbeatConnector();
 
-        Function<Object, Boolean> alterOffsets = offset -> connector.alterOffsets(null, Map.of(
+        Function<Object, Boolean> alterOffsets = offset -> connector.alterOffsets(null, Collections.singletonMap(
                 sourcePartition("primary", "backup"),
                 Collections.singletonMap(MirrorUtils.OFFSET_KEY, offset)
         ));
@@ -148,7 +149,7 @@ public class MirrorHeartBeatConnectorTest {
     public void testSuccessfulAlterOffsets() {
         MirrorHeartbeatConnector connector = new MirrorHeartbeatConnector();
 
-        Map<Map<String, ?>, Map<String, ?>> offsets = Map.of(
+        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
                 sourcePartition("primary", "backup"),
                 SOURCE_OFFSET
         );
@@ -157,7 +158,7 @@ public class MirrorHeartBeatConnectorTest {
         // since it could indicate that the offsets were reset previously or that no offsets have been committed yet
         // (for a reset operation)
         assertTrue(connector.alterOffsets(null, offsets));
-        assertTrue(connector.alterOffsets(null, Map.of()));
+        assertTrue(connector.alterOffsets(null, Collections.emptyMap()));
     }
 
     @Test
@@ -177,8 +178,8 @@ public class MirrorHeartBeatConnectorTest {
         assertTrue(() -> alterOffsets.apply(partition));
 
         assertTrue(() -> alterOffsets.apply(null));
-        assertTrue(() -> alterOffsets.apply(Map.of()));
-        assertTrue(() -> alterOffsets.apply(Map.of("unused_partition_key", "unused_partition_value")));
+        assertTrue(() -> alterOffsets.apply(Collections.emptyMap()));
+        assertTrue(() -> alterOffsets.apply(Collections.singletonMap("unused_partition_key", "unused_partition_value")));
     }
 
     private static Map<String, Object> sourcePartition(String sourceClusterAlias, String targetClusterAlias) {

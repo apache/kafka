@@ -23,6 +23,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -34,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 final class ElectionStateTest {
     @Test
     void testVotedCandidateWithoutVotedId() {
-        ElectionState electionState = ElectionState.withUnknownLeader(5, Set.of());
+        ElectionState electionState = ElectionState.withUnknownLeader(5, Collections.emptySet());
         assertFalse(electionState.isVotedCandidate(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID)));
     }
 
@@ -43,7 +45,7 @@ final class ElectionStateTest {
         ElectionState electionState = ElectionState.withVotedCandidate(
             5,
             ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID),
-            Set.of()
+            Collections.emptySet()
         );
         assertTrue(electionState.isVotedCandidate(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID)));
         assertTrue(
@@ -57,7 +59,7 @@ final class ElectionStateTest {
         ElectionState electionState = ElectionState.withVotedCandidate(
             5,
             votedKey,
-            Set.of()
+            Collections.emptySet()
         );
         assertFalse(electionState.isVotedCandidate(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID)));
         assertTrue(electionState.isVotedCandidate(votedKey));
@@ -67,7 +69,7 @@ final class ElectionStateTest {
     @ValueSource(shorts = {0, 1})
     void testQuorumStateDataRoundTrip(short version) {
         ReplicaKey votedKey = ReplicaKey.of(1, Uuid.randomUuid());
-        List<ElectionState> electionStates = List.of(
+        List<ElectionState> electionStates = Arrays.asList(
             ElectionState.withUnknownLeader(5, Set.of(1, 2, 3)),
             ElectionState.withElectedLeader(5, 1, Optional.empty(), Set.of(1, 2, 3)),
             ElectionState.withVotedCandidate(5, votedKey, Set.of(1, 2, 3)),
@@ -76,7 +78,7 @@ final class ElectionStateTest {
 
         final List<ElectionState> expected;
         if (version == 0) {
-            expected = List.of(
+            expected = Arrays.asList(
                 ElectionState.withUnknownLeader(5, Set.of(1, 2, 3)),
                 ElectionState.withElectedLeader(5, 1, Optional.empty(), Set.of(1, 2, 3)),
                 ElectionState.withVotedCandidate(
@@ -92,11 +94,11 @@ final class ElectionStateTest {
                 )
             );
         } else {
-            expected = List.of(
-                ElectionState.withUnknownLeader(5, Set.of()),
-                ElectionState.withElectedLeader(5, 1, Optional.empty(), Set.of()),
-                ElectionState.withVotedCandidate(5, votedKey, Set.of()),
-                ElectionState.withElectedLeader(5, 1, Optional.of(votedKey), Set.of())
+            expected = Arrays.asList(
+                ElectionState.withUnknownLeader(5, Collections.emptySet()),
+                ElectionState.withElectedLeader(5, 1, Optional.empty(), Collections.emptySet()),
+                ElectionState.withVotedCandidate(5, votedKey, Collections.emptySet()),
+                ElectionState.withElectedLeader(5, 1, Optional.of(votedKey), Collections.emptySet())
             );
         }
 

@@ -38,10 +38,11 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+
+import static java.util.Collections.singleton;
 
 /**
  * Write the original consumed record into a dead letter queue. The dead letter queue is a Kafka topic located
@@ -84,7 +85,7 @@ public class DeadLetterQueueReporter implements ErrorReporter<ConsumerRecord<byt
             if (!admin.listTopics().names().get().contains(topic)) {
                 log.error("Topic {} doesn't exist. Will attempt to create topic.", topic);
                 NewTopic schemaTopicRequest = new NewTopic(topic, DLQ_NUM_DESIRED_PARTITIONS, sinkConfig.dlqTopicReplicationFactor());
-                admin.createTopics(Set.of(schemaTopicRequest)).all().get();
+                admin.createTopics(singleton(schemaTopicRequest)).all().get();
             }
         } catch (InterruptedException e) {
             throw new ConnectException("Could not initialize dead letter queue with topic=" + topic, e);
@@ -151,7 +152,7 @@ public class DeadLetterQueueReporter implements ErrorReporter<ConsumerRecord<byt
 
         return this.kafkaProducer.send(producerRecord, (metadata, exception) -> {
             if (exception != null) {
-                log.error("Could not produce message to dead letter queue. topic={}", dlqTopicName, exception);
+                log.error("Could not produce message to dead letter queue. topic=" + dlqTopicName, exception);
                 errorHandlingMetrics.recordDeadLetterQueueProduceFailed();
             }
         });
@@ -183,7 +184,7 @@ public class DeadLetterQueueReporter implements ErrorReporter<ConsumerRecord<byt
     private byte[] stacktrace(Throwable error) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         try {
-            PrintStream stream = new PrintStream(bos, true, StandardCharsets.UTF_8);
+            PrintStream stream = new PrintStream(bos, true, StandardCharsets.UTF_8.name());
             error.printStackTrace(stream);
             bos.close();
             return bos.toByteArray();

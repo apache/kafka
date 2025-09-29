@@ -112,7 +112,8 @@ public final class CdCommandHandler implements Commands.Handler {
 
     @Override
     public boolean equals(Object other) {
-        if (!(other instanceof CdCommandHandler o)) return false;
+        if (!(other instanceof CdCommandHandler)) return false;
+        CdCommandHandler o = (CdCommandHandler) other;
         return o.target.equals(target);
     }
 }

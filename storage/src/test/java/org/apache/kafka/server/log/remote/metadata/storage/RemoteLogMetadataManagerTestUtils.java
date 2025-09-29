@@ -19,6 +19,7 @@ package org.apache.kafka.server.log.remote.metadata.storage;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.test.TestUtils;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -44,7 +45,8 @@ public class RemoteLogMetadataManagerTestUtils {
 
     public static class Builder {
         private String bootstrapServers;
-        private Map<String, Object> overrideRemoteLogMetadataManagerProps = Map.of();
+        private boolean startConsumerThread;
+        private Map<String, Object> overrideRemoteLogMetadataManagerProps = Collections.emptyMap();
         private Supplier<RemotePartitionMetadataStore> remotePartitionMetadataStore = RemotePartitionMetadataStore::new;
         private Function<Integer, RemoteLogMetadataTopicPartitioner> remoteLogMetadataTopicPartitioner = RemoteLogMetadataTopicPartitioner::new;
 
@@ -53,6 +55,11 @@ public class RemoteLogMetadataManagerTestUtils {
 
         public Builder bootstrapServers(String bootstrapServers) {
             this.bootstrapServers = Objects.requireNonNull(bootstrapServers);
+            return this;
+        }
+
+        public Builder startConsumerThread(boolean startConsumerThread) {
+            this.startConsumerThread = startConsumerThread;
             return this;
         }
 
@@ -75,7 +82,8 @@ public class RemoteLogMetadataManagerTestUtils {
             Objects.requireNonNull(bootstrapServers);
             String logDir = TestUtils.tempDirectory("rlmm_segs_").getAbsolutePath();
             TopicBasedRemoteLogMetadataManager topicBasedRemoteLogMetadataManager =
-                new TopicBasedRemoteLogMetadataManager(remoteLogMetadataTopicPartitioner, remotePartitionMetadataStore);
+                new TopicBasedRemoteLogMetadataManager(startConsumerThread,
+                    remoteLogMetadataTopicPartitioner, remotePartitionMetadataStore);
 
             // Initialize TopicBasedRemoteLogMetadataManager.
             Map<String, Object> configs = new HashMap<>();

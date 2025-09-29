@@ -28,6 +28,7 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -305,7 +306,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         SubscribedTopicDescriber subscribedTopicDescriber
     ) throws PartitionAssignorException {
         if (groupSpec.memberIds().isEmpty()) {
-            return new GroupAssignment(Map.of());
+            return new GroupAssignment(Collections.emptyMap());
         } else if (groupSpec.subscriptionType() == SubscriptionType.HOMOGENEOUS) {
             return assignHomogeneousGroup(groupSpec, subscribedTopicDescriber);
         } else {

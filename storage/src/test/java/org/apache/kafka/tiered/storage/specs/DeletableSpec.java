@@ -18,7 +18,33 @@ package org.apache.kafka.tiered.storage.specs;
 
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent;
 
-public record DeletableSpec(int sourceBrokerId, LocalTieredStorageEvent.EventType eventType, int eventCount) {
+import java.util.Objects;
+
+public final class DeletableSpec {
+
+    private final Integer sourceBrokerId;
+    private final LocalTieredStorageEvent.EventType eventType;
+    private final Integer eventCount;
+
+    public DeletableSpec(Integer sourceBrokerId,
+                         LocalTieredStorageEvent.EventType eventType,
+                         Integer eventCount) {
+        this.sourceBrokerId = sourceBrokerId;
+        this.eventType = eventType;
+        this.eventCount = eventCount;
+    }
+
+    public Integer getSourceBrokerId() {
+        return sourceBrokerId;
+    }
+
+    public LocalTieredStorageEvent.EventType getEventType() {
+        return eventType;
+    }
+
+    public Integer getEventCount() {
+        return eventCount;
+    }
 
     @Override
     public String toString() {
@@ -29,4 +55,18 @@ public record DeletableSpec(int sourceBrokerId, LocalTieredStorageEvent.EventTyp
                 '}';
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        DeletableSpec that = (DeletableSpec) o;
+        return Objects.equals(sourceBrokerId, that.sourceBrokerId)
+                && eventType == that.eventType
+                && Objects.equals(eventCount, that.eventCount);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(sourceBrokerId, eventType, eventCount);
+    }
 }

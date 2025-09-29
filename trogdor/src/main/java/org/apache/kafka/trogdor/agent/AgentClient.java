@@ -45,6 +45,7 @@ import org.slf4j.LoggerFactory;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -274,7 +275,9 @@ public class AgentClient {
                     System.out.printf("\tStart time: %s%n",
                         dateString(status.serverStartMs(), localOffset));
                     List<List<String>> lines = new ArrayList<>();
-                    lines.add(List.of("WORKER_ID", "TASK_ID", "STATE", "TASK_TYPE"));
+                    List<String> header = new ArrayList<>(
+                        Arrays.asList("WORKER_ID", "TASK_ID", "STATE", "TASK_TYPE"));
+                    lines.add(header);
                     for (Map.Entry<Long, WorkerState> entry : status.workers().entrySet()) {
                         List<String> cols = new ArrayList<>();
                         cols.add(Long.toString(entry.getKey()));

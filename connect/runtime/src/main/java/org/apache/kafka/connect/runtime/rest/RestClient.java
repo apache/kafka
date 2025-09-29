@@ -254,6 +254,27 @@ public class RestClient {
         return headers;
     }
 
-    public record HttpResponse<T>(int status, Map<String, String> headers, T body) {
+    public static class HttpResponse<T> {
+        private final int status;
+        private final Map<String, String> headers;
+        private final T body;
+
+        public HttpResponse(int status, Map<String, String> headers, T body) {
+            this.status = status;
+            this.headers = headers;
+            this.body = body;
+        }
+
+        public int status() {
+            return status;
+        }
+
+        public Map<String, String> headers() {
+            return headers;
+        }
+
+        public T body() {
+            return body;
+        }
     }
 }

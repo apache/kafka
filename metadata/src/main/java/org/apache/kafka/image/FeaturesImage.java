@@ -38,7 +38,7 @@ import java.util.Optional;
  */
 public final class FeaturesImage {
     public static final FeaturesImage EMPTY = new FeaturesImage(
-        Map.of(),
+        Collections.emptyMap(),
         Optional.empty()
     );
 
@@ -113,7 +113,8 @@ public final class FeaturesImage {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof FeaturesImage other)) return false;
+        if (!(o instanceof FeaturesImage)) return false;
+        FeaturesImage other = (FeaturesImage) o;
         return finalizedVersions.equals(other.finalizedVersions) &&
             metadataVersion.equals(other.metadataVersion);
     }

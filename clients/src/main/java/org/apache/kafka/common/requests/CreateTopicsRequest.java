@@ -22,8 +22,9 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Readable;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -108,7 +109,7 @@ public class CreateTopicsRequest extends AbstractRequest {
         return new CreateTopicsResponse(response);
     }
 
-    public static CreateTopicsRequest parse(Readable readable, short version) {
-        return new CreateTopicsRequest(new CreateTopicsRequestData(readable, version), version);
+    public static CreateTopicsRequest parse(ByteBuffer buffer, short version) {
+        return new CreateTopicsRequest(new CreateTopicsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

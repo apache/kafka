@@ -201,7 +201,7 @@ public interface Task {
     /**
      * @throws StreamsException fatal error, should close the thread
      */
-    Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean);
+    Map<TopicPartition, OffsetAndMetadata> prepareCommit();
 
     void postCommit(boolean enforceCheckpoint);
 

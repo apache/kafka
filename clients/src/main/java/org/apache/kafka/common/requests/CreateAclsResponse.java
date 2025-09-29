@@ -18,9 +18,10 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.CreateAclsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 
@@ -56,8 +57,8 @@ public class CreateAclsResponse extends AbstractResponse {
         return errorCounts(results().stream().map(r -> Errors.forCode(r.errorCode())));
     }
 
-    public static CreateAclsResponse parse(Readable readable, short version) {
-        return new CreateAclsResponse(new CreateAclsResponseData(readable, version));
+    public static CreateAclsResponse parse(ByteBuffer buffer, short version) {
+        return new CreateAclsResponse(new CreateAclsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

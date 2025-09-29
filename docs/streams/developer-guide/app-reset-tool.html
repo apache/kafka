@@ -67,7 +67,7 @@
             <h2>Step 1: Run the application reset tool<a class="headerlink" href="#step-1-run-the-application-reset-tool" title="Permalink to this headline"></a></h2>
             <p>Invoke the application reset tool from the command line</p>
             <p>Warning! This tool makes irreversible changes to your application. It is strongly recommended that you run this once with <code class="docutils literal"><span class="pre">--dry-run</span></code> to preview your changes before making them.</p>
-            <pre><code class="language-bash">$ bin/kafka-streams-application-reset.sh</code></pre>
+            <pre><code class="language-bash">$ bin/kafka-streams-application-reset</code></pre>
             <p>The tool accepts the following parameters:</p>
             <pre><code class="language-text">Option (* = required)                 Description
 ---------------------                 -----------
@@ -80,12 +80,9 @@
                                          PORT2.
 --by-duration &lt;String: urls&gt;          Reset offsets to offset by duration from
                                         current timestamp. Format: &#39;PnDTnHnMnS&#39;
---config-file &lt;String: file name&gt;    (Deprecated) Property file containing configs to be
-                                        passed to admin clients and embedded consumer.
-                                        This option will be removed in a future version.
-                                        Use --command-config instead.
---command-config &lt;String: file name&gt; Config properties file to be passed to admin clients
-                                        and embedded consumer.
+--config-file &lt;String: file name&gt;     Property file containing configs to be
+                                        passed to admin clients and embedded
+                                        consumer.
 --dry-run                             Display the actions that would be
                                         performed without executing the reset
                                         commands.
@@ -104,7 +101,7 @@
                                         &#39;n&#39;, where &#39;n&#39; can be positive or
                                         negative
 --to-datetime &lt;String&gt;                Reset offsets to offset from datetime.
-                                        Format: &#39;YYYY-MM-DDThh:mm:ss.sss&#39;
+                                        Format: &#39;YYYY-MM-DDTHH:mm:SS.sss&#39;
 --to-earliest                         Reset offsets to earliest offset.
 --to-latest                           Reset offsets to latest offset.
 --to-offset &lt;Long&gt;                    Reset offsets to a specific offset.

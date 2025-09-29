@@ -30,7 +30,6 @@ package org.apache.kafka.streams.kstream;
  * @see SessionWindowedKStream#aggregate(Initializer, Aggregator, Merger)
  * @see SessionWindowedKStream#aggregate(Initializer, Aggregator, Merger, Materialized)
  */
-@FunctionalInterface
 public interface Initializer<VAgg> {
 
     /**

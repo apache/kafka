@@ -27,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -65,13 +66,13 @@ public class WorkerConfigTransformerTest {
 
     @BeforeEach
     public void setup() {
-        configTransformer = new WorkerConfigTransformer(worker, Map.of("test", new TestConfigProvider()));
+        configTransformer = new WorkerConfigTransformer(worker, Collections.singletonMap("test", new TestConfigProvider()));
     }
 
     @Test
     public void testReplaceVariable() {
         // Execution
-        Map<String, String> result = configTransformer.transform(MY_CONNECTOR, Map.of(MY_KEY, "${test:testPath:testKey}"));
+        Map<String, String> result = configTransformer.transform(MY_CONNECTOR, Collections.singletonMap(MY_KEY, "${test:testPath:testKey}"));
 
         // Assertions
         assertEquals(TEST_RESULT, result.get(MY_KEY));
@@ -96,7 +97,7 @@ public class WorkerConfigTransformerTest {
         when(herder.restartConnector(eq(1L), eq(MY_CONNECTOR), notNull())).thenReturn(requestId);
 
         // Execution
-        Map<String, String> result = configTransformer.transform(MY_CONNECTOR, Map.of(MY_KEY, "${test:testPath:testKeyWithTTL}"));
+        Map<String, String> result = configTransformer.transform(MY_CONNECTOR, Collections.singletonMap(MY_KEY, "${test:testPath:testKeyWithTTL}"));
 
         // Assertions
         assertEquals(TEST_RESULT_WITH_TTL, result.get(MY_KEY));
@@ -111,14 +112,14 @@ public class WorkerConfigTransformerTest {
         when(herder.restartConnector(eq(10L), eq(MY_CONNECTOR), notNull())).thenReturn(requestId);
 
         // Execution
-        Map<String, String> result = configTransformer.transform(MY_CONNECTOR, Map.of(MY_KEY, "${test:testPath:testKeyWithTTL}"));
+        Map<String, String> result = configTransformer.transform(MY_CONNECTOR, Collections.singletonMap(MY_KEY, "${test:testPath:testKeyWithTTL}"));
 
         // Assertions
         assertEquals(TEST_RESULT_WITH_TTL, result.get(MY_KEY));
         verify(herder).restartConnector(eq(1L), eq(MY_CONNECTOR), notNull());
 
         // Execution
-        result = configTransformer.transform(MY_CONNECTOR, Map.of(MY_KEY, "${test:testPath:testKeyWithLongerTTL}"));
+        result = configTransformer.transform(MY_CONNECTOR, Collections.singletonMap(MY_KEY, "${test:testPath:testKeyWithLongerTTL}"));
 
         // Assertions
         assertEquals(TEST_RESULT_WITH_LONGER_TTL, result.get(MY_KEY));
@@ -146,14 +147,14 @@ public class WorkerConfigTransformerTest {
         public ConfigData get(String path, Set<String> keys) {
             if (path.equals(TEST_PATH)) {
                 if (keys.contains(TEST_KEY)) {
-                    return new ConfigData(Map.of(TEST_KEY, TEST_RESULT));
+                    return new ConfigData(Collections.singletonMap(TEST_KEY, TEST_RESULT));
                 } else if (keys.contains(TEST_KEY_WITH_TTL)) {
-                    return new ConfigData(Map.of(TEST_KEY_WITH_TTL, TEST_RESULT_WITH_TTL), 1L);
+                    return new ConfigData(Collections.singletonMap(TEST_KEY_WITH_TTL, TEST_RESULT_WITH_TTL), 1L);
                 } else if (keys.contains(TEST_KEY_WITH_LONGER_TTL)) {
-                    return new ConfigData(Map.of(TEST_KEY_WITH_LONGER_TTL, TEST_RESULT_WITH_LONGER_TTL), 10L);
+                    return new ConfigData(Collections.singletonMap(TEST_KEY_WITH_LONGER_TTL, TEST_RESULT_WITH_LONGER_TTL), 10L);
                 }
             }
-            return new ConfigData(Map.of());
+            return new ConfigData(Collections.emptyMap());
         }
 
         @Override

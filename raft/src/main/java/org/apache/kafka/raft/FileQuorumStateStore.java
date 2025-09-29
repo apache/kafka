@@ -95,10 +95,11 @@ public class FileQuorumStateStore implements QuorumStateStore {
             final ObjectMapper objectMapper = new ObjectMapper();
             JsonNode readNode = objectMapper.readTree(line);
 
-            if (!(readNode instanceof ObjectNode dataObject)) {
+            if (!(readNode instanceof ObjectNode)) {
                 throw new IOException("Deserialized node " + readNode +
                     " is not an object node");
             }
+            final ObjectNode dataObject = (ObjectNode) readNode;
 
             JsonNode dataVersionNode = dataObject.get(DATA_VERSION);
             if (dataVersionNode == null) {

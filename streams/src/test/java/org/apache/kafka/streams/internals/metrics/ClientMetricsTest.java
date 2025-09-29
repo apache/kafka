@@ -89,7 +89,7 @@ public class ClientMetricsTest {
     public void shouldAddStateMetric() {
         final String name = "state";
         final String description = "The state of the Kafka Streams client";
-        final Gauge<String> stateProvider = (config, now) -> State.RUNNING.name();
+        final Gauge<State> stateProvider = (config, now) -> State.RUNNING;
         setUpAndVerifyMutableMetric(
             name,
             description,

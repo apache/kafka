@@ -25,11 +25,8 @@ import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.Arrays;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -64,11 +61,8 @@ public class QuorumControllerMetrics implements AutoCloseable {
         "KafkaController", "EventQueueOperationsTimedOutCount");
     private static final MetricName NEW_ACTIVE_CONTROLLERS_COUNT = getMetricName(
         "KafkaController", "NewActiveControllersCount");
-    private static final String TIME_SINCE_LAST_HEARTBEAT_RECEIVED_METRIC_NAME = "TimeSinceLastHeartbeatReceivedMs";
-    private static final String BROKER_ID_TAG = "broker";
 
     private final Optional<MetricsRegistry> registry;
-    private final Time time;
     private volatile boolean active;
     private final AtomicLong lastAppliedRecordOffset = new AtomicLong(0);
     private final AtomicLong lastCommittedRecordOffset = new AtomicLong(0);
@@ -80,8 +74,6 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private final AtomicLong operationsStarted = new AtomicLong(0);
     private final AtomicLong operationsTimedOut = new AtomicLong(0);
     private final AtomicLong newActiveControllers = new AtomicLong(0);
-    private final Map<Integer, Long> brokerContactTimesMs = new ConcurrentHashMap<>();
-    private final int sessionTimeoutMs;
 
     private Consumer<Long> newHistogram(MetricName name, boolean biased) {
         if (registry.isPresent()) {
@@ -94,11 +86,9 @@ public class QuorumControllerMetrics implements AutoCloseable {
 
     public QuorumControllerMetrics(
         Optional<MetricsRegistry> registry,
-        Time time,
-        int sessionTimeoutMs
+        Time time
     ) {
         this.registry = registry;
-        this.time = time;
         this.active = false;
         registry.ifPresent(r -> r.newGauge(ACTIVE_CONTROLLER_COUNT, new Gauge<Integer>() {
             @Override
@@ -108,7 +98,6 @@ public class QuorumControllerMetrics implements AutoCloseable {
         }));
         this.eventQueueTimeUpdater = newHistogram(EVENT_QUEUE_TIME_MS, true);
         this.eventQueueProcessingTimeUpdater = newHistogram(EVENT_QUEUE_PROCESSING_TIME_MS, true);
-        this.sessionTimeoutMs = sessionTimeoutMs;
         registry.ifPresent(r -> r.newGauge(LAST_APPLIED_RECORD_OFFSET, new Gauge<Long>() {
             @Override
             public Long value() {
@@ -157,41 +146,6 @@ public class QuorumControllerMetrics implements AutoCloseable {
                 return newActiveControllers();
             }
         }));
-    }
-
-    public void addTimeSinceLastHeartbeatMetric(int brokerId) {
-        brokerContactTimesMs.put(brokerId, time.milliseconds());
-        registry.ifPresent(r -> r.newGauge(
-            getBrokerIdTagMetricName(
-                "KafkaController",
-                TIME_SINCE_LAST_HEARTBEAT_RECEIVED_METRIC_NAME,
-                brokerId
-            ),
-            new Gauge<Integer>() {
-                @Override
-                public Integer value() {
-                    return timeSinceLastHeartbeatMs(brokerId);
-                }
-            }
-        ));
-    }
-
-    public void removeTimeSinceLastHeartbeatMetric(int brokerId) {
-        registry.ifPresent(r -> r.removeMetric(
-            getBrokerIdTagMetricName(
-                "KafkaController",
-                TIME_SINCE_LAST_HEARTBEAT_RECEIVED_METRIC_NAME,
-                brokerId
-            )
-        ));
-        brokerContactTimesMs.remove(brokerId);
-    }
-
-    public void removeTimeSinceLastHeartbeatMetrics() {
-        for (int brokerId : brokerContactTimesMs.keySet()) {
-            removeTimeSinceLastHeartbeatMetric(brokerId);
-        }
-        brokerContactTimesMs.clear();
     }
 
     public void setActive(boolean active) {
@@ -266,21 +220,9 @@ public class QuorumControllerMetrics implements AutoCloseable {
         return newActiveControllers.get();
     }
 
-    public void updateBrokerContactTime(int brokerId) {
-        brokerContactTimesMs.put(brokerId, time.milliseconds());
-    }
-
-    public int timeSinceLastHeartbeatMs(int brokerId) {
-        Long lastTime = brokerContactTimesMs.get(brokerId);
-        if (lastTime == null) {
-            return sessionTimeoutMs;
-        }
-        return Math.min((int) (time.milliseconds() - lastTime), sessionTimeoutMs);
-    }
-
     @Override
     public void close() {
-        registry.ifPresent(r -> List.of(
+        registry.ifPresent(r -> Arrays.asList(
             ACTIVE_CONTROLLER_COUNT,
             EVENT_QUEUE_TIME_MS,
             EVENT_QUEUE_PROCESSING_TIME_MS,
@@ -293,16 +235,9 @@ public class QuorumControllerMetrics implements AutoCloseable {
             EVENT_QUEUE_OPERATIONS_TIMED_OUT_COUNT,
             NEW_ACTIVE_CONTROLLERS_COUNT
         ).forEach(r::removeMetric));
-        removeTimeSinceLastHeartbeatMetrics();
     }
 
     private static MetricName getMetricName(String type, String name) {
         return KafkaYammerMetrics.getMetricName("kafka.controller", type, name);
-    }
-
-    private static MetricName getBrokerIdTagMetricName(String type, String name, int brokerId) {
-        LinkedHashMap<String, String> brokerIdTag = new LinkedHashMap<>();
-        brokerIdTag.put(BROKER_ID_TAG, Integer.toString(brokerId));
-        return KafkaYammerMetrics.getMetricName("kafka.controller", type, name, brokerIdTag);
     }
 }

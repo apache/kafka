@@ -22,15 +22,16 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -86,7 +87,7 @@ public class FetchResponse extends AbstractResponse {
      * We may also return INCONSISTENT_TOPIC_ID error as a partition-level error when a partition in the session has a topic ID
      * inconsistent with the log.
      */
-    private FetchResponse(FetchResponseData fetchResponseData) {
+    public FetchResponse(FetchResponseData fetchResponseData) {
         super(ApiKeys.FETCH);
         this.data = fetchResponseData;
     }
@@ -128,7 +129,7 @@ public class FetchResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
+        Map<Errors, Integer> errorCounts = new HashMap<>();
         updateErrorCounts(errorCounts, error());
         data.responses().forEach(topicResponse ->
             topicResponse.partitions().forEach(partition ->
@@ -137,15 +138,8 @@ public class FetchResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    /**
-     * Creates a {@link org.apache.kafka.common.requests.FetchResponse} from the given byte buffer.
-     * Unlike {@link org.apache.kafka.common.requests.FetchResponse#of(FetchResponseData)}, this method doesn't convert
-     * null records to {@link org.apache.kafka.common.record.MemoryRecords#EMPTY}.
-     *
-     * <p><strong>This method should only be used in client-side.</strong></p>
-     */
-    public static FetchResponse parse(Readable readable, short version) {
-        return new FetchResponse(new FetchResponseData(readable, version));
+    public static FetchResponse parse(ByteBuffer buffer, short version) {
+        return new FetchResponse(new FetchResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     // Fetch versions 13 and above should have topic IDs for all topics.
@@ -226,21 +220,12 @@ public class FetchResponse extends AbstractResponse {
         return partition.records() == null ? 0 : partition.records().sizeInBytes();
     }
 
-    /**
-     * Creates a {@link org.apache.kafka.common.requests.FetchResponse} from the given data.
-     * This method converts null records to {@link org.apache.kafka.common.record.MemoryRecords#EMPTY}
-     * to ensure consistent record representation in the response.
-     *
-     * <p><strong>This method should only be used in server-side.</strong></p>
-     */
-    public static FetchResponse of(FetchResponseData data) {
-        for (FetchResponseData.FetchableTopicResponse response : data.responses()) {
-            for (FetchResponseData.PartitionData partition : response.partitions()) {
-                if (partition.records() == null)
-                    partition.setRecords(MemoryRecords.EMPTY);
-            }
-        }
-        return new FetchResponse(data);
+    // TODO: remove as a part of KAFKA-12410
+    public static FetchResponse of(Errors error,
+                                   int throttleTimeMs,
+                                   int sessionId,
+                                   LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData) {
+        return new FetchResponse(toMessage(error, throttleTimeMs, sessionId, responseData.entrySet().iterator(), Collections.emptyList()));
     }
 
     // TODO: remove as a part of KAFKA-12410
@@ -273,11 +258,6 @@ public class FetchResponse extends AbstractResponse {
             FetchResponseData.PartitionData partitionData = entry.getValue();
             // Since PartitionData alone doesn't know the partition ID, we set it here
             partitionData.setPartitionIndex(entry.getKey().topicPartition().partition());
-            // To protect the clients from failing due to null records,
-            // we always convert null records to MemoryRecords.EMPTY
-            // We will propose a KIP to change the schema definitions in the future
-            if (partitionData.records() == null)
-                partitionData.setRecords(MemoryRecords.EMPTY);
             // We have to keep the order of input topic-partition. Hence, we batch the partitions only if the last
             // batch is in the same topic group.
             FetchResponseData.FetchableTopicResponse previousTopic = topicResponseList.isEmpty() ? null

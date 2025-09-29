@@ -24,12 +24,12 @@ import java.util.Objects;
 public final class ProducableSpec {
 
     private final List<ProducerRecord<String, String>> records;
-    private int batchSize;
-    private long earliestLocalLogOffset;
+    private Integer batchSize;
+    private Long earliestLocalLogOffset;
 
     public ProducableSpec(List<ProducerRecord<String, String>> records,
-                          int batchSize,
-                          long earliestLocalLogOffset) {
+                          Integer batchSize,
+                          Long earliestLocalLogOffset) {
         this.records = records;
         this.batchSize = batchSize;
         this.earliestLocalLogOffset = earliestLocalLogOffset;
@@ -39,15 +39,15 @@ public final class ProducableSpec {
         return records;
     }
 
-    public int getBatchSize() {
+    public Integer getBatchSize() {
         return batchSize;
     }
 
-    public void setBatchSize(int batchSize) {
+    public void setBatchSize(Integer batchSize) {
         this.batchSize = batchSize;
     }
 
-    public long getEarliestLocalLogOffset() {
+    public Long getEarliestLocalLogOffset() {
         return earliestLocalLogOffset;
     }
 

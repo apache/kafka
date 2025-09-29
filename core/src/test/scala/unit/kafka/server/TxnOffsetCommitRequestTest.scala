@@ -16,20 +16,21 @@
  */
 package kafka.server
 
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.utils.TestUtils
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{EndTxnRequest, JoinGroupRequest}
+import org.apache.kafka.common.requests.JoinGroupRequest
 import org.apache.kafka.common.test.ClusterInstance
-import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.utils.ProducerIdAndEpoch
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.junit.jupiter.api.Assertions.{assertNotEquals, assertThrows}
+import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue, fail}
 
-@ClusterTestDefaults(
-  types = Array(Type.KRAFT),
-  serverProperties = Array(
+import scala.jdk.CollectionConverters.IterableHasAsScala
+
+@ClusterTestDefaults(types = Array(Type.KRAFT), serverProperties = Array(
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
     new ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, value = "1"),
@@ -39,26 +40,30 @@ import org.junit.jupiter.api.Assertions.{assertNotEquals, assertThrows}
 class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
   @ClusterTest
-  def testTxnOffsetCommitWithNewConsumerGroupProtocol(): Unit = {
+  def testTxnOffsetCommitWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
     testTxnOffsetCommit(true)
   }
 
   @ClusterTest
-  def testTxnOffsetCommitWithOldConsumerGroupProtocol(): Unit = {
+  def testTxnOffsetCommitWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
     testTxnOffsetCommit(false)
   }
 
-  @ClusterTest
-  def testDelayedTxnOffsetCommitWithBumpedEpochIsRejectedWithNewConsumerGroupProtocol(): Unit = {
-    testDelayedTxnOffsetCommitWithBumpedEpochIsRejected(true)
-  }
-
-  @ClusterTest
-  def testDelayedTxnOffsetCommitWithBumpedEpochIsRejectedWithOldConsumerGroupProtocol(): Unit = {
-    testDelayedTxnOffsetCommitWithBumpedEpochIsRejected(false)
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
+    )
+  )
+  def testTxnOffsetCommitWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
+    testTxnOffsetCommit(false)
   }
 
   private def testTxnOffsetCommit(useNewProtocol: Boolean): Unit = {
+    if (useNewProtocol && !isNewGroupCoordinatorEnabled) {
+      fail("Cannot use the new protocol with the old group coordinator.")
+    }
+
     val topic = "topic"
     val partition = 0
     val transactionalId = "txn"
@@ -72,8 +77,8 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
     // Join the consumer group. Note that we don't heartbeat here so we must use
     // a session long enough for the duration of the test.
     val (memberId: String, memberEpoch: Int) = joinConsumerGroup(groupId, useNewProtocol)
-    assertNotEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, memberId)
-    assertNotEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, memberEpoch)
+    assertTrue(memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID)
+    assertTrue(memberEpoch != JoinGroupRequest.UNKNOWN_GENERATION_ID)
 
     createTopic(topic, 1)
 
@@ -185,7 +190,7 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
       transactionalId = transactionalId
     )
 
-    val originalOffset = fetchOffset(groupId, topic, partition)
+    val originalOffset = fetchOffset(topic, partition, groupId)
 
     commitTxnOffset(
       groupId = groupId,
@@ -214,107 +219,26 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
 
     TestUtils.waitUntilTrue(() =>
       try {
-        fetchOffset(groupId, topic, partition) == expectedOffset
+        fetchOffset(topic, partition, groupId) == expectedOffset
       } catch {
         case _: Throwable => false
       }, "txn commit offset validation failed"
     )
   }
 
-  private def testDelayedTxnOffsetCommitWithBumpedEpochIsRejected(useNewProtocol: Boolean): Unit = {
-    val topic = "topic"
-    val partition = 0
-    val transactionalId = "txn"
-    val groupId = "group"
-    val offset = 100L
-
-    // Creates the __consumer_offsets and __transaction_state topics because it won't be created automatically
-    // in this test because it does not use FindCoordinator API.
-    createOffsetsTopic()
-    createTransactionStateTopic()
-
-    // Join the consumer group. Note that we don't heartbeat here so we must use
-    // a session long enough for the duration of the test.
-    val (memberId: String, memberEpoch: Int) = joinConsumerGroup(groupId, useNewProtocol)
-    assertNotEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, memberId)
-    assertNotEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, memberEpoch)
-
-    createTopic(topic, 1)
-
-    for (version <- ApiKeys.TXN_OFFSET_COMMIT.oldestVersion to ApiKeys.TXN_OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
-      val useTV2 = version > EndTxnRequest.LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2
-
-      // Initialize producer. Wait until the coordinator finishes loading.
-      var producerIdAndEpoch: ProducerIdAndEpoch = null
-      TestUtils.waitUntilTrue(() =>
-        try {
-          producerIdAndEpoch = initProducerId(
-            transactionalId = transactionalId,
-            producerIdAndEpoch = ProducerIdAndEpoch.NONE,
-            expectedError = Errors.NONE
-          )
-          true
-        } catch {
-          case _: Throwable => false
-        }, "initProducerId request failed"
-      )
-
-      addOffsetsToTxn(
-        groupId = groupId,
-        producerId = producerIdAndEpoch.producerId,
-        producerEpoch = producerIdAndEpoch.epoch,
-        transactionalId = transactionalId
-      )
-
-      // Complete the transaction.
-      endTxn(
-        producerId = producerIdAndEpoch.producerId,
-        producerEpoch = producerIdAndEpoch.epoch,
-        transactionalId = transactionalId,
-        isTransactionV2Enabled = useTV2,
-        committed = true,
-        expectedError = Errors.NONE
-      )
-
-      // Start a new transaction. Wait for the previous transaction to complete.
-      TestUtils.waitUntilTrue(() =>
-        try {
-          addOffsetsToTxn(
-            groupId = groupId,
-            producerId = producerIdAndEpoch.producerId,
-            producerEpoch = if (useTV2) (producerIdAndEpoch.epoch + 1).toShort else producerIdAndEpoch.epoch,
-            transactionalId = transactionalId
-          )
-          true
-        } catch {
-          case _: Throwable => false
-        }, "addOffsetsToTxn request failed"
-      )
-
-      // Committing offset with old epoch succeeds for TV1 and fails for TV2.
-      commitTxnOffset(
-        groupId = groupId,
-        memberId = if (version >= 3) memberId else JoinGroupRequest.UNKNOWN_MEMBER_ID,
-        generationId = if (version >= 3) 1 else JoinGroupRequest.UNKNOWN_GENERATION_ID,
-        producerId = producerIdAndEpoch.producerId,
-        producerEpoch = producerIdAndEpoch.epoch,
-        transactionalId = transactionalId,
-        topic = topic,
-        partition = partition,
-        offset = offset,
-        expectedError = if (useTV2) Errors.INVALID_PRODUCER_EPOCH else Errors.NONE,
-        version = version.toShort
-      )
-
-      // Complete the transaction.
-      endTxn(
-        producerId = producerIdAndEpoch.producerId,
-        producerEpoch = if (useTV2) (producerIdAndEpoch.epoch + 1).toShort else producerIdAndEpoch.epoch,
-        transactionalId = transactionalId,
-        isTransactionV2Enabled = useTV2,
-        committed = true,
-        expectedError = Errors.NONE
-      )
-    }
+  private def fetchOffset(
+     topic: String,
+     partition: Int,
+     groupId: String
+  ): Long = {
+    val fetchOffsetsResp = fetchOffsets(
+      groups = Map(groupId -> List(new TopicPartition(topic, partition))),
+      requireStable = true,
+      version = ApiKeys.OFFSET_FETCH.latestVersion
+    )
+    val groupIdRecord = fetchOffsetsResp.find(_.groupId == groupId).head
+    val topicRecord = groupIdRecord.topics.asScala.find(_.name == topic).head
+    val partitionRecord = topicRecord.partitions.asScala.find(_.partitionIndex == partition).head
+    partitionRecord.committedOffset
   }
 }

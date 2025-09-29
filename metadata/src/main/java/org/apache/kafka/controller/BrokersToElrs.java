@@ -23,6 +23,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Map;
 
 import static org.apache.kafka.metadata.Replicas.NONE;
@@ -153,7 +154,7 @@ public class BrokersToElrs {
     BrokersToIsrs.PartitionsOnReplicaIterator partitionsWithBrokerInElr(int brokerId) {
         Map<Uuid, int[]> topicMap = elrMembers.get(brokerId);
         if (topicMap == null) {
-            topicMap = Map.of();
+            topicMap = Collections.emptyMap();
         }
         return new BrokersToIsrs.PartitionsOnReplicaIterator(topicMap, false);
     }

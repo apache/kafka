@@ -34,29 +34,18 @@ public abstract class AbstractStatus<T> {
     private final State state;
     private final String trace;
     private final String workerId;
-    private final String version;
     private final int generation;
 
     public AbstractStatus(T id,
                           State state,
                           String workerId,
                           int generation,
-                          String trace,
-                          String version) {
+                          String trace) {
         this.id = id;
         this.state = state;
         this.workerId = workerId;
         this.generation = generation;
         this.trace = trace;
-        this.version = version;
-    }
-
-    public AbstractStatus(T id,
-                          State state,
-                          String workerId,
-                          int generation,
-                          String trace) {
-        this(id, state, workerId, generation, trace, null);
     }
 
     public T id() {
@@ -79,17 +68,12 @@ public abstract class AbstractStatus<T> {
         return generation;
     }
 
-    public String version() {
-        return version;
-    }
-
     @Override
     public String toString() {
         return "Status{" +
                 "id=" + id +
                 ", state=" + state +
                 ", workerId='" + workerId + '\'' +
-                ", version='" + version + '\'' +
                 ", generation=" + generation +
                 '}';
     }
@@ -105,8 +89,7 @@ public abstract class AbstractStatus<T> {
                 && Objects.equals(id, that.id)
                 && state == that.state
                 && Objects.equals(trace, that.trace)
-                && Objects.equals(workerId, that.workerId)
-                && Objects.equals(version, that.version);
+                && Objects.equals(workerId, that.workerId);
     }
 
     @Override
@@ -115,7 +98,6 @@ public abstract class AbstractStatus<T> {
         result = 31 * result + (state != null ? state.hashCode() : 0);
         result = 31 * result + (trace != null ? trace.hashCode() : 0);
         result = 31 * result + (workerId != null ? workerId.hashCode() : 0);
-        result = 31 * result + (version != null ? version.hashCode() : 0);
         result = 31 * result + generation;
         return result;
     }

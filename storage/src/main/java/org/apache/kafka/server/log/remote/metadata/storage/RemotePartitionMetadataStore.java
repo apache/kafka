@@ -31,12 +31,12 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 
 /**
  * This class represents a store to maintain the {@link RemotePartitionDeleteMetadata} and {@link RemoteLogMetadataCache} for each topic partition.
@@ -106,12 +106,12 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
         idToRemoteLogMetadataCache.remove(topicIdPartition);
     }
 
-    Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition)
+    public Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition)
             throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).listAllRemoteLogSegments();
     }
 
-    Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition, int leaderEpoch)
+    public Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition, int leaderEpoch)
             throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).listRemoteLogSegments(leaderEpoch);
     }
@@ -124,34 +124,27 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
             throw new RemoteResourceNotFoundException("No resource found for partition: " + topicIdPartition);
         }
         if (!remoteLogMetadataCache.isInitialized()) {
-            try {
-                boolean initialized = remoteLogMetadataCache.awaitInitialized(100, TimeUnit.MILLISECONDS);
-                if (!initialized) {
-                    // Throwing a retriable ReplicaNotAvailableException here for clients retry.
-                    throw new ReplicaNotAvailableException("Remote log metadata cache is not initialized for partition: " + topicIdPartition);
-                }
-            } catch (InterruptedException ex) {
-                throw new RemoteResourceNotFoundException("Couldn't initialize remote log metadata cache for partition: " + topicIdPartition);
-            }
+            // Throwing a retriable ReplicaNotAvailableException here for clients retry.
+            throw new ReplicaNotAvailableException("Remote log metadata cache is not initialized for partition: " + topicIdPartition);
         }
         return remoteLogMetadataCache;
     }
 
-    Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
-                                                                long offset,
-                                                                int epochForOffset)
+    public Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
+                                                                       long offset,
+                                                                       int epochForOffset)
             throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).remoteLogSegmentMetadata(epochForOffset, offset);
     }
 
-    Optional<RemoteLogSegmentMetadata> nextSegmentWithTxnIndex(TopicIdPartition topicIdPartition,
-                                                               int epoch,
-                                                               long offset) throws RemoteStorageException {
+    public Optional<RemoteLogSegmentMetadata> nextSegmentWithTxnIndex(TopicIdPartition topicIdPartition,
+                                                                      int epoch,
+                                                                      long offset) throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).nextSegmentWithTxnIndex(epoch, offset);
     }
 
-    Optional<Long> highestLogOffset(TopicIdPartition topicIdPartition,
-                                    int leaderEpoch) throws RemoteStorageException {
+    public Optional<Long> highestLogOffset(TopicIdPartition topicIdPartition,
+                                           int leaderEpoch) throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).highestOffsetForEpoch(leaderEpoch);
     }
 
@@ -161,8 +154,8 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
 
         // Clear the entries by creating unmodifiable empty maps.
         // Practically, we do not use the same instances that are closed.
-        idToPartitionDeleteMetadata = Map.of();
-        idToRemoteLogMetadataCache = Map.of();
+        idToPartitionDeleteMetadata = Collections.emptyMap();
+        idToRemoteLogMetadataCache = Collections.emptyMap();
     }
 
     @Override

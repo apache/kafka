@@ -17,13 +17,10 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.InvalidUpdateVersionException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.internals.BatchAccumulator;
-import org.apache.kafka.raft.internals.KRaftVersionUpgrade;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.server.common.KRaftVersion;
 
@@ -32,14 +29,18 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
-import java.util.List;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static java.util.Collections.emptySet;
+import static java.util.Collections.singleton;
 import static org.apache.kafka.raft.LeaderState.CHECK_QUORUM_TIMEOUT_FACTOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -48,36 +49,23 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class LeaderStateTest {
-    private final VoterSet.VoterNode localVoterNode = VoterSetTest.voterNode(ReplicaKey.of(0, Uuid.randomUuid()));
+    private final ReplicaKey localReplicaKey = ReplicaKey.of(0, Uuid.randomUuid());
     private final int epoch = 5;
     private final LogContext logContext = new LogContext();
+    private final BatchAccumulator<?> accumulator = Mockito.mock(BatchAccumulator.class);
     private final MockTime time = new MockTime();
     private final int fetchTimeoutMs = 2000;
     private final int checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
     private final int beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
+    private final KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
 
     private LeaderState<?> newLeaderState(
         VoterSet voters,
-        long epochStartOffset,
-        KRaftVersion kraftVersion
-    ) {
-        return newLeaderState(
-            voters,
-            epochStartOffset,
-            kraftVersion,
-            Mockito.mock(BatchAccumulator.class)
-        );
-    }
-
-    private LeaderState<?> newLeaderState(
-        VoterSet voters,
-        long epochStartOffset,
-        KRaftVersion kraftVersion,
-        BatchAccumulator<?> accumulator
+        long epochStartOffset
     ) {
         return new LeaderState<>(
             time,
-            localVoterNode,
+            localReplicaKey,
             epoch,
             epochStartOffset,
             voters,
@@ -85,6 +73,7 @@ public class LeaderStateTest {
             kraftVersion,
             voters.voterIds(),
             accumulator,
+            voters.listeners(localReplicaKey.id()),
             fetchTimeoutMs,
             logContext,
             new KafkaRaftMetrics(new Metrics(), "raft")
@@ -94,13 +83,11 @@ public class LeaderStateTest {
     private VoterSet localWithRemoteVoterSet(IntStream remoteIds, boolean withDirectoryId) {
         Map<Integer, VoterSet.VoterNode> voters = VoterSetTest.voterMap(remoteIds, withDirectoryId);
         if (withDirectoryId) {
-            voters.put(localVoterNode.voterKey().id(), localVoterNode);
+            voters.put(localReplicaKey.id(), VoterSetTest.voterNode(localReplicaKey));
         } else {
             voters.put(
-                localVoterNode.voterKey().id(),
-                VoterSetTest.voterNode(
-                    ReplicaKey.of(localVoterNode.voterKey().id(), ReplicaKey.NO_DIRECTORY_ID)
-                )
+                localReplicaKey.id(),
+                VoterSetTest.voterNode(ReplicaKey.of(localReplicaKey.id(), ReplicaKey.NO_DIRECTORY_ID))
             );
         }
 
@@ -109,8 +96,8 @@ public class LeaderStateTest {
 
     private VoterSet localWithRemoteVoterSet(Stream<ReplicaKey> remoteReplicaKeys, boolean withDirectoryId) {
         ReplicaKey actualLocalVoter = withDirectoryId ?
-            localVoterNode.voterKey() :
-            ReplicaKey.of(localVoterNode.voterKey().id(), ReplicaKey.NO_DIRECTORY_ID);
+            localReplicaKey :
+            ReplicaKey.of(localReplicaKey.id(), ReplicaKey.NO_DIRECTORY_ID);
 
         return VoterSetTest.voterSet(
             Stream.concat(Stream.of(actualLocalVoter), remoteReplicaKeys)
@@ -119,23 +106,20 @@ public class LeaderStateTest {
 
     @Test
     public void testRequireNonNullAccumulator() {
-        VoterSet voterSet = VoterSetTest.voterSet(Stream.of(localVoterNode.voterKey()));
+        VoterSet voterSet = VoterSetTest.voterSet(Stream.of(localReplicaKey));
         assertThrows(
             NullPointerException.class,
             () -> new LeaderState<>(
                 new MockTime(),
-                voterSet.voterNodes()
-                    .stream()
-                    .filter(node -> node.voterKey().equals(localVoterNode.voterKey()))
-                    .findFirst()
-                    .get(),
+                localReplicaKey,
                 epoch,
                 0,
                 voterSet,
                 OptionalLong.of(0),
-                KRaftVersion.KRAFT_VERSION_1,
-                Set.of(),
+                kraftVersion,
+                Collections.emptySet(),
                 null,
+                Endpoints.empty(),
                 fetchTimeoutMs,
                 logContext,
                 new KafkaRaftMetrics(new Metrics(), "raft")
@@ -150,39 +134,33 @@ public class LeaderStateTest {
         ReplicaKey node2 = replicaKey(2, withDirectoryId);
         LeaderState<?> state = newLeaderState(
             localWithRemoteVoterSet(Stream.of(node1, node2), withDirectoryId),
-            0L,
-            KRaftVersion.KRAFT_VERSION_1
+            0L
         );
         assertEquals(Set.of(node1, node2), state.nonAcknowledgingVoters());
         state.addAcknowledgementFrom(node1.id());
-        assertEquals(Set.of(node2), state.nonAcknowledgingVoters());
+        assertEquals(singleton(node2), state.nonAcknowledgingVoters());
         state.addAcknowledgementFrom(node2.id());
-        assertEquals(Set.of(), state.nonAcknowledgingVoters());
+        assertEquals(emptySet(), state.nonAcknowledgingVoters());
     }
 
     @Test
     public void testNonFollowerAcknowledgement() {
         int nonVoterId = 1;
         LeaderState<?> state = newLeaderState(
-            VoterSetTest.voterSet(Stream.of(localVoterNode.voterKey())),
-            0L,
-            KRaftVersion.KRAFT_VERSION_1
+            VoterSetTest.voterSet(Stream.of(localReplicaKey)),
+            0L
         );
         assertThrows(IllegalArgumentException.class, () -> state.addAcknowledgementFrom(nonVoterId));
     }
 
     @Test
     public void testUpdateHighWatermarkQuorumSizeOne() {
-        VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterNode.voterKey()));
-        LeaderState<?> state = newLeaderState(
-            voters,
-            15L,
-            KRaftVersion.KRAFT_VERSION_1
-        );
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(localReplicaKey));
+        LeaderState<?> state = newLeaderState(voters, 15L);
 
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), voters));
-        assertEquals(Set.of(), state.nonAcknowledgingVoters());
+        assertEquals(emptySet(), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertTrue(state.updateLocalState(new LogOffsetMetadata(16L), voters));
         assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
@@ -192,12 +170,8 @@ public class LeaderStateTest {
 
     @Test
     public void testNonMonotonicLocalEndOffsetUpdate() {
-        VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterNode.voterKey()));
-        LeaderState<?> state = newLeaderState(
-            voters,
-            15L,
-            KRaftVersion.KRAFT_VERSION_1
-        );
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(localReplicaKey));
+        LeaderState<?> state = newLeaderState(voters, 15L);
 
         assertEquals(Optional.empty(), state.highWatermark());
         assertTrue(state.updateLocalState(new LogOffsetMetadata(16L), voters));
@@ -210,12 +184,8 @@ public class LeaderStateTest {
 
     @Test
     public void testIdempotentEndOffsetUpdate() {
-        VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterNode.voterKey()));
-        LeaderState<?> state = newLeaderState(
-            voters,
-            15L,
-            KRaftVersion.KRAFT_VERSION_1
-        );
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(localReplicaKey));
+        LeaderState<?> state = newLeaderState(voters, 15L);
         assertEquals(Optional.empty(), state.highWatermark());
         assertTrue(state.updateLocalState(new LogOffsetMetadata(16L), voters));
         assertFalse(state.updateLocalState(new LogOffsetMetadata(16L), voters));
@@ -224,12 +194,8 @@ public class LeaderStateTest {
 
     @Test
     public void testUpdateHighWatermarkMetadata() {
-        VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterNode.voterKey()));
-        LeaderState<?> state = newLeaderState(
-            voters,
-            15L,
-            KRaftVersion.KRAFT_VERSION_1
-        );
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(localReplicaKey));
+        LeaderState<?> state = newLeaderState(voters, 15L);
         assertEquals(Optional.empty(), state.highWatermark());
 
         LogOffsetMetadata initialHw = new LogOffsetMetadata(16L, Optional.of(new MockOffsetMetadata("bar")));
@@ -247,17 +213,13 @@ public class LeaderStateTest {
         ReplicaKey otherNodeKey = replicaKey(1, withDirectoryId);
 
         VoterSet voters = localWithRemoteVoterSet(Stream.of(otherNodeKey), withDirectoryId);
-        LeaderState<?> state = newLeaderState(
-            voters,
-            10L,
-            KRaftVersion.KRAFT_VERSION_1
-        );
+        LeaderState<?> state = newLeaderState(voters, 10L);
 
         assertFalse(state.updateLocalState(new LogOffsetMetadata(13L), voters));
-        assertEquals(Set.of(otherNodeKey), state.nonAcknowledgingVoters());
+        assertEquals(singleton(otherNodeKey), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateReplicaState(otherNodeKey, 0, new LogOffsetMetadata(10L)));
-        assertEquals(Set.of(), state.nonAcknowledgingVoters());
+        assertEquals(emptySet(), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertTrue(state.updateReplicaState(otherNodeKey, 0, new LogOffsetMetadata(11L)));
         assertEquals(Optional.of(new LogOffsetMetadata(11L)), state.highWatermark());
@@ -272,20 +234,16 @@ public class LeaderStateTest {
         ReplicaKey nodeKey2 = replicaKey(2, withDirectoryId);
 
         VoterSet voters = localWithRemoteVoterSet(Stream.of(nodeKey1, nodeKey2), withDirectoryId);
-        LeaderState<?> state = newLeaderState(
-            voters,
-            10L,
-            KRaftVersion.KRAFT_VERSION_1
-        );
+        LeaderState<?> state = newLeaderState(voters, 10L);
 
         assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), voters));
         assertEquals(Set.of(nodeKey1, nodeKey2), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateReplicaState(nodeKey1, 0, new LogOffsetMetadata(10L)));
-        assertEquals(Set.of(nodeKey2), state.nonAcknowledgingVoters());
+        assertEquals(singleton(nodeKey2), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateReplicaState(nodeKey2, 0, new LogOffsetMetadata(10L)));
-        assertEquals(Set.of(), state.nonAcknowledgingVoters());
+        assertEquals(emptySet(), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertTrue(state.updateReplicaState(nodeKey2, 0, new LogOffsetMetadata(15L)));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
@@ -303,11 +261,7 @@ public class LeaderStateTest {
         ReplicaKey nodeKey2 = ReplicaKey.of(2, Uuid.randomUuid());
 
         VoterSet originalVoters  = localWithRemoteVoterSet(Stream.of(nodeKey1), true);
-        LeaderState<?> state = newLeaderState(
-            originalVoters,
-            5L,
-            KRaftVersion.KRAFT_VERSION_1
-        );
+        LeaderState<?> state = newLeaderState(originalVoters, 5L);
 
         assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoters));
         assertTrue(state.updateReplicaState(nodeKey1, 0, new LogOffsetMetadata(10L)));
@@ -337,11 +291,7 @@ public class LeaderStateTest {
 
         // start with three voters with HW at 15L
         VoterSet originalVoters = localWithRemoteVoterSet(Stream.of(nodeKey1, nodeKey2), true);
-        LeaderState<?> state = newLeaderState(
-            originalVoters,
-            5L,
-            KRaftVersion.KRAFT_VERSION_1
-        );
+        LeaderState<?> state = newLeaderState(originalVoters, 5L);
 
         assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoters));
         assertTrue(state.updateReplicaState(nodeKey1, 0, new LogOffsetMetadata(15L)));
@@ -375,11 +325,7 @@ public class LeaderStateTest {
         ReplicaKey nodeKey2 = ReplicaKey.of(2, Uuid.randomUuid());
 
         VoterSet originalVoters = localWithRemoteVoterSet(Stream.of(nodeKey1, nodeKey2), true);
-        LeaderState<?> state = newLeaderState(
-            originalVoters,
-            10L,
-            KRaftVersion.KRAFT_VERSION_1
-        );
+        LeaderState<?> state = newLeaderState(originalVoters, 10L);
 
         assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoters));
         assertTrue(state.updateReplicaState(nodeKey1, 0, new LogOffsetMetadata(15L)));
@@ -412,11 +358,7 @@ public class LeaderStateTest {
         ReplicaKey nodeKey2 = ReplicaKey.of(2, Uuid.randomUuid());
 
         VoterSet originalVoters = localWithRemoteVoterSet(Stream.of(nodeKey1, nodeKey2), true);
-        LeaderState<?> state = newLeaderState(
-            originalVoters,
-            10L,
-            KRaftVersion.KRAFT_VERSION_1
-        );
+        LeaderState<?> state = newLeaderState(originalVoters, 10L);
 
         assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoters));
         assertTrue(state.updateReplicaState(nodeKey1, 0, new LogOffsetMetadata(15L)));
@@ -424,7 +366,7 @@ public class LeaderStateTest {
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
 
         // removing leader should not decrement HW to 10L
-        VoterSet votersWithoutLeader = originalVoters.removeVoter(localVoterNode.voterKey()).get();
+        VoterSet votersWithoutLeader = originalVoters.removeVoter(localReplicaKey).get();
         assertFalse(state.updateLocalState(new LogOffsetMetadata(17L), votersWithoutLeader));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
 
@@ -450,11 +392,7 @@ public class LeaderStateTest {
         ReplicaKey nodeKey1 = replicaKey(1, withDirectoryId);
 
         VoterSet voters = localWithRemoteVoterSet(Stream.of(nodeKey1), withDirectoryId);
-        LeaderState<?> state = newLeaderState(
-            voters,
-            0L,
-            KRaftVersion.KRAFT_VERSION_1
-        );
+        LeaderState<?> state = newLeaderState(voters, 0L);
 
         state.updateLocalState(new LogOffsetMetadata(10L), voters);
         state.updateReplicaState(nodeKey1, time.milliseconds(), new LogOffsetMetadata(10L));
@@ -475,11 +413,7 @@ public class LeaderStateTest {
         long leaderEndOffset = 15L;
 
         VoterSet voters = localWithRemoteVoterSet(Stream.of(nodeKey1, nodeKey2), withDirectoryId);
-        LeaderState<?> state = newLeaderState(
-            voters,
-            leaderStartOffset,
-            KRaftVersion.KRAFT_VERSION_1
-        );
+        LeaderState<?> state = newLeaderState(voters, leaderStartOffset);
 
         state.updateLocalState(new LogOffsetMetadata(leaderEndOffset), voters);
         assertEquals(Optional.empty(), state.highWatermark());
@@ -488,7 +422,7 @@ public class LeaderStateTest {
 
         // Leader should not be included; the follower with larger offset should be prioritized.
         assertEquals(
-            List.of(nodeKey2, nodeKey1),
+            Arrays.asList(nodeKey2, nodeKey1),
             state.nonLeaderVotersByDescendingFetchOffset()
         );
     }
@@ -506,11 +440,7 @@ public class LeaderStateTest {
             Stream.of(nodeKey1, nodeKey2, nodeKey3, nodeKey4),
             withDirectoryId
         );
-        LeaderState<?> state = newLeaderState(
-            voters,
-            0L,
-            KRaftVersion.KRAFT_VERSION_1
-        );
+        LeaderState<?> state = newLeaderState(voters, 0L);
 
         assertEquals(checkQuorumTimeoutMs, state.timeUntilCheckQuorumExpires(time.milliseconds()));
         int resignLeadershipTimeout = checkQuorumTimeoutMs;
@@ -546,11 +476,7 @@ public class LeaderStateTest {
         ReplicaKey nodeKey3 = ReplicaKey.of(3, Uuid.randomUuid());
 
         VoterSet originalVoters  = localWithRemoteVoterSet(Stream.of(nodeKey1, nodeKey2), true);
-        LeaderState<?> state = newLeaderState(
-            originalVoters,
-            0L,
-            KRaftVersion.KRAFT_VERSION_1
-        );
+        LeaderState<?> state = newLeaderState(originalVoters, 0L);
         assertEquals(checkQuorumTimeoutMs, state.timeUntilCheckQuorumExpires(time.milliseconds()));
 
         // checkQuorum timeout not exceeded, should not expire the timer
@@ -575,7 +501,7 @@ public class LeaderStateTest {
         assertEquals(checkQuorumTimeoutMs, state.timeUntilCheckQuorumExpires(time.milliseconds()));
 
         // removing leader from the voter set
-        VoterSet votersWithoutLeader = votersWithNode3.removeVoter(localVoterNode.voterKey()).get();
+        VoterSet votersWithoutLeader = votersWithNode3.removeVoter(localReplicaKey).get();
         state.updateLocalState(new LogOffsetMetadata(1L), votersWithoutLeader);
 
         time.sleep(checkQuorumTimeoutMs / 2);
@@ -594,9 +520,8 @@ public class LeaderStateTest {
 
         // Only 1 voter quorum
         LeaderState<?> state = newLeaderState(
-            VoterSetTest.voterSet(Stream.of(localVoterNode.voterKey())),
-            0L,
-            KRaftVersion.KRAFT_VERSION_1
+            VoterSetTest.voterSet(Stream.of(localReplicaKey)),
+            0L
         );
         assertEquals(Long.MAX_VALUE, state.timeUntilCheckQuorumExpires(time.milliseconds()));
 
@@ -614,15 +539,11 @@ public class LeaderStateTest {
 
     @Test
     public void testLeaderEndpoints() {
-        VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterNode.voterKey()));
-        LeaderState<?> state = newLeaderState(
-            voters,
-            0L,
-            KRaftVersion.KRAFT_VERSION_1
-        );
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(localReplicaKey));
+        LeaderState<?> state = newLeaderState(voters, 0L);
 
         assertNotEquals(Endpoints.empty(), state.leaderEndpoints());
-        assertEquals(voters.listeners(localVoterNode.voterKey().id()), state.leaderEndpoints());
+        assertEquals(voters.listeners(localReplicaKey.id()), state.leaderEndpoints());
     }
 
     @Test
@@ -637,11 +558,7 @@ public class LeaderStateTest {
             false
         );
 
-        LeaderState<?> state = newLeaderState(
-            votersBeforeUpgrade,
-            0L,
-            KRaftVersion.KRAFT_VERSION_1
-        );
+        LeaderState<?> state = newLeaderState(votersBeforeUpgrade, 0L);
 
         assertFalse(state.updateLocalState(new LogOffsetMetadata(10L), votersBeforeUpgrade));
         assertTrue(state.updateReplicaState(nodeKey1, 0L, new LogOffsetMetadata(10L)));
@@ -657,29 +574,18 @@ public class LeaderStateTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testGrantVote(boolean isLogUpToDate) {
-        int[] remoteIds = {1, 2, 3};
         LeaderState<?> state = newLeaderState(
-            VoterSetTest.voterSet(
-                VoterSetTest.voterMap(
-                    IntStream.concat(IntStream.of(localVoterNode.voterKey().id()), IntStream.of(remoteIds)),
-                    false
-                )
-            ),
-            1,
-            KRaftVersion.KRAFT_VERSION_1
+            VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), false)),
+            1
         );
 
-        IntStream.of(remoteIds).forEach(id ->
-            List.of(true, false).forEach(isPrevote ->
-                assertFalse(
-                    state.canGrantVote(
-                        ReplicaKey.of(id, ReplicaKey.NO_DIRECTORY_ID),
-                        isLogUpToDate,
-                        isPrevote
-                    )
-                )
-            )
-        );
+        assertFalse(state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true));
+        assertFalse(state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true));
+        assertFalse(state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true));
+
+        assertFalse(state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, false));
+        assertFalse(state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, false));
+        assertFalse(state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, false));
     }
 
     @ParameterizedTest
@@ -691,8 +597,7 @@ public class LeaderStateTest {
         VoterSet voters = localWithRemoteVoterSet(IntStream.of(follower1), withDirectoryId);
         LeaderState<?> state = newLeaderState(
             voters,
-            epochStartOffset,
-            KRaftVersion.KRAFT_VERSION_1
+            epochStartOffset
         );
         assertEquals(0, state.timeUntilBeginQuorumEpochTimerExpires(time.milliseconds()));
 
@@ -707,166 +612,25 @@ public class LeaderStateTest {
         assertEquals(0, state.timeUntilBeginQuorumEpochTimerExpires(time.milliseconds()));
     }
 
-    @Test
-    public void testVolatileVoters() {
-        int follower1 = 1;
-        long epochStartOffset = 10L;
+    private static class MockOffsetMetadata implements OffsetMetadata {
+        private final String value;
 
-        VoterSet voters = localWithRemoteVoterSet(IntStream.of(follower1), false);
-        LeaderState<?> state = newLeaderState(
-            voters,
-            epochStartOffset,
-            KRaftVersion.KRAFT_VERSION_0
-        );
+        private MockOffsetMetadata(String value) {
+            this.value = value;
+        }
 
-        var votersWithLeaderUpdated = state.volatileVoters().get();
-        assertEquals(
-            voters.updateVoterIgnoringDirectoryId(localVoterNode).get(),
-            votersWithLeaderUpdated.voters()
-        );
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            MockOffsetMetadata that = (MockOffsetMetadata) o;
+            return Objects.equals(value, that.value);
+        }
 
-        var updatedVoters = new KRaftVersionUpgrade.Voters(
-            votersWithLeaderUpdated
-                .voters()
-                .updateVoterIgnoringDirectoryId(VoterSetTest.voterNode(follower1, true))
-                .get()
-        );
-
-        // Upate in-memory voter and check state
-        assertTrue(
-            state.compareAndSetVolatileVoters(votersWithLeaderUpdated, updatedVoters)
-        );
-        assertEquals(updatedVoters, state.volatileVoters().get());
-
-        // Unable to perform atomic update
-        assertFalse(
-            state.compareAndSetVolatileVoters(votersWithLeaderUpdated, updatedVoters)
-        );
-    }
-
-    @Test
-    public void testInvalidMaybeAppendUpgradedKRaftVersion() {
-        int follower1 = 1;
-        int follower2 = 2;
-        long epochStartOffset = 10L;
-
-        VoterSet persistedVoters = localWithRemoteVoterSet(IntStream.of(follower1, follower2), false);
-        LeaderState<?> state = newLeaderState(
-            persistedVoters,
-            epochStartOffset,
-            KRaftVersion.KRAFT_VERSION_0
-        );
-
-        // none of the remove voters support kraft version 1 since the starting version is 0.
-        assertThrows(
-            InvalidUpdateVersionException.class,
-            () ->
-                state.maybeAppendUpgradedKRaftVersion(
-                    epoch,
-                    KRaftVersion.KRAFT_VERSION_1,
-                    KRaftVersion.KRAFT_VERSION_0,
-                    persistedVoters,
-                    false,
-                    time.milliseconds()
-                )
-        );
-
-        // epoch is less than the leader's epoch
-        assertThrows(
-            NotLeaderException.class,
-            () ->
-                state.maybeAppendUpgradedKRaftVersion(
-                    epoch - 1,
-                    KRaftVersion.KRAFT_VERSION_1,
-                    KRaftVersion.KRAFT_VERSION_0,
-                    persistedVoters,
-                    false,
-                    time.milliseconds()
-                )
-        );
-
-        // epoch is greater than the leader's epoch
-        assertThrows(
-            IllegalArgumentException.class,
-            () ->
-                state.maybeAppendUpgradedKRaftVersion(
-                    epoch + 1,
-                    KRaftVersion.KRAFT_VERSION_1,
-                    KRaftVersion.KRAFT_VERSION_0,
-                    persistedVoters,
-                    false,
-                    time.milliseconds()
-                )
-        );
-
-        // noop since the upgrade version is already 1
-        assertFalse(
-            state.maybeAppendUpgradedKRaftVersion(
-                epoch,
-                KRaftVersion.KRAFT_VERSION_1,
-                KRaftVersion.KRAFT_VERSION_1,
-                persistedVoters,
-                false,
-                time.milliseconds()
-            )
-        );
-    }
-
-    @Test
-    public void testMaybeAppendUpgradedKRaftVersion() {
-        int follower1 = 1;
-        int follower2 = 2;
-        long epochStartOffset = 10L;
-        BatchAccumulator<?> accumulator = Mockito.mock(BatchAccumulator.class);
-
-        VoterSet persistedVoters = localWithRemoteVoterSet(IntStream.of(follower1, follower2), false);
-        LeaderState<?> state = newLeaderState(
-            persistedVoters,
-            epochStartOffset,
-            KRaftVersion.KRAFT_VERSION_0,
-            accumulator
-        );
-
-        var updatedVoters = state.volatileVoters().get().voters();
-        updatedVoters = updatedVoters
-            .updateVoterIgnoringDirectoryId(VoterSetTest.voterNode(follower1, true))
-            .get();
-        updatedVoters = updatedVoters
-            .updateVoterIgnoringDirectoryId(VoterSetTest.voterNode(follower2, true))
-            .get();
-        state.compareAndSetVolatileVoters(
-            state.volatileVoters().get(),
-            new KRaftVersionUpgrade.Voters(updatedVoters)
-        );
-
-        assertTrue(
-            state.maybeAppendUpgradedKRaftVersion(
-                epoch,
-                KRaftVersion.KRAFT_VERSION_1,
-                KRaftVersion.KRAFT_VERSION_0,
-                persistedVoters,
-                false,
-                time.milliseconds()
-            )
-        );
-
-        // Expect control records after upgrading the kraft version.
-        Mockito.verify(accumulator).appendControlMessages(Mockito.any());
-
-        // maybe upgrade kraft version should be a noop after an upgrade
-        assertFalse(
-            state.maybeAppendUpgradedKRaftVersion(
-                epoch,
-                KRaftVersion.KRAFT_VERSION_1,
-                KRaftVersion.KRAFT_VERSION_0,
-                persistedVoters,
-                false,
-                time.milliseconds()
-            )
-        );
-    }
-
-    private record MockOffsetMetadata(String value) implements OffsetMetadata {
+        @Override
+        public int hashCode() {
+            return Objects.hash(value);
+        }
     }
 
     private ReplicaKey replicaKey(int id, boolean withDirectoryId) {

@@ -37,7 +37,9 @@ import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.server.quota.QuotaType
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 import scala.util.Using
@@ -65,13 +67,15 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     super.tearDown()
   }
 
-  @Test
-  def shouldBootstrapTwoBrokersWithLeaderThrottle(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def shouldBootstrapTwoBrokersWithLeaderThrottle(quorum: String): Unit = {
     shouldMatchQuotaReplicatingThroughAnAsymmetricTopology(true)
   }
 
-  @Test
-  def shouldBootstrapTwoBrokersWithFollowerThrottle(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def shouldBootstrapTwoBrokersWithFollowerThrottle(quorum: String): Unit = {
     shouldMatchQuotaReplicatingThroughAnAsymmetricTopology(false)
   }
 
@@ -190,8 +194,9 @@ class ReplicationQuotasTest extends QuorumTestHarness {
 
   def tp(partition: Int): TopicPartition = new TopicPartition(topic, partition)
 
-  @Test
-  def shouldThrottleOldSegments(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def shouldThrottleOldSegments(quorum: String): Unit = {
     /**
       * Simple test which ensures throttled replication works when the dataset spans many segments
       */

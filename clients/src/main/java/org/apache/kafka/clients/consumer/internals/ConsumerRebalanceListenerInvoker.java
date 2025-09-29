@@ -30,6 +30,7 @@ import org.slf4j.Logger;
 import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
+import java.util.stream.Collectors;
 
 /**
  * This class encapsulates the invocation of the callback methods defined in the {@link ConsumerRebalanceListener}
@@ -54,7 +55,7 @@ public class ConsumerRebalanceListenerInvoker {
     }
 
     public Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
-        log.info("Adding newly assigned partitions: {}", assignedPartitions);
+        log.info("Adding newly assigned partitions: {}", assignedPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
 
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
 
@@ -66,12 +67,8 @@ public class ConsumerRebalanceListenerInvoker {
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {
-                log.error(
-                    "User provided listener {} failed on invocation of onPartitionsAssigned for partitions {}",
-                    listener.get().getClass().getName(),
-                    assignedPartitions,
-                    e
-                );
+                log.error("User provided listener {} failed on invocation of onPartitionsAssigned for partitions {}",
+                        listener.get().getClass().getName(), assignedPartitions, e);
                 return e;
             }
         }
@@ -80,11 +77,11 @@ public class ConsumerRebalanceListenerInvoker {
     }
 
     public Exception invokePartitionsRevoked(final SortedSet<TopicPartition> revokedPartitions) {
-        log.info("Revoke previously assigned partitions {}", revokedPartitions);
+        log.info("Revoke previously assigned partitions {}", revokedPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
         Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
         revokePausedPartitions.retainAll(revokedPartitions);
         if (!revokePausedPartitions.isEmpty())
-            log.info("The pause flag in partitions {} will be removed due to revocation.", revokePausedPartitions);
+                log.info("The pause flag in partitions [{}] will be removed due to revocation.", revokePausedPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
 
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
 
@@ -96,12 +93,8 @@ public class ConsumerRebalanceListenerInvoker {
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {
-                log.error(
-                    "User provided listener {} failed on invocation of onPartitionsRevoked for partitions {}",
-                    listener.get().getClass().getName(),
-                    revokedPartitions,
-                    e
-                );
+                log.error("User provided listener {} failed on invocation of onPartitionsRevoked for partitions {}",
+                        listener.get().getClass().getName(), revokedPartitions, e);
                 return e;
             }
         }
@@ -110,11 +103,11 @@ public class ConsumerRebalanceListenerInvoker {
     }
 
     public Exception invokePartitionsLost(final SortedSet<TopicPartition> lostPartitions) {
-        log.info("Lost previously assigned partitions {}", lostPartitions);
+        log.info("Lost previously assigned partitions {}", lostPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
         Set<TopicPartition> lostPausedPartitions = subscriptions.pausedPartitions();
         lostPausedPartitions.retainAll(lostPartitions);
         if (!lostPausedPartitions.isEmpty())
-            log.info("The pause flag in partitions {} will be removed due to partition lost.", lostPartitions);
+            log.info("The pause flag in partitions [{}] will be removed due to partition lost.", lostPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
 
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
 
@@ -126,12 +119,8 @@ public class ConsumerRebalanceListenerInvoker {
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {
-                log.error(
-                    "User provided listener {} failed on invocation of onPartitionsLost for partitions {}",
-                    listener.get().getClass().getName(),
-                    lostPartitions,
-                    e
-                );
+                log.error("User provided listener {} failed on invocation of onPartitionsLost for partitions {}",
+                        listener.get().getClass().getName(), lostPartitions, e);
                 return e;
             }
         }

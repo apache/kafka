@@ -34,12 +34,12 @@ public class ClientQuotaImageNode implements MetadataNode {
 
     @Override
     public Collection<String> childNames() {
-        return image.quotas().keySet();
+        return image.quotaMap().keySet();
     }
 
     @Override
     public MetadataNode child(String name) {
-        Double result = image.quotas().get(name);
+        Double result = image.quotaMap().get(name);
         if (result == null) return null;
         return new MetadataLeafNode(result + "");
     }

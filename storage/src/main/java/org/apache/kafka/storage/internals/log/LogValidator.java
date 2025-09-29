@@ -45,6 +45,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class LogValidator {
 
@@ -60,11 +61,37 @@ public class LogValidator {
         void recordNoKeyCompactedTopic();
     }
 
-    public record ValidationResult(long logAppendTimeMs, MemoryRecords validatedRecords, long maxTimestampMs,
-                                   boolean messageSizeMaybeChanged, RecordValidationStats recordValidationStats) {
+    public static class ValidationResult {
+        public final long logAppendTimeMs;
+        public final MemoryRecords validatedRecords;
+        public final long maxTimestampMs;
+        // we only maintain batch level offset for max timestamp since we want to align the behavior of updating time
+        // indexing entries. The paths of follower append and replica recovery do not iterate all records, so they have no
+        // idea about record level offset for max timestamp.
+        public final long shallowOffsetOfMaxTimestamp;
+        public final boolean messageSizeMaybeChanged;
+        public final RecordValidationStats recordValidationStats;
+
+        public ValidationResult(long logAppendTimeMs, MemoryRecords validatedRecords, long maxTimestampMs,
+                                long shallowOffsetOfMaxTimestamp, boolean messageSizeMaybeChanged,
+                                RecordValidationStats recordValidationStats) {
+            this.logAppendTimeMs = logAppendTimeMs;
+            this.validatedRecords = validatedRecords;
+            this.maxTimestampMs = maxTimestampMs;
+            this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
+            this.messageSizeMaybeChanged = messageSizeMaybeChanged;
+            this.recordValidationStats = recordValidationStats;
+        }
     }
 
-    private record ApiRecordError(Errors apiError, RecordError recordError) {
+    private static class ApiRecordError {
+        final Errors apiError;
+        final RecordError recordError;
+
+        private ApiRecordError(Errors apiError, RecordError recordError) {
+            this.apiError = apiError;
+            this.recordError = recordError;
+        }
     }
 
     private final MemoryRecords records;
@@ -183,7 +210,7 @@ public class LogValidator {
                 Optional<ApiRecordError> recordError = validateRecord(batch, topicPartition,
                     record, recordIndex, now, timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, compactedTopic,
                     metricsRecorder);
-                recordError.ifPresent(recordErrors::add);
+                recordError.ifPresent(e -> recordErrors.add(e));
                 // we fail the batch if any record fails, so we stop appending if any record fails
                 if (recordErrors.isEmpty())
                     builder.appendWithOffset(offsetCounter.value++, record);
@@ -202,6 +229,7 @@ public class LogValidator {
             now,
             convertedRecords,
             info.maxTimestamp,
+            info.shallowOffsetOfMaxTimestamp,
             true,
             recordValidationStats);
     }
@@ -211,6 +239,8 @@ public class LogValidator {
                                                        MetricsRecorder metricsRecorder) {
         long now = time.milliseconds();
         long maxTimestamp = RecordBatch.NO_TIMESTAMP;
+        long shallowOffsetOfMaxTimestamp = -1L;
+        long initialOffset = offsetCounter.value;
 
         RecordBatch firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, CompressionType.NONE);
 
@@ -239,6 +269,7 @@ public class LogValidator {
 
             if (batch.magic() > RecordBatch.MAGIC_VALUE_V0 && maxBatchTimestamp > maxTimestamp) {
                 maxTimestamp = maxBatchTimestamp;
+                shallowOffsetOfMaxTimestamp = offsetCounter.value - 1;
             }
 
             batch.setLastOffset(offsetCounter.value - 1);
@@ -255,10 +286,23 @@ public class LogValidator {
         }
 
         if (timestampType == TimestampType.LOG_APPEND_TIME) {
-            if (toMagic == RecordBatch.MAGIC_VALUE_V0) {
-                maxTimestamp = RecordBatch.NO_TIMESTAMP;
-            } else {
-                maxTimestamp = now;
+            maxTimestamp = now;
+            // those checks should be equal to MemoryRecordsBuilder#info
+            switch (toMagic) {
+                case RecordBatch.MAGIC_VALUE_V0:
+                    maxTimestamp = RecordBatch.NO_TIMESTAMP;
+                    // value will be the default value: -1
+                    shallowOffsetOfMaxTimestamp = -1;
+                    break;
+                case RecordBatch.MAGIC_VALUE_V1:
+                    // Those single-record batches have same max timestamp, so the initial offset is equal with
+                    // the last offset of earliest batch
+                    shallowOffsetOfMaxTimestamp = initialOffset;
+                    break;
+                default:
+                    // there is only one batch so use the last offset
+                    shallowOffsetOfMaxTimestamp = offsetCounter.value - 1;
+                    break;
             }
         }
 
@@ -266,6 +310,7 @@ public class LogValidator {
             now,
             records,
             maxTimestamp,
+            shallowOffsetOfMaxTimestamp,
             false,
             RecordValidationStats.EMPTY);
     }
@@ -327,12 +372,12 @@ public class LogValidator {
 
                     Optional<ApiRecordError> recordError = validateRecordCompression(sourceCompressionType,
                         recordIndex, record);
-                    if (recordError.isEmpty()) {
+                    if (!recordError.isPresent()) {
                         recordError = validateRecord(batch, topicPartition, record, recordIndex, now,
                             timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, compactedTopic, metricsRecorder);
                     }
 
-                    if (recordError.isEmpty()
+                    if (!recordError.isPresent()
                             && batch.magic() > RecordBatch.MAGIC_VALUE_V0
                             && toMagic > RecordBatch.MAGIC_VALUE_V0) {
 
@@ -389,6 +434,7 @@ public class LogValidator {
                 now,
                 records,
                 maxTimestamp,
+                lastOffset,
                 false,
                 recordValidationStats);
         }
@@ -430,6 +476,7 @@ public class LogValidator {
             logAppendTime,
             records,
             info.maxTimestamp,
+            info.shallowOffsetOfMaxTimestamp,
             true,
             recordValidationStats);
     }
@@ -590,7 +637,7 @@ public class LogValidator {
 
     private static void processRecordErrors(List<ApiRecordError> recordErrors) {
         if (!recordErrors.isEmpty()) {
-            List<RecordError> errors = recordErrors.stream().map(e -> e.recordError).toList();
+            List<RecordError> errors = recordErrors.stream().map(e -> e.recordError).collect(Collectors.toList());
             if (recordErrors.stream().anyMatch(e -> e.apiError == Errors.INVALID_TIMESTAMP)) {
                 throw new RecordValidationException(new InvalidTimestampException(
                     "One or more records have been rejected due to invalid timestamp"), errors);

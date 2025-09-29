@@ -33,6 +33,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 
+import static java.util.Collections.emptyList;
+import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.config.TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG;
 
 
@@ -42,7 +44,7 @@ import static org.apache.kafka.common.config.TopicConfig.MIN_IN_SYNC_REPLICAS_CO
  * determining the type of config keys (string, int, password, etc.)
  */
 public class KafkaConfigSchema {
-    public static final KafkaConfigSchema EMPTY = new KafkaConfigSchema(Map.of(), Map.of());
+    public static final KafkaConfigSchema EMPTY = new KafkaConfigSchema(emptyMap(), emptyMap());
 
     private static final ConfigDef EMPTY_CONFIG_DEF = new ConfigDef();
 
@@ -55,17 +57,28 @@ public class KafkaConfigSchema {
      * makes sense to put it here.
      */
     public static ConfigEntry.ConfigType translateConfigType(ConfigDef.Type type) {
-        return switch (type) {
-            case BOOLEAN -> ConfigEntry.ConfigType.BOOLEAN;
-            case STRING -> ConfigEntry.ConfigType.STRING;
-            case INT -> ConfigEntry.ConfigType.INT;
-            case SHORT -> ConfigEntry.ConfigType.SHORT;
-            case LONG -> ConfigEntry.ConfigType.LONG;
-            case DOUBLE -> ConfigEntry.ConfigType.DOUBLE;
-            case LIST -> ConfigEntry.ConfigType.LIST;
-            case CLASS -> ConfigEntry.ConfigType.CLASS;
-            case PASSWORD -> ConfigEntry.ConfigType.PASSWORD;
-        };
+        switch (type) {
+            case BOOLEAN:
+                return ConfigEntry.ConfigType.BOOLEAN;
+            case STRING:
+                return ConfigEntry.ConfigType.STRING;
+            case INT:
+                return ConfigEntry.ConfigType.INT;
+            case SHORT:
+                return ConfigEntry.ConfigType.SHORT;
+            case LONG:
+                return ConfigEntry.ConfigType.LONG;
+            case DOUBLE:
+                return ConfigEntry.ConfigType.DOUBLE;
+            case LIST:
+                return ConfigEntry.ConfigType.LIST;
+            case CLASS:
+                return ConfigEntry.ConfigType.CLASS;
+            case PASSWORD:
+                return ConfigEntry.ConfigType.PASSWORD;
+            default:
+                return ConfigEntry.ConfigType.UNKNOWN;
+        }
     }
 
     private static final Map<ConfigEntry.ConfigSource, DescribeConfigsResponse.ConfigSource> TRANSLATE_CONFIG_SOURCE_MAP;
@@ -155,10 +168,6 @@ public class KafkaConfigSchema {
         ConfigDef configDef = configDefs.getOrDefault(ConfigResource.Type.TOPIC, EMPTY_CONFIG_DEF);
         HashMap<String, ConfigEntry> effectiveConfigs = new HashMap<>();
         for (ConfigDef.ConfigKey configKey : configDef.configKeys().values()) {
-            // This config is internal; if the user hasn't set it explicitly, it should not be returned.
-            if (configKey.internalConfig && !dynamicTopicConfigs.containsKey(configKey.name)) {
-                continue;
-            }
             ConfigEntry entry = resolveEffectiveTopicConfig(configKey, staticNodeConfig,
                 dynamicClusterConfigs, dynamicNodeConfigs, dynamicTopicConfigs);
             effectiveConfigs.put(entry.name(), entry);
@@ -194,7 +203,7 @@ public class KafkaConfigSchema {
                 dynamicTopicConfigs.get(configKey.name),
                 ConfigSource.DYNAMIC_TOPIC_CONFIG, Function.identity());
         }
-        List<ConfigSynonym> synonyms = logConfigSynonyms.getOrDefault(configKey.name, List.of());
+        List<ConfigSynonym> synonyms = logConfigSynonyms.getOrDefault(configKey.name, emptyList());
         for (ConfigSynonym synonym : synonyms) {
             if (dynamicNodeConfigs.containsKey(synonym.name())) {
                 return toConfigEntry(configKey, dynamicNodeConfigs.get(synonym.name()),
@@ -224,7 +233,7 @@ public class KafkaConfigSchema {
         ConfigDef configDef = configDefs.getOrDefault(ConfigResource.Type.BROKER, EMPTY_CONFIG_DEF);
         ConfigDef.ConfigKey configKey = configDef.configKeys().get(configName);
         if (configKey == null) return null;
-        List<ConfigSynonym> synonyms = logConfigSynonyms.getOrDefault(configKey.name, List.of());
+        List<ConfigSynonym> synonyms = logConfigSynonyms.getOrDefault(configKey.name, emptyList());
         for (ConfigSynonym synonym : synonyms) {
             if (staticNodeConfig.containsKey(synonym.name())) {
                 return toConfigEntry(configKey, staticNodeConfig.get(synonym.name()),
@@ -269,7 +278,7 @@ public class KafkaConfigSchema {
             source,
             configKey.type().isSensitive(),
             false, // "readonly" is always false, for now.
-            List.of(), // we don't populate synonyms, for now.
+            emptyList(), // we don't populate synonyms, for now.
             translateConfigType(configKey.type()),
             configKey.documentation);
     }

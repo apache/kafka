@@ -69,7 +69,7 @@ public class DescribeUserScramCredentialsResult {
                     retval.completeExceptionally(Errors.forCode(optionalFirstFailedDescribe.get().errorCode()).exception(optionalFirstFailedDescribe.get().errorMessage()));
                 } else {
                     Map<String, UserScramCredentialsDescription> retvalMap = new HashMap<>();
-                    data.results().forEach(userResult ->
+                    data.results().stream().forEach(userResult ->
                             retvalMap.put(userResult.user(), new UserScramCredentialsDescription(userResult.user(),
                                     getScramCredentialInfosFor(userResult))));
                     retval.complete(retvalMap);

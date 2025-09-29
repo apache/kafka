@@ -21,6 +21,8 @@ import org.apache.kafka.common.Uuid;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.apache.kafka.metadata.placement.PartitionAssignmentTest.partitionAssignment;
@@ -31,9 +33,9 @@ public class TopicAssignmentTest {
 
     @Test
     public void testTopicAssignmentReplicas() {
-        List<Integer> replicasP0 = List.of(0, 1, 2);
-        List<Integer> replicasP1 = List.of(1, 2, 0);
-        List<PartitionAssignment> partitionAssignments = List.of(
+        List<Integer> replicasP0 = Arrays.asList(0, 1, 2);
+        List<Integer> replicasP1 = Arrays.asList(1, 2, 0);
+        List<PartitionAssignment> partitionAssignments = Arrays.asList(
             partitionAssignment(replicasP0),
             partitionAssignment(replicasP1)
         );
@@ -42,18 +44,18 @@ public class TopicAssignmentTest {
 
     @Test
     public void testConsistentEqualsAndHashCode() {
-        List<TopicAssignment> topicAssignments = List.of(
+        List<TopicAssignment> topicAssignments = Arrays.asList(
             new TopicAssignment(
-                List.of(
+                Collections.singletonList(
                     partitionAssignment(
-                        List.of(0, 1, 2)
+                        Arrays.asList(0, 1, 2)
                     )
                 )
             ),
             new TopicAssignment(
-                List.of(
+                Collections.singletonList(
                     partitionAssignment(
-                        List.of(1, 2, 0)
+                        Arrays.asList(1, 2, 0)
                     )
                 )
             )
@@ -75,17 +77,17 @@ public class TopicAssignmentTest {
 
     @Test
     public void testToString() {
-        List<Integer> replicas = List.of(0, 1, 2);
-        List<Uuid> directories = List.of(
+        List<Integer> replicas = Arrays.asList(0, 1, 2);
+        List<Uuid> directories = Arrays.asList(
                 Uuid.fromString("v56qeYzNRrqNtXsxzcReog"),
                 Uuid.fromString("MvUIAsOiRlSePeiBHdZrSQ"),
                 Uuid.fromString("jUqCchHtTHqMxeVv4dw1RA")
         );
-        List<PartitionAssignment> partitionAssignments = List.of(
+        List<PartitionAssignment> partitionAssignments = Collections.singletonList(
             new PartitionAssignment(replicas, directories::get)
         );
         TopicAssignment topicAssignment = new TopicAssignment(partitionAssignments);
-        assertEquals("TopicAssignment[assignments=[PartitionAssignment(replicas=[0, 1, 2], " +
-                "directories=[v56qeYzNRrqNtXsxzcReog, MvUIAsOiRlSePeiBHdZrSQ, jUqCchHtTHqMxeVv4dw1RA])]]", topicAssignment.toString());
+        assertEquals("TopicAssignment(assignments=[PartitionAssignment(replicas=[0, 1, 2], " +
+                "directories=[v56qeYzNRrqNtXsxzcReog, MvUIAsOiRlSePeiBHdZrSQ, jUqCchHtTHqMxeVv4dw1RA])])", topicAssignment.toString());
     }
 }

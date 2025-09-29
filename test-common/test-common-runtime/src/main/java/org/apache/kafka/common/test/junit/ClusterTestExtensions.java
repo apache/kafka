@@ -42,6 +42,8 @@ import org.junit.platform.commons.util.ReflectionUtils;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -77,15 +79,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * For example:
  *
  * <pre>
+ * &#64;ExtendWith(value = Array(classOf[ClusterTestExtensions]))
  * class SomeIntegrationTest {
- *   &#64;ClusterTest(brokers = 1, controllers = 1, types = {Type.KRAFT, Type.CO_KRAFT})
- *   void someTest(ClusterInstance cluster) {
+ *   &#64;ClusterTest(brokers = 1, controllers = 1, clusterType = ClusterType.Both)
+ *   def someTest(): Unit = {
  *     assertTrue(condition)
  *   }
  * }
  * </pre>
  *
- * will generate two invocations of "someTest" (since two cluster types were specified). For each invocation, the test class
+ * will generate two invocations of "someTest" (since ClusterType.Both was given). For each invocation, the test class
  * SomeIntegrationTest will be instantiated, lifecycle methods (before/after) will be run, and "someTest" will be invoked.
  *
  * A special system property "kafka.cluster.test.repeat" can be used to cause repeated invocation of the tests.
@@ -109,25 +112,13 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     private static final String PROCESS_REAPER_THREAD_PREFIX = "process reaper";
     private static final String RMI_THREAD_PREFIX = "RMI";
     private static final String DETECT_THREAD_LEAK_KEY = "detectThreadLeak";
-    private static final Set<String> SKIPPED_THREAD_PREFIX = Set.of(METRICS_METER_TICK_THREAD_PREFIX, SCALA_THREAD_PREFIX,
-            FORK_JOIN_POOL_THREAD_PREFIX, JUNIT_THREAD_PREFIX, ATTACH_LISTENER_THREAD_PREFIX, PROCESS_REAPER_THREAD_PREFIX,
-            RMI_THREAD_PREFIX, SystemTimer.SYSTEM_TIMER_THREAD_PREFIX);
+    private static final Set<String> SKIPPED_THREAD_PREFIX = Collections.unmodifiableSet(Stream.of(
+            METRICS_METER_TICK_THREAD_PREFIX, SCALA_THREAD_PREFIX, FORK_JOIN_POOL_THREAD_PREFIX, JUNIT_THREAD_PREFIX,
+            ATTACH_LISTENER_THREAD_PREFIX, PROCESS_REAPER_THREAD_PREFIX, RMI_THREAD_PREFIX, SystemTimer.SYSTEM_TIMER_THREAD_PREFIX)
+            .collect(Collectors.toSet()));
 
     @Override
     public boolean supportsTestTemplate(ExtensionContext context) {
-        return true;
-    }
-
-    /**
-     * Indicates whether this provider may return zero test template invocation contexts.
-     * Prior to JUnit 5.12, returning zero contexts was silently allowed. Starting from JUnit 5.12,
-     * a PreconditionViolationException is thrown unless this method explicitly returns {@code true}.
-     *
-     * @param context the extension context for the test template method
-     * @return {@code true} to allow this provider to return zero invocation contexts
-     * @see <a href="https://github.com/junit-team/junit5/commit/89a46dfa10c6447ef010fbff7903bfcb3c18975a">JUnit 5.12 Breaking Change</a>
-     */
-    public boolean mayReturnZeroTestTemplateInvocationContexts(ExtensionContext context) {
         return true;
     }
 
@@ -206,10 +197,14 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         String baseDisplayName,
         ClusterConfig config
     ) {
-        return switch (type) {
-            case KRAFT -> new RaftClusterInvocationContext(baseDisplayName, config, false);
-            case CO_KRAFT -> new RaftClusterInvocationContext(baseDisplayName, config, true);
-        };
+        switch (type) {
+            case KRAFT:
+                return new RaftClusterInvocationContext(baseDisplayName, config, false);
+            case CO_KRAFT:
+                return new RaftClusterInvocationContext(baseDisplayName, config, true);
+            default:
+                throw new IllegalArgumentException("Unsupported @Type value " + type);
+        }
     }
 
     List<TestTemplateInvocationContext> processClusterTemplate(ExtensionContext context, ClusterTemplate annot) {
@@ -220,7 +215,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         String baseDisplayName = context.getRequiredTestMethod().getName();
         int repeatCount = getTestRepeatCount();
         List<TestTemplateInvocationContext> contexts = IntStream.range(0, repeatCount)
-            .mapToObj(__ -> generateClusterConfiguration(context, annot.value()).stream())
+            .mapToObj(__ -> generateClusterConfigurations(context, annot.value()).stream())
             .flatMap(Function.identity())
             .flatMap(config -> config.clusterTypes().stream().map(type -> invocationContextForClusterType(type, baseDisplayName, config)))
             .collect(Collectors.toList());
@@ -233,7 +228,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     }
 
     @SuppressWarnings("unchecked")
-    private List<ClusterConfig> generateClusterConfiguration(
+    private List<ClusterConfig> generateClusterConfigurations(
         ExtensionContext context,
         String generateClustersMethods
     ) {
@@ -280,7 +275,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .collect(Collectors.toMap(ClusterFeature::feature, ClusterFeature::version));
 
         ClusterConfig config = ClusterConfig.builder()
-            .setTypes(Set.of(types))
+            .setTypes(new HashSet<>(Arrays.asList(types)))
             .setBrokers(clusterTest.brokers() == 0 ? defaults.brokers() : clusterTest.brokers())
             .setControllers(clusterTest.controllers() == 0 ? defaults.controllers() : clusterTest.controllers())
             .setDisksPerBroker(clusterTest.disksPerBroker() == 0 ? defaults.disksPerBroker() : clusterTest.disksPerBroker())
@@ -292,7 +287,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .setServerProperties(serverProperties)
             .setPerServerProperties(perServerProperties)
             .setMetadataVersion(clusterTest.metadataVersion())
-            .setTags(List.of(clusterTest.tags()))
+            .setTags(Arrays.asList(clusterTest.tags()))
             .setFeatures(features)
             .build();
 

@@ -19,8 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Readable;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 
+import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.stream.Collectors;
@@ -115,7 +116,7 @@ public class UpdateFeaturesRequest extends AbstractRequest {
         return data;
     }
 
-    public static UpdateFeaturesRequest parse(Readable readable, short version) {
-        return new UpdateFeaturesRequest(new UpdateFeaturesRequestData(readable, version), version);
+    public static UpdateFeaturesRequest parse(ByteBuffer buffer, short version) {
+        return new UpdateFeaturesRequest(new UpdateFeaturesRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

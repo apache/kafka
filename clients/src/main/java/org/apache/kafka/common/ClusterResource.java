@@ -28,7 +28,8 @@ public class ClusterResource {
 
     /**
      * Create {@link ClusterResource} with a cluster id. Note that cluster id may be {@code null} if the
-     * metadata request was sent to a broker without support for cluster ids.
+     * metadata request was sent to a broker without support for cluster ids. The first version of Kafka
+     * to support cluster id is 0.10.1.0.
      * @param clusterId The cluster id
      */
     public ClusterResource(String clusterId) {
@@ -37,7 +38,7 @@ public class ClusterResource {
 
     /**
      * Return the cluster id. Note that it may be {@code null} if the metadata request was sent to a broker without
-     * support for cluster ids.
+     * support for cluster ids. The first version of Kafka to support cluster id is 0.10.1.0.
      */
     public String clusterId() {
         return clusterId;

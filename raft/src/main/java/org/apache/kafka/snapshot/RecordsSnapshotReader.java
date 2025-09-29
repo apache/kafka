@@ -20,10 +20,9 @@ package org.apache.kafka.snapshot;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.Batch;
+import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.internals.RecordsIterator;
-import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import java.util.NoSuchElementException;
@@ -113,12 +112,11 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
         RecordSerde<T> serde,
         BufferSupplier bufferSupplier,
         int maxBatchSize,
-        boolean doCrcValidation,
-        LogContext logContext
+        boolean doCrcValidation
     ) {
         return new RecordsSnapshotReader<>(
             snapshot.snapshotId(),
-            new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize, doCrcValidation, logContext)
+            new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize, doCrcValidation)
         );
     }
 

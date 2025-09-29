@@ -21,8 +21,9 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.AlterConfigsRequestData;
 import org.apache.kafka.common.message.AlterConfigsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Readable;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 
+import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
@@ -131,7 +132,7 @@ public class AlterConfigsRequest extends AbstractRequest {
 
     }
 
-    public static AlterConfigsRequest parse(Readable readable, short version) {
-        return new AlterConfigsRequest(new AlterConfigsRequestData(readable, version), version);
+    public static AlterConfigsRequest parse(ByteBuffer buffer, short version) {
+        return new AlterConfigsRequest(new AlterConfigsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

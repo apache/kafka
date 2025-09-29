@@ -879,13 +879,13 @@ public class CachingPersistentSessionStoreTest {
 
     public static class CacheFlushListenerStub<K, V> implements CacheFlushListener<byte[], byte[]> {
         private final Deserializer<K> keyDeserializer;
-        private final Deserializer<V> valueDeserializer;
+        private final Deserializer<V> valueDesializer;
         private final List<KeyValueTimestamp<K, Change<V>>> forwarded = new LinkedList<>();
 
         CacheFlushListenerStub(final Deserializer<K> keyDeserializer,
-                               final Deserializer<V> valueDeserializer) {
+                               final Deserializer<V> valueDesializer) {
             this.keyDeserializer = keyDeserializer;
-            this.valueDeserializer = valueDeserializer;
+            this.valueDesializer = valueDesializer;
         }
 
         @Override
@@ -894,8 +894,8 @@ public class CachingPersistentSessionStoreTest {
                 new KeyValueTimestamp<>(
                     keyDeserializer.deserialize(null, record.key()),
                     new Change<>(
-                        valueDeserializer.deserialize(null, record.value().newValue),
-                        valueDeserializer.deserialize(null, record.value().oldValue)),
+                        valueDesializer.deserialize(null, record.value().newValue),
+                        valueDesializer.deserialize(null, record.value().oldValue)),
                     record.timestamp()
                 )
             );

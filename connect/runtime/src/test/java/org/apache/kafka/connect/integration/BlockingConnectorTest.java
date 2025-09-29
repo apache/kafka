@@ -48,6 +48,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -322,9 +323,9 @@ public class BlockingConnectorTest {
         normalConnectorHandle.expectedCommits(NUM_RECORDS_PRODUCED);
 
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getName());
+        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getName());
         props.put(TASKS_MAX_CONFIG, "1");
-        props.put(TestableSourceConnector.TOPIC_CONFIG, TEST_TOPIC);
+        props.put(MonitorableSourceConnector.TOPIC_CONFIG, TEST_TOPIC);
         log.info("Creating normal connector");
         try {
             connect.configureConnector(NORMAL_CONNECTOR_NAME, props);
@@ -576,7 +577,7 @@ public class BlockingConnectorTest {
         @Override
         public List<Map<String, String>> taskConfigs(int maxTasks) {
             block.maybeBlockOn(CONNECTOR_TASK_CONFIGS);
-            return List.of(Map.of());
+            return Collections.singletonList(Collections.emptyMap());
         }
 
         @Override

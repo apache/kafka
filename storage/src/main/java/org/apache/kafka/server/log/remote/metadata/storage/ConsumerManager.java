@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
 
@@ -67,7 +68,7 @@ public class ConsumerManager implements Closeable {
         consumerTaskThread = KafkaThread.nonDaemon("RLMMConsumerTask", consumerTask);
     }
 
-    void startConsumerThread() {
+    public void startConsumerThread() {
         try {
             // Start a thread to continuously consume records from topic partitions.
             consumerTaskThread.start();
@@ -85,7 +86,7 @@ public class ConsumerManager implements Closeable {
      * @throws TimeoutException if this method execution did not complete with in the wait time configured with
      *                          property {@code TopicBasedRemoteLogMetadataManagerConfig#REMOTE_LOG_METADATA_CONSUME_WAIT_MS_PROP}.
      */
-    void waitTillConsumptionCatchesUp(RecordMetadata recordMetadata) throws TimeoutException {
+    public void waitTillConsumptionCatchesUp(RecordMetadata recordMetadata) throws TimeoutException {
         waitTillConsumptionCatchesUp(recordMetadata, rlmmConfig.consumeWaitMs());
     }
 
@@ -96,8 +97,8 @@ public class ConsumerManager implements Closeable {
      * @param timeoutMs      wait timeout in milliseconds
      * @throws TimeoutException if this method execution did not complete with in the given {@code timeoutMs}.
      */
-    void waitTillConsumptionCatchesUp(RecordMetadata recordMetadata,
-                                      long timeoutMs) throws TimeoutException {
+    public void waitTillConsumptionCatchesUp(RecordMetadata recordMetadata,
+                                             long timeoutMs) throws TimeoutException {
         int partition = recordMetadata.partition();
         // If the current assignment does not have the subscription for this partition then return immediately.
         if (!consumerTask.isMetadataPartitionAssigned(partition)) {
@@ -107,6 +108,7 @@ public class ConsumerManager implements Closeable {
         long offset = recordMetadata.offset();
         long startTimeMs = time.milliseconds();
         long consumeCheckIntervalMs = Math.min(CONSUME_RECHECK_INTERVAL_MS, timeoutMs);
+        log.info("Wait until the consumer is caught up with the target partition {} up-to offset {}", partition, offset);
         while (true) {
             long readOffset = consumerTask.readOffsetForMetadataPartition(partition).orElse(-1L);
             if (readOffset >= offset) {
@@ -136,11 +138,15 @@ public class ConsumerManager implements Closeable {
         }
     }
 
-    void addAssignmentsForPartitions(Set<TopicIdPartition> partitions) {
+    public void addAssignmentsForPartitions(Set<TopicIdPartition> partitions) {
         consumerTask.addAssignmentsForPartitions(partitions);
     }
 
-    void removeAssignmentsForPartitions(Set<TopicIdPartition> partitions) {
+    public void removeAssignmentsForPartitions(Set<TopicIdPartition> partitions) {
         consumerTask.removeAssignmentsForPartitions(partitions);
+    }
+
+    public Optional<Long> readOffsetForPartition(int metadataPartition) {
+        return consumerTask.readOffsetForMetadataPartition(metadataPartition);
     }
 }

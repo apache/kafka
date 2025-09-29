@@ -291,6 +291,9 @@ public interface ConsumerPartitionAssignor {
         // a map to store assignor name -> assignor class name
         Map<String, String> assignorNameMap = new HashMap<>();
 
+        if (assignorClasses == null)
+            return assignors;
+
         for (Object klass : assignorClasses) {
             // first try to get the class if passed in as a string
             if (klass instanceof String) {

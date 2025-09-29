@@ -23,7 +23,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -51,7 +50,7 @@ public class WriteTxnMarkersResponseTest {
 
     @Test
     public void testConstructor() {
-        Map<Errors, Integer> expectedErrorCounts = new EnumMap<>(Errors.class);
+        Map<Errors, Integer> expectedErrorCounts = new HashMap<>();
         expectedErrorCounts.put(Errors.UNKNOWN_PRODUCER_ID, 1);
         expectedErrorCounts.put(Errors.INVALID_PRODUCER_EPOCH, 1);
         WriteTxnMarkersResponse response = new WriteTxnMarkersResponse(errorMap);

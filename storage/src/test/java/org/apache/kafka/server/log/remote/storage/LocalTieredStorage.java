@@ -106,6 +106,8 @@ import static org.apache.kafka.server.log.remote.storage.RemoteTopicPartitionDir
  */
 public final class LocalTieredStorage implements RemoteStorageManager {
 
+    public static final String STORAGE_CONFIG_PREFIX = "remote.log.storage.local.";
+
     /**
      * The root directory of this storage.
      */
@@ -537,23 +539,35 @@ public final class LocalTieredStorage implements RemoteStorageManager {
     }
 
     private EventType getEventTypeForFetch(IndexType indexType) {
-        return switch (indexType) {
-            case OFFSET -> FETCH_OFFSET_INDEX;
-            case TIMESTAMP -> FETCH_TIME_INDEX;
-            case PRODUCER_SNAPSHOT -> FETCH_PRODUCER_SNAPSHOT;
-            case TRANSACTION -> FETCH_TRANSACTION_INDEX;
-            case LEADER_EPOCH -> FETCH_LEADER_EPOCH_CHECKPOINT;
-        };
+        switch (indexType) {
+            case OFFSET:
+                return FETCH_OFFSET_INDEX;
+            case TIMESTAMP:
+                return FETCH_TIME_INDEX;
+            case PRODUCER_SNAPSHOT:
+                return FETCH_PRODUCER_SNAPSHOT;
+            case TRANSACTION:
+                return FETCH_TRANSACTION_INDEX;
+            case LEADER_EPOCH:
+                return FETCH_LEADER_EPOCH_CHECKPOINT;
+        }
+        return FETCH_SEGMENT;
     }
 
     private RemoteLogSegmentFileset.RemoteLogSegmentFileType getLogSegmentFileType(IndexType indexType) {
-        return switch (indexType) {
-            case OFFSET -> OFFSET_INDEX;
-            case TIMESTAMP -> TIME_INDEX;
-            case PRODUCER_SNAPSHOT -> PRODUCER_SNAPSHOT;
-            case TRANSACTION -> TRANSACTION_INDEX;
-            case LEADER_EPOCH -> LEADER_EPOCH_CHECKPOINT;
-        };
+        switch (indexType) {
+            case OFFSET:
+                return OFFSET_INDEX;
+            case TIMESTAMP:
+                return TIME_INDEX;
+            case PRODUCER_SNAPSHOT:
+                return PRODUCER_SNAPSHOT;
+            case TRANSACTION:
+                return TRANSACTION_INDEX;
+            case LEADER_EPOCH:
+                return LEADER_EPOCH_CHECKPOINT;
+        }
+        return SEGMENT;
     }
 
     public int brokerId() {

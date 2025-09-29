@@ -18,14 +18,16 @@ package org.apache.kafka.coordinator.group.modern.share;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
+import org.apache.kafka.image.TopicImage;
+import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -54,8 +56,8 @@ public class ShareGroupMember extends ModernGroupMember {
         private String rackId = null;
         private String clientId = "";
         private String clientHost = "";
-        private Set<String> subscribedTopicNames = Set.of();
-        private Map<Uuid, Set<Integer>> assignedPartitions = Map.of();
+        private Set<String> subscribedTopicNames = Collections.emptySet();
+        private Map<Uuid, Set<Integer>> assignedPartitions = Collections.emptyMap();
 
         public Builder(String memberId) {
             this.memberId = Objects.requireNonNull(memberId);
@@ -197,17 +199,18 @@ public class ShareGroupMember extends ModernGroupMember {
     /**
      * Converts this ShareGroupMember to a ShareGroupDescribeResponseData.Member.
      *
-     * @param image : Topics image object to search for a specific topic id
+     * @param topicsImage: Topics image object to search for a specific topic id
+     *
      * @return The ShareGroupMember mapped as ShareGroupDescribeResponseData.Member.
      */
     public ShareGroupDescribeResponseData.Member asShareGroupDescribeMember(
-        CoordinatorMetadataImage image
+        TopicsImage topicsImage
     ) {
         return new ShareGroupDescribeResponseData.Member()
             .setMemberEpoch(memberEpoch)
             .setMemberId(memberId)
             .setAssignment(new ShareGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(topicPartitionsFromMap(assignedPartitions, image)))
+                .setTopicPartitions(topicPartitionsFromMap(assignedPartitions, topicsImage)))
             .setClientHost(clientHost)
             .setClientId(clientId)
             .setRackId(rackId)
@@ -216,14 +219,17 @@ public class ShareGroupMember extends ModernGroupMember {
 
     private static List<ShareGroupDescribeResponseData.TopicPartitions> topicPartitionsFromMap(
         Map<Uuid, Set<Integer>> partitions,
-        CoordinatorMetadataImage image
+        TopicsImage topicsImage
     ) {
         List<ShareGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
         partitions.forEach((topicId, partitionSet) -> {
-            image.topicMetadata(topicId).ifPresent(topicMetadata -> topicPartitions.add(new ShareGroupDescribeResponseData.TopicPartitions()
-                .setTopicId(topicId)
-                .setTopicName(topicMetadata.name())
-                .setPartitions(new ArrayList<>(partitionSet))));
+            TopicImage topicImage = topicsImage.getTopic(topicId);
+            if (topicImage != null) {
+                topicPartitions.add(new ShareGroupDescribeResponseData.TopicPartitions()
+                    .setTopicId(topicId)
+                    .setTopicName(topicImage.name())
+                    .setPartitions(new ArrayList<>(partitionSet)));
+            }
         });
         return topicPartitions;
     }

@@ -42,14 +42,7 @@ public interface Producer<K, V> extends Closeable {
     /**
      * See {@link KafkaProducer#initTransactions()}
      */
-    default void initTransactions() {
-        initTransactions(false);
-    }
-
-    /**
-     * See {@link KafkaProducer#initTransactions(boolean)}
-     */
-    void initTransactions(boolean keepPreparedTxn);
+    void initTransactions();
 
     /**
      * See {@link KafkaProducer#beginTransaction()}
@@ -63,11 +56,6 @@ public interface Producer<K, V> extends Closeable {
                                   ConsumerGroupMetadata groupMetadata) throws ProducerFencedException;
 
     /**
-     * See {@link KafkaProducer#prepareTransaction()}
-     */
-    PreparedTxnState prepareTransaction() throws ProducerFencedException;
-
-    /**
      * See {@link KafkaProducer#commitTransaction()}
      */
     void commitTransaction() throws ProducerFencedException;
@@ -76,11 +64,6 @@ public interface Producer<K, V> extends Closeable {
      * See {@link KafkaProducer#abortTransaction()}
      */
     void abortTransaction() throws ProducerFencedException;
-
-    /**
-     * See {@link KafkaProducer#completeTransaction(PreparedTxnState)}
-     */
-    void completeTransaction(PreparedTxnState preparedTxnState) throws ProducerFencedException;
 
     /**
      * @see KafkaProducer#registerMetricForSubscription(KafkaMetric) 

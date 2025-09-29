@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
-import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
-import org.apache.maven.artifact.versioning.VersionRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +32,9 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -202,7 +202,7 @@ public class PluginUtils {
 
     public static Set<Path> pluginLocations(String pluginPath, boolean failFast) {
         if (pluginPath == null) {
-            return Set.of();
+            return Collections.emptySet();
         }
         String[] pluginPathElements = COMMA_WITH_WHITESPACE.split(pluginPath.trim(), -1);
         Set<Path> pluginLocations = new LinkedHashSet<>();
@@ -264,7 +264,7 @@ public class PluginUtils {
         Set<Path> visited = new HashSet<>();
 
         if (isArchive(topPath)) {
-            return List.of(topPath);
+            return Collections.singletonList(topPath);
         }
 
         DirectoryStream<Path> topListing = Files.newDirectoryStream(
@@ -333,12 +333,12 @@ public class PluginUtils {
 
         if (containsClassFiles) {
             if (archives.isEmpty()) {
-                return List.of(topPath);
+                return Collections.singletonList(topPath);
             }
             log.warn("Plugin path contains both java archives and class files. Returning only the"
                     + " archives");
         }
-        return List.copyOf(archives);
+        return Arrays.asList(archives.toArray(new Path[0]));
     }
 
     public static Set<PluginSource> pluginSources(Set<Path> pluginLocations, ClassLoader classLoader, PluginClassLoaderFactory factory) {
@@ -408,10 +408,13 @@ public class PluginUtils {
      */
     public static String prunedName(PluginDesc<?> plugin) {
         // It's currently simpler to switch on type than do pattern matching.
-        return switch (plugin.type()) {
-            case SOURCE, SINK -> prunePluginName(plugin, "Connector");
-            default -> prunePluginName(plugin, plugin.type().simpleName());
-        };
+        switch (plugin.type()) {
+            case SOURCE:
+            case SINK:
+                return prunePluginName(plugin, "Connector");
+            default:
+                return prunePluginName(plugin, plugin.type().simpleName());
+        }
     }
 
     private static String prunePluginName(PluginDesc<?> plugin, String suffix) {
@@ -466,43 +469,26 @@ public class PluginUtils {
         }
         return distinctUrls(urls);
     }
-
+    
     private static Collection<URL> forClassLoader(ClassLoader classLoader) {
         final Collection<URL> result = new ArrayList<>();
         while (classLoader != null) {
             if (classLoader instanceof URLClassLoader) {
                 URL[] urls = ((URLClassLoader) classLoader).getURLs();
                 if (urls != null) {
-                    result.addAll(new HashSet<>(List.of(urls)));
+                    result.addAll(new HashSet<>(Arrays.asList(urls)));
                 }
             }
             classLoader = classLoader.getParent();
         }
         return distinctUrls(result);
     }
-
+    
     private static Collection<URL> distinctUrls(Collection<URL> urls) {
         Map<String, URL> distinct = new HashMap<>(urls.size());
         for (URL url : urls) {
             distinct.put(url.toExternalForm(), url);
         }
         return distinct.values();
-    }
-
-    public static VersionRange connectorVersionRequirement(String version) throws InvalidVersionSpecificationException {
-        if (version == null || version.equals("latest")) {
-            return null;
-        }
-        version = version.trim();
-
-        // check first if the given version is valid
-        VersionRange range = VersionRange.createFromVersionSpec(version);
-
-        if (range.hasRestrictions()) {
-            return range;
-        }
-        // now if the version is not enclosed we consider it as a hard requirement and enclose it in []
-        version = "[" + version + "]";
-        return VersionRange.createFromVersionSpec(version);
     }
 }

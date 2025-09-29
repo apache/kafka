@@ -35,13 +35,14 @@ import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
@@ -144,7 +145,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * </ol>
      */
     void runOnce() {
-        // The following code avoids use of the Java Collections Streams API to reduce overhead in this loop.
         processApplicationEvents();
 
         final long currentTimeMs = time.milliseconds();
@@ -153,24 +153,19 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         }
         lastPollTimeMs = currentTimeMs;
 
-        long pollWaitTimeMs = MAX_POLL_TIMEOUT_MS;
-
-        for (RequestManager rm : requestManagers.entries()) {
-            NetworkClientDelegate.PollResult pollResult = rm.poll(currentTimeMs);
-            long timeoutMs = networkClientDelegate.addAll(pollResult);
-            pollWaitTimeMs = Math.min(pollWaitTimeMs, timeoutMs);
-        }
-
+        final long pollWaitTimeMs = requestManagers.entries().stream()
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .map(rm -> rm.poll(currentTimeMs))
+                .map(networkClientDelegate::addAll)
+                .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
 
-        long maxTimeToWaitMs = Long.MAX_VALUE;
-
-        for (RequestManager rm : requestManagers.entries()) {
-            long waitMs = rm.maximumTimeToWait(currentTimeMs);
-            maxTimeToWaitMs = Math.min(maxTimeToWaitMs, waitMs);
-        }
-
-        cachedMaximumTimeToWait = maxTimeToWaitMs;
+        cachedMaximumTimeToWait = requestManagers.entries().stream()
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .map(rm -> rm.maximumTimeToWait(currentTimeMs))
+                .reduce(Long.MAX_VALUE, Math::min);
 
         reapExpiredApplicationEvents(currentTimeMs);
         List<CompletableEvent<?>> uncompletedEvents = applicationEventReaper.uncompletedEvents();
@@ -238,14 +233,15 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * </ol>
      */
     // Visible for testing
-    static void runAtClose(final Collection<RequestManager> requestManagers,
+    static void runAtClose(final Collection<Optional<? extends RequestManager>> requestManagers,
                            final NetworkClientDelegate networkClientDelegate,
                            final long currentTimeMs) {
-        // These are the optional outgoing requests at the time of closing the consumer
-        for (RequestManager rm : requestManagers) {
-            NetworkClientDelegate.PollResult pollResult = rm.pollOnClose(currentTimeMs);
-            networkClientDelegate.addAll(pollResult);
-        }
+        // These are the optional outgoing requests at the
+        requestManagers.stream()
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .map(rm -> rm.pollOnClose(currentTimeMs))
+                .forEach(networkClientDelegate::addAll);
     }
 
     public boolean isRunning() {
@@ -343,20 +339,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         log.trace("Closing the consumer network thread");
         Timer timer = time.timer(closeTimeout);
         try {
-            // If an error was thrown from initializeResources(), it's possible that the list of request managers
-            // is null, so check before using. If the request manager list is null, there wasn't any real work
-            // performed, so not being able to close the request managers isn't so bad.
-            if (requestManagers != null && networkClientDelegate != null)
-                runAtClose(requestManagers.entries(), networkClientDelegate, time.milliseconds());
+            runAtClose(requestManagers.entries(), networkClientDelegate, time.milliseconds());
         } catch (Exception e) {
             log.error("Unexpected error during shutdown. Proceed with closing.", e);
         } finally {
-            // Likewise, if an error was thrown from initializeResources(), it's possible for the network client
-            // to be null, so check before using. If the network client is null, things have failed catastrophically
-            // enough that there aren't any outstanding requests to be sent anyway.
-            if (networkClientDelegate != null)
-                sendUnsentRequests(timer);
-
+            sendUnsentRequests(timer);
             asyncConsumerMetrics.recordApplicationEventExpiredSize(applicationEventReaper.reap(applicationEventQueue));
 
             closeQuietly(requestManagers, "request managers");
@@ -369,13 +356,12 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * If there is a metadata error, complete all uncompleted events that require subscription metadata.
      */
     private void maybeFailOnMetadataError(List<CompletableEvent<?>> events) {
-        List<CompletableApplicationEvent<?>> subscriptionMetadataEvent = new ArrayList<>();
-
-        for (CompletableEvent<?> ce : events) {
-            if (ce instanceof CompletableApplicationEvent && ((CompletableApplicationEvent<?>) ce).requireSubscriptionMetadata())
-                subscriptionMetadataEvent.add((CompletableApplicationEvent<?>) ce);
-        }
-
+        List<? extends CompletableApplicationEvent<?>> subscriptionMetadataEvent = events.stream()
+                .filter(e -> e instanceof CompletableApplicationEvent<?>)
+                .map(e -> (CompletableApplicationEvent<?>) e)
+                .filter(CompletableApplicationEvent::requireSubscriptionMetadata)
+                .collect(Collectors.toList());
+        
         if (subscriptionMetadataEvent.isEmpty())
             return;
         networkClientDelegate.getAndClearMetadataError().ifPresent(metadataError ->

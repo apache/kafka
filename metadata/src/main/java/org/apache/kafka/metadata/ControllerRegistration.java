@@ -203,7 +203,8 @@ public class ControllerRegistration {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ControllerRegistration other)) return false;
+        if (!(o instanceof ControllerRegistration)) return false;
+        ControllerRegistration other = (ControllerRegistration) o;
         return other.id == id &&
             other.incarnationId.equals(incarnationId) &&
             other.zkMigrationReady == zkMigrationReady &&

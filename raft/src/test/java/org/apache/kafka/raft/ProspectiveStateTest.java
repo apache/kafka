@@ -27,7 +27,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.InetSocketAddress;
-import java.util.Map;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ProspectiveStateTest {
     private final ReplicaKey localReplicaKey = ReplicaKey.of(0, Uuid.randomUuid());
     private final Endpoints leaderEndpoints = Endpoints.fromInetSocketAddresses(
-        Map.of(
+        Collections.singletonMap(
             ListenerName.normalised("CONTROLLER"),
             InetSocketAddress.createUnresolved("mock-host-3", 1234)
         )
@@ -71,6 +71,7 @@ public class ProspectiveStateTest {
             votedKey,
             voters,
             Optional.empty(),
+            1,
             electionTimeoutMs,
             logContext
         );
@@ -86,6 +87,7 @@ public class ProspectiveStateTest {
             Optional.empty(),
             voters,
             Optional.empty(),
+            1,
             electionTimeoutMs,
             logContext
         );
@@ -97,7 +99,7 @@ public class ProspectiveStateTest {
         ProspectiveState state = newProspectiveState(voterSetWithLocal(IntStream.empty(), withDirectoryId));
         assertTrue(state.epochElection().isVoteGranted());
         assertFalse(state.epochElection().isVoteRejected());
-        assertEquals(Set.of(), state.epochElection().unrecordedVoters());
+        assertEquals(Collections.emptySet(), state.epochElection().unrecordedVoters());
     }
 
     @ParameterizedTest
@@ -109,7 +111,7 @@ public class ProspectiveStateTest {
         );
         assertFalse(state.epochElection().isVoteGranted());
         assertFalse(state.epochElection().isVoteRejected());
-        assertEquals(Set.of(otherNode), state.epochElection().unrecordedVoters());
+        assertEquals(Collections.singleton(otherNode), state.epochElection().unrecordedVoters());
         assertTrue(state.recordRejectedVote(otherNode.id()));
         assertFalse(state.epochElection().isVoteGranted());
         assertTrue(state.epochElection().isVoteRejected());
@@ -124,9 +126,9 @@ public class ProspectiveStateTest {
         );
         assertFalse(state.epochElection().isVoteGranted());
         assertFalse(state.epochElection().isVoteRejected());
-        assertEquals(Set.of(otherNode), state.epochElection().unrecordedVoters());
+        assertEquals(Collections.singleton(otherNode), state.epochElection().unrecordedVoters());
         assertTrue(state.recordGrantedVote(otherNode.id()));
-        assertEquals(Set.of(), state.epochElection().unrecordedVoters());
+        assertEquals(Collections.emptySet(), state.epochElection().unrecordedVoters());
         assertFalse(state.epochElection().isVoteRejected());
         assertTrue(state.epochElection().isVoteGranted());
     }
@@ -143,11 +145,11 @@ public class ProspectiveStateTest {
         assertFalse(state.epochElection().isVoteRejected());
         assertEquals(Set.of(node1, node2), state.epochElection().unrecordedVoters());
         assertTrue(state.recordGrantedVote(node1.id()));
-        assertEquals(Set.of(node2), state.epochElection().unrecordedVoters());
+        assertEquals(Collections.singleton(node2), state.epochElection().unrecordedVoters());
         assertTrue(state.epochElection().isVoteGranted());
         assertFalse(state.epochElection().isVoteRejected());
         assertTrue(state.recordRejectedVote(node2.id()));
-        assertEquals(Set.of(), state.epochElection().unrecordedVoters());
+        assertEquals(Collections.emptySet(), state.epochElection().unrecordedVoters());
         assertTrue(state.epochElection().isVoteGranted());
         assertFalse(state.epochElection().isVoteRejected());
     }
@@ -164,11 +166,11 @@ public class ProspectiveStateTest {
         assertFalse(state.epochElection().isVoteRejected());
         assertEquals(Set.of(node1, node2), state.epochElection().unrecordedVoters());
         assertTrue(state.recordRejectedVote(node1.id()));
-        assertEquals(Set.of(node2), state.epochElection().unrecordedVoters());
+        assertEquals(Collections.singleton(node2), state.epochElection().unrecordedVoters());
         assertFalse(state.epochElection().isVoteGranted());
         assertFalse(state.epochElection().isVoteRejected());
         assertTrue(state.recordRejectedVote(node2.id()));
-        assertEquals(Set.of(), state.epochElection().unrecordedVoters());
+        assertEquals(Collections.emptySet(), state.epochElection().unrecordedVoters());
         assertFalse(state.epochElection().isVoteGranted());
         assertTrue(state.epochElection().isVoteRejected());
     }
@@ -348,7 +350,7 @@ public class ProspectiveStateTest {
         assertEquals(epoch, state.epoch());
         assertEquals(votedKeyWithDirectoryId, state.votedKey().get());
         assertEquals(
-            ElectionState.withVotedCandidate(epoch, votedKeyWithDirectoryId, Set.of(localId)),
+            ElectionState.withVotedCandidate(epoch, votedKeyWithDirectoryId, Collections.singleton(localId)),
             state.election()
         );
         assertEquals(electionTimeoutMs, state.remainingElectionTimeMs(time.milliseconds()));

@@ -18,7 +18,7 @@ package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.UnalignedRecords;
-import org.apache.kafka.server.common.OffsetAndEpoch;
+import org.apache.kafka.raft.OffsetAndEpoch;
 
 /**
  * Interface for reading snapshots as a sequence of records.
@@ -44,9 +44,9 @@ public interface RawSnapshotReader {
     UnalignedRecords slice(long position, int size);
 
     /**
-     * Returns all the records backing this snapshot reader.
+     * Returns all of the records backing this snapshot reader.
      *
-     * @return all the records for this snapshot
+     * @return all of the records for this snapshot
      */
     Records records();
 }

@@ -23,7 +23,10 @@ import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +59,11 @@ public class ClusterConfig {
     private final MetadataVersion metadataVersion;
 
     private final Map<String, String> serverProperties;
+    private final Map<String, String> producerProperties;
+    private final Map<String, String> consumerProperties;
+    private final Map<String, String> adminClientProperties;
+    private final Map<String, String> saslServerProperties;
+    private final Map<String, String> saslClientProperties;
     private final List<String> tags;
     private final Map<Integer, Map<String, String>> perServerProperties;
     private final Map<Feature, Short> features;
@@ -64,8 +72,10 @@ public class ClusterConfig {
     private ClusterConfig(Set<Type> types, int brokers, int controllers, int disksPerBroker, boolean autoStart,
                   SecurityProtocol brokerSecurityProtocol, ListenerName brokerListenerName,
                   SecurityProtocol controllerSecurityProtocol, ListenerName controllerListenerName, File trustStoreFile,
-                  MetadataVersion metadataVersion, Map<String, String> serverProperties,
-                  Map<Integer, Map<String, String>> perServerProperties, List<String> tags, Map<Feature, Short> features) {
+                  MetadataVersion metadataVersion, Map<String, String> serverProperties, Map<String, String> producerProperties,
+                  Map<String, String> consumerProperties, Map<String, String> adminClientProperties, Map<String, String> saslServerProperties,
+                  Map<String, String> saslClientProperties, Map<Integer, Map<String, String>> perServerProperties, List<String> tags,
+                  Map<Feature, Short> features) {
         // do fail fast. the following values are invalid for kraft modes.
         if (brokers < 0) throw new IllegalArgumentException("Number of brokers must be greater or equal to zero.");
         if (controllers < 0) throw new IllegalArgumentException("Number of controller must be greater or equal to zero.");
@@ -83,6 +93,11 @@ public class ClusterConfig {
         this.trustStoreFile = trustStoreFile;
         this.metadataVersion = Objects.requireNonNull(metadataVersion);
         this.serverProperties = Objects.requireNonNull(serverProperties);
+        this.producerProperties = Objects.requireNonNull(producerProperties);
+        this.consumerProperties = Objects.requireNonNull(consumerProperties);
+        this.adminClientProperties = Objects.requireNonNull(adminClientProperties);
+        this.saslServerProperties = Objects.requireNonNull(saslServerProperties);
+        this.saslClientProperties = Objects.requireNonNull(saslClientProperties);
         this.perServerProperties = Objects.requireNonNull(perServerProperties);
         this.tags = Objects.requireNonNull(tags);
         this.features = Objects.requireNonNull(features);
@@ -110,6 +125,26 @@ public class ClusterConfig {
 
     public Map<String, String> serverProperties() {
         return serverProperties;
+    }
+
+    public Map<String, String> producerProperties() {
+        return producerProperties;
+    }
+
+    public Map<String, String> consumerProperties() {
+        return consumerProperties;
+    }
+
+    public Map<String, String> adminClientProperties() {
+        return adminClientProperties;
+    }
+
+    public Map<String, String> saslServerProperties() {
+        return saslServerProperties;
+    }
+
+    public Map<String, String> saslClientProperties() {
+        return saslClientProperties;
     }
 
     public SecurityProtocol brokerSecurityProtocol() {
@@ -190,6 +225,11 @@ public class ClusterConfig {
                 .setTrustStoreFile(clusterConfig.trustStoreFile)
                 .setMetadataVersion(clusterConfig.metadataVersion)
                 .setServerProperties(clusterConfig.serverProperties)
+                .setProducerProperties(clusterConfig.producerProperties)
+                .setConsumerProperties(clusterConfig.consumerProperties)
+                .setAdminClientProperties(clusterConfig.adminClientProperties)
+                .setSaslServerProperties(clusterConfig.saslServerProperties)
+                .setSaslClientProperties(clusterConfig.saslClientProperties)
                 .setPerServerProperties(clusterConfig.perServerProperties)
                 .setTags(clusterConfig.tags)
                 .setFeatures(clusterConfig.features);
@@ -207,15 +247,20 @@ public class ClusterConfig {
         private ListenerName controllerListenerName;
         private File trustStoreFile;
         private MetadataVersion metadataVersion;
-        private Map<String, String> serverProperties = Map.of();
-        private Map<Integer, Map<String, String>> perServerProperties = Map.of();
-        private List<String> tags = List.of();
-        private Map<Feature, Short> features = Map.of();
+        private Map<String, String> serverProperties = Collections.emptyMap();
+        private Map<String, String> producerProperties = Collections.emptyMap();
+        private Map<String, String> consumerProperties = Collections.emptyMap();
+        private Map<String, String> adminClientProperties = Collections.emptyMap();
+        private Map<String, String> saslServerProperties = Collections.emptyMap();
+        private Map<String, String> saslClientProperties = Collections.emptyMap();
+        private Map<Integer, Map<String, String>> perServerProperties = Collections.emptyMap();
+        private List<String> tags = Collections.emptyList();
+        private Map<Feature, Short> features = Collections.emptyMap();
 
         private Builder() {}
 
         public Builder setTypes(Set<Type> types) {
-            this.types = Set.copyOf(types);
+            this.types = Collections.unmodifiableSet(new HashSet<>(types));
             return this;
         }
 
@@ -270,19 +315,44 @@ public class ClusterConfig {
         }
 
         public Builder setServerProperties(Map<String, String> serverProperties) {
-            this.serverProperties = Map.copyOf(serverProperties);
+            this.serverProperties = Collections.unmodifiableMap(new HashMap<>(serverProperties));
+            return this;
+        }
+
+        public Builder setConsumerProperties(Map<String, String> consumerProperties) {
+            this.consumerProperties = Collections.unmodifiableMap(new HashMap<>(consumerProperties));
+            return this;
+        }
+
+        public Builder setProducerProperties(Map<String, String> producerProperties) {
+            this.producerProperties = Collections.unmodifiableMap(new HashMap<>(producerProperties));
+            return this;
+        }
+
+        public Builder setAdminClientProperties(Map<String, String> adminClientProperties) {
+            this.adminClientProperties = Collections.unmodifiableMap(new HashMap<>(adminClientProperties));
+            return this;
+        }
+
+        public Builder setSaslServerProperties(Map<String, String> saslServerProperties) {
+            this.saslServerProperties = Collections.unmodifiableMap(new HashMap<>(saslServerProperties));
+            return this;
+        }
+
+        public Builder setSaslClientProperties(Map<String, String> saslClientProperties) {
+            this.saslClientProperties = Collections.unmodifiableMap(new HashMap<>(saslClientProperties));
             return this;
         }
 
         public Builder setPerServerProperties(Map<Integer, Map<String, String>> perServerProperties) {
             this.perServerProperties = Collections.unmodifiableMap(
                     perServerProperties.entrySet().stream()
-                            .collect(Collectors.toMap(Map.Entry::getKey, e -> Map.copyOf(e.getValue()))));
+                            .collect(Collectors.toMap(Map.Entry::getKey, e -> Collections.unmodifiableMap(new HashMap<>(e.getValue())))));
             return this;
         }
 
         public Builder setTags(List<String> tags) {
-            this.tags = List.copyOf(tags);
+            this.tags = Collections.unmodifiableList(new ArrayList<>(tags));
             return this;
         }
 
@@ -294,7 +364,9 @@ public class ClusterConfig {
         public ClusterConfig build() {
             return new ClusterConfig(types, brokers, controllers, disksPerBroker, autoStart,
                     brokerSecurityProtocol, brokerListenerName, controllerSecurityProtocol, controllerListenerName,
-                    trustStoreFile, metadataVersion, serverProperties, perServerProperties, tags, features);
+                    trustStoreFile, metadataVersion, serverProperties, producerProperties, consumerProperties,
+                    adminClientProperties, saslServerProperties, saslClientProperties,
+                    perServerProperties, tags, features);
         }
     }
 }

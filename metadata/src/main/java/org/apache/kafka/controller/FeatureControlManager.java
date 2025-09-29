@@ -18,9 +18,7 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.FeatureUpdate;
-import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
-import org.apache.kafka.common.metadata.NoOpRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
@@ -57,8 +55,7 @@ public class FeatureControlManager {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumFeatures quorumFeatures = null;
-        private KRaftVersionAccessor kraftVersionAccessor = null;
-
+        private MetadataVersion metadataVersion = MetadataVersion.latestProduction();
         private ClusterFeatureSupportDescriber clusterSupportDescriber = new ClusterFeatureSupportDescriber() {
             @Override
             public Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
@@ -86,13 +83,13 @@ public class FeatureControlManager {
             return this;
         }
 
-        Builder setClusterFeatureSupportDescriber(ClusterFeatureSupportDescriber clusterSupportDescriber) {
-            this.clusterSupportDescriber = clusterSupportDescriber;
+        Builder setMetadataVersion(MetadataVersion metadataVersion) {
+            this.metadataVersion = metadataVersion;
             return this;
         }
 
-        Builder setKRaftVersionAccessor(KRaftVersionAccessor kraftVersionAccessor) {
-            this.kraftVersionAccessor = kraftVersionAccessor;
+        Builder setClusterFeatureSupportDescriber(ClusterFeatureSupportDescriber clusterSupportDescriber) {
+            this.clusterSupportDescriber = clusterSupportDescriber;
             return this;
         }
 
@@ -104,32 +101,14 @@ public class FeatureControlManager {
                 localSupportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
                         MetadataVersion.MINIMUM_VERSION.featureLevel(),
                         MetadataVersion.latestProduction().featureLevel()));
-                quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, List.of(0));
+                quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, Collections.singletonList(0));
             }
-            if (kraftVersionAccessor == null) {
-                kraftVersionAccessor = new KRaftVersionAccessor() {
-                    private KRaftVersion version = KRaftVersion.LATEST_PRODUCTION;
-
-                    @Override
-                    public KRaftVersion kraftVersion() {
-                        return version;
-                    }
-
-                    @Override
-                    public void upgradeKRaftVersion(int epoch, KRaftVersion version, boolean validateOnly) {
-                        if (!validateOnly) {
-                            this.version = version;
-                        }
-                    }
-                };
-            }
-
             return new FeatureControlManager(
                 logContext,
                 quorumFeatures,
                 snapshotRegistry,
-                clusterSupportDescriber,
-                kraftVersionAccessor
+                metadataVersion,
+                clusterSupportDescriber
             );
         }
     }
@@ -149,90 +128,64 @@ public class FeatureControlManager {
     /**
      * The current metadata version
      */
-    private final TimelineObject<Optional<MetadataVersion>> metadataVersion;
+    private final TimelineObject<MetadataVersion> metadataVersion;
 
     /**
      * Gives information about the supported versions in the cluster.
      */
     private final ClusterFeatureSupportDescriber clusterSupportDescriber;
 
-    /**
-     * The interface for reading and upgrading the kraft version.
-     */
-    private final KRaftVersionAccessor kraftVersionAccessor;
-
     private FeatureControlManager(
         LogContext logContext,
         QuorumFeatures quorumFeatures,
         SnapshotRegistry snapshotRegistry,
-        ClusterFeatureSupportDescriber clusterSupportDescriber,
-        KRaftVersionAccessor kraftVersionAccessor
+        MetadataVersion metadataVersion,
+        ClusterFeatureSupportDescriber clusterSupportDescriber
     ) {
         this.log = logContext.logger(FeatureControlManager.class);
         this.quorumFeatures = quorumFeatures;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.metadataVersion = new TimelineObject<>(snapshotRegistry, Optional.empty());
+        this.metadataVersion = new TimelineObject<>(snapshotRegistry, metadataVersion);
         this.clusterSupportDescriber = clusterSupportDescriber;
-        this.kraftVersionAccessor = kraftVersionAccessor;
     }
 
     ControllerResult<ApiError> updateFeatures(
         Map<String, Short> updates,
         Map<String, FeatureUpdate.UpgradeType> upgradeTypes,
-        boolean validateOnly,
-        int currentClaimedEpoch
+        boolean validateOnly
     ) {
         List<ApiMessageAndVersion> records =
                 BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
 
         Map<String, Short> proposedUpdatedVersions = new HashMap<>(finalizedVersions);
-        proposedUpdatedVersions.put(MetadataVersion.FEATURE_NAME, metadataVersionOrThrow().featureLevel());
+        proposedUpdatedVersions.put(MetadataVersion.FEATURE_NAME, metadataVersion.get().featureLevel());
         proposedUpdatedVersions.putAll(updates);
 
         for (Entry<String, Short> entry : updates.entrySet()) {
-            ApiError error = updateFeature(
-                entry.getKey(),
-                entry.getValue(),
-                upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE),
-                records,
-                proposedUpdatedVersions,
-                validateOnly,
-                currentClaimedEpoch
-            );
+            ApiError error = updateFeature(entry.getKey(), entry.getValue(),
+                upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), records, proposedUpdatedVersions);
             if (!error.error().equals(Errors.NONE)) {
-                return ControllerResult.of(List.of(), error);
+                return ControllerResult.of(Collections.emptyList(), error);
             }
         }
 
         if (validateOnly) {
-            return ControllerResult.of(List.of(), ApiError.NONE);
+            return ControllerResult.of(Collections.emptyList(), ApiError.NONE);
         } else {
             return ControllerResult.atomicOf(records, ApiError.NONE);
         }
     }
 
-    Optional<MetadataVersion> metadataVersion() {
+    MetadataVersion metadataVersion() {
         return metadataVersion.get();
     }
 
-    MetadataVersion metadataVersionOrThrow() {
-        return metadataVersionOrThrow(SnapshotRegistry.LATEST_EPOCH);
-    }
-
-    private MetadataVersion metadataVersionOrThrow(long epoch) {
-        return metadataVersion.get(epoch).orElseThrow(() ->
-            new IllegalStateException("Unknown metadata version for FeatureControlManager"));
-    }
-
-    @SuppressWarnings({ "CyclomaticComplexity" })
     private ApiError updateFeature(
         String featureName,
         short newVersion,
         FeatureUpdate.UpgradeType upgradeType,
         List<ApiMessageAndVersion> records,
-        Map<String, Short> proposedUpdatedVersions,
-        boolean validateOnly,
-        int currentClaimedEpoch
+        Map<String, Short> proposedUpdatedVersions
     ) {
         if (upgradeType.equals(FeatureUpdate.UpgradeType.UNKNOWN)) {
             return invalidUpdateVersion(featureName, newVersion,
@@ -241,9 +194,7 @@ public class FeatureControlManager {
 
         final short currentVersion;
         if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
-            currentVersion = metadataVersionOrThrow().featureLevel();
-        } else if (featureName.equals(KRaftVersion.FEATURE_NAME)) {
-            currentVersion = kraftVersionAccessor.kraftVersion().featureLevel();
+            currentVersion = metadataVersion.get().featureLevel();
         } else {
             currentVersion = finalizedVersions.getOrDefault(featureName, (short) 0);
         }
@@ -273,34 +224,6 @@ public class FeatureControlManager {
         if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
             // Perform additional checks if we're updating metadata.version
             return updateMetadataVersion(newVersion, upgradeType.equals(FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE), records::add);
-        } else if (featureName.equals(KRaftVersion.FEATURE_NAME)) {
-            if (upgradeType.equals(FeatureUpdate.UpgradeType.UPGRADE)) {
-                try {
-                    kraftVersionAccessor.upgradeKRaftVersion(
-                        currentClaimedEpoch,
-                        KRaftVersion.fromFeatureLevel(newVersion),
-                        validateOnly
-                    );
-                    /* Add the noop record so that there is at least one offset to wait on to
-                     * complete the upgrade RPC
-                     */
-                    records.add(new ApiMessageAndVersion(new NoOpRecord(), (short) 0));
-                    return ApiError.NONE;
-                } catch (ApiException e) {
-                    return ApiError.fromThrowable(e);
-                } catch (IllegalArgumentException e) {
-                    return invalidUpdateVersion(featureName, newVersion, e.getMessage());
-                }
-            } else if (newVersion != currentVersion) {
-                return invalidUpdateVersion(
-                    featureName,
-                    newVersion,
-                    "Can't downgrade the version of this feature."
-                );
-            } else {
-                // Version didn't change
-                return ApiError.NONE;
-            }
         } else {
             // Validate dependencies for features that are not metadata.version
             try {
@@ -340,7 +263,7 @@ public class FeatureControlManager {
         String registrationSuffix = "";
         HashSet<Integer> foundControllers = new HashSet<>();
         foundControllers.add(quorumFeatures.nodeId());
-        if (metadataVersionOrThrow().isControllerRegistrationSupported()) {
+        if (metadataVersion.get().isControllerRegistrationSupported()) {
             for (Iterator<Entry<Integer, Map<String, VersionRange>>> iter =
                  clusterSupportDescriber.controllerSupported();
                  iter.hasNext(); ) {
@@ -387,7 +310,7 @@ public class FeatureControlManager {
         boolean allowUnsafeDowngrade,
         Consumer<ApiMessageAndVersion> recordConsumer
     ) {
-        MetadataVersion currentVersion = metadataVersionOrThrow();
+        MetadataVersion currentVersion = metadataVersion();
         final MetadataVersion newVersion;
         try {
             newVersion = MetadataVersion.fromFeatureLevel(newVersionLevel);
@@ -430,7 +353,7 @@ public class FeatureControlManager {
 
     FinalizedControllerFeatures finalizedFeatures(long epoch) {
         Map<String, Short> features = new HashMap<>();
-        features.put(MetadataVersion.FEATURE_NAME, metadataVersionOrThrow(epoch).featureLevel());
+        features.put(MetadataVersion.FEATURE_NAME, metadataVersion.get(epoch).featureLevel());
         for (Entry<String, Short> entry : finalizedVersions.entrySet(epoch)) {
             features.put(entry.getKey(), entry.getValue());
         }
@@ -445,7 +368,7 @@ public class FeatureControlManager {
         }
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
             MetadataVersion mv = MetadataVersion.fromFeatureLevel(record.featureLevel());
-            metadataVersion.set(Optional.of(mv));
+            metadataVersion.set(mv);
             log.info("Replayed a FeatureLevelRecord setting metadata.version to {}", mv);
         } else if (record.name().equals(KRaftVersion.FEATURE_NAME)) {
             // KAFKA-18979 - Skip any feature level record for kraft.version. This has two benefits:

@@ -49,7 +49,9 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -98,7 +100,7 @@ public class KafkaBasedLogTest {
         CONSUMER_PROPS.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer");
     }
 
-    private static final Set<TopicPartition> CONSUMER_ASSIGNMENT = Set.of(TP0, TP1);
+    private static final Set<TopicPartition> CONSUMER_ASSIGNMENT = new HashSet<>(Arrays.asList(TP0, TP1));
     private static final Map<String, String> FIRST_SET = new HashMap<>();
     static {
         FIRST_SET.put("key", "value");
@@ -151,7 +153,7 @@ public class KafkaBasedLogTest {
             }
         };
         consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
-        consumer.updatePartitions(TOPIC, List.of(TPINFO0, TPINFO1));
+        consumer.updatePartitions(TOPIC, Arrays.asList(TPINFO0, TPINFO1));
         Map<TopicPartition, Long> beginningOffsets = new HashMap<>();
         beginningOffsets.put(TP0, 0L);
         beginningOffsets.put(TP1, 0L);
@@ -406,7 +408,7 @@ public class KafkaBasedLogTest {
     @Test
     public void testOffsetReadFailureWhenWorkThreadFails() throws Exception {
         RuntimeException exception = new RuntimeException();
-        Set<TopicPartition> tps = Set.of(TP0, TP1);
+        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(TP0, TP1));
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
         endOffsets.put(TP1, 0L);
@@ -480,7 +482,7 @@ public class KafkaBasedLogTest {
 
     @Test
     public void testReadEndOffsetsUsingAdmin() {
-        Set<TopicPartition> tps = Set.of(TP0, TP1);
+        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(TP0, TP1));
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
         endOffsets.put(TP1, 0L);
@@ -496,7 +498,7 @@ public class KafkaBasedLogTest {
 
     @Test
     public void testReadEndOffsetsUsingAdminThatFailsWithUnsupported() {
-        Set<TopicPartition> tps = Set.of(TP0, TP1);
+        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(TP0, TP1));
         admin = mock(TopicAdmin.class);
         // Getting end offsets using the admin client should fail with unsupported version
         when(admin.retryEndOffsets(eq(tps), any(), anyLong())).thenThrow(new UnsupportedVersionException("too old"));
@@ -514,7 +516,7 @@ public class KafkaBasedLogTest {
 
     @Test
     public void testReadEndOffsetsUsingAdminThatFailsWithRetriable() {
-        Set<TopicPartition> tps = Set.of(TP0, TP1);
+        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(TP0, TP1));
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
         endOffsets.put(TP1, 0L);

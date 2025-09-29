@@ -18,6 +18,8 @@ package org.apache.kafka.streams.query;
 
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 
@@ -100,7 +102,7 @@ public class StateQueryRequest<R> {
         return new StateQueryRequest<>(
             storeName,
             position,
-            Optional.of(Set.copyOf(partitions)),
+            Optional.of(Collections.unmodifiableSet(new HashSet<>(partitions))),
             query,
             executionInfoEnabled,
             requireActive
@@ -164,7 +166,7 @@ public class StateQueryRequest<R> {
      * Whether this request should fetch from all locally available partitions.
      */
     public boolean isAllPartitions() {
-        return partitions.isEmpty();
+        return !partitions.isPresent();
     }
 
     /**
@@ -173,7 +175,7 @@ public class StateQueryRequest<R> {
      * @throws IllegalStateException if this is a request for all partitions
      */
     public Set<Integer> getPartitions() {
-        if (partitions.isEmpty()) {
+        if (!partitions.isPresent()) {
             throw new IllegalStateException(
                 "Cannot list partitions of an 'all partitions' request");
         } else {

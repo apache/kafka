@@ -1,6 +1,6 @@
 <!DOCTYPE import-control PUBLIC
-    "-//Checkstyle//DTD ImportControl Configuration 1.4//EN"
-    "https://checkstyle.sourceforge.io/dtds/import_control_1_4.dtd">
+"-//Puppy Crawl//DTD Import Control 1.1//EN"
+"http://www.puppycrawl.com/dtds/import_control_1_1.dtd">
 <!--
  Licensed to the Apache Software Foundation (ASF) under one or more
  contributor license agreements.  See the NOTICE file distributed with
@@ -35,7 +35,6 @@
   <allow pkg="kafka.common" />
   <allow pkg="kafka.utils" />
   <allow pkg="kafka.serializer" />
-  <allow pkg="org.apache.kafka.clients" class="CommonClientConfigs"/>
   <allow pkg="org.apache.kafka.common" />
   <allow pkg="org.apache.kafka.common.test.api" />
   <allow pkg="org.mockito" class="AssignmentsManagerTest"/>
@@ -46,6 +45,23 @@
   <disallow class="com.yammer.metrics.Metrics" />
   <allow pkg="com.yammer.metrics"/>
 
+  <subpackage name="testkit">
+    <allow pkg="kafka.metrics"/>
+    <allow pkg="kafka.raft"/>
+    <allow pkg="kafka.server"/>
+    <allow pkg="kafka.tools"/>
+    <allow pkg="org.apache.kafka.clients"/>
+    <allow pkg="org.apache.kafka.controller"/>
+    <allow pkg="org.apache.kafka.raft"/>
+    <allow pkg="org.apache.kafka.test"/>
+    <allow pkg="org.apache.kafka.metadata" />
+    <allow pkg="org.apache.kafka.metalog" />
+    <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.fault" />
+    <allow class="org.apache.kafka.storage.internals.log.CleanerConfig" />
+    <allow class="org.apache.kafka.network.SocketServerConfigs" />
+  </subpackage>
+
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.clients.admin" />
     <allow pkg="kafka.admin" />
@@ -55,7 +71,7 @@
   </subpackage>
 
   <subpackage name="coordinator">
-    <allow class="org.apache.kafka.metadata.MetadataCache" />
+    <allow class="kafka.server.MetadataCache" />
   </subpackage>
 
   <subpackage name="docker">
@@ -64,6 +80,24 @@
     <allow class="com.fasterxml.jackson.annotation.JsonProperty" />
     <allow class="com.fasterxml.jackson.annotation.JsonPropertyOrder" />
     <allow class="com.fasterxml.jackson.annotation.JsonIgnoreProperties" />
+  </subpackage>
+
+  <subpackage name="examples">
+    <allow pkg="org.apache.kafka.clients" />
+  </subpackage>
+
+  <subpackage name="log.remote">
+    <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.log.remote" />
+    <allow pkg="org.apache.kafka.server.log.remote.quota" />
+    <allow pkg="org.apache.kafka.server.metrics" />
+    <allow pkg="org.apache.kafka.storage.internals" />
+    <allow pkg="org.apache.kafka.storage.log.metrics" />
+    <allow pkg="kafka.log" />
+    <allow pkg="kafka.cluster" />
+    <allow pkg="kafka.server" />
+    <allow pkg="org.mockito" />
+    <allow pkg="org.apache.kafka.test" />
   </subpackage>
 
   <subpackage name="server">
@@ -123,7 +157,6 @@
     <allow pkg="org.apache.kafka.common.test"/>
     <allow pkg="org.apache.kafka.common.test.api"/>
     <allow pkg="org.apache.kafka.common.test.api"/>
-    <allow pkg="org.apache.kafka.admin"/>
   </subpackage>
 
   <subpackage name="security">
@@ -136,10 +169,8 @@
   </subpackage>
 
   <subpackage name="utils">
-    <file name="LoggingController.scala">
-      <allow pkg="org.apache.logging.log4j" />
-      <allow pkg="org.apache.logging.log4j.core.config" />
-    </file>
+    <allow pkg="org.apache.logging.log4j" />
+    <allow pkg="org.apache.logging.log4j.core.config" />
   </subpackage>
 
   <subpackage name="clients">

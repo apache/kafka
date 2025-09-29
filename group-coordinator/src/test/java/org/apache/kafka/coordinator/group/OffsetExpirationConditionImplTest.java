@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.Uuid;
-
 import org.junit.jupiter.api.Test;
 
 import java.util.OptionalInt;
@@ -41,8 +39,7 @@ public class OffsetExpirationConditionImplTest {
             OptionalInt.of(1),
             "metadata",
             commitTimestamp,
-            expireTimestampMs,
-            Uuid.ZERO_UUID
+            expireTimestampMs
         );
 
         // Test when expire timestamp exists (older versions with per partition retention)
@@ -59,8 +56,7 @@ public class OffsetExpirationConditionImplTest {
             OptionalInt.of(1),
             "metadata",
             commitTimestamp,
-            OptionalLong.empty(),
-            Uuid.ZERO_UUID
+            OptionalLong.empty()
         );
 
         // 3. Current timestamp - base timestamp >= offsets retention => should expire

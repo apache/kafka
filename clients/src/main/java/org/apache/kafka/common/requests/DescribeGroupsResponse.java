@@ -20,12 +20,13 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.utils.Utils;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
-import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -138,14 +139,14 @@ public class DescribeGroupsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
+        Map<Errors, Integer> errorCounts = new HashMap<>();
         data.groups().forEach(describedGroup ->
             updateErrorCounts(errorCounts, Errors.forCode(describedGroup.errorCode())));
         return errorCounts;
     }
 
-    public static DescribeGroupsResponse parse(Readable readable, short version) {
-        return new DescribeGroupsResponse(new DescribeGroupsResponseData(readable, version));
+    public static DescribeGroupsResponse parse(ByteBuffer buffer, short version) {
+        return new DescribeGroupsResponse(new DescribeGroupsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

@@ -45,6 +45,7 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -217,7 +218,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
     protected NewTopic newTopicDescription(final String topic, final WorkerConfig config) {
         Map<String, Object> topicSettings = config instanceof DistributedConfig
                 ? ((DistributedConfig) config).offsetStorageTopicSettings()
-                : Map.of();
+                : Collections.emptyMap();
         return TopicAdmin.defineTopic(topic)
                 .config(topicSettings) // first so that we override user-supplied settings as needed
                 .compacted()
@@ -264,7 +265,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
 
     @Override
     public Future<Map<ByteBuffer, ByteBuffer>> get(final Collection<ByteBuffer> keys) {
-        ConvertingFutureCallback<Void, Map<ByteBuffer, ByteBuffer>> future = new ConvertingFutureCallback<>() {
+        ConvertingFutureCallback<Void, Map<ByteBuffer, ByteBuffer>> future = new ConvertingFutureCallback<Void, Map<ByteBuffer, ByteBuffer>>() {
             @Override
             public Map<ByteBuffer, ByteBuffer> convert(Void result) {
                 Map<ByteBuffer, ByteBuffer> values = new HashMap<>();
@@ -296,7 +297,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
 
     @Override
     public Set<Map<String, Object>> connectorPartitions(String connectorName) {
-        return connectorPartitions.getOrDefault(connectorName, Set.of());
+        return connectorPartitions.getOrDefault(connectorName, Collections.emptySet());
     }
 
     protected final Callback<ConsumerRecord<byte[], byte[]>> consumedCallback = (error, record) -> {

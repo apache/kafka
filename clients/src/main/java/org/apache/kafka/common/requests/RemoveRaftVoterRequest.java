@@ -20,8 +20,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.RemoveRaftVoterRequestData;
 import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
+
+import java.nio.ByteBuffer;
 
 public class RemoveRaftVoterRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<RemoveRaftVoterRequest> {
@@ -65,9 +67,9 @@ public class RemoveRaftVoterRequest extends AbstractRequest {
             setThrottleTimeMs(throttleTimeMs));
     }
 
-    public static RemoveRaftVoterRequest parse(Readable readable, short version) {
+    public static RemoveRaftVoterRequest parse(ByteBuffer buffer, short version) {
         return new RemoveRaftVoterRequest(
-            new RemoveRaftVoterRequestData(readable, version),
+            new RemoveRaftVoterRequestData(new ByteBufferAccessor(buffer), version),
             version);
     }
 }

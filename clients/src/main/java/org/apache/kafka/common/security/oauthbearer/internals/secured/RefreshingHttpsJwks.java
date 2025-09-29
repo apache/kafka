@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.security.oauthbearer.BrokerJwtValidator;
 import org.apache.kafka.common.utils.Time;
 
 import org.jose4j.jwk.HttpsJwks;
@@ -26,6 +25,7 @@ import org.jose4j.lang.JoseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -49,14 +49,15 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * This instance is created and provided to the
  * {@link org.jose4j.keys.resolvers.HttpsJwksVerificationKeyResolver} that is used when using
  * an HTTP-/HTTPS-based {@link org.jose4j.keys.resolvers.VerificationKeyResolver}, which is then
- * provided to the {@link BrokerJwtValidator} to use in validating the signature of
+ * provided to the {@link ValidatorAccessTokenValidator} to use in validating the signature of
  * a JWT.
  *
  * @see org.jose4j.keys.resolvers.HttpsJwksVerificationKeyResolver
  * @see org.jose4j.keys.resolvers.VerificationKeyResolver
- * @see BrokerJwtValidator
+ * @see ValidatorAccessTokenValidator
  */
-public final class RefreshingHttpsJwks implements OAuthBearerConfigurable {
+
+public final class RefreshingHttpsJwks implements Initable, Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwks.class);
 
@@ -170,6 +171,7 @@ public final class RefreshingHttpsJwks implements OAuthBearerConfigurable {
         this(time, httpsJwks, refreshMs, refreshRetryBackoffMs, refreshRetryBackoffMaxMs, Executors.newSingleThreadScheduledExecutor());
     }
 
+    @Override
     public void init() throws IOException {
         try {
             log.debug("init started");
@@ -373,4 +375,5 @@ public final class RefreshingHttpsJwks implements OAuthBearerConfigurable {
             }
         }
     }
+
 }

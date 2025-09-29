@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
@@ -30,8 +29,6 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
-import org.apache.kafka.streams.errors.LogAndContinueProcessingExceptionHandler;
-import org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -42,9 +39,7 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -57,13 +52,10 @@ import org.mockito.quality.Strictness;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.apache.kafka.streams.errors.ProcessingExceptionHandler.Response;
-import static org.apache.kafka.streams.errors.ProcessingExceptionHandler.Result;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -88,8 +80,6 @@ public class ProcessorNodeTest {
     private static final String NAME = "name";
     private static final String KEY = "key";
     private static final String VALUE = "value";
-    private static final byte[] RAW_KEY = KEY.getBytes();
-    private static final byte[] RAW_VALUE = VALUE.getBytes();
 
     @Test
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringInit() {
@@ -111,12 +101,12 @@ public class ProcessorNodeTest {
             new ProcessorNode<>(NAME, new IgnoredInternalExceptionsProcessor(), Collections.emptySet());
 
         final InternalProcessorContext<Object, Object> internalProcessorContext = mockInternalProcessorContext();
-        node.init(internalProcessorContext, new ProcessingExceptionHandlerMock(ProcessingExceptionHandler.Response.fail(), internalProcessorContext, false));
+        node.init(internalProcessorContext, new ProcessingExceptionHandlerMock(ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL, internalProcessorContext, false));
 
         final FailedProcessingException failedProcessingException = assertThrows(FailedProcessingException.class,
             () -> node.process(new Record<>(KEY, VALUE, TIMESTAMP)));
 
-        assertInstanceOf(RuntimeException.class, failedProcessingException.getCause());
+        assertTrue(failedProcessingException.getCause() instanceof RuntimeException);
         assertEquals("Processing exception should be caught and handled by the processing exception handler.",
             failedProcessingException.getCause().getMessage());
         assertEquals(NAME, failedProcessingException.failedProcessorNodeName());
@@ -128,7 +118,7 @@ public class ProcessorNodeTest {
             new ProcessorNode<>(NAME, new IgnoredInternalExceptionsProcessor(), Collections.emptySet());
 
         final InternalProcessorContext<Object, Object> internalProcessorContext = mockInternalProcessorContext();
-        node.init(internalProcessorContext, new ProcessingExceptionHandlerMock(ProcessingExceptionHandler.Response.resume(), internalProcessorContext, false));
+        node.init(internalProcessorContext, new ProcessingExceptionHandlerMock(ProcessingExceptionHandler.ProcessingHandlerResponse.CONTINUE, internalProcessorContext, false));
 
         assertDoesNotThrow(() -> node.process(new Record<>(KEY, VALUE, TIMESTAMP)));
     }
@@ -155,7 +145,7 @@ public class ProcessorNodeTest {
 
         assertEquals(ignoredExceptionCause, runtimeException.getCause().getClass());
         assertEquals(ignoredExceptionCauseMessage, runtimeException.getCause().getMessage());
-        verify(processingExceptionHandler, never()).handleError(any(), any(), any());
+        verify(processingExceptionHandler, never()).handle(any(), any(), any());
     }
 
     @Test
@@ -164,7 +154,7 @@ public class ProcessorNodeTest {
                 new ProcessorNode<>(NAME, new IgnoredInternalExceptionsProcessor(), Collections.emptySet());
 
         final InternalProcessorContext<Object, Object> internalProcessorContext = mockInternalProcessorContext();
-        node.init(internalProcessorContext, new ProcessingExceptionHandlerMock(ProcessingExceptionHandler.Response.resume(), internalProcessorContext, true));
+        node.init(internalProcessorContext, new ProcessingExceptionHandlerMock(ProcessingExceptionHandler.ProcessingHandlerResponse.CONTINUE, internalProcessorContext, true));
 
         final FailedProcessingException failedProcessingException = assertThrows(FailedProcessingException.class,
             () -> node.process(new Record<>(KEY, VALUE, TIMESTAMP)));
@@ -172,58 +162,6 @@ public class ProcessorNodeTest {
         assertInstanceOf(RuntimeException.class, failedProcessingException.getCause());
         assertEquals("KABOOM!", failedProcessingException.getCause().getMessage());
         assertEquals(NAME, failedProcessingException.failedProcessorNodeName());
-    }
-
-
-    @Test
-    public void shouldBuildDeadLetterQueueRecordsInDefaultProcessingExceptionHandler() {
-        final ProcessorNode<Object, Object, Object, Object> node = new ProcessorNode<>("processor",
-                (Processor<Object, Object, Object, Object>) record -> {
-                    throw new NullPointerException("Oopsie!");
-                }, Collections.emptySet());
-
-        final MockRecordCollector collector = new MockRecordCollector();
-        final InternalProcessorContext<Object, Object> internalProcessorContext =
-                new InternalMockProcessorContext<>(
-                        new StateSerdes<>("sink", Serdes.ByteArray(), Serdes.ByteArray()),
-                        collector
-                );
-        final ProcessingExceptionHandler processingExceptionHandler = new LogAndFailProcessingExceptionHandler();
-        processingExceptionHandler.configure(Collections.singletonMap(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG, "dlq"));
-        node.init(internalProcessorContext, processingExceptionHandler);
-
-        assertThrows(RuntimeException.class,
-                () -> node.process(new Record<>("hello", "world", 1L)));
-
-        assertEquals(1, collector.collected().size());
-        assertEquals("dlq", collector.collected().get(0).topic());
-        assertEquals("sourceKey", new String((byte[]) collector.collected().get(0).key()));
-        assertEquals("sourceValue", new String((byte[]) collector.collected().get(0).value()));
-    }
-
-    @Test
-    public void shouldBuildDeadLetterQueueRecordsInLogAndContinueProcessingExceptionHandler() {
-        final ProcessorNode<Object, Object, Object, Object> node = new ProcessorNode<>("processor",
-                (Processor<Object, Object, Object, Object>) record -> {
-                    throw new NullPointerException("Oopsie!");
-                }, Collections.emptySet());
-
-        final MockRecordCollector collector = new MockRecordCollector();
-        final InternalProcessorContext<Object, Object> internalProcessorContext =
-                new InternalMockProcessorContext<>(
-                        new StateSerdes<>("sink", Serdes.ByteArray(), Serdes.ByteArray()),
-                        collector
-                );
-        final ProcessingExceptionHandler processingExceptionHandler = new LogAndContinueProcessingExceptionHandler();
-        processingExceptionHandler.configure(Collections.singletonMap(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG, "dlq"));
-        node.init(internalProcessorContext, processingExceptionHandler);
-
-        node.process(new Record<>("hello", "world", 0L));
-
-        assertEquals(1, collector.collected().size());
-        assertEquals("dlq", collector.collected().get(0).topic());
-        assertEquals("sourceKey", new String((byte[]) collector.collected().get(0).key()));
-        assertEquals("sourceValue", new String((byte[]) collector.collected().get(0).value()));
     }
 
     private static class ExceptionalProcessor implements Processor<Object, Object, Object, Object> {
@@ -262,7 +200,7 @@ public class ProcessorNodeTest {
                 throw new TaskCorruptedException(tasksIds, new InvalidOffsetException("Invalid offset") {
                     @Override
                     public Set<TopicPartition> partitions() {
-                        return Set.of(new TopicPartition("topic", 0));
+                        return new HashSet<>(Collections.singletonList(new TopicPartition("topic", 0)));
                     }
                 });
             }
@@ -372,68 +310,10 @@ public class ProcessorNodeTest {
             StreamsException.class,
             () -> node.process(new Record<>(KEY, VALUE, TIMESTAMP))
         );
-        assertInstanceOf(ClassCastException.class, se.getCause());
+        assertTrue(se.getCause() instanceof ClassCastException);
         assertTrue(se.getMessage().contains("default Serdes"));
         assertTrue(se.getMessage().contains("input types"));
         assertTrue(se.getMessage().contains("pname"));
-    }
-
-    @Test
-    void shouldFailWithDeadLetterQueueRecords() {
-        final ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
-        final List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
-
-        final Response response = Response.fail(records);
-
-        assertEquals(Result.FAIL, response.result());
-        assertEquals(1, response.deadLetterQueueRecords().size());
-        assertEquals(record, response.deadLetterQueueRecords().get(0));
-    }
-
-    @Test
-    void shouldFailWithoutDeadLetterQueueRecords() {
-        final Response response = Response.fail();
-
-        assertEquals(Result.FAIL, response.result());
-        assertTrue(response.deadLetterQueueRecords().isEmpty());
-    }
-
-    @Test
-    void shouldResumeWithDeadLetterQueueRecords() {
-        final ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
-        final List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
-
-        final Response response = Response.resume(records);
-
-        assertEquals(Result.RESUME, response.result());
-        assertEquals(1, response.deadLetterQueueRecords().size());
-        assertEquals(record, response.deadLetterQueueRecords().get(0));
-    }
-
-    @Test
-    void shouldResumeWithoutDeadLetterQueueRecords() {
-        final Response response = Response.resume();
-
-        assertEquals(Result.RESUME, response.result());
-        assertTrue(response.deadLetterQueueRecords().isEmpty());
-    }
-
-
-    @Test
-    void shouldNotBeModifiable() {
-        final ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
-        final List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
-
-        final Response response = Response.fail(records);
-
-        assertThrows(UnsupportedOperationException.class, () -> response.deadLetterQueueRecords().add(record));
-    }
-
-    @Test
-    void shouldReturnsEmptyList() {
-        final Response response = Response.fail();
-
-        assertTrue(response.deadLetterQueueRecords().isEmpty());
     }
 
     @SuppressWarnings("unchecked")
@@ -451,21 +331,19 @@ public class ProcessorNodeTest {
                 OFFSET,
                 PARTITION,
                 TOPIC,
-                new RecordHeaders(),
-                RAW_KEY,
-                RAW_VALUE));
+                new RecordHeaders()));
         when(internalProcessorContext.currentNode()).thenReturn(new ProcessorNode<>(NAME));
 
         return internalProcessorContext;
     }
 
     public static class ProcessingExceptionHandlerMock implements ProcessingExceptionHandler {
-        private final Response response;
+        private final ProcessingExceptionHandler.ProcessingHandlerResponse response;
         private final InternalProcessorContext<Object, Object> internalProcessorContext;
 
         private final boolean shouldThrowException;
 
-        public ProcessingExceptionHandlerMock(final Response response,
+        public ProcessingExceptionHandlerMock(final ProcessingExceptionHandler.ProcessingHandlerResponse response,
                                               final InternalProcessorContext<Object, Object> internalProcessorContext,
                                               final boolean shouldThrowException) {
             this.response = response;
@@ -474,16 +352,13 @@ public class ProcessorNodeTest {
         }
 
         @Override
-        public Response handleError(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
+        public ProcessingExceptionHandler.ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
             assertEquals(internalProcessorContext.topic(), context.topic());
             assertEquals(internalProcessorContext.partition(), context.partition());
             assertEquals(internalProcessorContext.offset(), context.offset());
             assertEquals(internalProcessorContext.currentNode().name(), context.processorNodeId());
             assertEquals(internalProcessorContext.taskId(), context.taskId());
-            assertEquals(internalProcessorContext.recordContext().timestamp(), context.timestamp());
-            assertEquals(internalProcessorContext.recordContext().sourceRawKey(), context.sourceRawKey());
-            assertEquals(internalProcessorContext.recordContext().sourceRawValue(), context.sourceRawValue());
-
+            assertEquals(internalProcessorContext.timestamp(), context.timestamp());
             assertEquals(KEY, record.key());
             assertEquals(VALUE, record.value());
             assertInstanceOf(RuntimeException.class, exception);

@@ -137,7 +137,7 @@ public abstract class ShutdownableThread extends Thread {
         } catch (FatalExitError e) {
             shutdownInitiated.countDown();
             shutdownComplete.countDown();
-            log.error("Stopped due to fatal error with exit code {}", e.statusCode(), e);
+            log.info("Stopped");
             Exit.exit(e.statusCode());
         } catch (Throwable e) {
             if (isRunning())

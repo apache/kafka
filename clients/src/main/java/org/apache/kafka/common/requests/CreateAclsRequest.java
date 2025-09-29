@@ -27,11 +27,12 @@ import org.apache.kafka.common.message.CreateAclsRequestData.AclCreation;
 import org.apache.kafka.common.message.CreateAclsResponseData;
 import org.apache.kafka.common.message.CreateAclsResponseData.AclCreationResult;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Readable;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 
@@ -82,8 +83,8 @@ public class CreateAclsRequest extends AbstractRequest {
             .setResults(results));
     }
 
-    public static CreateAclsRequest parse(Readable readable, short version) {
-        return new CreateAclsRequest(new CreateAclsRequestData(readable, version), version);
+    public static CreateAclsRequest parse(ByteBuffer buffer, short version) {
+        return new CreateAclsRequest(new CreateAclsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     private void validate(CreateAclsRequestData data) {

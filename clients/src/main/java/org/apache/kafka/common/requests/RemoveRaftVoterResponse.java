@@ -19,9 +19,10 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Map;
 
@@ -57,8 +58,8 @@ public class RemoveRaftVoterResponse extends AbstractResponse {
         }
     }
 
-    public static RemoveRaftVoterResponse parse(Readable readable, short version) {
+    public static RemoveRaftVoterResponse parse(ByteBuffer buffer, short version) {
         return new RemoveRaftVoterResponse(
-            new RemoveRaftVoterResponseData(readable, version));
+            new RemoveRaftVoterResponseData(new ByteBufferAccessor(buffer), version));
     }
 }

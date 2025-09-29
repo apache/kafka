@@ -19,9 +19,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DescribeConfigsRequestData;
 import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
+import java.nio.ByteBuffer;
 import java.util.stream.Collectors;
 
 public class DescribeConfigsRequest extends AbstractRequest {
@@ -66,7 +67,7 @@ public class DescribeConfigsRequest extends AbstractRequest {
         ));
     }
 
-    public static DescribeConfigsRequest parse(Readable readable, short version) {
-        return new DescribeConfigsRequest(new DescribeConfigsRequestData(readable, version), version);
+    public static DescribeConfigsRequest parse(ByteBuffer buffer, short version) {
+        return new DescribeConfigsRequest(new DescribeConfigsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

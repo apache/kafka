@@ -19,10 +19,11 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
-import java.util.EnumMap;
+import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.Map;
 
 public class AlterPartitionReassignmentsResponse extends AbstractResponse {
@@ -34,9 +35,9 @@ public class AlterPartitionReassignmentsResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public static AlterPartitionReassignmentsResponse parse(Readable readable, short version) {
+    public static AlterPartitionReassignmentsResponse parse(ByteBuffer buffer, short version) {
         return new AlterPartitionReassignmentsResponse(
-            new AlterPartitionReassignmentsResponseData(readable, version));
+            new AlterPartitionReassignmentsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override
@@ -61,7 +62,7 @@ public class AlterPartitionReassignmentsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
+        Map<Errors, Integer> counts = new HashMap<>();
         updateErrorCounts(counts, Errors.forCode(data.errorCode()));
 
         data.responses().forEach(topicResponse ->

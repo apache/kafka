@@ -27,6 +27,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -97,7 +98,7 @@ public final class ShareConsumeBenchSpec extends TaskSpec {
                             @JsonProperty("bootstrapServers") String bootstrapServers,
                             @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
                             @JsonProperty("maxMessages") long maxMessages,
-                            @JsonProperty("shareGroup") String shareGroup,
+                            @JsonProperty("consumerGroup") String shareGroup,
                             @JsonProperty("consumerConf") Map<String, String> consumerConf,
                             @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
                             @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
@@ -175,7 +176,7 @@ public final class ShareConsumeBenchSpec extends TaskSpec {
 
     @Override
     public TaskController newController(String id) {
-        return topology -> Set.of(consumerNode);
+        return topology -> Collections.singleton(consumerNode);
     }
 
     @Override

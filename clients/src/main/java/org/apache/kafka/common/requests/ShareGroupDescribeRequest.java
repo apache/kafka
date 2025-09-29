@@ -19,9 +19,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.ShareGroupDescribeRequestData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -32,7 +33,11 @@ public class ShareGroupDescribeRequest extends AbstractRequest {
         private final ShareGroupDescribeRequestData data;
 
         public Builder(ShareGroupDescribeRequestData data) {
-            super(ApiKeys.SHARE_GROUP_DESCRIBE);
+            this(data, false);
+        }
+
+        public Builder(ShareGroupDescribeRequestData data, boolean enableUnstableLastVersion) {
+            super(ApiKeys.SHARE_GROUP_DESCRIBE, enableUnstableLastVersion);
             this.data = data;
         }
 
@@ -75,9 +80,9 @@ public class ShareGroupDescribeRequest extends AbstractRequest {
         return data;
     }
 
-    public static ShareGroupDescribeRequest parse(Readable readable, short version) {
+    public static ShareGroupDescribeRequest parse(ByteBuffer buffer, short version) {
         return new ShareGroupDescribeRequest(
-                new ShareGroupDescribeRequestData(readable, version),
+                new ShareGroupDescribeRequestData(new ByteBufferAccessor(buffer), version),
                 version
         );
     }
@@ -90,7 +95,6 @@ public class ShareGroupDescribeRequest extends AbstractRequest {
                 .map(groupId -> new ShareGroupDescribeResponseData.DescribedGroup()
                         .setGroupId(groupId)
                         .setErrorCode(error.code())
-                        .setErrorMessage(error.message())
                 ).collect(Collectors.toList());
     }
 }

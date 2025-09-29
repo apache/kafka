@@ -20,6 +20,9 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.modern.Assignment;
+import org.apache.kafka.coordinator.group.modern.TopicMetadata;
+import org.apache.kafka.image.TopicImage;
+import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -33,7 +36,7 @@ public class ShareGroupBuilder {
     private int assignmentEpoch;
     private final Map<String, ShareGroupMember> members = new HashMap<>();
     private final Map<String, Assignment> assignments = new HashMap<>();
-    private long metadataHash = 0L;
+    private Map<String, TopicMetadata> subscriptionMetadata;
 
     public ShareGroupBuilder(String groupId, int groupEpoch) {
         this.groupId = groupId;
@@ -46,8 +49,8 @@ public class ShareGroupBuilder {
         return this;
     }
 
-    public ShareGroupBuilder withMetadataHash(long metadataHash) {
-        this.metadataHash = metadataHash;
+    public ShareGroupBuilder withSubscriptionMetadata(Map<String, TopicMetadata> subscriptionMetadata) {
+        this.subscriptionMetadata = subscriptionMetadata;
         return this;
     }
 
@@ -61,7 +64,7 @@ public class ShareGroupBuilder {
         return this;
     }
 
-    public List<CoordinatorRecord> build() {
+    public List<CoordinatorRecord> build(TopicsImage topicsImage) {
         List<CoordinatorRecord> records = new ArrayList<>();
 
         // Add subscription records for members.
@@ -69,8 +72,29 @@ public class ShareGroupBuilder {
             records.add(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord(groupId, member))
         );
 
+        // Add subscription metadata.
+        if (subscriptionMetadata == null) {
+            subscriptionMetadata = new HashMap<>();
+            members.forEach((memberId, member) ->
+                member.subscribedTopicNames().forEach(topicName -> {
+                    TopicImage topicImage = topicsImage.getTopic(topicName);
+                    if (topicImage != null) {
+                        subscriptionMetadata.put(topicName, new TopicMetadata(
+                            topicImage.id(),
+                            topicImage.name(),
+                            topicImage.partitions().size()
+                        ));
+                    }
+                })
+            );
+        }
+
+        if (!subscriptionMetadata.isEmpty()) {
+            records.add(GroupCoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
+        }
+
         // Add group epoch record.
-        records.add(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, groupEpoch, metadataHash));
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, groupEpoch));
 
         // Add target assignment records.
         assignments.forEach((memberId, assignment) ->

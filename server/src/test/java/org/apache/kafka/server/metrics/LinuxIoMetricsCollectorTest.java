@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Timeout;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -86,7 +87,7 @@ public class LinuxIoMetricsCollectorTest {
                          "read_bytes: " + readBytes + "\n" +
                          "write_bytes: " + writeBytes + "\n" +
                          "cancelled_write_bytes: 0\n";
-            Files.writeString(selfDir.resolve("io"), bld);
+            Files.write(selfDir.resolve("io"), bld.getBytes(StandardCharsets.UTF_8));
         }
     }
 }

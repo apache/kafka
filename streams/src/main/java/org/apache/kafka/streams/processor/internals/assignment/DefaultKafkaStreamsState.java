@@ -99,7 +99,7 @@ public class DefaultKafkaStreamsState implements KafkaStreamsState {
 
     @Override
     public long lagFor(final TaskId task) {
-        if (taskLagTotals.isEmpty()) {
+        if (!taskLagTotals.isPresent()) {
             LOG.error("lagFor was called on a KafkaStreamsState {} that does not support lag computations.", processId);
             throw new UnsupportedOperationException("Lag computation was not requested for KafkaStreamsState with process " + processId);
         }
@@ -115,7 +115,7 @@ public class DefaultKafkaStreamsState implements KafkaStreamsState {
 
     @Override
     public SortedSet<TaskId> prevTasksByLag(final String consumerClientId) {
-        if (taskLagTotals.isEmpty()) {
+        if (!taskLagTotals.isPresent()) {
             LOG.error("prevTasksByLag was called on a KafkaStreamsState {} that does not support lag computations.", processId);
             throw new UnsupportedOperationException("Lag computation was not requested for KafkaStreamsState with process " + processId);
         }
@@ -139,7 +139,7 @@ public class DefaultKafkaStreamsState implements KafkaStreamsState {
 
     @Override
     public Map<TaskId, Long> statefulTasksToLagSums() {
-        if (taskLagTotals.isEmpty()) {
+        if (!taskLagTotals.isPresent()) {
             LOG.error("statefulTasksToLagSums was called on a KafkaStreamsState {} that does not support lag computations.", processId);
             throw new UnsupportedOperationException("Lag computation was not requested for KafkaStreamsState with process " + processId);
         }

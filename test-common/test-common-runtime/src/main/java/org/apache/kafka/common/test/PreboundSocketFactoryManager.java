@@ -23,6 +23,7 @@ import org.apache.kafka.server.ServerSocketFactory;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.ServerSocketChannel;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -48,22 +49,7 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
             ServerSocketChannel socketChannel = getSocketForListenerAndMarkAsUsed(
                 nodeId,
                 listenerName);
-
             if (socketChannel != null) {
-                if (socketChannel.isOpen()) {
-                    return socketChannel;
-                }
-                // When restarting components(e.g. controllers, brokers) in tests, we want to reuse the same
-                // port that was previously allocated to maintain consistent addressing
-                // so the client can reconnect to the same port.
-                // Since those components would close the socket when they are restarted,
-                // we need to rebind the socket to the same port.
-                socketAddress = new InetSocketAddress(socketAddress.getHostString(), socketChannel.socket().getLocalPort());
-                socketChannel = ServerSocketFactory.INSTANCE.openServerSocket(
-                        listenerName,
-                        socketAddress,
-                        listenBacklogSize,
-                        recvBufferSize);
                 return socketChannel;
             }
             return ServerSocketFactory.INSTANCE.openServerSocket(
@@ -173,7 +159,7 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
         // SocketServer.)
         for (Entry<Integer, Map<String, ServerSocketChannel>> socketsEntry : sockets.entrySet()) {
             Set<String> usedListeners = usedSockets.getOrDefault(
-                socketsEntry.getKey(), Set.of());
+                socketsEntry.getKey(), Collections.emptySet());
             for (Entry<String, ServerSocketChannel> entry : socketsEntry.getValue().entrySet()) {
                 if (!usedListeners.contains(entry.getKey())) {
                     Utils.closeQuietly(entry.getValue(), "serverSocketChannel");

@@ -20,7 +20,6 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
-import org.apache.kafka.connect.runtime.isolation.PluginUtils;
 import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
@@ -30,17 +29,17 @@ import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.Stage;
 import org.apache.kafka.connect.util.StagedTimeoutException;
 
-import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
-import org.apache.maven.artifact.versioning.VersionRange;
-
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -142,11 +141,11 @@ public class ConnectorPluginsResource {
     ) {
         synchronized (this) {
             if (connectorsOnly) {
-                return connectorPlugins.stream()
-                    .filter(p -> p.type() == PluginType.SINK || p.type() == PluginType.SOURCE)
-                    .toList();
+                return Collections.unmodifiableList(connectorPlugins.stream()
+                        .filter(p -> PluginType.SINK.toString().equals(p.type()) || PluginType.SOURCE.toString().equals(p.type()))
+                        .collect(Collectors.toList()));
             } else {
-                return List.copyOf(connectorPlugins);
+                return Collections.unmodifiableList(new ArrayList<>(connectorPlugins));
             }
         }
     }
@@ -154,18 +153,9 @@ public class ConnectorPluginsResource {
     @GET
     @Path("/{pluginName}/config")
     @Operation(summary = "Get the configuration definition for the specified pluginName")
-    public List<ConfigKeyInfo> getConnectorConfigDef(final @PathParam("pluginName") String pluginName,
-                                                     final @QueryParam("version") @DefaultValue("latest") String version) {
-
-        VersionRange range;
-        try {
-            range = PluginUtils.connectorVersionRequirement(version);
-        } catch (InvalidVersionSpecificationException e) {
-            throw new BadRequestException("Invalid version specification: " + version, e);
-        }
-
+    public List<ConfigKeyInfo> getConnectorConfigDef(final @PathParam("pluginName") String pluginName) {
         synchronized (this) {
-            return herder.connectorPluginConfig(pluginName, range);
+            return herder.connectorPluginConfig(pluginName);
         }
     }
 

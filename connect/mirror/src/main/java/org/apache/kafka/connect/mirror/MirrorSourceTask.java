@@ -22,6 +22,8 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.Utils;
@@ -36,6 +38,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -55,6 +58,10 @@ public class MirrorSourceTask extends SourceTask {
     private boolean stopping = false;
     private Semaphore consumerAccess;
     private OffsetSyncWriter offsetSyncWriter;
+
+    // Enhanced MirrorMaker 2 features for fault tolerance
+    private Map<TopicPartition, Long> previousOffsets = new HashMap<>();
+    private Map<TopicPartition, Boolean> topicResetDetected = new HashMap<>();
 
     public MirrorSourceTask() {}
 
@@ -132,7 +139,14 @@ public class MirrorSourceTask extends SourceTask {
             return null;
         }
         try {
+            // Enhanced MirrorMaker 2: Check for topic resets before polling
+            detectAndHandleTopicResets();
+
             ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
+
+            // Enhanced MirrorMaker 2: Detect log truncation
+            detectLogTruncation(records);
+
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
             for (ConsumerRecord<byte[], byte[]> record : records) {
                 SourceRecord converted = convertRecord(record);
@@ -140,6 +154,10 @@ public class MirrorSourceTask extends SourceTask {
                 TopicPartition topicPartition = new TopicPartition(converted.topic(), converted.kafkaPartition());
                 metrics.recordAge(topicPartition, System.currentTimeMillis() - record.timestamp());
                 metrics.recordBytes(topicPartition, byteSize(record.value()));
+
+                // Enhanced MirrorMaker 2: Track offsets for truncation detection
+                TopicPartition sourceTopicPartition = new TopicPartition(record.topic(), record.partition());
+                previousOffsets.put(sourceTopicPartition, record.offset());
             }
             if (sourceRecords.isEmpty()) {
                 // WorkerSourceTasks expects non-zero batch size
@@ -149,6 +167,10 @@ public class MirrorSourceTask extends SourceTask {
                 return sourceRecords;
             }
         } catch (WakeupException e) {
+            return null;
+        } catch (UnknownTopicOrPartitionException e) {
+            log.warn("Topic or partition not found, attempting recovery: {}", e.getMessage());
+            handleTopicRecovery(e);
             return null;
         } catch (KafkaException e) {
             log.warn("Failure during poll.", e);
@@ -254,5 +276,122 @@ public class MirrorSourceTask extends SourceTask {
 
     private boolean isUncommitted(Long offset) {
         return offset == null || offset < 0;
+    }
+
+    /**
+     * Enhanced MirrorMaker 2: Detect log truncation by checking for offset gaps
+     * When aggressive retention policies purge messages before replication completes,
+     * this creates undetectable gaps in the replicated data stream.
+     */
+    private void detectLogTruncation(ConsumerRecords<byte[], byte[]> records) {
+        for (ConsumerRecord<byte[], byte[]> record : records) {
+            TopicPartition sourceTopicPartition = new TopicPartition(record.topic(), record.partition());
+            Long lastKnownOffset = previousOffsets.get(sourceTopicPartition);
+
+            if (lastKnownOffset != null && record.offset() > lastKnownOffset + 1) {
+                long gapSize = record.offset() - lastKnownOffset - 1;
+                String errorMessage = String.format(
+                    "CRITICAL: Log truncation detected for %s. Expected offset %d, but got %d. " +
+                    "Gap of %d messages detected, indicating potential data loss due to retention policies. " +
+                    "Timestamp: %d, Topic: %s, Partition: %d",
+                    sourceTopicPartition, lastKnownOffset + 1, record.offset(), gapSize,
+                    System.currentTimeMillis(), record.topic(), record.partition()
+                );
+
+                log.error(errorMessage);
+
+                // Fail-fast: Throw exception to stop replication immediately
+                throw new KafkaException("Log truncation detected: " + errorMessage);
+            }
+        }
+    }
+
+    /**
+     * Enhanced MirrorMaker 2: Detect and handle topic resets (deletion/recreation)
+     * When topics are deleted and recreated, offsets reset to 0, causing replication failures.
+     * This method detects such scenarios and automatically recovers.
+     */
+    private void detectAndHandleTopicResets() {
+        try {
+            Set<TopicPartition> assignedPartitions = consumer.assignment();
+
+            for (TopicPartition tp : assignedPartitions) {
+                if (topicResetDetected.getOrDefault(tp, false)) {
+                    continue; // Already handled this reset
+                }
+
+                try {
+                    // Try to get current position - this will fail if topic was reset
+                    long currentPosition = consumer.position(tp);
+                    Long lastKnownOffset = previousOffsets.get(tp);
+
+                    // If we had a previous offset but current position is 0, likely a topic reset
+                    if (lastKnownOffset != null && lastKnownOffset > 0 && currentPosition == 0) {
+                        log.warn("Topic reset detected for {}. Last known offset: {}, current position: {}. " +
+                                "Timestamp: {}",
+                                tp, lastKnownOffset, currentPosition, System.currentTimeMillis());
+
+                        handleTopicReset(tp);
+                    }
+                } catch (Exception e) {
+                    log.debug("Error checking position for {}: {}", tp, e.getMessage());
+                    // This might indicate a topic reset, attempt recovery
+                    handleTopicReset(tp);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Error during topic reset detection: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Enhanced MirrorMaker 2: Handle topic reset by resubscribing from beginning
+     */
+    private void handleTopicReset(TopicPartition topicPartition) {
+        try {
+            log.info("Handling topic reset for {}. Seeking to beginning offset. Timestamp: {}",
+                    topicPartition, System.currentTimeMillis());
+
+            // Mark this topic as reset to avoid repeated handling
+            topicResetDetected.put(topicPartition, true);
+
+            // Seek to beginning to restart replication from the start
+            consumer.seekToBeginning(List.of(topicPartition));
+
+            // Clear previous offset tracking for this partition
+            previousOffsets.remove(topicPartition);
+
+            log.info("Successfully recovered from topic reset for {}. Replication will restart from beginning.",
+                    topicPartition);
+
+        } catch (Exception e) {
+            log.error("Failed to handle topic reset for {}: {}", topicPartition, e.getMessage(), e);
+            // Re-throw to let Connect framework handle the error
+            throw new KafkaException("Failed to recover from topic reset for " + topicPartition, e);
+        }
+    }
+
+    /**
+     * Enhanced MirrorMaker 2: Handle topic recovery for unknown topics/partitions
+     */
+    private void handleTopicRecovery(UnknownTopicOrPartitionException e) {
+        try {
+            log.info("Attempting to recover from unknown topic/partition error: {}. Timestamp: {}",
+                    e.getMessage(), System.currentTimeMillis());
+
+            // Wait a bit for topic to be available again
+            Thread.sleep(5000);
+
+            // Clear reset detection state to allow re-detection
+            topicResetDetected.clear();
+
+            log.info("Topic recovery attempt completed. Will retry on next poll.");
+
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            log.warn("Topic recovery interrupted");
+        } catch (Exception ex) {
+            log.error("Failed during topic recovery: {}", ex.getMessage(), ex);
+        }
     }
 }

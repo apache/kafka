@@ -44,6 +44,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -131,15 +132,10 @@ public class StreamsResetter {
             StreamsResetterOptions options = new StreamsResetterOptions(args);
 
             String groupId = options.applicationId();
-
-            String commandConfigFile;
-            if (options.hasConfig()) {
-                System.out.println("Option --config-file has been deprecated and will be removed in a future version. Use --command-config instead.");
-                commandConfigFile = options.config();
-            } else {
-                commandConfigFile = options.commandConfig();
+            Properties properties = new Properties();
+            if (options.hasCommandConfig()) {
+                properties.putAll(Utils.loadProps(options.commandConfig()));
             }
-            Properties properties = (commandConfigFile != null) ? Utils.loadProps(commandConfigFile) : new Properties();
 
             String bootstrapServerValue = "localhost:9092";
             if (options.hasBootstrapServer()) {
@@ -182,7 +178,7 @@ public class StreamsResetter {
                                             final StreamsResetterOptions options)
         throws ExecutionException, InterruptedException {
         final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(
-            Set.of(groupId),
+            Collections.singleton(groupId),
             new DescribeConsumerGroupsOptions().timeoutMs(10 * 1000));
         try {
             final List<MemberDescription> members =
@@ -216,15 +212,15 @@ public class StreamsResetter {
         final List<String> notFoundInputTopics = new ArrayList<>();
         final List<String> notFoundIntermediateTopics = new ArrayList<>();
 
-        if (inputTopics.isEmpty() && intermediateTopics.isEmpty()) {
+        if (inputTopics.size() == 0 && intermediateTopics.size() == 0) {
             System.out.println("No input or intermediate topics specified. Skipping seek.");
             return EXIT_CODE_SUCCESS;
         }
 
-        if (!inputTopics.isEmpty()) {
+        if (inputTopics.size() != 0) {
             System.out.println("Reset-offsets for input topics " + inputTopics);
         }
-        if (!intermediateTopics.isEmpty()) {
+        if (intermediateTopics.size() != 0) {
             System.out.println("Seek-to-end for intermediate topics " + intermediateTopics);
         }
 
@@ -317,7 +313,7 @@ public class StreamsResetter {
     public void maybeSeekToEnd(final String groupId,
                                final Consumer<byte[], byte[]> client,
                                final Set<TopicPartition> intermediateTopicPartitions) {
-        if (!intermediateTopicPartitions.isEmpty()) {
+        if (intermediateTopicPartitions.size() > 0) {
             System.out.println("Following intermediate topics offsets will be reset to end (for consumer group " + groupId + ")");
             for (final TopicPartition topicPartition : intermediateTopicPartitions) {
                 if (allTopics.contains(topicPartition.topic())) {
@@ -332,7 +328,7 @@ public class StreamsResetter {
                             final Set<TopicPartition> inputTopicPartitions,
                             final StreamsResetterOptions options)
         throws IOException, ParseException {
-        if (!inputTopicPartitions.isEmpty()) {
+        if (inputTopicPartitions.size() > 0) {
             System.out.println("Following input topics offsets will be reset to (for consumer group " + options.applicationId() + ")");
             if (options.hasToOffset()) {
                 resetOffsetsTo(client, inputTopicPartitions, options.toOffset());
@@ -409,7 +405,7 @@ public class StreamsResetter {
             if (partitionOffset.isPresent()) {
                 client.seek(topicPartition, partitionOffset.get());
             } else {
-                client.seekToEnd(List.of(topicPartition));
+                client.seekToEnd(Collections.singletonList(topicPartition));
                 System.out.println("Partition " + topicPartition.partition() + " from topic " + topicPartition.topic() +
                         " is empty, without a committed record. Falling back to latest known offset.");
             }
@@ -512,7 +508,7 @@ public class StreamsResetter {
         final List<String> topicsToDelete;
 
         if (!specifiedInternalTopics.isEmpty()) {
-            if (!new HashSet<>(inferredInternalTopics).containsAll(specifiedInternalTopics)) {
+            if (!inferredInternalTopics.containsAll(specifiedInternalTopics)) {
                 throw new IllegalArgumentException("Invalid topic specified in the "
                         + "--internal-topics option. "
                         + "Ensure that the topics specified are all internal topics. "
@@ -578,8 +574,6 @@ public class StreamsResetter {
         private final OptionSpec<String> fromFileOption;
         private final OptionSpec<Long> shiftByOption;
         private final OptionSpecBuilder dryRunOption;
-        @Deprecated(since = "4.2", forRemoval = true)
-        private final OptionSpec<String> configOption;
         private final OptionSpec<String> commandConfigOption;
         private final OptionSpecBuilder forceOption;
 
@@ -616,7 +610,7 @@ public class StreamsResetter {
             toOffsetOption = parser.accepts("to-offset", "Reset offsets to a specific offset.")
                 .withRequiredArg()
                 .ofType(Long.class);
-            toDatetimeOption = parser.accepts("to-datetime", "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDThh:mm:ss.sss'")
+            toDatetimeOption = parser.accepts("to-datetime", "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDTHH:mm:SS.sss'")
                 .withRequiredArg()
                 .ofType(String.class);
             byDurationOption = parser.accepts("by-duration", "Reset offsets to offset by duration from current timestamp. Format: 'PnDTnHnMnS'")
@@ -631,12 +625,7 @@ public class StreamsResetter {
                 .withRequiredArg()
                 .describedAs("number-of-offsets")
                 .ofType(Long.class);
-            configOption = parser.accepts("config-file", "(DEPRECATED) Property file containing configs to be passed to admin clients and embedded consumer. "
-                    + "This option will be removed in a future version. Use --command-config instead.")
-                .withRequiredArg()
-                .ofType(String.class)
-                .describedAs("file name");
-            commandConfigOption = parser.accepts("command-config", "Config properties file to be passed to admin clients and embedded consumer.")
+            commandConfigOption = parser.accepts("config-file", "Property file containing configs to be passed to admin clients and embedded consumer.")
                 .withRequiredArg()
                 .ofType(String.class)
                 .describedAs("file name");
@@ -647,7 +636,12 @@ public class StreamsResetter {
 
             try {
                 options = parser.parse(args);
-                CommandLineUtils.maybePrintHelpOrVersion(this, USAGE);
+                if (CommandLineUtils.isPrintHelpNeeded(this)) {
+                    CommandLineUtils.printUsageAndExit(parser, USAGE);
+                }
+                if (CommandLineUtils.isPrintVersionNeeded(this)) {
+                    CommandLineUtils.printVersionAndExit();
+                }
                 CommandLineUtils.checkInvalidArgs(parser, options, toOffsetOption, toDatetimeOption, byDurationOption, toEarliestOption, toLatestOption, fromFileOption, shiftByOption);
                 CommandLineUtils.checkInvalidArgs(parser, options, toDatetimeOption, toOffsetOption, byDurationOption, toEarliestOption, toLatestOption, fromFileOption, shiftByOption);
                 CommandLineUtils.checkInvalidArgs(parser, options, byDurationOption, toOffsetOption, toDatetimeOption, toEarliestOption, toLatestOption, fromFileOption, shiftByOption);
@@ -655,7 +649,6 @@ public class StreamsResetter {
                 CommandLineUtils.checkInvalidArgs(parser, options, toLatestOption, toOffsetOption, toDatetimeOption, byDurationOption, toEarliestOption, fromFileOption, shiftByOption);
                 CommandLineUtils.checkInvalidArgs(parser, options, fromFileOption, toOffsetOption, toDatetimeOption, byDurationOption, toEarliestOption, toLatestOption, shiftByOption);
                 CommandLineUtils.checkInvalidArgs(parser, options, shiftByOption, toOffsetOption, toDatetimeOption, byDurationOption, toEarliestOption, toLatestOption, fromFileOption);
-                CommandLineUtils.checkInvalidArgs(parser, options, configOption, commandConfigOption);
             } catch (final OptionException e) {
                 CommandLineUtils.printUsageAndExit(parser, e.getMessage());
             }
@@ -669,12 +662,8 @@ public class StreamsResetter {
             return options.valueOf(applicationIdOption);
         }
 
-        public boolean hasConfig() {
-            return options.has(configOption);
-        }
-
-        public String config() {
-            return options.valueOf(configOption);
+        public boolean hasCommandConfig() {
+            return options.has(commandConfigOption);
         }
 
         public String commandConfig() {

@@ -24,7 +24,7 @@ import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
-import java.util.List;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -91,7 +91,7 @@ public final class SnapshotEmitterMetrics implements AutoCloseable {
 
     @Override
     public void close() {
-        registry.ifPresent(r -> List.of(
+        registry.ifPresent(r -> Arrays.asList(
             LATEST_SNAPSHOT_GENERATED_BYTES,
             LATEST_SNAPSHOT_GENERATED_AGE_MS
         ).forEach(r::removeMetric));

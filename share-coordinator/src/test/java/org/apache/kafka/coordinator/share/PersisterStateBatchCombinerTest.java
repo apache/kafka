@@ -22,6 +22,7 @@ import org.apache.kafka.server.share.persister.PersisterStateBatch;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Stream;
@@ -69,7 +70,7 @@ public class PersisterStateBatchCombinerTest {
             int deliveryState,
             int deliveryCount
         ) {
-            return List.of(
+            return Collections.singletonList(
                 new PersisterStateBatch(firstOffset, lastOffset, (byte) deliveryState, (short) deliveryCount)
             );
         }
@@ -107,14 +108,14 @@ public class PersisterStateBatchCombinerTest {
             new BatchTestHolder(
                 "Current batches with start offset midway are pruned.",
                 BatchTestHolder.singleBatch(100, 130, 0, 1),
-                List.of(),
+                Collections.emptyList(),
                 BatchTestHolder.singleBatch(120, 130, 0, 1),
                 120
             ),
 
             new BatchTestHolder(
                 "New batches with start offset midway are pruned.",
-                List.of(),
+                Collections.emptyList(),
                 BatchTestHolder.singleBatch(100, 130, 0, 1),
                 BatchTestHolder.singleBatch(120, 130, 0, 1),
                 120
@@ -122,9 +123,9 @@ public class PersisterStateBatchCombinerTest {
 
             new BatchTestHolder(
                 "Both current and new batches empty.",
-                List.of(),
-                List.of(),
-                List.of(),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyList(),
                 120
             )
         );

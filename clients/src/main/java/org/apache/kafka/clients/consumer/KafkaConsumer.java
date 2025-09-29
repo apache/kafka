@@ -30,7 +30,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidRegularExpression;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -661,7 +660,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * If the given list of topics is empty, it is treated the same as {@link #unsubscribe()}.
      *
      * <p>
-     * As part of group management, the group coordinator will keep track of the list of consumers that belong to a particular
+     * As part of group management, the consumer will keep track of the list of consumers that belong to a particular
      * group and will trigger a rebalance operation if any one of the following events are triggered:
      * <ul>
      * <li>Number of partitions change for any of the subscribed topics
@@ -670,11 +669,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <li>A new member is added to the consumer group
      * </ul>
      * <p>
-     * When any of these events are triggered, the provided listener will be invoked in this way:
-     * <ul>
-     *     <li>{@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} will be invoked with the partitions to revoke, before re-assigning those partitions to another consumer.</li>
-     *     <li>{@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)} will be invoked when the rebalance completes (even if no new partitions are assigned to the consumer)</li>
-     * </ul>
+     * When any of these events are triggered, the provided listener will be invoked first to indicate that
+     * the consumer's assignment has been revoked, and then again when the new assignment has been received.
      * Note that rebalances will only occur during an active call to {@link #poll(Duration)}, so callbacks will
      * also only be invoked during that time.
      *
@@ -912,8 +908,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * (in which case a {@link org.apache.kafka.common.errors.TimeoutException} is thrown to the caller).
      * <p>
      * Note that asynchronous offset commits sent previously with the {@link #commitAsync(OffsetCommitCallback)}
-     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method,
-     * but only when the consumer is using the consumer group protocol.
+     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method.
      *
      * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
      *             This fatal error can only occur if you are using automatic group management with {@link #subscribe(Collection)},
@@ -957,8 +952,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * encountered (in which case it is thrown to the caller), or the passed timeout expires.
      * <p>
      * Note that asynchronous offset commits sent previously with the {@link #commitAsync(OffsetCommitCallback)}
-     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method,
-     * but only when the consumer is using the consumer group protocol.
+     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method.
      *
      * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
      *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
@@ -1007,11 +1001,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * (in which case a {@link org.apache.kafka.common.errors.TimeoutException} is thrown to the caller).
      * <p>
      * Note that asynchronous offset commits sent previously with the {@link #commitAsync(OffsetCommitCallback)}
-     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method,
-     * but only when the consumer is using the consumer group protocol.
+     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method.
      *
-     * @param offsets A map of offsets by partition with associated metadata. This map will be copied internally, so it
-     *                is safe to mutate the map after returning.
+     * @param offsets A map of offsets by partition with associated metadata
      * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
      *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
      *             or if there is an active group with the same <code>group.id</code> which is using group management. In such cases,
@@ -1060,11 +1052,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * encountered (in which case it is thrown to the caller), or the timeout expires.
      * <p>
      * Note that asynchronous offset commits sent previously with the {@link #commitAsync(OffsetCommitCallback)}
-     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method,
-     * but only when the consumer is using the consumer group protocol.
+     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method.
      *
-     * @param offsets A map of offsets by partition with associated metadata. This map will be copied internally, so it
-     *                is safe to mutate the map after returning.
+     * @param offsets A map of offsets by partition with associated metadata
      * @param timeout The maximum amount of time to await completion of the offset commit
      * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
      *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
@@ -1153,7 +1143,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * offsets committed through this API are guaranteed to complete before a subsequent call to {@link #commitSync()}
      * (and variants) returns.
      *
-     * @param offsets A map of offsets by partition with associated metadata. This map will be copied internally, so it
+     * @param offsets A map of offsets by partition with associate metadata. This map will be copied internally, so it
      *                is safe to mutate the map after returning.
      * @param callback Callback to invoke when the commit completes
      * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer is using the classic group protocol
@@ -1573,8 +1563,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param timestampsToSearch the mapping from partition to the timestamp to look up.
      *
      * @return a mapping from partition to the timestamp and offset of the first message with timestamp greater
-     *         than or equal to the target timestamp. If the timestamp and offset for a specific partition cannot be found within
-     *         the default timeout, and no corresponding message exists, the entry in the returned map will be {@code null}
+     *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
+     *         such message.
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws IllegalArgumentException if the target timestamp is negative
@@ -1600,8 +1590,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param timeout The maximum amount of time to await retrieval of the offsets
      *
      * @return a mapping from partition to the timestamp and offset of the first message with timestamp greater
-     *         than or equal to the target timestamp. If the timestamp and offset for a specific partition cannot be found within
-     *         timeout, and no corresponding message exists, the entry in the returned map will be {@code null}
+     *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
+     *         such message.
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws IllegalArgumentException if the target timestamp is negative
@@ -1644,7 +1634,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param partitions the partitions to get the earliest offsets
      * @param timeout The maximum amount of time to await retrieval of the beginning offsets
      *
-     * @return The earliest available offsets for the given partitions, and it will return empty map if zero timeout is provided
+     * @return The earliest available offsets for the given partitions
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
@@ -1694,7 +1684,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param partitions the partitions to get the end offsets.
      * @param timeout The maximum amount of time to await retrieval of the end offsets
      *
-     * @return The end offsets for the given partitions, and it will return empty map if zero timeout is provided
+     * @return The end offsets for the given partitions.
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws org.apache.kafka.common.errors.TimeoutException if the offsets could not be fetched before
@@ -1771,19 +1761,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Close the consumer with {@link CloseOptions.GroupMembershipOperation#DEFAULT default leave group behavior},
-     * waiting for up to the default timeout of 30 seconds for any needed cleanup.
+     * Close the consumer, waiting for up to the default timeout of 30 seconds for any needed cleanup.
      * If auto-commit is enabled, this will commit the current offsets if possible within the default
-     * timeout. See {@link #close(CloseOptions)} for details. Note that {@link #wakeup()}
+     * timeout. See {@link #close(Duration)} for details. Note that {@link #wakeup()}
      * cannot be used to interrupt close.
-     * <p>
-     * This close operation will attempt all shutdown steps even if one of them fails.
-     * It logs all encountered errors, continues to execute the next steps, and finally throws the first error found.
      *
-     * @throws WakeupException    if {@link #wakeup()} is called before or while this function is called
-     * @throws InterruptException if the calling thread is interrupted before or while this function is called
-     * @throws KafkaException     for any other error during close
-     *                            (e.g., errors thrown from rebalance callbacks or commit callbacks from previous asynchronous commits)
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted
+     *             before or while this function is called
+     * @throws org.apache.kafka.common.KafkaException for any other error during close
      */
     @Override
     public void close() {
@@ -1791,13 +1776,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * This method has been deprecated since Kafka 4.1 and should use {@link KafkaConsumer#close(CloseOptions)} instead.
-     * <p>
-     * Close the consumer with {@link CloseOptions.GroupMembershipOperation#DEFAULT default leave group behavior}
-     * cleanly within the specified timeout. This method waits up to
-     * {@code timeout} for the consumer to complete pending commits and maybe leave the group (if the member is dynamic).
+     * Tries to close the consumer cleanly within the specified timeout. This method waits up to
+     * {@code timeout} for the consumer to complete pending commits and leave the group.
      * If auto-commit is enabled, this will commit the current offsets if possible within the
-     * timeout. If the consumer is unable to complete offset commits and to gracefully leave the group (if applicable)
+     * timeout. If the consumer is unable to complete offset commits and gracefully leave the group
      * before the timeout expires, the consumer is force closed. Note that {@link #wakeup()} cannot be
      * used to interrupt close.
      * <p>
@@ -1807,58 +1789,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} for these requests to complete during the close operation.
      * Note that the execution time of callbacks (such as {@link OffsetCommitCallback} and
      * {@link ConsumerRebalanceListener}) does not consume time from the close timeout.
-     * <p>
-     * This close operation will attempt all shutdown steps even if one of them fails.
-     * It logs all encountered errors, continues to execute the next steps, and finally throws the first error found.
      *
      * @param timeout The maximum time to wait for consumer to close gracefully. The value must be
      *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.
+     *
      * @throws IllegalArgumentException If the {@code timeout} is negative.
-     * @throws WakeupException          if {@link #wakeup()} is called before or while this function is called
-     * @throws InterruptException       if the calling thread is interrupted before or while this function is called
-     * @throws KafkaException           for any other error during close
-     *                                  (e.g., errors thrown from rebalance callbacks or commit callbacks from previous asynchronous commits)
+     * @throws InterruptException If the thread is interrupted before or while this function is called
+     * @throws org.apache.kafka.common.KafkaException for any other error during close
      */
-    @Deprecated(since = "4.1")
     @Override
     public void close(Duration timeout) {
         delegate.close(timeout);
-    }
-
-    /**
-     * Close the consumer cleanly. {@link CloseOptions} allows to specify a timeout and a
-     * {@link CloseOptions.GroupMembershipOperation leave group behavior}.
-     * If no timeout is specified, the default timeout of 30 seconds is used.
-     * If no leave group behavior is specified, the {@link CloseOptions.GroupMembershipOperation#DEFAULT default
-     * leave group behavior} is used.
-     * <p>
-     * This method waits up to the timeout for the consumer to complete pending commits and maybe leave the group,
-     * depending on the specified leave group behavior.
-     * If auto-commit is enabled, this will commit the current offsets if possible within the
-     * timeout. If the consumer is unable to complete offset commits and to gracefully leave the group (if applicable)
-     * before the timeout expires, the consumer is force closed. Note that {@link #wakeup()} cannot be
-     * used to interrupt close.
-     * <p>
-     * The actual maximum wait time is bounded by the {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} setting, which
-     * only applies to operations performed with the broker (coordinator-related requests and
-     * fetch sessions). Even if a larger timeout is specified, the consumer will not wait longer than
-     * {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} for these requests to complete during the close operation.
-     * Note that the execution time of callbacks (such as {@link OffsetCommitCallback} and
-     * {@link ConsumerRebalanceListener}) does not consume time from the close timeout.
-     * <p>
-     * This close operation will attempt all shutdown steps even if one of them fails.
-     * It logs all encountered errors, continues to execute the next steps, and finally throws the first error found.
-     *
-     * @param option see {@link CloseOptions}; cannot be {@code null}
-     * @throws IllegalArgumentException If the {@code option} timeout is negative
-     * @throws WakeupException          if {@link #wakeup()} is called before or while this function is called
-     * @throws InterruptException       if the calling thread is interrupted before or while this function is called
-     * @throws KafkaException           for any other error during close
-     *                                  (e.g., errors thrown from rebalance callbacks or commit callbacks from previous asynchronous commits)
-     */
-    @Override
-    public void close(CloseOptions option) {
-        delegate.close(option);
     }
 
     /**

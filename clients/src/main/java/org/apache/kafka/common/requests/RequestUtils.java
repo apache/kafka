@@ -16,13 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.AuthorizationException;
-import org.apache.kafka.common.errors.MismatchedEndpointTypeException;
-import org.apache.kafka.common.errors.SecurityDisabledException;
-import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
-import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Message;
@@ -83,15 +76,5 @@ public final class RequestUtils {
 
         writable.flip();
         return writable.buffer();
-    }
-
-    public static boolean isFatalException(Throwable e) {
-        return e instanceof AuthenticationException ||
-            e instanceof AuthorizationException ||
-            e instanceof MismatchedEndpointTypeException ||
-            e instanceof SecurityDisabledException ||
-            e instanceof UnsupportedVersionException ||
-            e instanceof UnsupportedEndpointTypeException ||
-            e instanceof UnsupportedForMessageFormatException;
     }
 }

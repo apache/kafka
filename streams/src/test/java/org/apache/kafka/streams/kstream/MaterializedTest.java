@@ -100,8 +100,14 @@ public class MaterializedTest {
 
     @Test
     public void shouldThrowTopologyExceptionIfStoreNameExceedsMaxAllowedLength() {
+        final StringBuffer invalidStoreNameBuffer = new StringBuffer();
         final int maxNameLength = 249;
-        final String invalidStoreName = "a".repeat(maxNameLength + 1);
+
+        for (int i = 0; i < maxNameLength + 1; i++) {
+            invalidStoreNameBuffer.append('a');
+        }
+
+        final String invalidStoreName = invalidStoreNameBuffer.toString();
 
         final TopologyException e = assertThrows(TopologyException.class,
             () -> Materialized.as(invalidStoreName));

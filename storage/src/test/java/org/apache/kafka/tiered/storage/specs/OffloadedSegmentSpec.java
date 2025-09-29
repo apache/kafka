@@ -20,17 +20,48 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.List;
+import java.util.Objects;
 
-/**
- * Specifies a remote log segment expected to be found in a second-tier storage.
- *
- * @param sourceBrokerId The broker which offloaded (uploaded) the segment to the second-tier storage.
- * @param topicPartition The topic-partition which the remote log segment belongs to.
- * @param baseOffset     The base offset of the remote log segment.
- * @param records        The records *expected* in the remote log segment.
- */
-public record OffloadedSegmentSpec(int sourceBrokerId, TopicPartition topicPartition, int baseOffset,
-                                   List<ProducerRecord<String, String>> records) {
+public final class OffloadedSegmentSpec {
+
+    private final int sourceBrokerId;
+    private final TopicPartition topicPartition;
+    private final int baseOffset;
+    private final List<ProducerRecord<String, String>> records;
+
+    /**
+     * Specifies a remote log segment expected to be found in a second-tier storage.
+     *
+     * @param sourceBrokerId The broker which offloaded (uploaded) the segment to the second-tier storage.
+     * @param topicPartition The topic-partition which the remote log segment belongs to.
+     * @param baseOffset The base offset of the remote log segment.
+     * @param records The records *expected* in the remote log segment.
+     */
+    public OffloadedSegmentSpec(int sourceBrokerId,
+                                TopicPartition topicPartition,
+                                int baseOffset,
+                                List<ProducerRecord<String, String>> records) {
+        this.sourceBrokerId = sourceBrokerId;
+        this.topicPartition = topicPartition;
+        this.baseOffset = baseOffset;
+        this.records = records;
+    }
+
+    public int getSourceBrokerId() {
+        return sourceBrokerId;
+    }
+
+    public TopicPartition getTopicPartition() {
+        return topicPartition;
+    }
+
+    public int getBaseOffset() {
+        return baseOffset;
+    }
+
+    public List<ProducerRecord<String, String>> getRecords() {
+        return records;
+    }
 
     @Override
     public String toString() {
@@ -38,4 +69,19 @@ public record OffloadedSegmentSpec(int sourceBrokerId, TopicPartition topicParti
                 topicPartition, sourceBrokerId, baseOffset, records.size());
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        OffloadedSegmentSpec that = (OffloadedSegmentSpec) o;
+        return sourceBrokerId == that.sourceBrokerId
+                && baseOffset == that.baseOffset
+                && Objects.equals(topicPartition, that.topicPartition)
+                && Objects.equals(records, that.records);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(sourceBrokerId, topicPartition, baseOffset, records);
+    }
 }

@@ -19,7 +19,7 @@ package org.apache.kafka.common.errors;
 /**
  * This record batch is larger than the maximum allowable size
  */
-public class RecordBatchTooLargeException extends InvalidConfigurationException {
+public class RecordBatchTooLargeException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 

@@ -30,19 +30,19 @@ import java.util.function.Function;
  *   <li>{@link #fromBiFunction(BiFunction)} - when the foreign key depends on both key and value</li>
  * </ul>
  *
- * @param <KLeft>  Type of primary table's key
- * @param <VLeft>  Type of primary table's value
- * @param <KRight> Type of the foreign key to extract
+ * @param <K>  Type of primary table's key
+ * @param <V>  Type of primary table's value
+ * @param <KO> Type of the foreign key to extract
  */
 @FunctionalInterface
-public interface ForeignKeyExtractor<KLeft, VLeft, KRight> {
-    KRight extract(KLeft key, VLeft value);
+public interface ForeignKeyExtractor<K, V, KO> {
+    KO extract(K key, V value);
 
-    static <KLeft, VLeft, KRight> ForeignKeyExtractor<? super KLeft, ? super VLeft, ? extends KRight> fromFunction(Function<? super VLeft, ? extends KRight> function) {
+    static <K, V, KO> ForeignKeyExtractor<K, V, KO> fromFunction(Function<V, KO> function) {
         return (key, value) -> function.apply(value);
     }
 
-    static <KLeft, VLeft, KRight> ForeignKeyExtractor<? super KLeft, ? super VLeft, ? extends KRight> fromBiFunction(BiFunction<? super KLeft, ? super VLeft, ? extends KRight> biFunction) {
+    static <K, V, KO> ForeignKeyExtractor<K, V, KO> fromBiFunction(BiFunction<K, V, KO> biFunction) {
         return biFunction::apply;
     }
 }

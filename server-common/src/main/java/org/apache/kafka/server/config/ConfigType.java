@@ -16,25 +16,19 @@
  */
 package org.apache.kafka.server.config;
 
+import java.util.List;
+
 /**
  * Represents all the entities that can be configured.
  */
-public enum ConfigType {
-    TOPIC("topics"),
-    CLIENT("clients"),
-    USER("users"),
-    BROKER("brokers"),
-    IP("ips"),
-    CLIENT_METRICS("client-metrics"),
-    GROUP("groups");
+public class ConfigType {
+    public static final String TOPIC = "topics";
+    public static final String CLIENT = "clients";
+    public static final String USER = "users";
+    public static final String BROKER = "brokers";
+    public static final String IP = "ips";
+    public static final String CLIENT_METRICS = "client-metrics";
+    public static final String GROUP = "groups";
 
-    private final String value;
-
-    ConfigType(String value) {
-        this.value = value;
-    }
-
-    public String value() {
-        return value;
-    }
+    public static final List<String> ALL = List.of(TOPIC, CLIENT, USER, BROKER, IP, CLIENT_METRICS, GROUP);
 }

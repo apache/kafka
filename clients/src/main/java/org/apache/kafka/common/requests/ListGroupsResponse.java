@@ -18,9 +18,10 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
+import java.nio.ByteBuffer;
 import java.util.Map;
 
 public class ListGroupsResponse extends AbstractResponse {
@@ -52,8 +53,8 @@ public class ListGroupsResponse extends AbstractResponse {
         return errorCounts(Errors.forCode(data.errorCode()));
     }
 
-    public static ListGroupsResponse parse(Readable readable, short version) {
-        return new ListGroupsResponse(new ListGroupsResponseData(readable, version));
+    public static ListGroupsResponse parse(ByteBuffer buffer, short version) {
+        return new ListGroupsResponse(new ListGroupsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

@@ -26,16 +26,16 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class ConfigurationUtilsTest extends OAuthBearerTest {
 
-    private static final String URL_CONFIG_NAME = "fictitious.url.config";
-    private static final String FILE_CONFIG_NAME = "fictitious.file.config";
+    private static final String URL_CONFIG_NAME = "url";
+    private static final String FILE_CONFIG_NAME = "file";
 
     @AfterEach
     public void tearDown() throws Exception {
@@ -59,7 +59,7 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
 
     @Test
     public void testUrlFile() {
-        assertThrowsWithMessage(ConfigException.class, () -> testFileUrl("file:///tmp/foo.txt"), "that doesn't exist");
+        testUrl("file:///tmp/foo.txt");
     }
 
     @Test
@@ -74,34 +74,41 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
 
     @Test
     public void testUrlInvalidProtocol() {
-        assertThrowsWithMessage(ConfigException.class, () -> testFileUrl("ftp://ftp.example.com"), "invalid protocol");
+        assertThrowsWithMessage(ConfigException.class, () -> testUrl("ftp://ftp.example.com"), "invalid protocol");
     }
 
     @Test
     public void testUrlNull() {
-        assertThrowsWithMessage(ConfigException.class, () -> testUrl(null), "is required");
+        assertThrowsWithMessage(ConfigException.class, () -> testUrl(null), "must be non-null");
     }
 
     @Test
     public void testUrlEmptyString() {
-        assertThrowsWithMessage(ConfigException.class, () -> testUrl(""), "is required");
+        assertThrowsWithMessage(ConfigException.class, () -> testUrl(""), "must not contain only whitespace");
     }
 
     @Test
     public void testUrlWhitespace() {
-        assertThrowsWithMessage(ConfigException.class, () -> testUrl("    "), "is required");
+        assertThrowsWithMessage(ConfigException.class, () -> testUrl("    "), "must not contain only whitespace");
+    }
+
+    private void testUrl(String value) {
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, value == null ? "" : value);
+        Map<String, Object> configs = Collections.singletonMap(URL_CONFIG_NAME, value);
+        ConfigurationUtils cu = new ConfigurationUtils(configs);
+        cu.validateUrl(URL_CONFIG_NAME);
     }
 
     @Test
     public void testFile() throws IOException {
         File file = TestUtils.tempFile("some contents!");
-        testFile(file.getAbsolutePath());
+        testFile(file.toURI().toURL().toString());
     }
 
     @Test
     public void testFileWithSuperfluousWhitespace() throws IOException {
         File file = TestUtils.tempFile();
-        testFile(String.format("  %s  ", file.getAbsolutePath()));
+        testFile(String.format("  %s  ", file.toURI().toURL()));
     }
 
     @Test
@@ -116,90 +123,56 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
         if (!file.setReadable(false))
             throw new IllegalStateException(String.format("Can't test file permissions as test couldn't programmatically make temp file %s un-readable", file.getAbsolutePath()));
 
-        assertThrowsWithMessage(ConfigException.class, () -> testFile(file.getAbsolutePath()), "that doesn't have read permission");
+        assertThrowsWithMessage(ConfigException.class, () -> testFile(file.toURI().toURL().toString()), "that doesn't have read permission");
     }
 
     @Test
     public void testFileNull() {
-        assertThrowsWithMessage(ConfigException.class, () -> testFile(null), "is required");
+        assertThrowsWithMessage(ConfigException.class, () -> testFile(null), "must be non-null");
     }
 
     @Test
     public void testFileEmptyString() {
-        assertThrowsWithMessage(ConfigException.class, () -> testFile(""), "is required");
+        assertThrowsWithMessage(ConfigException.class, () -> testFile(""), "must not contain only whitespace");
     }
 
     @Test
     public void testFileWhitespace() {
-        assertThrowsWithMessage(ConfigException.class, () -> testFile("    "), "is required");
+        assertThrowsWithMessage(ConfigException.class, () -> testFile("    "), "must not contain only whitespace");
     }
 
     @Test
     public void testThrowIfURLIsNotAllowed() {
         String url = "http://www.example.com";
         String fileUrl = "file:///etc/passwd";
-        ConfigurationUtils cu = new ConfigurationUtils(Map.of());
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(URL_CONFIG_NAME, url);
+        configs.put(FILE_CONFIG_NAME, fileUrl);
+        ConfigurationUtils cu = new ConfigurationUtils(configs);
 
         // By default, no URL is allowed
-        assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfURLIsNotAllowed(URL_CONFIG_NAME, url),
+        assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfURLIsNotAllowed(url),
                 ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
-        assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfURLIsNotAllowed(FILE_CONFIG_NAME, fileUrl),
+        assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfURLIsNotAllowed(fileUrl),
                 ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
 
         // add one url into allowed list
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, url);
-        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(URL_CONFIG_NAME, url));
-        assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfURLIsNotAllowed(FILE_CONFIG_NAME, fileUrl),
+        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(url));
+        assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfURLIsNotAllowed(fileUrl),
                 ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
 
         // add all urls into allowed list
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, url + "," + fileUrl);
-        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(URL_CONFIG_NAME, url));
-        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(FILE_CONFIG_NAME, fileUrl));
+        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(url));
+        assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(fileUrl));
     }
 
-    @Test
-    public void testThrowIfFileIsNotAllowed() {
-        String file1 = "file1";
-        String file2 = "file2";
-        ConfigurationUtils cu = new ConfigurationUtils(Map.of());
-
-        // By default, no file is allowed
-        assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfFileIsNotAllowed(FILE_CONFIG_NAME, file1),
-            ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG);
-        assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfFileIsNotAllowed(FILE_CONFIG_NAME, file1),
-            ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG);
-
-        // add one file into allowed list
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG, file1);
-        assertDoesNotThrow(() -> cu.throwIfFileIsNotAllowed(FILE_CONFIG_NAME, file1));
-        assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfFileIsNotAllowed(FILE_CONFIG_NAME, file2),
-            ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG);
-
-        // add all files into allowed list
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG, file1 + "," + file2);
-        assertDoesNotThrow(() -> cu.throwIfFileIsNotAllowed(FILE_CONFIG_NAME, file1));
-        assertDoesNotThrow(() -> cu.throwIfFileIsNotAllowed(FILE_CONFIG_NAME, file2));
-    }
-
-    private void testUrl(String value) {
+    protected void testFile(String value) {
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, value == null ? "" : value);
         Map<String, Object> configs = Collections.singletonMap(URL_CONFIG_NAME, value);
         ConfigurationUtils cu = new ConfigurationUtils(configs);
-        cu.validateUrl(URL_CONFIG_NAME);
+        cu.validateFile(URL_CONFIG_NAME);
     }
 
-    private void testFile(String value) {
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG, value == null ? "" : value);
-        Map<String, Object> configs = Collections.singletonMap(FILE_CONFIG_NAME, value);
-        ConfigurationUtils cu = new ConfigurationUtils(configs);
-        cu.validateFile(FILE_CONFIG_NAME);
-    }
-
-    private void testFileUrl(String value) {
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, value == null ? "" : value);
-        Map<String, Object> configs = Collections.singletonMap(URL_CONFIG_NAME, value);
-        ConfigurationUtils cu = new ConfigurationUtils(configs);
-        cu.validateFileUrl(URL_CONFIG_NAME);
-    }
 }

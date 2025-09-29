@@ -27,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -124,7 +125,7 @@ public class ConnectUtilsTest {
                         "thanks to newly-introduced federal legislation",
                         false)
         );
-        assertEquals(Map.of("\u1984", "big brother"), props);
+        assertEquals(Collections.singletonMap("\u1984", "big brother"), props);
 
         props.clear();
         props.put("\u1984", "BIG BROTHER");
@@ -140,7 +141,7 @@ public class ConnectUtilsTest {
                         "thanks to newly-introduced federal legislation",
                         true)
         );
-        assertEquals(Map.of("\u1984", "big brother"), props);
+        assertEquals(Collections.singletonMap("\u1984", "big brother"), props);
     }
 
     @Test

@@ -77,9 +77,14 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @cluster(num_nodes=7)
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_broker_rolling_bounce(self, metadata_quorum=quorum.isolated_kraft, group_protocol=None):
+    def test_broker_rolling_bounce(self, metadata_quorum=quorum.isolated_kraft, use_new_coordinator=False, group_protocol=None):
         """
         Verify correct consumer behavior when the brokers are consecutively restarted.
 
@@ -129,9 +134,16 @@ class OffsetValidationTest(VerifiableConsumerTest):
         clean_shutdown=[True],
         bounce_mode=["all", "rolling"],
         metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        clean_shutdown=[True],
+        bounce_mode=["all", "rolling"],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_consumer_bounce(self, clean_shutdown, bounce_mode, metadata_quorum=quorum.isolated_kraft, group_protocol=None):
+    def test_consumer_bounce(self, clean_shutdown, bounce_mode, metadata_quorum=quorum.isolated_kraft, use_new_coordinator=False, group_protocol=None):
         """
         Verify correct consumer behavior when the consumers in the group are consecutively restarted.
 
@@ -179,9 +191,18 @@ class OffsetValidationTest(VerifiableConsumerTest):
         bounce_mode=["all", "rolling"],
         num_bounces=[5],
         metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        clean_shutdown=[True],
+        static_membership=[True, False],
+        bounce_mode=["all", "rolling"],
+        num_bounces=[5],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
         group_protocol=[consumer_group.classic_group_protocol]
     )
-    def test_static_consumer_bounce_with_eager_assignment(self, clean_shutdown, static_membership, bounce_mode, num_bounces, metadata_quorum=quorum.isolated_kraft, group_protocol=None):
+    def test_static_consumer_bounce_with_eager_assignment(self, clean_shutdown, static_membership, bounce_mode, num_bounces, metadata_quorum=quorum.isolated_kraft, use_new_coordinator=False, group_protocol=None):
         """
         Verify correct static consumer behavior when the consumers in the group are restarted. In order to make 
         sure the behavior of static members are different from dynamic ones, we take both static and dynamic
@@ -246,9 +267,15 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @matrix(
         bounce_mode=["all", "rolling"],
         metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        bounce_mode=["all", "rolling"],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_static_consumer_persisted_after_rejoin(self, bounce_mode, metadata_quorum=quorum.isolated_kraft, group_protocol=None):
+    def test_static_consumer_persisted_after_rejoin(self, bounce_mode, metadata_quorum=quorum.isolated_kraft, use_new_coordinator=False, group_protocol=None):
         """
         Verify that the updated member.id(updated_member_id) caused by static member rejoin would be persisted. If not,
         after the brokers rolling bounce, the migrated group coordinator would load the stale persisted member.id and
@@ -281,9 +308,16 @@ class OffsetValidationTest(VerifiableConsumerTest):
         num_conflict_consumers=[1, 2],
         fencing_stage=["stable", "all"],
         metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        num_conflict_consumers=[1, 2],
+        fencing_stage=["stable", "all"],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_fencing_static_consumer(self, num_conflict_consumers, fencing_stage, metadata_quorum=quorum.isolated_kraft, group_protocol=None):
+    def test_fencing_static_consumer(self, num_conflict_consumers, fencing_stage, metadata_quorum=quorum.isolated_kraft, use_new_coordinator=False, group_protocol=None):
         """
         Verify correct static consumer behavior when there are conflicting consumers with same group.instance.id.
 
@@ -313,7 +347,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
             num_rebalances = consumer.num_rebalances()
             conflict_consumer.start()
             if group_protocol == consumer_group.classic_group_protocol:
-                # Classic protocol: conflicting members should join, and the initial ones with conflicting instance id should fail.
+                # Classic protocol: conflicting members should join, and the intial ones with conflicting instance id should fail.
                 self.await_members(conflict_consumer, num_conflict_consumers)
                 self.await_members(consumer, len(consumer.nodes) - num_conflict_consumers)
 
@@ -332,11 +366,6 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 wait_until(lambda: len(consumer.dead_nodes()) == len(consumer.nodes),
                            timeout_sec=60,
                            err_msg="Timed out waiting for the consumer to shutdown")
-                # Wait until the group becomes empty to ensure the instance ID is released.
-                # We use the 50-second timeout because the consumer session timeout is 45 seconds.
-                wait_until(lambda: self.group_id in self.kafka.list_consumer_groups(state="empty"),
-                           timeout_sec=50,
-                           err_msg="Timed out waiting for the consumers to be removed from the group.")
                 conflict_consumer.start()
                 self.await_members(conflict_consumer, num_conflict_consumers)
 
@@ -363,9 +392,16 @@ class OffsetValidationTest(VerifiableConsumerTest):
         clean_shutdown=[True],
         enable_autocommit=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        clean_shutdown=[True],
+        enable_autocommit=[True, False],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_consumer_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.isolated_kraft, group_protocol=None):
+    def test_consumer_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.isolated_kraft, use_new_coordinator=False, group_protocol=None):
         partition = TopicPartition(self.TOPIC, 0)
 
         consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit, group_protocol=group_protocol)
@@ -414,9 +450,16 @@ class OffsetValidationTest(VerifiableConsumerTest):
         clean_shutdown=[True, False],
         enable_autocommit=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        clean_shutdown=[True, False],
+        enable_autocommit=[True, False],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_broker_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.isolated_kraft, group_protocol=None):
+    def test_broker_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.isolated_kraft, use_new_coordinator=False, group_protocol=None):
         partition = TopicPartition(self.TOPIC, 0)
 
         consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit, group_protocol=group_protocol)
@@ -455,9 +498,14 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @cluster(num_nodes=7)
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_group_consumption(self, metadata_quorum=quorum.isolated_kraft, group_protocol=None):
+    def test_group_consumption(self, metadata_quorum=quorum.isolated_kraft, use_new_coordinator=False, group_protocol=None):
         """
         Verifies correct group rebalance behavior as consumers are started and stopped.
         In particular, this test verifies that the partition is readable after every
@@ -513,14 +561,24 @@ class AssignmentValidationTest(VerifiableConsumerTest):
                              "org.apache.kafka.clients.consumer.StickyAssignor",
                              "org.apache.kafka.clients.consumer.CooperativeStickyAssignor"],
         metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
+                             "org.apache.kafka.clients.consumer.RoundRobinAssignor",
+                             "org.apache.kafka.clients.consumer.StickyAssignor",
+                             "org.apache.kafka.clients.consumer.CooperativeStickyAssignor"],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
         group_protocol=[consumer_group.classic_group_protocol]
     )
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
         group_protocol=[consumer_group.consumer_group_protocol],
         group_remote_assignor=consumer_group.all_remote_assignors
     )
-    def test_valid_assignment(self, assignment_strategy=None, metadata_quorum=quorum.isolated_kraft, group_protocol=None, group_remote_assignor=None):
+    def test_valid_assignment(self, assignment_strategy=None, metadata_quorum=quorum.isolated_kraft, use_new_coordinator=False, group_protocol=None, group_remote_assignor=None):
         """
         Verify assignment strategy correctness: each partition is assigned to exactly
         one consumer instance.

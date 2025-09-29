@@ -28,7 +28,7 @@ import org.glassfish.hk2.utilities.binding.AbstractBinder;
 import org.glassfish.jersey.server.ResourceConfig;
 
 import java.util.Collection;
-import java.util.List;
+import java.util.Collections;
 import java.util.Map;
 
 public class MirrorRestServer extends RestServer {
@@ -48,12 +48,14 @@ public class MirrorRestServer extends RestServer {
 
     @Override
     protected Collection<Class<?>> regularResources() {
-        return List.of(InternalMirrorResource.class);
+        return Collections.singletonList(
+                InternalMirrorResource.class
+        );
     }
 
     @Override
     protected Collection<Class<?>> adminResources() {
-        return List.of();
+        return Collections.emptyList();
     }
 
     @Override
@@ -68,4 +70,5 @@ public class MirrorRestServer extends RestServer {
             bind(restClient).to(RestClient.class);
         }
     }
+
 }

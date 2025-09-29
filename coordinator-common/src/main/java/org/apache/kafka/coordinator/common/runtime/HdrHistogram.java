@@ -133,6 +133,15 @@ public final class HdrHistogram {
      * A simple tuple of a timestamp and a value. Can be used updating a value and recording the
      * timestamp of the update in a single atomic operation.
      */
-    private record Timestamped<T>(long timestamp, T value) { }
+    private static final class Timestamped<T> {
+
+        private final long timestamp;
+        private final T value;
+
+        private Timestamped(long timestamp, T value) {
+            this.timestamp = timestamp;
+            this.value = value;
+        }
+    }
 
 }

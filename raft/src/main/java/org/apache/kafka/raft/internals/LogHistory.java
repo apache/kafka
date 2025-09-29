@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft.internals;
 
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -71,9 +72,46 @@ public interface LogHistory<T> {
     void truncateOldEntries(long startOffset);
 
     /**
-     * Removes all the values from this object.
+     * Removes all of the values from this object.
      */
     void clear();
 
-    record Entry<T>(long offset, T value) { }
+    final class Entry<T> {
+        private final long offset;
+        private final T value;
+
+        public Entry(long offset, T value) {
+            this.offset = offset;
+            this.value = value;
+        }
+
+        public long offset() {
+            return offset;
+        }
+
+        public T value() {
+            return value;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            Entry<?> that = (Entry<?>) o;
+
+            if (offset != that.offset) return false;
+            return Objects.equals(value, that.value);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(offset, value);
+        }
+
+        @Override
+        public String toString() {
+            return String.format("Entry(offset=%d, value=%s)", offset, value);
+        }
+    }
 }

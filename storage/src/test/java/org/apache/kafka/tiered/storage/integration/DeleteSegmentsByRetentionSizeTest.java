@@ -18,12 +18,13 @@ package org.apache.kafka.tiered.storage.integration;
 
 import org.apache.kafka.common.config.TopicConfig;
 
+import java.util.Collections;
 import java.util.Map;
 
 public final class DeleteSegmentsByRetentionSizeTest extends BaseDeleteSegmentsTest {
 
     @Override
     protected Map<String, String> configsToBeAdded() {
-        return Map.of(TopicConfig.RETENTION_BYTES_CONFIG, "1");
+        return Collections.singletonMap(TopicConfig.RETENTION_BYTES_CONFIG, "1");
     }
 }

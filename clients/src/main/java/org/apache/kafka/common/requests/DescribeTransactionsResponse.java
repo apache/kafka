@@ -19,10 +19,11 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DescribeTransactionsResponseData;
 import org.apache.kafka.common.message.DescribeTransactionsResponseData.TransactionState;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
-import java.util.EnumMap;
+import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.Map;
 
 public class DescribeTransactionsResponse extends AbstractResponse {
@@ -40,7 +41,7 @@ public class DescribeTransactionsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
+        Map<Errors, Integer> errorCounts = new HashMap<>();
         for (TransactionState transactionState : data.transactionStates()) {
             Errors error = Errors.forCode(transactionState.errorCode());
             updateErrorCounts(errorCounts, error);
@@ -48,9 +49,9 @@ public class DescribeTransactionsResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    public static DescribeTransactionsResponse parse(Readable readable, short version) {
+    public static DescribeTransactionsResponse parse(ByteBuffer buffer, short version) {
         return new DescribeTransactionsResponse(new DescribeTransactionsResponseData(
-            readable, version));
+            new ByteBufferAccessor(buffer), version));
     }
 
     @Override

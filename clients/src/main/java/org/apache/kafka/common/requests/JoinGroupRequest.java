@@ -22,9 +22,10 @@ import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 
 public class JoinGroupRequest extends AbstractRequest {
@@ -96,7 +97,7 @@ public class JoinGroupRequest extends AbstractRequest {
      *
      * @return whether a known member id is required or not.
      */
-    public static boolean requiresKnownMemberId(int apiVersion) {
+    public static boolean requiresKnownMemberId(short apiVersion) {
         return apiVersion >= 4;
     }
 
@@ -117,7 +118,7 @@ public class JoinGroupRequest extends AbstractRequest {
      */
     public static boolean requiresKnownMemberId(
         JoinGroupRequestData request,
-        int apiVersion
+        short apiVersion
     ) {
         return request.groupInstanceId() == null
             && request.memberId().equals(UNKNOWN_MEMBER_ID)
@@ -150,7 +151,7 @@ public class JoinGroupRequest extends AbstractRequest {
      * @return whether the version supports skipping assignment.
      */
 
-    public static boolean supportsSkippingAssignment(int apiVersion) {
+    public static boolean supportsSkippingAssignment(short apiVersion) {
         return apiVersion >= 9;
     }
 
@@ -207,7 +208,7 @@ public class JoinGroupRequest extends AbstractRequest {
         return new JoinGroupResponse(data, version());
     }
 
-    public static JoinGroupRequest parse(Readable readable, short version) {
-        return new JoinGroupRequest(new JoinGroupRequestData(readable, version), version);
+    public static JoinGroupRequest parse(ByteBuffer buffer, short version) {
+        return new JoinGroupRequest(new JoinGroupRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

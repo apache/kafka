@@ -36,7 +36,7 @@ class ChangeLoggingTimestampedWindowBytesStore extends ChangeLoggingWindowBytesS
             name(),
             key,
             rawValue(valueAndTimestamp),
-            valueAndTimestamp != null ? timestamp(valueAndTimestamp) : internalContext.recordContext().timestamp(),
+            valueAndTimestamp != null ? timestamp(valueAndTimestamp) : internalContext.timestamp(),
             wrapped().getPosition()
         );
     }

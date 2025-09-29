@@ -18,12 +18,17 @@ package org.apache.kafka.coordinator.group;
 
 import java.util.function.Function;
 
-/**
- * @param baseTimestamp Given an offset and metadata, obtain the base timestamp that should be used
- *                      as the start of the offsets retention period.
- */
-public record OffsetExpirationConditionImpl(
-        Function<OffsetAndMetadata, Long> baseTimestamp) implements OffsetExpirationCondition {
+public class OffsetExpirationConditionImpl implements OffsetExpirationCondition {
+
+    /**
+     * Given an offset and metadata, obtain the base timestamp that should be used
+     * as the start of the offsets retention period.
+     */
+    private final Function<OffsetAndMetadata, Long> baseTimestamp;
+
+    public OffsetExpirationConditionImpl(Function<OffsetAndMetadata, Long> baseTimestamp) {
+        this.baseTimestamp = baseTimestamp;
+    }
 
     /**
      * Determine whether an offset is expired. Older versions have an expire timestamp per partition. If this
@@ -34,6 +39,7 @@ public record OffsetExpirationConditionImpl(
      * @param offset              The offset and metadata.
      * @param currentTimestampMs  The current timestamp.
      * @param offsetsRetentionMs  The offsets retention in milliseconds.
+     *
      * @return Whether the given offset is expired or not.
      */
     @Override
@@ -45,5 +51,12 @@ public record OffsetExpirationConditionImpl(
             // Current version with no per partition retention
             return currentTimestampMs - baseTimestamp.apply(offset) >= offsetsRetentionMs;
         }
+    }
+
+    /**
+     * @return The base timestamp.
+     */
+    public Function<OffsetAndMetadata, Long> baseTimestamp() {
+        return this.baseTimestamp;
     }
 }

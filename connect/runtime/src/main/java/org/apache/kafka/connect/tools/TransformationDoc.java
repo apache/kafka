@@ -34,14 +34,24 @@ import org.apache.kafka.connect.transforms.TimestampConverter;
 import org.apache.kafka.connect.transforms.TimestampRouter;
 import org.apache.kafka.connect.transforms.ValueToKey;
 
+import java.util.Arrays;
 import java.util.List;
 
 public class TransformationDoc {
 
-    private record DocInfo(String transformationName, String overview, ConfigDef configDef) {
+    private static final class DocInfo {
+        final String transformationName;
+        final String overview;
+        final ConfigDef configDef;
+
+        private DocInfo(String transformationName, String overview, ConfigDef configDef) {
+            this.transformationName = transformationName;
+            this.overview = overview;
+            this.configDef = configDef;
+        }
     }
 
-    private static final List<DocInfo> TRANSFORMATIONS = List.of(
+    private static final List<DocInfo> TRANSFORMATIONS = Arrays.asList(
             new DocInfo(Cast.class.getName(), Cast.OVERVIEW_DOC, Cast.CONFIG_DEF),
             new DocInfo(DropHeaders.class.getName(), DropHeaders.OVERVIEW_DOC, DropHeaders.CONFIG_DEF),
             new DocInfo(ExtractField.class.getName(), ExtractField.OVERVIEW_DOC, ExtractField.CONFIG_DEF),

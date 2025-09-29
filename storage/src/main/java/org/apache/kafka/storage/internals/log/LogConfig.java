@@ -26,6 +26,8 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.LegacyRecord;
+import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.common.utils.Utils;
@@ -46,6 +48,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
@@ -102,7 +105,7 @@ public class LogConfig extends AbstractConfig {
 
         @Override
         public List<String> headers() {
-            return List.of("Name", "Description", "Type", "Default", "Valid Values", SERVER_DEFAULT_HEADER_NAME, "Importance");
+            return asList("Name", "Description", "Type", "Default", "Valid Values", SERVER_DEFAULT_HEADER_NAME, "Importance");
         }
 
         // Visible for testing
@@ -122,6 +125,7 @@ public class LogConfig extends AbstractConfig {
     // Visible for testing
     public static final String SERVER_DEFAULT_HEADER_NAME = "Server Default Property";
 
+    public static final int DEFAULT_MAX_MESSAGE_BYTES = 1024 * 1024 + Records.LOG_OVERHEAD;
     public static final int DEFAULT_SEGMENT_BYTES = 1024 * 1024 * 1024;
     public static final long DEFAULT_SEGMENT_MS = 24 * 7 * 60 * 60 * 1000L;
     public static final long DEFAULT_SEGMENT_JITTER_MS = 0;
@@ -131,6 +135,7 @@ public class LogConfig extends AbstractConfig {
     public static final long DEFAULT_MAX_COMPACTION_LAG_MS = Long.MAX_VALUE;
     public static final double DEFAULT_MIN_CLEANABLE_DIRTY_RATIO = 0.5;
     public static final boolean DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE = false;
+    public static final String DEFAULT_COMPRESSION_TYPE = BrokerCompressionType.PRODUCER.name;
     public static final boolean DEFAULT_PREALLOCATE = false;
 
     public static final boolean DEFAULT_REMOTE_STORAGE_ENABLE = false;
@@ -139,13 +144,19 @@ public class LogConfig extends AbstractConfig {
     public static final long DEFAULT_LOCAL_RETENTION_BYTES = -2; // It indicates the value to be derived from RetentionBytes
     public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
 
-    public static final String INTERNAL_SEGMENT_BYTES_CONFIG = "internal.segment.bytes";
-    public static final String INTERNAL_SEGMENT_BYTES_DOC = "The maximum size of a single log file. This should be used for testing only.";
+    // Visible for testing
+    public static final Set<String> CONFIGS_WITH_NO_SERVER_DEFAULTS = Set.of(
+            TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG,
+            TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG,
+            TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG,
+            QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
+            QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
+    );
 
     public static final ConfigDef SERVER_CONFIG_DEF = new ConfigDef()
             .define(ServerLogConfigs.NUM_PARTITIONS_CONFIG, INT, ServerLogConfigs.NUM_PARTITIONS_DEFAULT, atLeast(1), MEDIUM, ServerLogConfigs.NUM_PARTITIONS_DOC)
-            .define(ServerLogConfigs.LOG_DIR_CONFIG, LIST, ServerLogConfigs.LOG_DIR_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(false, false), HIGH, ServerLogConfigs.LOG_DIR_DOC)
-            .define(ServerLogConfigs.LOG_DIRS_CONFIG, LIST, null, ConfigDef.ValidList.anyNonDuplicateValues(false, true), HIGH, ServerLogConfigs.LOG_DIRS_DOC)
+            .define(ServerLogConfigs.LOG_DIR_CONFIG, STRING, ServerLogConfigs.LOG_DIR_DEFAULT, HIGH, ServerLogConfigs.LOG_DIR_DOC)
+            .define(ServerLogConfigs.LOG_DIRS_CONFIG, STRING, null, HIGH, ServerLogConfigs.LOG_DIRS_DOC)
             .define(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(1024 * 1024), HIGH, ServerLogConfigs.LOG_SEGMENT_BYTES_DOC)
 
             .define(ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG, LONG, null, HIGH, ServerLogConfigs.LOG_ROLL_TIME_MILLIS_DOC)
@@ -184,7 +195,7 @@ public class LogConfig extends AbstractConfig {
     private static final LogConfigDef CONFIG = new LogConfigDef();
     static {
         CONFIG.
-                define(TopicConfig.SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(1024 * 1024), MEDIUM,
+                define(TopicConfig.SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), MEDIUM,
                         TopicConfig.SEGMENT_BYTES_DOC)
                 .define(TopicConfig.SEGMENT_MS_CONFIG, LONG, DEFAULT_SEGMENT_MS, atLeast(1), MEDIUM, TopicConfig.SEGMENT_MS_DOC)
                 .define(TopicConfig.SEGMENT_JITTER_MS_CONFIG, LONG, DEFAULT_SEGMENT_JITTER_MS, atLeast(0), MEDIUM,
@@ -200,7 +211,7 @@ public class LogConfig extends AbstractConfig {
                 // can be negative. See kafka.log.LogManager.cleanupExpiredSegments
                 .define(TopicConfig.RETENTION_MS_CONFIG, LONG, DEFAULT_RETENTION_MS, atLeast(-1), MEDIUM,
                         TopicConfig.RETENTION_MS_DOC)
-                .define(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, INT, ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT, atLeast(0), MEDIUM,
+                .define(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, INT, DEFAULT_MAX_MESSAGE_BYTES, atLeast(0), MEDIUM,
                         TopicConfig.MAX_MESSAGE_BYTES_DOC)
                 .define(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, INT, ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_DEFAULT, atLeast(0), MEDIUM,
                         TopicConfig.INDEX_INTERVAL_BYTES_DOC)
@@ -220,7 +231,7 @@ public class LogConfig extends AbstractConfig {
                         MEDIUM, TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_DOC)
                 .define(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, INT, ServerLogConfigs.MIN_IN_SYNC_REPLICAS_DEFAULT, atLeast(1), MEDIUM,
                         TopicConfig.MIN_IN_SYNC_REPLICAS_DOC)
-                .define(TopicConfig.COMPRESSION_TYPE_CONFIG, STRING, ServerLogConfigs.COMPRESSION_TYPE_DEFAULT, in(BrokerCompressionType.names().toArray(new String[0])),
+                .define(TopicConfig.COMPRESSION_TYPE_CONFIG, STRING, DEFAULT_COMPRESSION_TYPE, in(BrokerCompressionType.names().toArray(new String[0])),
                         MEDIUM, TopicConfig.COMPRESSION_TYPE_DOC)
                 .define(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, INT, CompressionType.GZIP.defaultLevel(),
                         CompressionType.GZIP.levelValidator(), MEDIUM, TopicConfig.COMPRESSION_GZIP_LEVEL_DOC)
@@ -246,8 +257,7 @@ public class LogConfig extends AbstractConfig {
                 .define(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
                         TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_COPY_DISABLE_DOC)
-                .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC)
-                .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, MEDIUM, INTERNAL_SEGMENT_BYTES_DOC);
+                .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC);
     }
 
     public final Set<String> overriddenConfigs;
@@ -256,8 +266,7 @@ public class LogConfig extends AbstractConfig {
      * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
      * should also be in `KafkaConfig#extractLogConfigMap`.
      */
-    private final int segmentSize;
-    private final Integer internalSegmentSize;
+    public final int segmentSize;
     public final long segmentMs;
     public final long segmentJitterMs;
     public final int maxIndexSize;
@@ -291,7 +300,7 @@ public class LogConfig extends AbstractConfig {
     private final Map<?, ?> props;
 
     public LogConfig(Map<?, ?> props) {
-        this(props, Set.of());
+        this(props, Collections.emptySet());
     }
 
     @SuppressWarnings({"this-escape"})
@@ -301,7 +310,6 @@ public class LogConfig extends AbstractConfig {
         this.overriddenConfigs = Collections.unmodifiableSet(overriddenConfigs);
 
         this.segmentSize = getInt(TopicConfig.SEGMENT_BYTES_CONFIG);
-        this.internalSegmentSize = getInt(INTERNAL_SEGMENT_BYTES_CONFIG);
         this.segmentMs = getLong(TopicConfig.SEGMENT_MS_CONFIG);
         this.segmentJitterMs = getLong(TopicConfig.SEGMENT_JITTER_MS_CONFIG);
         this.maxIndexSize = getInt(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG);
@@ -318,11 +326,11 @@ public class LogConfig extends AbstractConfig {
         this.minCleanableRatio = getDouble(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG);
         this.compact = getList(TopicConfig.CLEANUP_POLICY_CONFIG).stream()
                 .map(c -> c.toLowerCase(Locale.ROOT))
-                .toList()
+                .collect(Collectors.toList())
                 .contains(TopicConfig.CLEANUP_POLICY_COMPACT);
         this.delete = getList(TopicConfig.CLEANUP_POLICY_CONFIG).stream()
                 .map(c -> c.toLowerCase(Locale.ROOT))
-                .toList()
+                .collect(Collectors.toList())
                 .contains(TopicConfig.CLEANUP_POLICY_DELETE);
         this.uncleanLeaderElectionEnable = getBoolean(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
         this.minInSyncReplicas = getInt(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
@@ -339,25 +347,28 @@ public class LogConfig extends AbstractConfig {
     }
 
     private Optional<Compression> getCompression() {
-        return switch (compressionType) {
-            case GZIP -> Optional.of(Compression.gzip()
-                    .level(getInt(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
-                    .build());
-            case LZ4 -> Optional.of(Compression.lz4()
-                    .level(getInt(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG))
-                    .build());
-            case ZSTD -> Optional.of(Compression.zstd()
-                    .level(getInt(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG))
-                    .build());
-            case SNAPPY -> Optional.of(Compression.snappy().build());
-            case UNCOMPRESSED -> Optional.of(Compression.NONE);
-            case PRODUCER -> Optional.empty();
-        };
-    }
-
-    public int segmentSize() {
-        if (internalSegmentSize == null) return segmentSize;
-        return internalSegmentSize;
+        switch (compressionType) {
+            case GZIP:
+                return Optional.of(Compression.gzip()
+                        .level(getInt(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
+                        .build());
+            case LZ4:
+                return Optional.of(Compression.lz4()
+                        .level(getInt(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG))
+                        .build());
+            case ZSTD:
+                return Optional.of(Compression.zstd()
+                        .level(getInt(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG))
+                        .build());
+            case SNAPPY:
+                return Optional.of(Compression.snappy().build());
+            case UNCOMPRESSED:
+                return Optional.of(Compression.NONE);
+            case PRODUCER:
+                return Optional.empty();
+            default:
+                throw new IllegalArgumentException("Invalid value for " + TopicConfig.COMPRESSION_TYPE_CONFIG);
+        }
     }
 
     // Exposed as a method so it can be mocked
@@ -381,7 +392,7 @@ public class LogConfig extends AbstractConfig {
 
     public int initFileSize() {
         if (preallocate)
-            return segmentSize();
+            return segmentSize;
         else
             return 0;
     }
@@ -436,15 +447,11 @@ public class LogConfig extends AbstractConfig {
     }
 
     public static List<String> configNames() {
-        return CONFIG.names().stream().sorted().toList();
+        return CONFIG.names().stream().sorted().collect(Collectors.toList());
     }
 
-    public static List<String> nonInternalConfigNames() {
-        return CONFIG.configKeys().entrySet()
-                .stream()
-                .filter(entry -> !entry.getValue().internalConfig)
-                .map(Map.Entry::getKey)
-                .sorted().toList();
+    public static Optional<String> serverConfigName(String configName) {
+        return CONFIG.serverConfigName(configName);
     }
 
     public static Map<String, ConfigKey> configKeys() {
@@ -508,7 +515,7 @@ public class LogConfig extends AbstractConfig {
         boolean isRemoteLogStorageEnabled = (Boolean) newConfigs.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
         if (isRemoteLogStorageEnabled) {
             validateRemoteStorageOnlyIfSystemEnabled(newConfigs, isRemoteLogStorageSystemEnabled, false);
-            validateRemoteStorageRequiresDeleteCleanupPolicy(newConfigs);
+            validateNoRemoteStorageForCompactedTopic(newConfigs);
             validateRemoteStorageRetentionSize(newConfigs);
             validateRemoteStorageRetentionTime(newConfigs);
             validateRetentionConfigsWhenRemoteCopyDisabled(newConfigs, isRemoteLogStorageEnabled);
@@ -558,11 +565,10 @@ public class LogConfig extends AbstractConfig {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private static void validateRemoteStorageRequiresDeleteCleanupPolicy(Map<?, ?> props) {
-        List<String> cleanupPolicy = (List<String>) props.get(TopicConfig.CLEANUP_POLICY_CONFIG);
-        if (!cleanupPolicy.isEmpty() && (cleanupPolicy.size() != 1 || !TopicConfig.CLEANUP_POLICY_DELETE.equals(cleanupPolicy.get(0)))) {
-            throw new ConfigException("Remote log storage only supports topics with cleanup.policy=delete or cleanup.policy being an empty list.");
+    private static void validateNoRemoteStorageForCompactedTopic(Map<?, ?> props) {
+        String cleanupPolicy = props.get(TopicConfig.CLEANUP_POLICY_CONFIG).toString().toLowerCase(Locale.getDefault());
+        if (cleanupPolicy.contains(TopicConfig.CLEANUP_POLICY_COMPACT)) {
+            throw new ConfigException("Remote log storage is unsupported for the compacted topics");
         }
     }
 
@@ -604,7 +610,7 @@ public class LogConfig extends AbstractConfig {
      * Check that the given properties contain only valid log config names and that all values can be parsed and are valid
      */
     public static void validate(Properties props) {
-        validate(Map.of(), props, Map.of(), false);
+        validate(Collections.emptyMap(), props, Collections.emptyMap(), false);
     }
 
     public static void validate(Map<String, String> existingConfigs,
@@ -626,7 +632,7 @@ public class LogConfig extends AbstractConfig {
     @Override
     public String toString() {
         return "LogConfig{" +
-                "segmentSize=" + segmentSize() +
+                "segmentSize=" + segmentSize +
                 ", segmentMs=" + segmentMs +
                 ", segmentJitterMs=" + segmentJitterMs +
                 ", maxIndexSize=" + maxIndexSize +

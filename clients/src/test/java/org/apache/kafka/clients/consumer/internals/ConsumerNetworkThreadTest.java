@@ -21,7 +21,6 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -33,21 +32,21 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.function.Supplier;
 
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -118,7 +117,10 @@ public class ConsumerNetworkThreadTest {
     @ParameterizedTest
     @ValueSource(longs = {ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS - 1, ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS, ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS + 1})
     public void testConsumerNetworkThreadPollTimeComputations(long exampleTime) {
-        List<RequestManager> list = List.of(coordinatorRequestManager, heartbeatRequestManager);
+        List<Optional<? extends RequestManager>> list = new ArrayList<>();
+        list.add(Optional.of(coordinatorRequestManager));
+        list.add(Optional.of(heartbeatRequestManager));
+
         when(requestManagers.entries()).thenReturn(list);
 
         NetworkClientDelegate.PollResult pollResult = new NetworkClientDelegate.PollResult(exampleTime);
@@ -156,13 +158,16 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testRequestsTransferFromManagersToClientOnThreadRun() {
-        List<RequestManager> list = List.of(coordinatorRequestManager, heartbeatRequestManager, offsetsRequestManager);
+        List<Optional<? extends RequestManager>> list = new ArrayList<>();
+        list.add(Optional.of(coordinatorRequestManager));
+        list.add(Optional.of(heartbeatRequestManager));
+        list.add(Optional.of(offsetsRequestManager));
 
         when(requestManagers.entries()).thenReturn(list);
         when(coordinatorRequestManager.poll(anyLong())).thenReturn(mock(NetworkClientDelegate.PollResult.class));
         consumerNetworkThread.runOnce();
-        requestManagers.entries().forEach(rm -> verify(rm).poll(anyLong()));
-        requestManagers.entries().forEach(rm -> verify(rm).maximumTimeToWait(anyLong()));
+        requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm).poll(anyLong())));
+        requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm).maximumTimeToWait(anyLong())));
         verify(networkClientDelegate).addAll(any(NetworkClientDelegate.PollResult.class));
         verify(networkClientDelegate).poll(anyLong(), anyLong());
     }
@@ -173,7 +178,7 @@ public class ConsumerNetworkThreadTest {
         // Initial value before runOnce has been called
         assertEquals(ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS, consumerNetworkThread.maximumTimeToWait());
 
-        when(requestManagers.entries()).thenReturn(List.of(heartbeatRequestManager));
+        when(requestManagers.entries()).thenReturn(Collections.singletonList(Optional.of(heartbeatRequestManager)));
         when(heartbeatRequestManager.maximumTimeToWait(time.milliseconds())).thenReturn((long) defaultHeartbeatIntervalMs);
 
         consumerNetworkThread.runOnce();
@@ -206,11 +211,10 @@ public class ConsumerNetworkThreadTest {
         verify(networkClientDelegate, times(2)).poll(anyLong(), anyLong());
     }
 
-    @ParameterizedTest
-    @MethodSource("org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetricsTest#groupNameProvider")
-    public void testRunOnceRecordTimeBetweenNetworkThreadPoll(String groupName) {
+    @Test
+    public void testRunOnceRecordTimeBetweenNetworkThreadPoll() {
         try (Metrics metrics = new Metrics();
-             AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, groupName);
+             AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics);
              ConsumerNetworkThread consumerNetworkThread = new ConsumerNetworkThread(
                      new LogContext(),
                      time,
@@ -229,23 +233,22 @@ public class ConsumerNetworkThreadTest {
             assertEquals(
                 10,
                 (double) metrics.metric(
-                    metrics.metricName("time-between-network-thread-poll-avg", groupName)
+                    metrics.metricName("time-between-network-thread-poll-avg", CONSUMER_METRIC_GROUP)
                 ).metricValue()
             );
             assertEquals(
                 10,
                 (double) metrics.metric(
-                    metrics.metricName("time-between-network-thread-poll-max", groupName)
+                    metrics.metricName("time-between-network-thread-poll-max", CONSUMER_METRIC_GROUP)
                 ).metricValue()
             );
         }
     }
 
-    @ParameterizedTest
-    @MethodSource("org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetricsTest#groupNameProvider")
-    public void testRunOnceRecordApplicationEventQueueSizeAndApplicationEventQueueTime(String groupName) {
+    @Test
+    public void testRunOnceRecordApplicationEventQueueSizeAndApplicationEventQueueTime() {
         try (Metrics metrics = new Metrics();
-             AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, groupName);
+             AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics);
              ConsumerNetworkThread consumerNetworkThread = new ConsumerNetworkThread(
                      new LogContext(),
                      time,
@@ -268,74 +271,21 @@ public class ConsumerNetworkThreadTest {
             assertEquals(
                 0,
                 (double) metrics.metric(
-                    metrics.metricName("application-event-queue-size", groupName)
+                    metrics.metricName("application-event-queue-size", CONSUMER_METRIC_GROUP)
                 ).metricValue()
             );
             assertEquals(
                 10,
                 (double) metrics.metric(
-                    metrics.metricName("application-event-queue-time-avg", groupName)
+                    metrics.metricName("application-event-queue-time-avg", CONSUMER_METRIC_GROUP)
                 ).metricValue()
             );
             assertEquals(
                 10,
                 (double) metrics.metric(
-                    metrics.metricName("application-event-queue-time-max", groupName)
+                    metrics.metricName("application-event-queue-time-max", CONSUMER_METRIC_GROUP)
                 ).metricValue()
             );
-        }
-    }
-
-    @Test
-    public void testNetworkClientDelegateInitializeResourcesError() {
-        Supplier<NetworkClientDelegate> networkClientDelegateSupplier = () -> {
-            throw new KafkaException("Injecting NetworkClientDelegate initialization failure");
-        };
-        Supplier<RequestManagers> requestManagersSupplier = () -> requestManagers;
-        testInitializeResourcesError(networkClientDelegateSupplier, requestManagersSupplier);
-    }
-
-    @Test
-    public void testRequestManagersInitializeResourcesError() {
-        Supplier<NetworkClientDelegate> networkClientDelegateSupplier = () -> networkClientDelegate;
-        Supplier<RequestManagers> requestManagersSupplier = () -> {
-            throw new KafkaException("Injecting RequestManagers initialization failure");
-        };
-        testInitializeResourcesError(networkClientDelegateSupplier, requestManagersSupplier);
-    }
-
-    @Test
-    public void testNetworkClientDelegateAndRequestManagersInitializeResourcesError() {
-        Supplier<NetworkClientDelegate> networkClientDelegateSupplier = () -> {
-            throw new KafkaException("Injecting NetworkClientDelegate initialization failure");
-        };
-        Supplier<RequestManagers> requestManagersSupplier = () -> {
-            throw new KafkaException("Injecting RequestManagers initialization failure");
-        };
-        testInitializeResourcesError(networkClientDelegateSupplier, requestManagersSupplier);
-    }
-
-    /**
-     * Tests that when an error occurs during {@link ConsumerNetworkThread#initializeResources()} that the
-     * logic in {@link ConsumerNetworkThread#cleanup()} will not throw errors when closing.
-     */
-    private void testInitializeResourcesError(Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                                              Supplier<RequestManagers> requestManagersSupplier) {
-        // A new ConsumerNetworkThread is created because the shared one doesn't have any issues initializing its
-        // resources. However, most of the mocks can be reused, so this is mostly boilerplate except for the error
-        // when a supplier is invoked.
-        try (ConsumerNetworkThread thread = new ConsumerNetworkThread(
-            new LogContext(),
-            time,
-            applicationEventQueue,
-            applicationEventReaper,
-            () -> applicationEventProcessor,
-            networkClientDelegateSupplier,
-            requestManagersSupplier,
-            asyncConsumerMetrics
-        )) {
-            assertThrows(KafkaException.class, thread::initializeResources, "initializeResources should fail because one or more Supplier throws an error on get()");
-            assertDoesNotThrow(thread::cleanup, "cleanup() should not cause an error because all references are checked before use");
         }
     }
 }

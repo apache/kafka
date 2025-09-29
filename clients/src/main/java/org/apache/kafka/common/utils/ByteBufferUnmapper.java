@@ -40,7 +40,7 @@ public final class ByteBufferUnmapper {
     private static final RuntimeException UNMAP_NOT_SUPPORTED_EXCEPTION;
 
     static {
-        MethodHandle unmap = null;
+        Object unmap = null;
         RuntimeException exception = null;
         try {
             unmap = lookupUnmapMethodHandle();
@@ -48,7 +48,7 @@ public final class ByteBufferUnmapper {
             exception = e;
         }
         if (unmap != null) {
-            UNMAP = unmap;
+            UNMAP = (MethodHandle) unmap;
             UNMAP_NOT_SUPPORTED_EXCEPTION = null;
         } else {
             UNMAP = null;

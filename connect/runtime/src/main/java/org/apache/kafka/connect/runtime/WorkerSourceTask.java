@@ -19,7 +19,6 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
@@ -28,7 +27,6 @@ import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.ToleranceType;
-import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
@@ -54,7 +52,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.connect.runtime.SubmittedRecords.CommittableOffsets;
@@ -74,10 +71,10 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
                             SourceTask task,
                             TaskStatus.Listener statusListener,
                             TargetState initialState,
-                            Plugin<Converter> keyConverterPlugin,
-                            Plugin<Converter> valueConverterPlugin,
+                            Converter keyConverter,
+                            Converter valueConverter,
                             ErrorHandlingMetrics errorMetrics,
-                            Plugin<HeaderConverter> headerConverterPlugin,
+                            HeaderConverter headerConverter,
                             TransformationChain<SourceRecord, SourceRecord> transformationChain,
                             Producer<byte[], byte[]> producer,
                             TopicAdmin admin,
@@ -93,14 +90,12 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
                             RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
                             StatusBackingStore statusBackingStore,
                             Executor closeExecutor,
-                            Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier,
-                            TaskPluginsMetadata pluginsMetadata,
-                            Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
+                            Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier) {
 
-        super(id, task, statusListener, initialState, configState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, transformationChain,
-                null, producer,
+        super(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, transformationChain,
+                new WorkerSourceTaskContext(offsetReader, id, configState, null), producer,
                 admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics, errorMetrics, loader,
-                time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier, pluginsMetadata, pluginLoaderSwapper);
+                time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier);
 
         this.committableOffsets = CommittableOffsets.EMPTY;
         this.submittedRecords = new SubmittedRecords();

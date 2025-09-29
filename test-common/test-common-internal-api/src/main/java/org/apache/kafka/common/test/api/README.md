@@ -3,83 +3,49 @@ cluster configurations.
 
 # Annotations
 
-Three annotations are provided for defining a template of a Kafka cluster.
+A new `@ClusterTest` annotation is introduced which allows for a test to declaratively configure an underlying Kafka cluster.
 
-* `@ClusterTest`: declarative style cluster definition
-* `@ClusterTests`: wrapper around multiple `@ClusterTest`-s
-* `@ClusterTemplate`: points to a function for imperative cluster definition
-
-Another helper annotation `@ClusterTestDefaults` allows overriding the defaults for 
-all `@ClusterTest` in a single test class.
-
-# Usage
-
-The simplest usage is `@ClusterTest` by itself which will use some reasonable defaults.
-
-```java
-public class SampleTest {
-    @ClusterTest
-    void testSomething() { ... }
-}
+```scala
+@ClusterTest
+def testSomething(): Unit = { ... }
 ```
 
-The defaults can be modified by setting specific paramters on the annotation. 
+This annotation has fields for a set of cluster types and number of brokers, as well as commonly parameterized configurations. 
+Arbitrary server properties can also be provided in the annotation:
 
 ```java
-public class SampleTest {
-    @ClusterTest(brokers = 3, metadataVersion = MetadataVersion.IBP_4_0_IV3)
-    void testSomething() { ... }
-}
+@ClusterTest(
+  types = {Type.KRAFT},
+  brokerSecurityProtocol = SecurityProtocol.PLAINTEXT,
+  properties = {
+    @ClusterProperty(key = "inter.broker.protocol.version", value = "2.7-IV2"),
+    @ClusterProperty(key = "socket.send.buffer.bytes", value = "10240"),
+})
+void testSomething() { ... }
 ```
 
-It is also possible to modify the defaults for a whole class using `@ClusterTestDefaults`.
+Multiple `@ClusterTest` annotations can be given to generate more than one test invocation for the annotated method.
 
-```java
-@ClusterTestDefaults(brokers = 3, metadataVersion = MetadataVersion.IBP_4_0_IV3)
-public class SampleTest {
-    @ClusterTest
-    void testSomething() { ... }
-}
+```scala
+@ClusterTests(Array(
+  new ClusterTest(brokerSecurityProtocol = SecurityProtocol.PLAINTEXT),
+  new ClusterTest(brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT)
+))
+def testSomething(): Unit = { ... }
 ```
 
-To set some specific config, an array of `@ClusterProperty` annotations can be
-given.
-
-```java
-public class SampleTest {
-    @ClusterTest(
-      types = {Type.KRAFT},
-      brokerSecurityProtocol = SecurityProtocol.PLAINTEXT,
-      properties = {
-          @ClusterProperty(key = "inter.broker.protocol.version", value = "2.7-IV2"),
-          @ClusterProperty(key = "socket.send.buffer.bytes", value = "10240"),
-    })
-    void testSomething() { ... }
-}
-```
-
-Using the `@ClusterTests` annotation, multiple declarative cluster templates can
-be given.
-
-```java
-public class SampleTest {
-    @ClusterTests({
-        @ClusterTest(brokerSecurityProtocol = SecurityProtocol.PLAINTEXT),
-        @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT)
-    })
-    void testSomething() { ... }
-}
-```
+A class-level `@ClusterTestDefaults` annotation is added to provide default values for `@ClusterTest` defined within 
+the class. The intention here is to reduce repetitive annotation declarations and also make changing defaults easier 
+for a class with many test cases.
 
 # Dynamic Configuration
 
-In order to allow for more flexible cluster configuration, a `@ClusterTemplate` 
-annotation is also introduced. This annotation takes a single string value which 
-references a static method on the test class. This method is used to produce any 
-number of test configurations using a fluent builder style API.
+In order to allow for more flexible cluster configuration, a `@ClusterTemplate` annotation is also introduced. This 
+annotation takes a single string value which references a static method on the test class. This method is used to 
+produce any number of test configurations using a fluent builder style API.
 
 ```java
-import java.util.List;
+import java.util.Arrays;
 
 @ClusterTemplate("generateConfigs")
 void testSomething() { ... }
@@ -99,94 +65,61 @@ static List<ClusterConfig> generateConfigs() {
           .name("Generated Test 3")
           .serverProperties(props3)
           .build();
-  return List.of(config1, config2, config3);
+  return Arrays.asList(config1, config2, config3);
 }
 ```
 
-This alternate configuration style makes it easy to create any number of complex 
-configurations. Each returned ClusterConfig by a template method will result in
-an additional variation of the run.
+This "escape hatch" from the simple declarative style configuration makes it easy to dynamically configure clusters.
 
 
 # JUnit Extension
 
-The core logic of our test framework lies in `ClusterTestExtensions` which is a
-JUnit extension. It is automatically registered using SPI and will look for test
-methods that include one of the three annotations mentioned above. 
+One thing to note is that our "test*" methods are no longer _tests_, but rather they are test templates. We have added 
+a JUnit extension called `ClusterTestExtensions` which knows how to process these annotations in order to generate test 
+invocations. Test classes that wish to make use of these annotations need to explicitly register this extension:
 
-This way of dynamically generating tests uses the JUnit concept of test templates.
+```scala
+import org.apache.kafka.common.test.junit.ClusterTestExtensions
+
+@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
+class ApiVersionsRequestTest {
+   ...
+}
+```
 
 # JUnit Lifecycle
 
-JUnit discovers test template methods that are annotated with `@ClusterTest`, 
-`@ClusterTests`, or `@ClusterTemplate`. These annotations are processed and some
-number of test invocations are created.
+The lifecycle of a test class that is extended with `ClusterTestExtensions` follows:
 
-For each generated test invocation we have the following lifecycle:
+* JUnit discovers test template methods that are annotated with `@ClusterTest`, `@ClusterTests`, or `@ClusterTemplate`
+* `ClusterTestExtensions` is called for each of these template methods in order to generate some number of test invocations
 
+For each generated invocation:
 * Static `@BeforeAll` methods are called
 * Test class is instantiated
-* Kafka Cluster is started (if autoStart=true)
 * Non-static `@BeforeEach` methods are called
+* Kafka Cluster is started
 * Test method is invoked
 * Kafka Cluster is stopped
 * Non-static `@AfterEach` methods are called
 * Static `@AfterAll` methods are called
 
-`@BeforeEach` methods give an opportunity to set up additional test dependencies 
-after the cluster has started but before the test method is run.
+`@BeforeEach` methods give an opportunity to setup additional test dependencies before the cluster is started. 
 
 # Dependency Injection
 
-A ClusterInstance object can be injected into the test method or the test class constructor.
-This object is a shim to the underlying test framework and provides access to things like 
-SocketServers and has convenience factory methods for getting a client.
+The class is introduced to provide context to the underlying cluster and to provide reusable functionality that was
+previously garnered from the test hierarchy.
 
-The class is introduced to provide context to the underlying cluster and to provide reusable 
-functionality that was previously garnered from the test hierarchy.
+* ClusterInstance: a shim to the underlying class that actually runs the cluster, provides access to things like SocketServers
 
-Common usage is to inject this class into a test method
+In order to inject the object, simply add it as a parameter to your test class, `@BeforeEach` method, or test method.
 
-```java
-class SampleTest {
-    @ClusterTest
-    public void testOne(ClusterInstance cluster) {
-        this.cluster.admin().createTopics(...);
-        // Test code
-    }
-}
-```
-
-For cases where there is common setup code that involves the cluster (such as 
-creating topics), it is possible to access the ClusterInstance from a `@BeforeEach` 
-method. This requires injecting the object in the constructor. For example, 
-
-```java
-class SampleTest {
-    private final ClusterInstance cluster;
-
-    SampleTest(ClusterInstance cluster) {
-        this.cluster = cluster;
-    }
-    
-    @BeforeEach
-    public void setup() {
-      // Common setup code with started ClusterInstance
-      this.cluster.admin().createTopics(...); 
-    }
-
-    @ClusterTest
-    public void testOne() {
-        // Test code
-    }
-}
-```
-
-It is okay to inject the ClusterInstance in both ways. The same object will be
-provided in either case.
+| Injection | Class | BeforeEach | Test | Notes
+| --- | --- | --- | --- | --- |
+| ClusterInstance | yes* | no | yes | Injectable at class level for convenience, can only be accessed inside test |
 
 # Gotchas
-* Cluster tests are not compatible with other test templates like `@ParameterizedTest`
 * Test methods annotated with JUnit's `@Test` will still be run, but no cluster will be started and no dependency 
   injection will happen. This is generally not what you want.
 * Even though ClusterConfig is accessible, it is immutable inside the test method.

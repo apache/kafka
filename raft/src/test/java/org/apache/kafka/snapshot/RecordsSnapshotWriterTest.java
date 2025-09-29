@@ -22,14 +22,13 @@ import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.raft.Batch;
+import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.raft.VoterSetTest;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.server.common.KRaftVersion;
-import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import org.junit.jupiter.api.Test;
@@ -50,13 +49,13 @@ final class RecordsSnapshotWriterTest {
     @Test
     void testBuilderKRaftVersion0() {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100, 10);
-        int maxBatchSizeBytes = 1024;
+        int maxBatchSize = 1024;
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
             .setKraftVersion(KRaftVersion.KRAFT_VERSION_0)
             .setVoterSet(Optional.empty())
             .setTime(new MockTime())
-            .setMaxBatchSizeBytes(maxBatchSizeBytes)
+            .setMaxBatchSize(maxBatchSize)
             .setRawSnapshotWriter(
                 new MockRawSnapshotWriter(snapshotId, buffer::set)
             );
@@ -68,9 +67,8 @@ final class RecordsSnapshotWriterTest {
                 new MockRawSnapshotReader(snapshotId, buffer.get()),
                 STRING_SERDE,
                 BufferSupplier.NO_CACHING,
-                maxBatchSizeBytes,
-                true,
-                new LogContext()
+                maxBatchSize,
+                true
             )
         ) {
             // Consume the control record batch
@@ -100,7 +98,7 @@ final class RecordsSnapshotWriterTest {
     @Test
     void testBuilderKRaftVersion0WithVoterSet() {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100, 10);
-        int maxBatchSizeBytes = 1024;
+        int maxBatchSize = 1024;
         VoterSet voterSet = VoterSetTest.voterSet(
             new HashMap<>(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true))
         );
@@ -109,7 +107,7 @@ final class RecordsSnapshotWriterTest {
             .setKraftVersion(KRaftVersion.KRAFT_VERSION_0)
             .setVoterSet(Optional.of(voterSet))
             .setTime(new MockTime())
-            .setMaxBatchSizeBytes(maxBatchSizeBytes)
+            .setMaxBatchSize(maxBatchSize)
             .setRawSnapshotWriter(
                 new MockRawSnapshotWriter(snapshotId, buffer::set)
             );
@@ -120,7 +118,7 @@ final class RecordsSnapshotWriterTest {
     @Test
     void testKBuilderRaftVersion1WithVoterSet() {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100, 10);
-        int maxBatchSizeBytes = 1024;
+        int maxBatchSize = 1024;
         VoterSet voterSet = VoterSetTest.voterSet(
             new HashMap<>(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true))
         );
@@ -129,7 +127,7 @@ final class RecordsSnapshotWriterTest {
             .setKraftVersion(KRaftVersion.KRAFT_VERSION_1)
             .setVoterSet(Optional.of(voterSet))
             .setTime(new MockTime())
-            .setMaxBatchSizeBytes(maxBatchSizeBytes)
+            .setMaxBatchSize(maxBatchSize)
             .setRawSnapshotWriter(
                 new MockRawSnapshotWriter(snapshotId, buffer::set)
             );
@@ -141,9 +139,8 @@ final class RecordsSnapshotWriterTest {
                 new MockRawSnapshotReader(snapshotId, buffer.get()),
                 STRING_SERDE,
                 BufferSupplier.NO_CACHING,
-                maxBatchSizeBytes,
-                true,
-                new LogContext()
+                maxBatchSize,
+                true
             )
         ) {
             // Consume the control record batch
@@ -181,13 +178,13 @@ final class RecordsSnapshotWriterTest {
     @Test
     void testBuilderKRaftVersion1WithoutVoterSet() {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100, 10);
-        int maxBatchSizeBytes = 1024;
+        int maxBatchSize = 1024;
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
             .setKraftVersion(KRaftVersion.KRAFT_VERSION_1)
             .setVoterSet(Optional.empty())
             .setTime(new MockTime())
-            .setMaxBatchSizeBytes(maxBatchSizeBytes)
+            .setMaxBatchSize(maxBatchSize)
             .setRawSnapshotWriter(
                 new MockRawSnapshotWriter(snapshotId, buffer::set)
             );
@@ -199,9 +196,8 @@ final class RecordsSnapshotWriterTest {
                 new MockRawSnapshotReader(snapshotId, buffer.get()),
                 STRING_SERDE,
                 BufferSupplier.NO_CACHING,
-                maxBatchSizeBytes,
-                true,
-                new LogContext()
+                maxBatchSize,
+                true
             )
         ) {
             // Consume the control record batch

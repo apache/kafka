@@ -32,8 +32,9 @@ import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -57,19 +58,19 @@ public class FileStreamSinkTaskTest {
 
     @Test
     public void testPutFlush() {
-        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        HashMap<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         final String newLine = System.lineSeparator();
 
         // We do not call task.start() since it would override the output stream
 
-        task.put(List.of(
+        task.put(Collections.singletonList(
                 new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line1", 1)
         ));
         offsets.put(new TopicPartition("topic1", 0), new OffsetAndMetadata(1L));
         task.flush(offsets);
         assertEquals("line1" + newLine, os.toString());
 
-        task.put(List.of(
+        task.put(Arrays.asList(
                 new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line2", 2),
                 new SinkRecord("topic2", 0, null, null, Schema.STRING_SCHEMA, "line3", 1)
         ));
@@ -87,7 +88,7 @@ public class FileStreamSinkTaskTest {
         task.start(props);
 
         HashMap<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        task.put(List.of(
+        task.put(Collections.singletonList(
                 new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line0", 1)
         ));
         offsets.put(new TopicPartition("topic1", 0), new OffsetAndMetadata(1L));
@@ -98,7 +99,7 @@ public class FileStreamSinkTaskTest {
         int i = 0;
         try (BufferedReader reader = Files.newBufferedReader(Paths.get(outputFile))) {
             lines[i++] = reader.readLine();
-            task.put(List.of(
+            task.put(Arrays.asList(
                     new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line1", 2),
                     new SinkRecord("topic2", 0, null, null, Schema.STRING_SCHEMA, "line2", 1)
             ));

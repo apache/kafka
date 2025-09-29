@@ -18,21 +18,23 @@
 package kafka.server.metadata
 
 import kafka.network.ConnectionQuotas
+import kafka.server.ClientQuotaManager
+import kafka.server.ClientQuotaManager.BaseUserEntity
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.ClientQuotaMetadataManager.transferToClientQuotaEntity
 import kafka.utils.Logging
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.quota.ClientQuotaEntity
-import org.apache.kafka.server.quota.ClientQuotaEntity.ConfigEntity
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.server.quota.ClientQuotaEntity.{ConfigEntity => ClientQuotaConfigEntity} 
 
 import java.net.{InetAddress, UnknownHostException}
-import java.util.Optional
 import org.apache.kafka.image.{ClientQuotaDelta, ClientQuotasDelta}
 import org.apache.kafka.server.config.QuotaConfig
-import org.apache.kafka.server.quota.ClientQuotaManager
 
 import scala.jdk.OptionConverters.RichOptionalDouble
+
+
 
 // A strict hierarchy of entities that we support
 sealed trait QuotaEntity
@@ -148,13 +150,13 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
 
     // Convert entity into Options with sanitized values for QuotaManagers
     val (userEntity, clientEntity) = transferToClientQuotaEntity(quotaEntity)
-    val quotaValue = newValue.map(v => Optional.of(new Quota(v, true))).getOrElse(Optional.empty[Quota]())
 
+    val quotaValue = newValue.map(new Quota(_, true))
     try {
       manager.updateQuota(
-        userEntity,
-        clientEntity,
-        quotaValue
+        userEntity = userEntity,
+        clientEntity = clientEntity,
+        quota = quotaValue
       )
     } catch {
       case t: Throwable => error(s"Failed to update user-client quota $quotaEntity", t)
@@ -164,24 +166,24 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
 
 object ClientQuotaMetadataManager {
 
-  def transferToClientQuotaEntity(quotaEntity: QuotaEntity): (Optional[ConfigEntity], Optional[ConfigEntity]) = {
+  def transferToClientQuotaEntity(quotaEntity: QuotaEntity): (Option[BaseUserEntity], Option[ClientQuotaConfigEntity]) = {
     quotaEntity match {
       case UserEntity(user) =>
-        (Optional.of(new ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Optional.empty())
+        (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), None)
       case DefaultUserEntity =>
-        (Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY), Optional.empty())
+        (Some(ClientQuotaManager.DefaultUserEntity), None)
       case ClientIdEntity(clientId) =>
-        (Optional.empty(), Optional.of(new ClientQuotaManager.ClientIdEntity(clientId)))
+        (None, Some(ClientQuotaManager.ClientIdEntity(clientId)))
       case DefaultClientIdEntity =>
-        (Optional.empty(), Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID))
+        (None, Some(ClientQuotaManager.DefaultClientIdEntity))
       case ExplicitUserExplicitClientIdEntity(user, clientId) =>
-        (Optional.of(new ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Optional.of(new ClientQuotaManager.ClientIdEntity(clientId)))
+        (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Some(ClientQuotaManager.ClientIdEntity(clientId)))
       case ExplicitUserDefaultClientIdEntity(user) =>
-        (Optional.of(new ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID))
+        (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Some(ClientQuotaManager.DefaultClientIdEntity))
       case DefaultUserExplicitClientIdEntity(clientId) =>
-        (Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY), Optional.of(new ClientQuotaManager.ClientIdEntity(clientId)))
+        (Some(ClientQuotaManager.DefaultUserEntity), Some(ClientQuotaManager.ClientIdEntity(clientId)))
       case DefaultUserDefaultClientIdEntity =>
-        (Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY), Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID))
+        (Some(ClientQuotaManager.DefaultUserEntity), Some(ClientQuotaManager.DefaultClientIdEntity))
       case IpEntity(_) | DefaultIpEntity => throw new IllegalStateException("Should not see IP quota entities here")
     }
   }

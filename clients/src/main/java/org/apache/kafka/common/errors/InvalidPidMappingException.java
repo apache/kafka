@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.errors;
 
-public class InvalidPidMappingException extends ApplicationRecoverableException {
+public class InvalidPidMappingException extends ApiException {
     public InvalidPidMappingException(String message) {
         super(message);
     }

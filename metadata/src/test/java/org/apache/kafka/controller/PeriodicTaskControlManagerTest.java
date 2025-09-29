@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
@@ -56,7 +57,7 @@ public class PeriodicTaskControlManagerTest {
                     if (shouldFail.getAndSet(false)) {
                         throw new NullPointerException("uh oh");
                     }
-                    return ControllerResult.of(List.of(),
+                    return ControllerResult.of(Collections.emptyList(),
                         continuation.getAndSet(false));
                 },
                 periodNs,
@@ -64,7 +65,20 @@ public class PeriodicTaskControlManagerTest {
         }
     }
 
-    record TrackedTask(String tag, long deadlineNs, Supplier<ControllerResult<Void>> op) {
+    static class TrackedTask {
+        final String tag;
+        final long deadlineNs;
+        final Supplier<ControllerResult<Void>> op;
+
+        TrackedTask(
+            String tag,
+            long deadlineNs,
+            Supplier<ControllerResult<Void>> op
+        ) {
+            this.tag = tag;
+            this.deadlineNs = deadlineNs;
+            this.op = op;
+        }
     }
 
     static class PeriodicTaskControlManagerTestEnv implements PeriodicTaskControlManager.QueueAccessor {

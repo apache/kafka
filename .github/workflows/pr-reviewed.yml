@@ -13,30 +13,42 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Pull Request Reviewed
+name: Remove Triage Label
 
 on:
-  pull_request_review:
-    types: [submitted, edited, dismissed]
-    branches:
-      - trunk
-  pull_request:
-    types: [opened, reopened, edited]
-    branches:
-      - trunk
+  workflow_run:
+    workflows: [Pull Request Reviewed]
+    types:
+      - completed
 
 jobs:
-  save-pr-number:
-    name: Save PR Number
+  # This job runs with elevated permissions and the ability to modify pull requests. The steps taken here
+  # should be limited to updating labels and adding comments to PRs. This approach is taken from
+  # https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/.
+  remove-triage:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Env
         run: printenv
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
-      - name: Save PR Number
-        run: echo ${{ github.event.pull_request.number }} > PR_NUMBER.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          name: PR_NUMBER.txt
-          path: PR_NUMBER.txt
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+          name: pr-number.txt
+      - name: Remove label
+        uses: actions/github-script@v7
+        continue-on-error: true
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            var fs = require('fs');
+            var pr_number = Number(fs.readFileSync('./pr-number.txt'));
+            await github.rest.issues.removeLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr_number,
+              name: 'triage'
+            });

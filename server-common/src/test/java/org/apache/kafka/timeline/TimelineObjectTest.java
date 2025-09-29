@@ -22,7 +22,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.List;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -84,7 +84,7 @@ public class TimelineObjectTest {
 
         registry.reset();
 
-        assertEquals(List.of(), registry.epochsList());
+        assertEquals(Collections.emptyList(), registry.epochsList());
         assertEquals("<default>", value.get());
     }
 }

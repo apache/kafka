@@ -91,12 +91,4 @@ public class FileLock {
         }
         channel.close();
     }
-
-    /**
-     * Unlock the file and close the associated FileChannel
-     */
-    public synchronized void unlockAndClose() throws IOException {
-        unlock();
-        channel.close();
-    }
 }

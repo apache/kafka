@@ -21,6 +21,7 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 
+import org.apache.logging.log4j.Level;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
@@ -118,7 +119,8 @@ public class LoggingResource {
         }
 
         // Make sure that this is a valid level
-        if (org.apache.logging.log4j.Level.getLevel(levelString) == null) {
+        Level level = Level.toLevel(levelString.toUpperCase(Locale.ROOT), null);
+        if (level == null) {
             throw new NotFoundException("invalid log level '" + levelString + "'.");
         }
 

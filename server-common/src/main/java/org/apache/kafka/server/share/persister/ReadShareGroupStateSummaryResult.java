@@ -26,9 +26,9 @@ import java.util.stream.Collectors;
  * This class contains the result from {@link Persister#readSummary(ReadShareGroupStateSummaryParameters)}.
  */
 public class ReadShareGroupStateSummaryResult implements PersisterResult {
-    private final List<TopicData<PartitionStateSummaryData>> topicsData;
+    private final List<TopicData<PartitionStateErrorData>> topicsData;
 
-    private ReadShareGroupStateSummaryResult(List<TopicData<PartitionStateSummaryData>> topicsData) {
+    private ReadShareGroupStateSummaryResult(List<TopicData<PartitionStateErrorData>> topicsData) {
         this.topicsData = topicsData;
     }
 
@@ -37,18 +37,17 @@ public class ReadShareGroupStateSummaryResult implements PersisterResult {
                 .setTopicsData(data.results().stream()
                         .map(readStateSummaryResult -> new TopicData<>(readStateSummaryResult.topicId(),
                                 readStateSummaryResult.partitions().stream()
-                                        .map(partitionResult -> PartitionFactory.newPartitionStateSummaryData(
-                                                partitionResult.partition(), partitionResult.stateEpoch(), partitionResult.startOffset(),
-                                                partitionResult.leaderEpoch(), partitionResult.errorCode(), partitionResult.errorMessage()))
+                                        .map(partitionResult -> PartitionFactory.newPartitionStateErrorData(
+                                                partitionResult.partition(), partitionResult.stateEpoch(), partitionResult.startOffset(), partitionResult.errorCode(), partitionResult.errorMessage()))
                                         .collect(Collectors.toList())))
                         .collect(Collectors.toList()))
                 .build();
     }
 
     public static class Builder {
-        private List<TopicData<PartitionStateSummaryData>> topicsData;
+        private List<TopicData<PartitionStateErrorData>> topicsData;
 
-        public Builder setTopicsData(List<TopicData<PartitionStateSummaryData>> topicsData) {
+        public Builder setTopicsData(List<TopicData<PartitionStateErrorData>> topicsData) {
             this.topicsData = topicsData;
             return this;
         }
@@ -56,9 +55,5 @@ public class ReadShareGroupStateSummaryResult implements PersisterResult {
         public ReadShareGroupStateSummaryResult build() {
             return new ReadShareGroupStateSummaryResult(topicsData);
         }
-    }
-
-    public List<TopicData<PartitionStateSummaryData>> topicsData() {
-        return topicsData;
     }
 }

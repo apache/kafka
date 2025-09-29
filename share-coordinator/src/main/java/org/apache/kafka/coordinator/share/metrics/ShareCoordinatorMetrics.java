@@ -23,7 +23,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
-import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
@@ -31,8 +30,8 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import com.yammer.metrics.core.MetricsRegistry;
 
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -47,8 +46,6 @@ public class ShareCoordinatorMetrics extends CoordinatorMetrics implements AutoC
 
     public static final String SHARE_COORDINATOR_WRITE_SENSOR_NAME = "ShareCoordinatorWrite";
     public static final String SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME = "ShareCoordinatorWriteLatency";
-    public static final String SHARE_COORDINATOR_STATE_TOPIC_PRUNE_SENSOR_NAME = "ShareCoordinatorStateTopicPruneSensorName";
-    private final Map<TopicPartition, ShareGroupPruneMetrics> pruneMetrics = new ConcurrentHashMap<>();
 
     /**
      * Global sensors. These are shared across all metrics shards.
@@ -91,11 +88,10 @@ public class ShareCoordinatorMetrics extends CoordinatorMetrics implements AutoC
 
     @Override
     public void close() throws Exception {
-        List.of(
+        Arrays.asList(
             SHARE_COORDINATOR_WRITE_SENSOR_NAME,
             SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME
         ).forEach(metrics::removeSensor);
-        pruneMetrics.values().forEach(v -> metrics.removeSensor(v.pruneSensor.name()));
     }
 
     @Override
@@ -155,33 +151,6 @@ public class ShareCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public void record(String sensorName) {
         if (globalSensors.containsKey(sensorName)) {
             globalSensors.get(sensorName).record();
-        }
-    }
-
-    public void recordPrune(double value, TopicPartition tp) {
-        pruneMetrics.computeIfAbsent(tp, k -> new ShareGroupPruneMetrics(tp))
-            .pruneSensor.record(value);
-    }
-
-    private class ShareGroupPruneMetrics {
-        private final Sensor pruneSensor;
-
-        ShareGroupPruneMetrics(TopicPartition tp) {
-            String sensorNameSuffix = tp.toString();
-            Map<String, String> tags = Map.of(
-                "topic", tp.topic(),
-                "partition", Integer.toString(tp.partition())
-            );
-
-            pruneSensor = metrics.sensor(SHARE_COORDINATOR_STATE_TOPIC_PRUNE_SENSOR_NAME + sensorNameSuffix);
-
-            pruneSensor.add(
-                metrics.metricName("last-pruned-offset",
-                    METRICS_GROUP,
-                    "The offset at which the share-group state topic was last pruned.",
-                    tags),
-                new Value()
-            );
         }
     }
 }

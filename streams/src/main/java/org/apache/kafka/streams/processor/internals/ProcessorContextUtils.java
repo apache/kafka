@@ -17,8 +17,8 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import java.util.Map;
@@ -33,6 +33,13 @@ import java.util.Map;
 public final class ProcessorContextUtils {
 
     private ProcessorContextUtils() {}
+
+    /**
+     * Should be removed as part of KAFKA-10217
+     */
+    public static StreamsMetricsImpl metricsImpl(final ProcessorContext context) {
+        return (StreamsMetricsImpl) context.metrics();
+    }
 
     /**
      * Should be removed as part of KAFKA-10217
@@ -64,11 +71,9 @@ public final class ProcessorContextUtils {
         }
     }
 
-    public static <K, V> InternalProcessorContext<K, V> asInternalProcessorContext(
-        final ProcessorContext<K, V> context
-    ) {
+    public static InternalProcessorContext asInternalProcessorContext(final ProcessorContext context) {
         if (context instanceof InternalProcessorContext) {
-            return (InternalProcessorContext<K, V>) context;
+            return (InternalProcessorContext) context;
         } else {
             throw new IllegalArgumentException(
                 "This component requires internal features of Kafka Streams and must be disabled for unit tests."
@@ -76,9 +81,10 @@ public final class ProcessorContextUtils {
         }
     }
 
-    public static InternalProcessorContext<?, ?> asInternalProcessorContext(final StateStoreContext context) {
+    @SuppressWarnings("unchecked")
+    public static <K, V> InternalProcessorContext<K, V> asInternalProcessorContext(final StateStoreContext context) {
         if (context instanceof InternalProcessorContext) {
-            return (InternalProcessorContext<?, ?>) context;
+            return (InternalProcessorContext<K, V>) context;
         } else {
             throw new IllegalArgumentException(
                 "This component requires internal features of Kafka Streams and must be disabled for unit tests."

@@ -89,3 +89,5 @@ def as_json():
     Export all saved preferences in JSON format.
     """
     json.dumps(prefs, indent=2)
+
+

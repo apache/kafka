@@ -23,7 +23,6 @@ package org.apache.kafka.streams.kstream;
  * @param <K>   key type
  * @param <V>   aggregate value type
  */
-@FunctionalInterface
 public interface Merger<K, V> {
 
     /**

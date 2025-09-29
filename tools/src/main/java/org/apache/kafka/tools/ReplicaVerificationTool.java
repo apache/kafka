@@ -127,7 +127,7 @@ public class ReplicaVerificationTool {
 
                 List<TopicDescription> filteredTopicMetadata = topicsMetadata.stream().filter(
                     topicMetadata -> options.topicsIncludeFilter().isTopicAllowed(topicMetadata.name(), false)
-                ).toList();
+                ).collect(Collectors.toList());
 
                 if (filteredTopicMetadata.isEmpty()) {
                     LOG.error("No topics found. {} if specified, is either filtering out all topics or there is no topic.", options.topicsIncludeOpt);
@@ -196,7 +196,7 @@ public class ReplicaVerificationTool {
                             counter.incrementAndGet()
                         );
                     })
-                    .toList();
+                    .collect(Collectors.toList());
 
                 Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                     LOG.info("Stopping all fetchers");
@@ -300,8 +300,12 @@ public class ReplicaVerificationTool {
                 .ofType(Long.class)
                 .defaultsTo(30_000L);
             options = parser.parse(args);
-
-            CommandLineUtils.maybePrintHelpOrVersion(this, "Validate that all replicas for a set of topics have the same data.");
+            if (args.length == 0 || options.has(helpOpt)) {
+                CommandLineUtils.printUsageAndExit(parser, "Validate that all replicas for a set of topics have the same data.");
+            }
+            if (options.has(versionOpt)) {
+                CommandLineUtils.printVersionAndExit();
+            }
             CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt);
         }
 
@@ -344,7 +348,18 @@ public class ReplicaVerificationTool {
         }
     }
 
-    private record MessageInfo(int replicaId, long offset, long nextOffset, long checksum) {
+    private static class MessageInfo {
+        final int replicaId;
+        final long offset;
+        final long nextOffset;
+        final long checksum;
+
+        MessageInfo(int replicaId, long offset, long nextOffset, long checksum) {
+            this.replicaId = replicaId;
+            this.offset = offset;
+            this.nextOffset = nextOffset;
+            this.checksum = checksum;
+        }
     }
 
     protected static class ReplicaBuffer {
@@ -457,7 +472,7 @@ public class ReplicaVerificationTool {
                                 if (batch.lastOffset() >= fetchResponsePerReplica.get(replicaId).highWatermark()) {
                                     isMessageInAllReplicas = false;
                                 } else {
-                                    if (messageInfoFromFirstReplicaOpt.isEmpty()) {
+                                    if (!messageInfoFromFirstReplicaOpt.isPresent()) {
                                         messageInfoFromFirstReplicaOpt = Optional.of(
                                             new MessageInfo(replicaId, batch.lastOffset(), batch.nextOffset(), batch.checksum())
                                         );

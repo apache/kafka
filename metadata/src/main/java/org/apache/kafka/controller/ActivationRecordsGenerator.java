@@ -29,7 +29,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.function.Consumer;
 
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
@@ -145,7 +144,7 @@ public class ActivationRecordsGenerator {
     /**
      * Generate the set of activation records.
      * </p>
-     * If the metadata version is empty, write the bootstrap records. If the metadata version is not empty, do some validation and
+     * If the log is empty, write the bootstrap records. If the log is not empty, do some validation and
      * possibly write some records to put the log into a valid state. For bootstrap records, if KIP-868
      * metadata transactions are supported, use them. Otherwise, write the bootstrap records as an
      * atomic batch. The single atomic batch can be problematic if the bootstrap records are too large
@@ -153,12 +152,13 @@ public class ActivationRecordsGenerator {
      */
     static ControllerResult<Void> generate(
         Consumer<String> activationMessageConsumer,
+        boolean isEmpty,
         long transactionStartOffset,
         BootstrapMetadata bootstrapMetadata,
-        Optional<MetadataVersion> curMetadataVersion,
+        MetadataVersion curMetadataVersion,
         int defaultMinInSyncReplicas
     ) {
-        if (curMetadataVersion.isEmpty()) {
+        if (isEmpty) {
             return recordsForEmptyLog(activationMessageConsumer,
                     transactionStartOffset,
                     bootstrapMetadata,
@@ -167,7 +167,7 @@ public class ActivationRecordsGenerator {
         } else {
             return recordsForNonEmptyLog(activationMessageConsumer,
                     transactionStartOffset,
-                    curMetadataVersion.get());
+                    curMetadataVersion);
         }
     }
 }

@@ -19,7 +19,22 @@ package org.apache.kafka.storage.internals.checkpoint;
 
 import org.apache.kafka.common.Uuid;
 
-public record PartitionMetadata(int version, Uuid topicId) {
+public class PartitionMetadata {
+    private final int version;
+    private final Uuid topicId;
+
+    public PartitionMetadata(int version, Uuid topicId) {
+        this.version = version;
+        this.topicId = topicId;
+    }
+
+    public int version() {
+        return version;
+    }
+
+    public Uuid topicId() {
+        return topicId;
+    }
 
     public String encode() {
         return "version: " + version + "\ntopic_id: " + topicId;

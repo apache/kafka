@@ -17,7 +17,6 @@
 package org.apache.kafka.tools.consumer;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
 import org.apache.kafka.clients.consumer.ShareConsumer;
@@ -36,9 +35,7 @@ import java.io.PrintStream;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 
 
@@ -69,14 +66,10 @@ public class ConsoleShareConsumer {
         messageCount = 0;
         long timeoutMs = opts.timeoutMs() >= 0 ? opts.timeoutMs() : Long.MAX_VALUE;
 
-        Properties consumerProps = opts.consumerProps();
-        // Set share acknowledgement mode to explicit.
-        consumerProps.put(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, "explicit");
-
-        ShareConsumer<byte[], byte[]> consumer = new KafkaShareConsumer<>(consumerProps, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        ShareConsumer<byte[], byte[]> consumer = new KafkaShareConsumer<>(opts.consumerProps(), new ByteArrayDeserializer(), new ByteArrayDeserializer());
         ConsumerWrapper consumerWrapper = new ConsumerWrapper(opts.topicArg(), consumer, timeoutMs);
 
-        addShutdownHook(consumerWrapper, opts);
+        addShutdownHook(consumerWrapper);
 
         try {
             process(opts.maxMessages(), opts.formatter(), consumerWrapper, System.out, opts.rejectMessageOnError(), opts.acknowledgeType());
@@ -89,16 +82,13 @@ public class ConsoleShareConsumer {
         }
     }
 
-    private static void addShutdownHook(ConsumerWrapper consumer, ConsoleShareConsumerOptions conf) {
+    private static void addShutdownHook(ConsumerWrapper consumer) {
         Exit.addShutdownHook("consumer-shutdown-hook", () -> {
             try {
                 consumer.wakeup();
                 SHUTDOWN_LATCH.await();
             } catch (Throwable t) {
                 LOG.error("Exception while running shutdown hook: ", t);
-            }
-            if (conf.enableSystestEventsLogging()) {
-                System.out.println("shutdown_complete");
             }
         });
     }
@@ -121,7 +111,7 @@ public class ConsoleShareConsumer {
             messageCount += 1;
             try {
                 formatter.writeTo(new ConsumerRecord<>(msg.topic(), msg.partition(), msg.offset(), msg.timestamp(), msg.timestampType(),
-                        0, 0, msg.key(), msg.value(), msg.headers(), Optional.empty(), msg.deliveryCount()), output);
+                        0, 0, msg.key(), msg.value(), msg.headers(), Optional.empty()), output);
                 consumer.acknowledge(msg, acknowledgeType);
             } catch (Throwable t) {
                 if (rejectMessageOnError) {
@@ -167,7 +157,7 @@ public class ConsoleShareConsumer {
             this.consumer = consumer;
             this.timeoutMs = timeoutMs;
 
-            consumer.subscribe(List.of(topic));
+            consumer.subscribe(Collections.singletonList(topic));
         }
 
         ConsumerRecord<byte[], byte[]> receive() {

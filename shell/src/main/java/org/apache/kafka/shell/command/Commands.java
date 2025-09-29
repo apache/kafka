@@ -32,6 +32,7 @@ import org.jline.reader.Candidate;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.NavigableMap;
@@ -49,7 +50,7 @@ public final class Commands {
 
     static {
         TreeMap<String, Type> typesMap = new TreeMap<>();
-        for (Type type : List.of(
+        for (Type type : Arrays.asList(
             CatCommandHandler.TYPE,
             CdCommandHandler.TYPE,
             ExitCommandHandler.TYPE,

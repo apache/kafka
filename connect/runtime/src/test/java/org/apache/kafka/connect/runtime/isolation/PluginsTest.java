@@ -55,19 +55,21 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -92,7 +94,6 @@ public class PluginsTest {
         pluginProps.put(WorkerConfig.PLUGIN_PATH_CONFIG, TestPlugins.pluginPathJoined());
         plugins = new Plugins(pluginProps);
         props = new HashMap<>(pluginProps);
-        props.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
         props.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
         props.put("key.converter." + JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "true");
@@ -106,17 +107,17 @@ public class PluginsTest {
         SortedSet<PluginDesc<SinkConnector>> sinkConnectors = (SortedSet<PluginDesc<SinkConnector>>) plugins.sinkConnectors();
         missingPluginClass = sinkConnectors.first().className();
         nonEmpty = new PluginScanResult(
-            sinkConnectors,
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>()
+                sinkConnectors,
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet(),
+                Collections.emptySortedSet()
         );
-        empty = new PluginScanResult(List.of());
+        empty = new PluginScanResult(Collections.emptyList());
 
         createConfig();
     }
@@ -140,7 +141,7 @@ public class PluginsTest {
 
     @Test
     public void shouldInstantiateAndConfigureInternalConverters() {
-        instantiateAndConfigureInternalConverter(true, Map.of(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false"));
+        instantiateAndConfigureInternalConverter(true, Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false"));
         // Validate schemas.enable is set to false
         assertEquals("false", internalConverter.configs.get(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG));
     }
@@ -196,9 +197,16 @@ public class PluginsTest {
         props.remove(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG);
         createConfig();
 
+        // Because it's not explicitly set on the supplied configuration, the logic to use the current classloader for the connector
+        // will exit immediately, and so this method always returns null
         HeaderConverter headerConverter = plugins.newHeaderConverter(config,
+                                                                     WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
+                                                                     ClassLoaderUsage.CURRENT_CLASSLOADER);
+        assertNull(headerConverter);
+        // But we should always find it (or the worker's default) when using the plugins classloader ...
+        headerConverter = plugins.newHeaderConverter(config,
                                                      WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
-                                                     ClassLoaderUsage.CURRENT_CLASSLOADER);
+                                                     ClassLoaderUsage.PLUGINS);
         assertNotNull(headerConverter);
         assertInstanceOf(SimpleHeaderConverter.class, headerConverter);
     }
@@ -207,7 +215,7 @@ public class PluginsTest {
     public void shouldThrowIfPluginThrows() {
         assertThrows(ConnectException.class, () -> plugins.newPlugin(
             TestPlugin.ALWAYS_THROW_EXCEPTION.className(),
-            new AbstractConfig(new ConfigDef(), Map.of()),
+            new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
             Converter.class
         ));
     }
@@ -216,7 +224,7 @@ public class PluginsTest {
     public void shouldFindCoLocatedPluginIfBadPackaging() {
         Converter converter = plugins.newPlugin(
                 TestPlugin.BAD_PACKAGING_CO_LOCATED.className(),
-                new AbstractConfig(new ConfigDef(), Map.of()),
+                new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
                 Converter.class
         );
         assertNotNull(converter);
@@ -226,7 +234,7 @@ public class PluginsTest {
     public void shouldThrowIfPluginMissingSuperclass() {
         assertThrows(ConnectException.class, () -> plugins.newPlugin(
                 TestPlugin.BAD_PACKAGING_MISSING_SUPERCLASS.className(),
-                new AbstractConfig(new ConfigDef(), Map.of()),
+                new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
                 Converter.class
         ));
     }
@@ -242,7 +250,7 @@ public class PluginsTest {
     public void shouldThrowIfStaticInitializerThrowsServiceLoader() {
         assertThrows(ConnectException.class, () -> plugins.newPlugin(
                 TestPlugin.BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION.className(),
-                new AbstractConfig(new ConfigDef(), Map.of()),
+                new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
                 ConnectRestExtension.class
         ));
     }
@@ -300,7 +308,7 @@ public class PluginsTest {
         // Plugins are not isolated from other instances of their own class.
         Converter firstPlugin = plugins.newPlugin(
             TestPlugin.ALIASED_STATIC_FIELD.className(),
-            new AbstractConfig(new ConfigDef(), Map.of()),
+            new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
             Converter.class
         );
 
@@ -308,7 +316,7 @@ public class PluginsTest {
 
         Converter secondPlugin = plugins.newPlugin(
             TestPlugin.ALIASED_STATIC_FIELD.className(),
-            new AbstractConfig(new ConfigDef(), Map.of()),
+            new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
             Converter.class
         );
 
@@ -323,7 +331,7 @@ public class PluginsTest {
     public void newPluginShouldServiceLoadWithPluginClassLoader() {
         Converter plugin = plugins.newPlugin(
             TestPlugin.SERVICE_LOADER.className(),
-            new AbstractConfig(new ConfigDef(), Map.of()),
+            new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
             Converter.class
         );
 
@@ -339,7 +347,7 @@ public class PluginsTest {
     public void newPluginShouldInstantiateWithPluginClassLoader() {
         Converter plugin = plugins.newPlugin(
             TestPlugin.ALIASED_STATIC_FIELD.className(),
-            new AbstractConfig(new ConfigDef(), Map.of()),
+            new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
             Converter.class
         );
 
@@ -428,7 +436,7 @@ public class PluginsTest {
     @Test
     public void newPluginsShouldConfigureWithPluginClassLoader() {
         List<Configurable> configurables = plugins.newPlugins(
-            List.of(TestPlugin.SAMPLING_CONFIGURABLE.className()),
+            Collections.singletonList(TestPlugin.SAMPLING_CONFIGURABLE.className()),
             config,
             Configurable.class
         );
@@ -596,7 +604,7 @@ public class PluginsTest {
             String alias = "SamplingConverter";
             assertTrue(TestPlugin.SAMPLING_CONVERTER.className().contains(alias));
             ConfigDef def = new ConfigDef().define(configKey, ConfigDef.Type.CLASS, ConfigDef.Importance.HIGH, "docstring");
-            AbstractConfig config = new AbstractConfig(def, Map.of(configKey, alias));
+            AbstractConfig config = new AbstractConfig(def, Collections.singletonMap(configKey, alias));
 
             assertNotNull(config.getClass(configKey));
             assertNotNull(config.getConfiguredInstance(configKey, Converter.class));
@@ -625,7 +633,7 @@ public class PluginsTest {
 
         // Initialize Plugins object with parent class loader in the class loader tree. This is
         // to simulate the situation where jars exist on both system classpath and plugin path.
-        Map<String, String> pluginProps = Map.of(
+        Map<String, String> pluginProps = Collections.singletonMap(
                 WorkerConfig.PLUGIN_PATH_CONFIG,
                 TestPlugins.pluginPathJoined(childResource)
         );
@@ -638,14 +646,14 @@ public class PluginsTest {
 
         Converter converter = plugins.newPlugin(
                 className,
-                new AbstractConfig(new ConfigDef(), Map.of()),
+                new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
                 Converter.class
         );
         // Verify the version was read from the correct resource
         assertEquals(expectedVersions[0],
                 new String(converter.fromConnectData(null, null, null)));
         // When requesting multiple resources, they should be listed in the correct order
-        assertEquals(List.of(expectedVersions),
+        assertEquals(Arrays.asList(expectedVersions),
                 converter.toConnectData(null, null).value());
     }
 

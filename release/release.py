@@ -218,7 +218,7 @@ def verify_gpg_key():
     if not gpg.key_exists(gpg_key_id):
         fail(f"GPG key {gpg_key_id} not found")
     if not gpg.valid_passphrase(gpg_key_id, gpg_passphrase):
-        fail(f"GPG passphrase not valid for key {gpg_key_id}")
+        fail(f"GPG passprase not valid for key {gpg_key_id}")
 
 
 preferences.once("verify_requirements", lambda: confirm_or_fail(templates.requirements_instructions(preferences.FILE, preferences.as_json())))
@@ -232,12 +232,12 @@ apache_id = preferences.get('apache_id', lambda: prompt("Please enter your apach
 jdk21_env = get_jdk(21)
 
 
-def verify_prerequisites():
+def verify_prerequeisites():
     print("Begin to check if you have met all the pre-requisites for the release process")
     def prereq(name, soft_check):
         try:
             result = soft_check()
-            if not result:
+            if result == False:
                 fail(f"Pre-requisite not met: {name}")
             else:
                 print(f"Pre-requisite met: {name}")
@@ -250,7 +250,7 @@ def verify_prerequisites():
     return True
 
 
-preferences.once(f"verify_prerequisites", verify_prerequisites)
+preferences.once(f"verify_prerequeisites", verify_prerequeisites)
 
 # Validate that the release doesn't already exist
 git.fetch_tags()
@@ -297,7 +297,6 @@ textfiles.replace(f"{repo_dir}/docs/js/templateData.js", "-SNAPSHOT", "", regex=
 git.commit(f"Bump version to {release_version}")
 git.create_tag(rc_tag)
 git.switch_branch(starting_branch)
-git.merge_ref(rc_tag)
 
 # Note that we don't use tempfile here because mkdtemp causes problems with being able to determine the absolute path to a file.
 # Instead we rely on a fixed path
@@ -360,7 +359,7 @@ cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=os.path.j
 
 # TODO: Many of these suggested validation steps could be automated
 # and would help pre-validate a lot of the stuff voters test
-print(templates.sanity_check_instructions(release_version, rc_tag))
+print(templates.sanity_check_instructions(release_version, rc_tag, apache_id))
 confirm_or_fail("Have you sufficiently verified the release artifacts?")
 
 # TODO: Can we close the staging repository via a REST API since we
@@ -368,13 +367,13 @@ confirm_or_fail("Have you sufficiently verified the release artifacts?")
 print(templates.deploy_instructions())
 confirm_or_fail("Have you successfully deployed the artifacts?")
 confirm_or_fail(f"Ok to push RC tag {rc_tag}?")
-git.push_ref(rc_tag)
-git.push_ref(starting_branch)
+git.push_tag(rc_tag)
 
 # Move back to starting branch and clean out the temporary release branch (e.g. 1.0.0) we used to generate everything
 git.reset_hard_head()
 git.switch_branch(starting_branch)
 git.delete_branch(release_version)
 
-rc_vote_email_text = templates.rc_vote_email_text(release_version, rc, rc_tag, dev_branch, docs_release_version)
+rc_vote_email_text = templates.rc_vote_email_text(release_version, rc, rc_tag, dev_branch, docs_release_version, apache_id)
 print(templates.rc_email_instructions(rc_vote_email_text))
+

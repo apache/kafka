@@ -20,12 +20,13 @@ import org.apache.kafka.common.message.DescribeDelegationTokenResponseData;
 import org.apache.kafka.common.message.DescribeDelegationTokenResponseData.DescribedDelegationToken;
 import org.apache.kafka.common.message.DescribeDelegationTokenResponseData.DescribedDelegationTokenRenewer;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -75,9 +76,9 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public static DescribeDelegationTokenResponse parse(Readable readable, short version) {
+    public static DescribeDelegationTokenResponse parse(ByteBuffer buffer, short version) {
         return new DescribeDelegationTokenResponse(new DescribeDelegationTokenResponseData(
-            readable, version));
+            new ByteBufferAccessor(buffer), version));
     }
 
     @Override

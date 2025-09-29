@@ -243,7 +243,7 @@ public class RecordQueue {
                 lastCorruptedRecord = raw;
                 continue;
             }
-            headRecord = new StampedRecord(deserialized, timestamp, raw.key(), raw.value());
+            headRecord = new StampedRecord(deserialized, timestamp);
             headRecordSizeInBytes = consumerRecordSizeInBytes(raw);
         }
 

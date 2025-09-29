@@ -22,7 +22,6 @@ import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.server.{PartitionFetchState, ReplicaState}
 import org.junit.jupiter.api.Assertions._
 import kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
 import org.junit.jupiter.params.ParameterizedTest
@@ -68,7 +67,7 @@ class TierStateMachineTest {
     fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
 
     assertEquals(3L, replicaState.logEndOffset)
-    val expectedState = if (truncateOnFetch) Option(ReplicaState.FETCHING) else Option(ReplicaState.TRUNCATING)
+    val expectedState = if (truncateOnFetch) Option(Fetching) else Option(Truncating)
     assertEquals(expectedState, fetcher.fetchState(partition).map(_.state))
 
     fetcher.doWork()
@@ -129,7 +128,7 @@ class TierStateMachineTest {
     fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
 
     assertEquals(3L, replicaState.logEndOffset)
-    val expectedState = if (truncateOnFetch) Option(ReplicaState.FETCHING) else Option(ReplicaState.TRUNCATING)
+    val expectedState = if (truncateOnFetch) Option(Fetching) else Option(Truncating)
     assertEquals(expectedState, fetcher.fetchState(partition).map(_.state))
 
     fetcher.doWork()
@@ -163,9 +162,7 @@ class TierStateMachineTest {
     var isErrorHandled = false
     val mockLeaderEndpoint = new MockLeaderEndPoint(truncateOnFetch = truncateOnFetch, version = version)
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint) {
-      override def start(topicPartition: TopicPartition,
-                         currentFetchState: PartitionFetchState,
-                         fetchPartitionData: FetchResponseData.PartitionData): PartitionFetchState = {
+      override def start(topicPartition: TopicPartition, currentFetchState: PartitionFetchState, fetchPartitionData: FetchResponseData.PartitionData): PartitionFetchState = {
         isErrorHandled = true
         throw new FencedLeaderEpochException(s"Epoch ${currentFetchState.currentLeaderEpoch} is fenced")
       }

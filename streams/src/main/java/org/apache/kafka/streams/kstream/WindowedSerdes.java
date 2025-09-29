@@ -36,7 +36,7 @@ public class WindowedSerdes {
 
         // Helper method for users to specify whether the input topic is a changelog topic for deserializing the key properly.
         public TimeWindowedSerde<T> forChangelog(final boolean isChangelogTopic) {
-            final TimeWindowedDeserializer<T> deserializer = (TimeWindowedDeserializer<T>) this.deserializer();
+            final TimeWindowedDeserializer deserializer = (TimeWindowedDeserializer) this.deserializer();
             deserializer.setIsChangelogTopic(isChangelogTopic);
             return this;
         }
@@ -68,7 +68,6 @@ public class WindowedSerdes {
         return new SessionWindowedSerde<>(Serdes.serdeFrom(type));
     }
 
-    @SuppressWarnings("rawtypes")
     static void verifyInnerSerializerNotNull(final Serializer inner,
                                              final Serializer wrapper) {
         if (inner == null) {
@@ -78,7 +77,6 @@ public class WindowedSerdes {
         }
     }
 
-    @SuppressWarnings("rawtypes")
     static void verifyInnerDeserializerNotNull(final Deserializer inner,
                                                final Deserializer wrapper) {
         if (inner == null) {

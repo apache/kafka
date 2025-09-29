@@ -27,11 +27,17 @@ import java.util.stream.Stream;
 /**
  *  Tracks the votes cast by voters in an election held by a Nominee.
  */
-public record EpochElection(Map<Integer, VoterState> voterStates) {
+public class EpochElection {
+    private Map<Integer, VoterState> voterStates;
+
     public EpochElection(Set<ReplicaKey> voters) {
-        this(voters.stream()
-            .collect(Collectors.toMap(ReplicaKey::id, VoterState::new))
-        );
+        this.voterStates = voters.stream()
+            .collect(
+                Collectors.toMap(
+                    ReplicaKey::id,
+                    VoterState::new
+                )
+            );
     }
 
     /**
@@ -149,6 +155,14 @@ public record EpochElection(Map<Integer, VoterState> voterStates) {
 
     private int majoritySize() {
         return voterStates.size() / 2 + 1;
+    }
+
+    @Override
+    public String toString() {
+        return String.format(
+            "EpochElection(voterStates=%s)",
+            voterStates
+        );
     }
 
     private static final class VoterState {

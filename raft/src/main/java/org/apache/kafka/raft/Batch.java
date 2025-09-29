@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
@@ -180,7 +181,7 @@ public final class Batch<T> implements Iterable<T> {
             appendTimestamp,
             sizeInBytes,
             baseOffset + records.size() - 1,
-            List.of(),
+            Collections.emptyList(),
             records
         );
     }
@@ -218,7 +219,7 @@ public final class Batch<T> implements Iterable<T> {
             sizeInBytes,
             baseOffset + records.size() - 1,
             records,
-            List.of()
+            Collections.emptyList()
         );
     }
 }

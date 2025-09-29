@@ -55,6 +55,7 @@ import org.slf4j.LoggerFactory;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -370,7 +371,8 @@ public class CoordinatorClient {
                     System.out.printf("Task %s of type %s is %s. %s%n", taskId,
                         taskState.spec().getClass().getCanonicalName(),
                         taskState.stateType(), prettyPrintTaskInfo(taskState, localOffset));
-                    if (taskState instanceof TaskDone taskDone) {
+                    if (taskState instanceof TaskDone) {
+                        TaskDone taskDone = (TaskDone) taskState;
                         if ((taskDone.error() != null) && (!taskDone.error().isEmpty())) {
                             System.out.printf("Error: %s%n", taskDone.error());
                         }
@@ -470,7 +472,9 @@ public class CoordinatorClient {
             return "No matching tasks found.";
         }
         List<List<String>> lines = new ArrayList<>();
-        lines.add(List.of("ID", "TYPE", "STATE", "INFO"));
+        List<String> header = new ArrayList<>(
+            Arrays.asList("ID", "TYPE", "STATE", "INFO"));
+        lines.add(header);
         for (Map.Entry<String, TaskState> entry : response.tasks().entrySet()) {
             String taskId = entry.getKey();
             TaskState taskState = entry.getValue();
@@ -487,12 +491,15 @@ public class CoordinatorClient {
     static String prettyPrintTaskInfo(TaskState taskState, ZoneOffset zoneOffset) {
         if (taskState instanceof TaskPending) {
             return "Will start at " + dateString(taskState.spec().startMs(), zoneOffset);
-        } else if (taskState instanceof TaskRunning runState) {
+        } else if (taskState instanceof TaskRunning) {
+            TaskRunning runState = (TaskRunning) taskState;
             return "Started " + dateString(runState.startedMs(), zoneOffset) +
                 "; will stop after " + durationString(taskState.spec().durationMs());
-        } else if (taskState instanceof TaskStopping stoppingState) {
+        } else if (taskState instanceof TaskStopping) {
+            TaskStopping stoppingState = (TaskStopping) taskState;
             return "Started " + dateString(stoppingState.startedMs(), zoneOffset);
-        } else if (taskState instanceof TaskDone doneState) {
+        } else if (taskState instanceof TaskDone) {
+            TaskDone doneState = (TaskDone) taskState;
             String status;
             if (doneState.error() == null || doneState.error().isEmpty()) {
                 if (doneState.cancelled()) {

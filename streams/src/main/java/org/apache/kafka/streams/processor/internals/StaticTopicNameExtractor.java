@@ -28,9 +28,8 @@ public class StaticTopicNameExtractor<K, V> implements TopicNameExtractor<K, V> 
 
     public final String topicName;
 
-    public StaticTopicNameExtractor(final String topic) {
-        Objects.requireNonNull(topic, "topic cannot be null");
-        this.topicName = topic;
+    public StaticTopicNameExtractor(final String topicName) {
+        this.topicName = topicName;
     }
 
     public String extract(final K key, final V value, final RecordContext recordContext) {

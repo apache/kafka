@@ -19,7 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Readable;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+
+import java.nio.ByteBuffer;
 
 
 /**
@@ -72,8 +74,8 @@ public class SaslAuthenticateRequest extends AbstractRequest {
         return new SaslAuthenticateResponse(response);
     }
 
-    public static SaslAuthenticateRequest parse(Readable readable, short version) {
-        return new SaslAuthenticateRequest(new SaslAuthenticateRequestData(readable, version),
+    public static SaslAuthenticateRequest parse(ByteBuffer buffer, short version) {
+        return new SaslAuthenticateRequest(new SaslAuthenticateRequestData(new ByteBufferAccessor(buffer), version),
             version);
     }
 }

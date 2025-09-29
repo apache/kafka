@@ -31,7 +31,7 @@ import java.util.Collection;
 public interface BatchingStateRestoreCallback extends StateRestoreCallback {
 
     /**
-     * Called to restore a number of records. This method is called repeatedly until the {@link StateStore} is fully
+     * Called to restore a number of records.  This method is called repeatedly until the {@link StateStore} is fulled
      * restored.
      *
      * @param records the records to restore.

@@ -19,7 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.record.Records;
 
 /**
- * The class is not converted to a Java record since records are typically intended to be immutable, but this one contains a mutable field records
+ * Metadata for the records fetched from log, including the records itself
  */
 public class LogFetchInfo {
 

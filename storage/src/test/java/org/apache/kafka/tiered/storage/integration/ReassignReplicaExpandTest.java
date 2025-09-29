@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tiered.storage.integration;
 
+import java.util.Arrays;
 import java.util.List;
 
 public final class ReassignReplicaExpandTest extends BaseReassignReplicaTest {
@@ -26,6 +27,6 @@ public final class ReassignReplicaExpandTest extends BaseReassignReplicaTest {
      */
     @Override
     protected List<Integer> replicaIds() {
-        return List.of(broker0, broker1);
+        return Arrays.asList(broker0, broker1);
     }
 }

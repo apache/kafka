@@ -18,9 +18,10 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
+import java.nio.ByteBuffer;
 import java.util.Map;
 
 public class HeartbeatResponse extends AbstractResponse {
@@ -66,8 +67,8 @@ public class HeartbeatResponse extends AbstractResponse {
         return data;
     }
 
-    public static HeartbeatResponse parse(Readable readable, short version) {
-        return new HeartbeatResponse(new HeartbeatResponseData(readable, version));
+    public static HeartbeatResponse parse(ByteBuffer buffer, short version) {
+        return new HeartbeatResponse(new HeartbeatResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

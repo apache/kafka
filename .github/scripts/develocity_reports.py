@@ -191,13 +191,7 @@ class TestAnalyzer:
                 provider.save_cache(self.build_cache)
                 logger.info(f"Saved cache to {provider.__class__.__name__}")
 
-    def build_query(
-            self,
-            project: str,
-            chunk_start: datetime,
-            chunk_end: datetime,
-            test_tags: List[str]
-        ) -> str:
+    def build_query(self, project: str, chunk_start: datetime, chunk_end: datetime, test_type: str) -> str:
         """
         Constructs the query string to be used in both build info and test containers API calls.
         
@@ -205,44 +199,33 @@ class TestAnalyzer:
             project: The project name.
             chunk_start: The start datetime for the chunk.
             chunk_end: The end datetime for the chunk.
-            test_tags: A list of tags to include.
+            test_type: The type of tests to query.
         
         Returns:
             A formatted query string.
         """
-        test_tags.append("+github")
-        tags = []
-        for tag in test_tags:
-            if tag.startswith("+"):
-                tags.append(f"tag:{tag[1:]}")
-            elif tag.startswith("-"):
-                tags.append(f"-tag:{tag[1:]}")
-            else:
-                raise ValueError("Tag should include + or - to indicate inclusion or exclusion.")
-
-        tags = " ".join(tags)
-        return f"project:{project} buildStartTime:[{chunk_start.isoformat()} TO {chunk_end.isoformat()}] gradle.requestedTasks:test {tags}"
+        return f'project:{project} buildStartTime:[{chunk_start.isoformat()} TO {chunk_end.isoformat()}] gradle.requestedTasks:{test_type}'
     
     def process_chunk(
         self,
         chunk_start: datetime,
         chunk_end: datetime,
         project: str,
-        test_tags: List[str],
-        remaining_build_ids: set | None,
+        test_type: str,
+        remaining_build_ids: set,
         max_builds_per_request: int
     ) -> Dict[str, BuildInfo]:
         """Helper method to process a single chunk of build information"""
         chunk_builds = {}
         
         # Use the helper method to build the query
-        query = self.build_query(project, chunk_start, chunk_end, test_tags)
+        query = self.build_query(project, chunk_start, chunk_end, test_type)
         
         # Initialize pagination for this chunk
         from_build = None
         continue_chunk = True
 
-        while continue_chunk and (remaining_build_ids is None or remaining_build_ids):
+        while continue_chunk and remaining_build_ids:
             query_params = {
                 'query': query,
                 'models': ['gradle-attributes'],
@@ -290,7 +273,7 @@ class TestAnalyzer:
                             continue_chunk = False
                             break
                         
-                        if remaining_build_ids is None or build_id in remaining_build_ids:
+                        if build_id in remaining_build_ids:
                             if 'problem' not in gradle_attrs:
                                 chunk_builds[build_id] = BuildInfo(
                                     id=build_id,
@@ -298,8 +281,6 @@ class TestAnalyzer:
                                     duration=attrs.get('buildDuration'),
                                     has_failed=attrs.get('hasFailed', False)
                                 )
-                                if remaining_build_ids is not None:
-                                    remaining_build_ids.remove(build_id)
             
             if continue_chunk and response_json:
                 from_build = response_json[-1]['id']
@@ -310,55 +291,37 @@ class TestAnalyzer:
             
         return chunk_builds
 
-    def get_build_info(
-            self,
-            build_ids: List[str] = None,
-            project: str = None,
-            test_tags: List[str] = None,
-            query_days: int = None,
-            bypass_cache: bool = False,
-            fetch_all: bool = False
-    ) -> Dict[str, BuildInfo]:
+    def get_build_info(self, build_ids: List[str], project: str, test_type: str, query_days: int) -> Dict[str, BuildInfo]:
         builds = {}
         max_builds_per_request = 100
         cutoff_date = datetime.now(pytz.UTC) - timedelta(days=query_days)
-        current_time = datetime.now(pytz.UTC)
         
-        if not fetch_all and not build_ids:
-            raise ValueError(f"Either build_ids must be provided or fetch_all must be True: {build_ids} {fetch_all}")
-        
-        # Get builds from cache if available and bypass_cache is False
-        if not bypass_cache and self.build_cache:
+        # Get builds from cache if available
+        if self.build_cache:
             cached_builds = self.build_cache.builds
             cached_cutoff = self.build_cache.last_update - timedelta(days=query_days)
             
-            if fetch_all:
-                # Use all cached builds within the time period
-                for build_id, build in cached_builds.items():
+            # Use cached data for builds within the cache period
+            for build_id in build_ids:
+                if build_id in cached_builds:
+                    build = cached_builds[build_id]
                     if build.timestamp >= cached_cutoff:
                         builds[build_id] = build
-            else:
-                # Use cached data for specific builds within the cache period
-                for build_id in build_ids:
-                    if build_id in cached_builds:
-                        build = cached_builds[build_id]
-                        if build.timestamp >= cached_cutoff:
-                            builds[build_id] = build
             
             # Update cutoff date to only fetch new data
             cutoff_date = self.build_cache.last_update
             logger.info(f"Using cached data up to {cutoff_date.isoformat()}")
             
-            if not fetch_all:
-                # Remove already found builds from the search list
-                build_ids = [bid for bid in build_ids if bid not in builds]
-            
-                if not build_ids:
-                    logger.info("All builds found in cache")
-                    return builds
+            # Remove already found builds from the search list
+            build_ids = [bid for bid in build_ids if bid not in builds]
+
+        if not build_ids:
+            logger.info("All builds found in cache")
+            return builds
         
         # Fetch remaining builds from API
-        remaining_build_ids = set(build_ids) if not fetch_all else None
+        remaining_build_ids = set(build_ids)
+        current_time = datetime.now(pytz.UTC)
         chunk_size = self.default_chunk_size
 
         # Create time chunks
@@ -379,8 +342,8 @@ class TestAnalyzer:
                     chunk[0], 
                     chunk[1], 
                     project, 
-                    test_tags,
-                    remaining_build_ids.copy() if remaining_build_ids else None,
+                    test_type, 
+                    remaining_build_ids.copy(),
                     max_builds_per_request
                 ): chunk for chunk in chunks
             }
@@ -389,8 +352,7 @@ class TestAnalyzer:
                 try:
                     chunk_builds = future.result()
                     builds.update(chunk_builds)
-                    if remaining_build_ids:
-                        remaining_build_ids -= set(chunk_builds.keys())
+                    remaining_build_ids -= set(chunk_builds.keys())
                 except Exception as e:
                     logger.error(f"Chunk processing generated an exception: {str(e)}")
 
@@ -399,11 +361,11 @@ class TestAnalyzer:
             f"\nBuild Info Performance:"
             f"\n  Total Duration: {total_duration:.2f}s"
             f"\n  Builds Retrieved: {len(builds)}"
-            f"\n  Builds Not Found: {len(remaining_build_ids) if remaining_build_ids else 0}"
+            f"\n  Builds Not Found: {len(remaining_build_ids)}"
         )
         
-        # Update cache with new data if not bypassing cache
-        if builds and not bypass_cache:
+        # Update cache with new data
+        if builds:
             if not self.build_cache:
                 self.build_cache = BuildCache(current_time, {})
             self.build_cache.builds.update(builds)
@@ -412,14 +374,8 @@ class TestAnalyzer:
         
         return builds
 
-    def get_test_results(
-        self,
-        project: str,
-        threshold_days: int,
-        test_tags: List[str],
-        outcomes: List[str] = None
-    ) -> List[TestResult]:
-
+    def get_test_results(self, project: str, threshold_days: int, test_type: str = "quarantinedTest",
+                        outcomes: List[str] = None) -> List[TestResult]:
         """Fetch test results with timeline information"""
         if outcomes is None:
             outcomes = ["failed", "flaky"]
@@ -441,7 +397,7 @@ class TestAnalyzer:
             logger.debug(f"Processing chunk: {chunk_start} to {chunk_end}")
             
             # Use the helper method to build the query
-            query = self.build_query(project, chunk_start, chunk_end, test_tags)
+            query = self.build_query(project, chunk_start, chunk_end, test_type)
             
             query_params = {
                 'query': query,
@@ -485,10 +441,7 @@ class TestAnalyzer:
         logger.debug(f"Total unique build IDs collected: {len(build_ids)}")
         
         # Fetch build information using the updated get_build_info method
-        print(build_ids)
-        print(list(build_ids))
-
-        builds = self.get_build_info(list(build_ids), project, test_tags, threshold_days)
+        builds = self.get_build_info(list(build_ids), project, test_type, threshold_days)
         logger.debug(f"Retrieved {len(builds)} builds from API")
         logger.debug(f"Retrieved build IDs: {sorted(builds.keys())}")
 
@@ -511,11 +464,6 @@ class TestAnalyzer:
             # Sort timeline by timestamp
             result.timeline = sorted(timeline, key=lambda x: x.timestamp)
             logger.debug(f"Final timeline entries for {test_name}: {len(result.timeline)}")
-
-            # Print build details for debugging
-            logger.debug("Timeline entries:")
-            for entry in timeline:
-                logger.debug(f"Build ID: {entry.build_id}, Timestamp: {entry.timestamp}, Outcome: {entry.outcome}")
             
             # Calculate recent failure rate
             recent_cutoff = datetime.now(pytz.UTC) - timedelta(days=30)
@@ -585,7 +533,7 @@ class TestAnalyzer:
                                 "kafka", 
                                 chunk_start,
                                 current_time,
-                                test_tags=["+trunk", "+flaky"]
+                                test_type="quarantinedTest"
                             )
                             
                             problematic_tests[result.name] = {
@@ -606,7 +554,7 @@ class TestAnalyzer:
         project: str,
         chunk_start: datetime,
         chunk_end: datetime,
-        test_tags: List[str]
+        test_type: str = "quarantinedTest"
     ) -> List[TestCaseResult]:
         """
         Fetch detailed test case results for a specific container.
@@ -616,10 +564,10 @@ class TestAnalyzer:
             project: The project name
             chunk_start: Start time for the query
             chunk_end: End time for the query
-            test_tags: List of tags to query
+            test_type: Type of tests to query (default: "quarantinedTest")
         """
         # Use the helper method to build the query, similar to get_test_results
-        query = self.build_query(project, chunk_start, chunk_end, test_tags)
+        query = self.build_query(project, chunk_start, chunk_end, test_type)
         
         query_params = {
             'query': query,
@@ -648,7 +596,7 @@ class TestAnalyzer:
                         build_ids.update(ids)
             
             # Get build info for all build IDs
-            builds = self.get_build_info(list(build_ids), project, test_tags, 7)  # 7 days for test cases
+            builds = self.get_build_info(list(build_ids), project, test_type, 7)  # 7 days for test cases
             
             for test in content:
                 outcome_data = test['outcomeDistribution']
@@ -750,7 +698,6 @@ class TestAnalyzer:
         """
         cleared_tests = {}
         current_time = datetime.now(pytz.UTC)
-        chunk_start = current_time - timedelta(days=7)  # Last 7 days for test cases
         
         for result in results:
             # Only consider tests with sufficient recent executions
@@ -758,454 +705,86 @@ class TestAnalyzer:
             if len(recent_executions) < min_executions:
                 continue
             
-            # Calculate success rate at class level
+            # Calculate success rate
             successful_runs = sum(1 for t in recent_executions 
                                 if t.outcome == 'passed')
             success_rate = successful_runs / len(recent_executions)
             
-            # Check if the test meets clearing criteria at class level
+            # Check if the test meets clearing criteria
             if success_rate >= success_threshold:
                 # Verify no recent failures or flaky behavior
                 has_recent_issues = any(t.outcome in ['failed', 'flaky'] 
                                      for t in recent_executions[-min_executions:])
                 
                 if not has_recent_issues:
-                    try:
-                        # Get test case details
-                        test_cases = self.get_test_case_details(
-                            result.name,
-                            project,
-                            chunk_start,
-                            current_time,
-                            test_tags=["+trunk", "+flaky"]
-                        )
-                        
-                        # Only include if all test cases are also passing consistently
-                        all_cases_passing = True
-                        passing_test_cases = []
-                        
-                        for test_case in test_cases:
-                            case_total = test_case.outcome_distribution.total
-                            if case_total >= min_executions:
-                                case_success_rate = test_case.outcome_distribution.passed / case_total
-                                
-                                # Check recent executions for the test case
-                                recent_case_issues = any(t.outcome in ['failed', 'flaky']
-                                                       for t in test_case.timeline[-min_executions:])
-                                
-                                if case_success_rate >= success_threshold and not recent_case_issues:
-                                    passing_test_cases.append({
-                                        'name': test_case.name,
-                                        'success_rate': case_success_rate,
-                                        'total_executions': case_total,
-                                        'recent_executions': sorted(test_case.timeline, 
-                                                               key=lambda x: x.timestamp)[-min_executions:]
-                                    })
-                                else:
-                                    all_cases_passing = False
-                                    break
-                        
-                        if all_cases_passing and passing_test_cases:
-                            cleared_tests[result.name] = {
-                                'result': result,
-                                'success_rate': success_rate,
-                                'total_executions': len(recent_executions),
-                                'successful_runs': successful_runs,
-                                'recent_executions': recent_executions[-min_executions:],
-                                'test_cases': passing_test_cases
-                            }
-                            
-                    except Exception as e:
-                        logger.error(f"Error getting test case details for {result.name}: {str(e)}")
+                    cleared_tests[result.name] = {
+                        'result': result,
+                        'success_rate': success_rate,
+                        'total_executions': len(recent_executions),
+                        'successful_runs': successful_runs,
+                        'recent_executions': recent_executions[-min_executions:]
+                    }
         
         return cleared_tests
 
-    def update_cache(self, builds: Dict[str, BuildInfo]):
-        """
-        Update the build cache with new build information.
-        
-        Args:
-            builds: Dictionary of build IDs to BuildInfo objects
-        """
-        current_time = datetime.now(pytz.UTC)
-        
-        # Initialize cache if it doesn't exist
-        if not self.build_cache:
-            self.build_cache = BuildCache(current_time, {})
-        
-        # Update builds and last update time
-        self.build_cache.builds.update(builds)
-        self.build_cache.last_update = current_time
-        
-        # Save to all cache providers
-        self._save_cache()
-        
-        logger.info(f"Updated cache with {len(builds)} builds")
+def print_summary(problematic_tests: Dict[str, Dict], flaky_regressions: Dict[str, Dict]):
+    """Print a summary of the most problematic tests at the top of the report"""
+    print("\n## Summary of Most Problematic Tests")
 
-    def get_persistent_failing_tests(self, results: List[TestResult], 
-                                   min_failure_rate: float = 0.2,
-                                   min_executions: int = 5) -> Dict[str, Dict]:
-        """
-        Identify tests that have been consistently failing/flaky over time.
-        Groups by test class and includes individual test cases.
-        """
-        persistent_failures = {}
-        current_time = datetime.now(pytz.UTC)
-        chunk_start = current_time - timedelta(days=7)  # Last 7 days for test cases
-        
-        # Group results by class
-        class_groups = {}
-        for result in results:
-            class_name = result.name.split('#')[0]  # Get class name
-            if class_name not in class_groups:
-                class_groups[class_name] = []
-            class_groups[class_name].append(result)
-        
-        # Analyze each class and its test cases
-        for class_name, class_results in class_groups.items():
-            class_total = sum(r.outcome_distribution.total for r in class_results)
-            class_problems = sum(r.outcome_distribution.failed + r.outcome_distribution.flaky 
-                               for r in class_results)
-            
-            if class_total < min_executions:
-                continue
-            
-            class_failure_rate = class_problems / class_total if class_total > 0 else 0
-            
-            # Only include if class has significant failures
-            if class_failure_rate >= min_failure_rate:
-                try:
-                    # Get detailed test case information using the same method as other reports
-                    test_cases = self.get_test_case_details(
-                        class_name,
-                        "kafka",
-                        chunk_start,
-                        current_time,
-                        test_tags=["+trunk", "-flaky"]
-                    )
-                    
-                    failing_test_cases = {}
-                    for test_case in test_cases:
-                        total_runs = test_case.outcome_distribution.total
-                        if total_runs >= min_executions:
-                            problem_runs = (test_case.outcome_distribution.failed + 
-                                          test_case.outcome_distribution.flaky)
-                            failure_rate = problem_runs / total_runs if total_runs > 0 else 0
-                            
-                            if failure_rate >= min_failure_rate:
-                                # Extract just the method name
-                                method_name = test_case.name.split('.')[-1]
-                                failing_test_cases[method_name] = {
-                                    'result': test_case,
-                                    'failure_rate': failure_rate,
-                                    'total_executions': total_runs,
-                                    'failed_executions': problem_runs,
-                                    'timeline': sorted(test_case.timeline, key=lambda x: x.timestamp)
-                                }
-                    
-                    if failing_test_cases:  # Only include classes that have problematic test cases
-                        persistent_failures[class_name] = {
-                            'failure_rate': class_failure_rate,
-                            'total_executions': class_total,
-                            'failed_executions': class_problems,
-                            'test_cases': failing_test_cases
-                        }
-                        
-                except Exception as e:
-                    logger.error(f"Error getting test case details for {class_name}: {str(e)}")
-        
-        return persistent_failures
+    # Combine and sort all test cases by failure rate
+    all_problem_cases = []
 
-def get_develocity_class_link(class_name: str, threshold_days: int) -> str:
-    """
-    Generate Develocity link for a test class
-    
-    Args:
-        class_name: Name of the test class
-        threshold_days: Number of days to look back in search
-    """
-    base_url = "https://develocity.apache.org/scans/tests"
-    params = {
-        "search.rootProjectNames": "kafka",
-        "search.tags": "github,trunk",
-        "search.timeZoneId": "UTC",
-        "search.relativeStartTime": f"P{threshold_days}D",
-        "tests.container": class_name,
-        "search.tasks": "test"
-    }
-        
-    return f"{base_url}?{'&'.join(f'{k}={requests.utils.quote(str(v))}' for k, v in params.items())}"
-
-def get_develocity_method_link(class_name: str, method_name: str, threshold_days: int) -> str:
-    """
-    Generate Develocity link for a test method
-    
-    Args:
-        class_name: Name of the test class
-        method_name: Name of the test method
-        threshold_days: Number of days to look back in search
-    """
-    base_url = "https://develocity.apache.org/scans/tests"
-    
-    # Extract just the method name without the class prefix
-    if '.' in method_name:
-        method_name = method_name.split('.')[-1]
-        
-    params = {
-        "search.rootProjectNames": "kafka",
-        "search.tags": "github,trunk",
-        "search.timeZoneId": "UTC",
-        "search.relativeStartTime": f"P{threshold_days}D",
-        "tests.container": class_name,
-        "tests.test": method_name,
-        "search.tasks": "test"
-    }
-        
-    return f"{base_url}?{'&'.join(f'{k}={requests.utils.quote(str(v))}' for k, v in params.items())}"
-
-def print_most_problematic_tests(problematic_tests: Dict[str, Dict], threshold_days: int):
-    """Print a summary of the most problematic tests"""
-    print("\n## Most Problematic Tests")
-    if not problematic_tests:
-        print("No high-priority problematic tests found.")
-        return
-        
-    print(f"Found {len(problematic_tests)} tests that have been quarantined for {threshold_days} days and are still failing frequently.")
-    
-    # Print table with class and method information
-    print("\n<table>")
-    print("<tr><td>Class</td><td>Test Case</td><td>Failure Rate</td><td>Build Scans</td><td>Link</td></tr>")
-    
-    for test_name, details in sorted(problematic_tests.items(), 
-                                   key=lambda x: x[1]['failure_rate'],
-                                   reverse=True):
-        class_link = get_develocity_class_link(test_name, threshold_days)
-        print(f"<tr><td colspan=\"4\">{test_name}</td><td><a href=\"{class_link}\">↗️</a></td></tr>")
-        
-        for test_case in sorted(details['test_cases'],
-                              key=lambda x: (x.outcome_distribution.failed + x.outcome_distribution.flaky) / x.outcome_distribution.total 
-                              if x.outcome_distribution.total > 0 else 0,
-                              reverse=True):
+    # Process problematic quarantined tests
+    if len(problematic_tests) > 0:
+        print(f"Found {len(problematic_tests)} tests that have been quarantined for a while and are still flaky.")
+    for full_class_name, details in problematic_tests.items():
+        for test_case in details['test_cases']:
+            total_runs = test_case.outcome_distribution.total
             method_name = test_case.name.split('.')[-1]
-            if method_name != 'N/A':
-                method_link = get_develocity_method_link(test_name, test_case.name, threshold_days)
-                total_runs = test_case.outcome_distribution.total
-                failure_rate = (test_case.outcome_distribution.failed + test_case.outcome_distribution.flaky) / total_runs if total_runs > 0 else 0
-                print(f"<tr><td></td><td>{method_name}</td>"
-                      f"<td>{failure_rate:.2%}</td><td>{total_runs}</td>"
-                      f"<td><a href=\"{method_link}\">↗️</a></td></tr>")
-    print("</table>")
-    
-    # Print detailed execution history
-    print("\n<details>")
-    print("<summary>Detailed Execution History</summary>\n")
-    
-    for test_name, details in sorted(problematic_tests.items(),
-                                   key=lambda x: x[1]['failure_rate'],
-                                   reverse=True):
-        print(f"\n### {test_name}")
-        print(f"* Days Quarantined: {details['days_quarantined']}")
-        print(f"* Recent Failure Rate: {details['recent_failure_rate']:.2%}")
-        print(f"* Total Runs: {details['container_result'].outcome_distribution.total}")
-        print(f"* Build Outcomes: Passed: {details['container_result'].outcome_distribution.passed} | "
-              f"Failed: {details['container_result'].outcome_distribution.failed} | "
-              f"Flaky: {details['container_result'].outcome_distribution.flaky}")
-        
-        for test_method in sorted(details['test_cases'],
-                                key=lambda x: (x.outcome_distribution.failed + x.outcome_distribution.flaky) / x.outcome_distribution.total 
-                                if x.outcome_distribution.total > 0 else 0,
-                                reverse=True):
-            if test_method.timeline:
-                print(f"\n#### {method_name}")
-                print("Recent Executions:")
-                print("```")
-                print("Date/Time (UTC)      Outcome    Build ID")
-                print("-" * 44)
-                for entry in sorted(test_method.timeline, key=lambda x: x.timestamp, reverse=True)[:5]:
-                    date_str = entry.timestamp.strftime('%Y-%m-%d %H:%M')
-                    print(f"{date_str:<17} {entry.outcome:<10} {entry.build_id}")
-                print("```")
-    
-    print("</details>")
+            if total_runs > 0:
+                failure_rate = (test_case.outcome_distribution.failed +
+                              test_case.outcome_distribution.flaky) / total_runs
+                all_problem_cases.append({
+                    'class': full_class_name,
+                    'method': method_name,
+                    'failure_rate': failure_rate,
+                    'total_runs': total_runs
+                })
 
-def print_flaky_regressions(flaky_regressions: Dict[str, Dict], threshold_days: int):
-    """Print tests that have recently started showing flaky behavior"""
-    print("\n## Flaky Test Regressions")
-    if not flaky_regressions:
-        print("No flaky test regressions found.")
-        return
-        
-    print(f"Found {len(flaky_regressions)} tests that have started showing increased flaky behavior recently.")
-    
-    # Print table with test details
-    print("\n<table>")
-    print("<tr><td>Test Class</td><td>Recent Flaky Rate</td><td>Historical Rate</td><td>Recent Executions</td><td>Link</td></tr>")
-    
+    # Process flaky regressions
+    if len(flaky_regressions) > 0:
+        print(f"Found {len(flaky_regressions)} tests that have started recently failing.")
     for test_name, details in flaky_regressions.items():
-        class_link = get_develocity_class_link(test_name, threshold_days)
-        print(f"<tr><td colspan=\"4\">{test_name}</td><td><a href=\"{class_link}\">↗️</a></td></tr>")
-        print(f"<tr><td></td><td>{details['recent_flaky_rate']:.2%}</td>"
-              f"<td>{details['historical_flaky_rate']:.2%}</td>"
-              f"<td>{len(details['recent_executions'])}</td><td></td></tr>")
-        
-        # Add recent execution details in sub-rows
-        print("<tr><td colspan=\"5\">Recent Executions:</td></tr>")
-        for entry in sorted(details['recent_executions'], key=lambda x: x.timestamp, reverse=True)[:5]:
-            date_str = entry.timestamp.strftime('%Y-%m-%d %H:%M')
-            print(f"<tr><td></td><td colspan=\"4\">{date_str} - {entry.outcome}</td></tr>")
-    print("</table>")
-    
-    # Print detailed history
-    print("\n<details>")
-    print("<summary>Detailed Execution History</summary>\n")
-    
-    for test_name, details in sorted(flaky_regressions.items(),
-                                   key=lambda x: x[1]['recent_flaky_rate'],
-                                   reverse=True):
-        print(f"\n### {test_name}")
-        print(f"* Recent Flaky Rate: {details['recent_flaky_rate']:.2%}")
-        print(f"* Historical Flaky Rate: {details['historical_flaky_rate']:.2%}")
-        print("\nRecent Executions:")
-        print("```")
-        print("Date/Time (UTC)      Outcome    Build ID")
-        print("-" * 44)
-        for entry in sorted(details['recent_executions'], key=lambda x: x.timestamp, reverse=True)[:5]:
-            date_str = entry.timestamp.strftime('%Y-%m-%d %H:%M')
-            print(f"{date_str:<17} {entry.outcome:<10} {entry.build_id}")
-        print("```")
-    
-    print("</details>")
+        all_problem_cases.append({
+            'class': test_name,
+            'method': 'N/A',  # Flaky regressions are at class level
+            'failure_rate': details['recent_flaky_rate'],
+            'total_runs': len(details['recent_executions'])
+        })
 
-def print_persistent_failing_tests(persistent_failures: Dict[str, Dict], threshold_days: int):
-    """Print tests that have been consistently failing over time"""
-    print("\n## Persistently Failing/Flaky Tests")
-    if not persistent_failures:
-        print("No persistently failing tests found.")
-        return
-        
-    print(f"Found {len(persistent_failures)} tests that have been consistently failing or flaky.")
+    # Sort by failure rate descending
+    sorted_cases = sorted(all_problem_cases,
+                         key=lambda x: x['failure_rate'],
+                         reverse=True)
     
-    # Print table with test details
-    print("\n<table>")
-    print("<tr><td>Test Class</td><td>Test Case</td><td>Failure Rate</td><td>Total Runs</td><td>Failed/Flaky</td><td>Link</td></tr>")
-    
-    for class_name, class_details in sorted(persistent_failures.items(),
-                                          key=lambda x: x[1]['failure_rate'],
-                                          reverse=True):
-        class_link = get_develocity_class_link(class_name, threshold_days)
-        
-        # Print class row
-        print(f"<tr><td colspan=\"5\">{class_name}</td>"
-              f"<td><a href=\"{class_link}\">↗️</a></td></tr>")
-              
-        # Print test case rows
-        for test_name, test_details in sorted(class_details['test_cases'].items(),
-                                            key=lambda x: x[1]['failure_rate'],
-                                            reverse=True):
-            test_link = get_develocity_method_link(class_name, test_name, threshold_days)
-            print(f"<tr><td></td>"
-                  f"<td>{test_name}</td>"
-                  f"<td>{test_details['failure_rate']:.2%}</td>"
-                  f"<td>{test_details['total_executions']}</td>"
-                  f"<td>{test_details['failed_executions']}</td>"
-                  f"<td><a href=\"{test_link}\">↗️</a></td></tr>")
-    print("</table>")
-    
-    # Print detailed history
-    print("\n<details>")
-    print("<summary>Detailed Execution History</summary>\n")
-    
-    for class_name, class_details in sorted(persistent_failures.items(),
-                                          key=lambda x: x[1]['failure_rate'],
-                                          reverse=True):
-        print(f"\n### {class_name}")
-        print(f"* Overall Failure Rate: {class_details['failure_rate']:.2%}")
-        print(f"* Total Executions: {class_details['total_executions']}")
-        print(f"* Failed/Flaky Executions: {class_details['failed_executions']}")
-        
-        for test_name, test_details in sorted(class_details['test_cases'].items(),
-                                            key=lambda x: x[1]['failure_rate'],
-                                            reverse=True):
-            print("\nRecent Executions:")
-            print("```")
-            print("Date/Time (UTC)      Outcome    Build ID")
-            print("-" * 44)
-            for entry in sorted(test_details['timeline'], key=lambda x: x.timestamp, reverse=True)[:5]:
-                date_str = entry.timestamp.strftime('%Y-%m-%d %H:%M')
-                print(f"{date_str:<17} {entry.outcome:<10} {entry.build_id}")
-            print("```")
-    
-    print("</details>")
+    # Group by class
+    by_class = {}
+    for case in sorted_cases:
+        if case['class'] not in by_class:
+            by_class[case['class']] = []
+        by_class[case['class']].append(case)
 
-def print_cleared_tests(cleared_tests: Dict[str, Dict], threshold_days: int):
-    """Print tests that are ready to be unquarantined"""
-    print("\n## Cleared Tests (Ready for Unquarantine)")
-    if not cleared_tests:
-        print("No tests ready to be cleared from quarantine.")
-        return
-        
-    # Calculate total number of test methods
-    total_methods = sum(len(details['test_cases']) for details in cleared_tests.values())
-    
-    print(f"Found {len(cleared_tests)} test classes with {total_methods} test methods that have been consistently passing. "
-          f"These tests could be candidates for removing quarantine annotations at either class or method level.")
-    
-    # Print table with class and method information
-    print("\n<table>")
-    print("<tr><td>Test Class</td><td>Test Method</td><td>Success Rate</td><td>Total Runs</td><td>Recent Status</td><td>Link</td></tr>")
-    
-    for test_name, details in sorted(cleared_tests.items(),
-                                   key=lambda x: x[1]['success_rate'],
-                                   reverse=True):
-        class_link = get_develocity_class_link(test_name, threshold_days)
-        print(f"<tr><td colspan=\"5\">{test_name}</td><td><a href=\"{class_link}\">↗️</a></td></tr>")
-        print(f"<tr><td></td><td>Class Overall</td>"
-              f"<td>{details['success_rate']:.2%}</td>"
-              f"<td>{details['total_executions']}</td>"
-              f"<td>{details['successful_runs']} passed</td><td></td></tr>")
-        
-        for test_case in details['test_cases']:
-            method_name = test_case['name'].split('.')[-1]
-            method_link = get_develocity_method_link(test_name, test_case['name'], threshold_days)
-            recent_status = "N/A"
-            if test_case['recent_executions']:
-                recent_status = test_case['recent_executions'][-1].outcome
-            
-            print(f"<tr><td></td><td>{method_name}</td>"
-                  f"<td>{test_case['success_rate']:.2%}</td>"
-                  f"<td>{test_case['total_executions']}</td>"
-                  f"<td>{recent_status}</td>"
-                  f"<td><a href=\"{method_link}\">↗️</a></td></tr>")
-        print("<tr><td colspan=\"6\">&nbsp;</td></tr>")
+    # Print summary
+    print("<table><tr><td>Class</td><td>Test Case</td><td>Failure Rate</td><td>Build Scans</td></tr>")
+    for full_class_name, cases in by_class.items():
+        print(f"<tr><td colspan=\"4\">{full_class_name}</td></tr>")
+        for case in cases:
+            method = case['method']
+            if method != 'N/A':
+                print(f"<tr><td></td><td>{method:<60}</td><td>{case['failure_rate']:.2%}</td><td>{case['total_runs']}</td></tr>")
+            else:
+                print(f"<tr><td></td><td></td><td>{case['failure_rate']:.2%}</td><td>{case['total_runs']}</td></tr>")
     print("</table>")
-    
-    # Print detailed history
-    print("\n<details>")
-    print("<summary>Detailed Test Method History</summary>\n")
-    
-    for test_name, details in sorted(cleared_tests.items(),
-                                   key=lambda x: x[1]['success_rate'],
-                                   reverse=True):
-        print(f"\n### {test_name}")
-        print(f"* Overall Success Rate: {details['success_rate']:.2%}")
-        print(f"* Total Executions: {details['total_executions']}")
-        print(f"* Consecutive Successful Runs: {details['successful_runs']}")
-        
-        for test_case in details['test_cases']:
-            method_name = test_case['name'].split('.')[-1]
-            print(f"\n#### {method_name}")
-            print(f"* Success Rate: {test_case['success_rate']:.2%}")
-            print(f"* Total Runs: {test_case['total_executions']}")
-            print("\nRecent Executions:")
-            print("```")
-            print("Date/Time (UTC)      Outcome    Build ID")
-            print("-" * 44)
-            for entry in sorted(test_case['recent_executions'], key=lambda x: x.timestamp, reverse=True)[:5]:
-                date_str = entry.timestamp.strftime('%Y-%m-%d %H:%M')
-                print(f"{date_str:<17} {entry.outcome:<10} {entry.build_id}")
-            print("```")
-    
-    print("</details>")
 
 def main():
     token = None
@@ -1227,23 +806,18 @@ def main():
     analyzer = TestAnalyzer(BASE_URL, token)
     
     try:
-        quarantined_builds = analyzer.get_build_info([], PROJECT, "quarantinedTest", 7, bypass_cache=True, fetch_all=True)
-        regular_builds = analyzer.get_build_info([], PROJECT, "test", 7, bypass_cache=True, fetch_all=True)
-
-        analyzer.update_cache(quarantined_builds)
-        analyzer.update_cache(regular_builds)
-
-        # Get test results
+        # Get quarantined test results
         quarantined_results = analyzer.get_test_results(
             PROJECT, 
             threshold_days=QUARANTINE_THRESHOLD_DAYS,
-            test_tags=["+trunk", "+flaky", "-new"]
+            test_type="quarantinedTest"
         )
         
+        # Get regular test results for flaky regression analysis
         regular_results = analyzer.get_test_results(
             PROJECT,
             threshold_days=7,  # Last 7 days for regular tests
-            test_tags=["+trunk", "-flaky", "-new"]
+            test_type="test"
         )
         
         # Generate reports
@@ -1267,34 +841,111 @@ def main():
             success_threshold=SUCCESS_THRESHOLD
         )
         
-        # Get persistent failing tests (add after getting regular_results)
-        persistent_failures = analyzer.get_persistent_failing_tests(
-            regular_results,
-            min_failure_rate=0.2,  # 20% failure rate threshold
-            min_executions=5
-        )
-        
-        # Print report header
+        # Print summary first
         print(f"\n# Flaky Test Report for {datetime.now(pytz.UTC).strftime('%Y-%m-%d')}")
         print(f"This report was run on {datetime.now(pytz.UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC")
-        
-        # Print each section
-        print_most_problematic_tests(problematic_tests, QUARANTINE_THRESHOLD_DAYS)
-        print_flaky_regressions(flaky_regressions, QUARANTINE_THRESHOLD_DAYS)
-        print_persistent_failing_tests(persistent_failures, QUARANTINE_THRESHOLD_DAYS)
-        print_cleared_tests(cleared_tests, QUARANTINE_THRESHOLD_DAYS)
+
+        print_summary(problematic_tests, flaky_regressions)
+
+        # Print Flaky Test Regressions
+        print("\n## Flaky Test Regressions")
+        if not flaky_regressions:
+            print("No flaky test regressions found.")
+        else:
+            for test_name, details in flaky_regressions.items():
+                print(f"\n{test_name}")
+                print(f"Recent Flaky Rate: {details['recent_flaky_rate']:.2%}")
+                print(f"Historical Flaky Rate: {details['historical_flaky_rate']:.2%}")
+                print(f"\nRecent Executions (last {len(details['recent_executions'])} runs):")
+                for entry in sorted(details['recent_executions'], key=lambda x: x.timestamp)[-5:]:
+                    print(f"  {entry.timestamp.strftime('%Y-%m-%d %H:%M')} - {entry.outcome}")
+
+        # Print Cleared Tests
+        print("\n## Cleared Tests (Ready for Unquarantine)")
+        if not cleared_tests:
+            print("No tests ready to be cleared from quarantine.")
+        else:
+            # Print summary
+            print("<table><tr><td>Class</td><td>Test Case</td><td>Success Rate</td><td>Build Scans</td></tr>")
+            for test_name, details in cleared_tests.items():
+                print(f"<tr><td>{test_name}</td><td></td><td>{details['success_rate']:.2%}</td><td>{details['total_executions']}</td></tr>")
+            print("</table>")
+
+            for test_name, details in cleared_tests.items():
+                print(f"\n{test_name}")
+                print(f"Success Rate: {details['success_rate']:.2%}")
+                print(f"Total Executions: {details['total_executions']}")
+                print(f"\nRecent Executions (last {len(details['recent_executions'])} runs):")
+                for entry in sorted(details['recent_executions'], key=lambda x: x.timestamp):
+                    print(f"  {entry.timestamp.strftime('%Y-%m-%d %H:%M')} - {entry.outcome}")
+
+        # Print Defective Tests
+        print("\n## High-Priority Quarantined Tests")
+        if not problematic_tests:
+            print("No high-priority quarantined tests found.")
+        else:
+            print("These are tests which have been quarantined for several days and need attention.")
+            sorted_tests = sorted(
+                problematic_tests.items(),
+                key=lambda x: (x[1]['failure_rate'], x[1]['days_quarantined']),
+                reverse=True
+            )
+
+            print(f"\nFound {len(sorted_tests)} high-priority quarantined test classes:")
+            for full_class_name, details in sorted_tests:
+                class_result = details['container_result']
+                class_name = full_class_name.split(".")[-1]
+                print(f"### {class_name}")
+                print(f"{full_class_name} has been quarantined for {details['days_quarantined']} days")
+                print(f"Overall class failure: {details['failure_rate']:.2%}")
+                print(f"Recent class failure: {details['recent_failure_rate']:.2%}")
+                print("\nOverall Build Outcomes:")
+                print(f"  Total Runs: {class_result.outcome_distribution.total}")
+                print(f"  Failed: {class_result.outcome_distribution.failed}")
+                print(f"  Flaky: {class_result.outcome_distribution.flaky}")
+                print(f"  Passed: {class_result.outcome_distribution.passed}")
+
+                print("\nQuarantined Methods (Last 7 Days):")
+
+                # Sort test methods by failure rate
+                sorted_methods = sorted(
+                    details['test_cases'],
+                    key=lambda x: (x.outcome_distribution.failed + x.outcome_distribution.flaky) / x.outcome_distribution.total if x.outcome_distribution.total > 0 else 0,
+                    reverse=True
+                )
+
+                for test_method in sorted_methods:
+                    total_runs = test_method.outcome_distribution.total
+                    if total_runs > 0:
+                        failure_rate = (test_method.outcome_distribution.failed + test_method.outcome_distribution.flaky) / total_runs
+
+                        # Extract the method name from the full test name
+                        method_name = test_method.name.split('.')[-1]
+
+                        print(f"\n  → {method_name}")
+                        print(f"    Failure Rate: {failure_rate:.2%}")
+                        print(f"    Runs: {total_runs:3d} | Failed: {test_method.outcome_distribution.failed:3d} | "
+                              f"Flaky: {test_method.outcome_distribution.flaky:3d} | "
+                              f"Passed: {test_method.outcome_distribution.passed:3d}")
+
+                        # Show test method timeline
+                        if test_method.timeline:
+                            print(f"\n    Recent Executions (last {min(3, len(test_method.timeline))} of {len(test_method.timeline)} runs):")
+                            print("    Date/Time (UTC)      Outcome    Build ID")
+                            print("    " + "-" * 44)
+                            for entry in sorted(test_method.timeline, key=lambda x: x.timestamp)[-3:]:
+                                date_str = entry.timestamp.strftime('%Y-%m-%d %H:%M')
+                                print(f"    {date_str:<17} {entry.outcome:<10} {entry.build_id}")
 
     except Exception as e:
         logger.exception("Error occurred during report generation")
         print(f"Error occurred: {str(e)}")
 
+
 if __name__ == "__main__":
     # Configure logging
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler("flaky_test_report.log")
-        ]
+        format='%(asctime)s - %(levelname)s - %(message)s'
     )
     main()

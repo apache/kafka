@@ -20,7 +20,6 @@ package org.apache.kafka.common.utils;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
-import java.util.zip.CRC32C;
 import java.util.zip.Checksum;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,7 +36,7 @@ public class ChecksumsTest {
     private void doTestUpdateByteBuffer(byte[] bytes, ByteBuffer buffer) {
         buffer.put(bytes);
         buffer.flip();
-        Checksum bufferCrc = new CRC32C();
+        Checksum bufferCrc = Crc32C.create();
         Checksums.update(bufferCrc, buffer, buffer.remaining());
         assertEquals(Crc32C.compute(bytes, 0, bytes.length), bufferCrc.getValue());
         assertEquals(0, buffer.position());
@@ -56,8 +55,8 @@ public class ChecksumsTest {
         final ByteBuffer buffer = ByteBuffer.allocate(4);
         buffer.putInt(value);
 
-        Checksum crc1 = new CRC32C();
-        Checksum crc2 = new CRC32C();
+        Checksum crc1 = Crc32C.create();
+        Checksum crc2 = Crc32C.create();
 
         Checksums.updateInt(crc1, value);
         crc2.update(buffer.array(), buffer.arrayOffset(), 4);
@@ -71,8 +70,8 @@ public class ChecksumsTest {
         final ByteBuffer buffer = ByteBuffer.allocate(8);
         buffer.putLong(value);
 
-        Checksum crc1 = new CRC32C();
-        Checksum crc2 = new CRC32C();
+        Checksum crc1 = Crc32C.create();
+        Checksum crc2 = Crc32C.create();
 
         Checksums.updateLong(crc1, value);
         crc2.update(buffer.array(), buffer.arrayOffset(), 8);
@@ -85,7 +84,7 @@ public class ChecksumsTest {
         buffer.flip();
         buffer.position(offset);
 
-        Checksum bufferCrc = new CRC32C();
+        Checksum bufferCrc = Crc32C.create();
         Checksums.update(bufferCrc, buffer, buffer.remaining());
         assertEquals(Crc32C.compute(bytes, offset, buffer.remaining()), bufferCrc.getValue());
         assertEquals(offset, buffer.position());

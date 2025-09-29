@@ -18,34 +18,39 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.internals.metrics.OpenIterators;
 import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.streams.state.VersionedRecordIterator;
 
+import java.util.Set;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
 
 class MeteredMultiVersionedKeyQueryIterator<V> implements VersionedRecordIterator<V>, MeteredIterator {
 
     private final VersionedRecordIterator<byte[]> iterator;
     private final Function<VersionedRecord<byte[]>, VersionedRecord<V>> deserializeValue;
+    private final LongAdder numOpenIterators;
     private final Sensor sensor;
     private final Time time;
     private final long startNs;
     private final long startTimestampMs;
-    private final OpenIterators openIterators;
+    private final Set<MeteredIterator> openIterators;
 
     public MeteredMultiVersionedKeyQueryIterator(final VersionedRecordIterator<byte[]> iterator,
                                                  final Sensor sensor,
                                                  final Time time,
                                                  final Function<VersionedRecord<byte[]>, VersionedRecord<V>> deserializeValue,
-                                                 final OpenIterators openIterators) {
+                                                 final LongAdder numOpenIterators,
+                                                 final Set<MeteredIterator> openIterators) {
         this.iterator = iterator;
         this.deserializeValue = deserializeValue;
+        this.numOpenIterators = numOpenIterators;
         this.openIterators = openIterators;
         this.sensor = sensor;
         this.time = time;
         this.startNs = time.nanoseconds();
         this.startTimestampMs = time.milliseconds();
+        numOpenIterators.increment();
         openIterators.add(this);
     }
 
@@ -60,6 +65,7 @@ class MeteredMultiVersionedKeyQueryIterator<V> implements VersionedRecordIterato
             iterator.close();
         } finally {
             sensor.record(time.nanoseconds() - startNs);
+            numOpenIterators.decrement();
             openIterators.remove(this);
         }
     }

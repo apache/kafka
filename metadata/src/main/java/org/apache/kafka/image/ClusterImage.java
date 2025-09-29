@@ -25,16 +25,22 @@ import org.apache.kafka.metadata.ControllerRegistration;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
+
 
 /**
  * Represents the cluster in the metadata image.
- * <p>
+ *
  * This class is thread-safe.
  */
-public record ClusterImage(Map<Integer, BrokerRegistration> brokers, Map<Integer, ControllerRegistration> controllers) {
+public final class ClusterImage {
     public static final ClusterImage EMPTY = new ClusterImage(
-        Map.of(),
-        Map.of());
+            Collections.emptyMap(),
+            Collections.emptyMap());
+
+    private final Map<Integer, BrokerRegistration> brokers;
+
+    private final Map<Integer, ControllerRegistration> controllers;
 
     public ClusterImage(
         Map<Integer, BrokerRegistration> brokers,
@@ -48,8 +54,20 @@ public record ClusterImage(Map<Integer, BrokerRegistration> brokers, Map<Integer
         return brokers.isEmpty();
     }
 
+    public Map<Integer, BrokerRegistration> brokers() {
+        return brokers;
+    }
+
     public BrokerRegistration broker(int nodeId) {
         return brokers.get(nodeId);
+    }
+
+    public Map<Integer, ControllerRegistration> controllers() {
+        return controllers;
+    }
+
+    public boolean containsBroker(int brokerId) {
+        return brokers.containsKey(brokerId);
     }
 
     public long brokerEpoch(int brokerId) {
@@ -73,6 +91,19 @@ public record ClusterImage(Map<Integer, BrokerRegistration> brokers, Map<Integer
                 }
             }
         }
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(brokers, controllers);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof ClusterImage)) return false;
+        ClusterImage other = (ClusterImage) o;
+        return brokers.equals(other.brokers) &&
+            controllers.equals(other.controllers);
     }
 
     @Override

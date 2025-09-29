@@ -102,7 +102,7 @@ public class InFlightRequestsTest {
     }
 
     @Test
-    public void testCompleteNextThrowsIfNoInFlights() {
+    public void testCompleteNextThrowsIfNoInflights() {
         assertThrows(IllegalStateException.class, () -> inFlightRequests.completeNext(dest));
     }
 

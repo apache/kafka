@@ -19,10 +19,11 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
-import java.util.EnumMap;
+import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -48,7 +49,7 @@ public class VoteResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errors = new EnumMap<>(Errors.class);
+        Map<Errors, Integer> errors = new HashMap<>();
 
         errors.put(Errors.forCode(data.errorCode()), 1);
 
@@ -75,7 +76,7 @@ public class VoteResponse extends AbstractResponse {
         // Not supported by the response schema
     }
 
-    public static VoteResponse parse(Readable readable, short version) {
-        return new VoteResponse(new VoteResponseData(readable, version));
+    public static VoteResponse parse(ByteBuffer buffer, short version) {
+        return new VoteResponse(new VoteResponseData(new ByteBufferAccessor(buffer), version));
     }
 }

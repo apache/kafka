@@ -40,7 +40,7 @@ class ConsumerPerformanceService(PerformanceService):
         "socket-buffer-size", "The size of the tcp RECV size."
 
         "new-consumer", "Use the new consumer implementation."
-        "command-config", "Config properties file."
+        "consumer.config", "Consumer config properties file."
     """
 
     # Root directory for persistent output
@@ -83,13 +83,9 @@ class ConsumerPerformanceService(PerformanceService):
     def args(self, version):
         """Dictionary of arguments used to start the Consumer Performance script."""
         args = {
-            'topic': self.topic
+            'topic': self.topic,
+            'messages': self.messages
         }
-
-        if version.supports_command_config():
-            args['num-records'] = self.messages
-        else:
-            args['messages'] = self.messages
 
         if version < V_2_5_0:
             args['broker-list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
@@ -119,10 +115,7 @@ class ConsumerPerformanceService(PerformanceService):
         for key, value in self.args(node.version).items():
             cmd += " --%s %s" % (key, value)
 
-        if node.version.supports_command_config():
-            cmd += " --command-config %s" % ConsumerPerformanceService.CONFIG_FILE
-        else:
-            cmd += " --consumer.config %s" % ConsumerPerformanceService.CONFIG_FILE
+        cmd += " --consumer.config %s" % ConsumerPerformanceService.CONFIG_FILE
 
         for key, value in self.settings.items():
             cmd += " %s=%s" % (str(key), str(value))

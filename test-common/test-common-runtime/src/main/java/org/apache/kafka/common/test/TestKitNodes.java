@@ -32,6 +32,7 @@ import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -52,7 +53,7 @@ public class TestKitNodes {
         private int numControllerNodes;
         private int numBrokerNodes;
         private int numDisksPerBroker = 1;
-        private Map<Integer, Map<String, String>> perServerProperties = Map.of();
+        private Map<Integer, Map<String, String>> perServerProperties = Collections.emptyMap();
         private BootstrapMetadata bootstrapMetadata;
 
         public Builder() {
@@ -93,6 +94,11 @@ public class TestKitNodes {
             return this;
         }
 
+        public Builder setFeature(String featureName, short level) {
+            this.bootstrapMetadata = bootstrapMetadata.copyWithFeatureRecord(featureName, level);
+            return this;
+        }
+
         public Builder setCombined(boolean combined) {
             this.combined = combined;
             return this;
@@ -116,7 +122,7 @@ public class TestKitNodes {
         public Builder setPerServerProperties(Map<Integer, Map<String, String>> perServerProperties) {
             this.perServerProperties = Collections.unmodifiableMap(
                 perServerProperties.entrySet().stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, e -> Map.copyOf(e.getValue()))));
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> Collections.unmodifiableMap(new HashMap<>(e.getValue())))));
             return this;
         }
 
@@ -170,10 +176,10 @@ public class TestKitNodes {
             int controllerId = combined ? TestKitDefaults.BROKER_ID_OFFSET : TestKitDefaults.BROKER_ID_OFFSET + TestKitDefaults.CONTROLLER_ID_OFFSET;
             List<Integer> controllerNodeIds = IntStream.range(controllerId, controllerId + numControllerNodes)
                 .boxed()
-                .toList();
+                .collect(Collectors.toList());
             List<Integer> brokerNodeIds = IntStream.range(TestKitDefaults.BROKER_ID_OFFSET, TestKitDefaults.BROKER_ID_OFFSET + numBrokerNodes)
                 .boxed()
-                .toList();
+                .collect(Collectors.toList());
 
             String unknownIds = perServerProperties.keySet().stream()
                     .filter(id -> !controllerNodeIds.contains(id))
@@ -196,7 +202,7 @@ public class TestKitNodes {
                     baseDirectory.toFile().getAbsolutePath(),
                     clusterId,
                     brokerNodeIds.contains(id),
-                    perServerProperties.getOrDefault(id, Map.of())
+                    perServerProperties.getOrDefault(id, Collections.emptyMap())
                 );
                 controllerNodes.put(id, controllerNode);
             }
@@ -208,7 +214,7 @@ public class TestKitNodes {
                     baseDirectory.toFile().getAbsolutePath(),
                     clusterId,
                     controllerNodeIds.contains(id),
-                    perServerProperties.getOrDefault(id, Map.of()),
+                    perServerProperties.getOrDefault(id, Collections.emptyMap()),
                     numDisksPerBroker
                 );
                 brokerNodes.put(id, brokerNode);
@@ -311,7 +317,7 @@ public class TestKitNodes {
                 }
                 return new File(baseDirectory, logDir).getAbsolutePath();
             })
-            .toList();
+            .collect(Collectors.toList());
         MetaPropertiesEnsemble.Copier copier = new MetaPropertiesEnsemble.Copier(MetaPropertiesEnsemble.EMPTY);
 
         copier.setMetaLogDir(Optional.of(logDataDirectories.get(0)));

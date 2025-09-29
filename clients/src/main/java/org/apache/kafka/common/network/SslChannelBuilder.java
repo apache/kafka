@@ -164,7 +164,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
 
         @Override
         public Optional<KafkaPrincipalSerde> principalSerde() {
-            return Optional.of(principalBuilder);
+            return principalBuilder instanceof KafkaPrincipalSerde ? Optional.of((KafkaPrincipalSerde) principalBuilder) : Optional.empty();
         }
 
         @Override

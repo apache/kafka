@@ -71,6 +71,7 @@ import org.mockito.quality.Strictness;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -85,6 +86,7 @@ import java.util.stream.Stream;
 
 import jakarta.ws.rs.BadRequestException;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_HEALTH_CHECK_TIMEOUT_MS;
 import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -165,37 +167,37 @@ public class ConnectorPluginsResourceTest {
         ConfigDef connectorConfigDef = ConnectorConfig.configDef();
         List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(PROPS);
         List<ConfigValue> partialConnectorConfigValues = connectorConfigDef.validate(PARTIAL_PROPS);
-        ConfigInfos result = AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), connectorConfigDef.configKeys(), connectorConfigValues, List.of());
-        ConfigInfos partialResult = AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), connectorConfigDef.configKeys(), partialConnectorConfigValues, List.of());
-        List<ConfigInfo> configs = new LinkedList<>(result.configs());
-        List<ConfigInfo> partialConfigs = new LinkedList<>(partialResult.configs());
+        ConfigInfos result = AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), connectorConfigDef.configKeys(), connectorConfigValues, Collections.emptyList());
+        ConfigInfos partialResult = AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), connectorConfigDef.configKeys(), partialConnectorConfigValues, Collections.emptyList());
+        List<ConfigInfo> configs = new LinkedList<>(result.values());
+        List<ConfigInfo> partialConfigs = new LinkedList<>(partialResult.values());
 
-        ConfigKeyInfo configKeyInfo = new ConfigKeyInfo("test.string.config", "STRING", true, null, "HIGH", "Test configuration for string type.", null, -1, "NONE", "test.string.config", List.of());
-        ConfigValueInfo configValueInfo = new ConfigValueInfo("test.string.config", "testString", List.of(), List.of(), true);
+        ConfigKeyInfo configKeyInfo = new ConfigKeyInfo("test.string.config", "STRING", true, null, "HIGH", "Test configuration for string type.", null, -1, "NONE", "test.string.config", Collections.emptyList());
+        ConfigValueInfo configValueInfo = new ConfigValueInfo("test.string.config", "testString", Collections.emptyList(), Collections.emptyList(), true);
         ConfigInfo configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
         partialConfigs.add(configInfo);
 
-        configKeyInfo = new ConfigKeyInfo("test.int.config", "INT", true, null, "MEDIUM", "Test configuration for integer type.", "Test", 1, "MEDIUM", "test.int.config", List.of());
-        configValueInfo = new ConfigValueInfo("test.int.config", "1", List.of("1", "2", "3"), List.of(), true);
+        configKeyInfo = new ConfigKeyInfo("test.int.config", "INT", true, null, "MEDIUM", "Test configuration for integer type.", "Test", 1, "MEDIUM", "test.int.config", Collections.emptyList());
+        configValueInfo = new ConfigValueInfo("test.int.config", "1", asList("1", "2", "3"), Collections.emptyList(), true);
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
         partialConfigs.add(configInfo);
 
-        configKeyInfo = new ConfigKeyInfo("test.string.config.default", "STRING", false, "", "LOW", "Test configuration with default value.", null, -1, "NONE", "test.string.config.default", List.of());
-        configValueInfo = new ConfigValueInfo("test.string.config.default", "", List.of(), List.of(), true);
+        configKeyInfo = new ConfigKeyInfo("test.string.config.default", "STRING", false, "", "LOW", "Test configuration with default value.", null, -1, "NONE", "test.string.config.default", Collections.emptyList());
+        configValueInfo = new ConfigValueInfo("test.string.config.default", "", Collections.emptyList(), Collections.emptyList(), true);
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
         partialConfigs.add(configInfo);
 
-        configKeyInfo = new ConfigKeyInfo("test.list.config", "LIST", true, null, "HIGH", "Test configuration for list type.", "Test", 2, "LONG", "test.list.config", List.of());
-        configValueInfo = new ConfigValueInfo("test.list.config", "a,b", List.of("a", "b", "c"), List.of(), true);
+        configKeyInfo = new ConfigKeyInfo("test.list.config", "LIST", true, null, "HIGH", "Test configuration for list type.", "Test", 2, "LONG", "test.list.config", Collections.emptyList());
+        configValueInfo = new ConfigValueInfo("test.list.config", "a,b", asList("a", "b", "c"), Collections.emptyList(), true);
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
         partialConfigs.add(configInfo);
 
-        CONFIG_INFOS = new ConfigInfos(ConnectorPluginsResourceTestConnector.class.getName(), ERROR_COUNT, List.of("Test"), configs);
-        PARTIAL_CONFIG_INFOS = new ConfigInfos(ConnectorPluginsResourceTestConnector.class.getName(), PARTIAL_CONFIG_ERROR_COUNT, List.of("Test"), partialConfigs);
+        CONFIG_INFOS = new ConfigInfos(ConnectorPluginsResourceTestConnector.class.getName(), ERROR_COUNT, Collections.singletonList("Test"), configs);
+        PARTIAL_CONFIG_INFOS = new ConfigInfos(ConnectorPluginsResourceTestConnector.class.getName(), PARTIAL_CONFIG_ERROR_COUNT, Collections.singletonList("Test"), partialConfigs);
     }
 
     private final Herder herder = mock(DistributedHerder.class);
@@ -240,7 +242,7 @@ public class ConnectorPluginsResourceTest {
                 ConnectorPluginsResourceTestConnector.class.getName(),
                 resultConfigKeys,
                 configValues,
-                List.of("Test")
+                Collections.singletonList("Test")
             );
             configInfosCallback.getValue().onCompletion(null, configInfos);
             return null;
@@ -256,8 +258,8 @@ public class ConnectorPluginsResourceTest {
         assertEquals(PARTIAL_CONFIG_INFOS.errorCount(), configInfos.errorCount());
         assertEquals(PARTIAL_CONFIG_INFOS.groups(), configInfos.groups());
         assertEquals(
-            new HashSet<>(PARTIAL_CONFIG_INFOS.configs()),
-            new HashSet<>(configInfos.configs())
+            new HashSet<>(PARTIAL_CONFIG_INFOS.values()),
+            new HashSet<>(configInfos.values())
         );
         verify(herder).validateConnectorConfig(eq(PARTIAL_PROPS), any(), anyBoolean());
     }
@@ -284,7 +286,7 @@ public class ConnectorPluginsResourceTest {
                     ConnectorPluginsResourceTestConnector.class.getName(),
                     resultConfigKeys,
                     configValues,
-                    List.of("Test")
+                    Collections.singletonList("Test")
             );
             configInfosCallback.getValue().onCompletion(null, configInfos);
             return null;
@@ -298,7 +300,7 @@ public class ConnectorPluginsResourceTest {
         assertEquals(CONFIG_INFOS.name(), configInfos.name());
         assertEquals(0, configInfos.errorCount());
         assertEquals(CONFIG_INFOS.groups(), configInfos.groups());
-        assertEquals(new HashSet<>(CONFIG_INFOS.configs()), new HashSet<>(configInfos.configs()));
+        assertEquals(new HashSet<>(CONFIG_INFOS.values()), new HashSet<>(configInfos.values()));
         verify(herder).validateConnectorConfig(eq(PROPS), any(), anyBoolean());
     }
 
@@ -324,7 +326,7 @@ public class ConnectorPluginsResourceTest {
                     ConnectorPluginsResourceTestConnector.class.getName(),
                     resultConfigKeys,
                     configValues,
-                    List.of("Test")
+                    Collections.singletonList("Test")
             );
             configInfosCallback.getValue().onCompletion(null, configInfos);
             return null;
@@ -338,7 +340,7 @@ public class ConnectorPluginsResourceTest {
         assertEquals(CONFIG_INFOS.name(), configInfos.name());
         assertEquals(0, configInfos.errorCount());
         assertEquals(CONFIG_INFOS.groups(), configInfos.groups());
-        assertEquals(new HashSet<>(CONFIG_INFOS.configs()), new HashSet<>(configInfos.configs()));
+        assertEquals(new HashSet<>(CONFIG_INFOS.values()), new HashSet<>(configInfos.values()));
         verify(herder).validateConnectorConfig(eq(PROPS), any(), anyBoolean());
     }
 
@@ -372,8 +374,8 @@ public class ConnectorPluginsResourceTest {
         ClassLoader classLoader = ConnectorPluginsResourceTest.class.getClassLoader();
         PluginInfo sinkInfo = new PluginInfo(new PluginDesc<>(SampleSinkConnector.class, SampleSinkConnector.VERSION, PluginType.SINK, classLoader));
         PluginInfo sourceInfo = new PluginInfo(new PluginDesc<>(SampleSourceConnector.class, SampleSourceConnector.VERSION, PluginType.SOURCE, classLoader));
-        assertEquals(PluginType.SINK.toString(), sinkInfo.type().toString());
-        assertEquals(PluginType.SOURCE.toString(), sourceInfo.type().toString());
+        assertEquals(PluginType.SINK.toString(), sinkInfo.type());
+        assertEquals(PluginType.SOURCE.toString(), sourceInfo.type());
         assertEquals(SampleSinkConnector.VERSION, sinkInfo.version());
         assertEquals(SampleSourceConnector.VERSION, sourceInfo.version());
         assertEquals(SampleSinkConnector.class.getName(), sinkInfo.className());
@@ -426,14 +428,14 @@ public class ConnectorPluginsResourceTest {
     @Test
     public void testGetConnectorConfigDef() {
         String connName = ConnectorPluginsResourceTestConnector.class.getName();
-        when(herder.connectorPluginConfig(eq(connName), eq(null))).thenAnswer(answer -> {
+        when(herder.connectorPluginConfig(eq(connName))).thenAnswer(answer -> {
             List<ConfigKeyInfo> results = new ArrayList<>();
             for (ConfigDef.ConfigKey configKey : ConnectorPluginsResourceTestConnector.CONFIG_DEF.configKeys().values()) {
                 results.add(AbstractHerder.convertConfigKey(configKey));
             }
             return results;
         });
-        List<ConfigKeyInfo> connectorConfigDef = connectorPluginsResource.getConnectorConfigDef(connName, null);
+        List<ConfigKeyInfo> connectorConfigDef = connectorPluginsResource.getConnectorConfigDef(connName);
         assertEquals(ConnectorPluginsResourceTestConnector.CONFIG_DEF.names().size(), connectorConfigDef.size());
         for (String config : ConnectorPluginsResourceTestConnector.CONFIG_DEF.names()) {
             Optional<ConfigKeyInfo> cki = connectorConfigDef.stream().filter(c -> c.name().equals(config)).findFirst();
@@ -491,7 +493,7 @@ public class ConnectorPluginsResourceTest {
 
         @Override
         public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
-            return List.of(1, 2, 3);
+            return asList(1, 2, 3);
         }
 
         @Override
@@ -503,7 +505,7 @@ public class ConnectorPluginsResourceTest {
     private static class ListRecommender implements Recommender {
         @Override
         public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
-            return List.of("a", "b", "c");
+            return asList("a", "b", "c");
         }
 
         @Override

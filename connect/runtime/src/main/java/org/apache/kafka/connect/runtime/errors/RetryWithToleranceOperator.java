@@ -26,6 +26,7 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -100,7 +101,7 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
         this.errorHandlingMetrics = errorHandlingMetrics;
         this.stopRequestedLatch = stopRequestedLatch;
         this.stopping = false;
-        this.reporters = List.of();
+        this.reporters = Collections.emptyList();
     }
 
     /**
@@ -136,7 +137,7 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
     // Visible for testing
     synchronized Future<Void> report(ProcessingContext<T> context) {
         if (reporters.size() == 1) {
-            return new WorkerErrantRecordReporter.ErrantRecordFuture(List.of(reporters.get(0).report(context)));
+            return new WorkerErrantRecordReporter.ErrantRecordFuture(Collections.singletonList(reporters.iterator().next().report(context)));
         }
         List<Future<RecordMetadata>> futures = reporters.stream()
                 .map(r -> r.report(context))
@@ -310,7 +311,7 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
         try {
             stopRequestedLatch.await(delay, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
-            // ignore
+            return;
         }
     }
 
@@ -356,7 +357,7 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
                 e.addSuppressed(t);
             }
         }
-        reporters = List.of();
+        reporters = Collections.emptyList();
         if (e != null) {
             throw e;
         }

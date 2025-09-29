@@ -39,11 +39,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.stream.Collectors;
@@ -157,7 +158,7 @@ public class ClusterMetadataAuthorizerTest {
         }
     }
 
-    static final List<AclBinding> TEST_BINDINGS = List.of(
+    static final List<AclBinding> TEST_BINDINGS = Arrays.asList(
         new AclBinding(new ResourcePattern(TOPIC, WILDCARD_RESOURCE, LITERAL),
             new AccessControlEntry(WILDCARD_PRINCIPAL, WILDCARD, READ, ALLOW)),
         new AclBinding(new ResourcePattern(TOPIC, WILDCARD_RESOURCE, LITERAL),
@@ -173,7 +174,7 @@ public class ClusterMetadataAuthorizerTest {
         MockClusterMetadataAuthorizer authorizer = new MockClusterMetadataAuthorizer();
         authorizer.setAclMutator(mutator);
         CompletableFuture<List<AclCreateResult>> response = new CompletableFuture<>();
-        response.complete(List.of(AclCreateResult.SUCCESS,
+        response.complete(Arrays.asList(AclCreateResult.SUCCESS,
             new AclCreateResult(new InvalidRequestException("invalid"))));
         mutator.setCreateAclsResponse(response);
         List<? extends CompletionStage<AclCreateResult>> results = authorizer.createAcls(
@@ -207,8 +208,8 @@ public class ClusterMetadataAuthorizerTest {
         MockClusterMetadataAuthorizer authorizer = new MockClusterMetadataAuthorizer();
         authorizer.setAclMutator(mutator);
         CompletableFuture<List<AclDeleteResult>> response = new CompletableFuture<>();
-        response.complete(List.of(new AclDeleteResult(
-                Set.of(new AclBindingDeleteResult(TEST_BINDINGS.get(0)))),
+        response.complete(Arrays.asList(new AclDeleteResult(
+                Collections.singleton(new AclBindingDeleteResult(TEST_BINDINGS.get(0)))),
             new AclDeleteResult(new InvalidRequestException("invalid"))));
         mutator.setDeleteAclsResponse(response);
         List<? extends CompletionStage<AclDeleteResult>> results = authorizer.deleteAcls(

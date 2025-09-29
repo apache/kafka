@@ -24,7 +24,9 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.network.SocketServerConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import java.util.Properties
 import scala.jdk.CollectionConverters._
@@ -64,8 +66,9 @@ class DynamicNumNetworkThreadsTest extends BaseRequestTest {
       .count(listener == _.tags().get("listener"))
   }
 
-  @Test
-  def testDynamicNumNetworkThreads(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testDynamicNumNetworkThreads(quorum: String): Unit = {
     // Increase the base network thread count
     val newBaseNetworkThreadsCount = SocketServerConfigs.NUM_NETWORK_THREADS_DEFAULT + 1
     var props = new Properties

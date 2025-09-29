@@ -33,7 +33,9 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.authorizer.{ClusterMetadataAuthorizer, StandardAuthorizer}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertThrows, assertTrue}
-import org.junit.jupiter.api.{AfterEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, mutable}
@@ -156,8 +158,9 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     super.tearDown()
   }
 
-  @Test
-  def testListNodesFromControllersIncludingFencedBrokers(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testListNodesFromControllersIncludingFencedBrokers(quorum: String): Unit = {
     useBoostrapControllers()
     client = createAdminClient
     val result = client.describeCluster(new DescribeClusterOptions().includeFencedBrokers(true))
@@ -165,21 +168,24 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     assertTrue(exception.getCause.getCause.getMessage.contains("Cannot request fenced brokers from controller endpoint"))
   }
 
-  @Test
-  def testListNodesFromControllers(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testListNodesFromControllers(quorum: String): Unit = {
     useBoostrapControllers()
     client = createAdminClient
     val result = client.describeCluster(new DescribeClusterOptions())
     assertTrue(result.nodes().get().size().equals(controllerServers.size))
   }
 
-  @Test
-  def testAclUpdatesUsingSynchronousAuthorizer(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testAclUpdatesUsingSynchronousAuthorizer(quorum: String): Unit = {
     verifyAclUpdates()
   }
 
-  @Test
-  def testAclUpdatesUsingAsynchronousAuthorizer(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testAclUpdatesUsingAsynchronousAuthorizer(quorum: String): Unit = {
     SslAdminIntegrationTest.executor = Some(Executors.newSingleThreadExecutor)
     verifyAclUpdates()
   }
@@ -188,8 +194,9 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
    * Verify that ACL updates using synchronous authorizer are performed synchronously
    * on request threads without any performance overhead introduced by a purgatory.
    */
-  @Test
-  def testSynchronousAuthorizerAclUpdatesBlockRequestThreads(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testSynchronousAuthorizerAclUpdatesBlockRequestThreads(quorum: String): Unit = {
     val testSemaphore = new Semaphore(0)
     SslAdminIntegrationTest.semaphore = Some(testSemaphore)
     waitForNoBlockedRequestThreads()
@@ -202,7 +209,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     // Therefore, only the number of controller I/O threads is relevant in this context.
     val numReqThreads = controllerServers.head.config.numIoThreads * controllerServers.size
     while (blockedRequestThreads.size < numReqThreads) {
-      aclFutures += createAdminClient.createAcls(java.util.List.of(acl2))
+      aclFutures += createAdminClient.createAcls(List(acl2).asJava)
       assertTrue(aclFutures.size < numReqThreads * 10,
         s"Request threads not blocked numRequestThreads=$numReqThreads blocked=$blockedRequestThreads aclFutures=${aclFutures.size}")
     }
@@ -231,7 +238,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
       }
     }
     (0 until numTimedOut)
-      .map(_ => createAdminClient.createAcls(java.util.List.of(acl2)))
+      .map(_ => createAdminClient.createAcls(List(acl2).asJava))
       .foreach(_.all().get(30, TimeUnit.SECONDS))
   }
 
@@ -239,8 +246,9 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
    * Verify that ACL updates using an asynchronous authorizer are completed asynchronously
    * using a purgatory, enabling other requests to be processed even when ACL updates are blocked.
    */
-  @Test
-  def testAsynchronousAuthorizerAclUpdatesDontBlockRequestThreads(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testAsynchronousAuthorizerAclUpdatesDontBlockRequestThreads(quorum: String): Unit = {
     SslAdminIntegrationTest.executor = Some(Executors.newSingleThreadExecutor)
     val testSemaphore = new Semaphore(0)
     SslAdminIntegrationTest.semaphore = Some(testSemaphore)
@@ -251,7 +259,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     // In KRaft mode, ACL creation is handled exclusively by controller servers, not brokers.
     // Therefore, only the number of controller I/O threads is relevant in this context.
     val numReqThreads = controllerServers.head.config.numIoThreads * controllerServers.size
-    val aclFutures = (0 until numReqThreads).map(_ => createAdminClient.createAcls(java.util.List.of(acl2)))
+    val aclFutures = (0 until numReqThreads).map(_ => createAdminClient.createAcls(List(acl2).asJava))
 
     waitForNoBlockedRequestThreads()
     assertTrue(aclFutures.forall(future => !future.all.isDone))
@@ -287,7 +295,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
 
     useBoostrapControllers()
     client = createAdminClient
-    val results = client.createAcls(java.util.List.of(acl2, acl3)).values
+    val results = client.createAcls(List(acl2, acl3).asJava).values
     assertEquals(Set(acl2, acl3), results.keySet().asScala)
     assertFalse(results.values.asScala.exists(_.isDone))
     TestUtils.waitUntilTrue(() => testSemaphore.hasQueuedThreads, "Authorizer not blocked in createAcls")
@@ -296,7 +304,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     validateRequestContext(SslAdminIntegrationTest.lastUpdateRequestContext.get, ApiKeys.CREATE_ACLS)
 
     testSemaphore.acquire()
-    val results2 = client.deleteAcls(java.util.List.of(acl.toFilter, acl2.toFilter, acl3.toFilter)).values
+    val results2 = client.deleteAcls(List(acl.toFilter, acl2.toFilter, acl3.toFilter).asJava).values
     assertEquals(Set(acl.toFilter, acl2.toFilter, acl3.toFilter), results2.keySet.asScala)
     assertFalse(results2.values.asScala.exists(_.isDone))
     TestUtils.waitUntilTrue(() => testSemaphore.hasQueuedThreads, "Authorizer not blocked in deleteAcls")
@@ -353,7 +361,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     val controllerListenerName = ListenerName.forSecurityProtocol(extraControllerSecurityProtocol)
     val config = controllerServers.map { s =>
       val listener = s.config.effectiveAdvertisedControllerListeners
-        .find(_.listener == controllerListenerName.value)
+        .find(_.listenerName == controllerListenerName)
         .getOrElse(throw new IllegalArgumentException(s"Could not find listener with name $controllerListenerName"))
       Utils.formatAddress(listener.host, s.socketServer.boundPort(controllerListenerName))
     }.mkString(",")

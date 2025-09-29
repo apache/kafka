@@ -17,13 +17,15 @@
 
 package kafka.server
 
-import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.api.AfterEach
 import kafka.utils.TestUtils
 import TestUtils._
 import kafka.api.IntegrationTestHarness
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringSerializer
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 class ReplicaFetchTest extends IntegrationTestHarness {
   val topic1 = "foo"
@@ -37,8 +39,9 @@ class ReplicaFetchTest extends IntegrationTestHarness {
 
   override def brokerCount: Int = 2
 
-  @Test
-  def testReplicaFetcherThread(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testReplicaFetcherThread(quorum: String): Unit = {
     val partition = 0
     val testMessageList1 = List("test1", "test2", "test3", "test4")
     val testMessageList2 = List("test5", "test6", "test7", "test8")

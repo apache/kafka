@@ -22,10 +22,12 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset.Remote
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import static java.lang.String.format;
 
@@ -41,15 +43,16 @@ public final class LocalTieredStorageSnapshot {
     }
 
     public List<TopicPartition> getTopicPartitions() {
-        return snapshot.topicIdPartitions.stream()
+        final List<TopicPartition> topicPartitions = snapshot.topicIdPartitions.stream()
                 .map(TopicIdPartition::topicPartition)
-                .toList();
+                .collect(Collectors.toList());
+        return Collections.unmodifiableList(topicPartitions);
     }
 
     public List<RemoteLogSegmentFileset> getFilesets(final TopicPartition topicPartition) {
         return snapshot.records.values().stream()
                 .filter(fileset -> fileset.getRemoteLogSegmentId().topicIdPartition().topicPartition().equals(topicPartition))
-                .toList();
+                .collect(Collectors.toList());
     }
 
     public int size() {

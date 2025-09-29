@@ -463,7 +463,7 @@ public class StreamsMetadataState {
     }
 
     private final Function<Optional<Set<Integer>>, Integer> getPartition = maybeMulticastPartitions -> {
-        if (maybeMulticastPartitions.isEmpty()) {
+        if (!maybeMulticastPartitions.isPresent()) {
             return null;
         }
         if (maybeMulticastPartitions.get().size() != 1) {

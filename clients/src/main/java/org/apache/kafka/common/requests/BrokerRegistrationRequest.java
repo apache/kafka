@@ -19,8 +19,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
+
+import java.nio.ByteBuffer;
 
 public class BrokerRegistrationRequest extends AbstractRequest {
 
@@ -80,8 +82,8 @@ public class BrokerRegistrationRequest extends AbstractRequest {
                 .setErrorCode(error.code()));
     }
 
-    public static BrokerRegistrationRequest parse(Readable readable, short version) {
-        return new BrokerRegistrationRequest(new BrokerRegistrationRequestData(readable, version),
+    public static BrokerRegistrationRequest parse(ByteBuffer buffer, short version) {
+        return new BrokerRegistrationRequest(new BrokerRegistrationRequestData(new ByteBufferAccessor(buffer), version),
                 version);
     }
 }

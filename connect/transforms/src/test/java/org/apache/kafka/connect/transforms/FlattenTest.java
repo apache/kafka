@@ -27,9 +27,10 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -51,21 +52,21 @@ public class FlattenTest {
 
     @Test
     public void topLevelStructRequired() {
-        xformValue.configure(Map.of());
+        xformValue.configure(Collections.emptyMap());
         assertThrows(DataException.class, () -> xformValue.apply(new SourceRecord(null, null,
                 "topic", 0, Schema.INT32_SCHEMA, 42)));
     }
 
     @Test
     public void topLevelMapRequired() {
-        xformValue.configure(Map.of());
+        xformValue.configure(Collections.emptyMap());
         assertThrows(DataException.class, () -> xformValue.apply(new SourceRecord(null, null,
                 "topic", 0, null, 42)));
     }
 
     @Test
     public void testNestedStruct() {
-        xformValue.configure(Map.of());
+        xformValue.configure(Collections.emptyMap());
 
         SchemaBuilder builder = SchemaBuilder.struct();
         builder.field("int8", Schema.INT8_SCHEMA);
@@ -124,7 +125,7 @@ public class FlattenTest {
 
     @Test
     public void testNestedMapWithDelimiter() {
-        xformValue.configure(Map.of("delimiter", "#"));
+        xformValue.configure(Collections.singletonMap("delimiter", "#"));
 
         Map<String, Object> supportedTypes = new HashMap<>();
         supportedTypes.put("int8", (byte) 8);
@@ -137,8 +138,8 @@ public class FlattenTest {
         supportedTypes.put("string", "stringy");
         supportedTypes.put("bytes", "bytes".getBytes());
 
-        Map<String, Object> oneLevelNestedMap = Map.of("B", supportedTypes);
-        Map<String, Object> twoLevelNestedMap = Map.of("A", oneLevelNestedMap);
+        Map<String, Object> oneLevelNestedMap = Collections.singletonMap("B", supportedTypes);
+        Map<String, Object> twoLevelNestedMap = Collections.singletonMap("A", oneLevelNestedMap);
 
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null,
                 "topic", 0,
@@ -162,7 +163,7 @@ public class FlattenTest {
 
     @Test
     public void testOptionalFieldStruct() {
-        xformValue.configure(Map.of());
+        xformValue.configure(Collections.emptyMap());
 
         SchemaBuilder builder = SchemaBuilder.struct();
         builder.field("opt_int32", Schema.OPTIONAL_INT32_SCHEMA);
@@ -189,7 +190,7 @@ public class FlattenTest {
 
     @Test
     public void testOptionalStruct() {
-        xformValue.configure(Map.of());
+        xformValue.configure(Collections.emptyMap());
 
         SchemaBuilder builder = SchemaBuilder.struct().optional();
         builder.field("opt_int32", Schema.OPTIONAL_INT32_SCHEMA);
@@ -205,7 +206,7 @@ public class FlattenTest {
 
     @Test
     public void testOptionalNestedStruct() {
-        xformValue.configure(Map.of());
+        xformValue.configure(Collections.emptyMap());
 
         SchemaBuilder builder = SchemaBuilder.struct().optional();
         builder.field("opt_int32", Schema.OPTIONAL_INT32_SCHEMA);
@@ -229,12 +230,12 @@ public class FlattenTest {
 
     @Test
     public void testOptionalFieldMap() {
-        xformValue.configure(Map.of());
+        xformValue.configure(Collections.emptyMap());
 
         Map<String, Object> supportedTypes = new HashMap<>();
         supportedTypes.put("opt_int32", null);
 
-        Map<String, Object> oneLevelNestedMap = Map.of("B", supportedTypes);
+        Map<String, Object> oneLevelNestedMap = Collections.singletonMap("B", supportedTypes);
 
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null,
                 "topic", 0,
@@ -250,9 +251,9 @@ public class FlattenTest {
 
     @Test
     public void testKey() {
-        xformKey.configure(Map.of());
+        xformKey.configure(Collections.emptyMap());
 
-        Map<String, Map<String, Integer>> key = Map.of("A", Map.of("B", 12));
+        Map<String, Map<String, Integer>> key = Collections.singletonMap("A", Collections.singletonMap("B", 12));
         SourceRecord src = new SourceRecord(null, null, "topic", null, key, null, null);
         SourceRecord transformed = xformKey.apply(src);
 
@@ -265,14 +266,14 @@ public class FlattenTest {
 
     @Test
     public void testSchemalessArray() {
-        xformValue.configure(Map.of());
-        Object value = Map.of("foo", List.of("bar", Map.of("baz", Map.of("lfg", "lfg"))));
+        xformValue.configure(Collections.emptyMap());
+        Object value = Collections.singletonMap("foo", Arrays.asList("bar", Collections.singletonMap("baz", Collections.singletonMap("lfg", "lfg"))));
         assertEquals(value, xformValue.apply(new SourceRecord(null, null, "topic", null, null, null, value)).value());
     }
 
     @Test
     public void testArrayWithSchema() {
-        xformValue.configure(Map.of());
+        xformValue.configure(Collections.emptyMap());
         Schema nestedStructSchema = SchemaBuilder.struct().field("lfg", Schema.STRING_SCHEMA).build();
         Schema innerStructSchema = SchemaBuilder.struct().field("baz", nestedStructSchema).build();
         Schema structSchema = SchemaBuilder.struct()
@@ -283,7 +284,7 @@ public class FlattenTest {
         Struct innerValue = new Struct(innerStructSchema);
         innerValue.put("baz", nestedValue);
         Struct value = new Struct(structSchema);
-        value.put("foo", List.of(innerValue));
+        value.put("foo", Collections.singletonList(innerValue));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", null, null, structSchema, value)); 
         assertEquals(value, transformed.value());
         assertEquals(structSchema, transformed.valueSchema());
@@ -295,7 +296,7 @@ public class FlattenTest {
         // children should also be optional. Similarly, if the parent Struct has a default value, the default value for
         // the flattened field
 
-        xformValue.configure(Map.of());
+        xformValue.configure(Collections.emptyMap());
 
         SchemaBuilder builder = SchemaBuilder.struct().optional();
         builder.field("req_field", Schema.STRING_SCHEMA);
@@ -324,7 +325,7 @@ public class FlattenTest {
 
     @Test
     public void tombstoneEventWithoutSchemaShouldPassThrough() {
-        xformValue.configure(Map.of());
+        xformValue.configure(Collections.emptyMap());
 
         final SourceRecord record = new SourceRecord(null, null, "test", 0,
                 null, null);
@@ -336,7 +337,7 @@ public class FlattenTest {
 
     @Test
     public void tombstoneEventWithSchemaShouldPassThrough() {
-        xformValue.configure(Map.of());
+        xformValue.configure(Collections.emptyMap());
 
         final Schema simpleStructSchema = SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic", Schema.OPTIONAL_INT64_SCHEMA).build();
         final SourceRecord record = new SourceRecord(null, null, "test", 0,
@@ -349,7 +350,7 @@ public class FlattenTest {
 
     @Test
     public void testMapWithNullFields() {
-        xformValue.configure(Map.of());
+        xformValue.configure(Collections.emptyMap());
 
         // Use a LinkedHashMap to ensure the SMT sees entries in a specific order
         Map<String, Object> value = new LinkedHashMap<>();
@@ -367,7 +368,7 @@ public class FlattenTest {
 
     @Test
     public void testStructWithNullFields() {
-        xformValue.configure(Map.of());
+        xformValue.configure(Collections.emptyMap());
 
         final Schema structSchema = SchemaBuilder.struct()
             .field("firstNull", Schema.OPTIONAL_STRING_SCHEMA)

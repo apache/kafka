@@ -43,7 +43,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -151,7 +153,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         additionalBackupClusterClientsConfigs.putAll(superUserConfig());
         backupWorkerProps.putAll(superUserConfig());
 
-        Map<String, String> additionalConfig = new HashMap<>(superUserConfig()) {{
+        HashMap<String, String> additionalConfig = new HashMap<String, String>(superUserConfig()) {{
                 put(FORWARDING_ADMIN_CLASS, FakeForwardingAdminWithLocalMetadata.class.getName());
             }};
 
@@ -170,7 +172,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         startClusters(additionalConfig);
 
         try (Admin adminClient = primary.kafka().createAdminClient()) {
-            adminClient.createAcls(List.of(
+            adminClient.createAcls(Collections.singletonList(
                     new AclBinding(
                             new ResourcePattern(ResourceType.TOPIC, "*", PatternType.LITERAL),
                             new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
@@ -178,7 +180,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
             )).all().get();
         }
         try (Admin adminClient = backup.kafka().createAdminClient()) {
-            adminClient.createAcls(List.of(
+            adminClient.createAcls(Collections.singletonList(
                     new AclBinding(
                             new ResourcePattern(ResourceType.TOPIC, "*", PatternType.LITERAL),
                             new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
@@ -200,7 +202,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         produceMessages(primaryProducer, "test-topic-1");
         produceMessages(backupProducer, "test-topic-1");
         String consumerGroupName = "consumer-group-testReplication";
-        Map<String, Object> consumerProps = Map.of("group.id", consumerGroupName);
+        Map<String, Object> consumerProps = Collections.singletonMap("group.id", consumerGroupName);
         // warm up consumers before starting the connectors so we don't need to wait for discovery
         warmUpConsumer(consumerProps);
 
@@ -237,7 +239,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         produceMessages(backupProducer, "test-topic-1");
         produceMessages(primaryProducer, "test-topic-1");
         String consumerGroupName = "consumer-group-testReplication";
-        Map<String, Object> consumerProps = Map.of("group.id", consumerGroupName);
+        Map<String, Object> consumerProps = Collections.singletonMap("group.id", consumerGroupName);
         // warm up consumers before starting the connectors so we don't need to wait for discovery
         warmUpConsumer(consumerProps);
 
@@ -253,7 +255,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         waitForTopicToPersistInFakeLocalMetadataStore("primary.test-topic-1");
 
         // increase number of partitions
-        Map<String, NewPartitions> newPartitions = Map.of("test-topic-1", NewPartitions.increaseTo(NUM_PARTITIONS + 1));
+        Map<String, NewPartitions> newPartitions = Collections.singletonMap("test-topic-1", NewPartitions.increaseTo(NUM_PARTITIONS + 1));
         try (Admin adminClient = primary.kafka().createAdminClient()) {
             adminClient.createPartitions(newPartitions).all().get();
         }
@@ -272,7 +274,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         produceMessages(backupProducer, "test-topic-1");
         produceMessages(primaryProducer, "test-topic-1");
         String consumerGroupName = "consumer-group-testReplication";
-        Map<String, Object> consumerProps = Map.of("group.id", consumerGroupName);
+        Map<String, Object> consumerProps = Collections.singletonMap("group.id", consumerGroupName);
         // warm up consumers before starting the connectors so we don't need to wait for discovery
         warmUpConsumer(consumerProps);
 
@@ -300,7 +302,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         mm2Props.put("sync.topic.acls.enabled", "true");
         mm2Props.put("sync.topic.acls.interval.seconds", "1");
         mm2Config = new MirrorMakerConfig(mm2Props);
-        List<AclBinding> aclBindings = List.of(
+        List<AclBinding> aclBindings = Collections.singletonList(
                 new AclBinding(
                         new ResourcePattern(ResourceType.TOPIC, "test-topic-1", PatternType.LITERAL),
                         new AccessControlEntry("User:dummy", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW)
@@ -342,7 +344,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         );
 
         // expect to use FakeForwardingAdminWithLocalMetadata to update topic ACLs in FakeLocalMetadataStore.allAcls
-        assertTrue(FakeLocalMetadataStore.aclBindings("dummy").containsAll(List.of(expectedACLOnBackupCluster, expectedACLOnPrimaryCluster)));
+        assertTrue(FakeLocalMetadataStore.aclBindings("dummy").containsAll(Arrays.asList(expectedACLOnBackupCluster, expectedACLOnPrimaryCluster)));
     }
 
     void waitForTopicToPersistInFakeLocalMetadataStore(String topicName) throws InterruptedException {

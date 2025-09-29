@@ -20,9 +20,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -33,7 +34,11 @@ public class DeleteShareGroupStateRequest extends AbstractRequest {
         private final DeleteShareGroupStateRequestData data;
 
         public Builder(DeleteShareGroupStateRequestData data) {
-            super(ApiKeys.DELETE_SHARE_GROUP_STATE);
+            this(data, false);
+        }
+
+        public Builder(DeleteShareGroupStateRequestData data, boolean enableUnstableLastVersion) {
+            super(ApiKeys.DELETE_SHARE_GROUP_STATE, enableUnstableLastVersion);
             this.data = data;
         }
 
@@ -59,15 +64,15 @@ public class DeleteShareGroupStateRequest extends AbstractRequest {
     public DeleteShareGroupStateResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         List<DeleteShareGroupStateResponseData.DeleteStateResult> results = new ArrayList<>();
         data.topics().forEach(
-            topicResult -> results.add(new DeleteShareGroupStateResponseData.DeleteStateResult()
-                .setTopicId(topicResult.topicId())
-                .setPartitions(topicResult.partitions().stream()
-                    .map(partitionData -> new DeleteShareGroupStateResponseData.PartitionResult()
-                        .setPartition(partitionData.partition())
-                        .setErrorCode(Errors.forException(e).code()))
-                    .collect(Collectors.toList()))));
+                topicResult -> results.add(new DeleteShareGroupStateResponseData.DeleteStateResult()
+                        .setTopicId(topicResult.topicId())
+                        .setPartitions(topicResult.partitions().stream()
+                                .map(partitionData -> new DeleteShareGroupStateResponseData.PartitionResult()
+                                        .setPartition(partitionData.partition())
+                                        .setErrorCode(Errors.forException(e).code()))
+                                .collect(Collectors.toList()))));
         return new DeleteShareGroupStateResponse(new DeleteShareGroupStateResponseData()
-            .setResults(results));
+                .setResults(results));
     }
 
     @Override
@@ -75,10 +80,10 @@ public class DeleteShareGroupStateRequest extends AbstractRequest {
         return data;
     }
 
-    public static DeleteShareGroupStateRequest parse(Readable readable, short version) {
+    public static DeleteShareGroupStateRequest parse(ByteBuffer buffer, short version) {
         return new DeleteShareGroupStateRequest(
-            new DeleteShareGroupStateRequestData(readable, version),
-            version
+                new DeleteShareGroupStateRequestData(new ByteBufferAccessor(buffer), version),
+                version
         );
     }
 }

@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -53,7 +54,7 @@ class ControllerResult<T> {
         if (o == null || (!o.getClass().equals(getClass()))) {
             return false;
         }
-        ControllerResult<?> other = (ControllerResult<?>) o;
+        ControllerResult other = (ControllerResult) o;
         return records.equals(other.records) &&
             Objects.equals(response, other.response) &&
             Objects.equals(isAtomic, other.isAtomic);
@@ -75,7 +76,7 @@ class ControllerResult<T> {
     }
 
     public ControllerResult<T> withoutRecords() {
-        return new ControllerResult<>(List.of(), response, false);
+        return new ControllerResult<>(Collections.emptyList(), response, false);
     }
 
     public static <T> ControllerResult<T> atomicOf(List<ApiMessageAndVersion> records, T response) {

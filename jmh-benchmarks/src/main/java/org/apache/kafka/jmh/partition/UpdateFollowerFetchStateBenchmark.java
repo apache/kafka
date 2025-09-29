@@ -20,19 +20,17 @@ package org.apache.kafka.jmh.partition;
 import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.Partition;
+import kafka.cluster.Replica;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
+import kafka.server.MetadataCache;
 import kafka.server.builders.LogManagerBuilder;
+import kafka.server.metadata.MockConfigRepository;
 
-import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.metadata.LeaderRecoveryState;
-import org.apache.kafka.metadata.MetadataCache;
-import org.apache.kafka.metadata.MockConfigRepository;
-import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.server.replica.Replica;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
@@ -56,6 +54,8 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -89,8 +89,8 @@ public class UpdateFollowerFetchStateBenchmark {
         scheduler.startup();
         LogConfig logConfig = createLogConfig();
         logManager = new LogManagerBuilder().
-            setLogDirs(List.of(logDir)).
-            setInitialOfflineDirs(List.of()).
+            setLogDirs(Collections.singletonList(logDir)).
+            setInitialOfflineDirs(Collections.emptyList()).
             setConfigRepository(new MockConfigRepository()).
             setInitialDefaultConfig(logConfig).
             setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false)).
@@ -104,30 +104,32 @@ public class UpdateFollowerFetchStateBenchmark {
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(logDirFailureChannel).
             setTime(Time.SYSTEM).
+            setKeepPartitionMetadataFile(true).
             build();
         OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
         Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), topicPartition)).thenReturn(Optional.of(0L));
         DelayedOperations delayedOperations = new DelayedOperationsMock();
 
         // one leader, plus two followers
-        int[] replicas = {0, 1, 2};
-        PartitionRegistration partitionRegistration = new PartitionRegistration.Builder()
+        List<Integer> replicas = new ArrayList<>();
+        replicas.add(0);
+        replicas.add(1);
+        replicas.add(2);
+        LeaderAndIsrRequest.PartitionState partitionState = new LeaderAndIsrRequest.PartitionState()
+            .setControllerEpoch(0)
             .setLeader(0)
-            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
             .setLeaderEpoch(0)
             .setIsr(replicas)
             .setPartitionEpoch(1)
             .setReplicas(replicas)
-            .setDirectories(DirectoryId.unassignedArray(replicas.length))
-            .build();
+            .setIsNew(true);
         AlterPartitionListener alterPartitionListener = Mockito.mock(AlterPartitionListener.class);
         AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         partition = new Partition(topicPartition, 100,
                 0, () -> -1, Time.SYSTEM,
                 alterPartitionListener, delayedOperations,
                 Mockito.mock(MetadataCache.class), logManager, alterPartitionManager, topicId);
-
-        partition.makeLeader(partitionRegistration, true, offsetCheckpoints, topicId, Option.empty());
+        partition.makeLeader(partitionState, offsetCheckpoints, topicId, Option.empty());
         replica1 = partition.getReplica(1).get();
         replica2 = partition.getReplica(2).get();
     }

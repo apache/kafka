@@ -21,6 +21,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -55,7 +56,7 @@ public class ExtendedAssignment extends ConnectProtocol.Assignment {
 
     private static final ExtendedAssignment EMPTY = new ExtendedAssignment(
             CONNECT_PROTOCOL_V1, ConnectProtocol.Assignment.NO_ERROR, null, null, -1,
-            new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), 0);
+            Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), 0);
 
     /**
      * Create an assignment indicating responsibility for the given connector instances and task Ids.
@@ -166,7 +167,7 @@ public class ExtendedAssignment extends ConnectProtocol.Assignment {
         // Using LinkedHashMap preserves the ordering, which is helpful for tests and debugging
         Map<String, Collection<Integer>> taskMap = new LinkedHashMap<>();
         Optional.ofNullable(revokedConnectorIds)
-                .orElseGet(List::of)
+                .orElseGet(Collections::emptyList)
                 .stream()
                 .distinct()
                 .forEachOrdered(connectorId -> {
@@ -176,7 +177,7 @@ public class ExtendedAssignment extends ConnectProtocol.Assignment {
                 });
 
         Optional.ofNullable(revokedTaskIds)
-                .orElseGet(List::of)
+                .orElseGet(Collections::emptyList)
                 .forEach(taskId -> {
                     String connectorId = taskId.connector();
                     Collection<Integer> connectorTasks =
@@ -243,7 +244,7 @@ public class ExtendedAssignment extends ConnectProtocol.Assignment {
 
         Object[] connectors = struct.getArray(key);
         if (connectors == null) {
-            return List.of();
+            return Collections.emptyList();
         }
         List<String> connectorIds = new ArrayList<>();
         for (Object structObj : connectors) {
@@ -264,7 +265,7 @@ public class ExtendedAssignment extends ConnectProtocol.Assignment {
 
         Object[] tasks = struct.getArray(key);
         if (tasks == null) {
-            return List.of();
+            return Collections.emptyList();
         }
         List<ConnectorTaskId> tasksIds = new ArrayList<>();
         for (Object structObj : tasks) {

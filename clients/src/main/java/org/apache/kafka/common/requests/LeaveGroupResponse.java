@@ -20,10 +20,11 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
-import java.util.EnumMap;
+import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -132,7 +133,7 @@ public class LeaveGroupResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> combinedErrorCounts = new EnumMap<>(Errors.class);
+        Map<Errors, Integer> combinedErrorCounts = new HashMap<>();
         // Top level error.
         updateErrorCounts(combinedErrorCounts, Errors.forCode(data.errorCode()));
 
@@ -148,8 +149,8 @@ public class LeaveGroupResponse extends AbstractResponse {
         return data;
     }
 
-    public static LeaveGroupResponse parse(Readable readable, short version) {
-        return new LeaveGroupResponse(new LeaveGroupResponseData(readable, version));
+    public static LeaveGroupResponse parse(ByteBuffer buffer, short version) {
+        return new LeaveGroupResponse(new LeaveGroupResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

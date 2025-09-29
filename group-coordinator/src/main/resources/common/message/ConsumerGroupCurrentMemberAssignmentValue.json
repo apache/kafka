@@ -14,8 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 8,
-  "type": "coordinator-value",
+  "type": "data",
   "name": "ConsumerGroupCurrentMemberAssignmentValue",
   "validVersions": "0",
   "flexibleVersions": "0+",

@@ -19,8 +19,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
+
+import java.nio.ByteBuffer;
 
 public class RenewDelegationTokenRequest extends AbstractRequest {
 
@@ -31,9 +33,9 @@ public class RenewDelegationTokenRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public static RenewDelegationTokenRequest parse(Readable readable, short version) {
+    public static RenewDelegationTokenRequest parse(ByteBuffer buffer, short version) {
         return new RenewDelegationTokenRequest(new RenewDelegationTokenRequestData(
-            readable, version), version);
+            new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override

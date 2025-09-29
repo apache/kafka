@@ -43,7 +43,7 @@ public class StateStoreProviderStub extends StreamThreadStateStoreProvider {
         this.throwException = throwException;
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings("unchecked")
     @Override
     public <T> List<T> stores(final StoreQueryParameters storeQueryParameters) {
         final String storeName = storeQueryParameters.storeName();

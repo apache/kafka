@@ -25,11 +25,13 @@ import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import org.apache.kafka.tiered.storage.specs.RemoteDeleteSegmentSpec;
 
 import java.io.PrintStream;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageCondition.expectEvent;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_SEGMENT;
@@ -54,18 +56,18 @@ public final class DeleteRecordsAction implements TieredStorageTestAction {
             throws InterruptedException, ExecutionException, TimeoutException {
         List<LocalTieredStorage> tieredStorages = context.remoteStorageManagers();
         List<LocalTieredStorageCondition> tieredStorageConditions = deleteSegmentSpecs.stream()
-                .filter(spec -> spec.eventType() == DELETE_SEGMENT)
+                .filter(spec -> spec.getEventType() == DELETE_SEGMENT)
                 .map(spec -> expectEvent(
                         tieredStorages,
-                        spec.eventType(),
-                        spec.sourceBrokerId(),
-                        spec.topicPartition(),
+                        spec.getEventType(),
+                        spec.getSourceBrokerId(),
+                        spec.getTopicPartition(),
                         false,
-                        spec.eventCount()))
-                .toList();
+                        spec.getEventCount()))
+                .collect(Collectors.toList());
 
         Map<TopicPartition, RecordsToDelete> recordsToDeleteMap =
-                Map.of(partition, RecordsToDelete.beforeOffset(beforeOffset));
+                Collections.singletonMap(partition, RecordsToDelete.beforeOffset(beforeOffset));
         context.admin().deleteRecords(recordsToDeleteMap).all().get();
 
         if (!tieredStorageConditions.isEmpty()) {

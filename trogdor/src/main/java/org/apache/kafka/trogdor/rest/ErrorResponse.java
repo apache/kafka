@@ -22,10 +22,15 @@ import org.apache.kafka.trogdor.common.JsonUtil;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.Objects;
+
 /**
  * An error response.
  */
-public record ErrorResponse(int code, String message) {
+public class ErrorResponse {
+    private final int code;
+    private final String message;
+
     @JsonCreator
     public ErrorResponse(@JsonProperty("code") int code,
                          @JsonProperty("message") String message) {
@@ -33,16 +38,28 @@ public record ErrorResponse(int code, String message) {
         this.message = message;
     }
 
-    @Override
     @JsonProperty
     public int code() {
         return code;
     }
 
-    @Override
     @JsonProperty
     public String message() {
         return message;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ErrorResponse that = (ErrorResponse) o;
+        return Objects.equals(code, that.code) &&
+            Objects.equals(message, that.message);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(code, message);
     }
 
     @Override

@@ -19,11 +19,9 @@ package org.apache.kafka.server.common;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * This class contains the different Kafka versions.
@@ -107,39 +105,14 @@ public enum MetadataVersion {
     // Enables async remote LIST_OFFSETS support (KIP-1075)
     IBP_4_0_IV3(25, "4.0", "IV3", false),
 
-    // Enables ELR by default for new clusters (KIP-966).
-    // Share groups are preview in 4.1 (KIP-932).
-    // Streams groups are early access in 4.1 (KIP-1071).
-    IBP_4_1_IV0(26, "4.1", "IV0", false),
-
-    // Send FETCH version 18 in the replica fetcher (KIP-1166)
-    IBP_4_1_IV1(27, "4.1", "IV1", false),
-
     //
     // NOTE: MetadataVersions after this point are unstable and may be changed.
     // If users attempt to use an unstable MetadataVersion, they will get an error.
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
 
-    // Insert any additional IBP_4_1_IVx versions above this comment, and bump the feature level of
-    // IBP_4_2_IVx accordingly. When 4.2 development begins, IBP_4_2_IV0 will cease to be
-    // a placeholder.
-
-    // Enables share groups by default for new clusters (KIP-932).
-    //
-    // *** THIS IS A PLACEHOLDER UNSTABLE VERSION WHICH IS USED TO DEFINE THE POINT AT WHICH   ***
-    // *** SHARE GROUPS BECOME PRODUCTION-READY IN THE FUTURE. ITS DEFINITION ALLOWS A SHARE   ***
-    // *** GROUPS FEATURE TO BE DEFINED IN 4.1 BUT TURNED OFF BY DEFAULT, ABLE TO BE TURNED ON ***
-    // *** DYNAMICALLY TO TRY OUT THE PREVIEW CAPABILITY.                                      ***
-    IBP_4_2_IV0(28, "4.2", "IV0", false),
-
-    // Enables "streams" groups by default for new clusters (KIP-1071).
-    //
-    // *** THIS IS A PLACEHOLDER UNSTABLE VERSION WHICH IS USED TO DEFINE THE POINT AT WHICH     ***
-    // *** STREAMS GROUPS BECOME PRODUCTION-READY IN THE FUTURE. ITS DEFINITION ALLOWS A STREAMS ***
-    // *** GROUPS FEATURE TO BE DEFINED IN 4.1 BUT TURNED OFF BY DEFAULT, ABLE TO BE TURNED ON   ***
-    // *** DYNAMICALLY TO TRY OUT THE EARLY ACCESS CAPABILITY.                                   ***
-    IBP_4_2_IV1(29, "4.2", "IV1", false);
+    // Enables ELR by default for new clusters (KIP-966).
+    IBP_4_1_IV0(26, "4.1", "IV0", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -159,7 +132,7 @@ public enum MetadataVersion {
      * <strong>Think carefully before you update this value. ONCE A METADATA VERSION IS PRODUCTION,
      * IT CANNOT BE CHANGED.</strong>
      */
-    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_1_IV1;
+    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_0_IV3;
     // If you change the value above please also update
     // LATEST_STABLE_METADATA_VERSION version in tests/kafkatest/version.py
 
@@ -269,15 +242,13 @@ public enum MetadataVersion {
     }
 
     public short fetchRequestVersion() {
-        if (isAtLeast(IBP_4_1_IV1)) {
-            return 18;
-        } else if (isAtLeast(IBP_3_9_IV0)) {
+        if (this.isAtLeast(IBP_3_9_IV0)) {
             return 17;
-        } else if (isAtLeast(IBP_3_7_IV4)) {
+        } else if (this.isAtLeast(IBP_3_7_IV4)) {
             return 16;
-        } else if (isAtLeast(IBP_3_5_IV1)) {
+        } else if (this.isAtLeast(IBP_3_5_IV1)) {
             return 15;
-        } else if (isAtLeast(IBP_3_5_IV0)) {
+        } else if (this.isAtLeast(IBP_3_5_IV0)) {
             return 14;
         } else {
             return 13;
@@ -285,9 +256,7 @@ public enum MetadataVersion {
     }
 
     public short listOffsetRequestVersion() {
-        if (this.isAtLeast(IBP_4_2_IV1)) {
-            return 11;
-        } else if (this.isAtLeast(IBP_4_0_IV3)) {
+        if (this.isAtLeast(IBP_4_0_IV3)) {
             return 10;
         } else if (this.isAtLeast(IBP_3_9_IV0)) {
             return 9;
@@ -342,12 +311,11 @@ public enum MetadataVersion {
 
     /**
      * Return an `MetadataVersion` instance for `versionString`, which can be in a variety of formats (e.g. "3.8", "3.8.x",
-     * "3.8.0", "3.8-IV0"). The `unstableFeatureVersionsEnabled` parameter determines whether unstable versions are permitted.
-     * `IllegalArgumentException` is thrown if `versionString` cannot be mapped to an `MetadataVersion`.
+     * "3.8.0", "3.8-IV0"). `IllegalArgumentException` is thrown if `versionString` cannot be mapped to an `MetadataVersion`.
      * Note that 'misconfigured' values such as "3.8.1" will be parsed to `IBP_3_8_IV0` as we ignore anything after the first
      * two segments.
      */
-    public static MetadataVersion fromVersionString(String versionString, boolean unstableFeatureVersionsEnabled) {
+    public static MetadataVersion fromVersionString(String versionString) {
         String[] versionSegments = versionString.split(Pattern.quote("."));
         int numSegments = 2;
         String key;
@@ -356,22 +324,10 @@ public enum MetadataVersion {
         } else {
             key = String.join(".", Arrays.copyOfRange(versionSegments, 0, numSegments));
         }
-
-        MetadataVersion metadataVersion = IBP_VERSIONS.get(key);
-        if (metadataVersion == null || (!unstableFeatureVersionsEnabled && !metadataVersion.isProduction())) {
-            String errorMsg = "Unknown metadata.version '" + versionString + "'. Supported metadata.version are: "
-                + metadataVersionsToString(MetadataVersion.MINIMUM_VERSION,
-                unstableFeatureVersionsEnabled ? MetadataVersion.latestTesting() : MetadataVersion.latestProduction());
-            throw new IllegalArgumentException(errorMsg);
-        }
-        return metadataVersion;
-    }
-
-    public static String metadataVersionsToString(MetadataVersion first, MetadataVersion last) {
-        List<MetadataVersion> versions = List.of(MetadataVersion.VERSIONS).subList(first.ordinal(), last.ordinal() + 1);
-        return versions.stream()
-            .map(String::valueOf)
-            .collect(Collectors.joining(", "));
+        return Optional.ofNullable(IBP_VERSIONS.get(key)).orElseThrow(() ->
+            new IllegalArgumentException("Version " + versionString + " is not a valid version. The minimum version is " + MINIMUM_VERSION
+                + " and the maximum version is " + latestTesting())
+        );
     }
 
     public static MetadataVersion fromFeatureLevel(short version) {

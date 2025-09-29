@@ -18,8 +18,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.nio.ByteBuffer;
@@ -34,9 +34,9 @@ public class CreateDelegationTokenResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public static CreateDelegationTokenResponse parse(Readable readable, short version) {
+    public static CreateDelegationTokenResponse parse(ByteBuffer buffer, short version) {
         return new CreateDelegationTokenResponse(
-            new CreateDelegationTokenResponseData(readable, version));
+            new CreateDelegationTokenResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     public static CreateDelegationTokenResponse prepareResponse(int version,

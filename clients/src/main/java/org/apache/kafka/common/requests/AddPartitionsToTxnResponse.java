@@ -24,9 +24,10 @@ import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartiti
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnTopicResult;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnTopicResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Readable;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -149,8 +150,8 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
         return data;
     }
 
-    public static AddPartitionsToTxnResponse parse(Readable readable, short version) {
-        return new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData(readable, version));
+    public static AddPartitionsToTxnResponse parse(ByteBuffer buffer, short version) {
+        return new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

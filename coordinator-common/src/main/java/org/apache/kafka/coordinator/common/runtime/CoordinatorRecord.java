@@ -16,37 +16,22 @@
  */
 package org.apache.kafka.coordinator.common.runtime;
 
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.Objects;
 
 /**
- * A Record which contains an {{@link ApiMessage}} as key and
+ * A Record which contains an {{@link ApiMessageAndVersion}} as key and
  * an {{@link ApiMessageAndVersion}} as value. The value could be null to
  * represent a tombstone.
  *
  * This class is immutable.
  */
 public class CoordinatorRecord {
-
-    public static CoordinatorRecord record(
-        ApiMessage key,
-        ApiMessageAndVersion value
-    ) {
-        return new CoordinatorRecord(key, value);
-    }
-
-    public static CoordinatorRecord tombstone(
-        ApiMessage key
-    ) {
-        return new CoordinatorRecord(key, null);
-    }
-
     /**
      * The key of the record.
      */
-    private final ApiMessage key;
+    private final ApiMessageAndVersion key;
 
     /**
      * The value of the record or null if the record is
@@ -60,30 +45,18 @@ public class CoordinatorRecord {
      * @param key   A non-null key.
      * @param value A key or null.
      */
-    private CoordinatorRecord(
-        ApiMessage key,
+    public CoordinatorRecord(
+        ApiMessageAndVersion key,
         ApiMessageAndVersion value
     ) {
         this.key = Objects.requireNonNull(key);
-        if (key.apiKey() < 0) {
-            throw new IllegalArgumentException("The key must have a type.");
-        }
-
         this.value = value;
-        if (value != null) {
-            if (value.message().apiKey() < 0) {
-                throw new IllegalArgumentException("The value must have a type.");
-            }
-            if (value.message().apiKey() != key.apiKey()) {
-                throw new IllegalArgumentException("The key and the value must have the same type.");
-            }
-        }
     }
 
     /**
      * @return The key.
      */
-    public ApiMessage key() {
+    public ApiMessageAndVersion key() {
         return this.key;
     }
 
@@ -98,13 +71,18 @@ public class CoordinatorRecord {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        CoordinatorRecord that = (CoordinatorRecord) o;
-        return Objects.equals(key, that.key) && Objects.equals(value, that.value);
+
+        CoordinatorRecord record = (CoordinatorRecord) o;
+
+        if (!Objects.equals(key, record.key)) return false;
+        return Objects.equals(value, record.value);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(key, value);
+        int result = key.hashCode();
+        result = 31 * result + (value != null ? value.hashCode() : 0);
+        return result;
     }
 
     @Override

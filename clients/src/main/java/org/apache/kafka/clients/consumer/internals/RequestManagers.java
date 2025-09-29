@@ -54,13 +54,11 @@ public class RequestManagers implements Closeable {
     public final Optional<ShareHeartbeatRequestManager> shareHeartbeatRequestManager;
     public final Optional<ConsumerMembershipManager> consumerMembershipManager;
     public final Optional<ShareMembershipManager> shareMembershipManager;
-    public final Optional<StreamsMembershipManager> streamsMembershipManager;
     public final OffsetsRequestManager offsetsRequestManager;
     public final TopicMetadataRequestManager topicMetadataRequestManager;
     public final FetchRequestManager fetchRequestManager;
     public final Optional<ShareConsumeRequestManager> shareConsumeRequestManager;
-    public final Optional<StreamsGroupHeartbeatRequestManager> streamsGroupHeartbeatRequestManager;
-    private final List<RequestManager> entries;
+    private final List<Optional<? extends RequestManager>> entries;
     private final IdempotentCloser closer = new IdempotentCloser();
 
     public RequestManagers(LogContext logContext,
@@ -70,9 +68,7 @@ public class RequestManagers implements Closeable {
                            Optional<CoordinatorRequestManager> coordinatorRequestManager,
                            Optional<CommitRequestManager> commitRequestManager,
                            Optional<ConsumerHeartbeatRequestManager> heartbeatRequestManager,
-                           Optional<ConsumerMembershipManager> membershipManager,
-                           Optional<StreamsGroupHeartbeatRequestManager> streamsGroupHeartbeatRequestManager,
-                           Optional<StreamsMembershipManager> streamsMembershipManager) {
+                           Optional<ConsumerMembershipManager> membershipManager) {
         this.log = logContext.logger(RequestManagers.class);
         this.offsetsRequestManager = requireNonNull(offsetsRequestManager, "OffsetsRequestManager cannot be null");
         this.coordinatorRequestManager = coordinatorRequestManager;
@@ -82,21 +78,17 @@ public class RequestManagers implements Closeable {
         this.shareConsumeRequestManager = Optional.empty();
         this.consumerHeartbeatRequestManager = heartbeatRequestManager;
         this.shareHeartbeatRequestManager = Optional.empty();
-        this.streamsGroupHeartbeatRequestManager = streamsGroupHeartbeatRequestManager;
         this.consumerMembershipManager = membershipManager;
-        this.streamsMembershipManager = streamsMembershipManager;
         this.shareMembershipManager = Optional.empty();
 
-        List<RequestManager> list = new ArrayList<>();
-        coordinatorRequestManager.ifPresent(list::add);
-        commitRequestManager.ifPresent(list::add);
-        heartbeatRequestManager.ifPresent(list::add);
-        membershipManager.ifPresent(list::add);
-        streamsGroupHeartbeatRequestManager.ifPresent(list::add);
-        streamsMembershipManager.ifPresent(list::add);
-        list.add(offsetsRequestManager);
-        list.add(topicMetadataRequestManager);
-        list.add(fetchRequestManager);
+        List<Optional<? extends RequestManager>> list = new ArrayList<>();
+        list.add(coordinatorRequestManager);
+        list.add(commitRequestManager);
+        list.add(heartbeatRequestManager);
+        list.add(membershipManager);
+        list.add(Optional.of(offsetsRequestManager));
+        list.add(Optional.of(topicMetadataRequestManager));
+        list.add(Optional.of(fetchRequestManager));
         entries = Collections.unmodifiableList(list);
     }
 
@@ -110,24 +102,22 @@ public class RequestManagers implements Closeable {
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.commitRequestManager = Optional.empty();
         this.consumerHeartbeatRequestManager = Optional.empty();
-        this.streamsGroupHeartbeatRequestManager = Optional.empty();
         this.shareHeartbeatRequestManager = shareHeartbeatRequestManager;
         this.consumerMembershipManager = Optional.empty();
-        this.streamsMembershipManager = Optional.empty();
         this.shareMembershipManager = shareMembershipManager;
         this.offsetsRequestManager = null;
         this.topicMetadataRequestManager = null;
         this.fetchRequestManager = null;
 
-        List<RequestManager> list = new ArrayList<>();
-        coordinatorRequestManager.ifPresent(list::add);
-        shareHeartbeatRequestManager.ifPresent(list::add);
-        shareMembershipManager.ifPresent(list::add);
-        list.add(shareConsumeRequestManager);
+        List<Optional<? extends RequestManager>> list = new ArrayList<>();
+        list.add(coordinatorRequestManager);
+        list.add(shareHeartbeatRequestManager);
+        list.add(shareMembershipManager);
+        list.add(Optional.of(shareConsumeRequestManager));
         entries = Collections.unmodifiableList(list);
     }
 
-    public List<RequestManager> entries() {
+    public List<Optional<? extends RequestManager>> entries() {
         return entries;
     }
 
@@ -138,6 +128,8 @@ public class RequestManagers implements Closeable {
                     log.debug("Closing RequestManagers");
 
                     entries.stream()
+                            .filter(Optional::isPresent)
+                            .map(Optional::get)
                             .filter(rm -> rm instanceof Closeable)
                             .map(rm -> (Closeable) rm)
                             .forEach(c -> closeQuietly(c, c.getClass().getSimpleName()));
@@ -166,9 +158,8 @@ public class RequestManagers implements Closeable {
                                                      final Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                                      final Metrics metrics,
                                                      final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
-                                                     final MemberStateListener applicationThreadMemberStateListener,
-                                                     final Optional<StreamsRebalanceData> streamsRebalanceData
-    ) {
+                                                     final MemberStateListener applicationThreadMemberStateListener
+                                                     ) {
         return new CachedSupplier<>() {
             @Override
             protected RequestManagers create() {
@@ -196,59 +187,28 @@ public class RequestManagers implements Closeable {
                 ConsumerMembershipManager membershipManager = null;
                 CoordinatorRequestManager coordinator = null;
                 CommitRequestManager commitRequestManager = null;
-                StreamsGroupHeartbeatRequestManager streamsGroupHeartbeatRequestManager = null;
-                StreamsMembershipManager streamsMembershipManager = null;
 
                 if (groupRebalanceConfig != null && groupRebalanceConfig.groupId != null) {
                     Optional<String> serverAssignor = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
                     coordinator = new CoordinatorRequestManager(
-                        logContext,
-                        retryBackoffMs,
-                        retryBackoffMaxMs,
-                        groupRebalanceConfig.groupId);
+                            logContext,
+                            retryBackoffMs,
+                            retryBackoffMaxMs,
+                            groupRebalanceConfig.groupId);
                     commitRequestManager = new CommitRequestManager(
-                        time,
-                        logContext,
-                        subscriptions,
-                        config,
-                        coordinator,
-                        offsetCommitCallbackInvoker,
-                        groupRebalanceConfig.groupId,
-                        groupRebalanceConfig.groupInstanceId,
-                        metrics,
-                        metadata);
-                    if (streamsRebalanceData.isPresent()) {
-                        streamsMembershipManager = new StreamsMembershipManager(
-                            groupRebalanceConfig.groupId,
-                            streamsRebalanceData.get(),
+                            time,
+                            logContext,
                             subscriptions,
-                            backgroundEventHandler,
-                            logContext,
-                            time,
-                            metrics);
-                        streamsMembershipManager.registerStateListener(commitRequestManager);
-                        streamsMembershipManager.registerStateListener(applicationThreadMemberStateListener);
-
-                        if (clientTelemetryReporter.isPresent()) {
-                            clientTelemetryReporter.get()
-                                .updateMetricsLabels(Map.of(ClientTelemetryProvider.GROUP_MEMBER_ID, streamsMembershipManager.memberId()));
-                        }
-
-                        streamsGroupHeartbeatRequestManager = new StreamsGroupHeartbeatRequestManager(
-                            logContext,
-                            time,
                             config,
                             coordinator,
-                            streamsMembershipManager,
-                            backgroundEventHandler,
-                            metrics,
-                            streamsRebalanceData.get()
-                        );
-                    } else {
-                        membershipManager = new ConsumerMembershipManager(
+                            offsetCommitCallbackInvoker,
                             groupRebalanceConfig.groupId,
                             groupRebalanceConfig.groupInstanceId,
-                            groupRebalanceConfig.rackId,
+                            metrics,
+                            metadata);
+                    membershipManager = new ConsumerMembershipManager(
+                            groupRebalanceConfig.groupId,
+                            groupRebalanceConfig.groupInstanceId,
                             groupRebalanceConfig.rebalanceTimeoutMs,
                             serverAssignor,
                             subscriptions,
@@ -260,17 +220,17 @@ public class RequestManagers implements Closeable {
                             metrics,
                             config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
 
-                        // Update the group member ID label in the client telemetry reporter.
-                        // According to KIP-1082, the consumer will generate the member ID as the incarnation ID of the process.
-                        // Therefore, we can update the group member ID during initialization.
-                        if (clientTelemetryReporter.isPresent()) {
-                            clientTelemetryReporter.get()
-                                .updateMetricsLabels(Map.of(ClientTelemetryProvider.GROUP_MEMBER_ID, membershipManager.memberId()));
-                        }
+                    // Update the group member ID label in the client telemetry reporter.
+                    // According to KIP-1082, the consumer will generate the member ID as the incarnation ID of the process.
+                    // Therefore, we can update the group member ID during initialization.
+                    if (clientTelemetryReporter.isPresent()) {
+                        clientTelemetryReporter.get()
+                            .updateMetricsLabels(Map.of(ClientTelemetryProvider.GROUP_MEMBER_ID, membershipManager.memberId()));
+                    }
 
-                        membershipManager.registerStateListener(commitRequestManager);
-                        membershipManager.registerStateListener(applicationThreadMemberStateListener);
-                        heartbeatRequestManager = new ConsumerHeartbeatRequestManager(
+                    membershipManager.registerStateListener(commitRequestManager);
+                    membershipManager.registerStateListener(applicationThreadMemberStateListener);
+                    heartbeatRequestManager = new ConsumerHeartbeatRequestManager(
                             logContext,
                             time,
                             config,
@@ -279,7 +239,6 @@ public class RequestManagers implements Closeable {
                             membershipManager,
                             backgroundEventHandler,
                             metrics);
-                    }
                 }
 
                 final OffsetsRequestManager listOffsets = new OffsetsRequestManager(subscriptions,
@@ -302,9 +261,7 @@ public class RequestManagers implements Closeable {
                         Optional.ofNullable(coordinator),
                         Optional.ofNullable(commitRequestManager),
                         Optional.ofNullable(heartbeatRequestManager),
-                        Optional.ofNullable(membershipManager),
-                        Optional.ofNullable(streamsGroupHeartbeatRequestManager),
-                        Optional.ofNullable(streamsMembershipManager)
+                        Optional.ofNullable(membershipManager)
                 );
             }
         };
@@ -342,10 +299,10 @@ public class RequestManagers implements Closeable {
                 ShareMembershipManager shareMembershipManager = new ShareMembershipManager(
                         logContext,
                         groupRebalanceConfig.groupId,
-                        groupRebalanceConfig.rackId.orElse(null),
+                        null,
                         subscriptions,
                         metadata,
-                        time,
+                    time,
                         metrics);
 
                 // Update the group member ID label in the client telemetry reporter.

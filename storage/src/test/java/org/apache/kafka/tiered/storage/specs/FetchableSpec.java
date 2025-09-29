@@ -16,7 +16,26 @@
  */
 package org.apache.kafka.tiered.storage.specs;
 
-public record FetchableSpec(int sourceBrokerId, RemoteFetchCount fetchCount) {
+import java.util.Objects;
+
+public final class FetchableSpec {
+
+    private final Integer sourceBrokerId;
+    private final RemoteFetchCount fetchCount;
+
+    public FetchableSpec(Integer sourceBrokerId,
+                         RemoteFetchCount fetchCount) {
+        this.sourceBrokerId = sourceBrokerId;
+        this.fetchCount = fetchCount;
+    }
+
+    public Integer getSourceBrokerId() {
+        return sourceBrokerId;
+    }
+
+    public RemoteFetchCount getFetchCount() {
+        return fetchCount;
+    }
 
     @Override
     public String toString() {
@@ -26,4 +45,16 @@ public record FetchableSpec(int sourceBrokerId, RemoteFetchCount fetchCount) {
                 '}';
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        FetchableSpec that = (FetchableSpec) o;
+        return Objects.equals(sourceBrokerId, that.sourceBrokerId) && Objects.equals(fetchCount, that.fetchCount);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(sourceBrokerId, fetchCount);
+    }
 }

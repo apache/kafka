@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -39,14 +38,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Locale;
 import java.util.Properties;
 import java.util.function.Predicate;
 
@@ -90,25 +87,19 @@ public class StandbyTaskCreationIntegrationTest {
         client2.close(Duration.ofSeconds(60));
     }
 
-    private Properties streamsConfiguration(final boolean streamsProtocolEnabled) {
+    private Properties streamsConfiguration() {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
-        if (streamsProtocolEnabled) {
-            streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
-            CLUSTER.setGroupStandbyReplicas("app-" + safeTestName, 1);
-        } else {
-            streamsConfiguration.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
-        }
+        streamsConfiguration.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         return streamsConfiguration;
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldNotCreateAnyStandByTasksForStateStoreWithLoggingDisabled(final boolean streamsProtocolEnabled) throws Exception {
+    @Test
+    public void shouldNotCreateAnyStandByTasksForStateStoreWithLoggingDisabled() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         final String stateStoreName = "myTransformState";
         final StoreBuilder<KeyValueStore<Integer, Integer>> keyValueStoreBuilder =
@@ -125,9 +116,8 @@ public class StandbyTaskCreationIntegrationTest {
                 }
             }, stateStoreName);
 
-
         final Topology topology = builder.build();
-        createClients(topology, streamsConfiguration(streamsProtocolEnabled), topology, streamsConfiguration(streamsProtocolEnabled));
+        createClients(topology, streamsConfiguration(), topology, streamsConfiguration());
 
         setStateListenersForVerification(thread -> thread.standbyTasks().isEmpty() && !thread.activeTasks().isEmpty());
 
@@ -138,12 +128,11 @@ public class StandbyTaskCreationIntegrationTest {
         );
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldCreateStandByTasksForMaterializedAndOptimizedSourceTables(final boolean streamsProtocolEnabled) throws Exception {
-        final Properties streamsConfiguration1 = streamsConfiguration(streamsProtocolEnabled);
+    @Test
+    public void shouldCreateStandByTasksForMaterializedAndOptimizedSourceTables() throws Exception {
+        final Properties streamsConfiguration1 = streamsConfiguration();
         streamsConfiguration1.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
-        final Properties streamsConfiguration2 = streamsConfiguration(streamsProtocolEnabled);
+        final Properties streamsConfiguration2 = streamsConfiguration();
         streamsConfiguration2.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         final StreamsBuilder builder = new StreamsBuilder();

@@ -43,14 +43,7 @@ public class LogContext {
     }
 
     public Logger logger(Class<?> clazz) {
-        return logger(LoggerFactory.getLogger(clazz));
-    }
-
-    public Logger logger(String clazz) {
-        return logger(LoggerFactory.getLogger(clazz));
-    }
-
-    private Logger logger(Logger logger) {
+        Logger logger = LoggerFactory.getLogger(clazz);
         if (logger instanceof LocationAwareLogger) {
             return new LocationAwareKafkaLogger(logPrefix, (LocationAwareLogger) logger);
         } else {

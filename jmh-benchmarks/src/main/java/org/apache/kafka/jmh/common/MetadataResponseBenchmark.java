@@ -38,10 +38,12 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 @State(Scope.Benchmark)
@@ -64,14 +66,14 @@ public class MetadataResponseBenchmark {
                 new TopicPartition("benchmark", 42),
                 Optional.of(4),
                 Optional.of(42),
-                IntStream.range(0, nodes).boxed().toList(),
-                IntStream.range(0, nodes).filter(i1 -> i1 % 3 != 0).boxed().toList(),
-                IntStream.range(0, nodes).filter(i2 -> i2 % 3 == 0).boxed().toList());
+                IntStream.range(0, nodes).boxed().collect(Collectors.toList()),
+                IntStream.range(0, nodes).filter(i1 -> i1 % 3 != 0).boxed().collect(Collectors.toList()),
+                IntStream.range(0, nodes).filter(i2 -> i2 % 3 == 0).boxed().collect(Collectors.toList()));
         nodesById = new HashMap<>(nodes);
         for (int i = 0; i < nodes; i++) {
             nodesById.put(i, new Node(i, "localhost", 1234));
         }
-        nodesById = Map.copyOf(nodesById);
+        nodesById = Collections.unmodifiableMap(nodesById);
     }
 
     @Benchmark

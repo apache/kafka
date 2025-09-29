@@ -64,9 +64,9 @@ trait SaslSetup {
     val (serverKeytabFile, clientKeytabFile) = maybeCreateEmptyKeytabFiles()
     kdc = new MiniKdc(kdcConf, workDir)
     kdc.start()
-    kdc.createPrincipal(serverKeytabFile, java.util.List.of(JaasTestUtils.KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME + "/localhost"))
+    kdc.createPrincipal(serverKeytabFile, List(JaasTestUtils.KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME + "/localhost").asJava)
     kdc.createPrincipal(clientKeytabFile,
-      java.util.List.of(JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME, JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2))
+      List(JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME, JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2).asJava)
   }
 
   /** Return a tuple with the path to the server keytab file and client keytab file */
@@ -166,7 +166,7 @@ trait SaslSetup {
   def createScramCredentials(adminClient: Admin, userName: String, password: String): Unit = {
     PublicScramMechanism.values().filter(_ != PublicScramMechanism.UNKNOWN).map(mechanism => {
 
-      val results = adminClient.alterUserScramCredentials(util.List.of(
+      val results = adminClient.alterUserScramCredentials(util.Arrays.asList(
         new UserScramCredentialUpsertion(userName, new ScramCredentialInfo(mechanism, 4096), password)))
       results.all.get
     })

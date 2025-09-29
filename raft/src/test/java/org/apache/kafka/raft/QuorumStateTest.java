@@ -26,7 +26,6 @@ import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
-import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -34,8 +33,8 @@ import org.mockito.Mockito;
 
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -103,7 +102,7 @@ public class QuorumStateTest {
 
     private Set<Integer> persistedVoters(Set<Integer> voters, KRaftVersion kraftVersion) {
         if (kraftVersion.isReconfigSupported()) {
-            return Set.of();
+            return Collections.emptySet();
         }
 
         return voters;
@@ -119,7 +118,7 @@ public class QuorumStateTest {
 
     private VoterSet localStandaloneVoterSet() {
         return VoterSetTest.voterSet(
-            Map.of(localId, VoterSetTest.voterNode(localVoterKey))
+            Collections.singletonMap(localId, VoterSetTest.voterNode(localVoterKey))
         );
     }
 
@@ -145,11 +144,11 @@ public class QuorumStateTest {
     }
 
     private VoterSet withRemoteVoterSet(IntStream remoteIds, KRaftVersion kraftVersion) {
-        boolean withDirectoryId = kraftVersion.featureLevel() > 0;
+        boolean withDirectoryid = kraftVersion.featureLevel() > 0;
 
         Stream<ReplicaKey> remoteKeys = remoteIds
             .boxed()
-            .map(id -> replicaKey(id, withDirectoryId));
+            .map(id -> replicaKey(id, withDirectoryid));
 
         return VoterSetTest.voterSet(remoteKeys);
     }
@@ -252,7 +251,7 @@ public class QuorumStateTest {
             4,
             nonVoterKey.id(),
             Endpoints.fromInetSocketAddresses(
-                Map.of(
+                Collections.singletonMap(
                     VoterSetTest.DEFAULT_LISTENER_NAME,
                     InetSocketAddress.createUnresolved("non-voter-host", 1234)
                 )
@@ -536,7 +535,7 @@ public class QuorumStateTest {
         );
         assertEquals(Set.of(node1, node2), candidateState.epochElection().unrecordedVoters());
         assertEquals(Set.of(localId), candidateState.epochElection().grantingVoters());
-        assertEquals(Set.of(), candidateState.epochElection().rejectingVoters());
+        assertEquals(Collections.emptySet(), candidateState.epochElection().rejectingVoters());
         assertEquals(
             electionTimeoutMs + jitterMs,
             candidateState.remainingElectionTimeMs(time.milliseconds())
@@ -826,7 +825,7 @@ public class QuorumStateTest {
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToUnattached(5, OptionalInt.empty());
-        assertThrows(IllegalStateException.class, state::transitionToCandidate);
+        assertThrows(IllegalStateException.class, () -> state.transitionToCandidate());
     }
 
     @ParameterizedTest
@@ -843,7 +842,7 @@ public class QuorumStateTest {
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         assertTrue(state.isUnattachedAndVoted());
         assertThrows(IllegalStateException.class, () -> state.transitionToLeader(0L, accumulator));
-        assertThrows(IllegalStateException.class, () -> state.transitionToResigned(List.of()));
+        assertThrows(IllegalStateException.class, () -> state.transitionToResigned(Collections.emptyList()));
     }
 
     @ParameterizedTest
@@ -1040,7 +1039,7 @@ public class QuorumStateTest {
         state.unattachedAddVotedState(logEndEpoch, ReplicaKey.of(node1, ReplicaKey.NO_DIRECTORY_ID));
         assertThrows(IllegalStateException.class, () -> state.transitionToCandidate());
         assertThrows(IllegalStateException.class, () -> state.transitionToLeader(0, accumulator));
-        assertThrows(IllegalStateException.class, () -> state.transitionToResigned(List.of()));
+        assertThrows(IllegalStateException.class, () -> state.transitionToResigned(Collections.emptyList()));
     }
 
     @ParameterizedTest
@@ -1398,7 +1397,7 @@ public class QuorumStateTest {
             voters.listeners(node2)
         );
         assertThrows(IllegalStateException.class, () -> state.transitionToLeader(0, accumulator));
-        assertThrows(IllegalStateException.class, () -> state.transitionToResigned(List.of()));
+        assertThrows(IllegalStateException.class, () -> state.transitionToResigned(Collections.emptyList()));
     }
 
     @ParameterizedTest
@@ -1748,7 +1747,7 @@ public class QuorumStateTest {
 
         // in same epoch
         assertThrows(IllegalStateException.class, () -> state.transitionToLeader(logEndEpoch, accumulator));
-        assertThrows(IllegalStateException.class, () -> state.transitionToResigned(List.of()));
+        assertThrows(IllegalStateException.class, () -> state.transitionToResigned(Collections.emptyList()));
 
         // in higher epoch
         assertThrows(IllegalStateException.class, () -> state.transitionToLeader(10, accumulator));
@@ -2220,7 +2219,7 @@ public class QuorumStateTest {
         state.transitionToProspective();
         state.transitionToCandidate();
         assertTrue(state.isCandidate());
-        assertThrows(IllegalStateException.class, state::transitionToCandidate);
+        assertThrows(IllegalStateException.class, () -> state.transitionToCandidate());
     }
 
     @ParameterizedTest
@@ -2275,7 +2274,7 @@ public class QuorumStateTest {
 
         assertThrows(
             IllegalStateException.class, () ->
-            state.transitionToResigned(List.of())
+            state.transitionToResigned(Collections.emptyList())
         );
         assertTrue(state.isCandidate());
     }
@@ -2459,7 +2458,7 @@ public class QuorumStateTest {
         assertTrue(state.isLeader());
         assertEquals(1, state.epoch());
 
-        state.transitionToResigned(List.of(localVoterKey));
+        state.transitionToResigned(Collections.singletonList(localVoterKey));
         assertTrue(state.isResigned());
         ResignedState resignedState = state.resignedStateOrThrow();
         assertEquals(
@@ -2467,7 +2466,7 @@ public class QuorumStateTest {
             resignedState.election()
         );
         assertEquals(1, resignedState.epoch());
-        assertEquals(Set.of(), resignedState.unackedVoters());
+        assertEquals(Collections.emptySet(), resignedState.unackedVoters());
     }
 
     @ParameterizedTest
@@ -2625,7 +2624,7 @@ public class QuorumStateTest {
         assertTrue(state.isObserver());
         assertThrows(IllegalStateException.class, state::transitionToCandidate);
         assertThrows(IllegalStateException.class, () -> state.transitionToLeader(0L, accumulator));
-        assertThrows(IllegalStateException.class, () -> state.transitionToResigned(List.of()));
+        assertThrows(IllegalStateException.class, () -> state.transitionToResigned(Collections.emptyList()));
     }
 
     /**
@@ -2674,6 +2673,6 @@ public class QuorumStateTest {
         assertThrows(IllegalStateException.class, state::transitionToProspective);
         assertThrows(IllegalStateException.class, state::transitionToCandidate);
         assertThrows(IllegalStateException.class, () -> state.transitionToLeader(logEndEpoch + 1, accumulator));
-        assertThrows(IllegalStateException.class, () -> state.transitionToResigned(List.of()));
+        assertThrows(IllegalStateException.class, () -> state.transitionToResigned(Collections.emptyList()));
     }
 }

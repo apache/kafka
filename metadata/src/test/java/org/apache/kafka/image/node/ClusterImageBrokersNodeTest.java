@@ -26,8 +26,8 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.List;
-import java.util.Map;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,23 +38,23 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 @Timeout(value = 40)
 public class ClusterImageBrokersNodeTest {
     private static final ClusterImage TEST_IMAGE = new ClusterImage(
-            Map.of(1, new BrokerRegistration.Builder().
+            Collections.singletonMap(1, new BrokerRegistration.Builder().
                     setId(1).
                     setEpoch(1001).
                     setIncarnationId(Uuid.fromString("MJkaH0j0RwuC3W2GHQHtWA")).
-                    setListeners(List.of()).
-                    setSupportedFeatures(Map.of(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 4))).
+                    setListeners(Collections.emptyList()).
+                    setSupportedFeatures(Collections.singletonMap(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 4))).
                     setRack(Optional.empty()).
                     setFenced(false).
-                    setDirectories(List.of(Uuid.fromString("anCdBWcFTlu8gE1wP6bh3g"), Uuid.fromString("JsnDDNVyTL289kYk6sPzig"))).
+                    setDirectories(Arrays.asList(Uuid.fromString("anCdBWcFTlu8gE1wP6bh3g"), Uuid.fromString("JsnDDNVyTL289kYk6sPzig"))).
                     setInControlledShutdown(false).build()),
-            Map.of());
+            Collections.emptyMap());
 
     private static final ClusterImageBrokersNode NODE = new ClusterImageBrokersNode(TEST_IMAGE);
 
     @Test
     public void testChildNames() {
-        assertEquals(List.of("1"), NODE.childNames());
+        assertEquals(Collections.singletonList("1"), NODE.childNames());
     }
 
     @Test

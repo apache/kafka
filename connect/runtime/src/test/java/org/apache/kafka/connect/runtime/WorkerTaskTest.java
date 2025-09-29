@@ -24,7 +24,6 @@ import org.apache.kafka.connect.runtime.WorkerTask.TaskMetricsGroup;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
-import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.storage.StatusBackingStore;
@@ -300,7 +299,7 @@ public class WorkerTaskTest {
                               Supplier<List<ErrorReporter<Object>>> errorReporterSupplier,
                               Time time, StatusBackingStore statusBackingStore) {
             super(id, statusListener, initialState, loader, connectMetrics, errorHandlingMetrics,
-                    retryWithToleranceOperator, transformationChain, errorReporterSupplier, time, statusBackingStore, null, TestPlugins.noOpLoaderSwap());
+                    retryWithToleranceOperator, transformationChain, errorReporterSupplier, time, statusBackingStore);
         }
 
         @Override
@@ -317,11 +316,6 @@ public class WorkerTaskTest {
 
         @Override
         protected void close() {
-        }
-
-        @Override
-        protected String taskVersion() {
-            return null;
         }
     }
 

@@ -19,9 +19,6 @@ plugins {
 }
 
 def isGithubActions = System.getenv('GITHUB_ACTIONS') != null
-
-def runNew = ext.find("kafka.test.run.new") == "true"
-def runFlaky = ext.find("kafka.test.run.flaky") == "true"
 def currentJvm = JavaVersion.current()
 
 develocity {
@@ -41,13 +38,6 @@ develocity {
             tag "local"
         }
         tag "JDK$currentJvm"
-        if (runFlaky) {
-            tag "flaky"
-        }
-        if (runNew) {
-            tag "new"
-        }
-
     }
 }
 
@@ -64,7 +54,6 @@ buildCache {
 }
 
 include 'clients',
-    'clients:clients-integration-tests',
     'connect:api',
     'connect:basic-auth-extension',
     'connect:file',
@@ -116,8 +105,6 @@ include 'clients',
     'streams:upgrade-system-tests-37',
     'streams:upgrade-system-tests-38',
     'streams:upgrade-system-tests-39',
-    'streams:upgrade-system-tests-40',
-    'streams:upgrade-system-tests-41',
     'tools',
     'tools:tools-api',
     'transaction-coordinator',

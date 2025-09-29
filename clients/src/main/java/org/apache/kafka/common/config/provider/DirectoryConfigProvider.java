@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -116,7 +117,7 @@ public class DirectoryConfigProvider implements ConfigProvider {
 
     private static String read(Path path) {
         try {
-            return Files.readString(path);
+            return new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
         } catch (IOException e) {
             log.error("Could not read file {} for property {}", path, path.getFileName(), e);
             throw new ConfigException("Could not read file " + path + " for property " + path.getFileName());

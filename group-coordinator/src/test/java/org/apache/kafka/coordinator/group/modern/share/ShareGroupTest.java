@@ -25,21 +25,21 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
-import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
-import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
+import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupState;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 
 import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.Collections;
+import java.util.HashSet;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -136,16 +136,222 @@ public class ShareGroupTest {
 
     @Test
     public void testGroupTypeFromString() {
-        assertEquals(Group.GroupType.SHARE, Group.GroupType.parse("share"));
+        assertEquals(Group.GroupType.parse("share"), Group.GroupType.SHARE);
         // Test case insensitivity.
-        assertEquals(Group.GroupType.SHARE, Group.GroupType.parse("Share"));
-        assertEquals(Group.GroupType.SHARE, Group.GroupType.parse("SHare"));
+        assertEquals(Group.GroupType.parse("Share"), Group.GroupType.SHARE);
+        assertEquals(Group.GroupType.parse("SHare"), Group.GroupType.SHARE);
+    }
+
+    @Test
+    public void testUpdateSubscriptionMetadata() {
+        Uuid fooTopicId = Uuid.randomUuid();
+        Uuid barTopicId = Uuid.randomUuid();
+        Uuid zarTopicId = Uuid.randomUuid();
+
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(fooTopicId, "foo", 1)
+            .addTopic(barTopicId, "bar", 2)
+            .addTopic(zarTopicId, "zar", 3)
+            .addRacks()
+            .build();
+
+        ShareGroupMember member1 = new ShareGroupMember.Builder("member1")
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .build();
+        ShareGroupMember member2 = new ShareGroupMember.Builder("member2")
+            .setSubscribedTopicNames(Collections.singletonList("bar"))
+            .build();
+        ShareGroupMember member3 = new ShareGroupMember.Builder("member3")
+            .setSubscribedTopicNames(Collections.singletonList("zar"))
+            .build();
+
+        ShareGroup shareGroup = createShareGroup("group-foo");
+
+        // It should be empty by default.
+        assertEquals(
+            Collections.emptyMap(),
+            shareGroup.computeSubscriptionMetadata(
+                shareGroup.computeSubscribedTopicNames(null, null),
+                image.topics(),
+                image.cluster()
+            )
+        );
+
+        // Compute while taking into account member 1.
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
+            ),
+            shareGroup.computeSubscriptionMetadata(
+                shareGroup.computeSubscribedTopicNames(null, member1),
+                image.topics(),
+                image.cluster()
+            )
+        );
+
+        // Updating the group with member1.
+        shareGroup.updateMember(member1);
+
+        // It should return foo now.
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
+            ),
+            shareGroup.computeSubscriptionMetadata(
+                shareGroup.computeSubscribedTopicNames(null, null),
+                image.topics(),
+                image.cluster()
+            )
+        );
+
+        // Compute while taking into account removal of member 1.
+        assertEquals(
+            Collections.emptyMap(),
+            shareGroup.computeSubscriptionMetadata(
+                shareGroup.computeSubscribedTopicNames(member1, null),
+                image.topics(),
+                image.cluster()
+            )
+        );
+
+        // Compute while taking into account member 2.
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
+            ),
+            shareGroup.computeSubscriptionMetadata(
+                shareGroup.computeSubscribedTopicNames(null, member2),
+                image.topics(),
+                image.cluster()
+            )
+        );
+
+        // Updating the group with member2.
+        shareGroup.updateMember(member2);
+
+        // It should return foo and bar.
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
+            ),
+            shareGroup.computeSubscriptionMetadata(
+                shareGroup.computeSubscribedTopicNames(null, null),
+                image.topics(),
+                image.cluster()
+            )
+        );
+
+        // Compute while taking into account removal of member 2.
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
+            ),
+            shareGroup.computeSubscriptionMetadata(
+                shareGroup.computeSubscribedTopicNames(member2, null),
+                image.topics(),
+                image.cluster()
+            )
+        );
+
+        // Removing member1 results in returning bar.
+        assertEquals(
+            mkMap(
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
+            ),
+            shareGroup.computeSubscriptionMetadata(
+                shareGroup.computeSubscribedTopicNames(member1, null),
+                image.topics(),
+                image.cluster()
+            )
+        );
+
+        // Compute while taking into account member 3.
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
+            ),
+            shareGroup.computeSubscriptionMetadata(
+                shareGroup.computeSubscribedTopicNames(null, member3),
+                image.topics(),
+                image.cluster()
+            )
+        );
+
+        // Updating group with member3.
+        shareGroup.updateMember(member3);
+
+        // It should return foo, bar and zar.
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
+            ),
+            shareGroup.computeSubscriptionMetadata(
+                shareGroup.computeSubscribedTopicNames(null, null),
+                image.topics(),
+                image.cluster()
+            )
+        );
+
+        // Compute while taking into account removal of member 1, member 2 and member 3
+        assertEquals(
+            Collections.emptyMap(),
+            shareGroup.computeSubscriptionMetadata(
+                shareGroup.computeSubscribedTopicNames(new HashSet<>(Arrays.asList(member1, member2, member3))),
+                image.topics(),
+                image.cluster()
+            )
+        );
+
+        // Compute while taking into account removal of member 2 and member 3.
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
+            ),
+            shareGroup.computeSubscriptionMetadata(
+                shareGroup.computeSubscribedTopicNames(new HashSet<>(Arrays.asList(member2, member3))),
+                image.topics(),
+                image.cluster()
+            )
+        );
+
+        // Compute while taking into account removal of member 1.
+        assertEquals(
+            mkMap(
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
+            ),
+            shareGroup.computeSubscriptionMetadata(
+                shareGroup.computeSubscribedTopicNames(Collections.singleton(member1)),
+                image.topics(),
+                image.cluster()
+            )
+        );
+
+        // It should return foo, bar and zar.
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
+            ),
+            shareGroup.computeSubscriptionMetadata(
+                shareGroup.computeSubscribedTopicNames(Collections.emptySet()),
+                image.topics(),
+                image.cluster()
+            )
+        );
     }
 
     @Test
     public void testUpdateSubscribedTopicNamesAndSubscriptionType() {
         ShareGroupMember member1 = new ShareGroupMember.Builder("member1")
-            .setSubscribedTopicNames(List.of("foo"))
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
             .build();
         ShareGroupMember member2 = new ShareGroupMember.Builder("member2")
             .setSubscribedTopicNames(Arrays.asList("bar", "foo"))
@@ -158,7 +364,7 @@ public class ShareGroupTest {
 
         // It should be empty by default.
         assertEquals(
-            Map.of(),
+            Collections.emptyMap(),
             shareGroup.subscribedTopicNames()
         );
 
@@ -218,9 +424,9 @@ public class ShareGroupTest {
         String memberId2 = "member2";
 
         // Initial assignment for member1
-        Assignment initialAssignment = new Assignment(Map.of(
+        Assignment initialAssignment = new Assignment(Collections.singletonMap(
             topicId,
-            Set.of(0)
+            new HashSet<>(Collections.singletonList(0))
         ));
         shareGroup.updateTargetAssignment(memberId1, initialAssignment);
 
@@ -233,9 +439,9 @@ public class ShareGroupTest {
         );
 
         // New assignment for member1
-        Assignment newAssignment = new Assignment(Map.of(
+        Assignment newAssignment = new Assignment(Collections.singletonMap(
             topicId,
-            Set.of(1)
+            new HashSet<>(Collections.singletonList(1))
         ));
         shareGroup.updateTargetAssignment(memberId1, newAssignment);
 
@@ -248,9 +454,9 @@ public class ShareGroupTest {
         );
 
         // New assignment for member2 to add partition 1
-        Assignment newAssignment2 = new Assignment(Map.of(
+        Assignment newAssignment2 = new Assignment(Collections.singletonMap(
             topicId,
-            Set.of(1)
+            new HashSet<>(Collections.singletonList(1))
         ));
         shareGroup.updateTargetAssignment(memberId2, newAssignment2);
 
@@ -263,9 +469,9 @@ public class ShareGroupTest {
         );
 
         // New assignment for member1 to revoke partition 1 and assign partition 0
-        Assignment newAssignment1 = new Assignment(Map.of(
+        Assignment newAssignment1 = new Assignment(Collections.singletonMap(
             topicId,
-            Set.of(0)
+            new HashSet<>(Collections.singletonList(0))
         ));
         shareGroup.updateTargetAssignment(memberId1, newAssignment1);
 
@@ -357,7 +563,7 @@ public class ShareGroupTest {
         assertEquals(ShareGroupState.EMPTY, shareGroup.state(0));
         assertEquals("Empty", shareGroup.stateAsString(0));
         shareGroup.updateMember(new ShareGroupMember.Builder("member1")
-            .setSubscribedTopicNames(List.of("foo"))
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
             .build());
         snapshotRegistry.idempotentCreateSnapshot(1);
         assertEquals(ShareGroupState.EMPTY, shareGroup.state(0));
@@ -414,17 +620,38 @@ public class ShareGroupTest {
 
     @Test
     public void testIsSubscribedToTopic() {
+        Uuid fooTopicId = Uuid.randomUuid();
+        Uuid barTopicId = Uuid.randomUuid();
+
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(fooTopicId, "foo", 1)
+            .addTopic(barTopicId, "bar", 2)
+            .addRacks()
+            .build();
+
         ShareGroupMember member1 = new ShareGroupMember.Builder("member1")
-            .setSubscribedTopicNames(List.of("foo"))
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
             .build();
         ShareGroupMember member2 = new ShareGroupMember.Builder("member2")
-            .setSubscribedTopicNames(List.of("bar"))
+            .setSubscribedTopicNames(Collections.singletonList("bar"))
             .build();
 
         ShareGroup shareGroup = createShareGroup("group-foo");
 
         shareGroup.updateMember(member1);
         shareGroup.updateMember(member2);
+
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
+            ),
+            shareGroup.computeSubscriptionMetadata(
+                shareGroup.computeSubscribedTopicNames(null, null),
+                image.topics(),
+                image.cluster()
+            )
+        );
 
         assertTrue(shareGroup.isSubscribedToTopic("foo"));
         assertTrue(shareGroup.isSubscribedToTopic("bar"));
@@ -444,7 +671,7 @@ public class ShareGroupTest {
         assertEquals(ShareGroupState.EMPTY.toString(), shareGroup.stateAsString(0));
 
         shareGroup.updateMember(new ShareGroupMember.Builder("member1")
-                .setSubscribedTopicNames(List.of("foo"))
+                .setSubscribedTopicNames(Collections.singletonList("foo"))
                 .build());
         shareGroup.updateMember(new ShareGroupMember.Builder("member2")
                 .build());
@@ -459,11 +686,11 @@ public class ShareGroupTest {
             .setMembers(Arrays.asList(
                 new ShareGroupDescribeResponseData.Member()
                     .setMemberId("member1")
-                    .setSubscribedTopicNames(List.of("foo")),
+                    .setSubscribedTopicNames(Collections.singletonList("foo")),
                 new ShareGroupDescribeResponseData.Member().setMemberId("member2")
             ));
         ShareGroupDescribeResponseData.DescribedGroup actual = shareGroup.asDescribedGroup(1, "assignorName",
-            new KRaftCoordinatorMetadataImage(new MetadataImageBuilder().build()));
+            new MetadataImageBuilder().build().topics());
 
         assertEquals(expected, actual);
     }
@@ -473,16 +700,16 @@ public class ShareGroupTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ShareGroup shareGroup = new ShareGroup(snapshotRegistry, "group-foo");
         snapshotRegistry.idempotentCreateSnapshot(0);
-        assertTrue(shareGroup.isInStates(Set.of("empty"), 0));
-        assertFalse(shareGroup.isInStates(Set.of("Empty"), 0));
+        assertTrue(shareGroup.isInStates(Collections.singleton("empty"), 0));
+        assertFalse(shareGroup.isInStates(Collections.singleton("Empty"), 0));
 
         shareGroup.updateMember(new ShareGroupMember.Builder("member1")
-            .setSubscribedTopicNames(List.of("foo"))
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
             .build());
         snapshotRegistry.idempotentCreateSnapshot(1);
-        assertTrue(shareGroup.isInStates(Set.of("empty"), 0));
-        assertTrue(shareGroup.isInStates(Set.of("stable"), 1));
-        assertFalse(shareGroup.isInStates(Set.of("empty"), 1));
+        assertTrue(shareGroup.isInStates(Collections.singleton("empty"), 0));
+        assertTrue(shareGroup.isInStates(Collections.singleton("stable"), 1));
+        assertFalse(shareGroup.isInStates(Collections.singleton("empty"), 1));
     }
 
     private ShareGroup createShareGroup(String groupId) {

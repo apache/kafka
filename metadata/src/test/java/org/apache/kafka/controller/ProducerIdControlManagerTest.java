@@ -30,7 +30,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -48,7 +48,7 @@ public class ProducerIdControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+                Collections.singletonList(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(time).
@@ -154,11 +154,12 @@ public class ProducerIdControlManagerTest {
         assertEquals(new ProducerIdsBlock(3, 100000, 1000), producerIdControlManager.nextProducerBlock());
     }
 
-    static void generateProducerIds(
+    static ProducerIdsBlock generateProducerIds(
             ProducerIdControlManager producerIdControlManager, int brokerId, long brokerEpoch) {
         ControllerResult<ProducerIdsBlock> result =
             producerIdControlManager.generateNextProducerId(brokerId, brokerEpoch);
         result.records().forEach(apiMessageAndVersion ->
             producerIdControlManager.replay((ProducerIdsRecord) apiMessageAndVersion.message()));
+        return result.response();
     }
 }

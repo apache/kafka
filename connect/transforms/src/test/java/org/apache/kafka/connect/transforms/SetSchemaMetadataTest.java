@@ -30,6 +30,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -56,7 +57,7 @@ public class SetSchemaMetadataTest {
 
     @Test
     public void schemaNameUpdate() {
-        xform.configure(Map.of("schema.name", "foo"));
+        xform.configure(Collections.singletonMap("schema.name", "foo"));
         final SinkRecord record = new SinkRecord("", 0, null, null, SchemaBuilder.struct().build(), null, 0);
         final SinkRecord updatedRecord = xform.apply(record);
         assertEquals("foo", updatedRecord.valueSchema().name());
@@ -64,7 +65,7 @@ public class SetSchemaMetadataTest {
 
     @Test
     public void schemaVersionUpdate() {
-        xform.configure(Map.of("schema.version", 42));
+        xform.configure(Collections.singletonMap("schema.version", 42));
         final SinkRecord record = new SinkRecord("", 0, null, null, SchemaBuilder.struct().build(), null, 0);
         final SinkRecord updatedRecord = xform.apply(record);
         assertEquals(42, updatedRecord.valueSchema().version());

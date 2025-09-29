@@ -86,7 +86,8 @@ class PartitionReassignmentRevert {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof PartitionReassignmentRevert other)) return false;
+        if (!(o instanceof PartitionReassignmentRevert)) return false;
+        PartitionReassignmentRevert other = (PartitionReassignmentRevert) o;
         return replicas.equals(other.replicas) &&
             isr.equals(other.isr) &&
             unclean == other.unclean;

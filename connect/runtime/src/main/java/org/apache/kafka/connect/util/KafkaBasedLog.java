@@ -44,6 +44,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -184,8 +185,8 @@ public class KafkaBasedLog<K, V> {
         Objects.requireNonNull(topicAdmin);
         Objects.requireNonNull(readTopicPartition);
         return new KafkaBasedLog<>(topic,
-                Map.of(),
-                Map.of(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
                 () -> topicAdmin,
                 consumedCallback,
                 time,

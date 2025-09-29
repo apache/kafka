@@ -57,12 +57,11 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -77,7 +76,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.stream.Stream;
 
 import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
@@ -101,7 +99,6 @@ public class IQv2IntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     private KafkaStreams kafkaStreams;
-    private String groupProtocol;
 
     @BeforeAll
     public static void before()
@@ -152,8 +149,8 @@ public class IQv2IntegrationTest {
         ));
     }
 
-    private void setup(final String groupProtocol, final TestInfo testInfo) {
-        this.groupProtocol = groupProtocol;
+    @BeforeEach
+    public void beforeTest(final TestInfo testInfo) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.table(
@@ -162,6 +159,7 @@ public class IQv2IntegrationTest {
             Materialized.as(STORE_NAME)
         );
 
+
         final String safeTestName = safeUniqueTestName(testInfo);
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration(safeTestName));
         kafkaStreams.cleanUp();
@@ -169,10 +167,8 @@ public class IQv2IntegrationTest {
 
     @AfterEach
     public void afterTest() {
-        if (kafkaStreams != null) {
-            kafkaStreams.close(Duration.ofSeconds(60));
-            kafkaStreams.cleanUp();
-        }
+        kafkaStreams.close(Duration.ofSeconds(60));
+        kafkaStreams.cleanUp();
     }
 
     @AfterAll
@@ -180,10 +176,8 @@ public class IQv2IntegrationTest {
         CLUSTER.stop();
     }
 
-    @ParameterizedTest(name = "{1}")
-    @MethodSource("groupProtocolParameters")
-    public void shouldFailUnknownStore(final String groupProtocol, final String testName, final TestInfo testInfo) {
-        setup(groupProtocol, testInfo);
+    @Test
+    public void shouldFailUnknownStore() {
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final StateQueryRequest<ValueAndTimestamp<Integer>> request =
             inStore("unknown-store").withQuery(query);
@@ -191,10 +185,8 @@ public class IQv2IntegrationTest {
         assertThrows(UnknownStateStoreException.class, () -> kafkaStreams.query(request));
     }
 
-    @ParameterizedTest(name = "{1}")
-    @MethodSource("groupProtocolParameters")
-    public void shouldFailNotStarted(final String groupProtocol, final String testName, final TestInfo testInfo) {
-        setup(groupProtocol, testInfo);
+    @Test
+    public void shouldFailNotStarted() {
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final StateQueryRequest<ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME).withQuery(query);
@@ -202,10 +194,8 @@ public class IQv2IntegrationTest {
         assertThrows(StreamsNotStartedException.class, () -> kafkaStreams.query(request));
     }
 
-    @ParameterizedTest(name = "{1}")
-    @MethodSource("groupProtocolParameters")
-    public void shouldFailStopped(final String groupProtocol, final String testName, final TestInfo testInfo) {
-        setup(groupProtocol, testInfo);
+    @Test
+    public void shouldFailStopped() {
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final StateQueryRequest<ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME).withQuery(query);
@@ -215,11 +205,9 @@ public class IQv2IntegrationTest {
         assertThrows(StreamsStoppedException.class, () -> kafkaStreams.query(request));
     }
 
-    @ParameterizedTest(name = "{1}")
-    @MethodSource("groupProtocolParameters")
-    public void shouldRejectNonRunningActive(final String groupProtocol, final String testName, final TestInfo testInfo)
+    @Test
+    public void shouldRejectNonRunningActive()
         throws NoSuchFieldException, IllegalAccessException {
-        setup(groupProtocol, testInfo);
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final StateQueryRequest<ValueAndTimestamp<Integer>> request =
             inStore(STORE_NAME).withQuery(query).requireActive();
@@ -273,10 +261,8 @@ public class IQv2IntegrationTest {
         }
     }
 
-    @ParameterizedTest(name = "{1}")
-    @MethodSource("groupProtocolParameters")
-    public void shouldFetchFromPartition(final String groupProtocol, final String testName, final TestInfo testInfo) {
-        setup(groupProtocol, testInfo);
+    @Test
+    public void shouldFetchFromPartition() {
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final int partition = 1;
         final Set<Integer> partitions = singleton(partition);
@@ -290,10 +276,8 @@ public class IQv2IntegrationTest {
         assertThat(result.getPartitionResults().keySet(), equalTo(partitions));
     }
 
-    @ParameterizedTest(name = "{1}")
-    @MethodSource("groupProtocolParameters")
-    public void shouldFetchExplicitlyFromAllPartitions(final String groupProtocol, final String testName, final TestInfo testInfo) {
-        setup(groupProtocol, testInfo);
+    @Test
+    public void shouldFetchExplicitlyFromAllPartitions() {
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final Set<Integer> partitions = Set.of(0, 1);
         final StateQueryRequest<ValueAndTimestamp<Integer>> request =
@@ -306,10 +290,8 @@ public class IQv2IntegrationTest {
         assertThat(result.getPartitionResults().keySet(), equalTo(partitions));
     }
 
-    @ParameterizedTest(name = "{1}")
-    @MethodSource("groupProtocolParameters")
-    public void shouldNotRequireQueryHandler(final String groupProtocol, final String testName, final TestInfo testInfo) {
-        setup(groupProtocol, testInfo);
+    @Test
+    public void shouldNotRequireQueryHandler(final TestInfo testInfo) {
         final KeyQuery<Integer, ValueAndTimestamp<Integer>> query = KeyQuery.withKey(1);
         final int partition = 1;
         final Set<Integer> partitions = singleton(partition);
@@ -441,11 +423,8 @@ public class IQv2IntegrationTest {
         );
 
         // Discard the basic streams and replace with test-specific topology
-        if (kafkaStreams != null) {
-            kafkaStreams.close();
-        }
+        kafkaStreams.close();
         final String safeTestName = safeUniqueTestName(testInfo);
-        this.groupProtocol = groupProtocol;
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration(safeTestName));
         kafkaStreams.cleanUp();
 
@@ -467,7 +446,7 @@ public class IQv2IntegrationTest {
     private Properties streamsConfiguration(final String safeTestName) {
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName + "-" + groupProtocol);
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + (++port));
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
@@ -479,14 +458,6 @@ public class IQv2IntegrationTest {
         config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         config.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
-        config.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
         return config;
-    }
-
-    private static Stream<Arguments> groupProtocolParameters() {
-        return Stream.of(
-            Arguments.of("classic", "CLASSIC protocol"),
-            Arguments.of("streams", "STREAMS protocol")
-        );
     }
 }

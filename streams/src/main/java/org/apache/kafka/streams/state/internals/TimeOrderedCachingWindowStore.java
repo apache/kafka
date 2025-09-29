@@ -97,13 +97,12 @@ class TimeOrderedCachingWindowStore
         hasIndex = timeOrderedWindowStore.hasIndex();
     }
 
-    @SuppressWarnings("unchecked")
     private RocksDBTimeOrderedWindowStore getWrappedStore(final StateStore wrapped) {
         if (wrapped instanceof RocksDBTimeOrderedWindowStore) {
             return (RocksDBTimeOrderedWindowStore) wrapped;
         }
         if (wrapped instanceof WrappedStateStore) {
-            return getWrappedStore(((WrappedStateStore<?, Bytes, byte[]>) wrapped).wrapped());
+            return getWrappedStore(((WrappedStateStore<?, ?, ?>) wrapped).wrapped());
         }
         return null;
     }
@@ -256,15 +255,12 @@ class TimeOrderedCachingWindowStore
         final LRUCacheEntry entry =
             new LRUCacheEntry(
                 value,
-                internalContext.recordContext().headers(),
+                internalContext.headers(),
                 true,
-                internalContext.recordContext().offset(),
-                internalContext.recordContext().timestamp(),
-                internalContext.recordContext().partition(),
-                internalContext.recordContext().topic(),
-                internalContext.recordContext().sourceRawKey(),
-                internalContext.recordContext().sourceRawValue()
-            );
+                internalContext.offset(),
+                internalContext.timestamp(),
+                internalContext.partition(),
+                internalContext.topic());
 
         // Put to index first so that base can be evicted later
         if (hasIndex) {
@@ -278,13 +274,10 @@ class TimeOrderedCachingWindowStore
                     new byte[0],
                     new RecordHeaders(),
                     true,
-                    internalContext.recordContext().offset(),
-                    internalContext.recordContext().timestamp(),
-                    internalContext.recordContext().partition(),
-                    "",
-                    internalContext.recordContext().sourceRawKey(),
-                    internalContext.recordContext().sourceRawValue()
-                );
+                    internalContext.offset(),
+                    internalContext.timestamp(),
+                    internalContext.partition(),
+                    "");
             final Bytes indexKey = KeyFirstWindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, 0);
             internalContext.cache().put(cacheName, indexKeyCacheFunction.cacheKey(indexKey), emptyEntry);
         } else {

@@ -186,7 +186,8 @@ class OffsetSyncWriter implements AutoCloseable {
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof PartitionState that)) return false;
+            if (!(o instanceof PartitionState)) return false;
+            PartitionState that = (PartitionState) o;
             return previousUpstreamOffset == that.previousUpstreamOffset &&
                     previousDownstreamOffset == that.previousDownstreamOffset &&
                     lastSyncDownstreamOffset == that.lastSyncDownstreamOffset &&

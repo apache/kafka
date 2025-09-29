@@ -81,9 +81,6 @@ public class MockTimer implements Timer {
     }
 
     public int size() {
-        synchronized (taskQueue) {
-            taskQueue.removeIf(TimerTaskEntry::cancelled);
-        }
         return taskQueue.size();
     }
 

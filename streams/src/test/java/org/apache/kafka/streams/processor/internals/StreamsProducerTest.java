@@ -684,7 +684,7 @@ public class StreamsProducerTest {
         assertThat(thrown.getCause(), is(eosMockProducer.sendOffsetsToTransactionException));
         assertThat(
             thrown.getMessage(),
-            is("Producer got fenced trying to add offsets to a transaction [test];" +
+            is("Producer got fenced trying to commit a transaction [test];" +
                    " it means all tasks belonging to this thread should be migrated.")
         );
     }
@@ -703,7 +703,7 @@ public class StreamsProducerTest {
         assertThat(thrown.getCause(), is(eosMockProducer.sendOffsetsToTransactionException));
         assertThat(
             thrown.getMessage(),
-            is("Error encountered trying to add offsets to a transaction [test]")
+            is("Error encountered trying to commit a transaction [test]")
         );
     }
 
@@ -920,8 +920,8 @@ public class StreamsProducerTest {
             METADATA_WAIT_TIME;
         assertThat(eosStreamsProducer.totalBlockedTime(), equalTo(expectedTotalBlocked));
         final long closeStart = 1L;
-        final long closeDelay = 1L;
-        when(mockTime.nanoseconds()).thenReturn(closeStart).thenReturn(closeStart + closeDelay);
+        final long clodeDelay = 1L;
+        when(mockTime.nanoseconds()).thenReturn(closeStart).thenReturn(closeStart + clodeDelay);
         eosStreamsProducer.resetProducer(eosMockProducer);
         setProducerMetrics(
             eosMockProducer,
@@ -937,7 +937,7 @@ public class StreamsProducerTest {
 
         assertThat(
             eosStreamsProducer.totalBlockedTime(),
-            closeTo(2 * expectedTotalBlocked + closeDelay, 0.01)
+            closeTo(2 * expectedTotalBlocked + clodeDelay, 0.01)
         );
     }
 

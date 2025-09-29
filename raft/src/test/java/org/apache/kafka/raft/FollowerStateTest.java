@@ -26,7 +26,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.InetSocketAddress;
-import java.util.Map;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
@@ -43,7 +43,7 @@ public class FollowerStateTest {
     private final int fetchTimeoutMs = 15000;
     private final int leaderId = 3;
     private final Endpoints leaderEndpoints = Endpoints.fromInetSocketAddresses(
-        Map.of(
+        Collections.singletonMap(
             ListenerName.normalised("CONTROLLER"),
             InetSocketAddress.createUnresolved("mock-host-3", 1234)
         )
@@ -139,14 +139,5 @@ public class FollowerStateTest {
 
         assertEquals(leaderId, state.leaderId());
         assertEquals(leaderEndpoints, state.leaderEndpoints());
-    }
-
-    @Test
-    public void testHasUpdatedLeader() {
-        FollowerState state = newFollowerState(Set.of(0, 1, 2));
-
-        assertFalse(state.hasUpdatedLeader());
-        state.setHasUpdatedLeader();
-        assertTrue(state.hasUpdatedLeader());
     }
 }

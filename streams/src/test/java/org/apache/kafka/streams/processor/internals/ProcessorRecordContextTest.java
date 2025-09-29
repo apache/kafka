@@ -44,6 +44,7 @@ public class ProcessorRecordContextTest {
 
     @Test
     public void shouldEstimateNullTopicAndEmptyHeadersAsZeroLength() {
+        final Headers headers = new RecordHeaders();
         final ProcessorRecordContext context = new ProcessorRecordContext(
             42L,
             73L,

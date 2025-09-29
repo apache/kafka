@@ -24,13 +24,16 @@ import org.apache.kafka.common.utils.SecurityUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Represents the Delegation Tokens in the metadata image.
- * <p>
+ *
  * This class is thread-safe.
  */
-public record DelegationTokenData(TokenInformation tokenInformation) {
+public final class DelegationTokenData {
+
+    private final TokenInformation tokenInformation;
 
     public static DelegationTokenData fromRecord(DelegationTokenRecord record) {
         List<KafkaPrincipal> renewers = new ArrayList<>();
@@ -47,6 +50,14 @@ public record DelegationTokenData(TokenInformation tokenInformation) {
             record.expirationTimestamp()));
     }
 
+    public DelegationTokenData(TokenInformation tokenInformation) {
+        this.tokenInformation = tokenInformation;
+    }
+
+    public TokenInformation tokenInformation() {
+        return tokenInformation;
+    }
+
     public DelegationTokenRecord toRecord() {
         return new DelegationTokenRecord()
             .setOwner(tokenInformation.ownerAsString())
@@ -56,6 +67,19 @@ public record DelegationTokenData(TokenInformation tokenInformation) {
             .setMaxTimestamp(tokenInformation.maxTimestamp())
             .setExpirationTimestamp(tokenInformation.expiryTimestamp())
             .setTokenId(tokenInformation.tokenId());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(tokenInformation);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null) return false;
+        if (!o.getClass().equals(DelegationTokenData.class)) return false;
+        DelegationTokenData other = (DelegationTokenData) o;
+        return tokenInformation.equals(other.tokenInformation);
     }
 
     /*

@@ -21,9 +21,8 @@
 package kafka.metrics
 
 import kafka.utils.{CoreUtils, VerifiableProperties}
-import org.apache.kafka.common.utils.Utils
-
 import java.util.concurrent.atomic.AtomicBoolean
+
 import scala.collection.Seq
 import scala.collection.mutable.ArrayBuffer
 
@@ -63,7 +62,7 @@ object KafkaMetricsReporter {
         val metricsConfig = new KafkaMetricsConfig(verifiableProps)
         if (metricsConfig.reporters.nonEmpty) {
           metricsConfig.reporters.foreach(reporterType => {
-            val reporter = Utils.newInstance(reporterType, classOf[KafkaMetricsReporter])
+            val reporter = CoreUtils.createObject[KafkaMetricsReporter](reporterType)
             reporter.init(verifiableProps)
             reporters += reporter
             reporter match {
