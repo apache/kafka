@@ -297,7 +297,7 @@ public class SubscriptionSendProcessorSupplierTest {
         assertThat(context.forwarded().size(), is(1));
         assertThat(
             context.forwarded().get(0).record(),
-            is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
+            is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, pk, 0), 0))
         );
     }
 
@@ -361,7 +361,7 @@ public class SubscriptionSendProcessorSupplierTest {
         assertThat(context.forwarded().size(), is(1));
         assertThat(
             context.forwarded().get(0).record(),
-            is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
+            is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, pk, 0), 0))
         );
     }
 
