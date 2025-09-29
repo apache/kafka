@@ -108,6 +108,12 @@ public class Protocol {
         }
     }
 
+    private static void appendFieldNameToTable(String name, StringBuilder b) {
+        b.append("<td>");
+        b.append(name);
+        b.append("</td>");
+    }
+
     private static void schemaToFieldTableHtml(Schema schema, StringBuilder b) {
         Set<BoundField> fields = new LinkedHashSet<>();
         populateSchemaFields(schema, fields);
@@ -119,28 +125,12 @@ public class Protocol {
         b.append("</tr>");
         for (BoundField field : fields) {
             b.append("<tr>\n");
-            b.append("<td>");
-            b.append(field.def.name);
-            b.append("</td>");
-            b.append("<td>");
             if (field.def.type instanceof TaggedFields) {
                 TaggedFields taggedFields = (TaggedFields) field.def.type;
                 // Only include the field in the table if there are actually tags defined
                 if (taggedFields.numFields() > 0) {
-                    b.append("<table class=\"data-table\"><tbody>\n");
-                    b.append("<tr>");
-                    b.append("<th>Tag</th>\n");
-                    b.append("<th>Tagged field</th>\n");
-                    b.append("<th>Description</th>\n");
-                    b.append("</tr>");
                     taggedFields.fields().forEach((tag, taggedField) -> {
-                        b.append("<tr>\n");
-                        b.append("<td>");
-                        b.append(tag);
-                        b.append("</td>");
-                        b.append("<td>");
-                        b.append(taggedField.name);
-                        b.append("</td>");
+                        appendFieldNameToTable(taggedField.name + "&lt;tag: " + tag.toString() + "&gt;", b);
                         b.append("<td>");
                         b.append(taggedField.docString);
                         if (taggedField.type.isArray()) {
@@ -155,10 +145,10 @@ public class Protocol {
                         b.append("</tr>\n");
                     });
                     b.append("</tbody></table>\n");
-                } else {
-                    b.append(field.def.docString);
                 }
             } else {
+                appendFieldNameToTable(field.def.name, b);
+                b.append("<td>");
                 b.append(field.def.docString);
             }
             b.append("</td>");
