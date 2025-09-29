@@ -35,6 +35,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, ByteBufferAccessor, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
+import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorConfig}
 import org.apache.kafka.metadata.MetadataCache
@@ -45,14 +46,15 @@ import org.apache.kafka.server.quota.ControllerMutationQuota
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.never
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
+import org.mockito.Mockito.never
 
 import scala.collection.{Map, Seq}
 
 class AutoTopicCreationManagerTest {
 
   private val requestTimeout = 100
+  private val testCacheCapacity = 3
   private var config: KafkaConfig = _
   private val metadataCache = Mockito.mock(classOf[MetadataCache])
   private val brokerToController = Mockito.mock(classOf[NodeToControllerChannelManager])
@@ -60,6 +62,7 @@ class AutoTopicCreationManagerTest {
   private val transactionCoordinator = Mockito.mock(classOf[TransactionCoordinator])
   private val shareCoordinator = Mockito.mock(classOf[ShareCoordinator])
   private var autoTopicCreationManager: AutoTopicCreationManager = _
+  private val mockTime = new MockTime(0L, 0L)
 
   private val internalTopicPartitions = 2
   private val internalTopicReplicationFactor: Short = 2
@@ -76,6 +79,8 @@ class AutoTopicCreationManagerTest {
     props.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, internalTopicReplicationFactor.toString)
     props.setProperty(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, internalTopicReplicationFactor.toString)
     props.setProperty(ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, internalTopicReplicationFactor.toString)
+    // Set a short group max session timeout for testing TTL (1 second)
+    props.setProperty(GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, "1000")
 
     config = KafkaConfig.fromProps(props)
     val aliveBrokers = util.List.of(new Node(0, "host0", 0), new Node(1, "host1", 1))
@@ -115,7 +120,9 @@ class AutoTopicCreationManagerTest {
       brokerToController,
       groupCoordinator,
       transactionCoordinator,
-      shareCoordinator)
+      shareCoordinator,
+      mockTime,
+      topicErrorCacheCapacity = testCacheCapacity)
 
     val topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection
     topicsCollection.add(getNewTopic(topicName, numPartitions, replicationFactor))
@@ -231,9 +238,11 @@ class AutoTopicCreationManagerTest {
       brokerToController,
       groupCoordinator,
       transactionCoordinator,
-      shareCoordinator)
+      shareCoordinator,
+      mockTime,
+      topicErrorCacheCapacity = testCacheCapacity)
 
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, config.groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs() * 2)
 
     val argumentCaptor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
     Mockito.verify(brokerToController).sendRequest(
@@ -267,9 +276,11 @@ class AutoTopicCreationManagerTest {
       brokerToController,
       groupCoordinator,
       transactionCoordinator,
-      shareCoordinator)
+      shareCoordinator,
+      mockTime,
+      topicErrorCacheCapacity = testCacheCapacity)
 
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, config.groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs() * 2)
 
     Mockito.verify(brokerToController, never()).sendRequest(
       any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
@@ -288,9 +299,11 @@ class AutoTopicCreationManagerTest {
       brokerToController,
       groupCoordinator,
       transactionCoordinator,
-      shareCoordinator)
+      shareCoordinator,
+      mockTime,
+      topicErrorCacheCapacity = testCacheCapacity)
 
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, config.groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs() * 2)
 
     val argumentCaptor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
     Mockito.verify(brokerToController).sendRequest(
@@ -319,7 +332,9 @@ class AutoTopicCreationManagerTest {
       brokerToController,
       groupCoordinator,
       transactionCoordinator,
-      shareCoordinator)
+      shareCoordinator,
+      mockTime,
+      topicErrorCacheCapacity = testCacheCapacity)
 
     val createTopicApiVersion = new ApiVersionsResponseData.ApiVersion()
       .setApiKey(ApiKeys.CREATE_TOPICS.id)
@@ -355,5 +370,218 @@ class AutoTopicCreationManagerTest {
       .setName(topicName)
       .setNumPartitions(numPartitions)
       .setReplicationFactor(replicationFactor)
+  }
+
+  @Test
+  def testTopicCreationErrorCaching(): Unit = {
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      brokerToController,
+      groupCoordinator,
+      transactionCoordinator,
+      shareCoordinator,
+      mockTime,
+      topicErrorCacheCapacity = testCacheCapacity)
+
+    val topics = Map(
+      "test-topic-1" -> new CreatableTopic().setName("test-topic-1").setNumPartitions(1).setReplicationFactor(1)
+    )
+    val requestContext = initializeRequestContextWithUserPrincipal()
+
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, config.groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs() * 2)
+
+    val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
+    Mockito.verify(brokerToController).sendRequest(
+      any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+      argumentCaptor.capture())
+
+    // Simulate a CreateTopicsResponse with errors
+    val createTopicsResponseData = new org.apache.kafka.common.message.CreateTopicsResponseData()
+    val topicResult = new org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult()
+      .setName("test-topic-1")
+      .setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code())
+      .setErrorMessage("Topic 'test-topic-1' already exists.")
+    createTopicsResponseData.topics().add(topicResult)
+
+    val createTopicsResponse = new CreateTopicsResponse(createTopicsResponseData)
+    val header = new RequestHeader(ApiKeys.CREATE_TOPICS, 0, "client", 1)
+    val clientResponse = new ClientResponse(header, null, null,
+      0, 0, false, null, null, createTopicsResponse)
+
+    // Trigger the completion handler
+    argumentCaptor.getValue.onComplete(clientResponse)
+
+    // Verify that the error was cached
+    val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(Set("test-topic-1"), mockTime.milliseconds())
+    assertEquals(1, cachedErrors.size)
+    assertTrue(cachedErrors.contains("test-topic-1"))
+    assertEquals("Topic 'test-topic-1' already exists.", cachedErrors("test-topic-1"))
+  }
+
+  @Test
+  def testGetTopicCreationErrorsWithMultipleTopics(): Unit = {
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      brokerToController,
+      groupCoordinator,
+      transactionCoordinator,
+      shareCoordinator,
+      mockTime,
+      topicErrorCacheCapacity = testCacheCapacity)
+
+    val topics = Map(
+      "success-topic" -> new CreatableTopic().setName("success-topic").setNumPartitions(1).setReplicationFactor(1),
+      "failed-topic" -> new CreatableTopic().setName("failed-topic").setNumPartitions(1).setReplicationFactor(1)
+    )
+    val requestContext = initializeRequestContextWithUserPrincipal()
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, config.groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs() * 2)
+
+    val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
+    Mockito.verify(brokerToController).sendRequest(
+      any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+      argumentCaptor.capture())
+
+    // Simulate mixed response - one success, one failure
+    val createTopicsResponseData = new org.apache.kafka.common.message.CreateTopicsResponseData()
+    createTopicsResponseData.topics().add(
+      new org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult()
+        .setName("success-topic")
+        .setErrorCode(Errors.NONE.code())
+    )
+    createTopicsResponseData.topics().add(
+      new org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult()
+        .setName("failed-topic")
+        .setErrorCode(Errors.POLICY_VIOLATION.code())
+        .setErrorMessage("Policy violation")
+    )
+
+    val createTopicsResponse = new CreateTopicsResponse(createTopicsResponseData)
+    val header = new RequestHeader(ApiKeys.CREATE_TOPICS, 0, "client", 1)
+    val clientResponse = new ClientResponse(header, null, null,
+      0, 0, false, null, null, createTopicsResponse)
+
+    argumentCaptor.getValue.onComplete(clientResponse)
+
+    // Only the failed topic should be cached
+    val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(Set("success-topic", "failed-topic", "nonexistent-topic"), mockTime.milliseconds())
+    assertEquals(1, cachedErrors.size)
+    assertTrue(cachedErrors.contains("failed-topic"))
+    assertEquals("Policy violation", cachedErrors("failed-topic"))
+  }
+
+  @Test 
+  def testErrorCacheTTL(): Unit = {
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      brokerToController,
+      groupCoordinator,
+      transactionCoordinator,
+      shareCoordinator,
+      mockTime,
+      topicErrorCacheCapacity = testCacheCapacity)
+
+
+    // First cache an error by simulating topic creation failure
+    val topics = Map(
+      "test-topic" -> new CreatableTopic().setName("test-topic").setNumPartitions(1).setReplicationFactor(1)
+    )
+    val requestContext = initializeRequestContextWithUserPrincipal()
+    val shortTtlMs = 1000L // Use 1 second TTL for faster testing
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, shortTtlMs)
+
+    val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
+    Mockito.verify(brokerToController).sendRequest(
+      any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+      argumentCaptor.capture())
+
+    // Simulate a CreateTopicsResponse with error
+    val createTopicsResponseData = new org.apache.kafka.common.message.CreateTopicsResponseData()
+    val topicResult = new org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult()
+      .setName("test-topic")
+      .setErrorCode(Errors.INVALID_REPLICATION_FACTOR.code())
+      .setErrorMessage("Invalid replication factor")
+    createTopicsResponseData.topics().add(topicResult)
+
+    val createTopicsResponse = new CreateTopicsResponse(createTopicsResponseData)
+    val header = new RequestHeader(ApiKeys.CREATE_TOPICS, 0, "client", 1)
+    val clientResponse = new ClientResponse(header, null, null,
+      0, 0, false, null, null, createTopicsResponse)
+
+    // Cache the error at T0
+    argumentCaptor.getValue.onComplete(clientResponse)
+
+    // Verify error is cached and accessible within TTL
+    val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(Set("test-topic"), mockTime.milliseconds())
+    assertEquals(1, cachedErrors.size)
+    assertEquals("Invalid replication factor", cachedErrors("test-topic"))
+
+    // Advance time beyond TTL
+    mockTime.sleep(shortTtlMs + 100) // T0 + 1.1 seconds
+
+    // Verify error is now expired and proactively cleaned up
+    val expiredErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(Set("test-topic"), mockTime.milliseconds())
+    assertTrue(expiredErrors.isEmpty, "Expired errors should be proactively cleaned up")
+  }
+
+  @Test
+  def testErrorCacheExpirationBasedEviction(): Unit = {
+    // Create manager with small cache size for testing
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      brokerToController,
+      groupCoordinator,
+      transactionCoordinator,
+      shareCoordinator,
+      mockTime,
+      topicErrorCacheCapacity = 3)
+    
+    val requestContext = initializeRequestContextWithUserPrincipal()
+    
+    // Create 5 topics to exceed the cache size of 3
+    val topicNames = (1 to 5).map(i => s"test-topic-$i")
+    
+    // Add errors for all 5 topics to the cache
+    topicNames.zipWithIndex.foreach { case (topicName, idx) =>
+      val topics = Map(
+        topicName -> new CreatableTopic().setName(topicName).setNumPartitions(1).setReplicationFactor(1)
+      )
+      
+      autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, config.groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs() * 2)
+      
+      val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
+      Mockito.verify(brokerToController, Mockito.atLeastOnce()).sendRequest(
+        any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+        argumentCaptor.capture())
+      
+      // Simulate error response for this topic
+      val createTopicsResponseData = new org.apache.kafka.common.message.CreateTopicsResponseData()
+      val topicResult = new org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult()
+        .setName(topicName)
+        .setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code())
+        .setErrorMessage(s"Topic '$topicName' already exists.")
+      createTopicsResponseData.topics().add(topicResult)
+      
+      val createTopicsResponse = new CreateTopicsResponse(createTopicsResponseData)
+      val header = new RequestHeader(ApiKeys.CREATE_TOPICS, 0, "client", 1)
+      val clientResponse = new ClientResponse(header, null, null,
+        0, 0, false, null, null, createTopicsResponse)
+      
+      argumentCaptor.getValue.onComplete(clientResponse)
+      
+      // Advance time slightly between additions to ensure different timestamps
+      mockTime.sleep(10)
+      
+    }
+    
+    // With cache size of 3, topics 1 and 2 should have been evicted
+    val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(topicNames.toSet, mockTime.milliseconds())
+    
+    // Only the last 3 topics should be in the cache (topics 3, 4, 5)
+    assertEquals(3, cachedErrors.size, "Cache should contain only the most recent 3 entries")
+    assertTrue(cachedErrors.contains("test-topic-3"), "test-topic-3 should be in cache")
+    assertTrue(cachedErrors.contains("test-topic-4"), "test-topic-4 should be in cache")
+    assertTrue(cachedErrors.contains("test-topic-5"), "test-topic-5 should be in cache")
+    assertTrue(!cachedErrors.contains("test-topic-1"), "test-topic-1 should have been evicted")
+    assertTrue(!cachedErrors.contains("test-topic-2"), "test-topic-2 should have been evicted")
   }
 }

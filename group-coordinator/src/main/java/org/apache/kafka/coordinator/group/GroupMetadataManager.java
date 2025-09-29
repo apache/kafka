@@ -813,10 +813,10 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            return new ConsumerGroup(snapshotRegistry, groupId, metrics);
+            return new ConsumerGroup(snapshotRegistry, groupId);
         } else if (createIfNotExists && maybeDeleteEmptyClassicGroup(group, records)) {
             log.info("[GroupId {}] Converted the empty classic group to a consumer group.", groupId);
-            return new ConsumerGroup(snapshotRegistry, groupId, metrics);
+            return new ConsumerGroup(snapshotRegistry, groupId);
         } else {
             if (group.type() == CONSUMER) {
                 return (ConsumerGroup) group;
@@ -851,10 +851,10 @@ public class GroupMetadataManager {
         Group group = groups.get(groupId);
 
         if (group == null) {
-            return new StreamsGroup(logContext, snapshotRegistry, groupId, metrics);
+            return new StreamsGroup(logContext, snapshotRegistry, groupId);
         } else if (maybeDeleteEmptyClassicGroup(group, records)) {
             log.info("[GroupId {}] Converted the empty classic group to a streams group.", groupId);
-            return new StreamsGroup(logContext, snapshotRegistry, groupId, metrics);
+            return new StreamsGroup(logContext, snapshotRegistry, groupId);
         } else {
             return castToStreamsGroup(group);
         }
@@ -980,7 +980,7 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
+            ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId);
             groups.put(groupId, consumerGroup);
             return consumerGroup;
         } else if (group.type() == CONSUMER) {
@@ -990,7 +990,7 @@ public class GroupMetadataManager {
             // offsets if no group existed. Simple classic groups are not backed by any records
             // in the __consumer_offsets topic hence we can safely replace it here. Without this,
             // replaying consumer group records after offset commit records would not work.
-            ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
+            ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId);
             groups.put(groupId, consumerGroup);
             return consumerGroup;
         } else {
@@ -1023,7 +1023,7 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, groupId, metrics);
+            StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, groupId);
             groups.put(groupId, streamsGroup);
             return streamsGroup;
         } else if (group.type() == STREAMS) {
@@ -1364,7 +1364,6 @@ public class GroupMetadataManager {
         try {
             consumerGroup = ConsumerGroup.fromClassicGroup(
                 snapshotRegistry,
-                metrics,
                 classicGroup,
                 topicHashCache,
                 metadataImage

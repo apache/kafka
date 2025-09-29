@@ -2812,10 +2812,35 @@ class KafkaApis(val requestChannel: RequestChannel,
                 )
               }
             } else {
-              autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext);
+              // Compute group-specific timeout for caching errors (2 * heartbeat interval)
+              val heartbeatIntervalMs = Option(groupConfigManager.groupConfig(streamsGroupHeartbeatRequest.data.groupId).orElse(null))
+                .map(_.streamsHeartbeatIntervalMs().toLong)
+                .getOrElse(config.groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs().toLong)
+              val timeoutMs = heartbeatIntervalMs * 2
+
+              autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext, timeoutMs)
+              
+              // Check for cached topic creation errors only if there's already a MISSING_INTERNAL_TOPICS status
+              val hasMissingInternalTopicsStatus = responseData.status() != null && 
+                responseData.status().stream().anyMatch(s => s.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
+              
+              if (hasMissingInternalTopicsStatus) {
+                val currentTimeMs = time.milliseconds()
+                val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(topicsToCreate.keys.toSet, currentTimeMs)
+                if (cachedErrors.nonEmpty) {
+                  val missingInternalTopicStatus =
+                    responseData.status().stream().filter(x => x.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code()).findFirst()
+                  val creationErrorDetails = cachedErrors.map { case (topic, error) => s"$topic ($error)" }.mkString(", ")
+                  if (missingInternalTopicStatus.isPresent) {
+                    val existingDetail = Option(missingInternalTopicStatus.get().statusDetail()).getOrElse("")
+                    missingInternalTopicStatus.get().setStatusDetail(
+                      existingDetail + s"; Creation failed: $creationErrorDetails."
+                    )
+                  }
+                }
+              }
             }
           }
-
           requestHelper.sendMaybeThrottle(request, new StreamsGroupHeartbeatResponse(responseData))
         }
       }

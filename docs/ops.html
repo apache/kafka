@@ -4082,42 +4082,32 @@ In the replica description 0@controller-0:1234:3Db5QLSqSZieL3rJBUUegA, 0 is the 
   If you are not sure whether you are using static or dynamic quorums, you can determine this by
   running something like the following:<p>
 
-<pre><code class="language-bash">
-  $ bin/kafka-features.sh --bootstrap-controller localhost:9093 describe
-</code></pre><p>
+  <pre><code class="language-bash">$ bin/kafka-features.sh --bootstrap-controller localhost:9093 describe</code></pre>
+  <p>
+    If the <code>kraft.version</code> field is level 0 or absent, you are using a static quorum. If
+    it is 1 or above, you are using a dynamic quorum. For example, here is an example of a static
+    quorum:<p>
+  <pre><code class="language-bash">Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 0 Epoch: 5
+Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 3.9-IV0 FinalizedVersionLevel: 3.9-IV0  Epoch: 5</code></pre>
+  <p>
+    Here is another example of a static quorum:<p>
+  <pre><code class="language-bash">Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 3.8-IV0 FinalizedVersionLevel: 3.8-IV0  Epoch: 5</code></pre>
+  <p>
+    Here is an example of a dynamic quorum:<p>
+  <pre><code class="language-bash">Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 1 Epoch: 5
+Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 3.9-IV0 FinalizedVersionLevel: 3.9-IV0  Epoch: 5</code></pre>
+  <p>
+    The static versus dynamic nature of the quorum is determined at the time of formatting.
+    Specifically, the quorum will be formatted as dynamic if <code>controller.quorum.voters</code> is
+    <b>not</b> present, and if the software version is Apache Kafka 3.9 or newer. If you have
+    followed the instructions earlier in this document, you will get a dynamic quorum.<p>
 
-  If the <code>kraft.version</code> field is level 0 or absent, you are using a static quorum. If
-  it is 1 or above, you are using a dynamic quorum. For example, here is an example of a static
-  quorum:<p/>
-<pre><code class="language-bash">
-Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 0 Epoch: 5
-Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 3.9-IV0 FinalizedVersionLevel: 3.9-IV0  Epoch: 5
-</code></pre><p/>
+    If you would like the formatting process to fail if a dynamic quorum cannot be achieved, format your
+    controllers using the <code>--feature kraft.version=1</code>. (Note that you should not supply
+    this flag when formatting brokers -- only when formatting controllers.)<p>
 
-  Here is another example of a static quorum:<p/>
-<pre><code class="language-bash">
-Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 3.8-IV0 FinalizedVersionLevel: 3.8-IV0  Epoch: 5
-</code></pre><p/>
-
-  Here is an example of a dynamic quorum:<p/>
-<pre><code class="language-bash">
-Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 1 Epoch: 5
-Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 3.9-IV0 FinalizedVersionLevel: 3.9-IV0  Epoch: 5
-</code></pre><p/>
-
-  The static versus dynamic nature of the quorum is determined at the time of formatting.
-  Specifically, the quorum will be formatted as dynamic if <code>controller.quorum.voters</code> is
-  <b>not</b> present, and if the software version is Apache Kafka 3.9 or newer. If you have
-  followed the instructions earlier in this document, you will get a dynamic quorum.<p>
-
-  If you would like the formatting process to fail if a dynamic quorum cannot be achieved, format your
-  controllers using the <code>--feature kraft.version=1</code>. (Note that you should not supply
-  this flag when formatting brokers -- only when formatting controllers.)<p>
-
-<pre><code class="language-bash">
-  $ bin/kafka-storage.sh format -t KAFKA_CLUSTER_ID --feature kraft.version=1 -c controller.properties
-</code></pre><p>
-
+  <pre><code class="language-bash">$ bin/kafka-storage.sh format -t KAFKA_CLUSTER_ID --feature kraft.version=1 -c controller.properties</code></pre>
+  <p>
   Note: To migrate from static voter set to dynamic voter set, please refer to the <a href="#kraft_upgrade">Upgrade</a> section.
 
   <h5 class="anchor-heading"><a id="kraft_reconfig_add" class="anchor-link"></a><a href="#kraft_reconfig_add">Add New Controller</a></h5>
@@ -4169,7 +4159,7 @@ CurrentObservers:       [{"id": 0, "directoryId": "3Db5QLSqSZieL3rJBUUegA"},
 
   <pre><code class="language-bash">$ bin/kafka-dump-log.sh --cluster-metadata-decoder --files metadata_log_dir/__cluster_metadata-0/00000000000000000000.log</code></pre>
 
-  <p>This command decodes and prints the records in the a cluster metadata snapshot:</p>
+  <p>This command decodes and prints the records in a cluster metadata snapshot:</p>
 
   <pre><code class="language-bash">$ bin/kafka-dump-log.sh --cluster-metadata-decoder --files metadata_log_dir/__cluster_metadata-0/00000000000000000100-0000000001.checkpoint</code></pre>
 
@@ -4199,7 +4189,7 @@ foo
   <h4 class="anchor-heading"><a id="kraft_deployment" class="anchor-link"></a><a href="#kraft_deployment">Deploying Considerations</a></h4>
 
   <ul>
-    <li>Kafka server's <code>process.role</code> should be set to either <code>broker</code> or <code>controller</code> but not both. Combined mode can be used in development environments, but it should be avoided in critical deployment environments.</li>
+    <li>Kafka server's <code>process.roles</code> should be set to either <code>broker</code> or <code>controller</code> but not both. Combined mode can be used in development environments, but it should be avoided in critical deployment environments.</li>
     <li>For redundancy, a Kafka cluster should use 3 or more controllers, depending on factors like cost and the number of concurrent failures your system should withstand without availability impact. For the KRaft controller cluster to withstand <code>N</code> concurrent failures the controller cluster must include <code>2N + 1</code> controllers.</li>
     <li>The Kafka controllers store all the metadata for the cluster in memory and on disk. We believe that for a typical Kafka cluster 5GB of main memory and 5GB of disk space on the metadata log director is sufficient.</li>
   </ul>

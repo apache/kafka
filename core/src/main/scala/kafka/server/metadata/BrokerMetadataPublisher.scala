@@ -224,7 +224,7 @@ class BrokerMetadataPublisher(
       dynamicTopicClusterQuotaPublisher.onMetadataUpdate(delta, newImage)
 
       // Apply SCRAM delta.
-      scramPublisher.onMetadataUpdate(delta, newImage)
+      scramPublisher.onMetadataUpdate(delta, newImage, manifest)
 
       // Apply DelegationToken delta.
       delegationTokenPublisher.onMetadataUpdate(delta, newImage)

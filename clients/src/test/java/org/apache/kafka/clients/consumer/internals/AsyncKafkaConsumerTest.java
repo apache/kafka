@@ -2210,6 +2210,73 @@ public class AsyncKafkaConsumerTest {
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(CommitEvent.class));
     }
 
+    @Test
+    public void testCloseInvokesStreamsRebalanceListenerOnTasksRevokedWhenMemberEpochPositive() {
+        final String groupId = "streamsGroup";
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of());
+        
+        try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
+            consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
+            StreamsRebalanceListener mockStreamsListener = mock(StreamsRebalanceListener.class);
+            when(mockStreamsListener.onTasksRevoked(any())).thenReturn(Optional.empty());
+            consumer.subscribe(singletonList("topic"), mockStreamsListener);
+            final MemberStateListener groupMetadataUpdateListener = captureGroupMetadataUpdateListener(requestManagers);
+            final int memberEpoch = 42;
+            final String memberId = "memberId";
+            groupMetadataUpdateListener.onMemberEpochUpdated(Optional.of(memberEpoch), memberId);
+            
+            consumer.close(CloseOptions.timeout(Duration.ZERO));
+            
+            verify(mockStreamsListener).onTasksRevoked(any());
+        }
+    }
+    
+    @Test
+    public void testCloseInvokesStreamsRebalanceListenerOnAllTasksLostWhenMemberEpochZeroOrNegative() {
+        final String groupId = "streamsGroup";
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of());
+        
+        try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
+            consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
+            StreamsRebalanceListener mockStreamsListener = mock(StreamsRebalanceListener.class);
+            when(mockStreamsListener.onAllTasksLost()).thenReturn(Optional.empty());
+            consumer.subscribe(singletonList("topic"), mockStreamsListener);
+            final MemberStateListener groupMetadataUpdateListener = captureGroupMetadataUpdateListener(requestManagers);
+            final int memberEpoch = 0;
+            final String memberId = "memberId";
+            groupMetadataUpdateListener.onMemberEpochUpdated(Optional.of(memberEpoch), memberId);
+            
+            consumer.close(CloseOptions.timeout(Duration.ZERO));
+            
+            verify(mockStreamsListener).onAllTasksLost();
+        }
+    }
+    
+    @Test
+    public void testCloseWrapsStreamsRebalanceListenerException() {
+        final String groupId = "streamsGroup";
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of());
+        
+        try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
+            consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
+            StreamsRebalanceListener mockStreamsListener = mock(StreamsRebalanceListener.class);
+            RuntimeException testException = new RuntimeException("Test streams listener exception");
+            doThrow(testException).when(mockStreamsListener).onTasksRevoked(any());
+            consumer.subscribe(singletonList("topic"), mockStreamsListener);
+            final MemberStateListener groupMetadataUpdateListener = captureGroupMetadataUpdateListener(requestManagers);
+            final int memberEpoch = 1;
+            final String memberId = "memberId";
+            groupMetadataUpdateListener.onMemberEpochUpdated(Optional.of(memberEpoch), memberId);
+            
+            KafkaException thrownException = assertThrows(KafkaException.class, 
+                () -> consumer.close(CloseOptions.timeout(Duration.ZERO)));
+
+            assertInstanceOf(RuntimeException.class, thrownException.getCause());
+            assertTrue(thrownException.getCause().getMessage().contains("Test streams listener exception"));
+            verify(mockStreamsListener).onTasksRevoked(any());
+        }
+    }
+
     private void markReconcileAndAutoCommitCompleteForPollEvent() {
         doAnswer(invocation -> {
             PollEvent event = invocation.getArgument(0);
