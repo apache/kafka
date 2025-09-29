@@ -404,7 +404,8 @@ public class ConsumerConfig extends AbstractConfig {
     /**
      * A list of configuration keys not supported for CONSUMER protocol.
      */
-    private static final List<String> CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
+    // visible for testing
+    static final List<String> CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
             PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
             HEARTBEAT_INTERVAL_MS_CONFIG,
             SESSION_TIMEOUT_MS_CONFIG,
