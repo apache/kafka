@@ -59,7 +59,7 @@ public class ConsumerPollTestUtils {
     }
 
     public static void waitForException(Consumer<?, ?> consumer,
-                                        Function<KafkaException, Boolean> testCondition,
+                                        Function<Throwable, Boolean> testCondition,
                                         String conditionDetails) {
         try {
             TestUtils.waitForCondition(
@@ -67,8 +67,8 @@ public class ConsumerPollTestUtils {
                     try {
                         consumer.poll(Duration.ZERO);
                         return false;
-                    } catch (KafkaException e) {
-                        return testCondition.apply(e);
+                    } catch (Throwable t) {
+                        return testCondition.apply(t);
                     }
                 },
                 conditionDetails

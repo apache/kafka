@@ -3654,7 +3654,11 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         service.execute(() -> consumer.poll(Duration.ofSeconds(5)));
         try {
             TimeUnit.SECONDS.sleep(1);
-            assertThrows(ConcurrentModificationException.class, () -> consumer.poll(Duration.ofSeconds(5)));
+            ConsumerPollTestUtils.waitForException(
+                consumer,
+                t -> t instanceof ConcurrentModificationException,
+                "Consumer did not throw ConcurrentModificationException within timeout"
+            );
             client.wakeup();
             consumer.wakeup();
         } finally {

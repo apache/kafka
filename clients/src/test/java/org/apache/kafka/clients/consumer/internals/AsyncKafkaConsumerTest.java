@@ -1490,9 +1490,9 @@ public class AsyncKafkaConsumerTest {
             Exception expectedException = expectedExceptionOpt.get();
             ConsumerPollTestUtils.waitForException(
                 consumer,
-                e -> Objects.equals(e.getClass(), expectedException.getClass()) &&
-                    Objects.equals(e.getMessage(), expectedException.getMessage()) &&
-                    Objects.equals(e.getCause(), expectedException.getCause()),
+                t -> Objects.equals(t.getClass(), expectedException.getClass()) &&
+                    Objects.equals(t.getMessage(), expectedException.getMessage()) &&
+                    Objects.equals(t.getCause(), expectedException.getCause()),
                 "Consumer.poll() did not throw the expected exception " + expectedException
             );
         } else {
@@ -1561,7 +1561,7 @@ public class AsyncKafkaConsumerTest {
         markReconcileAndAutoCommitCompleteForPollEvent();
         ConsumerPollTestUtils.waitForException(
             consumer,
-            e -> e.getMessage().equals(expectedException.getMessage()),
+            t -> t.getMessage().equals(expectedException.getMessage()),
             "Consumer.poll() did not fail with expected exception " + expectedException + " within timeout"
         );
     }
@@ -1582,7 +1582,7 @@ public class AsyncKafkaConsumerTest {
         markReconcileAndAutoCommitCompleteForPollEvent();
         ConsumerPollTestUtils.waitForException(
             consumer,
-            e -> e.getMessage().equals(expectedException1.getMessage()),
+            t -> t.getMessage().equals(expectedException1.getMessage()),
             "Consumer.poll() did not fail with expected exception " + expectedException1 + " within timeout"
         );
         assertTrue(backgroundEventQueue.isEmpty());
