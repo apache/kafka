@@ -46,8 +46,8 @@ public class MaterializedTest {
         final TopologyException e = assertThrows(TopologyException.class,
             () -> Materialized.as(invalidName));
 
-        assertEquals(e.getMessage(), "Invalid topology: Name \"" + invalidName +
-            "\" is illegal, it contains a character other than " + "ASCII alphanumerics, '.', '_' and '-'");
+        assertEquals("Invalid topology: Name \"" + invalidName +
+            "\" is illegal, it contains a character other than " + "ASCII alphanumerics, '.', '_' and '-'", e.getMessage());
     }
 
     @Test
@@ -105,7 +105,7 @@ public class MaterializedTest {
 
         final TopologyException e = assertThrows(TopologyException.class,
             () -> Materialized.as(invalidStoreName));
-        assertEquals(e.getMessage(), "Invalid topology: Name is illegal, it can't be longer than " + maxNameLength +
-                " characters, name: " + invalidStoreName);
+        assertEquals("Invalid topology: Name is illegal, it can't be longer than " + maxNameLength +
+                " characters, name: " + invalidStoreName, e.getMessage());
     }
 }
