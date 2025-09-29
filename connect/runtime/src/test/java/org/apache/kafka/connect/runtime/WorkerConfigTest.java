@@ -27,7 +27,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,7 +58,7 @@ public class WorkerConfigTest {
     public void testLookupKafkaClusterId() {
         final Node broker1 = new Node(0, "dummyHost-1", 1234);
         final Node broker2 = new Node(1, "dummyHost-2", 1234);
-        List<Node> cluster = Arrays.asList(broker1, broker2);
+        List<Node> cluster = List.of(broker1, broker2);
         MockAdminClient adminClient = new MockAdminClient.Builder().
                 brokers(cluster).build();
         assertEquals(MockAdminClient.DEFAULT_CLUSTER_ID, WorkerConfig.lookupKafkaClusterId(adminClient));
@@ -69,7 +68,7 @@ public class WorkerConfigTest {
     public void testLookupNullKafkaClusterId() {
         final Node broker1 = new Node(0, "dummyHost-1", 1234);
         final Node broker2 = new Node(1, "dummyHost-2", 1234);
-        List<Node> cluster = Arrays.asList(broker1, broker2);
+        List<Node> cluster = List.of(broker1, broker2);
         MockAdminClient adminClient = new MockAdminClient.Builder().
                 brokers(cluster).clusterId(null).build();
         assertNull(WorkerConfig.lookupKafkaClusterId(adminClient));
@@ -79,7 +78,7 @@ public class WorkerConfigTest {
     public void testLookupKafkaClusterIdTimeout() {
         final Node broker1 = new Node(0, "dummyHost-1", 1234);
         final Node broker2 = new Node(1, "dummyHost-2", 1234);
-        List<Node> cluster = Arrays.asList(broker1, broker2);
+        List<Node> cluster = List.of(broker1, broker2);
         MockAdminClient adminClient = new MockAdminClient.Builder().
                 brokers(cluster).build();
         adminClient.timeoutNextRequest(1);

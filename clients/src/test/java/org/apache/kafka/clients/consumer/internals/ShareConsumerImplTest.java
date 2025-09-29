@@ -26,11 +26,13 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeOnCloseEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackRegistrationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
 import org.apache.kafka.clients.consumer.internals.events.StopFindCoordinatorOnCloseEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -76,6 +78,7 @@ import java.util.function.Predicate;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -210,18 +213,19 @@ public class ShareConsumerImplTest {
         props.put(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "an.invalid.class");
         final ConsumerConfig config = new ConsumerConfig(props);
 
-        LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        KafkaException ce = assertThrows(
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            KafkaException ce = assertThrows(
                 KafkaException.class,
                 () -> newConsumer(config));
-        assertTrue(ce.getMessage().contains("Failed to construct Kafka share consumer"), "Unexpected exception message: " + ce.getMessage());
-        assertTrue(ce.getCause().getMessage().contains("Class an.invalid.class cannot be found"), "Unexpected cause: " + ce.getCause());
+            assertTrue(ce.getMessage().contains("Failed to construct Kafka share consumer"), "Unexpected exception message: " + ce.getMessage());
+            assertTrue(ce.getCause().getMessage().contains("Class an.invalid.class cannot be found"), "Unexpected cause: " + ce.getCause());
 
-        boolean npeLogged = appender.getEvents().stream()
+            boolean npeLogged = appender.getEvents().stream()
                 .flatMap(event -> event.getThrowableInfo().stream())
                 .anyMatch(str -> str.contains("NullPointerException"));
 
-        assertFalse(npeLogged, "Unexpected NullPointerException during consumer construction");
+            assertFalse(npeLogged, "Unexpected NullPointerException during consumer construction");
+        }
     }
 
     @Test
@@ -777,6 +781,22 @@ public class ShareConsumerImplTest {
         // Because we didn't need to perform a timed get, we should still have every last millisecond
         // of our initial timeout.
         assertEquals(1000, timer.remainingMs());
+    }
+
+    @Test
+    public void testRecordBackgroundEventQueueSize() {
+        consumer = newConsumer();
+        Metrics metrics = consumer.metricsRegistry();
+        AsyncConsumerMetrics asyncConsumerMetrics = consumer.asyncConsumerMetrics();
+
+        ShareAcknowledgementCommitCallbackEvent event = new ShareAcknowledgementCommitCallbackEvent(Map.of());
+        backgroundEventQueue.add(event);
+        asyncConsumerMetrics.recordBackgroundEventQueueSize(1);
+
+        assertEquals(1, (double) metrics.metric(metrics.metricName("background-event-queue-size", CONSUMER_SHARE_METRIC_GROUP)).metricValue());
+
+        consumer.processBackgroundEvents();
+        assertEquals(0, (double) metrics.metric(metrics.metricName("background-event-queue-size", CONSUMER_SHARE_METRIC_GROUP)).metricValue());
     }
 
     /**

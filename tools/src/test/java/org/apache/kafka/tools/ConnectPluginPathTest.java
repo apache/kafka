@@ -444,13 +444,7 @@ public class ConnectPluginPathTest {
         MULTI_JAR
     }
 
-    private static class PluginLocation {
-        private final Path path;
-
-        private PluginLocation(Path path) {
-            this.path = path;
-        }
-
+    private record PluginLocation(Path path) {
         @Override
         public String toString() {
             return path.toString();
@@ -504,15 +498,7 @@ public class ConnectPluginPathTest {
         }
     }
 
-    private static class PluginPathElement {
-        private final Path root;
-        private final List<PluginLocation> locations;
-
-        private PluginPathElement(Path root, List<PluginLocation> locations) {
-            this.root = root;
-            this.locations = locations;
-        }
-
+    private record PluginPathElement(Path root, List<PluginLocation> locations) {
         @Override
         public String toString() {
             return root.toString();
@@ -535,14 +521,7 @@ public class ConnectPluginPathTest {
         return new PluginPathElement(path, locations);
     }
 
-    private static class WorkerConfig {
-        private final Path configFile;
-        private final List<PluginPathElement> pluginPathElements;
-
-        private WorkerConfig(Path configFile, List<PluginPathElement> pluginPathElements) {
-            this.configFile = configFile;
-            this.pluginPathElements = pluginPathElements;
-        }
+    private record WorkerConfig(Path configFile, List<PluginPathElement> pluginPathElements) {
 
         @Override
         public String toString() {

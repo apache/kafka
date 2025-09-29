@@ -646,16 +646,7 @@ public class ReassignPartitionsCommandTest {
         }));
     }
 
-    static class LogDirReassignment {
-        final String json;
-        final String currentDir;
-        final String targetDir;
-
-        public LogDirReassignment(String json, String currentDir, String targetDir) {
-            this.json = json;
-            this.currentDir = currentDir;
-            this.targetDir = targetDir;
-        }
+    record LogDirReassignment(String json, String currentDir, String targetDir) {
     }
 
     private LogDirReassignment buildLogDirReassignment(TopicPartition topicPartition,

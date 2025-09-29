@@ -24,7 +24,7 @@ import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.builders.LogManagerBuilder;
 
-import org.apache.kafka.common.PartitionState;
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
@@ -32,8 +32,10 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.metadata.MockConfigRepository;
+import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
@@ -78,7 +80,7 @@ import scala.jdk.javaapi.OptionConverters;
 public class PartitionMakeFollowerBenchmark {
     private final File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
     private final KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
-    private final List<Integer> replicas = List.of(0, 1, 2);
+    private final int[] replicas = {0, 1, 2};
     private final OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
     private final DelayedOperations delayedOperations  = Mockito.mock(DelayedOperations.class);
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
@@ -148,13 +150,15 @@ public class PartitionMakeFollowerBenchmark {
 
     @Benchmark
     public boolean testMakeFollower() {
-        PartitionState partitionState = new PartitionState()
+        PartitionRegistration partitionRegistration = new PartitionRegistration.Builder()
             .setLeader(0)
+            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
             .setLeaderEpoch(0)
             .setIsr(replicas)
             .setPartitionEpoch(1)
             .setReplicas(replicas)
-            .setIsNew(true);
-        return partition.makeFollower(partitionState, offsetCheckpoints, topicId, Option.empty());
+            .setDirectories(DirectoryId.unassignedArray(replicas.length))
+            .build();
+        return partition.makeFollower(partitionRegistration, true, offsetCheckpoints, topicId, Option.empty());
     }
 }

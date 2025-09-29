@@ -260,8 +260,8 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setRaftClient(RaftClient<ApiMessageAndVersion> logManager) {
-            this.raftClient = logManager;
+        public Builder setRaftClient(RaftClient<ApiMessageAndVersion> raftClient) {
+            this.raftClient = raftClient;
             return this;
         }
 
@@ -1082,7 +1082,7 @@ public final class QuorumController implements Controller {
 
         @Override
         public void beginShutdown() {
-            queue.beginShutdown("MetaLogManager.Listener");
+            queue.beginShutdown("QuorumMetaLogListener");
         }
 
         private void appendRaftEvent(String name, Runnable runnable) {

@@ -159,11 +159,6 @@ public class FollowerState implements EpochState {
         return updateVoterSetPeriodTimer.isExpired();
     }
 
-    public long remainingUpdateVoterSetPeriodMs(long currentTimeMs) {
-        updateVoterSetPeriodTimer.update(currentTimeMs);
-        return updateVoterSetPeriodTimer.remainingMs();
-    }
-
     public void resetUpdateVoterSetPeriod(long currentTimeMs) {
         updateVoterSetPeriodTimer.update(currentTimeMs);
         updateVoterSetPeriodTimer.reset(updateVoterPeriodMs());

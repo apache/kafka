@@ -885,7 +885,7 @@ public class TopicCommandTest {
     public void testTopicDeletion(ClusterInstance clusterInstance) throws Exception {
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
-            String testTopicName = TestUtils.randomString(10);
+            String testTopicName = "testing";
 
             adminClient.createTopics(List.of(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
             clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);

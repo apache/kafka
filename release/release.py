@@ -218,7 +218,7 @@ def verify_gpg_key():
     if not gpg.key_exists(gpg_key_id):
         fail(f"GPG key {gpg_key_id} not found")
     if not gpg.valid_passphrase(gpg_key_id, gpg_passphrase):
-        fail(f"GPG passprase not valid for key {gpg_key_id}")
+        fail(f"GPG passphrase not valid for key {gpg_key_id}")
 
 
 preferences.once("verify_requirements", lambda: confirm_or_fail(templates.requirements_instructions(preferences.FILE, preferences.as_json())))
@@ -232,12 +232,12 @@ apache_id = preferences.get('apache_id', lambda: prompt("Please enter your apach
 jdk21_env = get_jdk(21)
 
 
-def verify_prerequeisites():
+def verify_prerequisites():
     print("Begin to check if you have met all the pre-requisites for the release process")
     def prereq(name, soft_check):
         try:
             result = soft_check()
-            if result == False:
+            if not result:
                 fail(f"Pre-requisite not met: {name}")
             else:
                 print(f"Pre-requisite met: {name}")
@@ -250,7 +250,7 @@ def verify_prerequeisites():
     return True
 
 
-preferences.once(f"verify_prerequeisites", verify_prerequeisites)
+preferences.once(f"verify_prerequisites", verify_prerequisites)
 
 # Validate that the release doesn't already exist
 git.fetch_tags()
@@ -360,7 +360,7 @@ cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=os.path.j
 
 # TODO: Many of these suggested validation steps could be automated
 # and would help pre-validate a lot of the stuff voters test
-print(templates.sanity_check_instructions(release_version, rc_tag, apache_id))
+print(templates.sanity_check_instructions(release_version, rc_tag))
 confirm_or_fail("Have you sufficiently verified the release artifacts?")
 
 # TODO: Can we close the staging repository via a REST API since we
@@ -376,6 +376,5 @@ git.reset_hard_head()
 git.switch_branch(starting_branch)
 git.delete_branch(release_version)
 
-rc_vote_email_text = templates.rc_vote_email_text(release_version, rc, rc_tag, dev_branch, docs_release_version, apache_id)
+rc_vote_email_text = templates.rc_vote_email_text(release_version, rc, rc_tag, dev_branch, docs_release_version)
 print(templates.rc_email_instructions(rc_vote_email_text))
-

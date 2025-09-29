@@ -196,22 +196,8 @@ public class ConnectPluginPath {
         LIST, SYNC_MANIFESTS
     }
 
-    private static class Config {
-        private final Command command;
-        private final Set<Path> locations;
-        private final boolean dryRun;
-        private final boolean keepNotFound;
-        private final PrintStream out;
-        private final PrintStream err;
-
-        private Config(Command command, Set<Path> locations, boolean dryRun, boolean keepNotFound, PrintStream out, PrintStream err) {
-            this.command = command;
-            this.locations = locations;
-            this.dryRun = dryRun;
-            this.keepNotFound = keepNotFound;
-            this.out = out;
-            this.err = err;
-        }
+    private record Config(Command command, Set<Path> locations, boolean dryRun, boolean keepNotFound, PrintStream out,
+                          PrintStream err) {
 
         @Override
         public String toString() {
@@ -262,16 +248,9 @@ public class ConnectPluginPath {
      * <p>This is unique to the (source, class, type) tuple, and contains additional pre-computed information
      * that pertains to this specific plugin.
      */
-    private static class Row {
-        private final ManifestWorkspace.SourceWorkspace<?> workspace;
-        private final String className;
-        private final PluginType type;
-        private final String version;
-        private final List<String> aliases;
-        private final boolean loadable;
-        private final boolean hasManifest;
-
-        public Row(ManifestWorkspace.SourceWorkspace<?> workspace, String className, PluginType type, String version, List<String> aliases, boolean loadable, boolean hasManifest) {
+    private record Row(ManifestWorkspace.SourceWorkspace<?> workspace, String className, PluginType type,
+                       String version, List<String> aliases, boolean loadable, boolean hasManifest) {
+        private Row(ManifestWorkspace.SourceWorkspace<?> workspace, String className, PluginType type, String version, List<String> aliases, boolean loadable, boolean hasManifest) {
             this.workspace = Objects.requireNonNull(workspace, "workspace must be non-null");
             this.className = Objects.requireNonNull(className, "className must be non-null");
             this.version = Objects.requireNonNull(version, "version must be non-null");
@@ -279,10 +258,6 @@ public class ConnectPluginPath {
             this.aliases = Objects.requireNonNull(aliases, "aliases must be non-null");
             this.loadable = loadable;
             this.hasManifest = hasManifest;
-        }
-
-        private boolean loadable() {
-            return loadable;
         }
 
         private boolean compatible() {

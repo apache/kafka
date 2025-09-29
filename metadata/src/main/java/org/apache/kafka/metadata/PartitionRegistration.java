@@ -18,8 +18,6 @@
 package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.DirectoryId;
-import org.apache.kafka.common.PartitionState;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidReplicaDirectoriesException;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
@@ -408,21 +406,6 @@ public class PartitionRegistration {
             }
         }
         return new ApiMessageAndVersion(record, options.metadataVersion().partitionRecordVersion());
-    }
-
-    public PartitionState toLeaderAndIsrPartitionState(TopicPartition tp, boolean isNew) {
-        return new PartitionState().
-            setTopicName(tp.topic()).
-            setPartitionIndex(tp.partition()).
-            setLeader(leader).
-            setLeaderEpoch(leaderEpoch).
-            setIsr(Replicas.toList(isr)).
-            setPartitionEpoch(partitionEpoch).
-            setReplicas(Replicas.toList(replicas)).
-            setAddingReplicas(Replicas.toList(addingReplicas)).
-            setRemovingReplicas(Replicas.toList(removingReplicas)).
-            setLeaderRecoveryState(leaderRecoveryState.value()).
-            setIsNew(isNew);
     }
 
     @Override

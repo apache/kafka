@@ -28,10 +28,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -98,10 +98,10 @@ public class SinkConnectorsIntegrationTest {
     public void testEagerConsumerPartitionAssignment() throws Exception {
         final String topic1 = "topic1", topic2 = "topic2", topic3 = "topic3";
         final TopicPartition tp1 = new TopicPartition(topic1, 0), tp2 = new TopicPartition(topic2, 0), tp3 = new TopicPartition(topic3, 0);
-        final Collection<String> topics = Arrays.asList(topic1, topic2, topic3);
+        final Collection<String> topics = List.of(topic1, topic2, topic3);
 
         Map<String, String> connectorProps = baseSinkConnectorProps(String.join(",", topics));
-        // Need an eager assignor here; round robin is as good as any
+        // Need an eager assignor here; round-robin is as good as any
         connectorProps.put(
             CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
             RoundRobinAssignor.class.getName());
@@ -205,7 +205,7 @@ public class SinkConnectorsIntegrationTest {
     public void testCooperativeConsumerPartitionAssignment() throws Exception {
         final String topic1 = "topic1", topic2 = "topic2", topic3 = "topic3";
         final TopicPartition tp1 = new TopicPartition(topic1, 0), tp2 = new TopicPartition(topic2, 0), tp3 = new TopicPartition(topic3, 0);
-        final Collection<String> topics = Arrays.asList(topic1, topic2, topic3);
+        final Collection<String> topics = List.of(topic1, topic2, topic3);
 
         Map<String, String> connectorProps = baseSinkConnectorProps(String.join(",", topics));
         connectorProps.put(

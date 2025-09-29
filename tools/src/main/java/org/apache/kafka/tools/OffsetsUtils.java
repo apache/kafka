@@ -500,16 +500,7 @@ public class OffsetsUtils {
 
     public interface LogOffsetResult { }
 
-    public static class LogOffset implements LogOffsetResult {
-        final long value;
-
-        public LogOffset(long value) {
-            this.value = value;
-        }
-
-        public long value() {
-            return value;
-        }
+    public record LogOffset(long value) implements LogOffsetResult {
     }
 
     public static class Unknown implements LogOffsetResult { }

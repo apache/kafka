@@ -52,6 +52,7 @@ Follow instructions in https://kafka.apache.org/quickstart
 
 ### Running a particular unit/integration test ###
     ./gradlew clients:test --tests RequestResponseTest
+    ./gradlew streams:integration-tests:test --tests RestoreIntegrationTest
 
 ### Repeatedly running a particular unit/integration test with specific times by setting N ###
     N=500; I=0; while [ $I -lt $N ] && ./gradlew clients:test --tests RequestResponseTest --rerun --fail-fast; do (( I=$I+1 )); echo "Completed run: $I"; sleep 1; done
@@ -59,6 +60,7 @@ Follow instructions in https://kafka.apache.org/quickstart
 ### Running a particular test method within a unit/integration test ###
     ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
     ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testTimeToNextUpdate
+    ./gradlew streams:integration-tests:test --tests org.apache.kafka.streams.integration.RestoreIntegrationTest.shouldRestoreNullRecord
 
 ### Running a particular unit/integration test with log4j output ###
 By default, there will be only small number of logs output while testing. You can adjust it by changing the `log4j2.yaml` file in the module's `src/test/resources` directory.

@@ -172,7 +172,8 @@ object ReplicaManager {
     ListOffsetsRequest.LATEST_TIMESTAMP -> 1.toShort,
     ListOffsetsRequest.MAX_TIMESTAMP -> 7.toShort,
     ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP -> 8.toShort,
-    ListOffsetsRequest.LATEST_TIERED_TIMESTAMP -> 9.toShort
+    ListOffsetsRequest.LATEST_TIERED_TIMESTAMP -> 9.toShort,
+    ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP -> 11.toShort
   )
 
   def createLogReadResult(highWatermark: Long,
@@ -788,7 +789,11 @@ class ReplicaManager(val config: KafkaConfig,
             hasCustomErrorMessage = customException.isDefined
           )
       }
-      val entriesWithoutErrorsPerPartition = entriesPerPartition.filter { case (key, _) => !errorResults.contains(key) }
+      // In non-transaction paths, errorResults is typically empty, so we can 
+      // directly use entriesPerPartition instead of creating a new filtered collection
+      val entriesWithoutErrorsPerPartition = 
+        if (errorResults.nonEmpty) entriesPerPartition.filter { case (key, _) => !errorResults.contains(key) }
+        else entriesPerPartition
 
       val preAppendPartitionResponses = buildProducePartitionStatus(errorResults).map { case (k, status) => k -> status.responseStatus }
 
@@ -1256,11 +1261,11 @@ class ReplicaManager(val config: KafkaConfig,
         }
 
         val describeLogDirsResult = new DescribeLogDirsResponseData.DescribeLogDirsResult()
-          .setLogDir(absolutePath).setTopics(topicInfos)
+          .setLogDir(absolutePath)
+          .setTopics(topicInfos)
           .setErrorCode(Errors.NONE.code)
-          .setTotalBytes(totalBytes).setUsableBytes(usableBytes)
-        if (!topicInfos.isEmpty)
-          describeLogDirsResult.setTopics(topicInfos)
+          .setTotalBytes(totalBytes)
+          .setUsableBytes(usableBytes)
         describeLogDirsResult
 
       } catch {
@@ -2409,9 +2414,8 @@ class ReplicaManager(val config: KafkaConfig,
     localLeaders.foreachEntry { (tp, info) =>
       getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
         try {
-          val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
           val partitionAssignedDirectoryId = directoryIds.find(_._1.topicPartition() == tp).map(_._2)
-          partition.makeLeader(state, offsetCheckpoints, Some(info.topicId), partitionAssignedDirectoryId)
+          partition.makeLeader(info.partition, isNew, offsetCheckpoints, Some(info.topicId), partitionAssignedDirectoryId)
 
           changedPartitions.add(partition)
         } catch {
@@ -2451,9 +2455,8 @@ class ReplicaManager(val config: KafkaConfig,
           // - This also ensures that the local replica is created even if the leader
           //   is unavailable. This is required to ensure that we include the partition's
           //   high watermark in the checkpoint file (see KAFKA-1647).
-          val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
           val partitionAssignedDirectoryId = directoryIds.find(_._1.topicPartition() == tp).map(_._2)
-          val isNewLeaderEpoch = partition.makeFollower(state, offsetCheckpoints, Some(info.topicId), partitionAssignedDirectoryId)
+          val isNewLeaderEpoch = partition.makeFollower(info.partition, isNew, offsetCheckpoints, Some(info.topicId), partitionAssignedDirectoryId)
 
           if (isInControlledShutdown && (info.partition.leader == NO_LEADER ||
               !info.partition.isr.contains(config.brokerId))) {
