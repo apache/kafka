@@ -46,6 +46,7 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
@@ -177,12 +178,20 @@ public interface ClusterInstance {
     }
 
     default <K, V> ShareConsumer<K, V> shareConsumer(Map<String, Object> configs) {
+        return shareConsumer(configs, null, null);
+    }
+
+    default <K, V> ShareConsumer<K, V> shareConsumer(Map<String, Object> configs, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
         Map<String, Object> props = new HashMap<>(configs);
-        props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-        props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        if (keyDeserializer == null) {
+            props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        }
+        if (valueDeserializer == null) {
+            props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        }
         props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + TestUtils.randomString(5));
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        return new KafkaShareConsumer<>(setClientSaslConfig(props));
+        return new KafkaShareConsumer<>(setClientSaslConfig(props), keyDeserializer, valueDeserializer);
     }
 
     default Admin admin(Map<String, Object> configs, boolean usingBootstrapControllers) {
@@ -264,12 +273,7 @@ public interface ClusterInstance {
                 broker -> broker.metadataCache().numPartitions(topic).isEmpty()),
                 60000L, topic + " metadata not propagated after 60000 ms");
 
-        for (ControllerServer controller : controllers().values()) {
-            long controllerOffset = controller.raftManager().replicatedLog().endOffset().offset() - 1;
-            TestUtils.waitForCondition(
-                () -> brokers.stream().allMatch(broker -> ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset),
-                60000L, "Timeout waiting for controller metadata propagating to brokers");
-        }
+        ensureConsistentMetadata(brokers, controllers().values());
 
         TopicPartition topicPartition = new TopicPartition(topic, 0);
 
@@ -319,7 +323,7 @@ public interface ClusterInstance {
     default void createTopic(String topicName, int partitions, short replicas, Map<String, String> props) throws InterruptedException {
         try (Admin admin = admin()) {
             admin.createTopics(List.of(new NewTopic(topicName, partitions, replicas).configs(props)));
-            waitForTopic(topicName, partitions);
+            waitTopicCreation(topicName, partitions);
         }
     }
 
@@ -338,7 +342,7 @@ public interface ClusterInstance {
 
     void waitForReadyBrokers() throws InterruptedException;
 
-    default void waitForTopic(String topic, int partitions) throws InterruptedException {
+    default void waitTopicCreation(String topic, int partitions) throws InterruptedException {
         if (partitions <= 0) {
             throw new IllegalArgumentException("Partition count must be > 0, but was " + partitions);
         }
@@ -349,7 +353,15 @@ public interface ClusterInstance {
             () -> brokers.stream().allMatch(broker -> broker.metadataCache().numPartitions(topic).filter(p -> p == partitions).isPresent()),
                 60000L, topic + " metadata not propagated after 60000 ms");
 
-        for (ControllerServer controller : controllers().values()) {
+        ensureConsistentMetadata(brokers, controllers().values());
+    }
+
+    default void ensureConsistentMetadata() throws InterruptedException  {
+        ensureConsistentMetadata(aliveBrokers().values(), controllers().values());
+    }
+
+    default void ensureConsistentMetadata(Collection<KafkaBroker> brokers, Collection<ControllerServer> controllers) throws InterruptedException  {
+        for (ControllerServer controller : controllers) {
             long controllerOffset = controller.raftManager().replicatedLog().endOffset().offset() - 1;
             TestUtils.waitForCondition(
                 () -> brokers.stream().allMatch(broker -> ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset),
@@ -437,13 +449,5 @@ public interface ClusterInstance {
 
         throw new AssertionError("Timing out after " + timeoutMs +
                 " ms since a leader was not elected for partition " + topicPartition);
-    }
-
-    default List<Integer> boundPorts() {
-        return brokers().values().stream()
-                .map(KafkaBroker::socketServer)
-                .map(s -> s.boundPort(clientListener()))
-                .toList();
-
     }
 }

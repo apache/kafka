@@ -39,9 +39,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -60,14 +61,14 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     public static final int NUM_PARTITIONS = 1;
     public static final int BROKER_COUNT = 1;
     public static final String KAFKA_CLIENT_SASL_MECHANISM = "SCRAM-SHA-256";
-    private static final Seq<String> KAFKA_SERVER_SASL_MECHANISMS =  CollectionConverters.asScala(Collections.singletonList(KAFKA_CLIENT_SASL_MECHANISM)).toSeq();
+    private static final Seq<String> KAFKA_SERVER_SASL_MECHANISMS =  CollectionConverters.asScala(List.of(KAFKA_CLIENT_SASL_MECHANISM)).toSeq();
 
     private Consumer<byte[], byte[]> createConsumer() {
         return createConsumer(
             new ByteArrayDeserializer(),
             new ByteArrayDeserializer(),
             new Properties(),
-            CollectionConverters.asScala(Collections.<String>emptySet()).toList()
+            CollectionConverters.asScala(Set.<String>of()).toList()
         );
     }
 
@@ -99,7 +100,7 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     @Override
     public void addFormatterSettings(Formatter formatter) {
         formatter.setClusterId("XcZZOzUqS4yHOjhMQB6JLQ");
-        formatter.setScramArguments(Arrays.asList("SCRAM-SHA-256=[name=" + JaasTestUtils.KAFKA_SCRAM_ADMIN +
+        formatter.setScramArguments(List.of("SCRAM-SHA-256=[name=" + JaasTestUtils.KAFKA_SCRAM_ADMIN +
             ",password=" + JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD + "]"));
     }
 
@@ -119,7 +120,7 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
         this.superuserClientConfig().put(SaslConfigs.SASL_JAAS_CONFIG, superuserLoginContext);
         super.setUp(testInfo);
         try (Admin admin = createPrivilegedAdminClient()) {
-            admin.createTopics(Collections.singletonList(
+            admin.createTopics(List.of(
                 new NewTopic(TOPIC, NUM_PARTITIONS, (short) BROKER_COUNT))).all().
                     get(5, TimeUnit.MINUTES);
         } catch (ExecutionException | InterruptedException | TimeoutException e) {
@@ -142,7 +143,7 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
             ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
             Consumer<byte[], byte[]> consumer = createConsumer()
         ) {
-            consumer.subscribe(Collections.singletonList(TOPIC));
+            consumer.subscribe(List.of(TOPIC));
             verifyAuthenticationException(consumerGroupService::listGroups);
         }
     }
@@ -156,7 +157,7 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
             ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
             Consumer<byte[], byte[]> consumer = createConsumer()
         ) {
-            consumer.subscribe(Collections.singletonList(TOPIC));
+            consumer.subscribe(List.of(TOPIC));
 
             TestUtils.waitForCondition(() -> {
                 try {
@@ -180,7 +181,7 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
             "--group", "test.group",
             "--command-config", propsFile.getAbsolutePath()};
         ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(cgcArgs);
-        return new ConsumerGroupCommand.ConsumerGroupService(opts, Collections.emptyMap());
+        return new ConsumerGroupCommand.ConsumerGroupService(opts, Map.of());
     }
 
     private void verifyAuthenticationException(Executable action) {

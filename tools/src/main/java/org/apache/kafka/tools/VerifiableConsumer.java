@@ -58,7 +58,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -231,7 +230,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     public void run() {
         try {
             printJson(new StartupComplete());
-            consumer.subscribe(Collections.singletonList(topic), this);
+            consumer.subscribe(List.of(topic), this);
 
             while (!isFinished()) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
@@ -506,114 +505,125 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
     private static ArgumentParser argParser() {
         ArgumentParser parser = ArgumentParsers
-                .newArgumentParser("verifiable-consumer")
-                .defaultHelp(true)
-                .description("This tool consumes messages from a specific topic and emits consumer events (e.g. group rebalances, received messages, and offsets committed) as JSON objects to STDOUT.");
+            .newArgumentParser("verifiable-consumer")
+            .defaultHelp(true)
+            .description("This tool consumes messages from a specific topic and emits consumer events (e.g. group rebalances, received messages, and offsets committed) as JSON objects to STDOUT.");
         MutuallyExclusiveGroup connectionGroup = parser.addMutuallyExclusiveGroup("Connection Group")
-                .description("Group of arguments for connection to brokers")
-                .required(true);
+            .description("Group of arguments for connection to brokers")
+            .required(true);
         connectionGroup.addArgument("--bootstrap-server")
-                .action(store())
-                .required(true)
-                .type(String.class)
-                .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
-                .dest("bootstrapServer")
-                .help("The server(s) to connect to. Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
+            .action(store())
+            .required(true)
+            .type(String.class)
+            .dest("bootstrapServer")
+            .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
+            .help("The server(s) to connect to. Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
         parser.addArgument("--topic")
-                .action(store())
-                .required(true)
-                .type(String.class)
-                .metavar("TOPIC")
-                .help("Consumes messages from this topic.");
+            .action(store())
+            .required(true)
+            .type(String.class)
+            .metavar("TOPIC")
+            .help("Consumes messages from this topic.");
 
         parser.addArgument("--group-protocol")
-                .action(store())
-                .required(false)
-                .type(String.class)
-                .setDefault(ConsumerConfig.DEFAULT_GROUP_PROTOCOL)
-                .metavar("GROUP_PROTOCOL")
-                .dest("groupProtocol")
-                .help(String.format("Group protocol (must be one of %s)", Arrays.stream(GroupProtocol.values())
-                        .map(Object::toString).collect(Collectors.joining(", "))));
+            .action(store())
+            .required(false)
+            .type(String.class)
+            .setDefault(ConsumerConfig.DEFAULT_GROUP_PROTOCOL)
+            .dest("groupProtocol")
+            .metavar("GROUP-PROTOCOL")
+            .help(String.format("Group protocol (must be one of %s)", Arrays.stream(GroupProtocol.values())
+                    .map(Object::toString).collect(Collectors.joining(", "))));
 
         parser.addArgument("--group-remote-assignor")
-                .action(store())
-                .required(false)
-                .type(String.class)
-                .setDefault(ConsumerConfig.DEFAULT_GROUP_REMOTE_ASSIGNOR)
-                .metavar("GROUP_REMOTE_ASSIGNOR")
-                .dest("groupRemoteAssignor")
-                .help(String.format("Group remote assignor; only used if the group protocol is %s", GroupProtocol.CONSUMER.name()));
+            .action(store())
+            .required(false)
+            .type(String.class)
+            .setDefault(ConsumerConfig.DEFAULT_GROUP_REMOTE_ASSIGNOR)
+            .dest("groupRemoteAssignor")
+            .metavar("GROUP-REMOTE-ASSIGNOR")
+            .help(String.format("Group remote assignor; only used if the group protocol is %s", GroupProtocol.CONSUMER.name()));
 
         parser.addArgument("--group-id")
-                .action(store())
-                .required(true)
-                .type(String.class)
-                .metavar("GROUP_ID")
-                .dest("groupId")
-                .help("The groupId shared among members of the consumer group");
+            .action(store())
+            .required(true)
+            .type(String.class)
+            .dest("groupId")
+            .metavar("GROUP-ID")
+            .help("The group id of the consumer group");
 
         parser.addArgument("--group-instance-id")
-                .action(store())
-                .required(false)
-                .type(String.class)
-                .metavar("GROUP_INSTANCE_ID")
-                .dest("groupInstanceId")
-                .help("A unique identifier of the consumer instance");
+            .action(store())
+            .required(false)
+            .type(String.class)
+            .dest("groupInstanceId")
+            .metavar("GROUP-INSTANCE-ID")
+            .help("A unique identifier of the consumer instance");
 
         parser.addArgument("--max-messages")
-                .action(store())
-                .required(false)
-                .type(Integer.class)
-                .setDefault(-1)
-                .metavar("MAX-MESSAGES")
-                .dest("maxMessages")
-                .help("Consume this many messages. If -1 (the default), the consumer will consume until the process is killed externally");
+            .action(store())
+            .required(false)
+            .type(Integer.class)
+            .setDefault(-1)
+            .dest("maxMessages")
+            .metavar("MAX-MESSAGES")
+            .help("Consume this many messages. If -1 (the default), the consumer will consume until the process is killed externally");
 
         parser.addArgument("--session-timeout")
-                .action(store())
-                .required(false)
-                .type(Integer.class)
-                .metavar("TIMEOUT_MS")
-                .dest("sessionTimeout")
-                .help("Set the consumer's session timeout, note that this configuration is not supported when group protocol is consumer");
+            .action(store())
+            .required(false)
+            .type(Integer.class)
+            .dest("sessionTimeout")
+            .metavar("TIMEOUT-MS")
+            .help("Set the consumer's session timeout, note that this configuration is not supported when group protocol is consumer");
 
         parser.addArgument("--verbose")
-                .action(storeTrue())
-                .type(Boolean.class)
-                .metavar("VERBOSE")
-                .help("Enable to log individual consumed records");
+            .action(storeTrue())
+            .type(Boolean.class)
+            .metavar("VERBOSE")
+            .help("Enable to log individual consumed records");
 
         parser.addArgument("--enable-autocommit")
-                .action(storeTrue())
-                .type(Boolean.class)
-                .metavar("ENABLE-AUTOCOMMIT")
-                .dest("useAutoCommit")
-                .help("Enable offset auto-commit on consumer");
+            .action(storeTrue())
+            .type(Boolean.class)
+            .dest("useAutoCommit")
+            .metavar("ENABLE-AUTOCOMMIT")
+            .help("Enable offset auto-commit on consumer");
 
         parser.addArgument("--reset-policy")
-                .action(store())
-                .required(false)
-                .setDefault("earliest")
-                .type(String.class)
-                .dest("resetPolicy")
-                .help("Set reset policy (must be either 'earliest', 'latest', or 'none'");
+            .action(store())
+            .required(false)
+            .setDefault("earliest")
+            .type(String.class)
+            .dest("resetPolicy")
+            .metavar("RESET-POLICY")
+            .help("Set reset policy (must be either 'earliest', 'latest', or 'none')");
 
         parser.addArgument("--assignment-strategy")
-                .action(store())
-                .required(false)
-                .setDefault(RangeAssignor.class.getName())
-                .type(String.class)
-                .dest("assignmentStrategy")
-                .help(String.format("Set assignment strategy (e.g. %s); only used if the group protocol is %s", RoundRobinAssignor.class.getName(), GroupProtocol.CLASSIC.name()));
+            .action(store())
+            .required(false)
+            .setDefault(RangeAssignor.class.getName())
+            .type(String.class)
+            .dest("assignmentStrategy")
+            .metavar("ASSIGNMENT-STRATEGY")
+            .help(String.format("Set assignment strategy (e.g. %s); only used if the group protocol is %s", RoundRobinAssignor.class.getName(), GroupProtocol.CLASSIC.name()));
 
         parser.addArgument("--consumer.config")
-                .action(store())
-                .required(false)
-                .type(String.class)
-                .metavar("CONFIG_FILE")
-                .help("Consumer config properties file (config options shared with command line parameters will be overridden).");
+            .action(store())
+            .required(false)
+            .type(String.class)
+            .metavar("CONFIG-FILE")
+            .help("(DEPRECATED) Consumer config properties file. " +
+                    "This option will be removed in a future version. Use --command-config instead");
+
+        parser.addArgument("--command-config")
+            .action(store())
+            .required(false)
+            .type(String.class)
+            .metavar("CONFIG-FILE")
+            .dest("commandConfigFile")
+            .help("Config properties file (config options shared with command line parameters will be overridden).");
 
         return parser;
     }
@@ -623,12 +633,24 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
         boolean useAutoCommit = res.getBoolean("useAutoCommit");
         String configFile = res.getString("consumer.config");
-        String brokerHostandPort = res.getString("bootstrapServer");
+        String commandConfigFile = res.getString("commandConfigFile");
+        String brokerHostAndPort = res.getString("bootstrapServer");
 
         Properties consumerProps = new Properties();
+        if (configFile != null && commandConfigFile != null) {
+            throw new ArgumentParserException("Options --consumer.config and --command-config are mutually exclusive.", parser);
+        }
         if (configFile != null) {
+            System.out.println("Option --consumer.config has been deprecated and will be removed in a future version. Use --command-config instead.");
             try {
                 consumerProps.putAll(Utils.loadProps(configFile));
+            } catch (IOException e) {
+                throw new ArgumentParserException(e.getMessage(), parser);
+            }
+        }
+        if (commandConfigFile != null) {
+            try {
+                consumerProps.putAll(Utils.loadProps(commandConfigFile));
             } catch (IOException e) {
                 throw new ArgumentParserException(e.getMessage(), parser);
             }
@@ -664,7 +686,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             consumerProps.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId);
         }
 
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostandPort);
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostAndPort);
 
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, useAutoCommit);
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, res.getString("resetPolicy"));

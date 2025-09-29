@@ -48,7 +48,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -577,7 +576,7 @@ public class BlockingConnectorTest {
         @Override
         public List<Map<String, String>> taskConfigs(int maxTasks) {
             block.maybeBlockOn(CONNECTOR_TASK_CONFIGS);
-            return Collections.singletonList(Collections.emptyMap());
+            return List.of(Map.of());
         }
 
         @Override

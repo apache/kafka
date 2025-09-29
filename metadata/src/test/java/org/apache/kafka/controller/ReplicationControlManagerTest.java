@@ -935,7 +935,7 @@ public class ReplicationControlManagerTest {
             }
 
             @Override
-            public void close() throws Exception { /* Nothing to do */ }
+            public void close() { /* Nothing to do */ }
 
             @Override
             public void configure(Map<String, ?> configs) { /* Nothing to do */ }
@@ -2990,7 +2990,7 @@ public class ReplicationControlManagerTest {
             new int[]{2, 3, 4}, new int[]{3, 4, 2}}).topicId();
         KRaftClusterDescriber describer = replication.clusterDescriber;
         HashSet<UsableBroker> brokers = new HashSet<>();
-        describer.usableBrokers().forEachRemaining(broker -> brokers.add(broker));
+        describer.usableBrokers().forEachRemaining(brokers::add);
         assertEquals(Set.of(
             new UsableBroker(0, Optional.empty(), true),
             new UsableBroker(1, Optional.empty(), true),

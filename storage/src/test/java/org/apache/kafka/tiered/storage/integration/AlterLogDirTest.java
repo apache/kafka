@@ -54,7 +54,7 @@ public final class AlterLogDirTest extends TieredStorageTestHarness {
                 .produce(topicB, p0, new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"),
                         new KeyValueSpec("k2", "v2"))
                 // alter dir within the replica, we only expect one replicaId
-                .alterLogDir(topicB, p0, List.of(broker0).get(0))
+                .alterLogDir(topicB, p0, broker0)
                 // make sure the altered replica can still be elected as the leader
                 .expectLeader(topicB, p0, broker0, true)
                 // produce some more events and verify the earliest local offset

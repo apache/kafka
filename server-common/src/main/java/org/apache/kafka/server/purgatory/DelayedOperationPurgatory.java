@@ -199,7 +199,7 @@ public class DelayedOperationPurgatory<T extends DelayedOperation> {
     }
 
     /**
-     * Return the total size of watch lists the purgatory. Since an operation may be watched
+     * Return the total size of watch lists in the purgatory. Since an operation may be watched
      * on multiple lists, and some of its watched entries may still be in the watch lists
      * even when it has been completed, this number may be larger than the number of real operations watched
      */

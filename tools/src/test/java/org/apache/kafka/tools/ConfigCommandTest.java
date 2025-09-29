@@ -53,7 +53,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.File;
 import java.io.IOException;
 import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -85,8 +84,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class ConfigCommandTest {
-    private static final List<String> BROKER_BOOTSTRAP = Arrays.asList("--bootstrap-server", "localhost:9092");
-    private static final List<String> CONTROLLER_BOOTSTRAP = Arrays.asList("--bootstrap-controller", "localhost:9093");
+    private static final List<String> BROKER_BOOTSTRAP = List.of("--bootstrap-server", "localhost:9092");
+    private static final List<String> CONTROLLER_BOOTSTRAP = List.of("--bootstrap-controller", "localhost:9093");
 
     @Test
     public void shouldExitWithNonZeroStatusOnArgError() {
@@ -95,7 +94,7 @@ public class ConfigCommandTest {
 
     @Test
     public void shouldExitWithNonZeroStatusAlterUserQuotaWithoutEntityName() {
-        assertNonZeroStatusExit(toArray(BROKER_BOOTSTRAP, Arrays.asList(
+        assertNonZeroStatusExit(toArray(BROKER_BOOTSTRAP, List.of(
             "--entity-type", "users",
             "--alter", "--add-config", "consumer_byte_rate=20000")));
     }
@@ -110,7 +109,7 @@ public class ConfigCommandTest {
 
     @Test
     public void shouldExitWithNonZeroStatusIfBothBootstrapServerAndBootstrapControllerGiven() {
-        assertNonZeroStatusExit(toArray(BROKER_BOOTSTRAP, CONTROLLER_BOOTSTRAP, Arrays.asList(
+        assertNonZeroStatusExit(toArray(BROKER_BOOTSTRAP, CONTROLLER_BOOTSTRAP, List.of(
             "--describe", "--broker-defaults")));
     }
 
@@ -405,9 +404,9 @@ public class ConfigCommandTest {
 
         File file = TestUtils.tempFile(fileContents);
 
-        List<String> addConfigFileArgs = Arrays.asList("--add-config-file", file.getPath());
+        List<String> addConfigFileArgs = List.of("--add-config-file", file.getPath());
 
-        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList("--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(List.of("--bootstrap-server", "localhost:9092",
                 "--entity-name", "1",
                 "--entity-type", "brokers",
                 "--alter"),
@@ -423,7 +422,7 @@ public class ConfigCommandTest {
     }
 
     public void testExpectedEntityTypeNames(List<String> expectedTypes, List<String> expectedNames, List<String> connectOpts, String... args) {
-        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList(connectOpts.get(0), connectOpts.get(1), "--describe"), Arrays.asList(args)));
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(List.of(connectOpts.get(0), connectOpts.get(1), "--describe"), List.of(args)));
         createOpts.checkArgs();
         assertEquals(createOpts.entityTypes().toSeq(), seq(expectedTypes));
         assertEquals(createOpts.entityNames().toSeq(), seq(expectedNames));
@@ -431,31 +430,31 @@ public class ConfigCommandTest {
 
     @Test
     public void testOptionEntityTypeNames() {
-        List<String> connectOpts = Arrays.asList("--bootstrap-server", "localhost:9092");
+        List<String> connectOpts = List.of("--bootstrap-server", "localhost:9092");
 
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.TOPIC.value()), Collections.singletonList("A"), connectOpts, "--entity-type", "topics", "--entity-name", "A");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.IP.value()), Collections.singletonList("1.2.3.4"), connectOpts, "--entity-name", "1.2.3.4", "--entity-type", "ips");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.CLIENT_METRICS.value()), Collections.singletonList("A"), connectOpts, "--entity-type", "client-metrics", "--entity-name", "A");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.GROUP.value()), Collections.singletonList("A"), connectOpts, "--entity-type", "groups", "--entity-name", "A");
-        testExpectedEntityTypeNames(Arrays.asList(ConfigType.USER.value(), ConfigType.CLIENT.value()), Arrays.asList("A", ""), connectOpts,
+        testExpectedEntityTypeNames(List.of(ConfigType.TOPIC.value()), List.of("A"), connectOpts, "--entity-type", "topics", "--entity-name", "A");
+        testExpectedEntityTypeNames(List.of(ConfigType.IP.value()), List.of("1.2.3.4"), connectOpts, "--entity-name", "1.2.3.4", "--entity-type", "ips");
+        testExpectedEntityTypeNames(List.of(ConfigType.CLIENT_METRICS.value()), List.of("A"), connectOpts, "--entity-type", "client-metrics", "--entity-name", "A");
+        testExpectedEntityTypeNames(List.of(ConfigType.GROUP.value()), List.of("A"), connectOpts, "--entity-type", "groups", "--entity-name", "A");
+        testExpectedEntityTypeNames(List.of(ConfigType.USER.value(), ConfigType.CLIENT.value()), List.of("A", ""), connectOpts,
             "--entity-type", "users", "--entity-type", "clients", "--entity-name", "A", "--entity-default");
-        testExpectedEntityTypeNames(Arrays.asList(ConfigType.USER.value(), ConfigType.CLIENT.value()), Arrays.asList("", "B"), connectOpts,
+        testExpectedEntityTypeNames(List.of(ConfigType.USER.value(), ConfigType.CLIENT.value()), List.of("", "B"), connectOpts,
             "--entity-default", "--entity-name", "B", "--entity-type", "users", "--entity-type", "clients");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.TOPIC.value()), Collections.singletonList("A"), connectOpts, "--topic", "A");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.IP.value()), Collections.singletonList("1.2.3.4"), connectOpts, "--ip", "1.2.3.4");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.GROUP.value()), Collections.singletonList("A"), connectOpts, "--group", "A");
-        testExpectedEntityTypeNames(Arrays.asList(ConfigType.CLIENT.value(), ConfigType.USER.value()), Arrays.asList("B", "A"), connectOpts, "--client", "B", "--user", "A");
-        testExpectedEntityTypeNames(Arrays.asList(ConfigType.CLIENT.value(), ConfigType.USER.value()), Arrays.asList("B", ""), connectOpts, "--client", "B", "--user-defaults");
-        testExpectedEntityTypeNames(Arrays.asList(ConfigType.CLIENT.value(), ConfigType.USER.value()), Collections.singletonList("A"), connectOpts,
+        testExpectedEntityTypeNames(List.of(ConfigType.TOPIC.value()), List.of("A"), connectOpts, "--topic", "A");
+        testExpectedEntityTypeNames(List.of(ConfigType.IP.value()), List.of("1.2.3.4"), connectOpts, "--ip", "1.2.3.4");
+        testExpectedEntityTypeNames(List.of(ConfigType.GROUP.value()), List.of("A"), connectOpts, "--group", "A");
+        testExpectedEntityTypeNames(List.of(ConfigType.CLIENT.value(), ConfigType.USER.value()), List.of("B", "A"), connectOpts, "--client", "B", "--user", "A");
+        testExpectedEntityTypeNames(List.of(ConfigType.CLIENT.value(), ConfigType.USER.value()), List.of("B", ""), connectOpts, "--client", "B", "--user-defaults");
+        testExpectedEntityTypeNames(List.of(ConfigType.CLIENT.value(), ConfigType.USER.value()), List.of("A"), connectOpts,
             "--entity-type", "clients", "--entity-type", "users", "--entity-name", "A");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.TOPIC.value()), Collections.emptyList(), connectOpts, "--entity-type", "topics");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.IP.value()), Collections.emptyList(), connectOpts, "--entity-type", "ips");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.GROUP.value()), Collections.emptyList(), connectOpts, "--entity-type", "groups");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.CLIENT_METRICS.value()), Collections.emptyList(), connectOpts, "--entity-type", "client-metrics");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.BROKER.value()), Collections.singletonList("0"), connectOpts, "--entity-name", "0", "--entity-type", "brokers");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.BROKER.value()), Collections.singletonList("0"), connectOpts, "--broker", "0");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.USER.value()), Collections.emptyList(), connectOpts, "--entity-type", "users");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.BROKER.value()), Collections.emptyList(), connectOpts, "--entity-type", "brokers");
+        testExpectedEntityTypeNames(List.of(ConfigType.TOPIC.value()), List.of(), connectOpts, "--entity-type", "topics");
+        testExpectedEntityTypeNames(List.of(ConfigType.IP.value()), List.of(), connectOpts, "--entity-type", "ips");
+        testExpectedEntityTypeNames(List.of(ConfigType.GROUP.value()), List.of(), connectOpts, "--entity-type", "groups");
+        testExpectedEntityTypeNames(List.of(ConfigType.CLIENT_METRICS.value()), List.of(), connectOpts, "--entity-type", "client-metrics");
+        testExpectedEntityTypeNames(List.of(ConfigType.BROKER.value()), List.of("0"), connectOpts, "--entity-name", "0", "--entity-type", "brokers");
+        testExpectedEntityTypeNames(List.of(ConfigType.BROKER.value()), List.of("0"), connectOpts, "--broker", "0");
+        testExpectedEntityTypeNames(List.of(ConfigType.USER.value()), List.of(), connectOpts, "--entity-type", "users");
+        testExpectedEntityTypeNames(List.of(ConfigType.BROKER.value()), List.of(), connectOpts, "--entity-type", "brokers");
     }
 
     @Test
@@ -501,31 +500,23 @@ public class ConfigCommandTest {
     }
 
     private Entry<List<String>, Map<String, String>> argsAndExpectedEntity(Optional<String> entityName, String entityType) {
-        String command;
-        switch (entityType) {
-            case ClientQuotaEntity.USER:
-                command = "users";
-                break;
-            case ClientQuotaEntity.CLIENT_ID:
-                command = "clients";
-                break;
-            case ClientQuotaEntity.IP:
-                command = "ips";
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown command: " + entityType);
-        }
+        String command = switch (entityType) {
+            case ClientQuotaEntity.USER -> ConfigType.USER.value();
+            case ClientQuotaEntity.CLIENT_ID -> ConfigType.CLIENT.value();
+            case ClientQuotaEntity.IP -> ConfigType.IP.value();
+            default -> throw new IllegalArgumentException("Unknown command: " + entityType);
+        };
 
         return entityName.map(name -> {
             if (name.isEmpty())
-                return new SimpleImmutableEntry<>(Arrays.asList("--entity-type", command, "--entity-default"), Collections.singletonMap(entityType, (String) null));
-            return new SimpleImmutableEntry<>(Arrays.asList("--entity-type", command, "--entity-name", name), Collections.singletonMap(entityType, name));
-        }).orElse(new SimpleImmutableEntry<>(Collections.emptyList(), Collections.emptyMap()));
+                return new SimpleImmutableEntry<>(List.of("--entity-type", command, "--entity-default"), Collections.singletonMap(entityType, (String) null));
+            return new SimpleImmutableEntry<>(List.of("--entity-type", command, "--entity-name", name), Map.of(entityType, name));
+        }).orElse(new SimpleImmutableEntry<>(List.of(), Map.of()));
     }
 
     private void verifyAlterCommandFails(String expectedErrorMessage, List<String> alterOpts) {
         Admin mockAdminClient = mock(Admin.class);
-        ConfigCommand.ConfigCommandOptions opts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList("--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions opts = new ConfigCommand.ConfigCommandOptions(toArray(List.of("--bootstrap-server", "localhost:9092",
             "--alter"), alterOpts));
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(mockAdminClient, opts));
         assertTrue(e.getMessage().contains(expectedErrorMessage), "Unexpected exception: " + e);
@@ -535,25 +526,25 @@ public class ConfigCommandTest {
     public void shouldNotAlterNonQuotaIpConfigsUsingBootstrapServer() {
         // when using --bootstrap-server, it should be illegal to alter anything that is not a connection quota
         // for ip entities
-        List<String> ipEntityOpts = Arrays.asList("--entity-type", "ips", "--entity-name", "127.0.0.1");
+        List<String> ipEntityOpts = List.of("--entity-type", "ips", "--entity-name", "127.0.0.1");
         String invalidProp = "some_config";
-        verifyAlterCommandFails(invalidProp, concat(ipEntityOpts, Arrays.asList("--add-config", "connection_creation_rate=10000,some_config=10")));
-        verifyAlterCommandFails(invalidProp, concat(ipEntityOpts, Arrays.asList("--add-config", "some_config=10")));
-        verifyAlterCommandFails(invalidProp, concat(ipEntityOpts, Arrays.asList("--delete-config", "connection_creation_rate=10000,some_config=10")));
-        verifyAlterCommandFails(invalidProp, concat(ipEntityOpts, Arrays.asList("--delete-config", "some_config=10")));
+        verifyAlterCommandFails(invalidProp, concat(ipEntityOpts, List.of("--add-config", "connection_creation_rate=10000,some_config=10")));
+        verifyAlterCommandFails(invalidProp, concat(ipEntityOpts, List.of("--add-config", "some_config=10")));
+        verifyAlterCommandFails(invalidProp, concat(ipEntityOpts, List.of("--delete-config", "connection_creation_rate=10000,some_config=10")));
+        verifyAlterCommandFails(invalidProp, concat(ipEntityOpts, List.of("--delete-config", "some_config=10")));
     }
 
     private void verifyDescribeQuotas(List<String> describeArgs, ClientQuotaFilter expectedFilter) {
-        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList("--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray(List.of("--bootstrap-server", "localhost:9092",
             "--describe"), describeArgs));
         KafkaFutureImpl<Map<ClientQuotaEntity, Map<String, Double>>> describeFuture = new KafkaFutureImpl<>();
-        describeFuture.complete(Collections.emptyMap());
+        describeFuture.complete(Map.of());
         DescribeClientQuotasResult describeResult = mock(DescribeClientQuotasResult.class);
         when(describeResult.entities()).thenReturn(describeFuture);
 
         AtomicBoolean describedConfigs = new AtomicBoolean();
         Node node = new Node(1, "localhost", 9092);
-        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
             @Override
             public DescribeClientQuotasResult describeClientQuotas(ClientQuotaFilter filter, DescribeClientQuotasOptions options) {
                 assertTrue(filter.strict());
@@ -570,24 +561,24 @@ public class ConfigCommandTest {
     public void testDescribeIpConfigs() {
         String entityType = ClientQuotaEntity.IP;
         String knownHost = "1.2.3.4";
-        ClientQuotaFilter defaultIpFilter = ClientQuotaFilter.containsOnly(Collections.singletonList(ClientQuotaFilterComponent.ofDefaultEntity(entityType)));
-        ClientQuotaFilter singleIpFilter = ClientQuotaFilter.containsOnly(Collections.singletonList(ClientQuotaFilterComponent.ofEntity(entityType, knownHost)));
-        ClientQuotaFilter allIpsFilter = ClientQuotaFilter.containsOnly(Collections.singletonList(ClientQuotaFilterComponent.ofEntityType(entityType)));
-        verifyDescribeQuotas(Arrays.asList("--entity-default", "--entity-type", "ips"), defaultIpFilter);
-        verifyDescribeQuotas(Collections.singletonList("--ip-defaults"), defaultIpFilter);
-        verifyDescribeQuotas(Arrays.asList("--entity-type", "ips", "--entity-name", knownHost), singleIpFilter);
-        verifyDescribeQuotas(Arrays.asList("--ip", knownHost), singleIpFilter);
-        verifyDescribeQuotas(Arrays.asList("--entity-type", "ips"), allIpsFilter);
+        ClientQuotaFilter defaultIpFilter = ClientQuotaFilter.containsOnly(List.of(ClientQuotaFilterComponent.ofDefaultEntity(entityType)));
+        ClientQuotaFilter singleIpFilter = ClientQuotaFilter.containsOnly(List.of(ClientQuotaFilterComponent.ofEntity(entityType, knownHost)));
+        ClientQuotaFilter allIpsFilter = ClientQuotaFilter.containsOnly(List.of(ClientQuotaFilterComponent.ofEntityType(entityType)));
+        verifyDescribeQuotas(List.of("--entity-default", "--entity-type", "ips"), defaultIpFilter);
+        verifyDescribeQuotas(List.of("--ip-defaults"), defaultIpFilter);
+        verifyDescribeQuotas(List.of("--entity-type", "ips", "--entity-name", knownHost), singleIpFilter);
+        verifyDescribeQuotas(List.of("--ip", knownHost), singleIpFilter);
+        verifyDescribeQuotas(List.of("--entity-type", "ips"), allIpsFilter);
     }
 
     public void verifyAlterQuotas(List<String> alterOpts, ClientQuotaEntity expectedAlterEntity,
                                   Map<String, Double> expectedProps, Set<ClientQuotaAlteration.Op> expectedAlterOps) {
-        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList("--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(List.of("--bootstrap-server", "localhost:9092",
             "--alter"), alterOpts));
 
         AtomicBoolean describedConfigs = new AtomicBoolean();
         KafkaFutureImpl<Map<ClientQuotaEntity, Map<String, Double>>> describeFuture = new KafkaFutureImpl<>();
-        describeFuture.complete(Collections.singletonMap(expectedAlterEntity, expectedProps));
+        describeFuture.complete(Map.of(expectedAlterEntity, expectedProps));
         DescribeClientQuotasResult describeResult = mock(DescribeClientQuotasResult.class);
         when(describeResult.entities()).thenReturn(describeFuture);
 
@@ -606,7 +597,7 @@ public class ConfigCommandTest {
         when(alterResult.all()).thenReturn(alterFuture);
 
         Node node = new Node(1, "localhost", 9092);
-        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
             @Override
             public DescribeClientQuotasResult describeClientQuotas(ClientQuotaFilter filter, DescribeClientQuotasOptions options) {
                 assertTrue(filter.strict());
@@ -638,11 +629,11 @@ public class ConfigCommandTest {
         Entry<List<String>, Map<String, String>> defaultIpArgsAndEntity = argsAndExpectedEntity(Optional.of(""), ClientQuotaEntity.IP);
 
 
-        List<String> deleteArgs = Arrays.asList("--delete-config", "connection_creation_rate");
+        List<String> deleteArgs = List.of("--delete-config", "connection_creation_rate");
         Set<ClientQuotaAlteration.Op> deleteAlterationOps = Set.of(new ClientQuotaAlteration.Op("connection_creation_rate", null));
-        Map<String, Double> propsToDelete = Collections.singletonMap("connection_creation_rate", 50.0);
+        Map<String, Double> propsToDelete = Map.of("connection_creation_rate", 50.0);
 
-        List<String> addArgs = Arrays.asList("--add-config", "connection_creation_rate=100");
+        List<String> addArgs = List.of("--add-config", "connection_creation_rate=100");
         Set<ClientQuotaAlteration.Op> addAlterationOps = Set.of(new ClientQuotaAlteration.Op("connection_creation_rate", 100.0));
 
         verifyAlterQuotas(
@@ -653,7 +644,7 @@ public class ConfigCommandTest {
         verifyAlterQuotas(
             concat(singleIpArgsAndEntity.getKey(), addArgs),
             new ClientQuotaEntity(singleIpArgsAndEntity.getValue()),
-            Collections.emptyMap(),
+            Map.of(),
             addAlterationOps);
         verifyAlterQuotas(
             concat(defaultIpArgsAndEntity.getKey(), deleteArgs),
@@ -663,14 +654,14 @@ public class ConfigCommandTest {
         verifyAlterQuotas(
             concat(defaultIpArgsAndEntity.getKey(), addArgs),
             new ClientQuotaEntity(defaultIpArgsAndEntity.getValue()),
-            Collections.emptyMap(),
+            Map.of(),
             addAlterationOps);
     }
 
     private void verifyAlterUserClientQuotas(String user, String client) {
-        List<String> alterArgs = Arrays.asList("--add-config", "consumer_byte_rate=20000,producer_byte_rate=10000",
+        List<String> alterArgs = List.of("--add-config", "consumer_byte_rate=20000,producer_byte_rate=10000",
             "--delete-config", "request_percentage");
-        Map<String, Double> propsToDelete = Collections.singletonMap("request_percentage", 50.0);
+        Map<String, Double> propsToDelete = Map.of("request_percentage", 50.0);
 
         Set<ClientQuotaAlteration.Op> alterationOps = Set.of(
             new ClientQuotaAlteration.Op("consumer_byte_rate", 20000d),
@@ -700,10 +691,10 @@ public class ConfigCommandTest {
         verifyAlterUserClientQuotas(null, "");
     }
 
-    private final List<String> userEntityOpts = Arrays.asList("--entity-type", "users", "--entity-name", "admin");
-    private final List<String> clientEntityOpts = Arrays.asList("--entity-type", "clients", "--entity-name", "admin");
-    private final List<String> addScramOpts = Arrays.asList("--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]");
-    private final List<String> deleteScramOpts = Arrays.asList("--delete-config", "SCRAM-SHA-256");
+    private final List<String> userEntityOpts = List.of("--entity-type", "users", "--entity-name", "admin");
+    private final List<String> clientEntityOpts = List.of("--entity-type", "clients", "--entity-name", "admin");
+    private final List<String> addScramOpts = List.of("--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]");
+    private final List<String> deleteScramOpts = List.of("--delete-config", "SCRAM-SHA-256");
 
     @Test
     public void shouldNotAlterNonQuotaNonScramUserOrClientConfigUsingBootstrapServer() {
@@ -711,13 +702,13 @@ public class ConfigCommandTest {
         // for both user and client entities
         String invalidProp = "some_config";
         verifyAlterCommandFails(invalidProp, concat(userEntityOpts,
-            Arrays.asList("-add-config", "consumer_byte_rate=20000,producer_byte_rate=10000,some_config=10")));
+            List.of("-add-config", "consumer_byte_rate=20000,producer_byte_rate=10000,some_config=10")));
         verifyAlterCommandFails(invalidProp, concat(userEntityOpts,
-            Arrays.asList("--add-config", "consumer_byte_rate=20000,producer_byte_rate=10000,some_config=10")));
-        verifyAlterCommandFails(invalidProp, concat(clientEntityOpts, Arrays.asList("--add-config", "some_config=10")));
-        verifyAlterCommandFails(invalidProp, concat(userEntityOpts, Arrays.asList("--delete-config", "consumer_byte_rate,some_config")));
-        verifyAlterCommandFails(invalidProp, concat(userEntityOpts, Arrays.asList("--delete-config", "SCRAM-SHA-256,some_config")));
-        verifyAlterCommandFails(invalidProp, concat(clientEntityOpts, Arrays.asList("--delete-config", "some_config")));
+            List.of("--add-config", "consumer_byte_rate=20000,producer_byte_rate=10000,some_config=10")));
+        verifyAlterCommandFails(invalidProp, concat(clientEntityOpts, List.of("--add-config", "some_config=10")));
+        verifyAlterCommandFails(invalidProp, concat(userEntityOpts, List.of("--delete-config", "consumer_byte_rate,some_config")));
+        verifyAlterCommandFails(invalidProp, concat(userEntityOpts, List.of("--delete-config", "SCRAM-SHA-256,some_config")));
+        verifyAlterCommandFails(invalidProp, concat(clientEntityOpts, List.of("--delete-config", "some_config")));
     }
 
     @Test
@@ -731,16 +722,16 @@ public class ConfigCommandTest {
     public void shouldNotCreateUserScramCredentialConfigWithUnderMinimumIterationsUsingBootstrapServer() {
         // when using --bootstrap-server, it should be illegal to create a SCRAM credential for a user
         // with an iterations value less than the minimum
-        verifyAlterCommandFails("SCRAM-SHA-256", concat(userEntityOpts, Arrays.asList("--add-config", "SCRAM-SHA-256=[iterations=100,password=foo-secret]")));
+        verifyAlterCommandFails("SCRAM-SHA-256", concat(userEntityOpts, List.of("--add-config", "SCRAM-SHA-256=[iterations=100,password=foo-secret]")));
     }
 
     @Test
     public void shouldNotAlterUserScramCredentialAndClientQuotaConfigsSimultaneouslyUsingBootstrapServer() {
         // when using --bootstrap-server, it should be illegal to alter both SCRAM credentials and quotas for user entities
         String expectedErrorMessage = "SCRAM-SHA-256";
-        List<String> secondUserEntityOpts = Arrays.asList("--entity-type", "users", "--entity-name", "admin1");
-        List<String> addQuotaOpts = Arrays.asList("--add-config", "consumer_byte_rate=20000");
-        List<String> deleteQuotaOpts = Arrays.asList("--delete-config", "consumer_byte_rate");
+        List<String> secondUserEntityOpts = List.of("--entity-type", "users", "--entity-name", "admin1");
+        List<String> addQuotaOpts = List.of("--add-config", "consumer_byte_rate=20000");
+        List<String> deleteQuotaOpts = List.of("--delete-config", "consumer_byte_rate");
 
         verifyAlterCommandFails(expectedErrorMessage, concat(userEntityOpts, addScramOpts, userEntityOpts, deleteQuotaOpts));
         verifyAlterCommandFails(expectedErrorMessage, concat(userEntityOpts, addScramOpts, secondUserEntityOpts, deleteQuotaOpts));
@@ -758,11 +749,11 @@ public class ConfigCommandTest {
         // User SCRAM credentials should not be described when specifying
         // --describe --entity-type users --entity-default (or --user-defaults) with --bootstrap-server
         KafkaFutureImpl<Map<ClientQuotaEntity, Map<String, Double>>> describeFuture = new KafkaFutureImpl<>();
-        describeFuture.complete(Collections.singletonMap(new ClientQuotaEntity(Collections.singletonMap("", "")), Collections.singletonMap("request_percentage", 50.0)));
+        describeFuture.complete(Map.of(new ClientQuotaEntity(Map.of("", "")), Map.of("request_percentage", 50.0)));
         DescribeClientQuotasResult describeClientQuotasResult = mock(DescribeClientQuotasResult.class);
         when(describeClientQuotasResult.entities()).thenReturn(describeFuture);
         Node node = new Node(1, "localhost", 9092);
-        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
             @Override
             public DescribeClientQuotasResult describeClientQuotas(ClientQuotaFilter filter, DescribeClientQuotasOptions options) {
                 return describeClientQuotasResult;
@@ -773,15 +764,15 @@ public class ConfigCommandTest {
                 throw new IllegalStateException("Incorrectly described SCRAM credentials when specifying --entity-default with --bootstrap-server");
             }
         };
-        ConfigCommand.ConfigCommandOptions opts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList("--bootstrap-server", "localhost:9092", "--describe"), requestOpts));
+        ConfigCommand.ConfigCommandOptions opts = new ConfigCommand.ConfigCommandOptions(toArray(List.of("--bootstrap-server", "localhost:9092", "--describe"), requestOpts));
         ConfigCommand.describeConfig(mockAdminClient, opts); // fails if describeUserScramCredentials() is invoked
     }
 
     @Test
     public void shouldNotDescribeUserScramCredentialsWithEntityDefaultUsingBootstrapServer() {
         String expectedMsg = "The use of --entity-default or --user-defaults is not allowed with User SCRAM Credentials using --bootstrap-server.";
-        List<String> defaultUserOpt = Collections.singletonList("--user-defaults");
-        List<String> verboseDefaultUserOpts = Arrays.asList("--entity-type", "users", "--entity-default");
+        List<String> defaultUserOpt = List.of("--user-defaults");
+        List<String> verboseDefaultUserOpts = List.of("--entity-type", "users", "--entity-default");
         verifyAlterCommandFails(expectedMsg, concat(verboseDefaultUserOpts, addScramOpts));
         verifyAlterCommandFails(expectedMsg, concat(verboseDefaultUserOpts, deleteScramOpts));
         verifyUserScramCredentialsNotDescribed(verboseDefaultUserOpts);
@@ -813,9 +804,9 @@ public class ConfigCommandTest {
         AtomicBoolean alteredConfigs = new AtomicBoolean();
 
         ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName);
-        List<ConfigEntry> configEntries = Arrays.asList(newConfigEntry("min.insync.replicas", "1"), newConfigEntry("unclean.leader.election.enable", "1"));
+        List<ConfigEntry> configEntries = List.of(newConfigEntry("min.insync.replicas", "1"), newConfigEntry("unclean.leader.election.enable", "1"));
         KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
-        future.complete(Collections.singletonMap(resource, new Config(configEntries)));
+        future.complete(Map.of(resource, new Config(configEntries)));
         DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
         when(describeResult.all()).thenReturn(future);
 
@@ -825,14 +816,14 @@ public class ConfigCommandTest {
         when(alterResult.all()).thenReturn(alterFuture);
 
         Node node = new Node(1, "localhost", 9092);
-        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
             @Override
             public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
                 assertFalse(options.includeSynonyms(), "Config synonyms requested unnecessarily");
                 assertEquals(1, resources.size());
                 ConfigResource res = resources.iterator().next();
-                assertEquals(res.type(), ConfigResource.Type.TOPIC);
-                assertEquals(res.name(), resourceName);
+                assertEquals(ConfigResource.Type.TOPIC, res.type());
+                assertEquals(resourceName, res.name());
                 return describeResult;
             }
 
@@ -869,7 +860,7 @@ public class ConfigCommandTest {
     }
 
     public ConfigEntry newConfigEntry(String name, String value) {
-        return ConfigTest.newConfigEntry(name, value, ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, Collections.emptyList());
+        return ConfigTest.newConfigEntry(name, value, ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, List.of());
     }
 
     @Test
@@ -883,16 +874,16 @@ public class ConfigCommandTest {
 
         ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName);
         KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
-        future.complete(Collections.singletonMap(resource, new Config(Collections.emptyList())));
+        future.complete(Map.of(resource, new Config(List.of())));
         DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
         when(describeResult.all()).thenReturn(future);
 
         Node node = new Node(1, "localhost", 9092);
-        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
             @Override
             public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
                 assertTrue(options.includeSynonyms(), "Synonyms not requested");
-                assertEquals(Collections.singleton(resource), new HashSet<>(resources));
+                assertEquals(Set.of(resource), new HashSet<>(resources));
                 return describeResult;
             }
         };
@@ -903,7 +894,7 @@ public class ConfigCommandTest {
     @Test
     public void shouldAddBrokerLoggerConfig() {
         Node node = new Node(1, "localhost", 9092);
-        verifyAlterBrokerLoggerConfig(node, "1", "1", Arrays.asList(
+        verifyAlterBrokerLoggerConfig(node, "1", "1", List.of(
             new ConfigEntry("kafka.log.LogCleaner", "INFO"),
             new ConfigEntry("kafka.server.ReplicaManager", "INFO"),
             new ConfigEntry("kafka.server.KafkaApi", "INFO")
@@ -970,7 +961,7 @@ public class ConfigCommandTest {
         Node node = new Node(1, "localhost", 9092);
         // verifyAlterBrokerLoggerConfig tries to alter kafka.log.LogCleaner, kafka.server.ReplicaManager and kafka.server.KafkaApi
         // yet, we make it so DescribeConfigs returns only one logger, implying that kafka.server.ReplicaManager and kafka.log.LogCleaner are invalid
-        assertThrows(InvalidConfigurationException.class, () -> verifyAlterBrokerLoggerConfig(node, "1", "1", Collections.singletonList(
+        assertThrows(InvalidConfigurationException.class, () -> verifyAlterBrokerLoggerConfig(node, "1", "1", List.of(
             new ConfigEntry("kafka.server.KafkaApi", "INFO")
         )));
     }
@@ -978,17 +969,17 @@ public class ConfigCommandTest {
     @Test
     public void shouldAddDefaultBrokerDynamicConfig() {
         Node node = new Node(1, "localhost", 9092);
-        verifyAlterBrokerConfig(node, "", Collections.singletonList("--entity-default"));
+        verifyAlterBrokerConfig(node, "", List.of("--entity-default"));
     }
 
     @Test
     public void shouldAddBrokerDynamicConfig() {
         Node node = new Node(1, "localhost", 9092);
-        verifyAlterBrokerConfig(node, "1", Arrays.asList("--entity-name", "1"));
+        verifyAlterBrokerConfig(node, "1", List.of("--entity-name", "1"));
     }
 
     public void verifyAlterBrokerConfig(Node node, String resourceName, List<String> resourceOpts) {
-        String[] optsList = toArray(Arrays.asList("--bootstrap-server", "localhost:9092",
+        String[] optsList = toArray(List.of("--bootstrap-server", "localhost:9092",
             "--entity-type", "brokers",
             "--alter",
             "--add-config", "message.max.bytes=10,leader.replication.throttled.rate=10"), resourceOpts);
@@ -997,9 +988,9 @@ public class ConfigCommandTest {
         brokerConfigs.put("num.io.threads", "5");
 
         ConfigResource resource = new ConfigResource(ConfigResource.Type.BROKER, resourceName);
-        List<ConfigEntry> configEntries = Collections.singletonList(new ConfigEntry("num.io.threads", "5"));
+        List<ConfigEntry> configEntries = List.of(new ConfigEntry("num.io.threads", "5"));
         KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
-        future.complete(Collections.singletonMap(resource, new Config(configEntries)));
+        future.complete(Map.of(resource, new Config(configEntries)));
         DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
         when(describeResult.all()).thenReturn(future);
 
@@ -1008,7 +999,7 @@ public class ConfigCommandTest {
         AlterConfigsResult alterResult = mock(AlterConfigsResult.class);
         when(alterResult.all()).thenReturn(alterFuture);
 
-        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
             @Override
             public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
                 assertFalse(options.includeSynonyms(), "Config synonyms requested unnecessarily");
@@ -1049,7 +1040,7 @@ public class ConfigCommandTest {
         ConfigResource resourceCustom = new ConfigResource(ConfigResource.Type.BROKER, "1");
         ConfigResource resourceDefault = new ConfigResource(ConfigResource.Type.BROKER, brokerDefaultEntityName);
         KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
-        Config emptyConfig = new Config(Collections.emptyList());
+        Config emptyConfig = new Config(List.of());
         Map<ConfigResource, Config> resultMap = new HashMap<>();
         resultMap.put(resourceCustom, emptyConfig);
         resultMap.put(resourceDefault, emptyConfig);
@@ -1059,7 +1050,7 @@ public class ConfigCommandTest {
         when(describeResult.all()).thenReturn(future);
 
         Node node = new Node(1, "localhost", 9092);
-        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
             @Override
             public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
                 assertTrue(options.includeSynonyms(), "Synonyms not requested");
@@ -1087,7 +1078,7 @@ public class ConfigCommandTest {
 
         ConfigResource resource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, resourceName);
         KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
-        future.complete(Collections.singletonMap(resource, new Config(describeConfigEntries)));
+        future.complete(Map.of(resource, new Config(describeConfigEntries)));
         DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
         when(describeResult.all()).thenReturn(future);
 
@@ -1096,7 +1087,7 @@ public class ConfigCommandTest {
         AlterConfigsResult alterResult = mock(AlterConfigsResult.class);
         when(alterResult.all()).thenReturn(alterFuture);
 
-        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
             @Override
             public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
                 assertEquals(1, resources.size());
@@ -1115,7 +1106,7 @@ public class ConfigCommandTest {
                 assertEquals(ConfigResource.Type.BROKER_LOGGER, res.type());
                 assertEquals(3, alterConfigOps.size());
 
-                List<AlterConfigOp> expectedConfigOps = Arrays.asList(
+                List<AlterConfigOp> expectedConfigOps = List.of(
                     new AlterConfigOp(new ConfigEntry("kafka.server.ReplicaManager", ""), AlterConfigOp.OpType.DELETE),
                     new AlterConfigOp(new ConfigEntry("kafka.server.KafkaApi", ""), AlterConfigOp.OpType.DELETE),
                     new AlterConfigOp(new ConfigEntry("kafka.log.LogCleaner", "DEBUG"), AlterConfigOp.OpType.SET)
@@ -1174,14 +1165,14 @@ public class ConfigCommandTest {
             "--delete-config", "missing_config1, missing_config2"));
 
         ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName);
-        List<ConfigEntry> configEntries = Collections.emptyList();
+        List<ConfigEntry> configEntries = List.of();
         KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
-        future.complete(Collections.singletonMap(resource, new Config(configEntries)));
+        future.complete(Map.of(resource, new Config(configEntries)));
         DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
         when(describeResult.all()).thenReturn(future);
 
         Node node = new Node(1, "localhost", 9092);
-        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
             @Override
             public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
                 assertEquals(1, resources.size());
@@ -1199,15 +1190,15 @@ public class ConfigCommandTest {
     @Test
     public void shouldAlterClientMetricsConfig() {
         Node node = new Node(1, "localhost", 9092);
-        verifyAlterClientMetricsConfig(node, "1", Arrays.asList("--entity-type", "client-metrics", "--entity-name", "1"));
+        verifyAlterClientMetricsConfig(node, "1", List.of("--entity-type", "client-metrics", "--entity-name", "1"));
 
         // Test for the --client-metrics alias
         node = new Node(1, "localhost", 9092);
-        verifyAlterClientMetricsConfig(node, "1", Arrays.asList("--client-metrics", "1"));
+        verifyAlterClientMetricsConfig(node, "1", List.of("--client-metrics", "1"));
     }
 
     private void verifyAlterClientMetricsConfig(Node node, String resourceName, List<String> resourceOpts) {
-        List<String> optsList = concat(Arrays.asList("--bootstrap-server", "localhost:9092",
+        List<String> optsList = concat(List.of("--bootstrap-server", "localhost:9092",
             "--alter",
             "--delete-config", "interval.ms",
             "--add-config", "metrics=org.apache.kafka.consumer.," +
@@ -1215,11 +1206,11 @@ public class ConfigCommandTest {
         ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray(optsList));
 
         ConfigResource resource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, resourceName);
-        List<ConfigEntry> configEntries = Collections.singletonList(new ConfigEntry("interval.ms", "1000",
-            ConfigEntry.ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG, false, false, Collections.emptyList(),
+        List<ConfigEntry> configEntries = List.of(new ConfigEntry("interval.ms", "1000",
+            ConfigEntry.ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG, false, false, List.of(),
             ConfigEntry.ConfigType.UNKNOWN, null));
         KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
-        future.complete(Collections.singletonMap(resource, new Config(configEntries)));
+        future.complete(Map.of(resource, new Config(configEntries)));
         DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
         when(describeResult.all()).thenReturn(future);
 
@@ -1228,7 +1219,7 @@ public class ConfigCommandTest {
         AlterConfigsResult alterResult = mock(AlterConfigsResult.class);
         when(alterResult.all()).thenReturn(alterFuture);
 
-        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
             @Override
             public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
                 assertFalse(options.includeSynonyms(), "Config synonyms requested unnecessarily");
@@ -1248,7 +1239,7 @@ public class ConfigCommandTest {
                 assertEquals(ConfigResource.Type.CLIENT_METRICS, res.type());
                 assertEquals(3, alterConfigOps.size());
 
-                List<AlterConfigOp> expectedConfigOps = Arrays.asList(
+                List<AlterConfigOp> expectedConfigOps = List.of(
                     new AlterConfigOp(new ConfigEntry("interval.ms", ""), AlterConfigOp.OpType.DELETE),
                     new AlterConfigOp(new ConfigEntry("match", "client_software_name=kafka.python,client_software_version=1\\.2\\..*"), AlterConfigOp.OpType.SET),
                     new AlterConfigOp(new ConfigEntry("metrics", "org.apache.kafka.consumer."), AlterConfigOp.OpType.SET)
@@ -1279,7 +1270,7 @@ public class ConfigCommandTest {
         when(describeResult.all()).thenReturn(future);
 
         Node node = new Node(1, "localhost", 9092);
-        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
             @Override
             public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
                 assertTrue(options.includeSynonyms());
@@ -1287,12 +1278,12 @@ public class ConfigCommandTest {
                 ConfigResource resource = resources.iterator().next();
                 assertEquals(ConfigResource.Type.CLIENT_METRICS, resource.type());
                 assertEquals(resourceCustom.name(), resource.name());
-                future.complete(Collections.singletonMap(resourceCustom, new Config(Collections.singletonList(configEntry))));
+                future.complete(Map.of(resourceCustom, new Config(List.of(configEntry))));
                 return describeResult;
             }
         };
-        mockAdminClient.incrementalAlterConfigs(Collections.singletonMap(resourceCustom,
-            Collections.singletonList(new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET))), new AlterConfigsOptions());
+        mockAdminClient.incrementalAlterConfigs(Map.of(resourceCustom,
+            List.of(new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET))), new AlterConfigsOptions());
         ConfigCommand.describeConfig(mockAdminClient, describeOpts);
         verify(describeResult).all();
     }
@@ -1311,25 +1302,25 @@ public class ConfigCommandTest {
     @Test
     public void shouldAlterGroupConfig() {
         Node node = new Node(1, "localhost", 9092);
-        verifyAlterGroupConfig(node, "group", Arrays.asList("--entity-type", "groups", "--entity-name", "group"));
+        verifyAlterGroupConfig(node, "group", List.of("--entity-type", "groups", "--entity-name", "group"));
 
         // Test for the --group alias
-        verifyAlterGroupConfig(node, "groupUsingAlias", Arrays.asList("--group", "groupUsingAlias"));
+        verifyAlterGroupConfig(node, "groupUsingAlias", List.of("--group", "groupUsingAlias"));
     }
 
     private void verifyAlterGroupConfig(Node node, String resourceName, List<String> resourceOpts) {
-        List<String> optsList = concat(Arrays.asList("--bootstrap-server", "localhost:9092",
+        List<String> optsList = concat(List.of("--bootstrap-server", "localhost:9092",
             "--alter",
             "--delete-config", "consumer.session.timeout.ms",
             "--add-config", "consumer.heartbeat.interval.ms=6000"), resourceOpts);
         ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray(optsList));
 
         ConfigResource resource = new ConfigResource(ConfigResource.Type.GROUP, resourceName);
-        List<ConfigEntry> configEntries = Collections.singletonList(new ConfigEntry("consumer.session.timeout.ms", "45000",
-            ConfigEntry.ConfigSource.DYNAMIC_GROUP_CONFIG, false, false, Collections.emptyList(),
+        List<ConfigEntry> configEntries = List.of(new ConfigEntry("consumer.session.timeout.ms", "45000",
+            ConfigEntry.ConfigSource.DYNAMIC_GROUP_CONFIG, false, false, List.of(),
             ConfigEntry.ConfigType.UNKNOWN, null));
         KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
-        future.complete(Collections.singletonMap(resource, new Config(configEntries)));
+        future.complete(Map.of(resource, new Config(configEntries)));
         DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
         when(describeResult.all()).thenReturn(future);
 
@@ -1338,7 +1329,7 @@ public class ConfigCommandTest {
         AlterConfigsResult alterResult = mock(AlterConfigsResult.class);
         when(alterResult.all()).thenReturn(alterFuture);
 
-        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
             @Override
             public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
                 assertFalse(options.includeSynonyms(), "Config synonyms requested unnecessarily");
@@ -1358,7 +1349,7 @@ public class ConfigCommandTest {
                 assertEquals(ConfigResource.Type.GROUP, res.type());
                 assertEquals(2, alterConfigOps.size());
 
-                List<AlterConfigOp> expectedConfigOps = Arrays.asList(
+                List<AlterConfigOp> expectedConfigOps = List.of(
                     new AlterConfigOp(new ConfigEntry("consumer.session.timeout.ms", ""), AlterConfigOp.OpType.DELETE),
                     new AlterConfigOp(new ConfigEntry("consumer.heartbeat.interval.ms", "6000"), AlterConfigOp.OpType.SET)
                 );
@@ -1392,7 +1383,7 @@ public class ConfigCommandTest {
         when(describeResult.all()).thenReturn(future);
 
         Node node = new Node(1, "localhost", 9092);
-        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
             @Override
             public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
                 assertTrue(options.includeSynonyms());
@@ -1400,12 +1391,12 @@ public class ConfigCommandTest {
                 ConfigResource resource = resources.iterator().next();
                 assertEquals(ConfigResource.Type.GROUP, resource.type());
                 assertEquals(resourceCustom.name(), resource.name());
-                future.complete(Collections.singletonMap(resourceCustom, new Config(Collections.singletonList(configEntry))));
+                future.complete(Map.of(resourceCustom, new Config(List.of(configEntry))));
                 return describeResult;
             }
         };
-        mockAdminClient.incrementalAlterConfigs(Collections.singletonMap(resourceCustom,
-            Collections.singletonList(new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET))), new AlterConfigsOptions());
+        mockAdminClient.incrementalAlterConfigs(Map.of(resourceCustom,
+            List.of(new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET))), new AlterConfigsOptions());
         ConfigCommand.describeConfig(mockAdminClient, describeOpts);
         verify(describeResult).all();
     }
@@ -1432,7 +1423,7 @@ public class ConfigCommandTest {
 
     @SafeVarargs
     public static List<String> concat(List<String>... lists) {
-        return Stream.of(lists).flatMap(List::stream).collect(Collectors.toList());
+        return Stream.of(lists).flatMap(List::stream).toList();
     }
 
     @SafeVarargs
@@ -1448,7 +1439,7 @@ public class ConfigCommandTest {
 
     static class DummyAdminClient extends MockAdminClient {
         public DummyAdminClient(Node node) {
-            super(Collections.singletonList(node), node);
+            super(List.of(node), node);
         }
 
         @Override

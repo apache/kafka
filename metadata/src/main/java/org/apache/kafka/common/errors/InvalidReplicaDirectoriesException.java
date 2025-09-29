@@ -23,14 +23,15 @@ import org.apache.kafka.common.metadata.PartitionRecord;
  * A record was encountered where the number of directories does not match the number of replicas.
  */
 public class InvalidReplicaDirectoriesException extends InvalidMetadataException {
+    private static final String ERR_MSG = "The lengths for replicas and directories do not match: ";
 
     private static final long serialVersionUID = 1L;
 
     public InvalidReplicaDirectoriesException(PartitionRecord record) {
-        super("The lengths for replicas and directories do not match: " + record);
+        super(ERR_MSG + record);
     }
 
     public InvalidReplicaDirectoriesException(PartitionChangeRecord record) {
-        super("The lengths for replicas and directories do not match: " + record);
+        super(ERR_MSG + record);
     }
 }

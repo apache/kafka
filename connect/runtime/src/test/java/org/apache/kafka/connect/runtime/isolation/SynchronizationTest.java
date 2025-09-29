@@ -43,7 +43,6 @@ import java.lang.management.MonitorInfo;
 import java.lang.management.ThreadInfo;
 import java.net.URL;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.BrokenBarrierException;
@@ -71,7 +70,7 @@ public class SynchronizationTest {
 
     @BeforeEach
     public void setup(TestInfo testInfo) {
-        Map<String, String> pluginProps = Collections.singletonMap(
+        Map<String, String> pluginProps = Map.of(
             WorkerConfig.PLUGIN_PATH_CONFIG,
             TestPlugins.pluginPathJoined()
         );
@@ -241,7 +240,7 @@ public class SynchronizationTest {
                 // 4. Load the isolated plugin class and return
                 new AbstractConfig(
                         new ConfigDef().define("a.class", Type.CLASS, Importance.HIGH, ""),
-                        Collections.singletonMap("a.class", t1Class));
+                        Map.of("a.class", t1Class));
             }
         };
 
@@ -259,7 +258,7 @@ public class SynchronizationTest {
                 // 3. Enter the DelegatingClassLoader
                 // 4. Load the non-isolated class and return
                 new AbstractConfig(new ConfigDef().define("a.class", Type.CLASS, Importance.HIGH, ""),
-                        Collections.singletonMap("a.class", t2Class));
+                        Map.of("a.class", t2Class));
             }
         };
 

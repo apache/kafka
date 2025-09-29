@@ -18,41 +18,15 @@ package org.apache.kafka.tiered.storage.specs;
 
 import org.apache.kafka.common.TopicPartition;
 
-import java.util.Objects;
-
-public final class RemoteFetchSpec {
-
-    private final int sourceBrokerId;
-    private final TopicPartition topicPartition;
-    private final RemoteFetchCount remoteFetchCount;
-
-    /**
-     * Specifies a fetch (download) event from a second-tier storage. This is used to ensure the
-     * interactions between Kafka and the second-tier storage match expectations.
-     *
-     * @param sourceBrokerId The broker which fetched (a) remote log segment(s) from the second-tier storage.
-     * @param topicPartition The topic-partition which segment(s) were fetched.
-     * @param remoteFetchCount The number of remote log segment(s) and indexes fetched.
-     */
-    public RemoteFetchSpec(int sourceBrokerId,
-                           TopicPartition topicPartition,
-                           RemoteFetchCount remoteFetchCount) {
-        this.sourceBrokerId = sourceBrokerId;
-        this.topicPartition = topicPartition;
-        this.remoteFetchCount = remoteFetchCount;
-    }
-
-    public int getSourceBrokerId() {
-        return sourceBrokerId;
-    }
-
-    public TopicPartition getTopicPartition() {
-        return topicPartition;
-    }
-
-    public RemoteFetchCount getRemoteFetchCount() {
-        return remoteFetchCount;
-    }
+/**
+ * Specifies a fetch (download) event from a second-tier storage. This is used to ensure the
+ * interactions between Kafka and the second-tier storage match expectations.
+ *
+ * @param sourceBrokerId   The broker which fetched (a) remote log segment(s) from the second-tier storage.
+ * @param topicPartition   The topic-partition which segment(s) were fetched.
+ * @param remoteFetchCount The number of remote log segment(s) and indexes fetched.
+ */
+public record RemoteFetchSpec(int sourceBrokerId, TopicPartition topicPartition, RemoteFetchCount remoteFetchCount) {
 
     @Override
     public String toString() {
@@ -60,18 +34,4 @@ public final class RemoteFetchSpec {
                 sourceBrokerId, topicPartition, remoteFetchCount);
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        RemoteFetchSpec that = (RemoteFetchSpec) o;
-        return sourceBrokerId == that.sourceBrokerId
-                && Objects.equals(remoteFetchCount, that.remoteFetchCount)
-                && Objects.equals(topicPartition, that.topicPartition);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(sourceBrokerId, topicPartition, remoteFetchCount);
-    }
 }

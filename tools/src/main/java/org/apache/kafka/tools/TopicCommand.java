@@ -59,18 +59,19 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import joptsimple.ArgumentAcceptingOptionSpec;
 import joptsimple.OptionSpec;
@@ -112,11 +113,7 @@ public abstract class TopicCommand {
             }
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
-            if (cause != null) {
-                printException(cause);
-            } else {
-                printException(e);
-            }
+            printException(Objects.requireNonNullElse(cause, e));
             exitCode = 1;
         } catch (Throwable e) {
             printException(e);
@@ -159,10 +156,10 @@ public abstract class TopicCommand {
 
     @SuppressWarnings("deprecation")
     private static Properties parseTopicConfigsToBeAdded(TopicCommandOptions opts) {
-        List<List<String>> configsToBeAdded = opts.topicConfig().orElse(Collections.emptyList())
+        List<List<String>> configsToBeAdded = opts.topicConfig().orElse(List.of())
             .stream()
-            .map(s -> Arrays.asList(s.split("\\s*=\\s*")))
-            .collect(Collectors.toList());
+            .map(s -> List.of(s.split("\\s*=\\s*")))
+            .toList();
 
         if (!configsToBeAdded.stream().allMatch(config -> config.size() == 2)) {
             throw new IllegalArgumentException("requirement failed: Invalid topic config: all configs to be added must be in the format \"key=val\".");
@@ -256,7 +253,7 @@ public abstract class TopicCommand {
             name = options.topic().get();
             partitions = options.partitions();
             replicationFactor = options.replicationFactor();
-            replicaAssignment = options.replicaAssignment().orElse(Collections.emptyMap());
+            replicaAssignment = options.replicaAssignment().orElse(Map.of());
             configsToAdd = parseTopicConfigsToBeAdded(options);
         }
 
@@ -357,10 +354,10 @@ public abstract class TopicCommand {
                 .collect(Collectors.joining(",")));
             if (reassignment != null) {
                 System.out.print("\tAdding Replicas: " + reassignment.addingReplicas().stream()
-                    .map(node -> node.toString())
+                    .map(Object::toString)
                     .collect(Collectors.joining(",")));
                 System.out.print("\tRemoving Replicas: " + reassignment.removingReplicas().stream()
-                    .map(node -> node.toString())
+                    .map(Object::toString)
                     .collect(Collectors.joining(",")));
             }
 
@@ -443,9 +440,7 @@ public abstract class TopicCommand {
         }
 
         private static Admin createAdminClient(Properties commandConfig, Optional<String> bootstrapServer) {
-            if (bootstrapServer.isPresent()) {
-                commandConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer.get());
-            }
+            bootstrapServer.ifPresent(s -> commandConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s));
             return Admin.create(commandConfig);
         }
 
@@ -475,10 +470,10 @@ public abstract class TopicCommand {
                 }
 
                 Map<String, String> configsMap = topic.configsToAdd.stringPropertyNames().stream()
-                    .collect(Collectors.toMap(name -> name, name -> topic.configsToAdd.getProperty(name)));
+                    .collect(Collectors.toMap(name -> name, topic.configsToAdd::getProperty));
 
                 newTopic.configs(configsMap);
-                CreateTopicsResult createResult = adminClient.createTopics(Collections.singleton(newTopic),
+                CreateTopicsResult createResult = adminClient.createTopics(Set.of(newTopic),
                     new CreateTopicsOptions().retryOnQuotaViolation(false));
                 createResult.all().get();
                 System.out.println("Created topic " + topic.name + ".");
@@ -493,9 +488,7 @@ public abstract class TopicCommand {
         }
 
         public void listTopics(TopicCommandOptions opts) throws ExecutionException, InterruptedException {
-            String results = getTopics(opts.topic(), opts.excludeInternalTopics())
-                .stream()
-                .collect(Collectors.joining("\n"));
+            String results = String.join("\n", getTopics(opts.topic(), opts.excludeInternalTopics()));
             System.out.println(results);
         }
 
@@ -539,7 +532,7 @@ public abstract class TopicCommand {
                 Throwable cause = e.getCause();
                 if (cause instanceof UnsupportedVersionException || cause instanceof ClusterAuthorizationException) {
                     LOG.debug("Couldn't query reassignments through the AdminClient API: " + cause.getMessage(), cause);
-                    return Collections.emptyMap();
+                    return Map.of();
                 } else {
                     throw new RuntimeException(e);
                 }
@@ -558,9 +551,9 @@ public abstract class TopicCommand {
             List<String> topics;
             if (useTopicId) {
                 topicIds = getTopicIds(inputTopicId.get(), opts.excludeInternalTopics());
-                topics = Collections.emptyList();
+                topics = List.of();
             } else {
-                topicIds = Collections.emptyList();
+                topicIds = List.of();
                 topics = getTopics(opts.topic(), opts.excludeInternalTopics());
             }
 
@@ -588,7 +581,7 @@ public abstract class TopicCommand {
 
             List<String> topicNames = topicDescriptions.stream()
                 .map(org.apache.kafka.clients.admin.TopicDescription::name)
-                .collect(Collectors.toList());
+                .toList();
             Map<ConfigResource, KafkaFuture<Config>> allConfigs = adminClient.describeConfigs(
                 topicNames.stream()
                     .map(name -> new ConfigResource(ConfigResource.Type.TOPIC, name))
@@ -596,7 +589,7 @@ public abstract class TopicCommand {
             ).values();
             List<Integer> liveBrokers = adminClient.describeCluster().nodes().get().stream()
                 .map(Node::id)
-                .collect(Collectors.toList());
+                .toList();
             DescribeOptions describeOptions = new DescribeOptions(opts, new HashSet<>(liveBrokers));
             Set<TopicPartition> topicPartitions = topicDescriptions
                 .stream()
@@ -647,7 +640,7 @@ public abstract class TopicCommand {
         public void deleteTopic(TopicCommandOptions opts) throws ExecutionException, InterruptedException {
             List<String> topics = getTopics(opts.topic(), opts.excludeInternalTopics());
             ensureTopicExists(topics, opts.topic(), !opts.ifExists());
-            adminClient.deleteTopics(Collections.unmodifiableList(topics),
+            adminClient.deleteTopics(List.copyOf(topics),
                 new DeleteTopicsOptions().retryOnQuotaViolation(false)
             ).all().get();
         }
@@ -668,10 +661,10 @@ public abstract class TopicCommand {
             List<Uuid> allTopicIds = allTopics.listings().get().stream()
                 .map(TopicListing::topicId)
                 .sorted()
-                .collect(Collectors.toList());
+                .toList();
             return allTopicIds.contains(topicIdIncludeList) ?
-                Collections.singletonList(topicIdIncludeList) :
-                Collections.emptyList();
+                List.of(topicIdIncludeList) :
+                List.of();
         }
 
         @Override
@@ -835,7 +828,7 @@ public abstract class TopicCommand {
         }
 
         public <A> Optional<List<A>> valuesAsOption(OptionSpec<A> option) {
-            return valuesAsOption(option, Collections.emptyList());
+            return valuesAsOption(option, List.of());
         }
 
         public <A> Optional<A> valueAsOption(OptionSpec<A> option, Optional<A> defaultValue) {
@@ -953,8 +946,7 @@ public abstract class TopicCommand {
 
             // should have exactly one action
             long actions =
-                Arrays.asList(createOpt, listOpt, alterOpt, describeOpt, deleteOpt)
-                    .stream().filter(options::has)
+                Stream.of(createOpt, listOpt, alterOpt, describeOpt, deleteOpt).filter(options::has)
                     .count();
             if (actions != 1)
                 CommandLineUtils.printUsageAndExit(parser, "Command must include exactly one action: --list, --describe, --create, --alter or --delete");
@@ -989,29 +981,29 @@ public abstract class TopicCommand {
 
         private void checkInvalidArgs() {
             // check invalid args
-            CommandLineUtils.checkInvalidArgs(parser, options, configOpt, invalidOptions(Arrays.asList(alterOpt, createOpt)));
-            CommandLineUtils.checkInvalidArgs(parser, options, partitionsOpt, invalidOptions(Arrays.asList(alterOpt, createOpt)));
-            CommandLineUtils.checkInvalidArgs(parser, options, replicationFactorOpt, invalidOptions(Arrays.asList(createOpt)));
-            CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, invalidOptions(Arrays.asList(alterOpt, createOpt)));
+            CommandLineUtils.checkInvalidArgs(parser, options, configOpt, invalidOptions(List.of(alterOpt, createOpt)));
+            CommandLineUtils.checkInvalidArgs(parser, options, partitionsOpt, invalidOptions(List.of(alterOpt, createOpt)));
+            CommandLineUtils.checkInvalidArgs(parser, options, replicationFactorOpt, invalidOptions(List.of(createOpt)));
+            CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, invalidOptions(List.of(alterOpt, createOpt)));
             if (options.has(createOpt)) {
                 CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, partitionsOpt, replicationFactorOpt);
             }
 
 
             CommandLineUtils.checkInvalidArgs(parser, options, reportUnderReplicatedPartitionsOpt,
-                invalidOptions(Collections.singleton(topicsWithOverridesOpt), Arrays.asList(describeOpt, reportUnderReplicatedPartitionsOpt)));
+                invalidOptions(Set.of(topicsWithOverridesOpt), List.of(describeOpt, reportUnderReplicatedPartitionsOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, reportUnderMinIsrPartitionsOpt,
-                invalidOptions(Collections.singleton(topicsWithOverridesOpt), Arrays.asList(describeOpt, reportUnderMinIsrPartitionsOpt)));
+                invalidOptions(Set.of(topicsWithOverridesOpt), List.of(describeOpt, reportUnderMinIsrPartitionsOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, reportAtMinIsrPartitionsOpt,
-                invalidOptions(Collections.singleton(topicsWithOverridesOpt), Arrays.asList(describeOpt, reportAtMinIsrPartitionsOpt)));
+                invalidOptions(Set.of(topicsWithOverridesOpt), List.of(describeOpt, reportAtMinIsrPartitionsOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, reportUnavailablePartitionsOpt,
-                invalidOptions(Collections.singleton(topicsWithOverridesOpt), Arrays.asList(describeOpt, reportUnavailablePartitionsOpt)));
+                invalidOptions(Set.of(topicsWithOverridesOpt), List.of(describeOpt, reportUnavailablePartitionsOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, topicsWithOverridesOpt,
-                invalidOptions(new HashSet<>(allReplicationReportOpts), Arrays.asList(describeOpt)));
+                invalidOptions(new HashSet<>(allReplicationReportOpts), List.of(describeOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, ifExistsOpt,
-                invalidOptions(Arrays.asList(alterOpt, deleteOpt, describeOpt)));
-            CommandLineUtils.checkInvalidArgs(parser, options, ifNotExistsOpt, invalidOptions(Arrays.asList(createOpt)));
-            CommandLineUtils.checkInvalidArgs(parser, options, excludeInternalTopicOpt, invalidOptions(Arrays.asList(listOpt, describeOpt)));
+                invalidOptions(List.of(alterOpt, deleteOpt, describeOpt)));
+            CommandLineUtils.checkInvalidArgs(parser, options, ifNotExistsOpt, invalidOptions(List.of(createOpt)));
+            CommandLineUtils.checkInvalidArgs(parser, options, excludeInternalTopicOpt, invalidOptions(List.of(listOpt, describeOpt)));
         }
 
         private Set<OptionSpec<?>> invalidOptions(List<OptionSpec<?>> removeOptions) {
