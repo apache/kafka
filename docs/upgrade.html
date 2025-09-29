@@ -136,9 +136,17 @@
                 settings.
             </li>
             <li>
-                The <code>cleanup.policy</code> is empty and <code>remote.storage.enable</code> is set to true, the
+                <code>cleanup.policy</code> now supports empty values, which means infinite retention.
+                This is equivalent to setting <code>retention.ms=-1</code> and <code>retention.bytes=-1</code>
+                <br>
+                If <code>cleanup.policy</code> is empty and <code>remote.storage.enable</code> is set to true, the
                 local log segments will be cleaned based on the values of <code>log.local.retention.bytes</code> and
                 <code>log.local.retention.ms</code>.
+                <br>
+                If <code>cleanup.policy</code> is empty and <code>remote.storage.enable</code> is set to false,
+                local log segments will not be deleted automatically. However, records can still be deleted
+                explicitly through <code>deleteRecords</code> API calls, which will advance the log start offset
+                and remove the corresponding log segments.
             </li>
         </ul>
     </li>
@@ -161,6 +169,18 @@
             <li><code>[name=version, group=app-info, description=Metric indicating version, tags={client-id=...}]</code></li>
         </ul>
         For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/3gn0Ew">KIP-1120</a>.
+    </li>
+    <li>
+        The metrics <code>org.apache.kafka.server:type=AssignmentsManager.QueuedReplicaToDirAssignments</code>,
+        <code>org.apache.kafka.storage.internals.log:type=RemoteStorageThreadPool.RemoteLogReaderTaskQueueSize</code>, and
+        <code>org.apache.kafka.storage.internals.log:type=RemoteStorageThreadPool.RemoteLogReaderAvgIdlePercent</code>
+        have been deprecated and will be removed in Kafka 5.0.
+
+        As replacements, the following metrics have been introduced, which report the same information:
+        <code>kafka.server:type=AssignmentsManager.QueuedReplicaToDirAssignments</code>,
+        <code>kafka.log.remote:type=RemoteStorageThreadPool.RemoteLogReaderTaskQueueSize</code>, and
+        <code>kafka.log.remote:type=RemoteStorageThreadPool.RemoteLogReaderAvgIdlePercent</code>.
+        For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/6oqMEw">KIP-1100</a>.
     </li>
 </ul>
 

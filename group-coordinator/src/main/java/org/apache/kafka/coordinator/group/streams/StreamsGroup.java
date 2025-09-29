@@ -113,7 +113,6 @@ public class StreamsGroup implements Group {
         }
     }
 
-    private final LogContext logContext;
     private final Logger log;
 
     /**
@@ -217,7 +216,6 @@ public class StreamsGroup implements Group {
         String groupId
     ) {
         this.log = logContext.logger(StreamsGroup.class);
-        this.logContext = logContext;
         this.snapshotRegistry = Objects.requireNonNull(snapshotRegistry);
         this.groupId = Objects.requireNonNull(groupId);
         this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
@@ -1039,7 +1037,16 @@ public class StreamsGroup implements Group {
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
             .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset))
-            .setTopology(configuredTopology.get(committedOffset).map(ConfiguredTopology::asStreamsGroupDescribeTopology).orElse(null));
+            .setTopology(
+                configuredTopology.get(committedOffset)
+                    .filter(ConfiguredTopology::isReady)
+                    .map(ConfiguredTopology::asStreamsGroupDescribeTopology)
+                    .orElse(
+                        topology.get(committedOffset)
+                            .map(StreamsTopology::asStreamsGroupDescribeTopology)
+                            .orElseThrow(() -> new IllegalStateException("There should always be a topology for a streams group."))
+                    )
+            );
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
                 entry.getValue().asStreamsGroupDescribeMember(
