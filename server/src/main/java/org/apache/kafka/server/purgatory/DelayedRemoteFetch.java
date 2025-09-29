@@ -163,7 +163,8 @@ public class DelayedRemoteFetch extends DelayedOperation {
 
                 CompletableFuture<RemoteLogReadResult> remoteFetchResult = remoteFetchResults.get(tp);
                 if (remoteFetchInfos.containsKey(tp)
-                    && remoteFetchResult.isDone() && result.error() == Errors.NONE
+                    && remoteFetchResult.isDone()
+                    && result.error() == Errors.NONE
                     && result.info().delayedRemoteStorageFetch.isPresent()) {
 
                     if (remoteFetchResult.get().error().isPresent()) {
