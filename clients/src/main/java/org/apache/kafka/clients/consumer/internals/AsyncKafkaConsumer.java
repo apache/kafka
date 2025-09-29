@@ -189,11 +189,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         public Optional<CompositePollEvent.State> requirement() {
             // If there are background events to process, exit to the application thread.
             if (backgroundEventHandler.size() > 0)
-                return Optional.of(CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED);
+                return Optional.of(CompositePollEvent.State.CALLBACKS_REQUIRED);
 
             // If there are enqueued callbacks to invoke, exit to the application thread.
             if (offsetCommitCallbackInvoker.size() > 0)
-                return Optional.of(CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED);
+                return Optional.of(CompositePollEvent.State.CALLBACKS_REQUIRED);
 
             return Optional.empty();
         }
@@ -523,8 +523,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 logContext,
                 time,
                 applicationEventHandler,
-                this::processBackgroundEvents,
-                offsetCommitCallbackInvoker::executeCallbacks
+                () -> {
+                    processBackgroundEvents();
+                    offsetCommitCallbackInvoker.executeCallbacks();
+                }
             );
 
             // The FetchCollector is only used on the application thread.
@@ -604,8 +606,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             logContext,
             time,
             applicationEventHandler,
-            this::processBackgroundEvents,
-            offsetCommitCallbackInvoker::executeCallbacks
+            () -> {
+                processBackgroundEvents();
+                offsetCommitCallbackInvoker.executeCallbacks();
+            }
         );
         this.backgroundEventHandler = new BackgroundEventHandler(
             backgroundEventQueue,
@@ -733,8 +737,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             logContext,
             time,
             applicationEventHandler,
-            this::processBackgroundEvents,
-            offsetCommitCallbackInvoker::executeCallbacks
+            () -> {
+                processBackgroundEvents();
+                offsetCommitCallbackInvoker.executeCallbacks();
+            }
         );
     }
 
@@ -1855,19 +1861,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * of the {@link #fetchBuffer}, converting it to a well-formed {@link CompletedFetch}, validating that it and
      * the internal {@link SubscriptionState state} are correct, and then converting it all into a {@link Fetch}
      * for returning.
-     *
-     * <p/>
-     *
-     * This method will {@link ConsumerNetworkThread#wakeup() wake up the network thread} before returning. This is
-     * done as an optimization so that the <em>next round of data can be pre-fetched</em>.
      */
     private Fetch<K, V> collectFetch() {
-        final Fetch<K, V> fetch = fetchCollector.collectFetch(fetchBuffer);
-
-        // Notify the network thread to wake up and start the next round of fetching.
-        applicationEventHandler.wakeupNetworkThread();
-
-        return fetch;
+        return fetchCollector.collectFetch(fetchBuffer);
     }
 
     /**

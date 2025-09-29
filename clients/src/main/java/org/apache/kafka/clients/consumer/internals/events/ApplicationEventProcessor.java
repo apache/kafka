@@ -283,8 +283,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return;
         }
 
-        log.warn("Unknown next step for composite poll: {}", nextEventType);
-        event.complete(CompositePollEvent.State.UNKNOWN, Optional.empty());
+        event.completeExceptionally(new KafkaException("Unknown next step for composite poll: " + nextEventType));
     }
 
     private boolean maybePauseCompositePoll(CompositePollEvent event, ApplicationEvent.Type nextEventType) {

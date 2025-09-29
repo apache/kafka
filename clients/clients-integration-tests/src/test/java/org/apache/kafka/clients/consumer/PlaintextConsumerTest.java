@@ -1203,12 +1203,21 @@ public class PlaintextConsumerTest {
             consumer3.assign(List.of(TP));
             consumer3.seek(TP, 1);
 
-            var numRecords1 = consumer1.poll(Duration.ofMillis(5000)).count();
+            TestUtils.waitForCondition(
+                () -> consumer1.poll(Duration.ofMillis(5000)).count() == 3,
+                "consumer1 did not consume from earliest offset"
+            );
             assertThrows(InvalidGroupIdException.class, consumer1::commitSync);
             assertThrows(InvalidGroupIdException.class, () -> consumer2.committed(Set.of(TP)));
 
-            var numRecords2 = consumer2.poll(Duration.ofMillis(5000)).count();
-            var numRecords3 = consumer3.poll(Duration.ofMillis(5000)).count();
+            TestUtils.waitForCondition(
+                () -> consumer2.poll(Duration.ofMillis(5000)).count() == 0,
+                "Expected consumer2 to consume from latest offset"
+            );
+            TestUtils.waitForCondition(
+                () -> consumer3.poll(Duration.ofMillis(5000)).count() == 2,
+                "Expected consumer3 to consume from offset 1"
+            );
 
             consumer1.unsubscribe();
             consumer2.unsubscribe();
@@ -1217,14 +1226,6 @@ public class PlaintextConsumerTest {
             assertTrue(consumer1.assignment().isEmpty());
             assertTrue(consumer2.assignment().isEmpty());
             assertTrue(consumer3.assignment().isEmpty());
-
-            consumer1.close();
-            consumer2.close();
-            consumer3.close();
-
-            assertEquals(3, numRecords1, "Expected consumer1 to consume from earliest offset");
-            assertEquals(0, numRecords2, "Expected consumer2 to consume from latest offset");
-            assertEquals(2, numRecords3, "Expected consumer3 to consume from offset 1");
         }
     }
 

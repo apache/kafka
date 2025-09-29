@@ -26,16 +26,14 @@ public class CompositePollEvent extends ApplicationEvent {
 
     public enum State {
 
-        OFFSET_COMMIT_CALLBACKS_REQUIRED,
-        BACKGROUND_EVENT_PROCESSING_REQUIRED,
-        INCOMPLETE,
-        COMPLETE,
-        UNKNOWN
+        CALLBACKS_REQUIRED,
+        IN_PROGRESS,
+        COMPLETE
     }
 
     public static class Result {
 
-        private static final Result INCOMPLETE = new Result(State.INCOMPLETE, Optional.empty());
+        private static final Result IN_PROGRESS = new Result(State.IN_PROGRESS, Optional.empty());
         private final State state;
 
         private final Optional<Type> nextEventType;
@@ -81,7 +79,7 @@ public class CompositePollEvent extends ApplicationEvent {
         this.deadlineMs = deadlineMs;
         this.pollTimeMs = pollTimeMs;
         this.nextEventType = nextEventType;
-        this.resultOrError = new AtomicReference<>(Result.INCOMPLETE);
+        this.resultOrError = new AtomicReference<>(Result.IN_PROGRESS);
     }
 
     public long deadlineMs() {
@@ -111,11 +109,11 @@ public class CompositePollEvent extends ApplicationEvent {
             Objects.requireNonNull(nextEventType)
         );
 
-        resultOrError.compareAndSet(Result.INCOMPLETE, result);
+        resultOrError.compareAndSet(Result.IN_PROGRESS, result);
     }
 
     public void completeExceptionally(KafkaException e) {
-        resultOrError.compareAndSet(Result.INCOMPLETE, Objects.requireNonNull(e));
+        resultOrError.compareAndSet(Result.IN_PROGRESS, Objects.requireNonNull(e));
     }
 
     @Override

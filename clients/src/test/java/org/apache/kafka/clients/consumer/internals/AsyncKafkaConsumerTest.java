@@ -512,7 +512,7 @@ public class AsyncKafkaConsumerTest {
         completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(Collections.singletonList(topicName), listener);
         markReconcileAndAutoCommitCompleteForPollEvent();
-        markResultForCompositePollEvent(CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED);
+        markResultForCompositePollEvent(CompositePollEvent.State.CALLBACKS_REQUIRED);
         waitForConsumerPoll(
             callbackExecuted::get,
             "Consumer.poll() did not execute callback within timeout"
@@ -684,7 +684,7 @@ public class AsyncKafkaConsumerTest {
         consumer.assign(Collections.singleton(new TopicPartition("foo", 0)));
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
         markReconcileAndAutoCommitCompleteForPollEvent();
-        markResultForCompositePollEvent(CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED);
+        markResultForCompositePollEvent(CompositePollEvent.State.CALLBACKS_REQUIRED);
         waitForConsumerPoll(
             () -> callback.invoked == 1 && callback.exception == null,
             "Consumer.poll() did not execute the callback once (without error) in allottec timeout"
@@ -1488,7 +1488,7 @@ public class AsyncKafkaConsumerTest {
         }
 
         markReconcileAndAutoCommitCompleteForPollEvent();
-        markResultForCompositePollEvent(CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED);
+        markResultForCompositePollEvent(CompositePollEvent.State.CALLBACKS_REQUIRED);
 
         // This will trigger the background event queue to process our background event message.
         // If any error is happening inside the rebalance callbacks, we expect the first exception to be thrown from poll.
@@ -1567,7 +1567,7 @@ public class AsyncKafkaConsumerTest {
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(singletonList(new TopicPartition("topic", 0)));
         markReconcileAndAutoCommitCompleteForPollEvent();
-        markResultForCompositePollEvent(CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED);
+        markResultForCompositePollEvent(CompositePollEvent.State.CALLBACKS_REQUIRED);
         waitForConsumerPollException(
             e -> e.getMessage().equals(expectedException.getMessage()),
             "Consumer.poll() did not fail with expected exception " + expectedException + " within timeout"
@@ -1588,7 +1588,7 @@ public class AsyncKafkaConsumerTest {
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(singletonList(new TopicPartition("topic", 0)));
         markReconcileAndAutoCommitCompleteForPollEvent();
-        markResultForCompositePollEvent(CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED);
+        markResultForCompositePollEvent(CompositePollEvent.State.CALLBACKS_REQUIRED);
         waitForConsumerPollException(
             e -> e.getMessage().equals(expectedException1.getMessage()),
             "Consumer.poll() did not fail with expected exception " + expectedException1 + " within timeout"
@@ -1866,7 +1866,7 @@ public class AsyncKafkaConsumerTest {
         when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
         markReconcileAndAutoCommitCompleteForPollEvent();
         markResultForCompositePollEvent();
-        markResultForCompositePollEvent(CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED);
+        markResultForCompositePollEvent(CompositePollEvent.State.CALLBACKS_REQUIRED);
 
         waitForConsumerPoll(
             () -> backgroundEventReaper.size() == 0,

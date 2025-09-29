@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.CompositePollEvent;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -33,20 +32,17 @@ public class CompositePollEventInvoker {
     private final Logger log;
     private final Time time;
     private final ApplicationEventHandler applicationEventHandler;
-    private final Runnable backgroundEventProcessor;
-    private final Runnable offsetCommitProcessor;
+    private final Runnable applicationThreadCallbacks;
     private CompositePollEvent inflight;
 
     public CompositePollEventInvoker(LogContext logContext,
                                      Time time,
                                      ApplicationEventHandler applicationEventHandler,
-                                     Runnable backgroundEventProcessor,
-                                     Runnable offsetCommitProcessor) {
+                                     Runnable applicationThreadCallbacks) {
         this.log = logContext.logger(getClass());
         this.time = time;
         this.applicationEventHandler = applicationEventHandler;
-        this.backgroundEventProcessor = backgroundEventProcessor;
-        this.offsetCommitProcessor = offsetCommitProcessor;
+        this.applicationThreadCallbacks = applicationThreadCallbacks;
     }
 
     public void poll(Timer timer) {
@@ -71,18 +67,11 @@ public class CompositePollEventInvoker {
                 // Make sure to clear out the inflight request since it's complete.
                 log.debug("Event {} completed, clearing inflight", inflight);
                 inflight = null;
-            } else if (state == CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED) {
-                log.debug("About to process background events");
-                backgroundEventProcessor.run();
-                log.debug("Done processing background events");
+            } else if (state == CompositePollEvent.State.CALLBACKS_REQUIRED) {
+                log.debug("About to process callbacks");
+                applicationThreadCallbacks.run();
+                log.debug("Done processing callbacks");
                 result.nextEventType().ifPresent(t -> submitEvent(t, timer));
-            } else if (state == CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED) {
-                log.debug("About to process offset commits");
-                offsetCommitProcessor.run();
-                log.debug("Done processing offset commits");
-                result.nextEventType().ifPresent(t -> submitEvent(t, timer));
-            } else if (state == CompositePollEvent.State.UNKNOWN) {
-                throw new KafkaException("Unexpected poll result received");
             }
         } catch (Throwable t) {
             // If an exception is hit, bubble it up to the user but make sure to clear out the inflight request

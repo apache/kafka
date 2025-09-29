@@ -29,6 +29,7 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.MockConsumerInterceptor;
 
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.time.Duration;
@@ -282,11 +283,13 @@ public class PlaintextConsumerCommitTest {
             // In both CLASSIC and CONSUMER protocols, interceptors are executed in poll and close.
             // However, in the CONSUMER protocol, the assignment may be changed outside a poll, so
             // we need to poll once to ensure the interceptor is called.
-            if (groupProtocol == GroupProtocol.CONSUMER) {
-                consumer.poll(Duration.ZERO);
-            }
-
-            assertTrue(MockConsumerInterceptor.ON_COMMIT_COUNT.intValue() > commitCountBeforeRebalance);
+            TestUtils.waitForCondition(
+                () -> {
+                    consumer.poll(Duration.ZERO);
+                    return MockConsumerInterceptor.ON_COMMIT_COUNT.intValue() > commitCountBeforeRebalance;
+                },
+                "Consumer.poll() did not invoke onCommit() before timeout elapse"
+            );
 
             // verify commits are intercepted on close
             var commitCountBeforeClose = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue();
