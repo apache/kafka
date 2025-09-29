@@ -157,6 +157,7 @@ org.apache.kafka.clients.consumer.PlaintextConsumerCommitTest:
 - testClassicConsumerSubscribeAndCommitSync
 - testCommitAsyncCompletedBeforeCommitSyncReturns
 - testCommitAsyncCompletedBeforeConsumerCloses
+- testCommitAsyncFailsWhenCoordinatorUnavailableDuringClose
 org.apache.kafka.clients.consumer.PlaintextConsumerFetchTest:
 - testAsyncConsumerFetchHonoursFetchSizeIfLargeRecordNotFirst
 - testAsyncConsumerFetchHonoursMaxPartitionFetchBytesIfLargeRecordNotFirst
