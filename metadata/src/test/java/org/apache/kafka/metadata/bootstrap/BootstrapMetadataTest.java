@@ -131,7 +131,6 @@ public class BootstrapMetadataTest {
         BootstrapMetadata bootstrapMetadata = BootstrapMetadata.fromRecords(RECORDS_WITH_OLD_METADATA_VERSION, "quux");
         assertEquals("No MetadataVersion with feature level 1. Valid feature levels are from " + MetadataVersion.MINIMUM_VERSION.featureLevel()
             + " to " + MetadataVersion.latestTesting().featureLevel() + ".",
-                assertThrows(RuntimeException.class,
-                    () -> bootstrapMetadata.metadataVersion()).getMessage());
+                assertThrows(RuntimeException.class, bootstrapMetadata::metadataVersion).getMessage());
     }
 }

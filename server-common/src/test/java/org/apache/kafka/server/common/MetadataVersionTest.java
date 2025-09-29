@@ -26,6 +26,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import static org.apache.kafka.server.common.MetadataVersion.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MetadataVersionTest {
@@ -42,48 +43,69 @@ class MetadataVersionTest {
     @SuppressWarnings("checkstyle:JavaNCSS")
     public void testFromVersionString() {
         // 3.3-IV3 is the latest production version in the 3.3 line
-        assertEquals(IBP_3_3_IV3, MetadataVersion.fromVersionString("3.3"));
-        assertEquals(IBP_3_3_IV3, MetadataVersion.fromVersionString("3.3-IV3"));
+        assertEquals(IBP_3_3_IV3, MetadataVersion.fromVersionString("3.3", true));
+        assertEquals(IBP_3_3_IV3, MetadataVersion.fromVersionString("3.3-IV3", true));
 
         // 3.4-IV0 is the latest production version in the 3.4 line
-        assertEquals(IBP_3_4_IV0, MetadataVersion.fromVersionString("3.4"));
-        assertEquals(IBP_3_4_IV0, MetadataVersion.fromVersionString("3.4-IV0"));
+        assertEquals(IBP_3_4_IV0, MetadataVersion.fromVersionString("3.4", true));
+        assertEquals(IBP_3_4_IV0, MetadataVersion.fromVersionString("3.4-IV0", true));
 
         // 3.5-IV2 is the latest production version in the 3.5 line
-        assertEquals(IBP_3_5_IV2, MetadataVersion.fromVersionString("3.5"));
-        assertEquals(IBP_3_5_IV0, MetadataVersion.fromVersionString("3.5-IV0"));
-        assertEquals(IBP_3_5_IV1, MetadataVersion.fromVersionString("3.5-IV1"));
-        assertEquals(IBP_3_5_IV2, MetadataVersion.fromVersionString("3.5-IV2"));
+        assertEquals(IBP_3_5_IV2, MetadataVersion.fromVersionString("3.5", true));
+        assertEquals(IBP_3_5_IV0, MetadataVersion.fromVersionString("3.5-IV0", true));
+        assertEquals(IBP_3_5_IV1, MetadataVersion.fromVersionString("3.5-IV1", true));
+        assertEquals(IBP_3_5_IV2, MetadataVersion.fromVersionString("3.5-IV2", true));
 
         // 3.6-IV2 is the latest production version in the 3.6 line
-        assertEquals(IBP_3_6_IV2, MetadataVersion.fromVersionString("3.6"));
-        assertEquals(IBP_3_6_IV0, MetadataVersion.fromVersionString("3.6-IV0"));
-        assertEquals(IBP_3_6_IV1, MetadataVersion.fromVersionString("3.6-IV1"));
-        assertEquals(IBP_3_6_IV2, MetadataVersion.fromVersionString("3.6-IV2"));
+        assertEquals(IBP_3_6_IV2, MetadataVersion.fromVersionString("3.6", true));
+        assertEquals(IBP_3_6_IV0, MetadataVersion.fromVersionString("3.6-IV0", true));
+        assertEquals(IBP_3_6_IV1, MetadataVersion.fromVersionString("3.6-IV1", true));
+        assertEquals(IBP_3_6_IV2, MetadataVersion.fromVersionString("3.6-IV2", true));
 
         // 3.7-IV4 is the latest production version in the 3.7 line
-        assertEquals(IBP_3_7_IV4, MetadataVersion.fromVersionString("3.7"));
-        assertEquals(IBP_3_7_IV0, MetadataVersion.fromVersionString("3.7-IV0"));
-        assertEquals(IBP_3_7_IV1, MetadataVersion.fromVersionString("3.7-IV1"));
-        assertEquals(IBP_3_7_IV2, MetadataVersion.fromVersionString("3.7-IV2"));
-        assertEquals(IBP_3_7_IV3, MetadataVersion.fromVersionString("3.7-IV3"));
-        assertEquals(IBP_3_7_IV4, MetadataVersion.fromVersionString("3.7-IV4"));
+        assertEquals(IBP_3_7_IV4, MetadataVersion.fromVersionString("3.7", true));
+        assertEquals(IBP_3_7_IV0, MetadataVersion.fromVersionString("3.7-IV0", true));
+        assertEquals(IBP_3_7_IV1, MetadataVersion.fromVersionString("3.7-IV1", true));
+        assertEquals(IBP_3_7_IV2, MetadataVersion.fromVersionString("3.7-IV2", true));
+        assertEquals(IBP_3_7_IV3, MetadataVersion.fromVersionString("3.7-IV3", true));
+        assertEquals(IBP_3_7_IV4, MetadataVersion.fromVersionString("3.7-IV4", true));
 
         // 3.8-IV0 is the latest production version in the 3.8 line
-        assertEquals(IBP_3_8_IV0, MetadataVersion.fromVersionString("3.8"));
-        assertEquals(IBP_3_8_IV0, MetadataVersion.fromVersionString("3.8-IV0"));
+        assertEquals(IBP_3_8_IV0, MetadataVersion.fromVersionString("3.8", true));
+        assertEquals(IBP_3_8_IV0, MetadataVersion.fromVersionString("3.8-IV0", true));
 
         // 3.9-IV0 is the latest production version in the 3.9 line
-        assertEquals(IBP_3_9_IV0, MetadataVersion.fromVersionString("3.9"));
-        assertEquals(IBP_3_9_IV0, MetadataVersion.fromVersionString("3.9-IV0"));
+        assertEquals(IBP_3_9_IV0, MetadataVersion.fromVersionString("3.9", true));
+        assertEquals(IBP_3_9_IV0, MetadataVersion.fromVersionString("3.9-IV0", true));
 
         // 4.0-IV3 is the latest production version in the 4.0 line
-        assertEquals(IBP_4_0_IV0, MetadataVersion.fromVersionString("4.0-IV0"));
-        assertEquals(IBP_4_0_IV1, MetadataVersion.fromVersionString("4.0-IV1"));
-        assertEquals(IBP_4_0_IV2, MetadataVersion.fromVersionString("4.0-IV2"));
-        assertEquals(IBP_4_0_IV3, MetadataVersion.fromVersionString("4.0-IV3"));
+        assertEquals(IBP_4_0_IV3, MetadataVersion.fromVersionString("4.0", true));
+        assertEquals(IBP_4_0_IV0, MetadataVersion.fromVersionString("4.0-IV0", true));
+        assertEquals(IBP_4_0_IV1, MetadataVersion.fromVersionString("4.0-IV1", true));
+        assertEquals(IBP_4_0_IV2, MetadataVersion.fromVersionString("4.0-IV2", true));
+        assertEquals(IBP_4_0_IV3, MetadataVersion.fromVersionString("4.0-IV3", true));
 
-        assertEquals(IBP_4_1_IV0, MetadataVersion.fromVersionString("4.1-IV0"));
+        // 4.1-IV1 is the latest production version in the 4.1 line
+        assertEquals(IBP_4_1_IV1, MetadataVersion.fromVersionString("4.1", true));
+        assertEquals(IBP_4_1_IV0, MetadataVersion.fromVersionString("4.1-IV0", true));
+        assertEquals(IBP_4_1_IV1, MetadataVersion.fromVersionString("4.1-IV1", true));
+
+        assertEquals(IBP_4_2_IV0, MetadataVersion.fromVersionString("4.2-IV0", true));
+        assertEquals(IBP_4_2_IV1, MetadataVersion.fromVersionString("4.2-IV1", true));
+
+        // Throws exception when unstableFeatureVersionsEnabled is false
+        assertEquals("Unknown metadata.version '4.2-IV0'. Supported metadata.version are: 3.3-IV3, 3.4-IV0, 3.5-IV0, 3.5-IV1, 3.5-IV2, "
+            + "3.6-IV0, 3.6-IV1, 3.6-IV2, 3.7-IV0, 3.7-IV1, 3.7-IV2, 3.7-IV3, 3.7-IV4, 3.8-IV0, 3.9-IV0, 4.0-IV0, 4.0-IV1, 4.0-IV2, 4.0-IV3, 4.1-IV0, 4.1-IV1",
+            assertThrows(IllegalArgumentException.class, () -> fromVersionString("4.2-IV0", false)).getMessage());
+        assertEquals("Unknown metadata.version '4.2-IV1'. Supported metadata.version are: 3.3-IV3, 3.4-IV0, 3.5-IV0, 3.5-IV1, 3.5-IV2, "
+                + "3.6-IV0, 3.6-IV1, 3.6-IV2, 3.7-IV0, 3.7-IV1, 3.7-IV2, 3.7-IV3, 3.7-IV4, 3.8-IV0, 3.9-IV0, 4.0-IV0, 4.0-IV1, 4.0-IV2, 4.0-IV3, 4.1-IV0, 4.1-IV1",
+            assertThrows(IllegalArgumentException.class, () -> fromVersionString("4.2-IV1", false)).getMessage());
+    }
+
+    @Test
+    public void testMetadataVersionsToString() {
+        assertEquals("3.5-IV0, 3.5-IV1, 3.5-IV2, 3.6-IV0",
+            MetadataVersion.metadataVersionsToString(MetadataVersion.IBP_3_5_IV0, MetadataVersion.IBP_3_6_IV0));
     }
 
     @Test
@@ -108,6 +130,9 @@ class MetadataVersionTest {
         assertEquals("4.0", IBP_4_0_IV2.shortVersion());
         assertEquals("4.0", IBP_4_0_IV3.shortVersion());
         assertEquals("4.1", IBP_4_1_IV0.shortVersion());
+        assertEquals("4.1", IBP_4_1_IV1.shortVersion());
+        assertEquals("4.2", IBP_4_2_IV0.shortVersion());
+        assertEquals("4.2", IBP_4_2_IV1.shortVersion());
     }
 
     @Test
@@ -132,6 +157,9 @@ class MetadataVersionTest {
         assertEquals("4.0-IV2", IBP_4_0_IV2.version());
         assertEquals("4.0-IV3", IBP_4_0_IV3.version());
         assertEquals("4.1-IV0", IBP_4_1_IV0.version());
+        assertEquals("4.1-IV1", IBP_4_1_IV1.version());
+        assertEquals("4.2-IV0", IBP_4_2_IV0.version());
+        assertEquals("4.2-IV1", IBP_4_2_IV1.version());
     }
 
     @Test
@@ -253,8 +281,8 @@ class MetadataVersionTest {
     @ParameterizedTest
     @EnumSource(value = MetadataVersion.class)
     public void testListOffsetsValueVersion(MetadataVersion metadataVersion) {
-        final short expectedVersion = 10;
-        if (metadataVersion.isAtLeast(IBP_4_0_IV3)) {
+        final short expectedVersion = 11;
+        if (metadataVersion.isAtLeast(IBP_4_2_IV1)) {
             assertEquals(expectedVersion, metadataVersion.listOffsetRequestVersion());
         } else {
             assertTrue(metadataVersion.listOffsetRequestVersion() < expectedVersion);

@@ -111,7 +111,7 @@ public class GroupAuthorizerIntegrationTest {
                 AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true))
         ) {
             admin.createTopics(Collections.singleton(offsetTopic));
-            clusterInstance.waitForTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1);
+            clusterInstance.waitTopicCreation(Topic.GROUP_METADATA_TOPIC_NAME, 1);
         }
     }
 

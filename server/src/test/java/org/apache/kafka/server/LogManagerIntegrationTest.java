@@ -64,7 +64,7 @@ public class LogManagerIntegrationTest {
         try (Admin admin = cluster.admin()) {
             admin.createTopics(List.of(new NewTopic("foo", 1, (short) 1))).all().get();
         }
-        cluster.waitForTopic("foo", 1);
+        cluster.waitTopicCreation("foo", 1);
 
         // Produce some data into the topic
         Map<String, Object> producerConfigs = Map.of(
@@ -129,7 +129,7 @@ public class LogManagerIntegrationTest {
         try (Admin admin = cluster.admin()) {
             admin.createTopics(List.of(new NewTopic("foo", 1, (short) 3))).all().get();
         }
-        cluster.waitForTopic("foo", 1);
+        cluster.waitTopicCreation("foo", 1);
 
         Optional<PartitionMetadataFile> partitionMetadataFile = cluster.brokers().get(0).logManager()
                 .getLog(new TopicPartition("foo", 0), false).get()

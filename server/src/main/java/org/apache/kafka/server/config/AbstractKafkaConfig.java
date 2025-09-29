@@ -79,7 +79,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     }
 
     public List<String> logDirs() {
-        return Csv.parseCsvList(Optional.ofNullable(getString(ServerLogConfigs.LOG_DIRS_CONFIG)).orElse(getString(ServerLogConfigs.LOG_DIR_CONFIG)));
+        return Optional.ofNullable(getList(ServerLogConfigs.LOG_DIRS_CONFIG)).orElse(getList(ServerLogConfigs.LOG_DIR_CONFIG));
     }
 
     public int numIoThreads() {
@@ -107,7 +107,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     }
 
     public List<String> controllerListenerNames() {
-        return Csv.parseCsvList(getString(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG));
+        return getList(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG);
     }
 
     public ListenerName interBrokerListenerName() {
@@ -137,7 +137,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
             // 2. No SSL or SASL protocols are used in regular listeners (Note: controller listeners
             //    are not included in 'listeners' config when process.roles=broker)
             if (controllerListenerNames().stream().anyMatch(AbstractKafkaConfig::isSslOrSasl) ||
-                    Csv.parseCsvList(getString(SocketServerConfigs.LISTENERS_CONFIG)).stream()
+                    getList(SocketServerConfigs.LISTENERS_CONFIG).stream()
                             .anyMatch(listenerName -> isSslOrSasl(parseListenerName(listenerName)))) {
                 return mapValue;
             } else {

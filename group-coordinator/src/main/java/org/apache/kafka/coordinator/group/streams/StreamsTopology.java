@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
 
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -95,4 +97,43 @@ public record StreamsTopology(int topologyEpoch,
             .collect(Collectors.toMap(StreamsGroupTopologyValue.Subtopology::subtopologyId, x -> x));
         return new StreamsTopology(topology.epoch(), subtopologyMap);
     }
+
+    public StreamsGroupDescribeResponseData.Topology asStreamsGroupDescribeTopology() {
+        return new StreamsGroupDescribeResponseData.Topology()
+            .setEpoch(topologyEpoch)
+            .setSubtopologies(
+                subtopologies.entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .map(entry -> asStreamsGroupDescribeSubtopology(entry.getKey(), entry.getValue()))
+                    .toList()
+            );
+    }
+
+    private StreamsGroupDescribeResponseData.Subtopology asStreamsGroupDescribeSubtopology(String subtopologyId, StreamsGroupTopologyValue.Subtopology subtopology) {
+        return new StreamsGroupDescribeResponseData.Subtopology()
+            .setSubtopologyId(subtopologyId)
+            .setSourceTopics(subtopology.sourceTopics().stream().sorted().toList())
+            .setRepartitionSinkTopics(subtopology.repartitionSinkTopics().stream().sorted().toList())
+            .setRepartitionSourceTopics(subtopology.repartitionSourceTopics().stream()
+                .map(this::asStreamsGroupDescribeTopicInfo)
+                .sorted(Comparator.comparing(StreamsGroupDescribeResponseData.TopicInfo::name)).toList())
+            .setStateChangelogTopics(subtopology.stateChangelogTopics().stream()
+                .map(this::asStreamsGroupDescribeTopicInfo)
+                .sorted(Comparator.comparing(StreamsGroupDescribeResponseData.TopicInfo::name)).toList());
+    }
+
+    private StreamsGroupDescribeResponseData.TopicInfo asStreamsGroupDescribeTopicInfo(StreamsGroupTopologyValue.TopicInfo topicInfo) {
+        return new StreamsGroupDescribeResponseData.TopicInfo()
+            .setName(topicInfo.name())
+            .setPartitions(topicInfo.partitions())
+            .setReplicationFactor(topicInfo.replicationFactor())
+            .setTopicConfigs(
+                topicInfo.topicConfigs().stream().map(
+                    topicConfig -> new StreamsGroupDescribeResponseData.KeyValue()
+                        .setKey(topicConfig.key())
+                        .setValue(topicConfig.value())
+                ).toList()
+            );
+    }
+
 }

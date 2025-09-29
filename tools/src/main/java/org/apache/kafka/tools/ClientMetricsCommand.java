@@ -37,10 +37,10 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -91,11 +91,7 @@ public class ClientMetricsCommand {
             }
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
-            if (cause != null) {
-                printException(cause);
-            } else {
-                printException(e);
-            }
+            printException(Objects.requireNonNullElse(cause, e));
             exitCode = 1;
         } catch (Throwable t) {
             printException(t);
@@ -130,8 +126,8 @@ public class ClientMetricsCommand {
             Collection<AlterConfigOp> alterEntries = configsToBeSet.entrySet().stream()
                     .map(entry -> new AlterConfigOp(new ConfigEntry(entry.getKey(), entry.getValue()),
                             entry.getValue().isEmpty() ? AlterConfigOp.OpType.DELETE : AlterConfigOp.OpType.SET))
-                    .collect(Collectors.toList());
-            adminClient.incrementalAlterConfigs(Collections.singletonMap(configResource, alterEntries), alterOptions).all()
+                    .toList();
+            adminClient.incrementalAlterConfigs(Map.of(configResource, alterEntries), alterOptions).all()
                     .get(30, TimeUnit.SECONDS);
 
             System.out.println("Altered client metrics config for " + entityName + ".");
@@ -144,8 +140,8 @@ public class ClientMetricsCommand {
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, entityName);
             AlterConfigsOptions alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false);
             Collection<AlterConfigOp> alterEntries = oldConfigs.stream()
-                    .map(entry -> new AlterConfigOp(entry, AlterConfigOp.OpType.DELETE)).collect(Collectors.toList());
-            adminClient.incrementalAlterConfigs(Collections.singletonMap(configResource, alterEntries), alterOptions)
+                    .map(entry -> new AlterConfigOp(entry, AlterConfigOp.OpType.DELETE)).toList();
+            adminClient.incrementalAlterConfigs(Map.of(configResource, alterEntries), alterOptions)
                     .all().get(30, TimeUnit.SECONDS);
 
             System.out.println("Deleted client metrics config for " + entityName + ".");
@@ -162,7 +158,7 @@ public class ClientMetricsCommand {
                     System.out.println("The client metric resource " + entityNameOpt.get() + " doesn't exist and doesn't have dynamic config.");
                     return;
                 }
-                entities = Collections.singletonList(entityNameOpt.get());
+                entities = List.of(entityNameOpt.get());
             } else {
                 Collection<ConfigResource> resources = adminClient
                     .listConfigResources(Set.of(ConfigResource.Type.CLIENT_METRICS), new ListConfigResourcesOptions())
@@ -189,7 +185,7 @@ public class ClientMetricsCommand {
 
         private Collection<ConfigEntry> getClientMetricsConfig(String entityName) throws Exception {
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, entityName);
-            Map<ConfigResource, Config> result = adminClient.describeConfigs(Collections.singleton(configResource))
+            Map<ConfigResource, Config> result = adminClient.describeConfigs(Set.of(configResource))
                     .all().get(30, TimeUnit.SECONDS);
             return result.get(configResource).entries();
         }

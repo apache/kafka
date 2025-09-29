@@ -551,6 +551,7 @@ public class Selector implements Selectable, AutoCloseable {
                         boolean isReauthentication = channel.successfulAuthentications() > 1;
                         if (isReauthentication) {
                             sensors.successfulReauthentication.record(1.0, readyTimeMs);
+                            channel.maybeAddWriteInterestAfterReauth();
                             if (channel.reauthenticationLatencyMs() == null)
                                 log.warn(
                                     "Should never happen: re-authentication latency for a re-authenticated channel was null; continuing...");

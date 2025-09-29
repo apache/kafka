@@ -84,7 +84,6 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -211,6 +210,7 @@ public class TestSslUtils {
 
         sslConfigs.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, keyManagerAlgorithm);
         sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, trustManagerAlgorithm);
+        sslConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, List.of());
 
         List<String> enabledProtocols  = new ArrayList<>();
         enabledProtocols.add(tlsProtocol);
@@ -444,14 +444,19 @@ public class TestSslUtils {
                 SubjectPublicKeyInfo subPubKeyInfo = SubjectPublicKeyInfo.getInstance(keyPair.getPublic().getEncoded());
                 BcContentSignerBuilder signerBuilder;
                 String keyAlgorithm = keyPair.getPublic().getAlgorithm();
-                if (keyAlgorithm.equals("RSA"))
-                    signerBuilder = new BcRSAContentSignerBuilder(sigAlgId, digAlgId);
-                else if (keyAlgorithm.equals("DSA"))
-                    signerBuilder = new BcDSAContentSignerBuilder(sigAlgId, digAlgId);
-                else if (keyAlgorithm.equals("EC"))
-                    signerBuilder = new BcECContentSignerBuilder(sigAlgId, digAlgId);
-                else
-                    throw new IllegalArgumentException("Unsupported algorithm " + keyAlgorithm);
+                switch (keyAlgorithm) {
+                    case "RSA":
+                        signerBuilder = new BcRSAContentSignerBuilder(sigAlgId, digAlgId);
+                        break;
+                    case "DSA":
+                        signerBuilder = new BcDSAContentSignerBuilder(sigAlgId, digAlgId);
+                        break;
+                    case "EC":
+                        signerBuilder = new BcECContentSignerBuilder(sigAlgId, digAlgId);
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Unsupported algorithm " + keyAlgorithm);
+                }
                 ContentSigner sigGen = signerBuilder.build(privateKeyAsymKeyParam);
                 // Negative numbers for "days" can be used to generate expired certificates
                 Date now = new Date();
@@ -520,14 +525,19 @@ public class TestSslUtils {
                         SubjectPublicKeyInfo.getInstance(keyPair.getPublic().getEncoded());
                 BcContentSignerBuilder signerBuilder;
                 String keyAlgorithm = keyPair.getPublic().getAlgorithm();
-                if (keyAlgorithm.equals("RSA"))
-                    signerBuilder = new BcRSAContentSignerBuilder(sigAlgId, digAlgId);
-                else if (keyAlgorithm.equals("DSA"))
-                    signerBuilder = new BcDSAContentSignerBuilder(sigAlgId, digAlgId);
-                else if (keyAlgorithm.equals("EC"))
-                    signerBuilder = new BcECContentSignerBuilder(sigAlgId, digAlgId);
-                else
-                    throw new IllegalArgumentException("Unsupported algorithm " + keyAlgorithm);
+                switch (keyAlgorithm) {
+                    case "RSA":
+                        signerBuilder = new BcRSAContentSignerBuilder(sigAlgId, digAlgId);
+                        break;
+                    case "DSA":
+                        signerBuilder = new BcDSAContentSignerBuilder(sigAlgId, digAlgId);
+                        break;
+                    case "EC":
+                        signerBuilder = new BcECContentSignerBuilder(sigAlgId, digAlgId);
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Unsupported algorithm " + keyAlgorithm);
+                }
                 ContentSigner sigGen = signerBuilder.build(privateKeyAsymKeyParam);
                 // Negative numbers for "days" can be used to generate expired certificates
                 Date now = new Date();
@@ -686,6 +696,7 @@ public class TestSslUtils {
             sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, trustStorePassword);
             sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
             sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
+            sslConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, List.of());
 
             List<String> enabledProtocols  = new ArrayList<>();
             enabledProtocols.add(tlsProtocol);
@@ -701,7 +712,8 @@ public class TestSslUtils {
 
             Map<String, Object> sslConfigs = new HashMap<>();
             sslConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol);
-            sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList(tlsProtocol));
+            sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, List.of(tlsProtocol));
+            sslConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, List.of());
 
             if (connectionMode != ConnectionMode.CLIENT || useClientCert) {
                 KeyPair keyPair = generateKeyPair(algorithm);
@@ -838,6 +850,7 @@ public class TestSslUtils {
         List<String> enabledProtocols  = new ArrayList<>();
         enabledProtocols.add(tlsProtocol);
         sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
+        sslConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, List.of());
 
         return sslConfigs;
     }

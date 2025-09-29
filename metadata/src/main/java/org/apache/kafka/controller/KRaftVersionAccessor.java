@@ -36,7 +36,6 @@ interface KRaftVersionAccessor {
      * @param epoch the current epoch
      * @param newVersion the new kraft version to upgrade to
      * @param validateOnly whether to just validate the change and not persist it
-     * @throws ApiException when the upgrade fails to validate
      */
     void upgradeKRaftVersion(int epoch, KRaftVersion newVersion, boolean validateOnly);
 }

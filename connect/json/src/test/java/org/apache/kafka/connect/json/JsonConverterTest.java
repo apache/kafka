@@ -36,6 +36,8 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -975,6 +977,58 @@ public class JsonConverterTest {
     @Test
     public void testVersionRetrievedFromAppInfoParser() {
         assertEquals(AppInfoParser.getVersion(), converter.version());
+    }
+
+    @Test
+    public void testSchemaContentIsNull() {
+        Map<String, Object> config = new HashMap<>();
+        config.put(JsonConverterConfig.SCHEMA_CONTENT_CONFIG, null);
+        converter.configure(config, false);
+        byte[] jsonBytes = "{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\" }".getBytes();
+        SchemaAndValue result = converter.toConnectData(TOPIC, jsonBytes);
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "foo-bar-baz"), result);
+    }
+
+    @Test
+    public void testSchemaContentIsEmptyString() {
+        converter.configure(Map.of(JsonConverterConfig.SCHEMA_CONTENT_CONFIG, ""), false);
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "foo-bar-baz"), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\" }".getBytes()));
+    }
+
+    @Test
+    public void testSchemaContentValidSchema() {
+        converter.configure(Map.of(JsonConverterConfig.SCHEMA_CONTENT_CONFIG, "{ \"type\": \"string\" }"), false);
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "foo-bar-baz"), converter.toConnectData(TOPIC, "\"foo-bar-baz\"".getBytes()));
+    }
+
+    @Test
+    public void testSchemaContentInValidSchema() {
+        assertThrows(
+            DataException.class,
+            () -> converter.configure(Map.of(JsonConverterConfig.SCHEMA_CONTENT_CONFIG, "{ \"string\" }"), false),
+            " Provided schema is invalid , please recheck the schema you have provided");
+    }
+
+    @Test
+    public void testSchemaContentLooksLikeSchema() {
+        converter.configure(Map.of(JsonConverterConfig.SCHEMA_CONTENT_CONFIG, "{ \"type\": \"struct\", \"fields\": [{\"field\": \"schema\", \"type\": \"struct\",\"fields\": [{\"field\": \"type\", \"type\": \"string\" }]}, {\"field\": \"payload\", \"type\": \"string\"}]}"), false);
+        SchemaAndValue connectData = converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\" }".getBytes());
+        assertEquals("foo-bar-baz", ((Struct) connectData.value()).getString("payload"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "{ }",
+        "{ \"wrong\": \"schema\" }",
+        "{ \"schema\": { \"type\": \"string\" } }",
+        "{ \"payload\": \"foo-bar-baz\" }",
+        "{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\", \"extra\": \"field\" }",
+    })
+    public void testNullSchemaContentWithWrongConnectDataValue(String value) {
+        converter.configure(Map.of(), false);
+        assertThrows(
+                DataException.class,
+                () -> converter.toConnectData(TOPIC, value.getBytes()));
     }
 
     private JsonNode parse(byte[] json) {

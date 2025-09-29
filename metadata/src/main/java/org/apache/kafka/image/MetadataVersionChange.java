@@ -21,28 +21,13 @@ import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Objects;
 
-
 /**
  * A change in the MetadataVersion.
  */
-public final class MetadataVersionChange {
-    private final MetadataVersion oldVersion;
-    private final MetadataVersion newVersion;
-
-    public MetadataVersionChange(
-            MetadataVersion oldVersion,
-            MetadataVersion newVersion
-    ) {
-        this.oldVersion = Objects.requireNonNull(oldVersion);
-        this.newVersion = Objects.requireNonNull(newVersion);
-    }
-
-    public MetadataVersion oldVersion() {
-        return oldVersion;
-    }
-
-    public MetadataVersion newVersion() {
-        return newVersion;
+public record MetadataVersionChange(MetadataVersion oldVersion, MetadataVersion newVersion) {
+    public MetadataVersionChange {
+        Objects.requireNonNull(oldVersion);
+        Objects.requireNonNull(newVersion);
     }
 
     public boolean isUpgrade() {
@@ -51,27 +36,5 @@ public final class MetadataVersionChange {
 
     public boolean isDowngrade() {
         return newVersion.isLessThan(oldVersion);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o == null || !o.getClass().equals(this.getClass())) return false;
-        MetadataVersionChange other = (MetadataVersionChange) o;
-        return oldVersion.equals(other.oldVersion) &&
-                newVersion.equals(other.newVersion);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(oldVersion,
-                newVersion);
-    }
-
-    @Override
-    public String toString() {
-        return "MetadataVersionChange(" +
-                "oldVersion=" + oldVersion +
-                ", newVersion=" + newVersion +
-                ")";
     }
 }

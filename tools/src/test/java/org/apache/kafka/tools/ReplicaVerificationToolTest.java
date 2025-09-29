@@ -24,7 +24,6 @@ import org.apache.kafka.common.record.SimpleRecord;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.IntStream;
@@ -43,8 +42,8 @@ public class ReplicaVerificationToolTest {
             }};
 
         ReplicaVerificationTool.ReplicaBuffer replicaBuffer =
-            new ReplicaVerificationTool.ReplicaBuffer(expectedReplicasPerTopicAndPartition, Collections.emptyMap(), 2, 0);
-        expectedReplicasPerTopicAndPartition.forEach((tp, numReplicas) -> {
+            new ReplicaVerificationTool.ReplicaBuffer(expectedReplicasPerTopicAndPartition, Map.of(), 2, 0);
+        expectedReplicasPerTopicAndPartition.forEach((tp, numReplicas) ->
             IntStream.range(0, numReplicas).forEach(replicaId -> {
                 SimpleRecord[] records = IntStream.rangeClosed(0, 5)
                     .mapToObj(index -> new SimpleRecord(("key " + index).getBytes(), ("value " + index).getBytes()))
@@ -60,8 +59,8 @@ public class ReplicaVerificationToolTest {
                     .setRecords(memoryRecords);
 
                 replicaBuffer.addFetchedData(tp, replicaId, partitionData);
-            });
-        });
+            })
+        );
 
         replicaBuffer.verifyCheckSum(line -> sb.append(format("%s%n", line)));
         String output = sb.toString().trim();

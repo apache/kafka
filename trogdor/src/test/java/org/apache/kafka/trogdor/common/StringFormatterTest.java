@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.time.ZoneOffset;
-import java.util.Arrays;
+import java.util.List;
 
 import static org.apache.kafka.trogdor.common.StringFormatter.dateString;
 import static org.apache.kafka.trogdor.common.StringFormatter.durationString;
@@ -53,8 +53,8 @@ public class StringFormatterTest {
                 "lion    1      12345 %n" +
                 "manatee 50     1     %n"),
             StringFormatter.prettyPrintGrid(
-                Arrays.asList(Arrays.asList("ANIMAL", "NUMBER", "INDEX"),
-                    Arrays.asList("lion", "1", "12345"),
-                    Arrays.asList("manatee", "50", "1"))));
+                List.of(List.of("ANIMAL", "NUMBER", "INDEX"),
+                    List.of("lion", "1", "12345"),
+                    List.of("manatee", "50", "1"))));
     }
 }

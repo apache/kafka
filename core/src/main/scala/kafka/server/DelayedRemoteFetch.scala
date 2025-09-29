@@ -28,6 +28,7 @@ import org.apache.kafka.server.purgatory.DelayedOperation
 import org.apache.kafka.server.storage.log.{FetchParams, FetchPartitionData}
 import org.apache.kafka.storage.internals.log.{LogOffsetMetadata, RemoteLogReadResult, RemoteStorageFetchInfo}
 
+import java.util
 import java.util.concurrent.{CompletableFuture, Future, TimeUnit}
 import java.util.{Optional, OptionalInt, OptionalLong}
 import scala.collection._
@@ -36,9 +37,9 @@ import scala.collection._
  * A remote fetch operation that can be created by the replica manager and watched
  * in the remote fetch operation purgatory
  */
-class DelayedRemoteFetch(remoteFetchTask: Future[Void],
-                         remoteFetchResult: CompletableFuture[RemoteLogReadResult],
-                         remoteFetchInfo: RemoteStorageFetchInfo,
+class DelayedRemoteFetch(remoteFetchTasks: util.Map[TopicIdPartition, Future[Void]],
+                         remoteFetchResults: util.Map[TopicIdPartition, CompletableFuture[RemoteLogReadResult]],
+                         remoteFetchInfos: util.Map[TopicIdPartition, RemoteStorageFetchInfo],
                          remoteFetchMaxWaitMs: Long,
                          fetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)],
                          fetchParams: FetchParams,
@@ -56,7 +57,7 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
    *
    * Case a: This broker is no longer the leader of the partition it tries to fetch
    * Case b: This broker does not know the partition it tries to fetch
-   * Case c: The remote storage read request completed (succeeded or failed)
+   * Case c: All the remote storage read request completed (succeeded or failed)
    * Case d: The partition is in an offline log directory on this broker
    *
    * Upon completion, should return whatever data is available for each valid partition
@@ -81,7 +82,8 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
             return forceComplete()
         }
     }
-    if (remoteFetchResult.isDone) // Case c
+    // Case c
+    if (remoteFetchResults.values().stream().allMatch(taskResult => taskResult.isDone))
       forceComplete()
     else
       false
@@ -90,8 +92,13 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
   override def onExpiration(): Unit = {
     // cancel the remote storage read task, if it has not been executed yet and
     // avoid interrupting the task if it is already running as it may force closing opened/cached resources as transaction index.
-    val cancelled = remoteFetchTask.cancel(false)
-    if (!cancelled) debug(s"Remote fetch task for RemoteStorageFetchInfo: $remoteFetchInfo could not be cancelled and its isDone value is ${remoteFetchTask.isDone}")
+    remoteFetchTasks.forEach { (topicIdPartition, task) =>
+      if (task != null && !task.isDone) {
+         if (!task.cancel(false)) {
+           debug(s"Remote fetch task for remoteFetchInfo: ${remoteFetchInfos.get(topicIdPartition)} could not be cancelled.")
+         }
+      }
+    }
 
     DelayedRemoteFetchMetrics.expiredRequestMeter.mark()
   }
@@ -101,7 +108,8 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
    */
   override def onComplete(): Unit = {
     val fetchPartitionData = localReadResults.map { case (tp, result) =>
-      if (tp.topicPartition().equals(remoteFetchInfo.topicPartition)
+      val remoteFetchResult = remoteFetchResults.get(tp)
+      if (remoteFetchInfos.containsKey(tp)
         && remoteFetchResult.isDone
         && result.error == Errors.NONE
         && result.info.delayedRemoteStorageFetch.isPresent) {

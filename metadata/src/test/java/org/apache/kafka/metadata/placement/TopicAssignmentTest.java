@@ -85,7 +85,7 @@ public class TopicAssignmentTest {
             new PartitionAssignment(replicas, directories::get)
         );
         TopicAssignment topicAssignment = new TopicAssignment(partitionAssignments);
-        assertEquals("TopicAssignment(assignments=[PartitionAssignment(replicas=[0, 1, 2], " +
-                "directories=[v56qeYzNRrqNtXsxzcReog, MvUIAsOiRlSePeiBHdZrSQ, jUqCchHtTHqMxeVv4dw1RA])])", topicAssignment.toString());
+        assertEquals("TopicAssignment[assignments=[PartitionAssignment(replicas=[0, 1, 2], " +
+                "directories=[v56qeYzNRrqNtXsxzcReog, MvUIAsOiRlSePeiBHdZrSQ, jUqCchHtTHqMxeVv4dw1RA])]]", topicAssignment.toString());
     }
 }

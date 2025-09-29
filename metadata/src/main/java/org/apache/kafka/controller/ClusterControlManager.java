@@ -823,7 +823,7 @@ public class ClusterControlManager {
     }
 
     Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupportedFeatures() {
-        return new Iterator<Entry<Integer, Map<String, VersionRange>>>() {
+        return new Iterator<>() {
             private final Iterator<BrokerRegistration> iter = brokerRegistrations.values().iterator();
 
             @Override
@@ -845,7 +845,7 @@ public class ClusterControlManager {
             throw new UnsupportedVersionException("The current MetadataVersion is too old to " +
                     "support controller registrations.");
         }
-        return new Iterator<Entry<Integer, Map<String, VersionRange>>>() {
+        return new Iterator<>() {
             private final Iterator<ControllerRegistration> iter = controllerRegistrations.values().iterator();
 
             @Override

@@ -166,7 +166,7 @@ public class DeleteTopicTest {
                 "Follower " + followerBrokerId + " was not shutdown");
             Map<String, NewPartitions> newPartitionSet = Map.of(DEFAULT_TOPIC, NewPartitions.increaseTo(3));
             admin.createPartitions(newPartitionSet);
-            cluster.waitForTopic(DEFAULT_TOPIC, 3);
+            cluster.waitTopicCreation(DEFAULT_TOPIC, 3);
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
 
             follower.startup();

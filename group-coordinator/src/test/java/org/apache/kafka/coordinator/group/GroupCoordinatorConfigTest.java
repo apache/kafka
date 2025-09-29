@@ -42,7 +42,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class GroupCoordinatorConfigTest {
 
@@ -93,15 +92,15 @@ public class GroupCoordinatorConfigTest {
         config = createConfig(configs);
         assignors = config.consumerGroupAssignors();
         assertEquals(2, assignors.size());
-        assertTrue(assignors.get(0) instanceof RangeAssignor);
-        assertTrue(assignors.get(1) instanceof UniformAssignor);
+        assertInstanceOf(RangeAssignor.class, assignors.get(0));
+        assertInstanceOf(UniformAssignor.class, assignors.get(1));
 
         // Test custom assignor.
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, CustomAssignor.class.getName());
         config = createConfig(configs);
         assignors = config.consumerGroupAssignors();
         assertEquals(1, assignors.size());
-        assertTrue(assignors.get(0) instanceof CustomAssignor);
+        assertInstanceOf(CustomAssignor.class, assignors.get(0));
         assertNotNull(((CustomAssignor) assignors.get(0)).configs);
 
         // Test with classes.
@@ -109,24 +108,24 @@ public class GroupCoordinatorConfigTest {
         config = createConfig(configs);
         assignors = config.consumerGroupAssignors();
         assertEquals(2, assignors.size());
-        assertTrue(assignors.get(0) instanceof RangeAssignor);
-        assertTrue(assignors.get(1) instanceof CustomAssignor);
+        assertInstanceOf(RangeAssignor.class, assignors.get(0));
+        assertInstanceOf(CustomAssignor.class, assignors.get(1));
 
         // Test combination of short name and class.
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, "uniform, " + CustomAssignor.class.getName());
         config = createConfig(configs);
         assignors = config.consumerGroupAssignors();
         assertEquals(2, assignors.size());
-        assertTrue(assignors.get(0) instanceof UniformAssignor);
-        assertTrue(assignors.get(1) instanceof CustomAssignor);
+        assertInstanceOf(UniformAssignor.class, assignors.get(0));
+        assertInstanceOf(CustomAssignor.class, assignors.get(1));
 
         // Test combination of short name and class.
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of("uniform", CustomAssignor.class.getName()));
         config = createConfig(configs);
         assignors = config.consumerGroupAssignors();
         assertEquals(2, assignors.size());
-        assertTrue(assignors.get(0) instanceof UniformAssignor);
-        assertTrue(assignors.get(1) instanceof CustomAssignor);
+        assertInstanceOf(UniformAssignor.class, assignors.get(0));
+        assertInstanceOf(CustomAssignor.class, assignors.get(1));
     }
 
     @Test

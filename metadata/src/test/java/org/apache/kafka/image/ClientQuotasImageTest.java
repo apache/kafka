@@ -20,11 +20,9 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
-import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.QuotaConfig;
 
 import org.junit.jupiter.api.Test;
@@ -136,7 +134,7 @@ public class ClientQuotasImageTest {
 
     private static List<ApiMessageAndVersion> getImageRecords(ClientQuotasImage image) {
         RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder(MetadataVersion.latestProduction()).build());
+        image.write(writer);
         return writer.records();
     }
 }

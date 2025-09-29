@@ -35,7 +35,7 @@ import java.io.File;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -62,7 +62,7 @@ public class ExternalCommandWorkerTest {
             ExternalCommandSpec spec = new ExternalCommandSpec(0,
                 30000,
                 "node0",
-                Arrays.asList(command),
+                List.of(command),
                 workload,
                 Optional.of(shutdownGracePeriodMs));
             return new ExternalCommandWorker(id, spec);
