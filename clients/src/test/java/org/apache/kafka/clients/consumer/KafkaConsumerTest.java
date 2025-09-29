@@ -102,7 +102,6 @@ import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockDeserializer;
@@ -147,7 +146,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -952,7 +950,7 @@ public class KafkaConsumerTest {
         client.prepareResponse(listOffsetsResponse(Map.of(tp0, 50L)));
         client.prepareResponse(fetchResponse(tp0, 50L, 5));
 
-        ConsumerRecords<String, String> records = pollForRecords();
+        ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer, time);
         assertEquals(5, records.count());
         assertEquals(55L, consumer.position(tp0));
         assertEquals(1, records.nextOffsets().size());
@@ -1046,7 +1044,7 @@ public class KafkaConsumerTest {
 
             }, fetchResponse(tp0, 50L, 5));
 
-        ConsumerRecords<String, String> records = pollForRecords();
+        ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer, time);
         assertEquals(5, records.count());
         assertEquals(Set.of(tp0), records.partitions());
         assertEquals(1, records.nextOffsets().size());
@@ -1765,7 +1763,7 @@ public class KafkaConsumerTest {
         client.prepareResponse(listOffsetsResponse(Map.of(tp0, 10L)));
         client.prepareResponse(fetchResponse(tp0, 10L, 1));
 
-        ConsumerRecords<String, String> records = pollForRecords();
+        ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer, time);
 
         assertEquals(1, records.count());
         assertEquals(11L, consumer.position(tp0));
@@ -1824,7 +1822,7 @@ public class KafkaConsumerTest {
         client.prepareResponse(listOffsetsResponse(Map.of(tp0, 10L)));
         client.prepareResponse(fetchResponse(tp0, 10L, 1));
 
-        ConsumerRecords<String, String> records = pollForRecords();
+        ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer, time);
         assertEquals(1, records.count());
         assertEquals(11L, consumer.position(tp0));
         assertEquals(1, records.nextOffsets().size());
@@ -2119,7 +2117,7 @@ public class KafkaConsumerTest {
         time.sleep(heartbeatIntervalMs);
         Thread.sleep(heartbeatIntervalMs);
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
-        final ConsumerRecords<String, String> records = pollForRecords();
+        final ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer, time);
         assertFalse(records.isEmpty());
         assertFalse(records.nextOffsets().isEmpty());
     }
@@ -2667,8 +2665,11 @@ public class KafkaConsumerTest {
         consumer.assign(Set.of(tp0));
 
         // poll once to update with the current metadata
-        waitForConsumerPoll(() -> requestGenerated(client, ApiKeys.FIND_COORDINATOR),
-                "No metadata requests sent");
+        ConsumerPollTestUtils.waitForCondition(
+            consumer,
+            () -> requestGenerated(client, ApiKeys.FIND_COORDINATOR),
+            "No metadata requests sent"
+        );
         client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, metadata.fetch().nodes().get(0)));
 
         // no error for no current position
@@ -2682,11 +2683,15 @@ public class KafkaConsumerTest {
         // poll once again, which should send the list-offset request
         consumer.seek(tp0, 50L);
         // requests: list-offset, fetch
-        waitForConsumerPoll(() -> {
-            boolean hasListOffsetRequest = requestGenerated(client, ApiKeys.LIST_OFFSETS);
-            boolean hasFetchRequest = requestGenerated(client, ApiKeys.FETCH);
-            return hasListOffsetRequest && hasFetchRequest;
-        }, "No list-offset & fetch request sent");
+        ConsumerPollTestUtils.waitForCondition(
+            consumer,
+            () -> {
+                boolean hasListOffsetRequest = requestGenerated(client, ApiKeys.LIST_OFFSETS);
+                boolean hasFetchRequest = requestGenerated(client, ApiKeys.FETCH);
+                return hasListOffsetRequest && hasFetchRequest;
+            },
+            "No list-offset & fetch request sent"
+        );
 
         // no error for no end offset (so unknown lag)
         assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
@@ -2710,7 +2715,7 @@ public class KafkaConsumerTest {
         final FetchInfo fetchInfo = new FetchInfo(1L, 99L, 50L, 5);
         client.respondToRequest(fetchRequest, fetchResponse(Map.of(tp0, fetchInfo)));
 
-        final ConsumerRecords<String, String> records = pollForRecords();
+        final ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer, time);
         assertEquals(5, records.count());
         assertEquals(55L, consumer.position(tp0));
         assertEquals(1, records.nextOffsets().size());
@@ -3798,34 +3803,6 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         expectedTags.put("class", clazz.getSimpleName());
         expectedTags.putAll(TAGS);
         return new MetricName(NAME, "plugins", DESCRIPTION, expectedTags);
-    }
-
-    @SuppressWarnings("unchecked")
-    private ConsumerRecords<String, String> pollForRecords() {
-        Timer timer = time.timer(15000);
-
-        while (timer.notExpired()) {
-            ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1000));
-
-            if (!records.isEmpty())
-                return records;
-        }
-
-        throw new org.apache.kafka.common.errors.TimeoutException("no records to return");
-    }
-
-    private void waitForConsumerPoll(Supplier<Boolean> testCondition, String conditionDetails) {
-        try {
-            TestUtils.waitForCondition(
-                () -> {
-                    consumer.poll(Duration.ZERO);
-                    return testCondition.get();
-                },
-                conditionDetails
-            );
-        } catch (InterruptedException e) {
-            throw new InterruptException(e);
-        }
     }
 
     private static final String NAME = "name";

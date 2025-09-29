@@ -22,6 +22,7 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.clients.consumer.ConsumerPollTestUtils;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -126,9 +127,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -509,7 +508,8 @@ public class AsyncKafkaConsumerTest {
         completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(Collections.singletonList(topicName), listener);
         markReconcileAndAutoCommitCompleteForPollEvent();
-        waitForConsumerPoll(
+        ConsumerPollTestUtils.waitForCondition(
+            consumer,
             callbackExecuted::get,
             "Consumer.poll() did not execute callback within timeout"
         );
@@ -679,7 +679,8 @@ public class AsyncKafkaConsumerTest {
         consumer.assign(Collections.singleton(new TopicPartition("foo", 0)));
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
         markReconcileAndAutoCommitCompleteForPollEvent();
-        waitForConsumerPoll(
+        ConsumerPollTestUtils.waitForCondition(
+            consumer,
             () -> callback.invoked == 1 && callback.exception == null,
             "Consumer.poll() did not execute the callback once (without error) in allottec timeout"
         );
@@ -1487,13 +1488,11 @@ public class AsyncKafkaConsumerTest {
         // If any error is happening inside the rebalance callbacks, we expect the first exception to be thrown from poll.
         if (expectedExceptionOpt.isPresent()) {
             Exception expectedException = expectedExceptionOpt.get();
-
-            waitForConsumerPollException(
-                e -> {
-                    return Objects.equals(e.getClass(), expectedException.getClass()) &&
-                        Objects.equals(e.getMessage(), expectedException.getMessage()) &&
-                        Objects.equals(e.getCause(), expectedException.getCause());
-                },
+            ConsumerPollTestUtils.waitForException(
+                consumer,
+                e -> Objects.equals(e.getClass(), expectedException.getClass()) &&
+                    Objects.equals(e.getMessage(), expectedException.getMessage()) &&
+                    Objects.equals(e.getCause(), expectedException.getCause()),
                 "Consumer.poll() did not throw the expected exception " + expectedException
             );
         } else {
@@ -1560,7 +1559,8 @@ public class AsyncKafkaConsumerTest {
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(singletonList(new TopicPartition("topic", 0)));
         markReconcileAndAutoCommitCompleteForPollEvent();
-        waitForConsumerPollException(
+        ConsumerPollTestUtils.waitForException(
+            consumer,
             e -> e.getMessage().equals(expectedException.getMessage()),
             "Consumer.poll() did not fail with expected exception " + expectedException + " within timeout"
         );
@@ -1580,7 +1580,8 @@ public class AsyncKafkaConsumerTest {
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(singletonList(new TopicPartition("topic", 0)));
         markReconcileAndAutoCommitCompleteForPollEvent();
-        waitForConsumerPollException(
+        ConsumerPollTestUtils.waitForException(
+            consumer,
             e -> e.getMessage().equals(expectedException1.getMessage()),
             "Consumer.poll() did not fail with expected exception " + expectedException1 + " within timeout"
         );
@@ -1853,7 +1854,8 @@ public class AsyncKafkaConsumerTest {
         when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
         markReconcileAndAutoCommitCompleteForPollEvent();
 
-        waitForConsumerPoll(
+        ConsumerPollTestUtils.waitForCondition(
+            consumer,
             () -> backgroundEventReaper.size() == 0,
             "Consumer.poll() did not reap background events within timeout"
         );
@@ -2305,37 +2307,5 @@ public class AsyncKafkaConsumerTest {
             event.complete(CompositePollEvent.State.CALLBACKS_REQUIRED, Optional.empty());
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(CompositePollEvent.class));
-    }
-
-    private void waitForConsumerPoll(Supplier<Boolean> testCondition, String conditionDetails) {
-        try {
-            TestUtils.waitForCondition(
-                () -> {
-                    consumer.poll(Duration.ZERO);
-                    return testCondition.get();
-                },
-                conditionDetails
-            );
-        } catch (InterruptedException e) {
-            throw new InterruptException(e);
-        }
-    }
-
-    private void waitForConsumerPollException(Function<KafkaException, Boolean> testCondition, String conditionDetails) {
-        try {
-            TestUtils.waitForCondition(
-                () -> {
-                    try {
-                        consumer.poll(Duration.ZERO);
-                        return false;
-                    } catch (KafkaException e) {
-                        return testCondition.apply(e);
-                    }
-                },
-                conditionDetails
-            );
-        } catch (InterruptedException e) {
-            throw new InterruptException(e);
-        }
     }
 }
