@@ -566,21 +566,21 @@ public class ConfigCommandIntegrationTest {
 
         try (Admin client = cluster.admin()) {
 
-            alterAndVerifyBothLevelConfig(client, Optional.of(defaultBrokerId), singletonMap("message.max.bytes", "110000"), alterOpts);
-            alterAndVerifyBothLevelConfig(client, Optional.of(defaultBrokerId), singletonMap("message.max.bytes", "130000"), alterOpts);
+            alterAndVerifyBothLevelConfig(client, Optional.of(defaultBrokerId), Map.of("message.max.bytes", "110000"), alterOpts);
+            alterAndVerifyBothLevelConfig(client, Optional.of(defaultBrokerId), Map.of("message.max.bytes", "130000"), alterOpts);
 
             assertThrows(ExecutionException.class,
                     () -> alterAndVerifyBothLevelConfig(
                             client,
                             Optional.of(defaultBrokerId),
-                            singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"),
+                            Map.of("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"),
                             alterOpts)
             );
             assertThrows(ExecutionException.class,
                     () -> alterAndVerifyBothLevelConfig(
                             client,
                             Optional.of(defaultBrokerId),
-                            singletonMap("listener.name.external.ssl.keystore.password", "secret"),
+                            Map.of("listener.name.external.ssl.keystore.password", "secret"),
                             alterOpts)
             );
         }
@@ -602,7 +602,7 @@ public class ConfigCommandIntegrationTest {
         String configStr = transferConfigMapToString(config);
         ConfigCommand.ConfigCommandOptions addOpts =
                 new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId),
-                        entityOp(Optional.empty()), asList("--add-config", configStr)));
+                        entityOp(Optional.empty()), List.of("--add-config", configStr)));
         ConfigCommand.alterConfig(client, addOpts);
     }
 
