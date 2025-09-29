@@ -139,28 +139,28 @@ public class SubscriptionSendProcessorSupplier<KLeft, VLeft, KRight>
             final KRight oldForeignKey = oldValue == null ? null : foreignKeyExtractor.extract(record.key(), oldValue);
             final KRight newForeignKey = newValue == null ? null : foreignKeyExtractor.extract(record.key(), newValue);
 
-            final boolean unsubscribe = oldForeignKey != null;
-            if (unsubscribe) {
-                // delete old subscription if FK changed
+            final boolean maybeUnsubscribe = oldForeignKey != null;
+            if (maybeUnsubscribe) {
+                // delete old subscription only if FK changed
                 //
                 // if FK did change, we need to explicitly delete the old subscription,
                 // because the new subscription goes to a different partition
-                if (!Arrays.equals(serialize(newForeignKey), serialize(oldForeignKey))) {
-                    // this may lead to unnecessary tombstones, if we delete an existing key,
-                    // which did not join previously;
+                final boolean foreignKeyChanged = !Arrays.equals(serialize(newForeignKey), serialize(oldForeignKey));
+
+                if (foreignKeyChanged) {
+                    // this may lead to unnecessary tombstones if the old FK did not join;
                     // however, we cannot avoid it as we have no means to know if the old FK joined or not
                     forward(record, oldForeignKey, DELETE_KEY_NO_PROPAGATE);
                 }
             }
 
-            // for all cases, insert, update, and delete, we send a new subscription
+            // for all cases (insert, update, and delete), we send a new subscription;
             // we need to get a response back for all cases to always produce a left-join result
             //
             // note: for delete, `newForeignKey` is null, what is a "hack"
-            // no actual subscription will be added for null-FK, but we still get the response back we need
+            // no actual subscription will be added for null-FK on the right hand sice, but we still get the response back we need
             //
-            // this may lead to unnecessary tombstones, if we delete an existing key,
-            // which did not join previously;
+            // this may lead to unnecessary tombstones if the old FK did not join;
             // however, we cannot avoid it as we have no means to know if the old FK joined or not
             forward(record, newForeignKey, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE);
         }
@@ -170,7 +170,7 @@ public class SubscriptionSendProcessorSupplier<KLeft, VLeft, KRight>
             final VLeft newValue = record.value().newValue;
 
             final KRight oldForeignKey = oldValue == null ? null : foreignKeyExtractor.extract(record.key(), oldValue);
-            final boolean unsubscribe = oldForeignKey != null;
+            final boolean needToUnsubscribe = oldForeignKey != null;
 
             // if left row is inserted or updated, subscribe to new FK (if new FK is valid)
             if (newValue != null) {
@@ -178,17 +178,17 @@ public class SubscriptionSendProcessorSupplier<KLeft, VLeft, KRight>
 
                 if (newForeignKey == null) { // invalid FK
                     logSkippedRecordDueToNullForeignKey();
-                    if (unsubscribe) {
+                    if (needToUnsubscribe) {
                         // delete old subscription
                         //
-                        // this may lead to unnecessary tombstones if the old FK did not join
+                        // this may lead to unnecessary tombstones if the old FK did not join;
                         // however, we cannot avoid it as we have no means to know if the old FK joined or not
                         forward(record, oldForeignKey, DELETE_KEY_AND_PROPAGATE);
                     }
                 } else { // valid FK
                     // regular insert/update
 
-                    if (unsubscribe) {
+                    if (needToUnsubscribe) {
                         // update case
 
                         final boolean foreignKeyChanged = !Arrays.equals(serialize(newForeignKey), serialize(oldForeignKey));
@@ -203,8 +203,7 @@ public class SubscriptionSendProcessorSupplier<KLeft, VLeft, KRight>
                             // subscribe for new FK (note, could be on a different task/node than the old FK)
                             // additionally, propagate null if no FK is found so we can delete the previous result (if any)
                             //
-                            // this may lead to unnecessary tombstones if the old FK did not join
-                            // and the new FK key does not join either;
+                            // this may lead to unnecessary tombstones if the old FK did not join and the new FK key does not join either;
                             // however, we cannot avoid it as we have no means to know if the old FK joined or not
                             forward(record, newForeignKey, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE);
                         } else {
@@ -217,16 +216,15 @@ public class SubscriptionSendProcessorSupplier<KLeft, VLeft, KRight>
                         // insert case
 
                         // subscribe to new key
-                        // don't propagate null if no FK is found;
+                        // don't propagate null if no FK is found:
                         // for inserts, we know that there is no need to delete any previous result
                         forward(record, newForeignKey, PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE);
                     }
                 }
             } else {
                 // left row is deleted
-                if (unsubscribe) {
-                    // this may lead to unnecessary tombstones, if we delete an existing key,
-                    // which did not join previously;
+                if (needToUnsubscribe) {
+                    // this may lead to unnecessary tombstones if the old FK did not join;
                     // however, we cannot avoid it as we have no means to know if the old FK joined or not
                     forward(record, oldForeignKey, DELETE_KEY_AND_PROPAGATE);
                 }
