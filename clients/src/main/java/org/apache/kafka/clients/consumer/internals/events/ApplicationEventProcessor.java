@@ -22,8 +22,6 @@ import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
-import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
-import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager;
@@ -48,7 +46,6 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -64,25 +61,19 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final RequestManagers requestManagers;
-    private final NetworkClientDelegate networkClientDelegate;
-    private final CompositePollApplicationThreadRequirement compositePollApplicationThreadRequirement;
-    private final CompletableEventReaper applicationEventReaper;
+    private final Optional<CompositePollEventProcessorContext> compositePollContext;
     private int metadataVersionSnapshot;
 
     public ApplicationEventProcessor(final LogContext logContext,
                                      final RequestManagers requestManagers,
                                      final ConsumerMetadata metadata,
                                      final SubscriptionState subscriptions,
-                                     final NetworkClientDelegate networkClientDelegate,
-                                     final CompositePollApplicationThreadRequirement compositePollApplicationThreadRequirement,
-                                     final CompletableEventReaper applicationEventReaper) {
+                                     final Optional<CompositePollEventProcessorContext> compositePollContext) {
         this.log = logContext.logger(ApplicationEventProcessor.class);
         this.requestManagers = requestManagers;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
-        this.networkClientDelegate = networkClientDelegate;
-        this.compositePollApplicationThreadRequirement = compositePollApplicationThreadRequirement;
-        this.applicationEventReaper = applicationEventReaper;
+        this.compositePollContext = compositePollContext;
         this.metadataVersionSnapshot = metadata.updateVersion();
     }
 
@@ -235,104 +226,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         }
     }
 
-    private void process(final CompositePollEvent event) {
-        if (maybeFailCompositePoll(event) || maybePauseCompositePoll(event, ApplicationEvent.Type.POLL))
-            return;
-
-        ApplicationEvent.Type nextEventType = event.nextEventType();
-
-        if (nextEventType == ApplicationEvent.Type.POLL) {
-            log.debug("Processing {} logic for {}", nextEventType, event);
-            processPollEvent(event.pollTimeMs());
-            nextEventType = ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA;
-
-            if (maybeFailCompositePoll(event) || maybePauseCompositePoll(event, nextEventType))
-                return;
-        }
-
-        if (nextEventType == ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA) {
-            log.debug("Processing {} logic for {}", nextEventType, event);
-            processUpdatePatternSubscriptionEvent();
-            nextEventType = ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS;
-
-            if (maybeFailCompositePoll(event) || maybePauseCompositePoll(event, nextEventType))
-                return;
-        }
-
-        if (nextEventType == ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS) {
-            log.debug("Processing {} logic for {}", nextEventType, event);
-            CompletableFuture<Boolean> updatePositionsFuture = processCheckAndUpdatePositionsEvent(event.deadlineMs());
-            applicationEventReaper.add(new CompositePollPseudoEvent<>(updatePositionsFuture, event.deadlineMs()));
-
-            updatePositionsFuture.whenComplete((__, updatePositionsError) -> {
-                if (maybeFailCompositePoll(event, updatePositionsError))
-                    return;
-
-                log.debug("Processing {} logic for {}", ApplicationEvent.Type.CREATE_FETCH_REQUESTS, event);
-
-                // If needed, create a fetch request if there's no data in the FetchBuffer.
-                requestManagers.fetchRequestManager.createFetchRequests().whenComplete((___, fetchError) -> {
-                    if (maybeFailCompositePoll(event, fetchError))
-                        return;
-
-                    event.complete(CompositePollEvent.State.COMPLETE, Optional.empty());
-                    log.debug("Completed CompositePollEvent {}", event);
-                });
-            });
-
-            return;
-        }
-
-        event.completeExceptionally(new KafkaException("Unknown next step for composite poll: " + nextEventType));
-    }
-
-    private boolean maybePauseCompositePoll(CompositePollEvent event, ApplicationEvent.Type nextEventType) {
-        Optional<CompositePollEvent.State> stateOpt = compositePollApplicationThreadRequirement.requirement();
-
-        if (stateOpt.isPresent()) {
-            CompositePollEvent.State state = stateOpt.get();
-            log.debug("Pausing event processing for {} with {} as next step", state, nextEventType);
-            event.complete(state, Optional.of(nextEventType));
-            return true;
-        }
-
-        return false;
-    }
-
-    private boolean maybeFailCompositePoll(CompositePollEvent event, Throwable t) {
-        if (maybeFailCompositePoll(event))
-            return true;
-
-        if (t == null)
-            return false;
-
-        if (t instanceof org.apache.kafka.common.errors.TimeoutException || t instanceof java.util.concurrent.TimeoutException) {
-            log.debug("Ignoring timeout for CompositePollEvent {}: {}", event, t.getMessage());
-            return false;
-        }
-
-        if (t instanceof CompletionException) {
-            t = t.getCause();
-        }
-
-        KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(t);
-        event.completeExceptionally(e);
-        log.debug("Failing event processing for {}", event, e);
-        return true;
-    }
-
-    private boolean maybeFailCompositePoll(CompositePollEvent event) {
-        Optional<Exception> exception = networkClientDelegate.getAndClearMetadataError();
-
-        if (exception.isPresent()) {
-            KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(exception.get());
-            event.completeExceptionally(e);
-            log.debug("Failing event processing for {}", event, e);
-            return true;
-        }
-
-        return false;
-    }
 
     private void process(final PollEvent event) {
         processPollEvent(event.pollTimeMs());
@@ -811,6 +704,59 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         requestManagers.streamsMembershipManager.get().onAllTasksLostCallbackCompleted(event);
     }
 
+    private void process(final CompositePollEvent event) {
+        CompositePollEventProcessorContext context = compositePollContext.orElseThrow(IllegalArgumentException::new);
+
+        if (context.maybeFailCompositePoll(event) || context.maybePauseCompositePoll(event, ApplicationEvent.Type.POLL))
+            return;
+
+        ApplicationEvent.Type nextEventType = event.nextEventType();
+
+        if (nextEventType == ApplicationEvent.Type.POLL) {
+            log.debug("Processing {} logic for {}", nextEventType, event);
+            processPollEvent(event.pollTimeMs());
+            nextEventType = ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA;
+
+            if (context.maybeFailCompositePoll(event) || context.maybePauseCompositePoll(event, nextEventType))
+                return;
+        }
+
+        if (nextEventType == ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA) {
+            log.debug("Processing {} logic for {}", nextEventType, event);
+            processUpdatePatternSubscriptionEvent();
+            nextEventType = ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS;
+
+            if (context.maybeFailCompositePoll(event) || context.maybePauseCompositePoll(event, nextEventType))
+                return;
+        }
+
+        if (nextEventType == ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS) {
+            log.debug("Processing {} logic for {}", nextEventType, event);
+            CompletableFuture<Boolean> updatePositionsFuture = processCheckAndUpdatePositionsEvent(event.deadlineMs());
+            context.trackExpirableEvent(updatePositionsFuture, event.deadlineMs());
+
+            updatePositionsFuture.whenComplete((__, updatePositionsError) -> {
+                if (context.maybeFailCompositePoll(event, updatePositionsError))
+                    return;
+
+                log.debug("Processing {} logic for {}", ApplicationEvent.Type.CREATE_FETCH_REQUESTS, event);
+
+                // Create a fetch request if there's no data in the FetchBuffer.
+                requestManagers.fetchRequestManager.createFetchRequests().whenComplete((___, fetchError) -> {
+                    if (context.maybeFailCompositePoll(event, fetchError))
+                        return;
+
+                    event.complete(CompositePollEvent.State.COMPLETE, Optional.empty());
+                    log.debug("Completed CompositePollEvent {}", event);
+                });
+            });
+
+            return;
+        }
+
+        event.completeExceptionally(new KafkaException("Unknown next step for composite poll: " + nextEventType));
+    }
+
     private <T> BiConsumer<? super T, ? super Throwable> complete(final CompletableFuture<T> b) {
         return (value, exception) -> {
             if (exception != null)
@@ -828,26 +774,38 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                                                                final ConsumerMetadata metadata,
                                                                final SubscriptionState subscriptions,
                                                                final Supplier<RequestManagers> requestManagersSupplier,
-                                                               final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                                                               final CompositePollApplicationThreadRequirement applicationThreadRequirement,
-                                                               final CompletableEventReaper applicationEventReaper) {
+                                                               final Optional<Supplier<CompositePollEventProcessorContext>> compositePollEventProcessorContextSupplier) {
         return new CachedSupplier<>() {
             @Override
             protected ApplicationEventProcessor create() {
                 RequestManagers requestManagers = requestManagersSupplier.get();
-                NetworkClientDelegate networkClientDelegate = networkClientDelegateSupplier.get();
-
+                Optional<CompositePollEventProcessorContext> compositePollContext = compositePollEventProcessorContextSupplier.map(Supplier::get);
                 return new ApplicationEventProcessor(
                         logContext,
                         requestManagers,
                         metadata,
                         subscriptions,
-                        networkClientDelegate,
-                        applicationThreadRequirement,
-                        applicationEventReaper
+                        compositePollContext
                 );
             }
         };
+    }
+
+    /**
+     * Creates a {@link Supplier} for deferred creation during invocation by
+     * {@link ConsumerNetworkThread}.
+     */
+    public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
+                                                               final ConsumerMetadata metadata,
+                                                               final SubscriptionState subscriptions,
+                                                               final Supplier<RequestManagers> requestManagersSupplier) {
+        return supplier(
+            logContext,
+            metadata,
+            subscriptions,
+            requestManagersSupplier,
+            Optional.empty()
+        );
     }
 
     /**
@@ -920,41 +878,5 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
     private CompletableFuture<Boolean> processCheckAndUpdatePositionsEvent(final long deadlineMs) {
         return requestManagers.offsetsRequestManager.updateFetchPositions(deadlineMs);
-    }
-
-    /**
-     * This interface exists mostly to make the code more intuitive. When {@link #requirement()}
-     * returns true, the {@link CompositePollEvent} processing needs to be <em>interrupted</em> so that processing
-     * can return to the application thread.
-     */
-    public interface CompositePollApplicationThreadRequirement {
-
-        Optional<CompositePollEvent.State> requirement();
-    }
-
-    private static class CompositePollPseudoEvent<T> implements CompletableEvent<T> {
-
-        private final CompletableFuture<T> future;
-        private final long deadlineMs;
-
-        public CompositePollPseudoEvent(CompletableFuture<T> future, long deadlineMs) {
-            this.future = future;
-            this.deadlineMs = deadlineMs;
-        }
-
-        @Override
-        public CompletableFuture<T> future() {
-            return future;
-        }
-
-        @Override
-        public long deadlineMs() {
-            return deadlineMs;
-        }
-
-        @Override
-        public String toString() {
-            return getClass().getSimpleName() + "{future=" + future + ", deadlineMs=" + deadlineMs + '}';
-        }
     }
 }

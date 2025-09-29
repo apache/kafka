@@ -92,8 +92,6 @@ public class ApplicationEventProcessorTest {
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private final StreamsGroupHeartbeatRequestManager streamsGroupHeartbeatRequestManager = mock(StreamsGroupHeartbeatRequestManager.class);
     private final StreamsMembershipManager streamsMembershipManager = mock(StreamsMembershipManager.class);
-    private final NetworkClientDelegate networkClientDelegate = mock(NetworkClientDelegate.class);
-    private final CompletableEventReaper applicationEventReaper = mock(CompletableEventReaper.class);
     private ApplicationEventProcessor processor;
 
     private void setupProcessor(boolean withGroupId) {
@@ -114,9 +112,7 @@ public class ApplicationEventProcessorTest {
                 requestManagers,
                 metadata,
                 subscriptionState,
-                networkClientDelegate,
-                Optional::empty,
-                applicationEventReaper
+                Optional.empty()
         );
     }
 
@@ -138,9 +134,7 @@ public class ApplicationEventProcessorTest {
             requestManagers,
             metadata,
             subscriptionState,
-            networkClientDelegate,
-            Optional::empty,
-            applicationEventReaper
+            Optional.empty()
         );
     }
 

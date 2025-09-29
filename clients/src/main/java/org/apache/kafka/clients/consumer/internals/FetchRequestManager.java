@@ -77,9 +77,6 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
      * @return Future on which the caller can wait to ensure that the requests have been created
      */
     public CompletableFuture<Void> createFetchRequests() {
-        if (!fetchBuffer.isEmpty())
-            return CompletableFuture.completedFuture(null);
-
         CompletableFuture<Void> future = new CompletableFuture<>();
 
         if (pendingFetchRequestFuture != null) {
