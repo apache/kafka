@@ -125,7 +125,7 @@ public class ChannelBuilders {
         switch (securityProtocol) {
             case SSL:
                 requireNonNullMode(connectionMode, securityProtocol);
-                channelBuilder = new SslChannelBuilder(connectionMode, listenerName, isInterBrokerListener, logContext);
+                channelBuilder = new SslChannelBuilder(connectionMode, listenerName, isInterBrokerListener);
                 break;
             case SASL_SSL:
             case SASL_PLAINTEXT:

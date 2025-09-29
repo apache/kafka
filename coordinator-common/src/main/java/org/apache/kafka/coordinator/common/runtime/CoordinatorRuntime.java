@@ -1924,11 +1924,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     private final String logPrefix;
 
     /**
-     * The log context.
-     */
-    private final LogContext logContext;
-
-    /**
      * The logger.
      */
     private final Logger log;
@@ -2054,7 +2049,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         ExecutorService executorService
     ) {
         this.logPrefix = logPrefix;
-        this.logContext = logContext;
         this.log = logContext.logger(CoordinatorRuntime.class);
         this.time = time;
         this.timer = timer;
