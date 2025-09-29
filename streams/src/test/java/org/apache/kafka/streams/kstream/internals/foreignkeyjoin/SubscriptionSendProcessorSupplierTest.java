@@ -285,23 +285,6 @@ public class SubscriptionSendProcessorSupplierTest {
     }
 
     @Test
-    public void innerJoinShouldNotDeleteOldAndPropagateNewFKForUnchangedFK() {
-        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
-        innerJoinProcessor.init(context);
-        context.setRecordMetadata("topic", 0, 0);
-
-        final LeftValue leftRecordValue = new LeftValue(fk1);
-
-        innerJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, leftRecordValue), 0));
-
-        assertThat(context.forwarded().size(), is(1));
-        assertThat(
-            context.forwarded().get(0).record(),
-            is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, pk, 0), 0))
-        );
-    }
-
-    @Test
     public void innerJoinShouldPropagateNothingWhenOldAndNewFKIsNull() {
         final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
         innerJoinProcessor.init(context);
@@ -349,7 +332,7 @@ public class SubscriptionSendProcessorSupplierTest {
     }
 
     @Test
-    public void innerJoinShouldPropagateNewRecordOfUnchangedFK() {
+    public void innerJoinShouldPropagateUnchangedFKOnlyIfFKExistsInRightTable() {
         final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
         innerJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
