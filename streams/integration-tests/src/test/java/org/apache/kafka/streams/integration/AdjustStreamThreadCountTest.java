@@ -284,7 +284,13 @@ public class AdjustStreamThreadCountTest {
                 assertTrue(latch.await(30, TimeUnit.SECONDS));
                 one.join();
                 two.join();
-
+                waitForCondition(
+                    () -> kafkaStreams.metadataForLocalThreads().size() == oldThreadCount &&
+                        kafkaStreams.state() == KafkaStreams.State.RUNNING,
+                    DEFAULT_DURATION.toMillis(),
+                    "Kafka Streams did not stabilize at the expected thread count and RUNNING state."
+                );
+                
                 threadMetadata = kafkaStreams.metadataForLocalThreads();
                 assertThat(threadMetadata.size(), equalTo(oldThreadCount));
             } catch (final AssertionError e) {
