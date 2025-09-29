@@ -81,7 +81,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity"})
+@SuppressWarnings("ClassDataAbstractionCoupling")
 public class ApplicationEventProcessorTest {
     private final Time time = new MockTime();
     private final CommitRequestManager commitRequestManager = mock(CommitRequestManager.class);

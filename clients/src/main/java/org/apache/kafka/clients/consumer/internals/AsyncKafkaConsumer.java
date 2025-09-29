@@ -462,7 +462,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     streamsRebalanceData
             );
             final CompletableEventReaper applicationEventReaper = new CompletableEventReaper(logContext);
-            Supplier<CompositePollEventProcessorContext> compositePollContextSupplier = CompositePollEventProcessorContext.supplier(
+            final Supplier<CompositePollEventProcessorContext> compositePollContextSupplier = CompositePollEventProcessorContext.supplier(
                     logContext,
                     networkClientDelegateSupplier,
                     backgroundEventHandler,
@@ -500,8 +500,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 time,
                 applicationEventHandler,
                 () -> {
-                    processBackgroundEvents();
                     offsetCommitCallbackInvoker.executeCallbacks();
+                    processBackgroundEvents();
                 }
             );
 
@@ -583,8 +583,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             time,
             applicationEventHandler,
             () -> {
-                processBackgroundEvents();
                 offsetCommitCallbackInvoker.executeCallbacks();
+                processBackgroundEvents();
             }
         );
         this.backgroundEventHandler = new BackgroundEventHandler(
@@ -681,7 +681,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             Optional.empty()
         );
         final CompletableEventReaper applicationEventReaper = new CompletableEventReaper(logContext);
-        Supplier<CompositePollEventProcessorContext> compositePollContextSupplier = CompositePollEventProcessorContext.supplier(
+        final Supplier<CompositePollEventProcessorContext> compositePollContextSupplier = CompositePollEventProcessorContext.supplier(
             logContext,
             networkClientDelegateSupplier,
             backgroundEventHandler,
@@ -711,8 +711,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             time,
             applicationEventHandler,
             () -> {
-                processBackgroundEvents();
                 offsetCommitCallbackInvoker.executeCallbacks();
+                processBackgroundEvents();
             }
         );
     }

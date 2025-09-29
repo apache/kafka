@@ -45,6 +45,12 @@ public class BackgroundEventHandler {
         this.asyncConsumerMetrics = asyncConsumerMetrics;
     }
 
+    /**
+     * Returns the current size of the queue. Used by the background thread to determine if it needs to <i>pause</i>
+     * itself to return to the application thread for processing.
+     *
+     * @return Current size of queue
+     */
     public int size() {
         return backgroundEventQueue.size();
     }

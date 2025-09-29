@@ -297,7 +297,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     clientTelemetryReporter,
                     metrics
             );
-            final CompletableEventReaper applicationEventReaper = new CompletableEventReaper(logContext);
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                     logContext,
                     metadata,
@@ -309,7 +308,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     logContext,
                     time,
                     applicationEventQueue,
-                    applicationEventReaper,
+                    new CompletableEventReaper(logContext),
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
                     requestManagersSupplier,
@@ -404,7 +403,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 metrics
         );
 
-        final CompletableEventReaper applicationEventReaper = new CompletableEventReaper(logContext);
         final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
                 metadata,
@@ -416,7 +414,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 logContext,
                 time,
                 applicationEventQueue,
-                applicationEventReaper,
+                new CompletableEventReaper(logContext),
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier,
