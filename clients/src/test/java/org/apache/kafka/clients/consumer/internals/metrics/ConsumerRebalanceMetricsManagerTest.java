@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
@@ -38,35 +39,40 @@ import static org.mockito.Mockito.mock;
 
 class ConsumerRebalanceMetricsManagerTest {
 
-    private final Time time = new MockTime();
-    private final Metrics metrics = new Metrics(time);
+    private Time time;
+    private Metrics metrics;
+    private SubscriptionState subscriptionState;
+    private ConsumerRebalanceMetricsManager metricsManager;
+
+    @BeforeEach
+    public void setUp() {
+        time = new MockTime();
+        metrics = new Metrics(time);
+        subscriptionState = new SubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
+        metricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
+    }
 
     @Test
     public void testAssignedPartitionCountMetric() {
-        SubscriptionState subscriptionState = new SubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
-        ConsumerRebalanceMetricsManager consumerRebalanceMetricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
-
-        assertNotNull(metrics.metric(consumerRebalanceMetricsManager.assignedPartitionsCount), "Metric assigned-partitions has not been registered as expected");
+        assertNotNull(metrics.metric(metricsManager.assignedPartitionsCount), "Metric assigned-partitions has not been registered as expected");
 
         // Check for manually assigned partitions
         subscriptionState.assignFromUser(Set.of(new TopicPartition("topic", 0), new TopicPartition("topic", 1)));
-        assertEquals(2.0d, metrics.metric(consumerRebalanceMetricsManager.assignedPartitionsCount).metricValue());
+        assertEquals(2.0d, metrics.metric(metricsManager.assignedPartitionsCount).metricValue());
         subscriptionState.assignFromUser(Set.of());
-        assertEquals(0.0d, metrics.metric(consumerRebalanceMetricsManager.assignedPartitionsCount).metricValue());
+        assertEquals(0.0d, metrics.metric(metricsManager.assignedPartitionsCount).metricValue());
 
         subscriptionState.unsubscribe();
-        assertEquals(0.0d, metrics.metric(consumerRebalanceMetricsManager.assignedPartitionsCount).metricValue());
+        assertEquals(0.0d, metrics.metric(metricsManager.assignedPartitionsCount).metricValue());
 
         // Check for automatically assigned partitions
         subscriptionState.subscribe(Set.of("topic"), Optional.empty());
         subscriptionState.assignFromSubscribed(Set.of(new TopicPartition("topic", 0)));
-        assertEquals(1.0d, metrics.metric(consumerRebalanceMetricsManager.assignedPartitionsCount).metricValue());
+        assertEquals(1.0d, metrics.metric(metricsManager.assignedPartitionsCount).metricValue());
     }
 
     @Test
     public void testRebalanceTimingMetrics() {
-        SubscriptionState subscriptionState = new SubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
-        ConsumerRebalanceMetricsManager metricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
 
         // Verify timing metrics are registered
         assertNotNull(metrics.metric(metricsManager.rebalanceLatencyAvg));
@@ -91,9 +97,12 @@ class ConsumerRebalanceMetricsManagerTest {
         metricsManager.recordRebalanceEnded(time.milliseconds());
 
         // Verify metrics after second rebalance
-        assertEquals(20.0d, metrics.metric(metricsManager.rebalanceLatencyAvg).metricValue()); // (10 + 30) / 2
-        assertEquals(30.0d, metrics.metric(metricsManager.rebalanceLatencyMax).metricValue()); // max(10, 30)
-        assertEquals(40.0d, metrics.metric(metricsManager.rebalanceLatencyTotal).metricValue()); // 10 + 30
+        assertEquals(20.0d, metrics.metric(metricsManager.rebalanceLatencyAvg).metricValue(),
+                "Average latency should be (10 + 30) / 2 = 20ms");
+        assertEquals(30.0d, metrics.metric(metricsManager.rebalanceLatencyMax).metricValue(),
+                "Max latency should be max(10, 30) = 30ms");
+        assertEquals(40.0d, metrics.metric(metricsManager.rebalanceLatencyTotal).metricValue(),
+                "Total latency should be 10 + 30 = 40ms");
         assertEquals(2.0d, metrics.metric(metricsManager.rebalanceTotal).metricValue());
 
         // Record third rebalance (50ms duration)
@@ -102,16 +111,17 @@ class ConsumerRebalanceMetricsManagerTest {
         metricsManager.recordRebalanceEnded(time.milliseconds());
 
         // Verify metrics after third rebalance
-        assertEquals(30.0d, metrics.metric(metricsManager.rebalanceLatencyAvg).metricValue()); // (10 + 30 + 50) / 3
-        assertEquals(50.0d, metrics.metric(metricsManager.rebalanceLatencyMax).metricValue()); // max(10, 30, 50)
-        assertEquals(90.0d, metrics.metric(metricsManager.rebalanceLatencyTotal).metricValue()); // 10 + 30 + 50
+        assertEquals(30.0d, metrics.metric(metricsManager.rebalanceLatencyAvg).metricValue(),
+                "Average latency should be (10 + 30 + 50) / 3 = 30ms");
+        assertEquals(50.0d, metrics.metric(metricsManager.rebalanceLatencyMax).metricValue(),
+                "Max latency should be max(10, 30, 50) = 50ms");
+        assertEquals(90.0d, metrics.metric(metricsManager.rebalanceLatencyTotal).metricValue(),
+                "Total latency should be 10 + 30 + 50 = 90ms");
         assertEquals(3.0d, metrics.metric(metricsManager.rebalanceTotal).metricValue());
     }
 
     @Test
     public void testRebalanceRateMetric() {
-        SubscriptionState subscriptionState = new SubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
-        ConsumerRebalanceMetricsManager metricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
 
         // Verify rate metric is registered
         assertNotNull(metrics.metric(metricsManager.rebalanceRatePerHour));
@@ -123,75 +133,68 @@ class ConsumerRebalanceMetricsManagerTest {
             metricsManager.recordRebalanceEnded(time.milliseconds());
         }
 
-        // The rate metric uses a Rate stat with WindowedCount
-        // Based on the ShareRebalanceMetricsManagerTest, we expect 360.0 for this scenario
         double ratePerHour = (Double) metrics.metric(metricsManager.rebalanceRatePerHour).metricValue();
-        assertEquals(360.0d, ratePerHour, 1.0, "Should be approximately 360 rebalances per hour");
+        assertEquals(360.0d, ratePerHour, 1.0, 
+                "Rate metric uses WindowedCount - expecting 360 rebalances per hour for 3 rebalances in 30ms");
     }
 
     @Test
     public void testFailedRebalanceMetrics() {
-        SubscriptionState subscriptionState = new SubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
-        ConsumerRebalanceMetricsManager metricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
 
         // Verify failed rebalance metrics are registered
         assertNotNull(metrics.metric(metricsManager.failedRebalanceTotal));
         assertNotNull(metrics.metric(metricsManager.failedRebalanceRate));
 
-        // Initially, no failed rebalances
-        assertEquals(0.0d, metrics.metric(metricsManager.failedRebalanceTotal).metricValue());
+        assertEquals(0.0d, metrics.metric(metricsManager.failedRebalanceTotal).metricValue(),
+                "Initially, there should be no failed rebalances");
 
         // Start a rebalance but don't complete it
         metricsManager.recordRebalanceStarted(time.milliseconds());
         time.sleep(10);
         
-        // Record a failure
         metricsManager.maybeRecordRebalanceFailed();
-        assertEquals(1.0d, metrics.metric(metricsManager.failedRebalanceTotal).metricValue());
+        assertEquals(1.0d, metrics.metric(metricsManager.failedRebalanceTotal).metricValue(),
+                "Failed rebalance count should increment to 1 after recording failure");
 
         // Complete a successful rebalance
         metricsManager.recordRebalanceStarted(time.milliseconds());
         time.sleep(10);
         metricsManager.recordRebalanceEnded(time.milliseconds());
         
-        // Try to record failure after successful rebalance (should not increment)
         metricsManager.maybeRecordRebalanceFailed();
-        assertEquals(1.0d, metrics.metric(metricsManager.failedRebalanceTotal).metricValue());
+        assertEquals(1.0d, metrics.metric(metricsManager.failedRebalanceTotal).metricValue(),
+                "Failed count should not increment after successful rebalance completes");
 
         // Start another rebalance, don't complete it, then record failure
-        time.sleep(10); // Advance time before starting next rebalance
+        time.sleep(10);
         metricsManager.recordRebalanceStarted(time.milliseconds());
         assertTrue(metricsManager.rebalanceStarted(), "Rebalance should be in progress");
         time.sleep(10);
-        // Don't call recordRebalanceEnded, so the rebalance is still in progress
+        // Don't call recordRebalanceEnded() to simulate an incomplete rebalance
         metricsManager.maybeRecordRebalanceFailed();
         assertEquals(2.0d, metrics.metric(metricsManager.failedRebalanceTotal).metricValue());
 
-        // Verify failed rebalance rate
-        // We recorded 2 failures: first at ~10ms, second at ~40ms (total elapsed ~50ms)
-        // With minimum window of 30 seconds: 2 failures / 30 seconds = 240 failures/hour
         double failedRate = (Double) metrics.metric(metricsManager.failedRebalanceRate).metricValue();
-        assertEquals(240.0d, failedRate, 1.0, "Should be approximately 240 failed rebalances per hour");
+        assertEquals(240.0d, failedRate, 1.0, 
+                "With 2 failures in ~50ms and minimum window of 30s: 2/30s = 240 failures/hour");
     }
 
     @Test
     public void testLastRebalanceSecondsAgoMetric() {
-        SubscriptionState subscriptionState = new SubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
-        ConsumerRebalanceMetricsManager metricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
 
         // Verify metric is registered
         assertNotNull(metrics.metric(metricsManager.lastRebalanceSecondsAgo));
 
-        // Initially, no rebalance has occurred
-        assertEquals(-1.0d, metrics.metric(metricsManager.lastRebalanceSecondsAgo).metricValue());
+        assertEquals(-1.0d, metrics.metric(metricsManager.lastRebalanceSecondsAgo).metricValue(),
+                "Should return -1 when no rebalance has occurred");
 
         // Complete a rebalance
         metricsManager.recordRebalanceStarted(time.milliseconds());
         time.sleep(10);
         metricsManager.recordRebalanceEnded(time.milliseconds());
 
-        // Immediately after rebalance, should be 0 seconds
-        assertEquals(0.0d, metrics.metric(metricsManager.lastRebalanceSecondsAgo).metricValue());
+        assertEquals(0.0d, metrics.metric(metricsManager.lastRebalanceSecondsAgo).metricValue(),
+                "Should return 0 immediately after rebalance completes");
 
         // Advance time by 5 seconds
         time.sleep(5000);
@@ -206,37 +209,34 @@ class ConsumerRebalanceMetricsManagerTest {
         time.sleep(20);
         metricsManager.recordRebalanceEnded(time.milliseconds());
 
-        // Should reset to 0
-        assertEquals(0.0d, metrics.metric(metricsManager.lastRebalanceSecondsAgo).metricValue());
+        assertEquals(0.0d, metrics.metric(metricsManager.lastRebalanceSecondsAgo).metricValue(),
+                "Should reset to 0 after a new rebalance completes");
     }
 
     @Test
     public void testRebalanceStartedFlag() {
-        SubscriptionState subscriptionState = new SubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
-        ConsumerRebalanceMetricsManager metricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
 
-        // Initially, no rebalance in progress
-        assertFalse(metricsManager.rebalanceStarted());
+        assertFalse(metricsManager.rebalanceStarted(), 
+                "Initially, no rebalance should be in progress");
 
-        // Start rebalance
         metricsManager.recordRebalanceStarted(time.milliseconds());
-        assertTrue(metricsManager.rebalanceStarted());
+        assertTrue(metricsManager.rebalanceStarted(), 
+                "Rebalance should be marked as started after recordRebalanceStarted()");
 
-        // End rebalance
         time.sleep(10);
         metricsManager.recordRebalanceEnded(time.milliseconds());
-        assertFalse(metricsManager.rebalanceStarted());
+        assertFalse(metricsManager.rebalanceStarted(), 
+                "Rebalance should not be in progress after recordRebalanceEnded()");
 
         // Start another rebalance - advance time first
         time.sleep(100);
         metricsManager.recordRebalanceStarted(time.milliseconds());
-        assertTrue(metricsManager.rebalanceStarted());
+        assertTrue(metricsManager.rebalanceStarted(), 
+                "New rebalance should be marked as started");
     }
 
     @Test
     public void testMultipleConsecutiveFailures() {
-        SubscriptionState subscriptionState = new SubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
-        ConsumerRebalanceMetricsManager metricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
 
         // Record multiple consecutive failures
         for (int i = 0; i < 5; i++) {
@@ -245,16 +245,15 @@ class ConsumerRebalanceMetricsManagerTest {
             metricsManager.maybeRecordRebalanceFailed();
         }
 
-        assertEquals(5.0d, metrics.metric(metricsManager.failedRebalanceTotal).metricValue());
+        assertEquals(5.0d, metrics.metric(metricsManager.failedRebalanceTotal).metricValue(),
+                "Should have recorded 5 consecutive failed rebalances");
         
-        // Successful rebalances should still be 0
-        assertEquals(0.0d, metrics.metric(metricsManager.rebalanceTotal).metricValue());
+        assertEquals(0.0d, metrics.metric(metricsManager.rebalanceTotal).metricValue(),
+                "Successful rebalance count should remain 0 when only failures occur");
     }
 
     @Test
     public void testMixedSuccessAndFailureScenarios() {
-        SubscriptionState subscriptionState = new SubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
-        ConsumerRebalanceMetricsManager metricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
 
         // Success -> Failure -> Success -> Failure pattern
         // First success
@@ -263,38 +262,40 @@ class ConsumerRebalanceMetricsManagerTest {
         metricsManager.recordRebalanceEnded(time.milliseconds());
         assertEquals(1.0d, metrics.metric(metricsManager.rebalanceTotal).metricValue());
         
-        // First failure - advance time to ensure new timestamps
+        // First failure
         time.sleep(10);
         metricsManager.recordRebalanceStarted(time.milliseconds());
         assertTrue(metricsManager.rebalanceStarted(), "First failure rebalance should be in progress");
         time.sleep(30);
         metricsManager.maybeRecordRebalanceFailed();
         
-        // Check failure was recorded
         double failedAfterFirst = (Double) metrics.metric(metricsManager.failedRebalanceTotal).metricValue();
-        assertEquals(1.0d, failedAfterFirst, "Should have one failed rebalance");
+        assertEquals(1.0d, failedAfterFirst, "Should have recorded one failed rebalance after first failure");
         
-        // Second success - advance time to ensure new timestamps
+        // Second success
         time.sleep(10);
         metricsManager.recordRebalanceStarted(time.milliseconds());
         time.sleep(40);
         metricsManager.recordRebalanceEnded(time.milliseconds());
         assertEquals(2.0d, metrics.metric(metricsManager.rebalanceTotal).metricValue());
         
-        // Second failure - advance time to ensure new timestamps
+        // Second failure
         time.sleep(10);
         metricsManager.recordRebalanceStarted(time.milliseconds());
         assertTrue(metricsManager.rebalanceStarted(), "Second failure rebalance should be in progress");
         time.sleep(50);
         metricsManager.maybeRecordRebalanceFailed();
 
-        // Verify final counts
-        assertEquals(2.0d, metrics.metric(metricsManager.rebalanceTotal).metricValue());
-        assertEquals(2.0d, metrics.metric(metricsManager.failedRebalanceTotal).metricValue());
+        assertEquals(2.0d, metrics.metric(metricsManager.rebalanceTotal).metricValue(),
+                "Should have 2 successful rebalances in mixed scenario");
+        assertEquals(2.0d, metrics.metric(metricsManager.failedRebalanceTotal).metricValue(),
+                "Should have 2 failed rebalances in mixed scenario");
         
-        // Verify timing metrics (only successful rebalances contribute)
-        assertEquals(30.0d, metrics.metric(metricsManager.rebalanceLatencyAvg).metricValue()); // (20 + 40) / 2
-        assertEquals(40.0d, metrics.metric(metricsManager.rebalanceLatencyMax).metricValue());
-        assertEquals(60.0d, metrics.metric(metricsManager.rebalanceLatencyTotal).metricValue()); // 20 + 40
+        assertEquals(30.0d, metrics.metric(metricsManager.rebalanceLatencyAvg).metricValue(),
+                "Average latency should only include successful rebalances: (20 + 40) / 2 = 30ms");
+        assertEquals(40.0d, metrics.metric(metricsManager.rebalanceLatencyMax).metricValue(),
+                "Max latency should be 40ms from successful rebalances only");
+        assertEquals(60.0d, metrics.metric(metricsManager.rebalanceLatencyTotal).metricValue(),
+                "Total latency should only include successful rebalances: 20 + 40 = 60ms");
     }
 }
