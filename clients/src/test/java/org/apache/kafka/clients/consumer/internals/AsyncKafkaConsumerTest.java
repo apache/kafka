@@ -156,6 +156,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -1666,7 +1667,7 @@ public class AsyncKafkaConsumerTest {
         consumer.subscribe(singletonList("topic1"));
         markReconcileAndAutoCommitCompleteForPollEvent();
         consumer.poll(Duration.ofMillis(100));
-        verify(applicationEventHandler).add(any(CompositePollEvent.class));
+        verify(applicationEventHandler, atLeastOnce()).add(any(CompositePollEvent.class));
     }
 
     private Properties requiredConsumerConfigAndGroupId(final String groupId) {
@@ -2304,7 +2305,7 @@ public class AsyncKafkaConsumerTest {
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(PollEvent.class));
         doAnswer(invocation -> {
             CompositePollEvent event = invocation.getArgument(0);
-            event.complete(CompositePollEvent.State.CALLBACKS_REQUIRED, Optional.empty());
+            event.completeWithCallbackRequired(ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS);
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(CompositePollEvent.class));
     }

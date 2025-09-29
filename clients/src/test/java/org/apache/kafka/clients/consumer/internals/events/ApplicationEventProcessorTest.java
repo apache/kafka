@@ -111,8 +111,7 @@ public class ApplicationEventProcessorTest {
                 new LogContext(),
                 requestManagers,
                 metadata,
-                subscriptionState,
-                Optional.empty()
+                subscriptionState
         );
     }
 
@@ -133,8 +132,7 @@ public class ApplicationEventProcessorTest {
             new LogContext(),
             requestManagers,
             metadata,
-            subscriptionState,
-            Optional.empty()
+            subscriptionState
         );
     }
 

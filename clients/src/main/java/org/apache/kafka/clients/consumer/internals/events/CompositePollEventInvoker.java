@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -23,8 +24,14 @@ import org.apache.kafka.common.utils.Timer;
 
 import org.slf4j.Logger;
 
+import java.time.Duration;
+
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 
+/**
+ * {@code CompositePollEventInvoker} is executed on the application thread in the
+ * {@link AsyncKafkaConsumer#poll(Duration)}.
+ */
 public class CompositePollEventInvoker {
 
     private final Logger log;
@@ -43,9 +50,15 @@ public class CompositePollEventInvoker {
         this.applicationThreadCallbacks = applicationThreadCallbacks;
     }
 
+    /**
+     * {@code poll()} manages the lifetime of the {@link CompositePollEvent} processing. If it is called when
+     * no event is currently processing, it will start a new event processing asynchronously. A check is made
+     * during each invocation to see if the <em>inflight</em> event has reached a
+     * {@link CompositePollEvent.State terminal state}. If it has, the result will be processed accordingly.
+     */
     public void poll(Timer timer) {
         if (inflight == null) {
-            log.debug("No existing inflight event, submitting");
+            log.trace("No existing inflight event, submitting a new event");
             submitEvent(ApplicationEvent.Type.POLL, timer);
         }
 
@@ -58,18 +71,25 @@ public class CompositePollEventInvoker {
                 );
             }
 
-            CompositePollEvent.Result result = inflight.resultOrError();
+            CompositePollEvent.Result result = inflight.result();
             CompositePollEvent.State state = result.state();
 
-            if (state == CompositePollEvent.State.COMPLETE) {
+            if (state == CompositePollEvent.State.SUCCEEDED) {
                 // Make sure to clear out the inflight request since it's complete.
-                log.debug("Event {} completed, clearing inflight", inflight);
+                log.trace("Event {} completed, clearing inflight", inflight);
                 inflight = null;
+            } else if (state == CompositePollEvent.State.FAILED) {
+                log.trace("Event {} failed, clearing inflight", inflight);
+                inflight = null;
+                throw result.asKafkaException();
             } else if (state == CompositePollEvent.State.CALLBACKS_REQUIRED) {
-                log.debug("About to process callbacks");
+                log.trace("Event {} paused for callbacks, clearing inflight", inflight);
+
+                // Note: this is calling user-supplied code, so make sure to handle possible errors.
                 applicationThreadCallbacks.run();
-                log.debug("Done processing callbacks");
-                result.nextEventType().ifPresent(t -> submitEvent(t, timer));
+
+                // The application thread callbacks are complete. Resume the polling
+                submitEvent(result.asNextEventType(), timer);
             }
         } catch (Throwable t) {
             // If an exception is hit, bubble it up to the user but make sure to clear out the inflight request

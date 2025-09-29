@@ -69,7 +69,7 @@ public class CompositePollEventProcessorContext {
                 );
             }
         };
-    };
+    }
 
     public <T> void trackCheckAndUpdatePositionsForTimeout(CompletableFuture<T> future, long deadlineMs) {
         CompletableEvent<T> event = new CompletableEvent<>() {
@@ -92,21 +92,25 @@ public class CompositePollEventProcessorContext {
         applicationEventReaper.add(event);
     }
 
-    public boolean maybePauseCompositePoll(CompositePollEvent event, ApplicationEvent.Type nextEventType) {
+    public boolean maybeCompleteWithCallbackRequired(CompositePollEvent event, ApplicationEvent.Type nextEventType) {
         // If there are background events to process or enqueued callbacks to invoke, exit to
         // the application thread.
         if (backgroundEventHandler.size() > 0 || offsetCommitCallbackInvoker.size() > 0) {
-            CompositePollEvent.State state = CompositePollEvent.State.CALLBACKS_REQUIRED;
-            log.debug("Pausing event processing for {} with {} as next step", state, nextEventType);
-            event.complete(state, Optional.of(nextEventType));
+            log.debug(
+                "Pausing polling by completing {} with the state of {} and the next stage of {}",
+                event,
+                CompositePollEvent.State.CALLBACKS_REQUIRED,
+                nextEventType
+            );
+            event.completeWithCallbackRequired(nextEventType);
             return true;
         }
 
         return false;
     }
 
-    public boolean maybeFailCompositePoll(CompositePollEvent event, Throwable t) {
-        if (maybeFailCompositePoll(event))
+    public boolean maybeCompleteExceptionally(CompositePollEvent event, Throwable t) {
+        if (maybeCompleteExceptionally(event))
             return true;
 
         if (t == null)
@@ -121,22 +125,29 @@ public class CompositePollEventProcessorContext {
             t = t.getCause();
         }
 
-        KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(t);
-        event.completeExceptionally(e);
-        log.debug("Failing event processing for {}", event, e);
+        completeExceptionally(event, t);
         return true;
     }
 
-    public boolean maybeFailCompositePoll(CompositePollEvent event) {
+    public boolean maybeCompleteExceptionally(CompositePollEvent event) {
         Optional<Exception> exception = networkClientDelegate.getAndClearMetadataError();
 
         if (exception.isPresent()) {
-            KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(exception.get());
-            event.completeExceptionally(e);
-            log.debug("Failing event processing for {}", event, e);
+            completeExceptionally(event, exception.get());
             return true;
         }
 
         return false;
+    }
+
+    public void completeExceptionally(CompositePollEvent event, Throwable error) {
+        KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(error);
+        event.completeExceptionally(e);
+        log.debug("Failing event processing for {}", event, e);
+    }
+
+    public void complete(CompositePollEvent event) {
+        event.completeSuccessfully();
+        log.debug("Completed CompositePollEvent {}", event);
     }
 }

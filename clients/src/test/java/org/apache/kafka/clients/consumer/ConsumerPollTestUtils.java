@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestUtils;
@@ -25,22 +27,39 @@ import java.time.Duration;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
+
+/**
+ * This class provides utilities for tests to wait for a call to {@link Consumer#poll(Duration)} to produce a
+ * result (error, records, specific condition, etc.). This is mostly due to the subtle difference in behavior
+ * of the non-blocking {@link AsyncKafkaConsumer}. A single pass of {@link AsyncKafkaConsumer#poll(Duration)}
+ * may not be sufficient to provide an immediate result.
+ */
 public class ConsumerPollTestUtils {
 
-    @SuppressWarnings("unchecked")
-    public static <T> ConsumerRecords<T, T> waitForRecords(Consumer<?, ?> consumer, Time time) {
-        Timer timer = time.timer(15000);
+    /**
+     * Wait up to {@link TestUtils#DEFAULT_MAX_WAIT_MS} to return records from the given {@link Consumer}.
+     */
+    public static <T> ConsumerRecords<T, T> waitForRecords(Consumer<?, ?> consumer) {
+        Timer timer = Time.SYSTEM.timer(DEFAULT_MAX_WAIT_MS);
 
         while (timer.notExpired()) {
+            @SuppressWarnings("unchecked")
             ConsumerRecords<T, T> records = (ConsumerRecords<T, T>) consumer.poll(Duration.ofMillis(1000));
 
             if (!records.isEmpty())
                 return records;
+
+            timer.update();
         }
 
-        throw new org.apache.kafka.common.errors.TimeoutException("no records to return");
+        throw new TimeoutException("no records to return");
     }
 
+    /**
+     * Wait up to {@link TestUtils#DEFAULT_MAX_WAIT_MS} for the {@link Consumer} to produce the side effect
+     * that causes {@link Supplier condition} to evaluate to {@code true}.
+     */
     public static void waitForCondition(Consumer<?, ?> consumer,
                                         Supplier<Boolean> testCondition,
                                         String conditionDetails) {
@@ -57,6 +76,10 @@ public class ConsumerPollTestUtils {
         }
     }
 
+    /**
+     * Wait up to {@link TestUtils#DEFAULT_MAX_WAIT_MS} for the {@link Consumer} to throw an exception that,
+     * when tested against the {@link Function condition}, will evaluate to {@code true}.
+     */
     public static void waitForException(Consumer<?, ?> consumer,
                                         Function<Throwable, Boolean> testCondition,
                                         String conditionDetails) {

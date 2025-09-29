@@ -950,7 +950,7 @@ public class KafkaConsumerTest {
         client.prepareResponse(listOffsetsResponse(Map.of(tp0, 50L)));
         client.prepareResponse(fetchResponse(tp0, 50L, 5));
 
-        ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer, time);
+        ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer);
         assertEquals(5, records.count());
         assertEquals(55L, consumer.position(tp0));
         assertEquals(1, records.nextOffsets().size());
@@ -1044,7 +1044,7 @@ public class KafkaConsumerTest {
 
             }, fetchResponse(tp0, 50L, 5));
 
-        ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer, time);
+        ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer);
         assertEquals(5, records.count());
         assertEquals(Set.of(tp0), records.partitions());
         assertEquals(1, records.nextOffsets().size());
@@ -1763,7 +1763,7 @@ public class KafkaConsumerTest {
         client.prepareResponse(listOffsetsResponse(Map.of(tp0, 10L)));
         client.prepareResponse(fetchResponse(tp0, 10L, 1));
 
-        ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer, time);
+        ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer);
 
         assertEquals(1, records.count());
         assertEquals(11L, consumer.position(tp0));
@@ -1822,7 +1822,7 @@ public class KafkaConsumerTest {
         client.prepareResponse(listOffsetsResponse(Map.of(tp0, 10L)));
         client.prepareResponse(fetchResponse(tp0, 10L, 1));
 
-        ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer, time);
+        ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer);
         assertEquals(1, records.count());
         assertEquals(11L, consumer.position(tp0));
         assertEquals(1, records.nextOffsets().size());
@@ -2117,7 +2117,7 @@ public class KafkaConsumerTest {
         time.sleep(heartbeatIntervalMs);
         Thread.sleep(heartbeatIntervalMs);
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
-        final ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer, time);
+        final ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer);
         assertFalse(records.isEmpty());
         assertFalse(records.nextOffsets().isEmpty());
     }
@@ -2715,7 +2715,7 @@ public class KafkaConsumerTest {
         final FetchInfo fetchInfo = new FetchInfo(1L, 99L, 50L, 5);
         client.respondToRequest(fetchRequest, fetchResponse(Map.of(tp0, fetchInfo)));
 
-        final ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer, time);
+        final ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer);
         assertEquals(5, records.count());
         assertEquals(55L, consumer.position(tp0));
         assertEquals(1, records.nextOffsets().size());

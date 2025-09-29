@@ -473,7 +473,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     metadata,
                     subscriptions,
                     requestManagersSupplier,
-                    Optional.of(compositePollContextSupplier)
+                    compositePollContextSupplier
             );
             this.applicationEventHandler = applicationEventHandlerFactory.build(
                     logContext,
@@ -693,7 +693,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 metadata,
                 subscriptions,
                 requestManagersSupplier,
-                Optional.of(compositePollContextSupplier)
+                compositePollContextSupplier
         );
         this.applicationEventHandler = new ApplicationEventHandler(logContext,
                 time,
