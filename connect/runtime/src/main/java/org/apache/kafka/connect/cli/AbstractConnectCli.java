@@ -117,11 +117,12 @@ public abstract class AbstractConnectCli<H extends Herder, T extends WorkerConfi
         WorkerInfo initInfo = new WorkerInfo();
         initInfo.logAll();
 
+        T config = createConfig(workerProps);
+        log.debug("Kafka cluster ID: {}", config.kafkaClusterId());
+
         log.info("Scanning for plugin classes. This might take a moment ...");
         Plugins plugins = new Plugins(workerProps);
         plugins.compareAndSwapWithDelegatingLoader();
-        T config = createConfig(workerProps);
-        log.debug("Kafka cluster ID: {}", config.kafkaClusterId());
 
         RestClient restClient = new RestClient(config);
 
