@@ -27,12 +27,4 @@ public record LastRecord(OptionalLong lastDataOffset, short producerEpoch) {
     public LastRecord {
         Objects.requireNonNull(lastDataOffset, "lastDataOffset must be non null");
     }
-
-    @Override
-    public String toString() {
-        return "LastRecord(" +
-                "lastDataOffset=" + lastDataOffset +
-                ", producerEpoch=" + producerEpoch +
-                ')';
-    }
 }
