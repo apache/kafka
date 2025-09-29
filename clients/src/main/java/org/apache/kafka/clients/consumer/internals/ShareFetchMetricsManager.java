@@ -20,7 +20,10 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 
-public class ShareFetchMetricsManager {
+import java.io.IOException;
+import java.util.Arrays;
+
+public class ShareFetchMetricsManager implements AutoCloseable {
     private final Metrics metrics;
     private final Sensor throttleTime;
     private final Sensor bytesFetched;
@@ -91,5 +94,17 @@ public class ShareFetchMetricsManager {
 
     void recordFailedAcknowledgements(int acknowledgements) {
         failedAcknowledgements.record(acknowledgements);
+    }
+
+    @Override
+    public void close() throws IOException {
+        Arrays.asList(
+            throttleTime.name(),
+            bytesFetched.name(),
+            recordsFetched.name(),
+            fetchLatency.name(),
+            sentAcknowledgements.name(),
+            failedAcknowledgements.name()
+        ).forEach(metrics::removeSensor);
     }
 }

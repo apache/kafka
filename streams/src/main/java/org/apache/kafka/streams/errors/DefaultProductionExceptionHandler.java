@@ -18,38 +18,42 @@ package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.streams.StreamsConfig;
 
 import java.util.Map;
+
+import static org.apache.kafka.streams.errors.internals.ExceptionHandlerUtils.maybeBuildDeadLetterQueueRecords;
 
 /**
  * {@code ProductionExceptionHandler} that always instructs streams to fail when an exception
  * happens while attempting to produce result records.
  */
 public class DefaultProductionExceptionHandler implements ProductionExceptionHandler {
-    /**
-     * @deprecated Since 3.9. Use {@link #handle(ErrorHandlerContext, ProducerRecord, Exception)} instead.
-     */
-    @SuppressWarnings("deprecation")
-    @Deprecated
-    @Override
-    public ProductionExceptionHandlerResponse handle(final ProducerRecord<byte[], byte[]> record,
-                                                     final Exception exception) {
-        return exception instanceof RetriableException ?
-            ProductionExceptionHandlerResponse.RETRY :
-            ProductionExceptionHandlerResponse.FAIL;
-    }
+
+    private String deadLetterQueueTopic = null;
 
     @Override
-    public ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context,
-                                                     final ProducerRecord<byte[], byte[]> record,
-                                                     final Exception exception) {
+    public Response handleError(final ErrorHandlerContext context,
+                                final ProducerRecord<byte[], byte[]> record,
+                                final Exception exception) {
         return exception instanceof RetriableException ?
-            ProductionExceptionHandlerResponse.RETRY :
-            ProductionExceptionHandlerResponse.FAIL;
+            Response.retry() :
+            Response.fail(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, context.sourceRawKey(), context.sourceRawValue(), context, exception));
     }
+
+    @SuppressWarnings("rawtypes")
+    @Override
+    public Response handleSerializationError(final ErrorHandlerContext context,
+                                             final ProducerRecord record,
+                                             final Exception exception,
+                                             final SerializationExceptionOrigin origin) {
+        return Response.fail(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, context.sourceRawKey(), context.sourceRawValue(), context, exception));
+    }
+
 
     @Override
     public void configure(final Map<String, ?> configs) {
-        // ignore
+        if (configs.get(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG) != null)
+            deadLetterQueueTopic = String.valueOf(configs.get(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG));
     }
 }

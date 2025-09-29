@@ -83,7 +83,7 @@ public class AcknowledgementsTest {
     }
 
     @Test
-    public void testSingleAcknowledgementTypeExceedingLimit() {
+    public void testSingleAcknowledgeTypeExceedingLimit() {
         int i = 0;
         for (; i < maxRecordsWithSameAcknowledgeType; i++) {
             acks.add(i, AcknowledgeType.ACCEPT);
@@ -119,7 +119,7 @@ public class AcknowledgementsTest {
     }
 
     @Test
-    public void testSingleAcknowledgementTypeWithGap() {
+    public void testSingleAcknowledgeTypeWithGap() {
         for (int i = 0; i < maxRecordsWithSameAcknowledgeType; i++) {
             acks.add(i, null);
         }
@@ -186,7 +186,7 @@ public class AcknowledgementsTest {
     }
 
     @Test
-    public void testSingleAcknowledgementTypeWithinLimit() {
+    public void testSingleAcknowledgeTypeWithinLimit() {
         acks.add(0L, AcknowledgeType.ACCEPT);
         acks.add(1L, AcknowledgeType.ACCEPT);
         acks.add(2L, AcknowledgeType.ACCEPT);

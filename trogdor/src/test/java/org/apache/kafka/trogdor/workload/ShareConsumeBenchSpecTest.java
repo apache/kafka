@@ -18,10 +18,9 @@ package org.apache.kafka.trogdor.workload;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -32,7 +31,7 @@ class ShareConsumeBenchSpecTest {
 
     @Test
     public void testExpandTopicNames() {
-        ShareConsumeBenchSpec shareConsumeBenchSpec = shareConsumeBenchSpec(Arrays.asList("foo[1-3]", "bar"));
+        ShareConsumeBenchSpec shareConsumeBenchSpec = shareConsumeBenchSpec(List.of("foo[1-3]", "bar"));
         Set<String> expectedNames = new HashSet<>();
 
         expectedNames.add("foo1");
@@ -45,15 +44,15 @@ class ShareConsumeBenchSpecTest {
 
     @Test
     public void testInvalidNameRaisesException() {
-        for (String invalidName : Arrays.asList("In:valid", "invalid:", ":invalid[]", "in:valid:", "invalid[1-3]:")) {
-            assertThrows(IllegalArgumentException.class, () -> shareConsumeBenchSpec(Collections.singletonList(invalidName)).expandTopicNames());
+        for (String invalidName : List.of("In:valid", "invalid:", ":invalid[]", "in:valid:", "invalid[1-3]:")) {
+            assertThrows(IllegalArgumentException.class, () -> shareConsumeBenchSpec(List.of(invalidName)).expandTopicNames());
         }
     }
 
     @Test
     public void testDefaultShareGroupName() {
         ShareConsumeBenchSpec shareConsumeBenchSpec = new ShareConsumeBenchSpec(0, 0, "node", "localhost",
-                123, 1234, null, Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(), 1,
+                123, 1234, null, Map.of(), Map.of(), Map.of(), 1,
                 Optional.empty(), List.of("abc"));
         assertEquals("share", shareConsumeBenchSpec.shareGroup());
     }
@@ -61,7 +60,7 @@ class ShareConsumeBenchSpecTest {
     private ShareConsumeBenchSpec shareConsumeBenchSpec(List<String> activeTopics) {
         return new ShareConsumeBenchSpec(0, 0, "node", "localhost",
                 123, 1234, "sg-1",
-                Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(), 1,
+                Map.of(), Map.of(), Map.of(), 1,
                 Optional.empty(), activeTopics);
     }
 

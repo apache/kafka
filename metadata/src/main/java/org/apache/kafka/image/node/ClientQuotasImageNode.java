@@ -63,14 +63,11 @@ public class ClientQuotasImageNode implements MetadataNode {
         String ip = null;
         String user = null;
         for (Map.Entry<String, String> entry : entity.entries().entrySet()) {
-            if (entry.getKey().equals(CLIENT_ID)) {
-                clientId = entry.getValue();
-            } else if (entry.getKey().equals(IP)) {
-                ip = entry.getValue();
-            } else if (entry.getKey().equals(USER)) {
-                user = entry.getValue();
-            } else {
-                throw new RuntimeException("Invalid entity type " + entry.getKey());
+            switch (entry.getKey()) {
+                case CLIENT_ID -> clientId = entry.getValue();
+                case IP -> ip = entry.getValue();
+                case USER -> user = entry.getValue();
+                default -> throw new RuntimeException("Invalid entity type " + entry.getKey());
             }
         }
         StringBuilder bld = new StringBuilder();
@@ -85,7 +82,6 @@ public class ClientQuotasImageNode implements MetadataNode {
         }
         if (user != null) {
             bld.append(prefix).append("user(").append(escape(user)).append(")");
-            prefix = "_";
         }
         return bld.toString();
     }

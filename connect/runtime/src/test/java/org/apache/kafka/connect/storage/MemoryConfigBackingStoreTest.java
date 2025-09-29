@@ -28,9 +28,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -51,13 +49,13 @@ import static org.mockito.Mockito.verify;
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class MemoryConfigBackingStoreTest {
 
-    private static final List<String> CONNECTOR_IDS = Arrays.asList("connector1", "connector2");
+    private static final List<String> CONNECTOR_IDS = List.of("connector1", "connector2");
 
     // Actual values are irrelevant here and can be used as either connector or task configurations
-    private static final List<Map<String, String>> SAMPLE_CONFIGS = Arrays.asList(
-        Collections.singletonMap("config-key-one", "config-value-one"),
-        Collections.singletonMap("config-key-two", "config-value-two"),
-        Collections.singletonMap("config-key-three", "config-value-three")
+    private static final List<Map<String, String>> SAMPLE_CONFIGS = List.of(
+        Map.of("config-key-one", "config-value-one"),
+        Map.of("config-key-two", "config-value-two"),
+        Map.of("config-key-three", "config-value-three")
     );
 
     @Mock
@@ -142,10 +140,10 @@ public class MemoryConfigBackingStoreTest {
     public void testPutTaskConfigs() {
         // Can't write task configs for non-existent connector
         assertThrows(IllegalArgumentException.class,
-            () -> configStore.putTaskConfigs(CONNECTOR_IDS.get(0), Collections.singletonList(SAMPLE_CONFIGS.get(1))));
+            () -> configStore.putTaskConfigs(CONNECTOR_IDS.get(0), List.of(SAMPLE_CONFIGS.get(1))));
 
         configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), null);
-        configStore.putTaskConfigs(CONNECTOR_IDS.get(0), Collections.singletonList(SAMPLE_CONFIGS.get(1)));
+        configStore.putTaskConfigs(CONNECTOR_IDS.get(0), List.of(SAMPLE_CONFIGS.get(1)));
         ClusterConfigState configState = configStore.snapshot();
 
         ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_IDS.get(0), 0);
@@ -153,7 +151,7 @@ public class MemoryConfigBackingStoreTest {
         assertEquals(SAMPLE_CONFIGS.get(1), configState.taskConfig(taskId));
 
         verify(configUpdateListener).onConnectorConfigUpdate(eq(CONNECTOR_IDS.get(0)));
-        verify(configUpdateListener).onTaskConfigUpdate(eq(Collections.singleton(taskId)));
+        verify(configUpdateListener).onTaskConfigUpdate(eq(Set.of(taskId)));
     }
 
     @Test
@@ -172,18 +170,18 @@ public class MemoryConfigBackingStoreTest {
         }).when(configUpdateListener).onTaskConfigUpdate(anySet());
 
         configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), null);
-        configStore.putTaskConfigs(CONNECTOR_IDS.get(0), Collections.singletonList(SAMPLE_CONFIGS.get(1)));
+        configStore.putTaskConfigs(CONNECTOR_IDS.get(0), List.of(SAMPLE_CONFIGS.get(1)));
         configStore.removeTaskConfigs(CONNECTOR_IDS.get(0));
         ClusterConfigState configState = configStore.snapshot();
 
         assertEquals(0, configState.taskCount(CONNECTOR_IDS.get(0)));
-        assertEquals(Collections.emptyList(), configState.tasks(CONNECTOR_IDS.get(0)));
+        assertEquals(List.of(), configState.tasks(CONNECTOR_IDS.get(0)));
 
         verify(configUpdateListener).onConnectorConfigUpdate(eq(CONNECTOR_IDS.get(0)));
         verify(configUpdateListener, times(2)).onTaskConfigUpdate(anySet());
 
         ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_IDS.get(0), 0);
-        assertEquals(Arrays.asList(Collections.singleton(taskId), Collections.singleton(taskId)), onTaskConfigUpdateCaptures);
+        assertEquals(List.of(Set.of(taskId), Set.of(taskId)), onTaskConfigUpdateCaptures);
     }
 
     @Test

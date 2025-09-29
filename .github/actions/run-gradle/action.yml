@@ -83,6 +83,9 @@ runs:
         RUN_FLAKY_TESTS: ${{ inputs.run-flaky-tests }}
         TEST_XML_OUTPUT_DIR: ${{ inputs.test-xml-output }}
         TEST_VERBOSE: ${{ inputs.test-verbose }}
+      # This build step is invoked by build.yml to run junit tests only,
+      # Spotbugs is being run by that workflow via the "check" task and does not need to also be run here,
+      # since that is redundant.
       run: |
         set +e
         ./.github/scripts/thread-dump.sh &
@@ -97,6 +100,8 @@ runs:
         -Pkafka.cluster.test.repeat=$TEST_REPEAT \
         -Pkafka.test.verbose=$TEST_VERBOSE \
         -PcommitId=xxxxxxxxxxxxxxxx \
+        -x spotbugsMain \
+        -x spotbugsTest \
         $TEST_TASK
         exitcode="$?"
         echo "exitcode=$exitcode" >> $GITHUB_OUTPUT

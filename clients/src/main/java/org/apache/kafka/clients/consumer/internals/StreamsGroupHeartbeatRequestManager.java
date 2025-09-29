@@ -287,7 +287,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     private final HeartbeatMetricsManager metricsManager;
 
-    private StreamsRebalanceData streamsRebalanceData;
+    private final StreamsRebalanceData streamsRebalanceData;
 
     /**
      * Timer for tracking the time since the last consumer poll.  If the timer expires, the consumer will stop

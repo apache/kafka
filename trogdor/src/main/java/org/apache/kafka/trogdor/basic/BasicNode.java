@@ -21,7 +21,6 @@ import org.apache.kafka.trogdor.common.Node;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -46,7 +45,7 @@ public class BasicNode implements Node {
     public BasicNode(String name, JsonNode root) {
         this.name = name;
         String hostname = "localhost";
-        Set<String> tags = Collections.emptySet();
+        Set<String> tags = new HashSet<>();
         Map<String, String> config = new HashMap<>();
         for (Map.Entry<String, JsonNode> entry : root.properties()) {
             String key = entry.getKey();

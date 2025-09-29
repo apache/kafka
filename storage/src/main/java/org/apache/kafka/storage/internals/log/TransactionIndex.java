@@ -47,13 +47,7 @@ import java.util.function.Supplier;
  */
 public class TransactionIndex implements Closeable {
 
-    private static class AbortedTxnWithPosition {
-        final AbortedTxn txn;
-        final int position;
-        AbortedTxnWithPosition(AbortedTxn txn, int position) {
-            this.txn = txn;
-            this.position = position;
-        }
+    private record AbortedTxnWithPosition(AbortedTxn txn, int position) {
     }
 
     private final long startOffset;
@@ -232,7 +226,7 @@ public class TransactionIndex implements Closeable {
 
         PrimitiveRef.IntRef position = PrimitiveRef.ofInt(0);
 
-        return () -> new Iterator<AbortedTxnWithPosition>() {
+        return () -> new Iterator<>() {
 
             @Override
             public boolean hasNext() {

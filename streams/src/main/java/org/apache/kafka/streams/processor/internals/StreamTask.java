@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -945,10 +946,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 recordContext.sourceRawValue()
             );
 
-            final ProcessingExceptionHandler.ProcessingHandlerResponse response;
+            final ProcessingExceptionHandler.Response processingExceptionResponse;
             try {
-                response = Objects.requireNonNull(
-                    processingExceptionHandler.handle(errorHandlerContext, null, processingException),
+                processingExceptionResponse = Objects.requireNonNull(
+                    processingExceptionHandler.handleError(errorHandlerContext, null, processingException),
                     "Invalid ProcessingExceptionHandler response."
                 );
             } catch (final Exception fatalUserException) {
@@ -963,7 +964,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw new FailedProcessingException("Fatal user code error in processing error callback", node.name(), fatalUserException);
             }
 
-            if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
+            final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = processingExceptionResponse.deadLetterQueueRecords();
+            if (!deadLetterQueueRecords.isEmpty()) {
+                final RecordCollector collector = ((RecordCollector.Supplier) processorContext).recordCollector();
+                for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
+                    collector.send(
+                            deadLetterQueueRecord.key(),
+                            deadLetterQueueRecord.value(),
+                            node.name(),
+                            processorContext,
+                            deadLetterQueueRecord);
+                }
+            }
+
+            if (processingExceptionResponse.result() == ProcessingExceptionHandler.Result.FAIL) {
                 log.error("Processing exception handler is set to fail upon" +
                         " a processing error. If you would rather have the streaming pipeline" +
                         " continue after a processing error, please set the " +

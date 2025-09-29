@@ -423,7 +423,7 @@ public class RemoteIndexCache implements Closeable {
     public int lookupOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
         lock.readLock().lock();
         try {
-            return getIndexEntry(remoteLogSegmentMetadata).lookupOffset(offset).position;
+            return getIndexEntry(remoteLogSegmentMetadata).lookupOffset(offset).position();
         } finally {
             lock.readLock().unlock();
         }
@@ -432,7 +432,7 @@ public class RemoteIndexCache implements Closeable {
     public int lookupTimestamp(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long timestamp, long startingOffset) {
         lock.readLock().lock();
         try {
-            return getIndexEntry(remoteLogSegmentMetadata).lookupTimestamp(timestamp, startingOffset).position;
+            return getIndexEntry(remoteLogSegmentMetadata).lookupTimestamp(timestamp, startingOffset).position();
         } finally {
             lock.readLock().unlock();
         }
@@ -542,7 +542,7 @@ public class RemoteIndexCache implements Closeable {
                 if (cleanStarted)
                     throw new IllegalStateException("This entry is marked for cleanup");
                 TimestampOffset timestampOffset = timeIndex.lookup(timestamp);
-                return offsetIndex.lookup(Math.max(startingOffset, timestampOffset.offset));
+                return offsetIndex.lookup(Math.max(startingOffset, timestampOffset.offset()));
             } finally {
                 entryLock.readLock().unlock();
             }

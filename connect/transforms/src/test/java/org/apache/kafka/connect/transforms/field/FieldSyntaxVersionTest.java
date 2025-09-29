@@ -35,18 +35,18 @@ public class FieldSyntaxVersionTest {
     @Test
     void shouldAppendConfigToDef() {
         ConfigDef def = FieldSyntaxVersion.appendConfigTo(new ConfigDef());
-        assertEquals(def.configKeys().size(), 1);
+        assertEquals(1, def.configKeys().size());
         final ConfigDef.ConfigKey configKey = def.configKeys().get("field.syntax.version");
-        assertEquals(configKey.name, "field.syntax.version");
-        assertEquals(configKey.defaultValue, "V1");
+        assertEquals("field.syntax.version", configKey.name);
+        assertEquals("V1", configKey.defaultValue);
     }
 
     @Test
     void shouldFailWhenAppendConfigToDefAgain() {
         ConfigDef def = FieldSyntaxVersion.appendConfigTo(new ConfigDef());
-        assertEquals(def.configKeys().size(), 1);
+        assertEquals(1, def.configKeys().size());
         ConfigException e = assertThrows(ConfigException.class, () -> FieldSyntaxVersion.appendConfigTo(def));
-        assertEquals(e.getMessage(), "Configuration field.syntax.version is defined twice.");
+        assertEquals("Configuration field.syntax.version is defined twice.", e.getMessage());
     }
 
     @ParameterizedTest

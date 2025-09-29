@@ -255,7 +255,7 @@ public abstract class Loggers {
             LoggerContext context = (LoggerContext) LogManager.getContext(false);
             var results = new HashMap<String, org.apache.logging.log4j.core.Logger>();
             context.getConfiguration().getLoggers().forEach((name, logger) -> results.put(name, loggerContext.getLogger(name)));
-            context.getLoggerRegistry().getLoggers().forEach(logger -> results.put(logger.getName(), logger));
+            context.getLoggers().forEach(logger -> results.put(logger.getName(), logger));
             return results;
         }
 

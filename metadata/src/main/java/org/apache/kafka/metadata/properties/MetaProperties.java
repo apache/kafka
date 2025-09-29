@@ -238,15 +238,11 @@ public final class MetaProperties {
         StringBuilder bld = new StringBuilder();
         bld.append("MetaProperties");
         bld.append("(version=").append(version.number());
-        if (clusterId.isPresent()) {
-            bld.append(", clusterId=").append(clusterId.get());
-        }
+        clusterId.ifPresent(id -> bld.append(", clusterId=").append(id));
         if (nodeId.isPresent()) {
             bld.append(", nodeId=").append(nodeId.getAsInt());
         }
-        if (directoryId.isPresent()) {
-            bld.append(", directoryId=").append(directoryId.get());
-        }
+        directoryId.ifPresent(id -> bld.append(", directoryId=").append(id));
         bld.append(")");
         return bld.toString();
     }
@@ -254,9 +250,7 @@ public final class MetaProperties {
     public Properties toProperties() {
         Properties props = new Properties();
         props.setProperty(VERSION_PROP, version.numberString());
-        if (clusterId.isPresent()) {
-            props.setProperty(CLUSTER_ID_PROP, clusterId.get());
-        }
+        clusterId.ifPresent(id -> props.setProperty(CLUSTER_ID_PROP, id));
         if (version.hasBrokerId()) {
             if (nodeId.isPresent()) {
                 props.setProperty(BROKER_ID_PROP, "" + nodeId.getAsInt());
@@ -264,9 +258,7 @@ public final class MetaProperties {
         } else {
             props.setProperty(NODE_ID_PROP, "" + nodeId.getAsInt());
         }
-        if (directoryId.isPresent()) {
-            props.setProperty(DIRECTORY_ID_PROP, directoryId.get().toString());
-        }
+        directoryId.ifPresent(id -> props.setProperty(DIRECTORY_ID_PROP, id.toString()));
         return props;
     }
 }
