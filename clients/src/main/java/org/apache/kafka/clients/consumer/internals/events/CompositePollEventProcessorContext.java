@@ -71,7 +71,7 @@ public class CompositePollEventProcessorContext {
         };
     };
 
-    public <T> void trackExpirableEvent(CompletableFuture<T> future, long deadlineMs) {
+    public <T> void trackCheckAndUpdatePositionsForTimeout(CompletableFuture<T> future, long deadlineMs) {
         CompletableEvent<T> event = new CompletableEvent<>() {
             @Override
             public CompletableFuture<T> future() {

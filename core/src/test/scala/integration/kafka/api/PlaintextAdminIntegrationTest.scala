@@ -568,7 +568,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       try {
         consumer.assign(util.Set.of(tp))
         consumer.seekToBeginning(util.Set.of(tp))
-
         TestUtils.waitUntilTrue(() => {
           val records = consumer.poll(time.Duration.ofSeconds(3))
           expectedNumber == records.count()
