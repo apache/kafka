@@ -200,7 +200,7 @@ public class SubscriptionSendProcessorSupplier<KLeft, VLeft, KRight>
                             // we don't need any response, as we only want a response from the new subscription
                             forward(record, oldForeignKey, DELETE_KEY_NO_PROPAGATE);
 
-                            // subscribe to new key (note, could be on a different task/node than the old FK)
+                            // subscribe for new FK (note, could be on a different task/node than the old FK)
                             // additionally, propagate null if no FK is found so we can delete the previous result (if any)
                             //
                             // this may lead to unnecessary tombstones if the old FK did not join
