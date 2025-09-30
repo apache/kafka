@@ -896,11 +896,6 @@ public class SubscriptionState {
         return tps != null && isFetchableAndSubscribed(tp, tps);
     }
 
-    public synchronized boolean isPendingCallbacks(TopicPartition tp) {
-        TopicPartitionState assignedOrNull = assignedStateOrNull(tp);
-        return assignedOrNull != null && assignedOrNull.isPendingCallbacks();
-    }
-
     public synchronized boolean hasValidPosition(TopicPartition tp) {
         TopicPartitionState assignedOrNull = assignedStateOrNull(tp);
         return assignedOrNull != null && assignedOrNull.hasValidPosition();
@@ -1217,11 +1212,7 @@ public class SubscriptionState {
         }
 
         private boolean isFetchable() {
-            return !paused && !isPendingCallbacks() && hasValidPosition();
-        }
-
-        private boolean isPendingCallbacks() {
-            return pendingRevocation || pendingOnAssignedCallback;
+            return !paused && !pendingRevocation && !pendingOnAssignedCallback && hasValidPosition();
         }
 
         private void highWatermark(Long highWatermark) {
