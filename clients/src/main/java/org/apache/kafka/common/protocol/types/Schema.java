@@ -28,7 +28,7 @@ import java.util.Objects;
  */
 public final class Schema extends DocumentedType {
 
-    private static final String STRUCT_TYPE_NAME = "STRUCT";
+    private static final String STRUCT_TYPE_NAME = "NULLABLE_STRUCT";
 
     private static final Object[] NO_VALUES = new Object[0];
 
