@@ -49,14 +49,6 @@ public final class TransactionalRequestResult {
         this.latch.countDown();
     }
 
-    public void await() {
-        this.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
-    }
-
-    public void await(long timeout, TimeUnit unit) {
-        this.await(timeout, unit, () -> new KafkaException("Unknown reason."));
-    }
-
     public void await(long timeout, TimeUnit unit, Supplier<KafkaException> potentialCauseException) {
         try {
             boolean success = latch.await(timeout, unit);

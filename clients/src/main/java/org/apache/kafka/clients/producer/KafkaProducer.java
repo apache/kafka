@@ -1252,7 +1252,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
                 Throwable cause;
                 Errors error = metadata.getError(topic);
-                if (error != null) {
+                if (error != null && error != Errors.NONE) {
                     cause = error.exception();
                 } else if (ex.getCause() != null) {
                     cause = ex.getCause();

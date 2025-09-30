@@ -970,7 +970,7 @@ public class TransactionManagerTest {
         prepareInitPidResponse(Errors.NONE, false, producerId, (short) (epoch + 1));
         runUntil(() -> !transactionManager.hasOngoingTransaction());
         runUntil(retryResult::isCompleted);
-        retryResult.await();
+        retryResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unexpected time out during the test."));
         runUntil(retryResult::isAcked);
         assertFalse(transactionManager.hasOngoingTransaction());
 
@@ -1358,7 +1358,9 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasFatalError());
         assertInstanceOf(TransactionalIdAuthorizationException.class, transactionManager.lastError());
         assertFalse(initPidResult.isSuccessful());
-        assertThrows(TransactionalIdAuthorizationException.class, initPidResult::await);
+        assertThrows(TransactionalIdAuthorizationException.class, () -> initPidResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS,
+                () -> new KafkaException("Unexpected time out during the test."))
+        );
         assertFatalError(TransactionalIdAuthorizationException.class);
     }
 
@@ -1373,7 +1375,9 @@ public class TransactionManagerTest {
         runUntil(transactionManager::hasError);
         assertTrue(initPidResult.isCompleted());
         assertFalse(initPidResult.isSuccessful());
-        assertThrows(TransactionalIdAuthorizationException.class, initPidResult::await);
+        assertThrows(TransactionalIdAuthorizationException.class, () -> initPidResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS,
+                () -> new KafkaException("Unexpected time out during the test.")
+        ));
         assertAbortableError(TransactionalIdAuthorizationException.class);
     }
 
@@ -1622,7 +1626,7 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.hasPartitionsToAdd());
         assertFalse(accumulator.hasIncomplete());
         assertTrue(abortResult.isSuccessful());
-        abortResult.await();
+        abortResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unexpected time out during the test."));
 
         // ensure we can now start a new transaction
 
@@ -1658,7 +1662,9 @@ public class TransactionManagerTest {
         TransactionalRequestResult result = transactionManager.beginAbort();
         assertInstanceOf(
                 KafkaException.class,
-                assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS)).getCause(),
+                assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS,
+                        () -> new KafkaException("Unexpected time out during the test.")
+                )).getCause(),
                 "Unknown Reason."
         );
 
@@ -1674,7 +1680,7 @@ public class TransactionManagerTest {
         assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
 
         assertSame(result, transactionManager.beginAbort());
-        result.await();
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unexpected time out during the test."));
 
         transactionManager.beginTransaction();
         assertTrue(transactionManager.hasOngoingTransaction());
@@ -1696,7 +1702,9 @@ public class TransactionManagerTest {
         TransactionalRequestResult result = transactionManager.beginCommit();
         assertInstanceOf(
                 KafkaException.class,
-                assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS)).getCause(),
+                assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS,
+                        () -> new KafkaException("Unexpected time out during the test.")
+                )).getCause(),
                 "Unknown Reason."
         );
 
@@ -1712,7 +1720,7 @@ public class TransactionManagerTest {
         assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
 
         assertSame(result, transactionManager.beginCommit());
-        result.await();
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unexpected time out during the test."));
 
         transactionManager.beginTransaction();
         assertTrue(transactionManager.hasOngoingTransaction());
@@ -1727,7 +1735,9 @@ public class TransactionManagerTest {
 
         assertInstanceOf(
                 KafkaException.class,
-                assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS)).getCause(),
+                assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS,
+                        () -> new KafkaException("Unexpected time out during the test.")
+                )).getCause(),
                 "Unknown Reason."
         );
 
@@ -1746,7 +1756,7 @@ public class TransactionManagerTest {
         assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
 
         assertSame(result, transactionManager.initializeTransactions(false));
-        result.await();
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unexpected time out during the test."));
         assertTrue(result.isAcked());
         assertThrows(IllegalStateException.class, () -> transactionManager.initializeTransactions(false));
 
@@ -1785,7 +1795,7 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.hasPartitionsToAdd());
         assertFalse(accumulator.hasIncomplete());
         assertTrue(result.isSuccessful());
-        result.await();
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unexpected time out during the test."));
 
         // ensure we can now start a new transaction
 
@@ -1849,7 +1859,7 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.hasPartitionsToAdd());
         assertFalse(accumulator.hasIncomplete());
         assertTrue(abortResult.isSuccessful());
-        abortResult.await();
+        abortResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unexpected time out during the test."));
 
         // ensure we can now start a new transaction
 
@@ -2001,7 +2011,7 @@ public class TransactionManagerTest {
         prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
         runUntil(transactionManager::hasProducerId);
 
-        result.await();
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unexpected time out during the test."));
         transactionManager.beginTransaction();
 
         // Ensure AddPartitionsToTxn retries. Since CONCURRENT_TRANSACTIONS is handled differently here, we substitute.
@@ -2033,7 +2043,7 @@ public class TransactionManagerTest {
         prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
         runUntil(transactionManager::hasProducerId);
 
-        result.await();
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unexpected time out during the test."));
     }
 
     @Test
@@ -2056,7 +2066,9 @@ public class TransactionManagerTest {
 
         runUntil(transactionManager::hasError);
 
-        assertThrows(ProducerFencedException.class, result::await);
+        assertThrows(ProducerFencedException.class, () -> result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS,
+                () -> new KafkaException("Unexpected time out during the test."))
+        );
 
         assertThrows(ProducerFencedException.class, () -> transactionManager.beginTransaction());
         assertThrows(ProducerFencedException.class, () -> transactionManager.beginCommit());
@@ -2151,7 +2163,9 @@ public class TransactionManagerTest {
         runUntil(commitResult::isCompleted);
         runUntil(responseFuture::isDone);
 
-        assertThrows(KafkaException.class, commitResult::await);
+        assertThrows(KafkaException.class, () -> commitResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS,
+                () -> new KafkaException("Unexpected time out during the test.")
+        ));
         assertFalse(commitResult.isSuccessful());
         assertTrue(commitResult.isAcked());
 
@@ -2213,7 +2227,9 @@ public class TransactionManagerTest {
 
         runUntil(commitResult::isCompleted);  // commit should be cancelled with exception without being sent.
 
-        assertThrows(KafkaException.class, commitResult::await);
+        assertThrows(KafkaException.class, () -> commitResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS,
+                () -> new KafkaException("Unexpected time out during the test.")
+        ));
         TestUtils.assertFutureThrows(OutOfOrderSequenceException.class, responseFuture);
 
         // Commit is not allowed, so let's abort and try again.
@@ -2990,7 +3006,10 @@ public class TransactionManagerTest {
         assertFalse(commitResult.isSuccessful());  // the commit shouldn't succeed since the produce request failed.
         assertInstanceOf(
                 KafkaException.class,
-                assertInstanceOf(TimeoutException.class, assertThrows(TransactionAbortableException.class, commitResult::await).getCause()).getCause(),
+                assertInstanceOf(TimeoutException.class, assertThrows(TransactionAbortableException.class, () ->
+                        commitResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () ->
+                                new KafkaException("Unexpected time out during the test.")
+                        )).getCause()).getCause(),
                 "Unknown Error."
         );
 
@@ -3349,7 +3368,7 @@ public class TransactionManagerTest {
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
         runUntil(abortResult::isCompleted);
         assertTrue(abortResult.isSuccessful());
-        abortResult.await();
+        abortResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unexpected time out during the test."));
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
         transactionManager.beginTransaction();
@@ -3417,7 +3436,7 @@ public class TransactionManagerTest {
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
         runUntil(abortResult::isCompleted);
         assertTrue(abortResult.isSuccessful());
-        abortResult.await();
+        abortResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unexpected time out during the test."));
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
         transactionManager.beginTransaction();
@@ -3465,7 +3484,7 @@ public class TransactionManagerTest {
 
         assertTrue(abortResult.isCompleted());
         assertTrue(abortResult.isSuccessful());
-        abortResult.await();
+        abortResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unexpected time out during the test."));
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
         transactionManager.beginTransaction();
@@ -3512,7 +3531,7 @@ public class TransactionManagerTest {
 
         assertTrue(abortResult.isCompleted());
         assertTrue(abortResult.isSuccessful());
-        abortResult.await();
+        abortResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unexpected time out during the test."));
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
         transactionManager.beginTransaction();
@@ -3571,7 +3590,7 @@ public class TransactionManagerTest {
 
         assertTrue(abortResult.isCompleted());
         assertTrue(abortResult.isSuccessful());
-        abortResult.await();
+        abortResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unexpected time out during the test."));
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
         transactionManager.beginTransaction();
@@ -3903,7 +3922,7 @@ public class TransactionManagerTest {
         prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, producerId, epoch);
         runUntil(() -> !transactionManager.hasOngoingTransaction());
         runUntil(retryResult::isCompleted);
-        retryResult.await();
+        retryResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unexpected time out during the test."));
         runUntil(retryResult::isAcked);
         assertFalse(transactionManager.hasOngoingTransaction());
     }
@@ -3919,7 +3938,9 @@ public class TransactionManagerTest {
         runUntil(transactionManager::hasError);
         assertTrue(initPidResult.isCompleted());
         assertFalse(initPidResult.isSuccessful());
-        assertThrows(TransactionAbortableException.class, initPidResult::await);
+        assertThrows(TransactionAbortableException.class, () -> initPidResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS,
+                () -> new KafkaException("Unexpected time out during the test.")
+        ));
         assertAbortableError(TransactionAbortableException.class);
     }
 
@@ -3979,7 +4000,9 @@ public class TransactionManagerTest {
         runUntil(commitResult::isCompleted);
         runUntil(responseFuture::isDone);
 
-        assertThrows(KafkaException.class, commitResult::await);
+        assertThrows(KafkaException.class, () -> commitResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS,
+                () -> new KafkaException("Unexpected time out during the test."))
+        );
         assertFalse(commitResult.isSuccessful());
         assertTrue(commitResult.isAcked());
 
@@ -4055,7 +4078,9 @@ public class TransactionManagerTest {
         assertInstanceOf(
                 KafkaException.class,
                 assertThrows(TimeoutException.class,
-                             () -> result.await(MAX_BLOCK_TIMEOUT, TimeUnit.MILLISECONDS)).getCause(),
+                             () -> result.await(MAX_BLOCK_TIMEOUT, TimeUnit.MILLISECONDS,
+                                     () -> new KafkaException("Unexpected time out during the test.")
+                             )).getCause(),
                 "Unknown Error."
         );
 
@@ -4149,7 +4174,7 @@ public class TransactionManagerTest {
         runUntil(transactionManager::hasProducerId);
         transactionManager.maybeUpdateTransactionV2Enabled(true);
         
-        result.await();
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unexpected time out during the test."));
         assertTrue(result.isSuccessful());
         
         // Verify transaction manager transitioned to PREPARED_TRANSACTION state
@@ -4190,7 +4215,7 @@ public class TransactionManagerTest {
         runUntil(transactionManager::hasProducerId);
         transactionManager.maybeUpdateTransactionV2Enabled(true);
         
-        result.await();
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unexpected time out during the test."));
         assertTrue(result.isSuccessful());
         
         // Verify transaction manager transitioned to READY state (not PREPARED_TRANSACTION)
@@ -4536,7 +4561,7 @@ public class TransactionManagerTest {
         runUntil(transactionManager::hasProducerId);
         transactionManager.maybeUpdateTransactionV2Enabled(true);
 
-        result.await();
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unexpected time out during the test."));
         assertTrue(result.isSuccessful());
         assertTrue(result.isAcked());
     }
@@ -4578,7 +4603,7 @@ public class TransactionManagerTest {
         runUntil(transactionManager::hasProducerId);
         transactionManager.maybeUpdateTransactionV2Enabled(true);
 
-        result.await();
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unexpected time out during the test."));
         assertTrue(result.isSuccessful());
         assertTrue(result.isAcked());
     }
