@@ -469,6 +469,12 @@ public class FeatureCommandTest {
     }
 
     @Test
+    public void testHandleRemoteCommandWithoutBootstrap() {
+        String errorMessage = ToolsTestUtils.grabConsoleError(() -> FeatureCommand.mainNoExit("upgrade"));
+        assertTrue(errorMessage.contains("one of the arguments --bootstrap-server --bootstrap-controller is required"));
+    }
+
+    @Test
     public void testHandleFeatureDependenciesForFeatureWithDependencies() {
         Map<String, Object> namespace = new HashMap<>();
         namespace.put("feature", List.of("test.feature.version=2"));
