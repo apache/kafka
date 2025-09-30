@@ -115,7 +115,7 @@ public class ConsumerPerformance {
     }
 
     protected static void printHeader(boolean showDetailedStats) {
-        String newFieldsInHeader = ", rebalance.time.ms, fetch.time.ms, fetch.MB.sec, fetch.nMsg.sec";
+        String newFieldsInHeader = ", stop.the.world.ms, fetch.time.ms, fetch.MB.sec, fetch.nMsg.sec";
         if (!showDetailedStats)
             System.out.printf("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec%s%n", newFieldsInHeader);
         else
