@@ -45,7 +45,7 @@ import org.apache.kafka.metadata.{BrokerState, ListenerInfo}
 import org.apache.kafka.metadata.publisher.AclPublisher
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, TopicIdPartition}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, BrokerReadyCallback, DirectoryEventHandler, NodeToControllerChannelManager, TopicIdPartition}
 import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
@@ -64,7 +64,7 @@ import java.util
 import java.util.Optional
 import java.util.concurrent.locks.{Condition, ReentrantLock}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
-import scala.collection.Map
+import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
 
@@ -161,6 +161,8 @@ class BrokerServer(
   var sharePartitionManager: SharePartitionManager = _
 
   var persister: Persister = _
+
+  private val brokerReadyCallbacks = new mutable.ListBuffer[BrokerReadyCallback]()
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -282,6 +284,9 @@ class BrokerServer(
             withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
 
       remoteLogManagerOpt = createRemoteLogManager(listenerInfo)
+
+      remoteLogManagerOpt.foreach(rlm =>
+        registerBrokerReadyCallback(rlm.remoteLogMetadataManager()))
 
       alterPartitionManager = AlterPartitionManager(
         config,
@@ -589,9 +594,14 @@ class BrokerServer(
         "all of the SocketServer Acceptors to be started",
         enableRequestProcessingFuture, startupDeadline, time)
 
-      remoteLogManagerOpt.foreach(rlm =>
-        rlm.remoteLogMetadataManager().onBrokerReadyForRequests()
-      )
+      brokerReadyCallbacks.foreach { callback =>
+        try {
+          callback.onBrokerReady()
+        } catch {
+          case e: Exception =>
+            error(s"Error executing broker ready callback: ${callback.getClass.getSimpleName}", e)
+        }
+      }
 
       maybeChangeStatus(STARTING, STARTED)
     } catch {
@@ -601,6 +611,10 @@ class BrokerServer(
         shutdown()
         throw if (e.isInstanceOf[ExecutionException]) e.getCause else e
     }
+  }
+
+   private def registerBrokerReadyCallback(callback: BrokerReadyCallback): Unit = {
+    brokerReadyCallbacks += callback
   }
 
   private def createGroupCoordinator(): GroupCoordinator = {

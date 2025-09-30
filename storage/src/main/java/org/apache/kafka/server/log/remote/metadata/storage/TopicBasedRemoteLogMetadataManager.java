@@ -370,7 +370,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         }
     }
     @Override
-    public void onBrokerReadyForRequests() {
+    public void onBrokerReady() {
         log.info("Broker is ready for requests, now initializing RLMM resources");
         initializationThread.start();
     }
