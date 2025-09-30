@@ -60,11 +60,13 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import joptsimple.OptionException;
+import org.mockito.MockedStatic;
 
 import static org.apache.kafka.common.KafkaFuture.completedFuture;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -80,6 +82,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mockStatic;
 
 public class StreamsGroupCommandTest {
 
@@ -475,6 +478,28 @@ public class StreamsGroupCommandTest {
         StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args.toArray(new String[0]), adminClient);
         assertThrows(UnknownTopicOrPartitionException.class, () -> service.resetOffsets());
         service.close();
+    }
+
+    @Test
+    public void testExecuteExitCode() {
+        // OptionException
+        assertEquals(1, StreamsGroupCommand.execute(new String[]{"--invalid-option"}));
+
+        // ArgumentException
+        assertEquals(1, StreamsGroupCommand.execute(new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS}));
+
+        //ExecutionException & InterruptedException
+        try (MockedStatic<StreamsGroupCommand> mockedStreamGroupCommand = mockStatic(StreamsGroupCommand.class)) {
+
+            mockedStreamGroupCommand.when(() -> StreamsGroupCommand.execute(any(String[].class))).thenCallRealMethod();
+
+            mockedStreamGroupCommand.when(() -> StreamsGroupCommand.run(any(StreamsGroupCommandOptions.class))).thenThrow(new ExecutionException("ExecutionException", new RuntimeException()));
+            assertEquals(1, StreamsGroupCommand.execute(new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--list"}));
+
+            mockedStreamGroupCommand.when(() -> StreamsGroupCommand.run(any(StreamsGroupCommandOptions.class))).thenThrow(new InterruptedException("InterruptedException"));
+            assertEquals(1, StreamsGroupCommand.execute(new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--list"}));
+
+        }
     }
 
     private ListGroupsResult listGroupResult(String groupId) {
