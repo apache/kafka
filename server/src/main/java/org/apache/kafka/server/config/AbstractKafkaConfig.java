@@ -42,6 +42,7 @@ import org.apache.kafka.storage.internals.log.LogConfig;
 
 import org.apache.commons.validator.routines.InetAddressValidator;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -190,14 +191,14 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
         if (!requireDistinctPorts) return;
 
-        Map<Integer, List<Endpoint>> duplicatePorts = endPoints.stream()
-                .filter(ep -> ep.port() != 0) // filter port 0 for unit tests
-                .collect(Collectors.groupingBy(Endpoint::port))
-                .entrySet().stream()
-                .filter(entry -> entry.getValue().size() > 1)
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-
-        duplicatePorts.forEach((port, eps) -> {
+        endPoints.stream()
+        .filter(ep -> ep.port() != 0) // filter port 0 for unit tests
+        .collect(Collectors.groupingBy(Endpoint::port))
+        .entrySet().stream()
+        .filter(entry -> entry.getValue().size() > 1)
+        .forEach(entry -> {
+            int port = entry.getKey();
+            List<Endpoint> eps = entry.getValue();
             Map<Boolean, List<Endpoint>> partitionedByValidIp = eps.stream()
                     .collect(Collectors.partitioningBy(ep -> ep.host() != null && INET_ADDRESS_VALIDATOR.isValid(ep.host())));
 
