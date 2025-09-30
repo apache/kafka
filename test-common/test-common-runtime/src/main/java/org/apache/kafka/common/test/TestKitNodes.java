@@ -94,11 +94,6 @@ public class TestKitNodes {
             return this;
         }
 
-        public Builder setFeature(String featureName, short level) {
-            this.bootstrapMetadata = bootstrapMetadata.copyWithFeatureRecord(featureName, level);
-            return this;
-        }
-
         public Builder setCombined(boolean combined) {
             this.combined = combined;
             return this;
