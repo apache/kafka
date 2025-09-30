@@ -460,6 +460,15 @@ public class FeatureCommandTest {
     }
 
     @Test
+    public void testHandleVersionMappingWithoutBootstrap() {
+        Map.Entry<String, String> output = ToolsTestUtils.grabConsoleOutputAndError(() -> FeatureCommand.mainNoExit("version-mapping"));
+        assertEquals("", output.getValue());
+        MetadataVersion metadataVersion = MetadataVersion.latestProduction();
+        assertTrue(output.getKey().contains("metadata.version=" + metadataVersion.featureLevel() + " (" + metadataVersion.version() + ")"),
+                "Output did not contain expected Metadata Version: " + output.getKey());
+    }
+
+    @Test
     public void testHandleFeatureDependenciesForFeatureWithDependencies() {
         Map<String, Object> namespace = new HashMap<>();
         namespace.put("feature", List.of("test.feature.version=2"));

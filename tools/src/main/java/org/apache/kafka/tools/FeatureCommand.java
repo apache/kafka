@@ -92,7 +92,7 @@ public class FeatureCommand {
         addVersionMappingParser(subparsers);
         addFeatureDependenciesParser(subparsers);
 
-        Namespace namespace = parser.parseArgsOrFail(args);
+        Namespace namespace = parser.parseArgs(args);
         String command = namespace.getString("command");
         String configPath = namespace.getString("command_config");
         Properties properties = (configPath == null) ? new Properties() : Utils.loadProps(configPath);
