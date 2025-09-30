@@ -257,13 +257,14 @@ public class ConsumerConfigTest {
         testUnsupportedConfigsWithConsumerGroupProtocol(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 1000);
         testUnsupportedConfigsWithConsumerGroupProtocol(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000);
     }
-    
+
     @Test
     public void testUnsupportedConfigsForLoggingWithConsumerGroupProtocol() {
         final Map<String, Object> configs = Map.of(
                 ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass,
                 ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass,
-                ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name()
+                ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name(),
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"
         );
         ConsumerConfig config = new ConsumerConfig(configs);
         Map<String, Object> configToLog = config.clearUnsupportedConfigsForLogging(
@@ -272,7 +273,7 @@ public class ConsumerConfigTest {
                         .collect(HashMap::new, (m, v) -> m.put(v.toString(), v), HashMap::putAll)
         );
         ConsumerConfig.CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS.forEach(
-                configName -> assertFalse(configToLog.containsKey(configName))
+            configName -> assertFalse(configToLog.containsKey(configName))
         );
     }
 
