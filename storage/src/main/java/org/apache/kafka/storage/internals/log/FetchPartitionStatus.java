@@ -18,7 +18,6 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.requests.FetchRequest.PartitionData;
-import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 
 /**
  * A class containing log offset metadata and fetch info for a topic partition.
