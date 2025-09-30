@@ -211,12 +211,6 @@ public class FeatureCommandTest {
     }
 
     @Test
-    public void testMetadataVersionsToString() {
-        assertEquals("3.5-IV0, 3.5-IV1, 3.5-IV2, 3.6-IV0",
-            FeatureCommand.metadataVersionsToString(MetadataVersion.IBP_3_5_IV0, MetadataVersion.IBP_3_6_IV0));
-    }
-
-    @Test
     public void testDowngradeType() {
         assertEquals(SAFE_DOWNGRADE, FeatureCommand.downgradeType(
             new Namespace(Map.of("unsafe", Boolean.FALSE))));
@@ -274,7 +268,7 @@ public class FeatureCommandTest {
         namespace.put("feature", List.of("foo.bar=6"));
         namespace.put("dry_run", false);
         Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()));
-        assertTrue(t.getMessage().contains("Unknown metadata.version 3.3-IV1"));
+        assertTrue(t.getMessage().contains("Unknown metadata.version '3.3-IV1'"));
     }
 
     @Test
@@ -371,7 +365,7 @@ public class FeatureCommandTest {
         namespace.put("release_version", "foo");
         ToolsTestUtils.captureStandardOut(() -> {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()));
-            assertTrue(t.getMessage().contains("Unknown metadata.version foo."));
+            assertTrue(t.getMessage().contains("Unknown metadata.version 'foo'."));
         });
     }
 
@@ -452,9 +446,8 @@ public class FeatureCommandTest {
             FeatureCommand.handleVersionMapping(new Namespace(namespace), testingFeatures)
         );
 
-        assertEquals("Unknown release version '2.9-IV2'." +
-            " Supported versions are: " + MetadataVersion.MINIMUM_VERSION +
-            " to " + MetadataVersion.latestTesting().version(), exception1.getMessage());
+        assertEquals("Unknown metadata.version '2.9-IV2'. Supported metadata.version are: " + MetadataVersion.metadataVersionsToString(
+                MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestTesting()), exception1.getMessage());
 
         namespace.put("release_version", "invalid");
 
@@ -462,9 +455,8 @@ public class FeatureCommandTest {
             FeatureCommand.handleVersionMapping(new Namespace(namespace), testingFeatures)
         );
 
-        assertEquals("Unknown release version 'invalid'." +
-            " Supported versions are: " + MetadataVersion.MINIMUM_VERSION +
-            " to " + MetadataVersion.latestTesting().version(), exception2.getMessage());
+        assertEquals("Unknown metadata.version 'invalid'. Supported metadata.version are: " + MetadataVersion.metadataVersionsToString(
+            MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestTesting()), exception2.getMessage());
     }
 
     @Test
