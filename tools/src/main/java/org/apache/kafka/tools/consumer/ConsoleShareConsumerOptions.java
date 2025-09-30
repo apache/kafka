@@ -62,12 +62,12 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
                 .describedAs("topic")
                 .ofType(String.class);
         @Deprecated(since = "4.2", forRemoval = true)
-        OptionSpec<String> consumerPropertyOpt = parser.accepts("consumer-property", "(DEPRECATED) A mechanism to pass user-defined properties in the form key=value to the consumer. " +
+        OptionSpec<String> consumerPropertyOpt = parser.accepts("consumer-property", "(DEPRECATED) Consumer config properties in the form key=value. " +
                         "This option will be removed in a future version. Use --command-property instead.")
                 .withRequiredArg()
                 .describedAs("consumer_prop")
                 .ofType(String.class);
-        OptionSpec<String> commandPropertyOpt = parser.accepts("command-property", "A mechanism to pass user-defined properties in the form key=value to the consumer.")
+        OptionSpec<String> commandPropertyOpt = parser.accepts("command-property", "Consumer config properties in the form key=value.")
                 .withRequiredArg()
                 .describedAs("consumer_prop")
                 .ofType(String.class);
@@ -98,7 +98,7 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
                                 " print.value=true|false\n" +
                                 " key.separator=<key.separator>\n" +
                                 " line.separator=<line.separator>\n" +
-                                " headers.separator=<line.separator>\n" +
+                                " headers.separator=<headers.separator>\n" +
                                 " null.literal=<null.literal>\n" +
                                 " key.deserializer=<key.deserializer>\n" +
                                 " value.deserializer=<value.deserializer>\n" +
@@ -151,7 +151,7 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
                 .ofType(String.class);
         keyDeserializerOpt = parser.accepts("key-deserializer", "The name of the class to use for deserializing keys.")
                 .withRequiredArg()
-                .describedAs("deserializer for key")
+                .describedAs("deserializer for keys")
                 .ofType(String.class);
         valueDeserializerOpt = parser.accepts("value-deserializer", "The name of the class to use for deserializing values.")
                 .withRequiredArg()

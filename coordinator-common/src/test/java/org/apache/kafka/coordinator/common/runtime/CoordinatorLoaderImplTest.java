@@ -91,7 +91,8 @@ class CoordinatorLoaderImplTest {
             partitionLogSupplier,
             partitionLogEndOffsetSupplier,
             serde,
-            1000
+            1000,
+            CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
         )) {
             assertFutureThrows(NotLeaderOrFollowerException.class, loader.load(tp, coordinator));
         }
@@ -110,7 +111,8 @@ class CoordinatorLoaderImplTest {
             partitionLogSupplier,
             partitionLogEndOffsetSupplier,
             serde,
-            1000
+            1000,
+            CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
         )) {
             loader.close();
             assertFutureThrows(RuntimeException.class, loader.load(tp, coordinator));
@@ -131,7 +133,8 @@ class CoordinatorLoaderImplTest {
             partitionLogSupplier,
             partitionLogEndOffsetSupplier,
             serde,
-            1000
+            1000,
+            CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
         )) {
             when(log.logStartOffset()).thenReturn(0L);
             when(log.highWatermark()).thenReturn(0L);
@@ -217,7 +220,8 @@ class CoordinatorLoaderImplTest {
             partitionLogSupplier,
             partitionLogEndOffsetSupplier,
             serde,
-            1000
+            1000,
+            CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
         )) {
             when(log.logStartOffset()).thenReturn(0L);
 
@@ -262,7 +266,8 @@ class CoordinatorLoaderImplTest {
             partitionLogSupplier,
             partitionLogEndOffsetSupplier,
             serde,
-            1000
+            1000,
+            CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
         )) {
             when(log.logStartOffset()).thenReturn(0L);
 
@@ -298,7 +303,8 @@ class CoordinatorLoaderImplTest {
             partitionLogSupplier,
             partitionLogEndOffsetSupplier,
             serde,
-            1000
+            1000,
+            CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
         )) {
             when(log.logStartOffset()).thenReturn(0L);
 
@@ -337,7 +343,8 @@ class CoordinatorLoaderImplTest {
             partitionLogSupplier,
             partitionLogEndOffsetSupplier,
             serde,
-            1000
+            1000,
+            CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
         )) {
             when(log.logStartOffset()).thenReturn(0L);
 
@@ -365,7 +372,8 @@ class CoordinatorLoaderImplTest {
             partitionLogSupplier,
             partitionLogEndOffsetSupplier,
             serde,
-            1000
+            1000,
+            CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
         )) {
             long startTimeMs = time.milliseconds();
             when(log.logStartOffset()).thenReturn(0L);
@@ -412,7 +420,8 @@ class CoordinatorLoaderImplTest {
             partitionLogSupplier,
             partitionLogEndOffsetSupplier,
             serde,
-            1000
+            1000,
+            CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
         )) {
             when(log.logStartOffset()).thenReturn(0L);
             when(log.highWatermark()).thenReturn(0L, 0L, 2L);
@@ -475,7 +484,8 @@ class CoordinatorLoaderImplTest {
             partitionLogSupplier,
             partitionLogEndOffsetSupplier,
             serde,
-            1000
+            1000,
+            CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
         )) {
             when(log.logStartOffset()).thenReturn(0L);
             when(log.highWatermark()).thenReturn(0L);
@@ -501,7 +511,8 @@ class CoordinatorLoaderImplTest {
             partitionLogSupplier,
             partitionLogEndOffsetSupplier,
             serde,
-            1000
+            1000,
+            CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
         )) {
             when(log.logStartOffset()).thenReturn(0L);
             when(log.highWatermark()).thenReturn(5L, 7L, 7L);
@@ -552,6 +563,79 @@ class CoordinatorLoaderImplTest {
     }
 
     @Test
+    void testUpdateLastWrittenOffsetCommitInterval() throws Exception {
+        TopicPartition tp = new TopicPartition("foo", 0);
+        UnifiedLog log = mock(UnifiedLog.class);
+        Function<TopicPartition, Optional<UnifiedLog>> partitionLogSupplier = partition -> Optional.of(log);
+        Function<TopicPartition, Optional<Long>> partitionLogEndOffsetSupplier = partition -> Optional.of(7L);
+        StringKeyValueDeserializer serde = new StringKeyValueDeserializer();
+        CoordinatorPlayback<Map.Entry<String, String>> coordinator = mock(CoordinatorPlayback.class);
+
+        try (CoordinatorLoaderImpl<Map.Entry<String, String>> loader = new CoordinatorLoaderImpl<>(
+            Time.SYSTEM,
+            partitionLogSupplier,
+            partitionLogEndOffsetSupplier,
+            serde,
+            1000,
+            2L
+        )) {
+            when(log.logStartOffset()).thenReturn(0L);
+            when(log.highWatermark()).thenReturn(7L);
+
+            FetchDataInfo readResult1 = logReadResult(0, Arrays.asList(
+                new SimpleRecord("k1".getBytes(), "v1".getBytes()),
+                new SimpleRecord("k2".getBytes(), "v2".getBytes())
+            ));
+
+            when(log.read(0L, 1000, FetchIsolation.LOG_END, true))
+                .thenReturn(readResult1);
+
+            FetchDataInfo readResult2 = logReadResult(2, Arrays.asList(
+                new SimpleRecord("k3".getBytes(), "v3".getBytes()),
+                new SimpleRecord("k4".getBytes(), "v4".getBytes()),
+                new SimpleRecord("k5".getBytes(), "v5".getBytes())
+            ));
+
+            when(log.read(2L, 1000, FetchIsolation.LOG_END, true))
+                .thenReturn(readResult2);
+
+            FetchDataInfo readResult3 = logReadResult(5, Arrays.asList(
+                new SimpleRecord("k6".getBytes(), "v6".getBytes())
+            ));
+
+            when(log.read(5L, 1000, FetchIsolation.LOG_END, true))
+                .thenReturn(readResult3);
+
+            FetchDataInfo readResult4 = logReadResult(6, Arrays.asList(
+                new SimpleRecord("k7".getBytes(), "v7".getBytes())
+            ));
+
+            when(log.read(6L, 1000, FetchIsolation.LOG_END, true))
+                .thenReturn(readResult4);
+
+            assertNotNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS));
+
+            verify(coordinator).replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k1", "v1"));
+            verify(coordinator).replay(1L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k2", "v2"));
+            verify(coordinator).replay(2L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k3", "v3"));
+            verify(coordinator).replay(3L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k4", "v4"));
+            verify(coordinator).replay(4L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k5", "v5"));
+            verify(coordinator).replay(5L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k6", "v6"));
+            verify(coordinator).replay(6L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k7", "v7"));
+            verify(coordinator, times(0)).updateLastWrittenOffset(0L);
+            verify(coordinator, times(1)).updateLastWrittenOffset(2L);
+            verify(coordinator, times(1)).updateLastWrittenOffset(5L);
+            verify(coordinator, times(0)).updateLastWrittenOffset(6L);
+            verify(coordinator, times(1)).updateLastWrittenOffset(7L);
+            verify(coordinator, times(0)).updateLastCommittedOffset(0L);
+            verify(coordinator, times(1)).updateLastCommittedOffset(2L);
+            verify(coordinator, times(1)).updateLastCommittedOffset(5L);
+            verify(coordinator, times(0)).updateLastCommittedOffset(6L);
+            verify(coordinator, times(1)).updateLastCommittedOffset(7L);
+        }
+    }
+
+    @Test
     void testPartitionGoesOfflineDuringLoad() throws Exception {
         TopicPartition tp = new TopicPartition("foo", 0);
         UnifiedLog log = mock(UnifiedLog.class);
@@ -565,7 +649,8 @@ class CoordinatorLoaderImplTest {
             partitionLogSupplier,
             partitionLogEndOffsetSupplier,
             serde,
-            1000
+            1000,
+            CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
         )) {
             when(log.logStartOffset()).thenReturn(0L);
             when(log.highWatermark()).thenReturn(0L);

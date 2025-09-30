@@ -296,7 +296,7 @@ public class StreamsMembershipManager implements RequestManager {
         this.backgroundEventHandler = backgroundEventHandler;
         this.streamsRebalanceData = streamsRebalanceData;
         this.subscriptionState = subscriptionState;
-        metricsManager = new ConsumerRebalanceMetricsManager(metrics);
+        metricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
         this.time = time;
     }
 

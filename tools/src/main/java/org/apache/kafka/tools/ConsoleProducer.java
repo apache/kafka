@@ -254,12 +254,12 @@ public class ConsoleProducer {
                     .withRequiredArg()
                     .describedAs("config file")
                     .ofType(String.class);
-            producerPropertyOpt = parser.accepts("producer-property", "(DEPRECATED) A mechanism to pass user-defined properties in the form key=value to the producer." +
+            producerPropertyOpt = parser.accepts("producer-property", "(DEPRECATED) Producer config properties in the form key=value. " +
                             "This option will be removed in a future version. Use --command-property instead.")
                     .withRequiredArg()
                     .describedAs("producer_prop")
                     .ofType(String.class);
-            commandPropertyOpt = parser.accepts("command-property", "A mechanism to pass user-defined properties in the form key=value to the producer.")
+            commandPropertyOpt = parser.accepts("command-property", "Producer config properties in the form key=value.")
                     .withRequiredArg()
                     .describedAs("producer_prop")
                     .ofType(String.class);
