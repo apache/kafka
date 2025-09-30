@@ -9645,19 +9645,43 @@ public class GroupMetadataManagerTest {
             .setProcessId("processId")
             .setMemberEpoch(epoch)
             .setPreviousMemberEpoch(epoch - 1);
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        StreamsTopology topology = new StreamsTopology(
+            0,
+            Map.of(subtopology1,
+                new StreamsGroupTopologyValue.Subtopology()
+                    .setSubtopologyId(subtopology1)
+                    .setSourceTopics(List.of(fooTopicName))
+            )
+        );
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withStreamsGroup(new StreamsGroupBuilder(streamsGroupIds.get(0), epoch))
+            .withStreamsGroup(new StreamsGroupBuilder(streamsGroupIds.get(0), epoch)
+                .withTopology(topology)
+            )
             .withStreamsGroup(new StreamsGroupBuilder(streamsGroupIds.get(1), epoch)
-                .withMember(memberBuilder.build()))
+                .withMember(memberBuilder.build())
+                .withTopology(topology)
+            )
             .build();
+
+        StreamsGroupDescribeResponseData.Topology expectedTopology =
+            new StreamsGroupDescribeResponseData.Topology()
+                .setEpoch(0)
+                .setSubtopologies(List.of(
+                    new StreamsGroupDescribeResponseData.Subtopology()
+                        .setSubtopologyId(subtopology1)
+                        .setSourceTopics(List.of(fooTopicName))
+                ));
 
         List<StreamsGroupDescribeResponseData.DescribedGroup> expected = Arrays.asList(
             new StreamsGroupDescribeResponseData.DescribedGroup()
                 .setGroupEpoch(epoch)
                 .setGroupId(streamsGroupIds.get(0))
                 .setGroupState(StreamsGroupState.EMPTY.toString())
-                .setAssignmentEpoch(0),
+                .setAssignmentEpoch(0)
+                .setTopology(expectedTopology),
             new StreamsGroupDescribeResponseData.DescribedGroup()
                 .setGroupEpoch(epoch)
                 .setGroupId(streamsGroupIds.get(1))
@@ -9666,6 +9690,7 @@ public class GroupMetadataManagerTest {
                         TasksTuple.EMPTY
                     )
                 ))
+                .setTopology(expectedTopology)
                 .setGroupState(StreamsGroupState.NOT_READY.toString())
         );
         List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.sendStreamsGroupDescribe(streamsGroupIds);
@@ -9695,6 +9720,16 @@ public class GroupMetadataManagerTest {
         String memberId1 = "memberId1";
         String memberId2 = "memberId2";
         String subtopologyId = "subtopology1";
+        String fooTopicName = "foo";
+        StreamsGroupTopologyValue topology = new StreamsGroupTopologyValue()
+            .setEpoch(0)
+            .setSubtopologies(
+                List.of(
+                    new StreamsGroupTopologyValue.Subtopology()
+                        .setSubtopologyId(subtopologyId)
+                        .setSourceTopics(List.of(fooTopicName))
+                )
+            );
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
 
@@ -9702,6 +9737,7 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(streamsGroupId, memberBuilder1.build()));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(streamsGroupId, memberBuilder1.build()));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(streamsGroupId, epoch + 1, 0));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(streamsGroupId, topology));
 
         TasksTuple assignment = new TasksTuple(
             Map.of(subtopologyId, Set.of(0, 1)),
@@ -9733,6 +9769,17 @@ public class GroupMetadataManagerTest {
                 memberBuilder1.build().asStreamsGroupDescribeMember(TasksTuple.EMPTY),
                 memberBuilder2.build().asStreamsGroupDescribeMember(assignment)
             ))
+            .setTopology(
+                new StreamsGroupDescribeResponseData.Topology()
+                    .setEpoch(0)
+                    .setSubtopologies(
+                        List.of(
+                            new StreamsGroupDescribeResponseData.Subtopology()
+                                .setSubtopologyId(subtopologyId)
+                                .setSourceTopics(List.of(fooTopicName))
+                        )
+                    )
+            )
             .setGroupState(StreamsGroup.StreamsGroupState.NOT_READY.toString())
             .setGroupEpoch(epoch + 2);
         assertEquals(1, actual.size());

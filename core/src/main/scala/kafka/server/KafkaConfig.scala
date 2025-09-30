@@ -43,7 +43,6 @@ import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.AbstractKafkaConfig.getMap
 import org.apache.kafka.server.config.{AbstractKafkaConfig, KRaftConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
@@ -651,18 +650,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     require(principalBuilderClass != null, s"${BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG} must be non-null")
     require(classOf[KafkaPrincipalSerde].isAssignableFrom(principalBuilderClass),
       s"${BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG} must implement KafkaPrincipalSerde")
-  }
-
-  /**
-   * Validate some configurations for new MetadataVersion. A new MetadataVersion can take place when
-   * a FeatureLevelRecord for "metadata.version" is read from the cluster metadata.
-   */
-  def validateWithMetadataVersion(metadataVersion: MetadataVersion): Unit = {
-    if (processRoles.contains(ProcessRole.BrokerRole) && logDirs.size > 1) {
-      require(metadataVersion.isDirectoryAssignmentSupported,
-        s"Multiple log directories (aka JBOD) are not supported in the current MetadataVersion ${metadataVersion}. " +
-          s"Need ${MetadataVersion.IBP_3_7_IV2} or higher")
-    }
   }
 
   /**
