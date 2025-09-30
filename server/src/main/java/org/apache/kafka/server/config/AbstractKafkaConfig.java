@@ -42,7 +42,6 @@ import org.apache.kafka.storage.internals.log.LogConfig;
 
 import org.apache.commons.validator.routines.InetAddressValidator;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
