@@ -114,11 +114,11 @@ public abstract class AbstractConnectCli<H extends Herder, T extends WorkerConfi
         log.info("Kafka Connect worker initializing ...");
         long initStart = time.hiResClockMs();
 
-        WorkerInfo initInfo = new WorkerInfo();
-        initInfo.logAll();
-
         T config = createConfig(workerProps);
         log.debug("Kafka cluster ID: {}", config.kafkaClusterId());
+
+        WorkerInfo initInfo = new WorkerInfo();
+        initInfo.logAll();
 
         log.info("Scanning for plugin classes. This might take a moment ...");
         Plugins plugins = new Plugins(workerProps);
