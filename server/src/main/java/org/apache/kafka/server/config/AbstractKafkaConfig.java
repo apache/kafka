@@ -174,14 +174,13 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     }
 
     public static List<Endpoint> listenerListToEndPoints(List<String> listeners, Map<ListenerName, SecurityProtocol> securityProtocolMap, boolean requireDistinctPorts) {
-        List<Endpoint> endPoints;
         try {
-            endPoints = SocketServerConfigs.listenerListToEndPoints(listeners, securityProtocolMap);
+            List<Endpoint> endPoints = SocketServerConfigs.listenerListToEndPoints(listeners, securityProtocolMap);
+            validate(endPoints, listeners, requireDistinctPorts);
+            return endPoints;
         } catch (Exception e) {
             throw new IllegalArgumentException(String.format("Error creating broker listeners from '%s': %s", listeners, e.getMessage()), e);
         }
-        validate(endPoints, listeners, requireDistinctPorts);
-        return endPoints;
     }
 
     private static void validate(List<Endpoint> endPoints, List<String> listeners, boolean requireDistinctPorts) {
