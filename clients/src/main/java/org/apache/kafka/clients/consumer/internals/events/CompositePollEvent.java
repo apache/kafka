@@ -42,8 +42,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * {@link AsyncKafkaConsumer#poll(Duration)} is implemented using a non-blocking design to ensure performance is
  * at the same level as {@link ClassicKafkaConsumer#poll(Duration)}. The event is submitted in {@code poll()}, but
  * there are no blocking waits for the "result" of the event. Checks are made for the result at certain points, but
- * they do not block. The logic for the three previously-mentioned events is executed one after the other on the
- * background thread.
+ * they do not block. The logic for the previously-mentioned events is executed sequentially on the background thread.
  *
  * <p/>
  *
@@ -198,6 +197,6 @@ public class CompositePollEvent extends ApplicationEvent {
             ", deadlineMs=" + deadlineMs +
             ", pollTimeMs=" + pollTimeMs +
             ", startingEventType=" + startingEventType +
-            ", result=" + result;
+            ", result=" + result.get();
     }
 }

@@ -104,7 +104,7 @@ public class CompositePollEventInvoker {
         } catch (Throwable t) {
             // If an exception is hit, bubble it up to the user but make sure to clear out the inflight request
             // because the error effectively renders it complete.
-            log.debug("Event {} \"completed\" via error ({}), clearing inflight", inflight, String.valueOf(t));
+            log.debug("Event {} failed due to {}, clearing inflight", inflight, String.valueOf(t));
             inflight = null;
             throw ConsumerUtils.maybeWrapAsKafkaException(t);
         }
