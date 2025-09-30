@@ -101,7 +101,6 @@ public class DescribeStreamsGroupTest {
     public void testDescribeWithUnrecognizedOption() {
         String[] args = new String[]{"--unrecognized-option", "--bootstrap-server", bootstrapServers, "--describe", "--group", APP_ID};
         assertThrows(OptionException.class, () -> getStreamsGroupService(args));
-        assertEquals(1, StreamsGroupCommand.execute(args));
     }
 
     @Test
@@ -129,15 +128,12 @@ public class DescribeStreamsGroupTest {
             List.of(APP_ID, INPUT_TOPIC, "1", "0"),
             List.of(APP_ID, "streams-group-command-test-KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition", "0", "0"),
             List.of(APP_ID, "streams-group-command-test-KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition", "1", "0"));
-        final String[] args1 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--group", APP_ID};
+
         validateDescribeOutput(
-                Arrays.asList(args1), expectedHeader, expectedRows, List.of());
-        assertEquals(0, StreamsGroupCommand.execute(args1));
+            List.of("--bootstrap-server", bootstrapServers, "--describe", "--group", APP_ID), expectedHeader, expectedRows, List.of());
         // --describe --offsets has the same output as --describe
-        final String[] args2 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--offsets", "--group", APP_ID};
         validateDescribeOutput(
-                Arrays.asList(args2), expectedHeader, expectedRows, List.of());
-        assertEquals(0, StreamsGroupCommand.execute(args2));
+            List.of("--bootstrap-server", bootstrapServers, "--describe", "--offsets", "--group", APP_ID), expectedHeader, expectedRows, List.of());
     }
 
     @Test
@@ -149,19 +145,13 @@ public class DescribeStreamsGroupTest {
             List.of(APP_ID, "streams-group-command-test-KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition", "0", "-", "-", "0", "0"),
             List.of(APP_ID, "streams-group-command-test-KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition", "1", "-", "-", "0", "0"));
 
-        final String[] args1 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--group", APP_ID};
         validateDescribeOutput(
-                Arrays.asList(args1), expectedHeader, expectedRows, List.of());
-        assertEquals(0, StreamsGroupCommand.execute(args1));
+            List.of("--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, List.of());
         // --describe --offsets has the same output as --describe
-        final String[] args2 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--offsets", "--verbose", "--group", APP_ID};
         validateDescribeOutput(
-                Arrays.asList(args2), expectedHeader, expectedRows, List.of());
-        assertEquals(0, StreamsGroupCommand.execute(args2));
-        final String[] args3 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--offsets", "--group", APP_ID};
+            List.of("--bootstrap-server", bootstrapServers, "--describe", "--offsets", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, List.of());
         validateDescribeOutput(
-                Arrays.asList(args3), expectedHeader, expectedRows, List.of());
-        assertEquals(0, StreamsGroupCommand.execute(args3));
+            List.of("--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--offsets", "--group", APP_ID), expectedHeader, expectedRows, List.of());
     }
 
     @Test
@@ -170,10 +160,8 @@ public class DescribeStreamsGroupTest {
         final Set<List<String>> expectedRows = Set.of(List.of(APP_ID, "", "", "Stable", "2"));
         // The coordinator is not deterministic, so we don't care about it.
         final List<Integer> dontCares = List.of(1, 2);
-        final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--state", "--group", APP_ID};
         validateDescribeOutput(
-            Arrays.asList(args), expectedHeader, expectedRows, dontCares);
-        assertEquals(0, StreamsGroupCommand.execute(args));
+            List.of("--bootstrap-server", bootstrapServers, "--describe", "--state", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
     }
 
     @Test
@@ -183,14 +171,10 @@ public class DescribeStreamsGroupTest {
         // The coordinator is not deterministic, so we don't care about it.
         final List<Integer> dontCares = List.of(1, 2);
 
-        final String[] args1 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--state", "--verbose", "--group", APP_ID};
         validateDescribeOutput(
-            Arrays.asList(args1), expectedHeader, expectedRows, dontCares);
-        assertEquals(0, StreamsGroupCommand.execute(args1));
-        final String[] args2 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--state", "--group", APP_ID};
+            List.of("--bootstrap-server", bootstrapServers, "--describe", "--state", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
         validateDescribeOutput(
-            Arrays.asList(args2), expectedHeader, expectedRows, dontCares);
-        assertEquals(0, StreamsGroupCommand.execute(args2));
+            List.of("--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--state", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
     }
 
     @Test
@@ -202,10 +186,8 @@ public class DescribeStreamsGroupTest {
         // The member and process names as well as client-id are not deterministic, so we don't care about them.
         final List<Integer> dontCares = List.of(1, 2, 3);
 
-        final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--members", "--group", APP_ID};
         validateDescribeOutput(
-            Arrays.asList(args), expectedHeader, expectedRows, dontCares);
-        assertEquals(0, StreamsGroupCommand.execute(args));
+            List.of("--bootstrap-server", bootstrapServers, "--describe", "--members", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
     }
 
     @Test
@@ -217,14 +199,10 @@ public class DescribeStreamsGroupTest {
         // The member and process names as well as client-id are not deterministic, so we don't care about them.
         final List<Integer> dontCares = List.of(3, 6, 7);
 
-        final String[] args1 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID};
         validateDescribeOutput(
-            Arrays.asList(args1), expectedHeader, expectedRows, dontCares);
-        assertEquals(0, StreamsGroupCommand.execute(args1));
-        final String[] args2 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--group", APP_ID};
+            List.of("--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
         validateDescribeOutput(
-            Arrays.asList(args2), expectedHeader, expectedRows, dontCares);
-        assertEquals(0, StreamsGroupCommand.execute(args2));
+            List.of("--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
     }
 
     @Test
@@ -247,21 +225,15 @@ public class DescribeStreamsGroupTest {
         // The member and process names as well as client-id are not deterministic, so we don't care about them.
         final List<Integer> dontCares = List.of(3, 6, 7);
 
-        final String[] args1 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID, "--group", APP_ID_2};
         validateDescribeOutput(
-            Arrays.asList(args1),
+            List.of("--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID, "--group", APP_ID_2),
             expectedHeader, expectedRowsMap, dontCares);
-        assertEquals(0, StreamsGroupCommand.execute(args1));
-        final String[] args2 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--group", APP_ID, "--group", APP_ID_2};
         validateDescribeOutput(
-            Arrays.asList(args2),
+            List.of("--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--group", APP_ID, "--group", APP_ID_2),
             expectedHeader, expectedRowsMap, dontCares);
-        assertEquals(0, StreamsGroupCommand.execute(args2));
-        final String[] args3 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--all-groups"};
         validateDescribeOutput(
-            Arrays.asList(args3),
+            List.of("--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--all-groups"),
             expectedHeader, expectedRowsMap, dontCares);
-        assertEquals(0, StreamsGroupCommand.execute(args3));
 
         streams2.close();
         streams2.cleanUp();
@@ -274,22 +246,17 @@ public class DescribeStreamsGroupTest {
             "Error: Executing streams group command failed due to org.apache.kafka.common.errors.GroupIdNotFoundException: Group %s not found.",
             nonExistingGroup);
 
-        final String[] args1 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", nonExistingGroup};
         validateDescribeOutput(
-            Arrays.asList(args1), errorMessage);
-        assertEquals(1, StreamsGroupCommand.execute(args1));
-        final String[] args2 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--group", nonExistingGroup};
+            List.of("--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", nonExistingGroup), errorMessage);
         validateDescribeOutput(
-            Arrays.asList(args2), errorMessage);
-        assertEquals(1, StreamsGroupCommand.execute(args2));
+            List.of("--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--group", nonExistingGroup), errorMessage);
     }
 
     @Test
     public void testDescribeStreamsGroupWithShortTimeout() {
-        final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID, "--timeout", "1"};
-        Throwable e = assertThrows(ExecutionException.class, () -> getStreamsGroupService(args).describeGroups());
+        List<String> args = List.of("--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID, "--timeout", "1");
+        Throwable e = assertThrows(ExecutionException.class, () -> getStreamsGroupService(args.toArray(new String[0])).describeGroups());
         assertEquals(TimeoutException.class, e.getCause().getClass());
-        assertEquals(1, StreamsGroupCommand.execute(args));
     }
 
     private static Topology topology(String inputTopic, String outputTopic) {

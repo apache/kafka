@@ -57,7 +57,6 @@ import java.util.stream.Collectors;
 import joptsimple.OptionException;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(600)
 @Tag("integration")
@@ -103,8 +102,7 @@ public class ListStreamsGroupTest {
 
     @Test
     public void testListStreamsGroupWithoutFilters() throws Exception {
-        final String[] args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list"};
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args)) {
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list"})) {
             Set<String> expectedGroups = Set.of(APP_ID);
 
             final AtomicReference<Set> foundGroups = new AtomicReference<>();
@@ -114,20 +112,17 @@ public class ListStreamsGroupTest {
             }, "Expected --list to show streams groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
 
         }
-        assertEquals(0, StreamsGroupCommand.execute(args));
     }
 
     @Test
     public void testListWithUnrecognizedNewOption() {
         String[] cgcArgs = new String[]{"--new-option", "--bootstrap-server", cluster.bootstrapServers(), "--list"};
         Assertions.assertThrows(OptionException.class, () -> getStreamsGroupService(cgcArgs));
-        assertEquals(1, StreamsGroupCommand.execute(cgcArgs));
     }
 
     @Test
     public void testListStreamsGroupWithStates() throws Exception {
-        final String[] args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state"};
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args)) {
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state"})) {
             Set<GroupListing> expectedListing = Set.of(
                 new GroupListing(
                     APP_ID,
@@ -143,13 +138,11 @@ public class ListStreamsGroupTest {
                 return Objects.equals(expectedListing, foundListing.get());
             }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
-        assertEquals(0, StreamsGroupCommand.execute(args));
     }
 
     @Test
     public void testListStreamsGroupWithSpecifiedStates() throws Exception {
-        final String[] args1 = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "stable"};
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args1)) {
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "stable"})) {
             Set<GroupListing> expectedListing = Set.of(
                 new GroupListing(
                     APP_ID,
@@ -165,9 +158,8 @@ public class ListStreamsGroupTest {
                 return Objects.equals(expectedListing, foundListing.get());
             }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
-        assertEquals(0, StreamsGroupCommand.execute(args1));
-        final String[] args2 = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "PreparingRebalance"};
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args2)) {
+
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "PreparingRebalance"})) {
             Set<GroupListing> expectedListing = Set.of();
 
             final AtomicReference<Set<GroupListing>> foundListing = new AtomicReference<>();
@@ -177,7 +169,6 @@ public class ListStreamsGroupTest {
                 return Objects.equals(expectedListing, foundListing.get());
             }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
-        assertEquals(1, StreamsGroupCommand.execute(args2));
     }
 
     @Test

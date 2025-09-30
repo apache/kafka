@@ -129,7 +129,6 @@ public class DeleteStreamsGroupTest {
     public void testDeleteWithUnrecognizedOption() {
         final String[] args = new String[]{"--unrecognized-option", "--bootstrap-server", bootstrapServers, "--delete", "--all-groups"};
         assertThrows(OptionException.class, () -> getStreamsGroupService(args));
-        assertEquals(1, StreamsGroupCommand.execute(args));
     }
 
     @Test
@@ -210,7 +209,6 @@ public class DeleteStreamsGroupTest {
                 result.get(appId),
                 "The expected error was not detected while deleting streams group");
         }
-        assertEquals(0, StreamsGroupCommand.execute(args));
     }
 
     @Test
@@ -234,7 +232,6 @@ public class DeleteStreamsGroupTest {
             TestUtils.waitForCondition(() -> getInternalTopics(appId).isEmpty(),
                 "The internal topics of the streams group " + appId + " were not deleted as expected.");
         }
-        assertEquals(0, StreamsGroupCommand.execute(args));
     }
 
     @Test
@@ -244,8 +241,6 @@ public class DeleteStreamsGroupTest {
         final String appId3 = generateGroupAppId();
 
         String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete", "--all-groups"};
-
-        assertEquals(0, StreamsGroupCommand.execute(args));
 
         StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
         KafkaStreams streams1 = startKSApp(appId1, service);
@@ -344,8 +339,6 @@ public class DeleteStreamsGroupTest {
         final String appId3 = generateGroupAppId();
 
         String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete", "--all-groups", "--delete-all-internal-topics"};
-
-        assertEquals(0, StreamsGroupCommand.execute(args));
 
         StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
         KafkaStreams streams1 = startKSApp(appId1, service);

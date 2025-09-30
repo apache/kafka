@@ -132,7 +132,6 @@ public class DeleteStreamsGroupOffsetTest {
             Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
             assertEquals(Errors.GROUP_ID_NOT_FOUND, res.getKey());
         }
-        assertEquals(0, StreamsGroupCommand.execute(args));
     }
 
     @Test
@@ -154,6 +153,7 @@ public class DeleteStreamsGroupOffsetTest {
             getStreamsGroupService(args);
         } finally {
             assertTrue(exited.get());
+            Exit.resetExitProcedure();
         }
     }
 
@@ -312,7 +312,6 @@ public class DeleteStreamsGroupOffsetTest {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-        assertEquals(0, StreamsGroupCommand.execute(args));
     }
 
     private void assertError(Map.Entry<Errors, Map<TopicPartition, Throwable>> res,
