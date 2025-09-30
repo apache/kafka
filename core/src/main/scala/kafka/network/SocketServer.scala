@@ -487,11 +487,6 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
                                        memoryPool: MemoryPool,
                                        apiVersionManager: ApiVersionManager)
   extends Runnable with Logging {
-
-  private val metricsPackage = "kafka.network"
-  private val metricsClassName = "Acceptor"
-  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
-
   val shouldRun = new AtomicBoolean(true)
 
   private val sendBufferSize = config.socketSendBufferBytes
