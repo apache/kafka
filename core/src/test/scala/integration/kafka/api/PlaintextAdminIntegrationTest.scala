@@ -4618,10 +4618,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     try {
       TestUtils.waitUntilTrue(() => {
         streams.poll(JDuration.ofMillis(100L))
-        !streams.assignment().isEmpty
+        streams.assignment().size() == testNumPartitions
       }, "Consumer not assigned to partitions")
 
-      streams.poll(JDuration.ofMillis(1000L))
       streams.commitSync()
 
       TestUtils.waitUntilTrue(() => {
@@ -4678,10 +4677,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     try {
       TestUtils.waitUntilTrue(() => {
         streams.poll(JDuration.ofMillis(100L))
-        !streams.assignment().isEmpty
+        streams.assignment().size() == testNumPartitions
       }, "Consumer not assigned to partitions")
 
-      streams.poll(JDuration.ofMillis(1000L))
       streams.commitSync()
 
       // List streams group offsets
@@ -4755,10 +4753,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     try {
       TestUtils.waitUntilTrue(() => {
         streams.poll(JDuration.ofMillis(100L))
-        !streams.assignment().isEmpty
+        streams.assignment().size() == testNumPartitions
       }, "Consumer not assigned to partitions")
 
-      streams.poll(JDuration.ofMillis(1000L))
       streams.commitSync()
 
       // List streams group offsets
