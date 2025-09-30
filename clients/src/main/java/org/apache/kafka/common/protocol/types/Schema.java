@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import org.apache.kafka.common.protocol.types.Type.DocumentedType;
+
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
@@ -24,7 +26,10 @@ import java.util.Objects;
 /**
  * The schema for a compound record definition
  */
-public final class Schema extends Type {
+public final class Schema extends DocumentedType {
+
+    private static final String STRUCT_TYPE_NAME = "STRUCT";
+
     private static final Object[] NO_VALUES = new Object[0];
 
     private final BoundField[] fields;
@@ -204,6 +209,19 @@ public final class Schema extends Type {
         } catch (ClassCastException e) {
             throw new SchemaException("Not a Struct.");
         }
+    }
+
+    @Override
+    public String typeName() {
+        return STRUCT_TYPE_NAME;
+    }
+
+    @Override
+    public String documentation() {
+        return "Represents a composite object or null. " +
+                "For non-null values, the first byte is an INT8 with value 1, " +
+                "followed by the serialization of each field in the order they are defined. " +
+                "A null value is encoded as an INT8 with value -1 and there are no following bytes.";
     }
 
     public void walk(Visitor visitor) {
