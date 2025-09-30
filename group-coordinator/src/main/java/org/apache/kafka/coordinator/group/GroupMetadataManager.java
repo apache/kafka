@@ -1961,15 +1961,13 @@ public class GroupMetadataManager {
         }
 
         // 3b. If the topology is validated, persist the fact that it is validated.
-        int validatedTopologyEpoch;
+        int validatedTopologyEpoch = -1;
         if (updatedConfiguredTopology.isReady()) {
             validatedTopologyEpoch = updatedTopology.topologyEpoch();
             SortedMap<String, ConfiguredSubtopology> subtopologySortedMap = updatedConfiguredTopology.subtopologies().get();
             throwIfRequestContainsInvalidTasks(subtopologySortedMap, ownedActiveTasks);
             throwIfRequestContainsInvalidTasks(subtopologySortedMap, ownedStandbyTasks);
             throwIfRequestContainsInvalidTasks(subtopologySortedMap, ownedWarmupTasks);
-        } else {
-            validatedTopologyEpoch = -1;
         }
         // We validated a topology that was not validated before, so bump the group epoch as we may have to reassign tasks.
         if (validatedTopologyEpoch != group.validatedTopologyEpoch()) {

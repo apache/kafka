@@ -4423,7 +4423,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         val firstGroup = client.listGroups().all().get().stream()
           .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
         firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
-      }, "Stream group not stable yet")
+      }, "Streams group did not transition to STABLE before timeout")
 
       // Verify the describe call works correctly
       val describedGroups = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get()
@@ -4470,7 +4470,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         val firstGroup = client.listGroups().all().get().stream()
           .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
         firstGroup.groupState().orElse(null) == GroupState.NOT_READY && firstGroup.groupId() == streamsGroupId
-      }, "Stream group not NOT_READY yet")
+      }, "Streams group did not transition to NOT_READY before timeout")
 
       // Verify the describe call works correctly
       val describedGroups = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get()
@@ -4514,7 +4514,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       TestUtils.waitUntilTrue(() => {
         val firstGroup = client.listGroups().all().get().stream().findFirst().orElse(null)
         firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
-      }, "Stream group not stable yet")
+      }, "Streams group did not transition to STABLE before timeout")
 
       // Verify the describe call works correctly
       val describedGroups = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get()
@@ -4664,7 +4664,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       TestUtils.waitUntilTrue(() => {
         val firstGroup = client.listGroups().all().get().stream().findFirst().orElse(null)
         firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
-      }, "Stream group not stable yet")
+      }, "Streams group did not transition to STABLE before timeout")
 
       val allTopicPartitions = client.listStreamsGroupOffsets(
         util.Map.of(streamsGroupId, new ListStreamsGroupOffsetsSpec())

@@ -16368,8 +16368,8 @@ public class GroupMetadataManagerTest {
         // Commit the offset and test again
         context.commit();
 
-        List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.groupMetadataManager.streamsGroupDescribe(List.of(groupId), context.lastCommittedOffset);
-        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
+        List<StreamsGroupDescribeResponseData.DescribedGroup> actualDescribedGroups = context.groupMetadataManager.streamsGroupDescribe(List.of(groupId), context.lastCommittedOffset);
+        StreamsGroupDescribeResponseData.DescribedGroup expectedDescribedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
             .setGroupId(groupId)
             .setAssignmentEpoch(1)
             .setTopology(
@@ -16387,8 +16387,8 @@ public class GroupMetadataManagerTest {
             ))
             .setGroupState(StreamsGroupState.STABLE.toString())
             .setGroupEpoch(1);
-        assertEquals(1, actual.size());
-        assertEquals(describedGroup, actual.get(0));
+        assertEquals(1, actualDescribedGroups.size());
+        assertEquals(expectedDescribedGroup, actualDescribedGroups.get(0));
     }
 
     @Test
