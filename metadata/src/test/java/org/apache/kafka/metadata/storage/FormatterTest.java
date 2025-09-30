@@ -425,13 +425,8 @@ public class FormatterTest {
                 parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
             formatter1.formatter.setHasDynamicQuorum(true);
             formatter1.formatter.run();
-<<<<<<< HEAD
-            assertEquals((short) 1, formatter1.formatter.featureLevels.getOrDefault("kraft.version", (short) 0));
-            assertEquals(Arrays.asList(
-=======
             assertEquals((short) 1, formatter1.formatter.featureLevels.get(KRaftVersion.FEATURE_NAME));
             assertEquals(List.of(
->>>>>>> 012e4ca6d8 (KAFKA-19719 --no-initial-controllers should not assume kraft.version=1 (#20604))
                 String.format("Formatting data directory %s with %s %s.",
                     testEnv.directory(1),
                     MetadataVersion.FEATURE_NAME,
