@@ -191,38 +191,38 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         if (!requireDistinctPorts) return;
 
         endPoints.stream()
-        .filter(ep -> ep.port() != 0) // filter port 0 for unit tests
-        .collect(Collectors.groupingBy(Endpoint::port))
-        .entrySet().stream()
-        .filter(entry -> entry.getValue().size() > 1)
-        .forEach(entry -> {
-            int port = entry.getKey();
-            List<Endpoint> eps = entry.getValue();
-            Map<Boolean, List<Endpoint>> partitionedByValidIp = eps.stream()
-                    .collect(Collectors.partitioningBy(ep -> ep.host() != null && INET_ADDRESS_VALIDATOR.isValid(ep.host())));
+            .filter(ep -> ep.port() != 0) // filter port 0 for unit tests
+            .collect(Collectors.groupingBy(Endpoint::port))
+            .entrySet().stream()
+            .filter(entry -> entry.getValue().size() > 1)
+            .forEach(entry -> {
+                int port = entry.getKey();
+                List<Endpoint> eps = entry.getValue();
+                Map<Boolean, List<Endpoint>> partitionedByValidIp = eps.stream()
+                        .collect(Collectors.partitioningBy(ep -> ep.host() != null && INET_ADDRESS_VALIDATOR.isValid(ep.host())));
 
-            List<Endpoint> duplicatesWithIpHosts = partitionedByValidIp.get(true);
-            List<Endpoint> duplicatesWithoutIpHosts = partitionedByValidIp.get(false);
+                List<Endpoint> duplicatesWithIpHosts = partitionedByValidIp.get(true);
+                List<Endpoint> duplicatesWithoutIpHosts = partitionedByValidIp.get(false);
 
-            checkDuplicateListenerPorts(duplicatesWithoutIpHosts, listeners);
+                checkDuplicateListenerPorts(duplicatesWithoutIpHosts, listeners);
 
-            if (duplicatesWithIpHosts.isEmpty()) {
-                // No-op
-            } else if (duplicatesWithIpHosts.size() == 2) {
-                String errorMessage = "If you have two listeners on the same port then one needs to be IPv4 and the other IPv6, listeners: " + listeners + ", port: " + port;
-                Endpoint ep1 = duplicatesWithIpHosts.get(0);
-                Endpoint ep2 = duplicatesWithIpHosts.get(1);
-                if (!validateOneIsIpv4AndOtherIpv6(ep1.host(), ep2.host())) {
-                    throw new IllegalArgumentException(errorMessage);
+                if (duplicatesWithIpHosts.isEmpty()) {
+                    // No-op
+                } else if (duplicatesWithIpHosts.size() == 2) {
+                    String errorMessage = "If you have two listeners on the same port then one needs to be IPv4 and the other IPv6, listeners: " + listeners + ", port: " + port;
+                    Endpoint ep1 = duplicatesWithIpHosts.get(0);
+                    Endpoint ep2 = duplicatesWithIpHosts.get(1);
+                    if (!validateOneIsIpv4AndOtherIpv6(ep1.host(), ep2.host())) {
+                        throw new IllegalArgumentException(errorMessage);
+                    }
+
+                    if (!duplicatesWithoutIpHosts.isEmpty()) {
+                        throw new IllegalArgumentException(errorMessage);
+                    }
+                } else {
+                    throw new IllegalArgumentException("Each listener must have a different port unless exactly one listener has an IPv4 address and the other IPv6 address, listeners: " + listeners + ", port: " + port);
                 }
-
-                if (!duplicatesWithoutIpHosts.isEmpty()) {
-                    throw new IllegalArgumentException(errorMessage);
-                }
-            } else {
-                throw new IllegalArgumentException("Each listener must have a different port unless exactly one listener has an IPv4 address and the other IPv6 address, listeners: " + listeners + ", port: " + port);
-            }
-        });
+            });
     }
 
     private static boolean validateOneIsIpv4AndOtherIpv6(String first, String second) {
