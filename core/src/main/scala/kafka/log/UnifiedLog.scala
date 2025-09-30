@@ -1062,10 +1062,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
             val entry = producerStateManager.activeProducers.get(batch.producerId)
             if (entry != null && batch.producerEpoch < entry.producerEpoch) {
               val message = "Epoch of producer " + batch.producerId + " is " + batch.producerEpoch + ", which is smaller than the last seen epoch " + entry.producerEpoch
-              throw new Nothing(message)
+              throw new InvalidProducerEpochException(message)
             }
             // Only check verification if epoch is current
-            if (batchMissingRequiredVerification(batch, requestVerificationGuard)) throw new Nothing("Record was not part of an ongoing transaction")
+            if (batchMissingRequiredVerification(batch, requestVerificationGuard))
+              throw new InvalidTxnStateException("Record was not part of an ongoing transaction")
           }
         }
 
