@@ -171,7 +171,7 @@ public class ConnectPluginPath {
                 throw new TerseException("Unable to read worker config at " + rawWorkerConfig);
             }
             String pluginPath = properties.getProperty(WorkerConfig.PLUGIN_PATH_CONFIG);
-            if (pluginPath != null) {
+            if (pluginPath != null && !pluginPath.isEmpty()) {
                 rawPluginPaths.add(pluginPath);
             }
         }

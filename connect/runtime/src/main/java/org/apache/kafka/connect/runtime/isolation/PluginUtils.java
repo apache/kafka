@@ -209,8 +209,11 @@ public class PluginUtils {
         for (String path : pluginPathElements) {
             try {
                 Path pluginPathElement = Paths.get(path).toAbsolutePath();
+                if (path.isEmpty()) {
+                    log.warn("Plugin path element is empty, evaluating to {}.", pluginPathElement);
+                }
                 if (!Files.exists(pluginPathElement)) {
-                    throw new FileNotFoundException(pluginPathElement.toString());
+                   throw new FileNotFoundException(pluginPathElement.toString());
                 }
                 // Currently 'plugin.paths' property is a list of top-level directories
                 // containing plugins
