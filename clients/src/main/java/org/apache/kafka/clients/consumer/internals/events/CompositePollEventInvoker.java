@@ -71,24 +71,34 @@ public class CompositePollEventInvoker {
                 );
             }
 
+            // Result should be non-null and starts off as State.STARTED.
             CompositePollEvent.Result result = inflight.result();
             CompositePollEvent.State state = result.state();
 
             if (state == CompositePollEvent.State.SUCCEEDED) {
-                // Make sure to clear out the inflight request since it's complete.
+                // The composite event has completed all the requisite stages, though it does not imply that
+                // there is data in the FetchBuffer yet. Make sure to clear out the inflight request.
                 log.trace("Event {} completed, clearing inflight", inflight);
                 inflight = null;
             } else if (state == CompositePollEvent.State.FAILED) {
+                // The composite event failed at one of the stages. Make sure to clear out the inflight request
+                // before the underlying error is surfaced to the user.
                 log.trace("Event {} failed, clearing inflight", inflight);
                 inflight = null;
+
                 throw result.asKafkaException();
             } else if (state == CompositePollEvent.State.CALLBACKS_REQUIRED) {
+                // The background thread detected that it needed to yield to the application thread to invoke
+                // callbacks. Even though the inflight reference _should_ be overwritten when the next stage of
+                // the event is submitted, go ahead and clear out the inflight request just to be sure.
                 log.trace("Event {} paused for callbacks, clearing inflight", inflight);
+                inflight = null;
 
                 // Note: this is calling user-supplied code, so make sure to handle possible errors.
                 applicationThreadCallbacks.run();
 
-                // The application thread callbacks are complete. Resume the polling
+                // The application thread callbacks are complete. Create another event to resume the polling at
+                // the next stage.
                 submitEvent(result.asNextEventType(), timer);
             }
         } catch (Throwable t) {
@@ -102,8 +112,11 @@ public class CompositePollEventInvoker {
 
     private void submitEvent(ApplicationEvent.Type type, Timer timer) {
         long deadlineMs = calculateDeadlineMs(timer);
-        inflight = new CompositePollEvent(deadlineMs, time.milliseconds(), type);
+        long pollTimeMs = time.milliseconds();
+        inflight = new CompositePollEvent(deadlineMs, pollTimeMs, type);
         applicationEventHandler.add(inflight);
-        log.debug("Submitted new {} with {} remaining on timer", inflight, timer.remainingMs());
+
+        if (log.isTraceEnabled())
+            log.trace("Submitted new {} with {} remaining on timer", inflight, timer.remainingMs());
     }
 }

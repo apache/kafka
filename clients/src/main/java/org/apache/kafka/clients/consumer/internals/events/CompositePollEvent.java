@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -24,6 +25,7 @@ import org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer;
 import org.apache.kafka.common.KafkaException;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -68,7 +70,15 @@ public class CompositePollEvent extends ApplicationEvent {
 
     public static class Result {
 
-        private static final Object COMPLETED = new Object();
+        /**
+         * This string value is used when the {@code Result} represents a completed event. This is used so that
+         * {@code null} isn't used for {@link #value}.
+         */
+        private static final Object COMPLETED_SENTINEL = "COMPLETED";
+
+        /**
+         * Used as the initial state/result until the terminal state is achieved.
+         */
         private static final Result STARTED = new Result(State.STARTED, null);
         private final State state;
         private final Object value;
@@ -83,6 +93,9 @@ public class CompositePollEvent extends ApplicationEvent {
         }
 
         public Type asNextEventType() {
+            if (state != State.CALLBACKS_REQUIRED)
+                throw new KafkaException("The usage of asNextEventType is unexpected for state: " + state);
+
             if (!(value instanceof ApplicationEvent.Type))
                 throw new KafkaException("The result value for the poll was unexpected: " + value);
 
@@ -90,6 +103,9 @@ public class CompositePollEvent extends ApplicationEvent {
         }
 
         public KafkaException asKafkaException() {
+            if (state != State.FAILED)
+                throw new KafkaException("The usage of asKafkaException is unexpected for state: " + state);
+
             if (!(value instanceof KafkaException))
                 throw new KafkaException("The result value for the poll was unexpected: " + value);
 
@@ -114,16 +130,33 @@ public class CompositePollEvent extends ApplicationEvent {
         }
     }
 
+    private static final List<Type> ALLOWED_STARTING_EVENT_TYPES = List.of(
+        Type.CHECK_AND_UPDATE_POSITIONS,
+        Type.POLL,
+        Type.UPDATE_SUBSCRIPTION_METADATA
+    );
     private final long deadlineMs;
     private final long pollTimeMs;
-    private final Type nextEventType;
+    private final Type startingEventType;
     private final AtomicReference<Result> result;
 
-    public CompositePollEvent(long deadlineMs, long pollTimeMs, Type nextEventType) {
+    /**
+     * Creates a new event to signify a multi-stage processing of {@link Consumer#poll(Duration)} logic.
+     * 
+     * @param deadlineMs        Time, in milliseconds, at which point the event must be completed; based on the
+     *                          {@link Duration} passed to {@link Consumer#poll(Duration)}
+     * @param pollTimeMs        Time, in milliseconds, at which point the event was created
+     * @param startingEventType {@link ApplicationEvent.Type} that serves as the starting point for the event processing
+     */
+    public CompositePollEvent(long deadlineMs, long pollTimeMs, Type startingEventType) {
         super(Type.COMPOSITE_POLL);
         this.deadlineMs = deadlineMs;
         this.pollTimeMs = pollTimeMs;
-        this.nextEventType = nextEventType;
+
+        if (!ALLOWED_STARTING_EVENT_TYPES.contains(startingEventType))
+            throw new KafkaException("The starting event type " + startingEventType + " is not valid. Should be one of " + ALLOWED_STARTING_EVENT_TYPES);
+
+        this.startingEventType = startingEventType;
         this.result = new AtomicReference<>(Result.STARTED);
     }
 
@@ -135,8 +168,8 @@ public class CompositePollEvent extends ApplicationEvent {
         return pollTimeMs;
     }
 
-    public Type nextEventType() {
-        return nextEventType;
+    public Type startingEventType() {
+        return startingEventType;
     }
 
     public Result result() {
@@ -144,7 +177,7 @@ public class CompositePollEvent extends ApplicationEvent {
     }
 
     public void completeSuccessfully() {
-        Result r = new Result(State.SUCCEEDED, Result.COMPLETED);
+        Result r = new Result(State.SUCCEEDED, Result.COMPLETED_SENTINEL);
         result.compareAndSet(Result.STARTED, r);
     }
 
@@ -160,6 +193,10 @@ public class CompositePollEvent extends ApplicationEvent {
 
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", deadlineMs=" + deadlineMs + ", pollTimeMs=" + pollTimeMs + ", nextEventType=" + nextEventType + ", result=" + result;
+        return super.toStringBase() +
+            ", deadlineMs=" + deadlineMs +
+            ", pollTimeMs=" + pollTimeMs +
+            ", startingEventType=" + startingEventType +
+            ", result=" + result;
     }
 }

@@ -759,7 +759,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
     private void process(final CompositePollEvent event) {
         CompositePollEventProcessorContext context = compositePollContext.orElseThrow(IllegalArgumentException::new);
-        ApplicationEvent.Type nextEventType = event.nextEventType();
+        ApplicationEvent.Type nextEventType = event.startingEventType();
 
         if (context.maybeCompleteExceptionally(event) || context.maybeCompleteWithCallbackRequired(event, nextEventType))
             return;

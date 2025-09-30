@@ -17,6 +17,8 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
+import org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer;
+import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.OffsetCommitCallbackInvoker;
@@ -30,6 +32,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.function.Supplier;
 
+/**
+ * This provides the context for the {@link ApplicationEventProcessor#process(ApplicationEvent)} that invokes the
+ * {@link CompositePollEvent} process method. This is mostly to avoid polluting the {@link ApplicationEventProcessor}
+ * with instance variables and logic that's specific only to the background {@link CompositePollEvent} processing.
+ */
 public class CompositePollEventProcessorContext {
 
     private final Logger log;
@@ -50,6 +57,10 @@ public class CompositePollEventProcessorContext {
         this.applicationEventReaper = applicationEventReaper;
     }
 
+    /**
+     * Creates a {@link Supplier} for deferred creation during invocation by
+     * {@link ConsumerNetworkThread}.
+     */
     public static Supplier<CompositePollEventProcessorContext> supplier(LogContext logContext,
                                                                         Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                                                         BackgroundEventHandler backgroundEventHandler,
@@ -71,11 +82,17 @@ public class CompositePollEventProcessorContext {
         };
     }
 
-    public <T> void trackCheckAndUpdatePositionsForTimeout(CompletableFuture<T> future, long deadlineMs) {
-        CompletableEvent<T> event = new CompletableEvent<>() {
+    /**
+     * To maintain the flow from {@link ClassicKafkaConsumer}, the logic to check and update positions should be
+     * allowed to time out before moving on to the logic for sending fetch requests. This achieves that by reusing
+     * the {@link CompletableEventReaper} and allowing it to expire the {@link CompletableFuture} for the check and
+     * update positions stage.
+     */
+    public void trackCheckAndUpdatePositionsForTimeout(CompletableFuture<Boolean> updatePositionsFuture, long deadlineMs) {
+        CompletableEvent<Boolean> event = new CompletableEvent<>() {
             @Override
-            public CompletableFuture<T> future() {
-                return future;
+            public CompletableFuture<Boolean> future() {
+                return updatePositionsFuture;
             }
 
             @Override
@@ -85,18 +102,23 @@ public class CompositePollEventProcessorContext {
 
             @Override
             public String toString() {
-                return getClass().getSimpleName() + "{future=" + future + ", deadlineMs=" + deadlineMs + '}';
+                return getClass().getSimpleName() + "{updatePositionsFuture=" + updatePositionsFuture + ", deadlineMs=" + deadlineMs + '}';
             }
         };
 
         applicationEventReaper.add(event);
     }
 
+    /**
+     * Helper method that will check if any application thread user callbacks need to be executed. If so, the
+     * current event will be completed with {@link CompositePollEvent.State#CALLBACKS_REQUIRED} and this method
+     * will return {@code true}. Otherwise, it will return {@code false}.
+     */
     public boolean maybeCompleteWithCallbackRequired(CompositePollEvent event, ApplicationEvent.Type nextEventType) {
         // If there are background events to process or enqueued callbacks to invoke, exit to
         // the application thread.
         if (backgroundEventHandler.size() > 0 || offsetCommitCallbackInvoker.size() > 0) {
-            log.debug(
+            log.trace(
                 "Pausing polling by completing {} with the state of {} and the next stage of {}",
                 event,
                 CompositePollEvent.State.CALLBACKS_REQUIRED,
@@ -109,6 +131,13 @@ public class CompositePollEventProcessorContext {
         return false;
     }
 
+    /**
+     * Helper method that checks if there's a non-null error from
+     * {@link NetworkClientDelegate#getAndClearMetadataError()} or if the provided exception is not a timeout-based
+     * exception. If there's an error to report to the user, the current event will be completed with
+     * {@link CompositePollEvent.State#FAILED} and this method will return {@code true}. Otherwise, it will
+     * return {@code false}.
+     */
     public boolean maybeCompleteExceptionally(CompositePollEvent event, Throwable t) {
         if (maybeCompleteExceptionally(event))
             return true;
@@ -129,6 +158,12 @@ public class CompositePollEventProcessorContext {
         return true;
     }
 
+    /**
+     * Helper method that checks if there's a non-null error from
+     * {@link NetworkClientDelegate#getAndClearMetadataError()}, and if so, reports it to the user by completing the
+     * current event with {@link CompositePollEvent.State#FAILED} and returning {@code true}. Otherwise, it will
+     * return {@code false}.
+     */
     public boolean maybeCompleteExceptionally(CompositePollEvent event) {
         Optional<Exception> exception = networkClientDelegate.getAndClearMetadataError();
 
@@ -140,14 +175,20 @@ public class CompositePollEventProcessorContext {
         return false;
     }
 
+    /**
+     * Helper method to complete the given event with {@link CompositePollEvent.State#FAILED}.
+     */
     public void completeExceptionally(CompositePollEvent event, Throwable error) {
         KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(error);
         event.completeExceptionally(e);
-        log.debug("Failing event processing for {}", event, e);
+        log.trace("Failing event processing for {}", event, e);
     }
 
+    /**
+     * Helper method to complete the given event with {@link CompositePollEvent.State#SUCCEEDED}.
+     */
     public void complete(CompositePollEvent event) {
         event.completeSuccessfully();
-        log.debug("Completed CompositePollEvent {}", event);
+        log.trace("Completed event processing for {}", event);
     }
 }
