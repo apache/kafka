@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 
@@ -35,9 +36,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConsumerPerformanceTest {
@@ -300,6 +304,61 @@ public class ConsumerPerformanceTest {
 
         String err = ToolsTestUtils.captureStandardErr(() -> ConsumerPerformance.run(args, consumerCreator));
         assertTrue(Utils.isBlank(err), "Should be no stderr message, but was \"" + err + "\"");
+    }
+
+    @Test
+    public void testConsumerListenerWithAllPartitionRevokedAndAssigned() throws InterruptedException {
+        String topicName = "topic";
+        TopicPartition tp0 = new TopicPartition(topicName, 0);
+        TopicPartition tp1 = new TopicPartition(topicName, 1);
+        AtomicLong joinTimeMs = new AtomicLong(0);
+        AtomicLong joinTimeMsInSingleRound = new AtomicLong(0);
+        ConsumerPerformance.ConsumerPerfRebListener listener = new ConsumerPerformance.ConsumerPerfRebListener(joinTimeMs, 0, joinTimeMsInSingleRound);
+        listener.onPartitionsAssigned(Set.of(tp0));
+        long lastJoinTimeMs = joinTimeMs.get();
+
+        // All assigned partitions have been revoked.
+        listener.onPartitionsRevoked(Set.of(tp0));
+        Thread.sleep(100);
+        listener.onPartitionsAssigned(Set.of(tp1));
+
+        assertNotEquals(lastJoinTimeMs, joinTimeMs.get());
+    }
+
+    @Test
+    public void testConsumerListenerWithPartialPartitionRevokedAndAssigned() throws InterruptedException {
+        String topicName = "topic";
+        TopicPartition tp0 = new TopicPartition(topicName, 0);
+        TopicPartition tp1 = new TopicPartition(topicName, 1);
+        AtomicLong joinTimeMs = new AtomicLong(0);
+        AtomicLong joinTimeMsInSingleRound = new AtomicLong(0);
+        ConsumerPerformance.ConsumerPerfRebListener listener = new ConsumerPerformance.ConsumerPerfRebListener(joinTimeMs, 0, joinTimeMsInSingleRound);
+        listener.onPartitionsAssigned(Set.of(tp0, tp1));
+        long lastJoinTimeMs = joinTimeMs.get();
+
+        // The assigned partitions were partially revoked.
+        listener.onPartitionsRevoked(Set.of(tp0));
+        Thread.sleep(100);
+        listener.onPartitionsAssigned(Set.of(tp0));
+
+        assertEquals(lastJoinTimeMs, joinTimeMs.get());
+    }
+
+    @Test
+    public void testConsumerListenerWithoutPartitionRevoked() throws InterruptedException {
+        String topicName = "topic";
+        TopicPartition tp0 = new TopicPartition(topicName, 0);
+        TopicPartition tp1 = new TopicPartition(topicName, 1);
+        AtomicLong joinTimeMs = new AtomicLong(0);
+        AtomicLong joinTimeMsInSingleRound = new AtomicLong(0);
+        ConsumerPerformance.ConsumerPerfRebListener listener = new ConsumerPerformance.ConsumerPerfRebListener(joinTimeMs, 0, joinTimeMsInSingleRound);
+        listener.onPartitionsAssigned(Set.of(tp0));
+        long lastJoinTimeMs = joinTimeMs.get();
+
+        Thread.sleep(100);
+        listener.onPartitionsAssigned(Set.of(tp1));
+
+        assertEquals(lastJoinTimeMs, joinTimeMs.get());
     }
 
     private void testHeaderMatchContent(boolean detailed, int expectedOutputLineCount, Runnable runnable) {

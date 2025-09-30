@@ -152,7 +152,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
     private static void confirmCorrectValues(OAuthBearerUnsecuredJws jws, String user, long startMs,
             long lifetimeSeconds) throws OAuthBearerIllegalTokenException {
         Map<String, Object> header = jws.header();
-        assertEquals(header.size(), 1);
+        assertEquals(1, header.size());
         assertEquals("none", header.get("alg"));
         assertEquals(user != null ? user : "<unknown>", jws.principalName());
         assertEquals(Long.valueOf(startMs), jws.startTimeMs());
