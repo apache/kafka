@@ -34,6 +34,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * <ul>
  *     <li>{@link PollEvent}</li>
+ *     <li>{@link UpdatePatternSubscriptionEvent}</li>
  *     <li>{@link CheckAndUpdatePositionsEvent}</li>
  *     <li>{@link CreateFetchRequestsEvent}</li>
  * </ul>
