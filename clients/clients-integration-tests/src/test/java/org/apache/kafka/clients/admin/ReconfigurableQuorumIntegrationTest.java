@@ -21,12 +21,12 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
-import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -45,14 +45,21 @@ public class ReconfigurableQuorumIntegrationTest {
 
     @Test
     public void testRemoveAndAddVoterWithValidClusterId() throws Exception {
-        try (var cluster = new KafkaClusterTestKit.Builder(
-                new TestKitNodes.Builder()
-                        .setClusterId("test-cluster")
-                        .setNumBrokerNodes(1)
-                        .setNumControllerNodes(3)
-                        .setFeature(KRaftVersion.FEATURE_NAME, KRaftVersion.KRAFT_VERSION_1.featureLevel())
-                        .build()).build()
-        ) {
+        final var nodes = new TestKitNodes.Builder()
+                .setClusterId("test-cluster")
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(3)
+                .build();
+
+        final Map<Integer, Uuid> initialVoters = new HashMap<>();
+        for (final var controllerNode : nodes.controllerNodes().values()) {
+            initialVoters.put(
+                    controllerNode.id(),
+                    controllerNode.metadataDirectoryId()
+            );
+        }
+
+        try (var cluster = new KafkaClusterTestKit.Builder(nodes).setInitialVoterSet(initialVoters).build()) {
             cluster.format();
             cluster.startup();
             try (Admin admin = Admin.create(cluster.clientProperties())) {
@@ -86,14 +93,21 @@ public class ReconfigurableQuorumIntegrationTest {
 
     @Test
     public void testRemoveAndAddVoterWithInconsistentClusterId() throws Exception {
-        try (var cluster = new KafkaClusterTestKit.Builder(
-                new TestKitNodes.Builder()
-                        .setClusterId("test-cluster")
-                        .setNumBrokerNodes(1)
-                        .setNumControllerNodes(3)
-                        .setFeature(KRaftVersion.FEATURE_NAME, KRaftVersion.KRAFT_VERSION_1.featureLevel())
-                        .build()).build()
-        ) {
+        final var nodes = new TestKitNodes.Builder()
+                .setClusterId("test-cluster")
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(3)
+                .build();
+
+        final Map<Integer, Uuid> initialVoters = new HashMap<>();
+        for (final var controllerNode : nodes.controllerNodes().values()) {
+            initialVoters.put(
+                    controllerNode.id(),
+                    controllerNode.metadataDirectoryId()
+            );
+        }
+
+        try (var cluster = new KafkaClusterTestKit.Builder(nodes).setInitialVoterSet(initialVoters).build()) {
             cluster.format();
             cluster.startup();
             try (Admin admin = Admin.create(cluster.clientProperties())) {
