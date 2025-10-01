@@ -28,6 +28,7 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.MockConsumerInterceptor;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 
@@ -452,6 +453,40 @@ public class PlaintextConsumerCommitTest {
         }
     }
 
+    /**
+     * This is testing when closing the consumer but commit request has already been sent.
+     * During the closing, the consumer won't find the coordinator anymore.
+     */
+    @ClusterTest
+    public void testCommitAsyncFailsWhenCoordinatorUnavailableDuringClose() throws InterruptedException {
+        try (Producer<byte[], byte[]> producer = cluster.producer();
+             var consumer = createConsumer(GroupProtocol.CONSUMER, false)
+        ) {
+            sendRecords(producer, tp, 3, System.currentTimeMillis());
+            consumer.assign(List.of(tp));
+
+            var callback = new CountConsumerCommitCallback();
+
+            // Close the coordinator before committing because otherwise the commit will fail to find the coordinator.
+            cluster.brokerIds().forEach(cluster::shutdownBroker);
+
+            TestUtils.waitForCondition(() -> cluster.aliveBrokers().isEmpty(), "All brokers should be shut down");
+
+            consumer.poll(Duration.ofMillis(500));
+            consumer.commitAsync(Map.of(tp, new OffsetAndMetadata(1L)), callback);
+
+            long startTime = System.currentTimeMillis();
+            consumer.close(CloseOptions.timeout(Duration.ofMillis(500)));
+            long closeDuration = System.currentTimeMillis() - startTime;
+
+            assertTrue(closeDuration < 1000, "The closing process for the consumer was too long: " + closeDuration + " ms");
+            assertTrue(callback.lastError.isPresent());
+            assertEquals(CommitFailedException.class, callback.lastError.get().getClass());
+            assertEquals("Failed to commit offsets: Coordinator unknown and consumer is closing", callback.lastError.get().getMessage());
+            assertEquals(1, callback.exceptionCount);
+        }
+    }
+
     // TODO: This only works in the new consumer, but should be fixed for the old consumer as well
     @ClusterTest
     public void testCommitAsyncCompletedBeforeConsumerCloses() throws InterruptedException {
@@ -575,6 +610,7 @@ public class PlaintextConsumerCommitTest {
 
     private static class CountConsumerCommitCallback implements OffsetCommitCallback {
         private int successCount = 0;
+        private int exceptionCount = 0;
         private Optional<Exception> lastError = Optional.empty();
 
         @Override
@@ -582,6 +618,7 @@ public class PlaintextConsumerCommitTest {
             if (exception == null) {
                 successCount += 1;
             } else {
+                exceptionCount += 1;
                 lastError = Optional.of(exception);
             }
         }
