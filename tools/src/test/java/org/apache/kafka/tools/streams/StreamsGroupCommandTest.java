@@ -17,7 +17,6 @@
 package org.apache.kafka.tools.streams;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupsOptions;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
@@ -53,7 +52,6 @@ import org.mockito.MockedStatic;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -64,7 +62,6 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import joptsimple.OptionException;
 
@@ -568,14 +565,6 @@ public class StreamsGroupCommandTest {
         KafkaFutureImpl<StreamsGroupDescription> future = new KafkaFutureImpl<>();
         future.complete(description);
         return new DescribeStreamsGroupsResult(Map.of(groupId, future));
-    }
-
-    private DescribeTopicsResult describeTopicsResult(Collection<String> topics, int numOfPartitions) {
-        var topicDescriptions = topics.stream().collect(Collectors.toMap(Function.identity(),
-            topic -> new TopicDescription(topic, false, IntStream.range(0, numOfPartitions)
-                .mapToObj(i -> new TopicPartitionInfo(i, null, List.of(), List.of()))
-                .toList())));
-        return AdminClientTestUtils.describeTopicsResult(topicDescriptions);
     }
 
     private ListOffsetsResult listOffsetsResult() {
