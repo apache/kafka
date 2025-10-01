@@ -455,8 +455,7 @@ public class KafkaEventQueueTest {
                 return "event2-processed";
             }));
             assertEquals("event2-processed", event2.get());
-            assertTrue(lastIdleTimeMs.get() >= waitTime5Ms,
-                "Idle time should be at least " + waitTime5Ms + "ms, was: " + lastIdleTimeMs.get());
+            assertEquals(waitTime5Ms, lastIdleTimeMs.get(), "Idle time should be " + waitTime5Ms + "ms, was: " + lastIdleTimeMs.get());
 
             // Test 2: Deferred event
             long waitTime2Ms = 2;
@@ -466,8 +465,7 @@ public class KafkaEventQueueTest {
                     () -> deferredEvent2.complete(null));
             time.sleep(waitTime2Ms);
             deferredEvent2.get();
-            assertTrue(lastIdleTimeMs.get() >= waitTime2Ms,
-                "Idle time should be at least " + waitTime2Ms + "ms, was: " + lastIdleTimeMs.get());
+            assertEquals(waitTime2Ms, lastIdleTimeMs.get(), "Idle time should be " + waitTime2Ms + "ms, was: " + lastIdleTimeMs.get());
         }
     }
 }
