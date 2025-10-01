@@ -193,7 +193,7 @@ public class FetchBuffer implements AutoCloseable {
         }
     }
 
-    void wakeup() {
+    public void wakeup() {
         try {
             lock.lock();
             wokenup.set(true);

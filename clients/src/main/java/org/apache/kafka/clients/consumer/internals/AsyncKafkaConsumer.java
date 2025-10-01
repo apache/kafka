@@ -467,7 +467,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     networkClientDelegateSupplier,
                     backgroundEventHandler,
                     offsetCommitCallbackInvoker,
-                    applicationEventReaper
+                    applicationEventReaper,
+                    fetchBuffer
             );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
@@ -686,7 +687,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             networkClientDelegateSupplier,
             backgroundEventHandler,
             offsetCommitCallbackInvoker,
-            applicationEventReaper
+            applicationEventReaper,
+            fetchBuffer
         );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,

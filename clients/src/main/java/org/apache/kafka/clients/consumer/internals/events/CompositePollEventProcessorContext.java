@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
+import org.apache.kafka.clients.consumer.internals.FetchBuffer;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.OffsetCommitCallbackInvoker;
 import org.apache.kafka.common.KafkaException;
@@ -44,17 +45,20 @@ public class CompositePollEventProcessorContext {
     private final BackgroundEventHandler backgroundEventHandler;
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
     private final CompletableEventReaper applicationEventReaper;
+    private final FetchBuffer fetchBuffer;
 
     private CompositePollEventProcessorContext(LogContext logContext,
                                                NetworkClientDelegate networkClientDelegate,
                                                BackgroundEventHandler backgroundEventHandler,
                                                OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
-                                               CompletableEventReaper applicationEventReaper) {
+                                               CompletableEventReaper applicationEventReaper,
+                                               FetchBuffer fetchBuffer) {
         this.log = logContext.logger(getClass());
         this.networkClientDelegate = networkClientDelegate;
         this.backgroundEventHandler = backgroundEventHandler;
         this.offsetCommitCallbackInvoker = offsetCommitCallbackInvoker;
         this.applicationEventReaper = applicationEventReaper;
+        this.fetchBuffer = fetchBuffer;
     }
 
     /**
@@ -65,7 +69,8 @@ public class CompositePollEventProcessorContext {
                                                                         Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                                                         BackgroundEventHandler backgroundEventHandler,
                                                                         OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
-                                                                        CompletableEventReaper applicationEventReaper) {
+                                                                        CompletableEventReaper applicationEventReaper,
+                                                                        FetchBuffer fetchBuffer) {
         return new CachedSupplier<>() {
             @Override
             protected CompositePollEventProcessorContext create() {
@@ -76,7 +81,8 @@ public class CompositePollEventProcessorContext {
                     networkClientDelegate,
                     backgroundEventHandler,
                     offsetCommitCallbackInvoker,
-                    applicationEventReaper
+                    applicationEventReaper,
+                    fetchBuffer
                 );
             }
         };
@@ -125,6 +131,7 @@ public class CompositePollEventProcessorContext {
                 nextEventType
             );
             event.completeWithCallbackRequired(nextEventType);
+            fetchBuffer.wakeup();
             return true;
         }
 
