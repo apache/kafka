@@ -341,7 +341,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     baseDirectory,
                     faultHandlerFactory,
                     socketFactoryManager,
-                    Optional.of(jaasFile),
+                    Optional.ofNullable(jaasFile),
                     standalone,
                     initialVoterSet,
                     deleteOnClose);
