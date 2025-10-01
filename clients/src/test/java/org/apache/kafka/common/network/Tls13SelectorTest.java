@@ -36,6 +36,7 @@ import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class Tls13SelectorTest extends SslSelectorTest {
 
@@ -47,11 +48,27 @@ public class Tls13SelectorTest extends SslSelectorTest {
         return configs;
     }
 
-    @Flaky(value = "KAFKA-14249", comment = "Copied from base class. Remove this override once the flakiness has been resolved.")
+    @Flaky(value = "KAFKA-14249", comment = "Stabilize TLSv1.3 idle expiry by waiting for READY and allowing a short observe window.")
     @Test
     @Override
     public void testCloseOldestConnection() throws Exception {
-        super.testCloseOldestConnection();
+        String id = "0";
+        selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.waitForChannelReady(selector, id);
+        selector.poll(50);
+        time.sleep(10_000L);
+        TestUtils.waitForCondition(() -> {
+            try {
+                selector.poll(50);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            ChannelState state = selector.disconnected().get(id);
+            return state == ChannelState.EXPIRED;
+        }, 30_000L, "Expected idle connection to expire");
+
+        assertTrue(selector.disconnected().containsKey(id), "The idle connection should have been closed");
+        assertEquals(ChannelState.EXPIRED, selector.disconnected().get(id));
     }
 
     /**
