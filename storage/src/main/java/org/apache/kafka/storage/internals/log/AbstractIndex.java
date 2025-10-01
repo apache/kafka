@@ -17,8 +17,8 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.utils.ByteBufferUnmapper;
-import org.apache.kafka.common.utils.OperatingSystem;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.util.LockUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,8 +33,8 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.util.Objects;
 import java.util.OptionalInt;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * The abstract index class which holds entry format agnostic methods.
@@ -47,7 +47,18 @@ public abstract class AbstractIndex implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractIndex.class);
 
-    protected final ReentrantLock lock = new ReentrantLock();
+    // Serializes all index operations that mutate internal state.
+    // Readers do not need to acquire this lock because:
+    //  1) MappedByteBuffer provides direct access to the OS-level buffer cache,
+    //     which allows concurrent reads in practice.
+    //  2) Clients only read committed data and are not affected by concurrent appends/truncates.
+    //     In the rare case when the data is truncated, the follower could read inconsistent data.
+    //     The follower has the logic to ignore the inconsistent data through crc and leader epoch.
+    //  3) Read and remap operations are coordinated via remapLock to ensure visibility of the
+    //     underlying mmap.
+    private final ReentrantLock lock = new ReentrantLock();
+    // Allows concurrent read operations while ensuring exclusive access if the underlying mmap is changed
+    private final ReentrantReadWriteLock remapLock = new ReentrantReadWriteLock();
 
     private final long baseOffset;
     private final int maxIndexSize;
@@ -187,36 +198,32 @@ public abstract class AbstractIndex implements Closeable {
      * @return a boolean indicating whether the size of the memory map and the underneath file is changed or not.
      */
     public boolean resize(int newSize) throws IOException {
-        lock.lock();
-        try {
-            int roundedNewSize = roundDownToExactMultiple(newSize, entrySize());
+        return inLock(() ->
+                inRemapWriteLock(() -> {
+                    int roundedNewSize = roundDownToExactMultiple(newSize, entrySize());
 
-            if (length == roundedNewSize) {
-                log.debug("Index {} was not resized because it already has size {}", file.getAbsolutePath(), roundedNewSize);
-                return false;
-            } else {
-                RandomAccessFile raf = new RandomAccessFile(file, "rw");
-                try {
-                    int position = mmap.position();
+                    if (length == roundedNewSize) {
+                        log.debug("Index {} was not resized because it already has size {}", file.getAbsolutePath(), roundedNewSize);
+                        return false;
+                    } else {
+                        RandomAccessFile raf = new RandomAccessFile(file, "rw");
+                        try {
+                            int position = mmap.position();
 
-                    /* Windows or z/OS won't let us modify the file length while the file is mmapped :-( */
-                    if (OperatingSystem.IS_WINDOWS || OperatingSystem.IS_ZOS)
-                        safeForceUnmap();
-                    raf.setLength(roundedNewSize);
-                    this.length = roundedNewSize;
-                    mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize);
-                    this.maxEntries = mmap.limit() / entrySize();
-                    mmap.position(position);
-                    log.debug("Resized {} to {}, position is {} and limit is {}", file.getAbsolutePath(), roundedNewSize,
-                            mmap.position(), mmap.limit());
-                    return true;
-                } finally {
-                    Utils.closeQuietly(raf, "index file " + file.getName());
-                }
-            }
-        } finally {
-            lock.unlock();
-        }
+                            safeForceUnmap();
+                            raf.setLength(roundedNewSize);
+                            this.length = roundedNewSize;
+                            mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize);
+                            this.maxEntries = mmap.limit() / entrySize();
+                            mmap.position(position);
+                            log.debug("Resized {} to {}, position is {} and limit is {}", file.getAbsolutePath(), roundedNewSize,
+                                    mmap.position(), mmap.limit());
+                            return true;
+                        } finally {
+                            Utils.closeQuietly(raf, "index file " + file.getName());
+                        }
+                    }
+                }));
     }
 
     /**
@@ -236,12 +243,9 @@ public abstract class AbstractIndex implements Closeable {
      * Flush the data in the index to disk
      */
     public void flush() {
-        lock.lock();
-        try {
+        inLock(() -> {
             mmap.force();
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     /**
@@ -261,14 +265,11 @@ public abstract class AbstractIndex implements Closeable {
      * the file.
      */
     public void trimToValidSize() throws IOException {
-        lock.lock();
-        try {
+        inLock(() -> {
             if (mmap != null) {
                 resize(entrySize() * entries);
             }
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     /**
@@ -288,12 +289,7 @@ public abstract class AbstractIndex implements Closeable {
         // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
         // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
         // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
-        lock.lock();
-        try {
-            safeForceUnmap();
-        } finally {
-            lock.unlock();
-        }
+        inLock(() -> inRemapWriteLock(this::safeForceUnmap));
     }
 
     /**
@@ -420,20 +416,28 @@ public abstract class AbstractIndex implements Closeable {
         mmap.position(entries * entrySize());
     }
 
-    /**
-     * Execute the given function in a lock only if we are running on windows or z/OS. We do this
-     * because Windows or z/OS won't let us resize a file while it is mmapped. As a result we have to force unmap it
-     * and this requires synchronizing reads.
-     */
-    protected final <T, E extends Exception> T maybeLock(Lock lock, StorageAction<T, E> action) throws E {
-        if (OperatingSystem.IS_WINDOWS || OperatingSystem.IS_ZOS)
-            lock.lock();
-        try {
-            return action.execute();
-        } finally {
-            if (OperatingSystem.IS_WINDOWS || OperatingSystem.IS_ZOS)
-                lock.unlock();
-        }
+    protected final <T, E extends Exception> T inLock(LockUtils.ThrowingSupplier<T, E> action) throws E {
+        return LockUtils.inLock(lock, action);
+    }
+
+    protected final <E extends Exception> void inLock(LockUtils.ThrowingRunnable<E> action) throws E {
+        LockUtils.inLock(lock, action);
+    }
+
+    protected final <T, E extends Exception> T inRemapReadLock(LockUtils.ThrowingSupplier<T, E> action) throws E {
+        return LockUtils.inLock(remapLock.readLock(), action);
+    }
+
+    protected final <E extends Exception> void inRemapReadLock(LockUtils.ThrowingRunnable<E> action) throws E {
+        LockUtils.inLock(remapLock.readLock(), action);
+    }
+
+    protected final <T, E extends Exception> T inRemapWriteLock(LockUtils.ThrowingSupplier<T, E> action) throws E {
+        return LockUtils.inLock(remapLock.writeLock(), action);
+    }
+
+    protected final <E extends Exception> void inRemapWriteLock(LockUtils.ThrowingRunnable<E> action) throws E {
+        LockUtils.inLock(remapLock.writeLock(), action);
     }
 
     /**
