@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.common;
 
-import java.util.Collections;
 import java.util.Map;
 
 public enum KRaftVersion implements FeatureVersion {
