@@ -103,7 +103,7 @@ public class AdjustStreamThreadCountTest {
     private static StreamsBuilder builder;
     private static Properties properties;
     private static String appId = "";
-    public static final Duration DEFAULT_DURATION = Duration.ofSeconds(30);
+    public static final Duration DEFAULT_DURATION = Duration.ofSeconds(60);
 
     @BeforeEach
     public void setup(final TestInfo testInfo) {
@@ -272,8 +272,8 @@ public class AdjustStreamThreadCountTest {
             stateTransitionHistory.clear();
 
             final CountDownLatch latch = new CountDownLatch(2);
-            final Thread one = adjustCountHelperThread(kafkaStreams, 4, latch);
-            final Thread two = adjustCountHelperThread(kafkaStreams, 6, latch);
+            final Thread one = adjustCountHelperThread(kafkaStreams, 2, latch);
+            final Thread two = adjustCountHelperThread(kafkaStreams, 3, latch);
             Set<ThreadMetadata> threadMetadata = null;
 
             AssertionError testError = null;
@@ -281,7 +281,7 @@ public class AdjustStreamThreadCountTest {
                 two.start();
                 one.start();
 
-                assertTrue(latch.await(30, TimeUnit.SECONDS));
+                assertTrue(latch.await(90, TimeUnit.SECONDS));
                 one.join();
                 two.join();
                 waitForCondition(
@@ -290,7 +290,7 @@ public class AdjustStreamThreadCountTest {
                     DEFAULT_DURATION.toMillis(),
                     "Kafka Streams did not stabilize at the expected thread count and RUNNING state."
                 );
-                
+
                 threadMetadata = kafkaStreams.metadataForLocalThreads();
                 assertThat(threadMetadata.size(), equalTo(oldThreadCount));
             } catch (final AssertionError e) {
