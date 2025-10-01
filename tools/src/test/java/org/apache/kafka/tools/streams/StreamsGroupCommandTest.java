@@ -49,6 +49,7 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
+import org.mockito.MockedStatic;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -66,7 +67,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import joptsimple.OptionException;
-import org.mockito.MockedStatic;
 
 import static org.apache.kafka.common.KafkaFuture.completedFuture;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -79,10 +79,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.mockStatic;
 
 public class StreamsGroupCommandTest {
 
@@ -481,24 +481,40 @@ public class StreamsGroupCommandTest {
     }
 
     @Test
-    public void testExecuteExitCode() {
-        // OptionException
-        assertEquals(1, StreamsGroupCommand.execute(new String[]{"--invalid-option"}));
+    public void testExitCodeOnInvalidOption() {
+        String[] args = new String[]{"--invalid-option"};
+        assertEquals(1, StreamsGroupCommand.execute(args));
+    }
 
-        // ArgumentException
-        assertEquals(1, StreamsGroupCommand.execute(new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS}));
+    @Test
+    public void testExitCodeOnIllegalArguments() {
+        String[] args = new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS};
+        assertEquals(1, StreamsGroupCommand.execute(args));
+    }
 
-        //ExecutionException & InterruptedException
+    @Test
+    public void testExitCodeOnExecutionException() {
         try (MockedStatic<StreamsGroupCommand> mockedStreamGroupCommand = mockStatic(StreamsGroupCommand.class)) {
-
+            String[] args = new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--list"};
             mockedStreamGroupCommand.when(() -> StreamsGroupCommand.execute(any(String[].class))).thenCallRealMethod();
-
             mockedStreamGroupCommand.when(() -> StreamsGroupCommand.run(any(StreamsGroupCommandOptions.class))).thenThrow(new ExecutionException("ExecutionException", new RuntimeException()));
-            assertEquals(1, StreamsGroupCommand.execute(new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--list"}));
+            
+            assertEquals(1, StreamsGroupCommand.execute(args));
+            
+            mockedStreamGroupCommand.verify(() -> StreamsGroupCommand.run(any(StreamsGroupCommandOptions.class)));
+        }
+    }
 
+    @Test
+    public void testExitCodeOnInterruptedException() {
+        try (MockedStatic<StreamsGroupCommand> mockedStreamGroupCommand = mockStatic(StreamsGroupCommand.class)) {
+            String[] args = new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--list"};
+            mockedStreamGroupCommand.when(() -> StreamsGroupCommand.execute(any(String[].class))).thenCallRealMethod();
             mockedStreamGroupCommand.when(() -> StreamsGroupCommand.run(any(StreamsGroupCommandOptions.class))).thenThrow(new InterruptedException("InterruptedException"));
-            assertEquals(1, StreamsGroupCommand.execute(new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--list"}));
-
+            
+            assertEquals(1, StreamsGroupCommand.execute(args));
+            
+            mockedStreamGroupCommand.verify(() -> StreamsGroupCommand.run(any(StreamsGroupCommandOptions.class)));
         }
     }
 
