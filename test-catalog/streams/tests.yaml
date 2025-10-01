@@ -2710,6 +2710,7 @@ org.apache.kafka.streams.processor.internals.StreamTaskTest:
 - shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuatingWallClockTimeTime
 - testMetrics
 org.apache.kafka.streams.processor.internals.StreamThreadTest:
+- shouldAlsoPurgeBeforeTheCommitInterval
 - shouldAlsoPurgeWhenNothingGetsCommitted
 - shouldAlwaysUpdateTasksMetadataAfterChangingState
 - shouldCatchHandleCorruptionOnTaskCorruptedExceptionPath
