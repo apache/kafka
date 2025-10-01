@@ -458,9 +458,12 @@ public class MeteredSessionStoreTest {
     }
 
     @Test
-    public void shouldRecordRestoreTimeOnInit() {
+    public void shouldRecordRestoreLatencyOnRecordRestoreTime() {
         setUp();
         init();
+
+        final long restoreTimeNs = 1000;
+        store.recordRestoreTime(restoreTimeNs);
 
         // it suffices to verify one restore metric since all restore metrics are recorded by the same sensor
         // and the sensor is tested elsewhere

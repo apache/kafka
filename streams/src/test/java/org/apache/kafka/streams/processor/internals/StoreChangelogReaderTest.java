@@ -41,6 +41,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
+import org.apache.kafka.streams.state.internals.MeteredStateStore;
 import org.apache.kafka.test.MockStandbyUpdateListener;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -90,6 +91,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -1362,6 +1364,29 @@ public class StoreChangelogReaderTest {
                     " it could be already cleaned up during the handling of task corruption and never restore again")
             );
         }
+    }
+
+    @Test
+    public void shouldCallRecordRestoreTimeAtTheEndOfRestore() {
+        setupActiveStateManager();
+
+        final MeteredStateStore meteredStateStore = mock(MeteredStateStore.class);
+
+        when(storeMetadata.changelogPartition()).thenReturn(tp);
+        when(storeMetadata.store()).thenReturn(meteredStateStore);
+        when(meteredStateStore.name()).thenReturn(storeName);
+        final TaskId taskId = new TaskId(0, 0);
+
+        when(storeMetadata.offset()).thenReturn(5L);
+        when(activeStateManager.taskId()).thenReturn(taskId);
+
+        setupConsumer(1, tp);
+
+        changelogReader.register(tp, activeStateManager);
+
+        changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+
+        verify(meteredStateStore).recordRestoreTime(anyLong());
     }
 
     private void setupConsumer(final long messages, final TopicPartition topicPartition) {

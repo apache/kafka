@@ -69,7 +69,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  */
 public class MeteredKeyValueStore<K, V>
     extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, K, V>
-    implements KeyValueStore<K, V> {
+    implements KeyValueStore<K, V>, MeteredStateStore {
 
     final Serde<K> keySerde;
     final Serde<V> valueSerde;
@@ -91,6 +91,7 @@ public class MeteredKeyValueStore<K, V>
     protected InternalProcessorContext<?, ?> internalContext;
     private StreamsMetricsImpl streamsMetrics;
     private TaskId taskId;
+    private Sensor restoreSensor;
 
     protected OpenIterators openIterators;
 
@@ -128,11 +129,10 @@ public class MeteredKeyValueStore<K, V>
         streamsMetrics = (StreamsMetricsImpl) stateStoreContext.metrics();
 
         registerMetrics();
-        final Sensor restoreSensor =
-            StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
 
-        // register and possibly restore the state from the logs
-        maybeMeasureLatency(() -> super.init(stateStoreContext, root), time, restoreSensor);
+        restoreSensor = StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+
+        super.init(stateStoreContext, root);
     }
 
     private void registerMetrics() {
@@ -150,6 +150,11 @@ public class MeteredKeyValueStore<K, V>
         StateStoreMetrics.addNumOpenIteratorsGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
                 (config, now) -> openIterators.sum());
         openIterators = new OpenIterators(taskId, metricsScope, name(), streamsMetrics);
+    }
+
+    @Override
+    public void recordRestoreTime(final long restoreTimeNs) {
+        restoreSensor.record(restoreTimeNs);
     }
 
     protected Serde<V> prepareValueSerdeForStore(final Serde<V> valueSerde, final SerdeGetter getter) {
