@@ -4601,7 +4601,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     prepareRecords(testTopicName)
 
     // Producer sends messages
-    for (i <- 1 to 20) {
+    val numRecords = 20
+
+    for (i <- 1 to numRecords) {
       TestUtils.waitUntilTrue(() => {
         val producerRecord = producer.send(
             new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
@@ -4610,15 +4612,21 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       }, "Fail to produce record to topic")
     }
 
+    val consumerConfig = new Properties();
+    consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+
     val streams = createStreamsGroup(
+      configOverrides = consumerConfig,
       inputTopic = testTopicName,
       streamsGroupId = streamsGroupId,
     )
 
     try {
+      var counter = 0
+
       TestUtils.waitUntilTrue(() => {
-        streams.poll(JDuration.ofMillis(100L))
-        streams.assignment().size() == testNumPartitions
+        counter += streams.poll(JDuration.ofMillis(100L)).count()
+        counter >= numRecords
       }, "Consumer not assigned to partitions")
 
       streams.commitSync()
@@ -4660,7 +4668,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     prepareTopics(List(testTopicName), testNumPartitions)
     prepareRecords(testTopicName)
     // Producer sends messages
-    for (i <- 1 to 20) {
+    val numRecords = 20
+
+    for (i <- 1 to numRecords) {
       TestUtils.waitUntilTrue(() => {
         val producerRecord = producer.send(
             new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
@@ -4669,15 +4679,21 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       }, "Fail to produce record to topic")
     }
 
+    val consumerConfig = new Properties();
+    consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+
     val streams = createStreamsGroup(
+      configOverrides = consumerConfig,
       inputTopic = testTopicName,
       streamsGroupId = streamsGroupId,
     )
 
     try {
+      var counter = 0
+
       TestUtils.waitUntilTrue(() => {
-        streams.poll(JDuration.ofMillis(100L))
-        streams.assignment().size() == testNumPartitions
+        counter += streams.poll(JDuration.ofMillis(100L)).count()
+        counter >= numRecords
       }, "Consumer not assigned to partitions")
 
       streams.commitSync()
@@ -4736,7 +4752,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     prepareRecords(testTopicName)
 
     // Producer sends messages
-    for (i <- 1 to 20) {
+    val numRecords = 20
+
+    for (i <- 1 to numRecords) {
       TestUtils.waitUntilTrue(() => {
         val producerRecord = producer.send(
             new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
@@ -4745,15 +4763,21 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       }, "Fail to produce record to topic")
     }
 
+    val consumerConfig = new Properties();
+    consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+
     val streams = createStreamsGroup(
+      configOverrides = consumerConfig,
       inputTopic = testTopicName,
       streamsGroupId = streamsGroupId,
     )
 
     try {
+      var counter = 0
+
       TestUtils.waitUntilTrue(() => {
-        streams.poll(JDuration.ofMillis(100L))
-        streams.assignment().size() == testNumPartitions
+        counter += streams.poll(JDuration.ofMillis(100L)).count()
+        counter >= numRecords
       }, "Consumer not assigned to partitions")
 
       streams.commitSync()
