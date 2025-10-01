@@ -182,4 +182,14 @@ public class TimingWheel {
             if (overflowWheel != null) overflowWheel.advanceClock(currentTimeMs);
         }
     }
+
+    // only for testing
+    TimingWheel overflowWheel() {
+        return this.overflowWheel;
+    }
+
+    // only for testing
+    long currentTimeMs() {
+        return this.currentTimeMs;
+    }
 }

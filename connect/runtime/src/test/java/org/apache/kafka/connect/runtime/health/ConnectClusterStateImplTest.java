@@ -29,9 +29,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -55,7 +54,7 @@ public class ConnectClusterStateImplTest {
     
     @BeforeEach
     public void setUp() {
-        expectedConnectors = Arrays.asList("sink1", "source1", "source2");
+        expectedConnectors = List.of("sink1", "source1", "source2");
         connectClusterState = new ConnectClusterStateImpl(
             herderRequestTimeoutMs,
             new ConnectClusterDetailsImpl(KAFKA_CLUSTER_ID),
@@ -78,7 +77,7 @@ public class ConnectClusterStateImplTest {
     @Test
     public void connectorConfig() {
         final String connName = "sink6";
-        final Map<String, String> expectedConfig = Collections.singletonMap("key", "value");
+        final Map<String, String> expectedConfig = Map.of("key", "value");
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Callback<Map<String, String>>> callback = ArgumentCaptor.forClass(Callback.class);

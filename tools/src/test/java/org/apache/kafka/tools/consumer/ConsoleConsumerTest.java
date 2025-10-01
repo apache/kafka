@@ -61,14 +61,13 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.regex.Pattern;
 
-import static java.util.Collections.singleton;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG;
@@ -155,7 +154,7 @@ public class ConsoleConsumerTest {
             mockConsumer
         );
 
-        mockConsumer.rebalance(Arrays.asList(tp1, tp2));
+        mockConsumer.rebalance(List.of(tp1, tp2));
         Map<TopicPartition, Long> offsets = new HashMap<>();
         offsets.put(tp1, startOffset);
         offsets.put(tp2, startOffset);
@@ -234,8 +233,8 @@ public class ConsoleConsumerTest {
             mockConsumer
         );
 
-        verify(mockConsumer).assign(eq(Collections.singletonList(tp0)));
-        verify(mockConsumer).seekToEnd(eq(Collections.singletonList(tp0)));
+        verify(mockConsumer).assign(eq(List.of(tp0)));
+        verify(mockConsumer).seekToEnd(eq(List.of(tp0)));
         consumer.cleanup();
         reset(mockConsumer);
 
@@ -249,7 +248,7 @@ public class ConsoleConsumerTest {
 
         consumer = new ConsoleConsumer.ConsumerWrapper(new ConsoleConsumerOptions(args), mockConsumer);
 
-        verify(mockConsumer).assign(eq(Collections.singletonList(tp0)));
+        verify(mockConsumer).assign(eq(List.of(tp0)));
         verify(mockConsumer).seek(eq(tp0), eq(123L));
         consumer.cleanup();
         reset(mockConsumer);
@@ -264,8 +263,8 @@ public class ConsoleConsumerTest {
 
         consumer = new ConsoleConsumer.ConsumerWrapper(new ConsoleConsumerOptions(args), mockConsumer);
 
-        verify(mockConsumer).assign(eq(Collections.singletonList(tp0)));
-        verify(mockConsumer).seekToBeginning(eq(Collections.singletonList(tp0)));
+        verify(mockConsumer).assign(eq(List.of(tp0)));
+        verify(mockConsumer).seekToBeginning(eq(List.of(tp0)));
         consumer.cleanup();
         reset(mockConsumer);
     }
@@ -295,7 +294,7 @@ public class ConsoleConsumerTest {
         try (Admin admin = cluster.admin()) {
 
             NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
-            admin.createTopics(singleton(newTopic));
+            admin.createTopics(Set.of(newTopic));
             produceMessagesWithTxn(cluster);
 
             String[] transactionLogMessageFormatter = createConsoleConsumerArgs(cluster, 
@@ -334,7 +333,7 @@ public class ConsoleConsumerTest {
         try (Admin admin = cluster.admin()) {
 
             NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
-            admin.createTopics(singleton(newTopic));
+            admin.createTopics(Set.of(newTopic));
             produceMessages(cluster);
 
             String[] offsetsMessageFormatter = createConsoleConsumerArgs(cluster, 
@@ -376,7 +375,7 @@ public class ConsoleConsumerTest {
         try (Admin admin = cluster.admin()) {
 
             NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
-            admin.createTopics(singleton(newTopic));
+            admin.createTopics(Set.of(newTopic));
             produceMessages(cluster);
 
             String[] groupMetadataMessageFormatter = createConsoleConsumerArgs(cluster, 

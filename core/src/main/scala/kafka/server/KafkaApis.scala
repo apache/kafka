@@ -60,10 +60,10 @@ import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.{Group, GroupConfig, GroupConfigManager, GroupCoordinator}
 import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
-import org.apache.kafka.server.{ApiVersionManager, ClientMetricsManager, DelegationTokenManager, ProcessRole}
+import org.apache.kafka.security.DelegationTokenManager
+import org.apache.kafka.server.{ApiVersionManager, ClientMetricsManager, ProcessRole}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.{GroupVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
-import org.apache.kafka.server.config.DelegationTokenManagerConfigs
 import org.apache.kafka.server.share.context.ShareFetchContext
 import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, SharePartitionKey}
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
@@ -481,7 +481,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // that the request quota is not enforced if acks == 0.
       val timeMs = time.milliseconds()
       val requestSize = request.sizeInBytes
-      val bandwidthThrottleTimeMs = quotas.produce.maybeRecordAndGetThrottleTimeMs(request, requestSize, timeMs)
+      val bandwidthThrottleTimeMs = quotas.produce.maybeRecordAndGetThrottleTimeMs(request.session, request.header.clientId(), requestSize, timeMs)
       val requestThrottleTimeMs =
         if (produceRequest.acks == 0) 0
         else quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)
@@ -691,14 +691,14 @@ class KafkaApis(val requestChannel: RequestChannel,
         val responseSize = fetchContext.getResponseSize(partitions, versionId)
         val timeMs = time.milliseconds()
         val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)
-        val bandwidthThrottleTimeMs = quotas.fetch.maybeRecordAndGetThrottleTimeMs(request, responseSize, timeMs)
+        val bandwidthThrottleTimeMs = quotas.fetch.maybeRecordAndGetThrottleTimeMs(request.session, request.header.clientId(), responseSize, timeMs)
 
         val maxThrottleTimeMs = math.max(bandwidthThrottleTimeMs, requestThrottleTimeMs)
         val fetchResponse = if (maxThrottleTimeMs > 0) {
           request.apiThrottleTimeMs = maxThrottleTimeMs
           // Even if we need to throttle for request quota violation, we should "unrecord" the already recorded value
           // from the fetch quota because we are going to return an empty response.
-          quotas.fetch.unrecordQuotaSensor(request, responseSize, timeMs)
+          quotas.fetch.unrecordQuotaSensor(request.session, request.header.clientId(), responseSize, timeMs)
           if (bandwidthThrottleTimeMs > requestThrottleTimeMs) {
             requestHelper.throttle(quotas.fetch, request, bandwidthThrottleTimeMs)
           } else {
@@ -730,7 +730,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val maxQuotaWindowBytes = if (fetchRequest.isFromFollower)
         Int.MaxValue
       else
-        quotas.fetch.getMaxValueInQuotaWindow(request.session, clientId).toInt
+        quotas.fetch.maxValueInQuotaWindow(request.session, clientId).toInt
 
       val fetchMaxBytes = Math.min(Math.min(fetchRequest.maxBytes, config.fetchMaxBytes), maxQuotaWindowBytes)
       val fetchMinBytes = Math.min(fetchRequest.minBytes, fetchMaxBytes)
@@ -843,7 +843,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       val nonExistingTopics = topics.diff(topicResponses.asScala.map(_.name).toSet)
       val nonExistingTopicResponses = if (allowAutoTopicCreation) {
-        val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request)
+        val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request.session, request.header.clientId())
         autoTopicCreationManager.createTopics(nonExistingTopics, controllerMutationQuota, Some(request.context))
       } else {
         nonExistingTopics.map { topic =>
@@ -1268,7 +1268,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val topicMetadata = metadataCache.getTopicMetadata(Set(internalTopicName).asJava, request.context.listenerName, false, false).asScala
 
       if (topicMetadata.headOption.isEmpty) {
-        val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request)
+        val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request.session, request.header.clientId)
         autoTopicCreationManager.createTopics(Seq(internalTopicName).toSet, controllerMutationQuota, None)
         (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
       } else {
@@ -1894,7 +1894,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         val unauthorizedTopicErrors = mutable.Map[TopicPartition, Errors]()
         val nonExistingTopicErrors = mutable.Map[TopicPartition, Errors]()
-        val authorizedPartitions = mutable.Set[TopicPartition]()
+        val authorizedPartitions = new util.HashSet[TopicPartition]()
 
         // Only request versions less than 4 need write authorization since they come from clients.
         val authorizedTopics =
@@ -1916,7 +1916,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           // partitions which failed, and an 'OPERATION_NOT_ATTEMPTED' error code for the partitions which succeeded
           // the authorization check to indicate that they were not added to the transaction.
           val partitionErrors = unauthorizedTopicErrors ++ nonExistingTopicErrors ++
-            authorizedPartitions.map(_ -> Errors.OPERATION_NOT_ATTEMPTED)
+            authorizedPartitions.asScala.map(_ -> Errors.OPERATION_NOT_ATTEMPTED)
           addResultAndMaybeSendResponse(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, partitionErrors.asJava))
         } else {
           def sendResponseCallback(error: Errors): Unit = {
@@ -1995,7 +1995,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
         addOffsetsToTxnRequest.data.producerId,
         addOffsetsToTxnRequest.data.producerEpoch,
-        Set(offsetTopicPartition),
+        util.Set.of(offsetTopicPartition),
         sendResponseCallback,
         TransactionVersion.TV_0, // This request will always come from the client not using TV 2.
         requestLocal)
@@ -2313,7 +2313,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     if (!allowTokenRequests(request))
       sendResponseCallback(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, Collections.emptyList)
-    else if (!new DelegationTokenManagerConfigs(config).tokenAuthEnabled)
+    else if (!tokenManager.isEnabled)
       sendResponseCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, Collections.emptyList)
     else {
       val requestPrincipal = request.context.principal
@@ -2812,10 +2812,35 @@ class KafkaApis(val requestChannel: RequestChannel,
                 )
               }
             } else {
-              autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext);
+              // Compute group-specific timeout for caching errors (2 * heartbeat interval)
+              val heartbeatIntervalMs = Option(groupConfigManager.groupConfig(streamsGroupHeartbeatRequest.data.groupId).orElse(null))
+                .map(_.streamsHeartbeatIntervalMs().toLong)
+                .getOrElse(config.groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs().toLong)
+              val timeoutMs = heartbeatIntervalMs * 2
+
+              autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext, timeoutMs)
+              
+              // Check for cached topic creation errors only if there's already a MISSING_INTERNAL_TOPICS status
+              val hasMissingInternalTopicsStatus = responseData.status() != null && 
+                responseData.status().stream().anyMatch(s => s.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
+              
+              if (hasMissingInternalTopicsStatus) {
+                val currentTimeMs = time.milliseconds()
+                val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(topicsToCreate.keys.toSet, currentTimeMs)
+                if (cachedErrors.nonEmpty) {
+                  val missingInternalTopicStatus =
+                    responseData.status().stream().filter(x => x.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code()).findFirst()
+                  val creationErrorDetails = cachedErrors.map { case (topic, error) => s"$topic ($error)" }.mkString(", ")
+                  if (missingInternalTopicStatus.isPresent) {
+                    val existingDetail = Option(missingInternalTopicStatus.get().statusDetail()).getOrElse("")
+                    missingInternalTopicStatus.get().setStatusDetail(
+                      existingDetail + s"; Creation failed: $creationErrorDetails."
+                    )
+                  }
+                }
+              }
             }
           }
-
           requestHelper.sendMaybeThrottle(request, new StreamsGroupHeartbeatResponse(responseData))
         }
       }
@@ -3324,7 +3349,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val interestedTopicPartitions = new util.ArrayList[TopicIdPartition]
 
-    erroneousAndValidPartitionData.validTopicIdPartitions.forEach { case topicIdPartition =>
+    erroneousAndValidPartitionData.validTopicIdPartitions.forEach { topicIdPartition =>
       if (!authorizedTopics.contains(topicIdPartition.topicPartition.topic))
         erroneous += topicIdPartition -> ShareFetchResponse.partitionResponse(topicIdPartition, Errors.TOPIC_AUTHORIZATION_FAILED)
       else if (!metadataCache.contains(topicIdPartition.topicPartition))
@@ -3344,7 +3369,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // for share fetch from consumer, cap fetchMaxBytes to the maximum bytes that could be fetched without being
       // throttled given no bytes were recorded in the recent quota window. Trying to fetch more bytes would result
       // in a guaranteed throttling potentially blocking consumer progress.
-      val maxQuotaWindowBytes = quotas.fetch.getMaxValueInQuotaWindow(request.session, clientId).toInt
+      val maxQuotaWindowBytes = quotas.fetch.maxValueInQuotaWindow(request.session, clientId).toInt
 
       val fetchMaxBytes = Math.min(Math.min(shareFetchRequest.maxBytes, config.fetchMaxBytes), maxQuotaWindowBytes)
       val fetchMinBytes = Math.min(shareFetchRequest.minBytes, fetchMaxBytes)
@@ -3756,7 +3781,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val groupId = alterShareGroupOffsetsRequest.data.groupId
 
     if (!isShareGroupProtocolEnabled) {
-      requestHelper.sendMaybeThrottle(request, alterShareGroupOffsetsRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.UNSUPPORTED_VERSION.exception))
+      requestHelper.sendMaybeThrottle(request, alterShareGroupOffsetsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       return CompletableFuture.completedFuture[Unit](())
     } else if (!authHelper.authorize(request.context, READ, GROUP, groupId)) {
       requestHelper.sendMaybeThrottle(request, alterShareGroupOffsetsRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
@@ -3766,9 +3791,9 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       alterShareGroupOffsetsRequest.data.topics.forEach(topic => {
         val topicError = {
-          if (!authHelper.authorize(request.context, READ, TOPIC, topic.topicName())) {
+          if (!authHelper.authorize(request.context, READ, TOPIC, topic.topicName)) {
             Some(new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED))
-          } else if (!metadataCache.contains(topic.topicName())) {
+          } else if (!metadataCache.contains(topic.topicName)) {
             Some(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION))
           } else {
             None
@@ -3776,9 +3801,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
         topicError match {
           case Some(error) =>
-            topic.partitions().forEach(partition => responseBuilder.addPartition(topic.topicName(), partition.partitionIndex(), metadataCache.topicNamesToIds(), error.error))
+            topic.partitions.forEach(partition => responseBuilder.addPartition(topic.topicName, partition.partitionIndex, metadataCache.topicNamesToIds, error))
           case None =>
-            authorizedTopicPartitions.add(topic)
+            authorizedTopicPartitions.add(topic.duplicate)
         }
       })
 
@@ -3792,8 +3817,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, alterShareGroupOffsetsRequest.getErrorResponse(exception))
+        } else if (response.errorCode != Errors.NONE.code) {
+          requestHelper.sendMaybeThrottle(request, alterShareGroupOffsetsRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, response.errorCode, response.errorMessage))
         } else {
-          requestHelper.sendMaybeThrottle(request, responseBuilder.merge(response, metadataCache.topicNamesToIds()).build())
+          requestHelper.sendMaybeThrottle(request, responseBuilder.merge(response, metadataCache.topicNamesToIds).build())
         }
       }
     }
@@ -3824,20 +3851,11 @@ class KafkaApis(val requestChannel: RequestChannel,
           new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
             .setTopicName(topic.topicName)
             .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
-            .setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message())
+            .setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message)
         )
       } else {
         authorizedTopics.add(topic)
       }
-    }
-
-    if (authorizedTopics.isEmpty) {
-      requestHelper.sendMaybeThrottle(
-        request,
-        new DeleteShareGroupOffsetsResponse(
-          new DeleteShareGroupOffsetsResponseData()
-            .setResponses(deleteShareGroupOffsetsResponseTopics)))
-      return CompletableFuture.completedFuture[Unit](())
     }
 
     groupCoordinator.deleteShareGroupOffsets(
@@ -3847,12 +3865,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (exception != null) {
         requestHelper.sendMaybeThrottle(request, deleteShareGroupOffsetsRequest.getErrorResponse(
           AbstractResponse.DEFAULT_THROTTLE_TIME,
-          Errors.forException(exception).code(),
-          exception.getMessage()))
+          Errors.forException(exception).code,
+          exception.getMessage))
       } else if (responseData.errorCode() != Errors.NONE.code) {
         requestHelper.sendMaybeThrottle(
           request,
-          deleteShareGroupOffsetsRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, responseData.errorCode(), responseData.errorMessage())
+          deleteShareGroupOffsetsRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, responseData.errorCode, responseData.errorMessage)
         )
       } else {
         responseData.responses.forEach { topic => {
@@ -4076,14 +4094,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     val responseSize = shareFetchContext.responseSize(partitions, versionId)
     val timeMs = time.milliseconds()
     val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)
-    val bandwidthThrottleTimeMs = quotas.fetch.maybeRecordAndGetThrottleTimeMs(request, responseSize, timeMs)
+    val bandwidthThrottleTimeMs = quotas.fetch.maybeRecordAndGetThrottleTimeMs(request.session, request.header.clientId(), responseSize, timeMs)
 
     val maxThrottleTimeMs = math.max(bandwidthThrottleTimeMs, requestThrottleTimeMs)
     if (maxThrottleTimeMs > 0) {
       request.apiThrottleTimeMs = maxThrottleTimeMs
       // Even if we need to throttle for request quota violation, we should "unrecord" the already recorded value
       // from the fetch quota because we are going to return an empty response.
-      quotas.fetch.unrecordQuotaSensor(request, responseSize, timeMs)
+      quotas.fetch.unrecordQuotaSensor(request.session, request.header.clientId(), responseSize, timeMs)
       if (bandwidthThrottleTimeMs > requestThrottleTimeMs) {
         requestHelper.throttle(quotas.fetch, request, bandwidthThrottleTimeMs)
       } else {

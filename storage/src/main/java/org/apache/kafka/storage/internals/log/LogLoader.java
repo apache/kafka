@@ -338,7 +338,7 @@ public class LogLoader {
                         scheduler,
                         logDirFailureChannel,
                         logPrefix);
-                deleteProducerSnapshotsAsync(result.deletedSegments);
+                deleteProducerSnapshotsAsync(result.deletedSegments());
             }
         }
     }
@@ -438,15 +438,7 @@ public class LogLoader {
         return Optional.empty();
     }
 
-    static class RecoveryOffsets {
-
-        final long newRecoveryPoint;
-        final long nextOffset;
-
-        RecoveryOffsets(long newRecoveryPoint, long nextOffset) {
-            this.newRecoveryPoint = newRecoveryPoint;
-            this.nextOffset = nextOffset;
-        }
+    record RecoveryOffsets(long newRecoveryPoint, long nextOffset) {
     }
 
     /**

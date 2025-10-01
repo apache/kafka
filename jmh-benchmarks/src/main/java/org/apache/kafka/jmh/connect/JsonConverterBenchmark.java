@@ -36,7 +36,7 @@ import org.openjdk.jmh.infra.BenchmarkParams;
 import org.openjdk.jmh.infra.Blackhole;
 
 import java.nio.charset.Charset;
-import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @State(Scope.Benchmark)
@@ -426,7 +426,7 @@ public class JsonConverterBenchmark {
     public void setup(BenchmarkParams params)  {
 
         converter = new JsonConverter(Boolean.parseBoolean(params.getParam("blackbirdModule")));
-        converter.configure(Collections.emptyMap(), false);
+        converter.configure(Map.of(), false);
     }
 
     @Benchmark

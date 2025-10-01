@@ -31,8 +31,8 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.server.config.ServerConfigs;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -56,7 +56,7 @@ public class BrokerApiVersionsCommandTest {
 
         NodeApiVersions nodeApiVersions = new NodeApiVersions(
                 ApiVersionsResponse.filterApis(listenerType, true, true),
-                Collections.emptyList());
+                List.of());
         Iterator<ApiKeys> apiKeysIter = ApiKeys.clientApis().iterator();
         while (apiKeysIter.hasNext()) {
             ApiKeys apiKey = apiKeysIter.next();

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -32,10 +33,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.Locale;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -54,6 +57,7 @@ public class JoinWithIncompleteMetadataIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
+        STREAMS_CONFIG.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), MISSING_TOPIC_DETECTION_TIMEOUT_MS);
     }
 
     @AfterAll
@@ -63,6 +67,7 @@ public class JoinWithIncompleteMetadataIntegrationTest {
 
     private static final String APP_ID = "join-incomplete-metadata-integration-test";
     private static final Long COMMIT_INTERVAL = 100L;
+    private static final int MISSING_TOPIC_DETECTION_TIMEOUT_MS = 5000;
     static final Properties STREAMS_CONFIG = new Properties();
     static final String INPUT_TOPIC_RIGHT = "inputTopicRight";
     static final String NON_EXISTENT_INPUT_TOPIC_LEFT = "inputTopicLeft-not-exist";
@@ -87,10 +92,16 @@ public class JoinWithIncompleteMetadataIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
     }
 
-    @Test
-    public void testShouldAutoShutdownOnJoinWithIncompleteMetadata() throws InterruptedException {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testShouldAutoShutdownOnJoinWithIncompleteMetadata(final boolean useNewProtocol) throws InterruptedException {
+        final String appId = APP_ID + "-" + (useNewProtocol ? "new" : "old");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        
+        if (useNewProtocol) {
+            STREAMS_CONFIG.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
+        }
 
         final KStream<Long, String> notExistStream = builder.stream(NON_EXISTENT_INPUT_TOPIC_LEFT);
 

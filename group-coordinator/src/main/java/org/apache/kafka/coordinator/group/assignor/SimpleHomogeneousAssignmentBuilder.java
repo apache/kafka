@@ -20,6 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.server.common.TopicIdPartition;
@@ -141,7 +142,7 @@ public class SimpleHomogeneousAssignmentBuilder {
             memberIndices.put(memberIds.get(memberIndex), memberIndex);
         }
 
-        this.targetPartitions = AssignorHelpers.computeTargetPartitions(groupSpec, subscribedTopicIds, subscribedTopicDescriber);
+        this.targetPartitions = computeTargetPartitions(groupSpec, subscribedTopicIds, subscribedTopicDescriber);
 
         int numTargetPartitions = targetPartitions.size();
         if (numTargetPartitions == 0) {
@@ -328,10 +329,10 @@ public class SimpleHomogeneousAssignmentBuilder {
 
     /**
      * Assign partitions to unfilled members. It repeatedly iterates through the unfilled members while running
-     * once thrown the set of partitions. When a partition is found that has insufficient sharing, it attempts to assign
-     * to one of the partitions.
+     * once through the set of partitions. When a partition is found that has insufficient sharing, it attempts to assign
+     * to one of the members.
      * <p>
-     * There is one tricky cases here and that's where a partition wants another assignment, but none of the unfilled
+     * There is one tricky case here and that's where a partition wants another assignment, but none of the unfilled
      * members are able to take it (because they already have that partition). In this situation, we just accept that
      * no additional assignments for this partition could be made and carry on. In theory, a different shuffling of the
      * partitions would be able to achieve better balance, but it's harmless tolerating a slight imbalance in this case.
@@ -381,5 +382,37 @@ public class SimpleHomogeneousAssignmentBuilder {
                 break;
             }
         }
+    }
+
+    /**
+     * Computes the list of target partitions which can be assigned to members. This list includes all partitions
+     * for the subscribed topic IDs, with the additional check that they must be assignable.
+     * @param groupSpec                 The assignment spec which includes member metadata.
+     * @param subscribedTopicIds        The set of subscribed topic IDs.
+     * @param subscribedTopicDescriber  The topic and partition metadata describer.
+     * @return The list of target partitions.
+     */
+    private static List<TopicIdPartition> computeTargetPartitions(
+        GroupSpec groupSpec,
+        Set<Uuid> subscribedTopicIds,
+        SubscribedTopicDescriber subscribedTopicDescriber
+    ) {
+        List<TopicIdPartition> targetPartitions = new ArrayList<>();
+        subscribedTopicIds.forEach(topicId -> {
+            int numPartitions = subscribedTopicDescriber.numPartitions(topicId);
+            if (numPartitions == -1) {
+                throw new PartitionAssignorException(
+                    "Members are subscribed to topic " + topicId + " which doesn't exist in the topic metadata."
+                );
+            }
+
+            for (int partition = 0; partition < numPartitions; partition++) {
+                if (groupSpec.isPartitionAssignable(topicId, partition)) {
+                    targetPartitions.add(new TopicIdPartition(topicId, partition));
+                }
+            }
+        });
+
+        return targetPartitions;
     }
 }

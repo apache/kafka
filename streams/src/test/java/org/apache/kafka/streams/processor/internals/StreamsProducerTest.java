@@ -684,7 +684,7 @@ public class StreamsProducerTest {
         assertThat(thrown.getCause(), is(eosMockProducer.sendOffsetsToTransactionException));
         assertThat(
             thrown.getMessage(),
-            is("Producer got fenced trying to commit a transaction [test];" +
+            is("Producer got fenced trying to add offsets to a transaction [test];" +
                    " it means all tasks belonging to this thread should be migrated.")
         );
     }
@@ -703,7 +703,7 @@ public class StreamsProducerTest {
         assertThat(thrown.getCause(), is(eosMockProducer.sendOffsetsToTransactionException));
         assertThat(
             thrown.getMessage(),
-            is("Error encountered trying to commit a transaction [test]")
+            is("Error encountered trying to add offsets to a transaction [test]")
         );
     }
 

@@ -35,15 +35,15 @@ public final class PartitionsExpandTest extends TieredStorageTestHarness {
 
     @Override
     protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
-        final Integer broker0 = 0;
-        final Integer broker1 = 1;
+        final int broker0 = 0;
+        final int broker1 = 1;
         final String topicA = "topicA";
-        final Integer p0 = 0;
-        final Integer p1 = 1;
-        final Integer p2 = 2;
-        final Integer partitionCount = 1;
-        final Integer replicationFactor = 2;
-        final Integer maxBatchCountPerSegment = 1;
+        final int p0 = 0;
+        final int p1 = 1;
+        final int p2 = 2;
+        final int partitionCount = 1;
+        final int replicationFactor = 2;
+        final int maxBatchCountPerSegment = 1;
         final boolean enableRemoteLogStorage = true;
         final List<Integer> p0Assignment = List.of(broker0, broker1);
         final List<Integer> p1Assignment = List.of(broker0, broker1);

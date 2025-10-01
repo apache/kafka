@@ -24,7 +24,6 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,12 +58,12 @@ public class PartitionsSpec extends Message {
                         assignments.add(brokerId == null ? Integer.valueOf(0) : brokerId);
                     }
                 }
-                partMap.put(partition, Collections.unmodifiableList(assignments));
+                partMap.put(partition, List.copyOf(assignments));
             }
         }
-        this.partitionAssignments = Collections.unmodifiableMap(partMap);
+        this.partitionAssignments = Map.copyOf(partMap);
         if (configs == null) {
-            this.configs = Collections.emptyMap();
+            this.configs = Map.of();
         } else {
             this.configs = Map.copyOf(configs);
         }

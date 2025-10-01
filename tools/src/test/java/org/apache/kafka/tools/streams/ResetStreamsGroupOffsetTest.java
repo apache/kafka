@@ -70,7 +70,6 @@ import java.util.stream.Collectors;
 import joptsimple.OptionException;
 
 import static java.time.LocalDateTime.now;
-import static java.util.Arrays.asList;
 import static java.util.stream.Collectors.toMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -443,13 +442,13 @@ public class ResetStreamsGroupOffsetTest {
         }
         // assert that the reset offsets are as expected
         assertEquals(expectedResetResults, resetOffsetsResultByGroup);
-        assertEquals(expectedResetResults.values().size(), resetOffsetsResultByGroup.values().size());
+        assertEquals(expectedResetResults.size(), resetOffsetsResultByGroup.size());
         // assert that the committed offsets are as expected
         AssertCommittedOffsets(appId, topic, expectedCommittedOffset, partitions);
     }
 
     private void resetOffsetsAndAssertInternalTopicDeletion(String[] args, String appId, String... specifiedInternalTopics) throws InterruptedException {
-        List<String> specifiedInternalTopicsList = asList(specifiedInternalTopics);
+        List<String> specifiedInternalTopicsList = List.of(specifiedInternalTopics);
         Set<String> allInternalTopics = getInternalTopics(appId);
         specifiedInternalTopicsList.forEach(allInternalTopics::remove);
 
@@ -465,10 +464,10 @@ public class ResetStreamsGroupOffsetTest {
             );
             // verify that the specified internal topics were deleted
             Set<String> internalTopicsAfterReset = getInternalTopics(appId);
-            specifiedInternalTopicsList.forEach(topic -> {
+            specifiedInternalTopicsList.forEach(topic ->
                 assertFalse(internalTopicsAfterReset.contains(topic),
-                    "Internal topic '" + topic + "' was not deleted as expected after reset");
-            });
+                    "Internal topic '" + topic + "' was not deleted as expected after reset")
+            );
 
         } else {
             TestUtils.waitForCondition(() -> {
@@ -530,7 +529,7 @@ public class ResetStreamsGroupOffsetTest {
         }
         // assert that the reset offsets are as expected
         assertEquals(expectedResetResults, resetOffsetsResultByGroup);
-        assertEquals(expectedResetResults.values().size(), resetOffsetsResultByGroup.values().size());
+        assertEquals(expectedResetResults.size(), resetOffsetsResultByGroup.size());
         // assert that the committed offsets are as expected
         AssertCommittedOffsets(appId, topic1, topic2, expectedCommittedOffset);
     }
@@ -565,7 +564,7 @@ public class ResetStreamsGroupOffsetTest {
         }
         // assert that the reset offsets are as expected
         assertEquals(expectedOffsets, resetOffsetsResult);
-        assertEquals(expectedOffsets.values().size(), resetOffsetsResult.values().size());
+        assertEquals(expectedOffsets.size(), resetOffsetsResult.size());
         // assert that the committed offsets are as expected
         assertEquals(expectedCommittedOffsets, committedOffsets(topics, appId));
     }
@@ -631,8 +630,8 @@ public class ResetStreamsGroupOffsetTest {
     }
 
     private String[] addTo(String[] args, String... extra) {
-        List<String> res = new ArrayList<>(asList(args));
-        res.addAll(asList(extra));
+        List<String> res = new ArrayList<>(List.of(args));
+        res.addAll(List.of(extra));
         return res.toArray(new String[0]);
     }
 

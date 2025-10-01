@@ -61,6 +61,8 @@ import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorExecutor;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
@@ -117,8 +119,6 @@ import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -1088,8 +1088,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param newImage  The metadata image.
      */
     @Override
-    public void onLoaded(MetadataImage newImage) {
-        MetadataDelta emptyDelta = new MetadataDelta(newImage);
+    public void onLoaded(CoordinatorMetadataImage newImage) {
+        CoordinatorMetadataDelta emptyDelta = newImage.emptyDelta();
         groupMetadataManager.onNewMetadataImage(newImage, emptyDelta);
         coordinatorMetrics.activateMetricsShard(metricsShard);
 
@@ -1113,7 +1113,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param delta     The delta image.
      */
     @Override
-    public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
+    public void onNewMetadataImage(CoordinatorMetadataImage newImage, CoordinatorMetadataDelta delta) {
         groupMetadataManager.onNewMetadataImage(newImage, delta);
     }
 

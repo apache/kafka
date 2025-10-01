@@ -239,7 +239,7 @@ object DynamicBrokerConfig {
             }
           }
           val configHandler = new BrokerConfigHandler(config, quotaManagers)
-          configHandler.processConfigChanges("", dynamicPerBrokerConfigs)
+          configHandler.processConfigChanges("", dynamicDefaultConfigs)
           configHandler.processConfigChanges(config.brokerId.toString, dynamicPerBrokerConfigs)
         }
       }

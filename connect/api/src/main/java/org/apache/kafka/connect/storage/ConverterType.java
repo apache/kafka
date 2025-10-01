@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.connect.storage;
 
-import java.util.Collections;
-import java.util.HashMap;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * The type of {@link Converter} and {@link HeaderConverter}.
@@ -29,16 +29,8 @@ public enum ConverterType {
     VALUE,
     HEADER;
 
-    private static final Map<String, ConverterType> NAME_TO_TYPE;
-
-    static {
-        ConverterType[] types = ConverterType.values();
-        Map<String, ConverterType> nameToType = new HashMap<>(types.length);
-        for (ConverterType type : types) {
-            nameToType.put(type.name, type);
-        }
-        NAME_TO_TYPE = Collections.unmodifiableMap(nameToType);
-    }
+    private static final Map<String, ConverterType> NAME_TO_TYPE = Arrays.stream(ConverterType.values())
+        .collect(Collectors.toUnmodifiableMap(ConverterType::getName, t -> t));
 
     /**
      * Find the ConverterType with the given name, using a case-insensitive match.

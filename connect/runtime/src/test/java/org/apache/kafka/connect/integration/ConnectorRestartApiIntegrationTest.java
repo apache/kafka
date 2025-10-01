@@ -30,7 +30,6 @@ import org.junit.jupiter.api.TestInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -131,7 +130,7 @@ public class ConnectorRestartApiIntegrationTest {
         // Call the Restart API
         String restartEndpoint = connect.endpointForResource(
                 String.format("connectors/%s/restart", connectorName));
-        Response response = connect.requestPost(restartEndpoint, "", Collections.emptyMap());
+        Response response = connect.requestPost(restartEndpoint, "", Map.of());
         assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
 
     }
@@ -152,7 +151,7 @@ public class ConnectorRestartApiIntegrationTest {
         // Call the Restart API
         String restartEndpoint = connect.endpointForResource(
                 String.format("connectors/%s/restart?onlyFailed=" + onlyFailed + "&includeTasks=" + includeTasks, connectorName));
-        Response response = connect.requestPost(restartEndpoint, "", Collections.emptyMap());
+        Response response = connect.requestPost(restartEndpoint, "", Map.of());
         assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response.getStatus());
     }
 
@@ -213,7 +212,7 @@ public class ConnectorRestartApiIntegrationTest {
 
     @Test
     public void testOneFailedTasksRestartOnlyOneTasks() throws Exception {
-        Set<String> tasksToFail = Collections.singleton(taskId(1));
+        Set<String> tasksToFail = Set.of(taskId(1));
         failedTasksRestart(true, true, 0, buildExpectedTasksRestarts(tasksToFail), tasksToFail, false);
     }
 

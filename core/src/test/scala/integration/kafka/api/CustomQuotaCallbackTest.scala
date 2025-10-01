@@ -437,9 +437,9 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
       case groupPrincipal: GroupedUserPrincipal =>
         val userGroup = groupPrincipal.userGroup
         val quotaLimit = quotaOrDefault(userGroup, quotaType)
-        if (quotaLimit != null)
-          java.util.Map.of(QuotaGroupTag, userGroup)
-        else
+        if (quotaLimit != null) {
+          util.Map.of(QuotaGroupTag, userGroup)
+        } else
           UnlimitedQuotaMetricTags
       case _ =>
         UnlimitedQuotaMetricTags

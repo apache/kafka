@@ -18,8 +18,6 @@ package org.apache.kafka.connect.util;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -27,37 +25,37 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ConnectorUtilsTest {
 
-    private static final List<Integer> FIVE_ELEMENTS = Arrays.asList(1, 2, 3, 4, 5);
+    private static final List<Integer> FIVE_ELEMENTS = List.of(1, 2, 3, 4, 5);
 
     @Test
     public void testGroupPartitions() {
 
         List<List<Integer>> grouped = ConnectorUtils.groupPartitions(FIVE_ELEMENTS, 1);
-        assertEquals(Collections.singletonList(FIVE_ELEMENTS), grouped);
+        assertEquals(List.of(FIVE_ELEMENTS), grouped);
 
         grouped = ConnectorUtils.groupPartitions(FIVE_ELEMENTS, 2);
-        assertEquals(Arrays.asList(Arrays.asList(1, 2, 3), Arrays.asList(4, 5)), grouped);
+        assertEquals(List.of(List.of(1, 2, 3), List.of(4, 5)), grouped);
 
         grouped = ConnectorUtils.groupPartitions(FIVE_ELEMENTS, 3);
-        assertEquals(Arrays.asList(Arrays.asList(1, 2),
-                Arrays.asList(3, 4),
-                Collections.singletonList(5)), grouped);
+        assertEquals(List.of(List.of(1, 2),
+                List.of(3, 4),
+                List.of(5)), grouped);
 
         grouped = ConnectorUtils.groupPartitions(FIVE_ELEMENTS, 5);
-        assertEquals(Arrays.asList(Collections.singletonList(1),
-                Collections.singletonList(2),
-                Collections.singletonList(3),
-                Collections.singletonList(4),
-                Collections.singletonList(5)), grouped);
+        assertEquals(List.of(List.of(1),
+                List.of(2),
+                List.of(3),
+                List.of(4),
+                List.of(5)), grouped);
 
         grouped = ConnectorUtils.groupPartitions(FIVE_ELEMENTS, 7);
-        assertEquals(Arrays.asList(Collections.singletonList(1),
-                Collections.singletonList(2),
-                Collections.singletonList(3),
-                Collections.singletonList(4),
-                Collections.singletonList(5),
-                Collections.emptyList(),
-                Collections.emptyList()), grouped);
+        assertEquals(List.of(List.of(1),
+                List.of(2),
+                List.of(3),
+                List.of(4),
+                List.of(5),
+                List.of(),
+                List.of()), grouped);
     }
 
     @Test

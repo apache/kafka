@@ -133,7 +133,7 @@ public class StaticBrokerConfigTest {
 
             admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) 1))).config(TOPIC).get();
             // make sure the topic metadata exist
-            cluster.waitForTopic(TOPIC, 1);
+            cluster.waitTopicCreation(TOPIC, 1);
             Map<ConfigResource, Config> configResourceMap = admin.describeConfigs(
                     List.of(brokerResource, topicResource, groupResource, clientMetricsResource)).all().get();
 

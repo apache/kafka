@@ -18,8 +18,6 @@
 package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.DirectoryId;
-import org.apache.kafka.common.PartitionState;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidReplicaDirectoriesException;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
@@ -216,8 +214,8 @@ public class PartitionRegistration {
     }
 
     private PartitionRegistration(int[] replicas, Uuid[] directories, int[] isr, int[] removingReplicas,
-                                 int[] addingReplicas, int leader, LeaderRecoveryState leaderRecoveryState,
-                                 int leaderEpoch, int partitionEpoch, int[] elr, int[] lastKnownElr) {
+                                  int[] addingReplicas, int leader, LeaderRecoveryState leaderRecoveryState,
+                                  int leaderEpoch, int partitionEpoch, int[] elr, int[] lastKnownElr) {
         Objects.requireNonNull(directories);
         if (directories.length > 0 && directories.length != replicas.length) {
             throw new IllegalArgumentException("The lengths for replicas and directories do not match.");
@@ -408,22 +406,6 @@ public class PartitionRegistration {
             }
         }
         return new ApiMessageAndVersion(record, options.metadataVersion().partitionRecordVersion());
-    }
-
-    public PartitionState toLeaderAndIsrPartitionState(TopicPartition tp,
-                                                                           boolean isNew) {
-        return new PartitionState().
-            setTopicName(tp.topic()).
-            setPartitionIndex(tp.partition()).
-            setLeader(leader).
-            setLeaderEpoch(leaderEpoch).
-            setIsr(Replicas.toList(isr)).
-            setPartitionEpoch(partitionEpoch).
-            setReplicas(Replicas.toList(replicas)).
-            setAddingReplicas(Replicas.toList(addingReplicas)).
-            setRemovingReplicas(Replicas.toList(removingReplicas)).
-            setLeaderRecoveryState(leaderRecoveryState.value()).
-            setIsNew(isNew);
     }
 
     @Override

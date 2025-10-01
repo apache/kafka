@@ -729,6 +729,14 @@ public class RequestResponseTest {
     }
 
     @Test
+    public void testJoinGroupRequestV0RebalanceTimeout() {
+        final short version = 0;
+        JoinGroupRequest jgr = createJoinGroupRequest(version);
+        JoinGroupRequest jgr2 = JoinGroupRequest.parse(jgr.serialize(), version);
+        assertEquals(jgr2.data().rebalanceTimeoutMs(), jgr.data().rebalanceTimeoutMs());
+    }
+
+    @Test
     public void testSerializeWithHeader() {
         CreatableTopicCollection topicsToCreate = new CreatableTopicCollection(1);
         topicsToCreate.add(new CreatableTopic()

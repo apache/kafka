@@ -22,8 +22,6 @@ import org.apache.kafka.server.util.CommandLineUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -90,6 +88,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
     final OptionSpec<Void> verboseOpt;
 
     final Set<OptionSpec<?>> allGroupSelectionScopeOpts;
+    final Set<OptionSpec<?>> allTopicSelectionScopeOpts;
     final Set<OptionSpec<?>> allShareGroupLevelOpts;
     final Set<OptionSpec<?>> allResetOffsetScenarioOpts;
     final Set<OptionSpec<?>> allDeleteOffsetsOpts;
@@ -144,10 +143,11 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         verboseOpt = parser.accepts("verbose", VERBOSE_DOC)
             .availableIf(describeOpt);
 
-        allGroupSelectionScopeOpts = new HashSet<>(Arrays.asList(groupOpt, allGroupsOpt));
-        allShareGroupLevelOpts = new HashSet<>(Arrays.asList(listOpt, describeOpt, deleteOpt, resetOffsetsOpt));
-        allResetOffsetScenarioOpts = new HashSet<>(Arrays.asList(resetToDatetimeOpt, resetToEarliestOpt, resetToLatestOpt));
-        allDeleteOffsetsOpts = new HashSet<>(Arrays.asList(groupOpt, topicOpt));
+        allGroupSelectionScopeOpts = Set.of(groupOpt, allGroupsOpt);
+        allTopicSelectionScopeOpts = Set.of(topicOpt, allTopicsOpt);
+        allShareGroupLevelOpts = Set.of(listOpt, describeOpt, deleteOpt, resetOffsetsOpt);
+        allResetOffsetScenarioOpts = Set.of(resetToDatetimeOpt, resetToEarliestOpt, resetToLatestOpt);
+        allDeleteOffsetsOpts = Set.of(groupOpt, topicOpt);
 
         options = parser.parse(args);
     }
@@ -161,11 +161,11 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         if (options.has(describeOpt)) {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + describeOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
-            List<OptionSpec<?>> mutuallyExclusiveOpts = Arrays.asList(membersOpt, offsetsOpt, stateOpt);
+                    "Option " + describeOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
+            List<OptionSpec<?>> mutuallyExclusiveOpts = List.of(membersOpt, offsetsOpt, stateOpt);
             if (mutuallyExclusiveOpts.stream().mapToInt(o -> options.has(o) ? 1 : 0).sum() > 1) {
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + describeOpt + " takes at most one of these options: " + mutuallyExclusiveOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+                    "Option " + describeOpt + " takes at most one of these options: " + mutuallyExclusiveOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
             }
             if (options.has(stateOpt) && options.valueOf(stateOpt) != null)
                 CommandLineUtils.printUsageAndExit(parser,
@@ -187,7 +187,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         if (options.has(deleteOffsetsOpt)) {
             if (!options.has(groupOpt) || !options.has(topicOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + deleteOffsetsOpt + " takes the following options: " + allDeleteOffsetsOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+                    "Option " + deleteOffsetsOpt + " takes the following options: " + allDeleteOffsetsOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
         }
 
         if (options.has(resetOffsetsOpt)) {
@@ -201,6 +201,16 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
             if (!options.has(groupOpt))
                 CommandLineUtils.printUsageAndExit(parser,
                     "Option " + resetOffsetsOpt + " takes the option: " + groupOpt);
+
+            if (!options.has(topicOpt) && !options.has(allTopicsOpt)) {
+                CommandLineUtils.printUsageAndExit(parser,
+                    "Option " + resetOffsetsOpt + " takes one of these options: " + allTopicSelectionScopeOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
+            }
+            
+            if (!options.has(resetToEarliestOpt) && !options.has(resetToLatestOpt) && !options.has(resetToDatetimeOpt)) {
+                CommandLineUtils.printUsageAndExit(parser,
+                    "Option " + resetOffsetsOpt + " takes one of these options: " + allResetOffsetScenarioOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
+            }
 
             CommandLineUtils.checkInvalidArgs(parser, options, resetToDatetimeOpt, minus(allResetOffsetScenarioOpts, resetToDatetimeOpt));
             CommandLineUtils.checkInvalidArgs(parser, options, resetToEarliestOpt, minus(allResetOffsetScenarioOpts, resetToEarliestOpt));

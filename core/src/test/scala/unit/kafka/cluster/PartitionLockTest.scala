@@ -18,7 +18,6 @@
 package kafka.cluster
 
 import java.lang.{Long => JLong}
-import java.util
 import java.util.{Optional, Properties}
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
@@ -28,11 +27,10 @@ import kafka.utils._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchRequest
-import org.apache.kafka.common.PartitionState
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.{DirectoryId, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.apache.kafka.metadata.{LeaderAndIsr, MetadataCache, MockConfigRepository}
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MetadataCache, MockConfigRepository, PartitionRegistration}
 import org.apache.kafka.server.common.{RequestLocal, TopicIdPartition}
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
@@ -141,18 +139,20 @@ class PartitionLockTest extends Logging {
   def testGetReplicaWithUpdateAssignmentAndIsr(): Unit = {
     val active = new AtomicBoolean(true)
     val replicaToCheck = 3
-    val firstReplicaSet = util.List.of[Integer](3, 4, 5)
-    val secondReplicaSet = util.List.of[Integer](1, 2, 3)
-    def partitionState(replicas: util.List[Integer]) = new PartitionState()
-      .setLeader(replicas.get(0))
+    val firstReplicaSet = Array(3, 4, 5)
+    val secondReplicaSet = Array(1, 2, 3)
+    def partitionRegistration(replicas: Array[Int]) = new PartitionRegistration.Builder()
+      .setLeader(replicas(0))
+      .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
       .setLeaderEpoch(1)
       .setIsr(replicas)
       .setPartitionEpoch(1)
       .setReplicas(replicas)
-      .setIsNew(true)
+      .setDirectories(DirectoryId.unassignedArray(replicas.length))
+      .build()
     val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
     // Update replica set synchronously first to avoid race conditions
-    partition.makeLeader(partitionState(secondReplicaSet), offsetCheckpoints, None)
+    partition.makeLeader(partitionRegistration(secondReplicaSet), isNew = true, offsetCheckpoints, None)
     assertTrue(partition.getReplica(replicaToCheck).isDefined, s"Expected replica $replicaToCheck to be defined")
 
     val future = executorService.submit((() => {
@@ -165,7 +165,7 @@ class PartitionLockTest extends Logging {
           secondReplicaSet
         }
 
-        partition.makeLeader(partitionState(replicas), offsetCheckpoints, None)
+        partition.makeLeader(partitionRegistration(replicas), isNew = true, offsetCheckpoints, None)
 
         i += 1
         Thread.sleep(1) // just to avoid tight loop
@@ -344,17 +344,20 @@ class PartitionLockTest extends Logging {
 
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Some(topicId))
 
-    val replicas = (0 to numReplicaFetchers).map(i => Integer.valueOf(brokerId + i)).toList.asJava
+    val replicas = (0 to numReplicaFetchers).map(i => brokerId + i).toArray
     val isr = replicas
-    replicas.forEach(replicaId => when(metadataCache.getAliveBrokerEpoch(replicaId)).thenReturn(Optional.of(1L)))
+    replicas.foreach(replicaId => when(metadataCache.getAliveBrokerEpoch(replicaId)).thenReturn(Optional.of(1L)))
 
-    assertTrue(partition.makeLeader(new PartitionState()
+    val partitionRegistration = new PartitionRegistration.Builder()
       .setLeader(brokerId)
+      .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
       .setLeaderEpoch(leaderEpoch)
       .setIsr(isr)
       .setPartitionEpoch(1)
       .setReplicas(replicas)
-      .setIsNew(true), offsetCheckpoints, Some(topicId)), "Expected become leader transition to succeed")
+      .setDirectories(DirectoryId.unassignedArray(replicas.length))
+      .build()
+    assertTrue(partition.makeLeader(partitionRegistration, isNew = true, offsetCheckpoints, Some(topicId)), "Expected become leader transition to succeed")
 
     partition
   }

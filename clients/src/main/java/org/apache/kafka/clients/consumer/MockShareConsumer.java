@@ -105,6 +105,10 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
     }
 
     @Override
+    public synchronized void acknowledge(String topic, int partition, long offset, AcknowledgeType type) {
+    }
+
+    @Override
     public synchronized Map<TopicIdPartition, Optional<KafkaException>> commitSync() {
         return new HashMap<>();
     }

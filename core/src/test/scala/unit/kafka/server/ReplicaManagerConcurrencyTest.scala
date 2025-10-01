@@ -200,7 +200,6 @@ class ReplicaManagerConcurrencyTest extends Logging {
       override def createReplicaFetcherManager(
         metrics: Metrics,
         time: Time,
-        threadNamePrefix: Option[String],
         quotaManager: ReplicationQuotaManager
       ): ReplicaFetcherManager = {
         Mockito.mock(classOf[ReplicaFetcherManager])

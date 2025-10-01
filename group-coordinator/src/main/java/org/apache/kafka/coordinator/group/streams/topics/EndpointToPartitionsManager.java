@@ -18,16 +18,16 @@
 package org.apache.kafka.coordinator.group.streams.topics;
 
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
-import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.image.TopicImage;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 public class EndpointToPartitionsManager {
@@ -38,7 +38,7 @@ public class EndpointToPartitionsManager {
     public static StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions(final StreamsGroupMember streamsGroupMember,
                                                                                               final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint,
                                                                                               final StreamsGroup streamsGroup,
-                                                                                              final MetadataImage metadataImage) {
+                                                                                              final CoordinatorMetadataImage metadataImage) {
         StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = new StreamsGroupHeartbeatResponseData.EndpointToPartitions();
         Map<String, Set<Integer>> activeTasks = streamsGroupMember.assignedTasks().activeTasks();
         Map<String, Set<Integer>> standbyTasks = streamsGroupMember.assignedTasks().standbyTasks();
@@ -53,7 +53,7 @@ public class EndpointToPartitionsManager {
 
     private static List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions(final Map<String, Set<Integer>> tasks,
                                                                                           final Map<String, ConfiguredSubtopology> configuredSubtopologies,
-                                                                                          final MetadataImage metadataImage) {
+                                                                                          final CoordinatorMetadataImage metadataImage) {
         List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionsForTasks = new ArrayList<>();
         for (Map.Entry<String, Set<Integer>> taskEntry : tasks.entrySet()) {
             String subtopologyId = taskEntry.getKey();
@@ -70,13 +70,13 @@ public class EndpointToPartitionsManager {
 
     private static List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionListForTask(final Set<Integer> taskSet,
                                                                                                     final Set<String> topicNames,
-                                                                                                    final MetadataImage metadataImage) {
+                                                                                                    final CoordinatorMetadataImage metadataImage) {
         return topicNames.stream().map(topic -> {
-            TopicImage topicImage = metadataImage.topics().getTopic(topic);
-            if (topicImage == null) {
+            Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadata = metadataImage.topicMetadata(topic);
+            if (topicMetadata.isEmpty()) {
                 throw new IllegalStateException("Topic " + topic + " not found in metadata image");
             }
-            int numPartitionsForTopic = topicImage.partitions().size();
+            int numPartitionsForTopic = topicMetadata.get().partitionCount();
             StreamsGroupHeartbeatResponseData.TopicPartition tp = new StreamsGroupHeartbeatResponseData.TopicPartition();
             tp.setTopic(topic);
             List<Integer> tpPartitions = new ArrayList<>(taskSet);

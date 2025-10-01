@@ -24,7 +24,6 @@ import java.util.Map.Entry
 import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
 import kafka.network.RequestChannel
-import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.logger.RuntimeLoggerManager
 import kafka.server.metadata.KRaftMetadataCache
@@ -41,7 +40,7 @@ import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartit
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse
-import org.apache.kafka.common.message.{CreateTopicsRequestData, _}
+import org.apache.kafka.common.message._
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
@@ -55,9 +54,12 @@ import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.server.{ApiVersionManager, DelegationTokenManager, ProcessRole}
+import org.apache.kafka.raft.RaftManager
+import org.apache.kafka.security.DelegationTokenManager
+import org.apache.kafka.server.{ApiVersionManager, ProcessRole}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, RequestLocal}
+import org.apache.kafka.server.quota.ControllerMutationQuota
 
 import scala.jdk.CollectionConverters._
 
@@ -196,7 +198,7 @@ class ControllerApis(
 
   private def handleDeleteTopics(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val deleteTopicsRequest = request.body[DeleteTopicsRequest]
-    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 5)
+    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request.session, request.header, 5)
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
       requestTimeoutMsToDeadlineNs(time, deleteTopicsRequest.data.timeoutMs),
       controllerMutationQuotaRecorderFor(controllerMutationQuota))
@@ -360,7 +362,7 @@ class ControllerApis(
 
   private def handleCreateTopics(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val createTopicsRequest = request.body[CreateTopicsRequest]
-    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 6)
+    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request.session, request.header, 6)
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
       requestTimeoutMsToDeadlineNs(time, createTopicsRequest.data.timeoutMs),
       controllerMutationQuotaRecorderFor(controllerMutationQuota))
@@ -795,7 +797,7 @@ class ControllerApis(
       authHelper.filterByAuthorized(request.context, ALTER, TOPIC, topics)(n => n)
     }
     val createPartitionsRequest = request.body[CreatePartitionsRequest]
-    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 3)
+    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request.session, request.header, 3)
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
       requestTimeoutMsToDeadlineNs(time, createPartitionsRequest.data.timeoutMs),
       controllerMutationQuotaRecorderFor(controllerMutationQuota))
@@ -1069,7 +1071,7 @@ class ControllerApis(
       EndpointType.CONTROLLER,
       clusterId,
       () => registrationsPublisher.describeClusterControllers(request.context.listenerName()),
-      () => raftManager.leaderAndEpoch.leaderId().orElse(-1)
+      () => raftManager.client.leaderAndEpoch.leaderId().orElse(-1)
     )
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
       new DescribeClusterResponse(response.setThrottleTimeMs(requestThrottleMs)))

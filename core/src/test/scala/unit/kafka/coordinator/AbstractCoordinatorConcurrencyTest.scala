@@ -190,8 +190,7 @@ object AbstractCoordinatorConcurrencyTest {
       delayedFetchPurgatoryParam = Some(delayedFetchPurgatoryParam),
       delayedDeleteRecordsPurgatoryParam = Some(delayedDeleteRecordsPurgatoryParam),
       delayedRemoteFetchPurgatoryParam = Some(delayedRemoteFetchPurgatoryParam),
-      delayedRemoteListOffsetsPurgatoryParam = Some(delayedRemoteListOffsetsPurgatoryParam),
-      threadNamePrefix = Option(this.getClass.getName)) {
+      delayedRemoteListOffsetsPurgatoryParam = Some(delayedRemoteListOffsetsPurgatoryParam)) {
 
     @volatile var logs: mutable.Map[TopicPartition, (UnifiedLog, Long)] = _
 

@@ -56,7 +56,7 @@ import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfi
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogCleaner, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
@@ -900,7 +900,6 @@ object TestUtils extends Logging {
       } else if (oldLeaderOpt.isDefined) {
           debug(s"Checking leader that has changed from $oldLeaderOpt")
           brokers.find { broker =>
-            broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
             broker.config.brokerId != oldLeaderOpt.get &&
               broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
           }.map(_.config.brokerId)
@@ -953,7 +952,7 @@ object TestUtils extends Logging {
                        time: MockTime = new MockTime(),
                        recoveryThreadsPerDataDir: Int = 4,
                        transactionVerificationEnabled: Boolean = false,
-                       log: Option[UnifiedLog] = None,
+                       logFn: Option[(TopicPartition, Option[Uuid]) => UnifiedLog] = None,
                        remoteStorageSystemEnable: Boolean = false,
                        initialTaskDelayMs: Long = ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT): LogManager = {
     val logManager = new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
@@ -974,11 +973,17 @@ object TestUtils extends Logging {
                    brokerTopicStats = new BrokerTopicStats,
                    logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
                    remoteStorageSystemEnable = remoteStorageSystemEnable,
-                   initialTaskDelayMs = initialTaskDelayMs)
+                   initialTaskDelayMs = initialTaskDelayMs,
+                   cleanerFactory = (cleanerConfig, files, map, logDirFailureChannel, time) => Mockito.spy(new LogCleaner(cleanerConfig, files, map, logDirFailureChannel, time))
+    )
 
-    if (log.isDefined) {
+    if (logFn.isDefined) {
       val spyLogManager = Mockito.spy(logManager)
-      Mockito.doReturn(log.get, Nil: _*).when(spyLogManager).getOrCreateLog(any(classOf[TopicPartition]), anyBoolean(), anyBoolean(), any(classOf[Optional[Uuid]]), any(classOf[Option[Uuid]]))
+      Mockito.doAnswer(answer => {
+        val topicPartition = answer.getArgument(0, classOf[TopicPartition])
+        val topicId = answer.getArgument(3, classOf[Optional[Uuid]])
+        logFn.get(topicPartition, OptionConverters.toScala(topicId))
+      }).when(spyLogManager).getOrCreateLog(any(classOf[TopicPartition]), anyBoolean(), anyBoolean(), any(classOf[Optional[Uuid]]), any(classOf[Option[Uuid]]))
       spyLogManager
     } else
       logManager

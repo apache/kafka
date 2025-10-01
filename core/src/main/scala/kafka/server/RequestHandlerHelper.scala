@@ -23,7 +23,7 @@ import org.apache.kafka.common.errors.ClusterAuthorizationException
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.server.quota.ThrottleCallback
+import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ThrottleCallback}
 
 class RequestHandlerHelper(
   requestChannel: RequestChannel,
@@ -40,7 +40,7 @@ class RequestHandlerHelper(
       override def startThrottling(): Unit = requestChannel.startThrottling(request)
       override def endThrottling(): Unit = requestChannel.endThrottling(request)
     }
-    quotaManager.throttle(request, callback, throttleTimeMs)
+    quotaManager.throttle(request.header.clientId(), request.session, callback, throttleTimeMs)
   }
 
   def handleError(request: RequestChannel.Request, e: Throwable): Unit = {

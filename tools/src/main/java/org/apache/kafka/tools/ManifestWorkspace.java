@@ -45,7 +45,6 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -83,23 +82,13 @@ public class ManifestWorkspace {
     }
 
     public SourceWorkspace<?> forSource(PluginSource source) throws IOException {
-        SourceWorkspace<?> sourceWorkspace;
-        switch (source.type()) {
-            case CLASSPATH:
-                sourceWorkspace = new ClasspathWorkspace(source);
-                break;
-            case MULTI_JAR:
-                sourceWorkspace = new MultiJarWorkspace(source);
-                break;
-            case SINGLE_JAR:
-                sourceWorkspace = new SingleJarWorkspace(source);
-                break;
-            case CLASS_HIERARCHY:
-                sourceWorkspace = new ClassHierarchyWorkspace(source);
-                break;
-            default:
-                throw new IllegalStateException("Unknown source type " + source.type());
-        }
+        SourceWorkspace<?> sourceWorkspace = switch (source.type()) {
+            case CLASSPATH -> new ClasspathWorkspace(source);
+            case MULTI_JAR -> new MultiJarWorkspace(source);
+            case SINGLE_JAR -> new SingleJarWorkspace(source);
+            case CLASS_HIERARCHY -> new ClassHierarchyWorkspace(source);
+            default -> throw new IllegalStateException("Unknown source type " + source.type());
+        };
         workspaces.add(sourceWorkspace);
         return sourceWorkspace;
     }
@@ -390,7 +379,7 @@ public class ManifestWorkspace {
         }
         try (FileSystem jar = FileSystems.newFileSystem(
                 new URI("jar", writableJar.toUri().toString(), ""),
-                Collections.emptyMap()
+                Map.of()
         )) {
             Path zipRoot = jar.getRootDirectories().iterator().next();
             // Set dryRun to false because this jar file is already a writable copy.

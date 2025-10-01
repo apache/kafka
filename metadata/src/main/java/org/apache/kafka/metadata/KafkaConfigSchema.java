@@ -55,28 +55,17 @@ public class KafkaConfigSchema {
      * makes sense to put it here.
      */
     public static ConfigEntry.ConfigType translateConfigType(ConfigDef.Type type) {
-        switch (type) {
-            case BOOLEAN:
-                return ConfigEntry.ConfigType.BOOLEAN;
-            case STRING:
-                return ConfigEntry.ConfigType.STRING;
-            case INT:
-                return ConfigEntry.ConfigType.INT;
-            case SHORT:
-                return ConfigEntry.ConfigType.SHORT;
-            case LONG:
-                return ConfigEntry.ConfigType.LONG;
-            case DOUBLE:
-                return ConfigEntry.ConfigType.DOUBLE;
-            case LIST:
-                return ConfigEntry.ConfigType.LIST;
-            case CLASS:
-                return ConfigEntry.ConfigType.CLASS;
-            case PASSWORD:
-                return ConfigEntry.ConfigType.PASSWORD;
-            default:
-                return ConfigEntry.ConfigType.UNKNOWN;
-        }
+        return switch (type) {
+            case BOOLEAN -> ConfigEntry.ConfigType.BOOLEAN;
+            case STRING -> ConfigEntry.ConfigType.STRING;
+            case INT -> ConfigEntry.ConfigType.INT;
+            case SHORT -> ConfigEntry.ConfigType.SHORT;
+            case LONG -> ConfigEntry.ConfigType.LONG;
+            case DOUBLE -> ConfigEntry.ConfigType.DOUBLE;
+            case LIST -> ConfigEntry.ConfigType.LIST;
+            case CLASS -> ConfigEntry.ConfigType.CLASS;
+            case PASSWORD -> ConfigEntry.ConfigType.PASSWORD;
+        };
     }
 
     private static final Map<ConfigEntry.ConfigSource, DescribeConfigsResponse.ConfigSource> TRANSLATE_CONFIG_SOURCE_MAP;

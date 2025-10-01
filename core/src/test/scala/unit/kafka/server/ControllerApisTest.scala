@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.network.RequestChannel
-import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
 import org.apache.kafka.clients.admin.AlterConfigOp
@@ -49,16 +48,19 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.test.MockController
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{ElectionType, Uuid}
+import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.controller.{Controller, ControllerRequestContext, ResultOrError}
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.network.metrics.RequestChannelMetrics
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.network.Session
+import org.apache.kafka.raft.{QuorumConfig, RaftManager}
 import org.apache.kafka.server.SimpleApiVersionManager
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, KRaftVersion, MetadataVersion, ProducerIdsBlock, RequestLocal}
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs}
+import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager}
 import org.apache.kafka.server.util.FutureUtils
 import org.apache.kafka.storage.internals.log.CleanerConfig
 import org.apache.kafka.test.TestUtils
@@ -114,14 +116,16 @@ class ControllerApisTest {
   private val clientRequestQuotaManager: ClientRequestQuotaManager = mock(classOf[ClientRequestQuotaManager])
   private val neverThrottlingClientControllerQuotaManager: ControllerMutationQuotaManager = mock(classOf[ControllerMutationQuotaManager])
   when(neverThrottlingClientControllerQuotaManager.newQuotaFor(
-    any(classOf[RequestChannel.Request]),
+    any(classOf[Session]),
+    any(classOf[RequestHeader]),
     any(classOf[Short])
   )).thenReturn(
     MockControllerMutationQuota(Integer.MAX_VALUE) // never throttles
   )
   private val alwaysThrottlingClientControllerQuotaManager: ControllerMutationQuotaManager = mock(classOf[ControllerMutationQuotaManager])
   when(alwaysThrottlingClientControllerQuotaManager.newQuotaFor(
-    any(classOf[RequestChannel.Request]),
+    any(classOf[Session]),
+    any(classOf[RequestHeader]),
     any(classOf[Short])
   )).thenReturn(
     MockControllerMutationQuota(0) // always throttles

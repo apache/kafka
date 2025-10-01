@@ -126,7 +126,6 @@ public class ReplicaManagerBuilder {
                              Option.empty(),
                              Option.empty(),
                              Option.empty(),
-                             Option.empty(),
                              () ->  -1L,
                              Option.empty(),
                              DirectoryEventHandler.NOOP,
