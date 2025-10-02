@@ -719,7 +719,6 @@ class KafkaRequestHandlerTest {
       apiHandler,
       time,
       4,
-      "RequestHandlerAvgIdlePercent",
       "broker"
     )
 
@@ -733,7 +732,6 @@ class KafkaRequestHandlerTest {
       apiHandler,
       time,
       4,
-      "RequestHandlerAvgIdlePercent",
       "controller"
     )
 

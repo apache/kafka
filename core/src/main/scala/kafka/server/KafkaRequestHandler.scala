@@ -24,7 +24,7 @@ import kafka.server.KafkaRequestHandler.{threadCurrentRequest, threadRequestChan
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import com.yammer.metrics.core.Meter
-import kafka.server.KafkaRequestHandlerPool.aggregateThreads
+import kafka.server.KafkaRequestHandlerPool.{aggregateThreads, requestHandlerAvgIdleMetricName}
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{Exit, KafkaThread, Time}
 import org.apache.kafka.server.common.RequestLocal
@@ -91,11 +91,11 @@ class KafkaRequestHandler(
   brokerId: Int,
   val aggregateIdleMeter: Meter,
   val perPoolIdleMeter: Meter,
-  val totalHandlerThreads: AtomicInteger,
+  val poolHandlerThreads: AtomicInteger,
   val requestChannel: RequestChannel,
   apis: ApiRequestHandler,
   time: Time,
-  nodeName: String = "broker",
+  nodeName: String = "broker"
 ) extends Runnable with Logging {
   this.logIdent = s"[Kafka Request Handler $id on ${nodeName.capitalize} $brokerId] "
   private val shutdownComplete = new CountDownLatch(1)
@@ -115,7 +115,7 @@ class KafkaRequestHandler(
       val endTime = time.nanoseconds
       val idleTime = endTime - startSelectTime
       // Per-pool idle ratio uses the pool's own thread count as denominator
-      perPoolIdleMeter.mark(idleTime / totalHandlerThreads.get)
+      perPoolIdleMeter.mark(idleTime / poolHandlerThreads.get)
       // Aggregate idle ratio uses the total threads across all pools as denominator
       aggregateIdleMeter.mark(idleTime / aggregateThreads.get)
 
@@ -199,6 +199,7 @@ class KafkaRequestHandler(
 
 object KafkaRequestHandlerPool {
   val aggregateThreads = new AtomicInteger(0)
+  val requestHandlerAvgIdleMetricName = "RequestHandlerAvgIdlePercent"
 }
 
 class KafkaRequestHandlerPool(
@@ -207,14 +208,13 @@ class KafkaRequestHandlerPool(
   val apis: ApiRequestHandler,
   time: Time,
   numThreads: Int,
-  requestHandlerAvgIdleMetricName: String,
   nodeName: String = "broker"
 ) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   val threadPoolSize: AtomicInteger = new AtomicInteger(numThreads)
   /* Per-pool idle meter (broker-only or controller-only) */
-  private val perPoolIdleMeterName = nodeName + "RequestHandlerAvgIdlePercent"
+  private val perPoolIdleMeterName = nodeName.capitalize + requestHandlerAvgIdleMetricName
   private val perPoolIdleMeter = metricsGroup.newMeter(perPoolIdleMeterName, "percent", TimeUnit.NANOSECONDS)
   /* Aggregate meter to track the average free capacity of the request handlers */
   private val aggregateIdleMeter = metricsGroup.newMeter(requestHandlerAvgIdleMetricName, "percent", TimeUnit.NANOSECONDS)

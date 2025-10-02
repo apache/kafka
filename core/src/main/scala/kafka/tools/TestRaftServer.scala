@@ -130,8 +130,7 @@ class TestRaftServer(
       socketServer.dataPlaneRequestChannel,
       requestHandler,
       time,
-      config.numIoThreads,
-      "RequestHandlerAvgIdlePercent"
+      config.numIoThreads
     )
 
     workloadGenerator.start()

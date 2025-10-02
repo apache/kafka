@@ -287,7 +287,6 @@ class ControllerServer(
         controllerApis,
         time,
         config.numIoThreads,
-        "RequestHandlerAvgIdlePercent",
         "controller")
 
       // Set up the metadata cache publisher.
