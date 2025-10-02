@@ -411,7 +411,13 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * This will make the consumer send the updated subscription on the next poll.
      */
     private void process(final UpdatePatternSubscriptionEvent event) {
-        processUpdatePatternSubscriptionEvent();
+        if (!subscriptions.hasPatternSubscription()) {
+            return;
+        }
+        if (this.metadataVersionSnapshot < metadata.updateVersion()) {
+            this.metadataVersionSnapshot = metadata.updateVersion();
+            updatePatternSubscription(metadata.fetch());
+        }
         event.future().complete(null);
     }
 
@@ -761,15 +767,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 });
             }
 
-            nextEventType = ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA;
-
-            if (context.maybeCompleteExceptionally(event) || context.maybeCompleteWithCallbackRequired(event, nextEventType))
-                return;
-        }
-
-        if (nextEventType == ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA) {
-            log.debug("Processing {} logic for {}", nextEventType, event);
-            processUpdatePatternSubscriptionEvent();
             nextEventType = ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS;
 
             if (context.maybeCompleteExceptionally(event) || context.maybeCompleteWithCallbackRequired(event, nextEventType))

@@ -132,8 +132,7 @@ public class AsyncPollEvent extends ApplicationEvent {
 
     private static final List<Type> ALLOWED_STARTING_EVENT_TYPES = List.of(
         Type.ASYNC_POLL,
-        Type.CHECK_AND_UPDATE_POSITIONS,
-        Type.UPDATE_SUBSCRIPTION_METADATA
+        Type.CHECK_AND_UPDATE_POSITIONS
     );
     private final long deadlineMs;
     private final long pollTimeMs;
