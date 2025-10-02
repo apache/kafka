@@ -462,7 +462,7 @@ public class MeteredSessionStoreTest {
         setUp();
         init();
 
-        final long restoreTimeNs = 1000;
+        final long restoreTimeNs = 1000L;
         store.recordRestoreTime(restoreTimeNs);
 
         // it suffices to verify one restore metric since all restore metrics are recorded by the same sensor
