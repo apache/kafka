@@ -69,8 +69,8 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
             "retrying RemoteLogMetadataManager resources initialization again.";
 
     public static final String REMOTE_LOG_METADATA_INITIALIZATION_RETRY_MAX_TIMEOUT_MS_DOC = "The maximum amount of time in milliseconds " +
-            "for retrying RemoteLogMetadataManager resources initialization. When total retry intervals reach this timeout, initialization " +
-            "is considered as failed and broker starts shutting down.";
+            "for retrying RemoteLogMetadataManager resources initialization. The timer for this timeout begins after the broker is ready to handle requests. " +
+            "When total retry intervals reach this timeout, initialization is considered as failed and broker starts shutting down.";
 
     public static final String REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX = "remote.log.metadata.common.client.";
     public static final String REMOTE_LOG_METADATA_PRODUCER_PREFIX = "remote.log.metadata.producer.";
