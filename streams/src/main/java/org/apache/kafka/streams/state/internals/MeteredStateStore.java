@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.processor.StateStore;
-
-public interface MeteredStateStore extends StateStore {
+public interface MeteredStateStore {
 
     void recordRestoreTime(final long restoreTimeNs);
 }

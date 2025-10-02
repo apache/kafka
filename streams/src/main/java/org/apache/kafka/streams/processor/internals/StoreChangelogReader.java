@@ -192,8 +192,8 @@ public class StoreChangelogReader implements ChangelogReader {
             return bufferedLimitIndex;
         }
 
-        long calculateRestoreTime(final Time time) {
-            return time.nanoseconds() - restoreStartTimeNs;
+        long calculateRestoreTime(final long restoreEndTimeNs) {
+            return restoreEndTimeNs - restoreStartTimeNs;
         }
     }
 
@@ -703,7 +703,7 @@ public class StoreChangelogReader implements ChangelogReader {
             changelogMetadata.transitTo(ChangelogState.COMPLETED);
             pauseChangelogsFromRestoreConsumer(Collections.singleton(partition));
             if (storeMetadata.store() instanceof MeteredStateStore) {
-                ((MeteredStateStore) storeMetadata.store()).recordRestoreTime(changelogMetadata.calculateRestoreTime(time));
+                ((MeteredStateStore) storeMetadata.store()).recordRestoreTime(changelogMetadata.calculateRestoreTime(time.nanoseconds()));
             }
 
             try {

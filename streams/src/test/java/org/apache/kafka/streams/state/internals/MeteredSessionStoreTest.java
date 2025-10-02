@@ -467,8 +467,8 @@ public class MeteredSessionStoreTest {
 
         // it suffices to verify one restore metric since all restore metrics are recorded by the same sensor
         // and the sensor is tested elsewhere
-        final KafkaMetric metric = metric("restore-rate");
-        assertTrue((Double) metric.metricValue() > 0);
+        final KafkaMetric metric = metric("restore-latency-max");
+        assertThat((Double) metric.metricValue(), equalTo((double) restoreTimeNs));
     }
 
     @Test

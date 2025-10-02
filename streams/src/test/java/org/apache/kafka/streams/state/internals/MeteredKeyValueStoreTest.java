@@ -58,7 +58,6 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -221,8 +220,8 @@ public class MeteredKeyValueStoreTest {
 
         // it suffices to verify one restore metric since all restore metrics are recorded by the same sensor
         // and the sensor is tested elsewhere
-        final KafkaMetric metric = metric("restore-rate");
-        assertThat((Double) metric.metricValue(), greaterThan(0.0));
+        final KafkaMetric metric = metric("restore-latency-max");
+        assertThat((Double) metric.metricValue(), equalTo((double) restoreTimeNs));
     }
 
     @Test

@@ -221,19 +221,8 @@ public class MeteredWindowStoreTest {
 
         // it suffices to verify one restore metric since all restore metrics are recorded by the same sensor
         // and the sensor is tested elsewhere
-        final KafkaMetric metric = metric("restore-rate");
-        assertThat((Double) metric.metricValue(), greaterThan(0.0));
-    }
-
-    @Test
-    public void shouldRecordRestoreLatencyOnInit() {
-        doNothing().when(innerStoreMock).init(context, store);
-        store.init(context, store);
-
-        // it suffices to verify one restore metric since all restore metrics are recorded by the same sensor
-        // and the sensor is tested elsewhere
-        final KafkaMetric metric = metric("restore-rate");
-        assertThat((Double) metric.metricValue(), greaterThan(0.0));
+        final KafkaMetric metric = metric("restore-latency-max");
+        assertThat((Double) metric.metricValue(), equalTo((double) restoreTimeNs));
     }
 
     @Test
