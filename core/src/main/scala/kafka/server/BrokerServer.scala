@@ -613,7 +613,7 @@ class BrokerServer(
     }
   }
 
-   private def registerBrokerReadyCallback(callback: BrokerReadyCallback): Unit = {
+  def registerBrokerReadyCallback(callback: BrokerReadyCallback): Unit = {
     brokerReadyCallbacks += callback
   }
 
