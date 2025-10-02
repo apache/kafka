@@ -34,10 +34,16 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
 
 
-class ConsumerRebalanceMetricsManagerTest {
+class ConsumerRebalanceMetricsManagerTest extends AbstractConsumerMetricsManagerTest {
 
     private final Time time = new MockTime();
     private final Metrics metrics = new Metrics(time);
+
+    @Override
+    protected AbstractConsumerMetricsManager metricsManager(Metrics metrics, String groupDescription) {
+        SubscriptionState subscriptionState = new SubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
+        return new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
+    }
 
     @Test
     public void testAssignedPartitionCountMetric() {

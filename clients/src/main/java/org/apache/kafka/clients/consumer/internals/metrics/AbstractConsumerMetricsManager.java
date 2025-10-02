@@ -21,24 +21,25 @@ import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * Utility class that serves as a common abstraction point
+ */
 public abstract class AbstractConsumerMetricsManager implements AutoCloseable {
 
     private final Metrics metrics;
     private final String metricGroupName;
     private final Set<MetricName> metricNames;
-    private final List<Sensor> sensors;
+    private final Set<Sensor> sensors;
 
     protected AbstractConsumerMetricsManager(Metrics metrics, String metricGroupName) {
         this.metrics = Objects.requireNonNull(metrics);
         this.metricGroupName = Objects.requireNonNull(metricGroupName);
         this.metricNames = new HashSet<>();
-        this.sensors = new ArrayList<>();
+        this.sensors = new HashSet<>();
     }
 
     protected MetricName metricName(String name, String description) {
@@ -59,7 +60,20 @@ public abstract class AbstractConsumerMetricsManager implements AutoCloseable {
 
     @Override
     public final void close() {
+        System.out.println("Metrics before:");
+        metrics.metrics().keySet().forEach(System.out::println);
+
         metricNames.forEach(metrics::removeMetric);
+
+        System.out.println("Metrics after:");
+        metrics.metrics().keySet().forEach(System.out::println);
+
+        System.out.println("Sensors before:");
+        sensors.stream().filter(s -> metrics.getSensor(s.name()) != null).forEach(System.out::println);
+
         sensors.forEach(s -> metrics.removeSensor(s.name()));
+
+        System.out.println("Sensors after:");
+        sensors.stream().filter(s -> metrics.getSensor(s.name()) != null).forEach(System.out::println);
     }
 }
