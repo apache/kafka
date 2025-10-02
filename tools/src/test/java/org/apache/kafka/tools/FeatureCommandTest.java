@@ -471,7 +471,8 @@ public class FeatureCommandTest {
     @Test
     public void testHandleRemoteCommandWithoutBootstrap() {
         String errorMessage = ToolsTestUtils.grabConsoleError(() -> FeatureCommand.mainNoExit("upgrade"));
-        assertTrue(errorMessage.contains("one of the arguments --bootstrap-server --bootstrap-controller is required"));
+        assertTrue(errorMessage.contains("You must specify either --bootstrap-controller " +
+                "or --bootstrap-server."));
     }
 
     @Test

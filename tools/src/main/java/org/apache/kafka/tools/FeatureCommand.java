@@ -111,7 +111,7 @@ public class FeatureCommand {
         } catch (Exception e) {
             // bootstrap_server and bootstrap_controller are in a mutually exclusive group,
             // so the exception happens only when both of them are missing
-            throw new ArgumentParserException("one of the arguments --bootstrap-server --bootstrap-controller is required", parser);
+            throw new ArgumentParserException(e.getMessage(), parser);
         }
 
         try (Admin adminClient = Admin.create(properties)) {
