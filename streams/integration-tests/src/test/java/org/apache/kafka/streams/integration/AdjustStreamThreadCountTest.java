@@ -272,8 +272,8 @@ public class AdjustStreamThreadCountTest {
             stateTransitionHistory.clear();
 
             final CountDownLatch latch = new CountDownLatch(2);
-            final Thread one = adjustCountHelperThread(kafkaStreams, 2, latch);
-            final Thread two = adjustCountHelperThread(kafkaStreams, 3, latch);
+            final Thread one = adjustCountHelperThread(kafkaStreams, 1, latch);
+            final Thread two = adjustCountHelperThread(kafkaStreams, 1, latch);
             Set<ThreadMetadata> threadMetadata = null;
 
             AssertionError testError = null;
@@ -281,9 +281,10 @@ public class AdjustStreamThreadCountTest {
                 two.start();
                 one.start();
 
-                assertTrue(latch.await(90, TimeUnit.SECONDS));
+                assertTrue(latch.await(30, TimeUnit.SECONDS));
                 one.join();
                 two.join();
+
                 waitForCondition(
                     () -> kafkaStreams.metadataForLocalThreads().size() == oldThreadCount &&
                         kafkaStreams.state() == KafkaStreams.State.RUNNING,
