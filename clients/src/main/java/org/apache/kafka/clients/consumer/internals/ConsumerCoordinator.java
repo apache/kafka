@@ -30,6 +30,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
+import org.apache.kafka.clients.consumer.internals.metrics.AbstractConsumerMetricsManager;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -55,6 +56,8 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Meter;
+import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
@@ -108,6 +111,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final List<ConsumerPartitionAssignor> assignors;
     private final ConsumerMetadata metadata;
     private final ConsumerCoordinatorMetrics coordinatorMetrics;
+    private final RebalanceCallbackMetricsManager rebalanceCallbackMetricsManager;
     private final SubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
@@ -271,11 +275,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             protocol = null;
         }
 
+        this.rebalanceCallbackMetricsManager = new RebalanceCallbackMetricsManager(metrics, metricGrpPrefix);
         this.rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
             logContext,
             subscriptions,
             time,
-            new RebalanceCallbackMetricsManager(metrics, metricGrpPrefix)
+            rebalanceCallbackMetricsManager
         );
         this.metadata.requestUpdate(true);
     }
@@ -1024,6 +1029,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         } finally {
             super.close(timer, membershipOperation);
+            Utils.closeQuietly(coordinatorMetrics, "consumer coordinator metrics");
+            Utils.closeQuietly(rebalanceCallbackMetricsManager, "consumer rebalance callback metrics");
         }
     }
 
@@ -1621,24 +1628,26 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    private class ConsumerCoordinatorMetrics {
+    private class ConsumerCoordinatorMetrics extends AbstractConsumerMetricsManager {
         private final Sensor commitSensor;
 
+        @SuppressWarnings({"this-escape"})
         private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
-            String metricGrpName = metricGrpPrefix + COORDINATOR_METRICS_SUFFIX;
+            super(metrics, metricGrpPrefix + COORDINATOR_METRICS_SUFFIX);
 
-            this.commitSensor = metrics.sensor("commit-latency");
-            this.commitSensor.add(metrics.metricName("commit-latency-avg",
-                metricGrpName,
+            this.commitSensor = sensor("commit-latency");
+            this.commitSensor.add(metricName("commit-latency-avg",
                 "The average time taken for a commit request"), new Avg());
-            this.commitSensor.add(metrics.metricName("commit-latency-max",
-                metricGrpName,
+            this.commitSensor.add(metricName("commit-latency-max",
                 "The max time taken for a commit request"), new Max());
-            this.commitSensor.add(createMeter(metrics, metricGrpName, "commit", "commit calls"));
+            this.commitSensor.add(new Meter(new WindowedCount(),
+                metricName("commit-rate",
+                    String.format("The number of %s per second", "commit calls")),
+                metricName("commit-total",
+                    String.format("The total number of %s", "commit calls"))));
 
             Measurable numParts = (config, now) -> subscriptions.numAssignedPartitions();
-            metrics.addMetric(metrics.metricName("assigned-partitions",
-                metricGrpName,
+            addMetric(metricName("assigned-partitions",
                 "The number of partitions currently assigned to this consumer"), numParts);
         }
     }

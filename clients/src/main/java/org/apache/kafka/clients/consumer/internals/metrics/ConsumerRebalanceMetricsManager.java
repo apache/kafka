@@ -52,6 +52,7 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
     private long lastRebalanceEndMs = -1L;
     private long lastRebalanceStartMs = -1L;
 
+    @SuppressWarnings({"this-escape"})
     public ConsumerRebalanceMetricsManager(Metrics metrics, SubscriptionState subscriptions) {
         super(metrics, CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
 

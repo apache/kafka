@@ -35,6 +35,7 @@ public final class ShareRebalanceMetricsManager extends RebalanceMetricsManager 
     private long lastRebalanceEndMs = -1L;
     private long lastRebalanceStartMs = -1L;
 
+    @SuppressWarnings({"this-escape"})
     public ShareRebalanceMetricsManager(Metrics metrics) {
         super(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
 

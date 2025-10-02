@@ -34,6 +34,7 @@ public class KafkaShareConsumerMetrics extends AbstractConsumerMetricsManager {
     private long pollStartMs;
     private long timeSinceLastPollMs;
 
+    @SuppressWarnings({"this-escape"})
     public KafkaShareConsumerMetrics(Metrics metrics) {
         super(metrics, CONSUMER_SHARE_METRIC_GROUP);
         Measurable lastPoll = (mConfig, now) -> {

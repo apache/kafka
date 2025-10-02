@@ -42,6 +42,7 @@ public class HeartbeatMetricsManager extends AbstractConsumerMetricsManager {
         this(metrics, CONSUMER_METRIC_GROUP_PREFIX);
     }
 
+    @SuppressWarnings({"this-escape"})
     public HeartbeatMetricsManager(Metrics metrics, String metricGroupPrefix) {
         super(metrics, metricGroupPrefix + COORDINATOR_METRICS_SUFFIX);
         heartbeatSensor = sensor("heartbeat-latency");

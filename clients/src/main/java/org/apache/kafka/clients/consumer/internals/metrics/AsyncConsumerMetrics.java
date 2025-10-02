@@ -45,6 +45,7 @@ public class AsyncConsumerMetrics extends AbstractConsumerMetricsManager {
     private final Sensor unsentRequestsQueueSizeSensor;
     private final Sensor unsentRequestsQueueTimeSensor;
 
+    @SuppressWarnings({"this-escape"})
     public AsyncConsumerMetrics(Metrics metrics, String groupName) {
         super(metrics, groupName);
 

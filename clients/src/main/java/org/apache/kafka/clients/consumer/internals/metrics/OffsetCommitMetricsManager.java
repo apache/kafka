@@ -34,8 +34,9 @@ public class OffsetCommitMetricsManager extends AbstractConsumerMetricsManager {
     final MetricName commitTotal;
     private final Sensor commitSensor;
 
-    public OffsetCommitMetricsManager(Metrics metrics_) {
-        super(metrics_, CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
+    @SuppressWarnings({"this-escape"})
+    public OffsetCommitMetricsManager(Metrics metrics) {
+        super(metrics, CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
         commitSensor = sensor("commit-latency");
         commitLatencyAvg = metricName("commit-latency-avg",
             "The average time taken for a commit request");

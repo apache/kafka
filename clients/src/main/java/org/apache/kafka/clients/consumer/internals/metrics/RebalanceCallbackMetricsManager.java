@@ -40,6 +40,7 @@ public class RebalanceCallbackMetricsManager extends AbstractConsumerMetricsMana
         this(metrics, CONSUMER_METRIC_GROUP_PREFIX);
     }
 
+    @SuppressWarnings({"this-escape"})
     public RebalanceCallbackMetricsManager(Metrics metrics, String grpMetricsPrefix) {
         super(metrics, grpMetricsPrefix + COORDINATOR_METRICS_SUFFIX);
         partitionRevokeCallbackSensor = sensor("partition-revoked-latency");

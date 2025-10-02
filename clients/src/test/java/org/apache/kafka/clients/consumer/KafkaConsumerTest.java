@@ -391,6 +391,19 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
+    public void testMetricsRemovedOnClose(GroupProtocol groupProtocol) {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
+
+        assertTrue(consumer.metrics().size() > 1, "The consumer should have created many metrics");
+        consumer.close(CloseOptions.timeout(Duration.ZERO));
+        assertTrue(consumer.metrics().size() <= 1, "The consumer should have removed all of its metrics");
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
     public void testDisableJmxAndClientTelemetryReporter(GroupProtocol groupProtocol) {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
