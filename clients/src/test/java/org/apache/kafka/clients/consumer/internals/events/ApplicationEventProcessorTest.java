@@ -111,7 +111,8 @@ public class ApplicationEventProcessorTest {
                 new LogContext(),
                 requestManagers,
                 metadata,
-                subscriptionState
+                subscriptionState,
+                Optional.of(mock(AsyncPollEventProcessorContext.class))
         );
     }
 
@@ -171,7 +172,7 @@ public class ApplicationEventProcessorTest {
 
     private static Stream<Arguments> applicationEvents() {
         return Stream.of(
-                Arguments.of(new PollEvent(100)),
+                Arguments.of(new AsyncPollEvent(calculateDeadlineMs(12345, 100), 100)),
                 Arguments.of(new CreateFetchRequestsEvent(calculateDeadlineMs(12345, 100))),
                 Arguments.of(new CheckAndUpdatePositionsEvent(500)),
                 Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)),
@@ -265,12 +266,12 @@ public class ApplicationEventProcessorTest {
 
     @Test
     public void testPollEvent() {
-        PollEvent event = new PollEvent(12345);
+        AsyncPollEvent event = new AsyncPollEvent(12346, 12345);
 
         setupProcessor(true);
         when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+        when(offsetsRequestManager.updateFetchPositions(anyLong())).thenReturn(new CompletableFuture<>());
         processor.process(event);
-        assertTrue(event.reconcileAndAutoCommit().isDone());
         verify(commitRequestManager).updateTimerAndMaybeCommit(12345);
         verify(membershipManager).onConsumerPoll();
         verify(heartbeatRequestManager).resetPollTimer(12345);

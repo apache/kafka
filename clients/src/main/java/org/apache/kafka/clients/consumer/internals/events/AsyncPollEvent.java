@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * This class represents the non-blocking event that executes logic functionally equivalent to the following:
  *
  * <ul>
- *     <li>{@link PollEvent}</li>
+ *     <li>{@link SharePollEvent}</li>
  *     <li>{@link UpdatePatternSubscriptionEvent}</li>
  *     <li>{@link CheckAndUpdatePositionsEvent}</li>
  *     <li>{@link CreateFetchRequestsEvent}</li>
@@ -46,8 +46,8 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * <p/>
  *
- * When the {@code CompositePollEvent} is created, it exists in the {@link State#STARTED} state. The background
- * thread will execute the {@code CompositePollEvent} until it completes successfully ({@link State#SUCCEEDED}),
+ * When the {@code AsyncPollEvent} is created, it exists in the {@link State#STARTED} state. The background
+ * thread will execute the {@code AsyncPollEvent} until it completes successfully ({@link State#SUCCEEDED}),
  * hits an error ({@link State#FAILED}), or detects that the application thread needs to execute callbacks
  * ({@link State#CALLBACKS_REQUIRED}).
  *
@@ -58,7 +58,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * application thread. The background thread is able to detect when it needs to complete processing so that the
  * application thread can execute the awaiting callbacks.
  */
-public class CompositePollEvent extends ApplicationEvent {
+public class AsyncPollEvent extends ApplicationEvent {
 
     public enum State {
 
@@ -131,8 +131,8 @@ public class CompositePollEvent extends ApplicationEvent {
     }
 
     private static final List<Type> ALLOWED_STARTING_EVENT_TYPES = List.of(
+        Type.ASYNC_POLL,
         Type.CHECK_AND_UPDATE_POSITIONS,
-        Type.POLL,
         Type.UPDATE_SUBSCRIPTION_METADATA
     );
     private final long deadlineMs;
@@ -142,14 +142,25 @@ public class CompositePollEvent extends ApplicationEvent {
 
     /**
      * Creates a new event to signify a multi-stage processing of {@link Consumer#poll(Duration)} logic.
+     *
+     * @param deadlineMs        Time, in milliseconds, at which point the event must be completed; based on the
+     *                          {@link Duration} passed to {@link Consumer#poll(Duration)}
+     * @param pollTimeMs        Time, in milliseconds, at which point the event was created
+     */
+    public AsyncPollEvent(long deadlineMs, long pollTimeMs) {
+        this(deadlineMs, pollTimeMs, Type.ASYNC_POLL);
+    }
+
+    /**
+     * Creates a new event to signify a multi-stage processing of {@link Consumer#poll(Duration)} logic.
      * 
      * @param deadlineMs        Time, in milliseconds, at which point the event must be completed; based on the
      *                          {@link Duration} passed to {@link Consumer#poll(Duration)}
      * @param pollTimeMs        Time, in milliseconds, at which point the event was created
      * @param startingEventType {@link ApplicationEvent.Type} that serves as the starting point for the event processing
      */
-    public CompositePollEvent(long deadlineMs, long pollTimeMs, Type startingEventType) {
-        super(Type.COMPOSITE_POLL);
+    public AsyncPollEvent(long deadlineMs, long pollTimeMs, Type startingEventType) {
+        super(Type.ASYNC_POLL);
         this.deadlineMs = deadlineMs;
         this.pollTimeMs = pollTimeMs;
 

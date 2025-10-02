@@ -61,19 +61,19 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final RequestManagers requestManagers;
-    private final Optional<CompositePollEventProcessorContext> compositePollContext;
+    private final Optional<AsyncPollEventProcessorContext> asyncPollContext;
     private int metadataVersionSnapshot;
 
     public ApplicationEventProcessor(final LogContext logContext,
                                      final RequestManagers requestManagers,
                                      final ConsumerMetadata metadata,
                                      final SubscriptionState subscriptions,
-                                     final Optional<CompositePollEventProcessorContext> compositePollContext) {
+                                     final Optional<AsyncPollEventProcessorContext> asyncPollContext) {
         this.log = logContext.logger(ApplicationEventProcessor.class);
         this.requestManagers = requestManagers;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
-        this.compositePollContext = compositePollContext;
+        this.asyncPollContext = asyncPollContext;
         this.metadataVersionSnapshot = metadata.updateVersion();
     }
 
@@ -88,16 +88,20 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                                      final RequestManagers requestManagers,
                                      final ConsumerMetadata metadata,
                                      final SubscriptionState subscriptions,
-                                     final CompositePollEventProcessorContext compositePollContext) {
-        this(logContext, requestManagers, metadata, subscriptions, Optional.of(compositePollContext));
+                                     final AsyncPollEventProcessorContext asyncPollContext) {
+        this(logContext, requestManagers, metadata, subscriptions, Optional.of(asyncPollContext));
     }
 
     @SuppressWarnings({"CyclomaticComplexity", "JavaNCSSCheck"})
     @Override
     public void process(ApplicationEvent event) {
         switch (event.type()) {
-            case COMPOSITE_POLL:
-                process((CompositePollEvent) event);
+            case ASYNC_POLL:
+                process((AsyncPollEvent) event);
+                return;
+
+            case SHARE_POLL:
+                process((SharePollEvent) event);
                 return;
 
             case COMMIT_ASYNC:
@@ -106,10 +110,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
             case COMMIT_SYNC:
                 process((SyncCommitEvent) event);
-                return;
-
-            case POLL:
-                process((PollEvent) event);
                 return;
 
             case FETCH_COMMITTED_OFFSETS:
@@ -241,38 +241,13 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         }
     }
 
-    private void process(final PollEvent event) {
-        processPollEvent(event.pollTimeMs());
-        event.markReconcileAndAutoCommitComplete();
-    }
-
-    private void processPollEvent(final long pollTimeMs) {
-        // Trigger a reconciliation that can safely commit offsets if needed to rebalance,
-        // as we're processing before any new fetching starts in the app thread
+    private void process(final SharePollEvent event) {
         requestManagers.consumerMembershipManager.ifPresent(consumerMembershipManager ->
             consumerMembershipManager.maybeReconcile(true));
-        if (requestManagers.commitRequestManager.isPresent()) {
-            CommitRequestManager commitRequestManager = requestManagers.commitRequestManager.get();
-            commitRequestManager.updateTimerAndMaybeCommit(pollTimeMs);
-            // all commit request generation points have been passed,
-            // so it's safe to notify the app thread could proceed and start fetching
-            requestManagers.consumerHeartbeatRequestManager.ifPresent(hrm -> {
-                hrm.membershipManager().onConsumerPoll();
-                hrm.resetPollTimer(pollTimeMs);
-            });
-            requestManagers.streamsGroupHeartbeatRequestManager.ifPresent(hrm -> {
-                hrm.membershipManager().onConsumerPoll();
-                hrm.resetPollTimer(pollTimeMs);
-            });
-        } else {
-            // safe to unblock - no auto-commit risk here:
-            // 1. commitRequestManager is not present
-            // 2. shareConsumer has no auto-commit mechanism
-            requestManagers.shareHeartbeatRequestManager.ifPresent(hrm -> {
-                hrm.membershipManager().onConsumerPoll();
-                hrm.resetPollTimer(pollTimeMs);
-            });
-        }
+        requestManagers.shareHeartbeatRequestManager.ifPresent(hrm -> {
+            hrm.membershipManager().onConsumerPoll();
+            hrm.resetPollTimer(event.pollTimeMs());
+        });
     }
 
     private void process(final CreateFetchRequestsEvent event) {
@@ -757,16 +732,35 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         requestManagers.streamsMembershipManager.get().onAllTasksLostCallbackCompleted(event);
     }
 
-    private void process(final CompositePollEvent event) {
-        CompositePollEventProcessorContext context = compositePollContext.orElseThrow(IllegalArgumentException::new);
+    private void process(final AsyncPollEvent event) {
+        AsyncPollEventProcessorContext context = asyncPollContext.orElseThrow(IllegalArgumentException::new);
         ApplicationEvent.Type nextEventType = event.startingEventType();
 
         if (context.maybeCompleteExceptionally(event) || context.maybeCompleteWithCallbackRequired(event, nextEventType))
             return;
 
-        if (nextEventType == ApplicationEvent.Type.POLL) {
+        if (nextEventType == ApplicationEvent.Type.ASYNC_POLL) {
             log.debug("Processing {} logic for {}", nextEventType, event);
-            processPollEvent(event.pollTimeMs());
+
+            // Trigger a reconciliation that can safely commit offsets if needed to rebalance,
+            // as we're processing before any new fetching starts
+            requestManagers.consumerMembershipManager.ifPresent(consumerMembershipManager ->
+                consumerMembershipManager.maybeReconcile(true));
+
+            if (requestManagers.commitRequestManager.isPresent()) {
+                CommitRequestManager commitRequestManager = requestManagers.commitRequestManager.get();
+                commitRequestManager.updateTimerAndMaybeCommit(event.pollTimeMs());
+
+                requestManagers.consumerHeartbeatRequestManager.ifPresent(hrm -> {
+                    hrm.membershipManager().onConsumerPoll();
+                    hrm.resetPollTimer(event.pollTimeMs());
+                });
+                requestManagers.streamsGroupHeartbeatRequestManager.ifPresent(hrm -> {
+                    hrm.membershipManager().onConsumerPoll();
+                    hrm.resetPollTimer(event.pollTimeMs());
+                });
+            }
+
             nextEventType = ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA;
 
             if (context.maybeCompleteExceptionally(event) || context.maybeCompleteWithCallbackRequired(event, nextEventType))
@@ -805,7 +799,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return;
         }
 
-        context.completeExceptionally(event, new KafkaException("Unknown next step for composite poll: " + nextEventType));
+        context.completeExceptionally(event, new KafkaException("Unknown next step for async poll: " + nextEventType));
     }
 
     private <T> BiConsumer<? super T, ? super Throwable> complete(final CompletableFuture<T> b) {
@@ -847,18 +841,18 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                                                                final ConsumerMetadata metadata,
                                                                final SubscriptionState subscriptions,
                                                                final Supplier<RequestManagers> requestManagersSupplier,
-                                                               final Supplier<CompositePollEventProcessorContext> compositePollEventProcessorContextSupplier) {
+                                                               final Supplier<AsyncPollEventProcessorContext> asyncPollContextSupplier) {
         return new CachedSupplier<>() {
             @Override
             protected ApplicationEventProcessor create() {
                 RequestManagers requestManagers = requestManagersSupplier.get();
-                CompositePollEventProcessorContext compositePollContext = compositePollEventProcessorContextSupplier.get();
+                AsyncPollEventProcessorContext asyncPollContext = asyncPollContextSupplier.get();
                 return new ApplicationEventProcessor(
                         logContext,
                         requestManagers,
                         metadata,
                         subscriptions,
-                        compositePollContext
+                        asyncPollContext
                 );
             }
         };

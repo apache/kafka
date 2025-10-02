@@ -35,10 +35,10 @@ import java.util.function.Supplier;
 
 /**
  * This provides the context for the {@link ApplicationEventProcessor#process(ApplicationEvent)} that invokes the
- * {@link CompositePollEvent} process method. This is mostly to avoid polluting the {@link ApplicationEventProcessor}
- * with instance variables and logic that's specific only to the background {@link CompositePollEvent} processing.
+ * {@link AsyncPollEvent} process method. This is mostly to avoid polluting the {@link ApplicationEventProcessor}
+ * with instance variables and logic that's specific only to the background {@link AsyncPollEvent} processing.
  */
-public class CompositePollEventProcessorContext {
+public class AsyncPollEventProcessorContext {
 
     private final Logger log;
     private final NetworkClientDelegate networkClientDelegate;
@@ -47,12 +47,12 @@ public class CompositePollEventProcessorContext {
     private final CompletableEventReaper applicationEventReaper;
     private final FetchBuffer fetchBuffer;
 
-    private CompositePollEventProcessorContext(LogContext logContext,
-                                               NetworkClientDelegate networkClientDelegate,
-                                               BackgroundEventHandler backgroundEventHandler,
-                                               OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
-                                               CompletableEventReaper applicationEventReaper,
-                                               FetchBuffer fetchBuffer) {
+    private AsyncPollEventProcessorContext(LogContext logContext,
+                                           NetworkClientDelegate networkClientDelegate,
+                                           BackgroundEventHandler backgroundEventHandler,
+                                           OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
+                                           CompletableEventReaper applicationEventReaper,
+                                           FetchBuffer fetchBuffer) {
         this.log = logContext.logger(getClass());
         this.networkClientDelegate = networkClientDelegate;
         this.backgroundEventHandler = backgroundEventHandler;
@@ -65,18 +65,18 @@ public class CompositePollEventProcessorContext {
      * Creates a {@link Supplier} for deferred creation during invocation by
      * {@link ConsumerNetworkThread}.
      */
-    public static Supplier<CompositePollEventProcessorContext> supplier(LogContext logContext,
-                                                                        Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                                                                        BackgroundEventHandler backgroundEventHandler,
-                                                                        OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
-                                                                        CompletableEventReaper applicationEventReaper,
-                                                                        FetchBuffer fetchBuffer) {
+    public static Supplier<AsyncPollEventProcessorContext> supplier(LogContext logContext,
+                                                                    Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
+                                                                    BackgroundEventHandler backgroundEventHandler,
+                                                                    OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
+                                                                    CompletableEventReaper applicationEventReaper,
+                                                                    FetchBuffer fetchBuffer) {
         return new CachedSupplier<>() {
             @Override
-            protected CompositePollEventProcessorContext create() {
+            protected AsyncPollEventProcessorContext create() {
                 NetworkClientDelegate networkClientDelegate = networkClientDelegateSupplier.get();
 
-                return new CompositePollEventProcessorContext(
+                return new AsyncPollEventProcessorContext(
                     logContext,
                     networkClientDelegate,
                     backgroundEventHandler,
@@ -117,20 +117,23 @@ public class CompositePollEventProcessorContext {
 
     /**
      * Helper method that will check if any application thread user callbacks need to be executed. If so, the
-     * current event will be completed with {@link CompositePollEvent.State#CALLBACKS_REQUIRED} and this method
+     * current event will be completed with {@link AsyncPollEvent.State#CALLBACKS_REQUIRED} and this method
      * will return {@code true}. Otherwise, it will return {@code false}.
      */
-    public boolean maybeCompleteWithCallbackRequired(CompositePollEvent event, ApplicationEvent.Type nextEventType) {
+    public boolean maybeCompleteWithCallbackRequired(AsyncPollEvent event, ApplicationEvent.Type nextEventType) {
         // If there are background events to process or enqueued callbacks to invoke, exit to
         // the application thread.
         if (backgroundEventHandler.size() > 0 || offsetCommitCallbackInvoker.size() > 0) {
             log.trace(
                 "Pausing polling by completing {} with the state of {} and the next stage of {}",
                 event,
-                CompositePollEvent.State.CALLBACKS_REQUIRED,
+                AsyncPollEvent.State.CALLBACKS_REQUIRED,
                 nextEventType
             );
             event.completeWithCallbackRequired(nextEventType);
+
+            // This to ensure that the application thread doesn't needlessly wait for the full time out if it's
+            // been detected that a callback is required.
             fetchBuffer.wakeup();
             return true;
         }
@@ -142,10 +145,10 @@ public class CompositePollEventProcessorContext {
      * Helper method that checks if there's a non-null error from
      * {@link NetworkClientDelegate#getAndClearMetadataError()} or if the provided exception is not a timeout-based
      * exception. If there's an error to report to the user, the current event will be completed with
-     * {@link CompositePollEvent.State#FAILED} and this method will return {@code true}. Otherwise, it will
+     * {@link AsyncPollEvent.State#FAILED} and this method will return {@code true}. Otherwise, it will
      * return {@code false}.
      */
-    public boolean maybeCompleteExceptionally(CompositePollEvent event, Throwable t) {
+    public boolean maybeCompleteExceptionally(AsyncPollEvent event, Throwable t) {
         if (maybeCompleteExceptionally(event))
             return true;
 
@@ -153,7 +156,7 @@ public class CompositePollEventProcessorContext {
             return false;
 
         if (t instanceof org.apache.kafka.common.errors.TimeoutException || t instanceof java.util.concurrent.TimeoutException) {
-            log.debug("Ignoring timeout for CompositePollEvent {}: {}", event, t.getMessage());
+            log.trace("Ignoring timeout for {}: {}", event, t.getMessage());
             return false;
         }
 
@@ -168,10 +171,10 @@ public class CompositePollEventProcessorContext {
     /**
      * Helper method that checks if there's a non-null error from
      * {@link NetworkClientDelegate#getAndClearMetadataError()}, and if so, reports it to the user by completing the
-     * current event with {@link CompositePollEvent.State#FAILED} and returning {@code true}. Otherwise, it will
+     * current event with {@link AsyncPollEvent.State#FAILED} and returning {@code true}. Otherwise, it will
      * return {@code false}.
      */
-    public boolean maybeCompleteExceptionally(CompositePollEvent event) {
+    public boolean maybeCompleteExceptionally(AsyncPollEvent event) {
         Optional<Exception> exception = networkClientDelegate.getAndClearMetadataError();
 
         if (exception.isPresent()) {
@@ -183,18 +186,18 @@ public class CompositePollEventProcessorContext {
     }
 
     /**
-     * Helper method to complete the given event with {@link CompositePollEvent.State#FAILED}.
+     * Helper method to complete the given event with {@link AsyncPollEvent.State#FAILED}.
      */
-    public void completeExceptionally(CompositePollEvent event, Throwable error) {
+    public void completeExceptionally(AsyncPollEvent event, Throwable error) {
         KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(error);
         event.completeExceptionally(e);
         log.trace("Failing event processing for {}", event, e);
     }
 
     /**
-     * Helper method to complete the given event with {@link CompositePollEvent.State#SUCCEEDED}.
+     * Helper method to complete the given event with {@link AsyncPollEvent.State#SUCCEEDED}.
      */
-    public void complete(CompositePollEvent event) {
+    public void complete(AsyncPollEvent event) {
         event.completeSuccessfully();
         log.trace("Completed event processing for {}", event);
     }
