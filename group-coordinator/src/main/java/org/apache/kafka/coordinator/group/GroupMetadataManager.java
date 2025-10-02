@@ -3078,10 +3078,14 @@ public class GroupMetadataManager {
                 }
 
                 // Copy the member but with its new member id.
-                ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(existingStaticMemberOrNull, memberId)
+                ConsumerGroupMember.Builder memberBuilder = new ConsumerGroupMember.Builder(existingStaticMemberOrNull, memberId)
                     .setMemberEpoch(0)
-                    .setPreviousMemberEpoch(0)
-                    .build();
+                    .setPreviousMemberEpoch(0);
+                if (useClassicProtocol) {
+                    // Regex subscription is not supported for classic member.
+                    memberBuilder.setSubscribedTopicRegex("");
+                }
+                ConsumerGroupMember newMember = memberBuilder.build();
 
                 // Generate the records to replace the member. We don't care about the regular expression
                 // here because it is taken care of later after the static membership replacement.
