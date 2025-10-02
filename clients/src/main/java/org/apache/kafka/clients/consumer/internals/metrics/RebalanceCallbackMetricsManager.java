@@ -25,7 +25,7 @@ import org.apache.kafka.common.metrics.stats.Max;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 
-public class RebalanceCallbackMetricsManager {
+public class RebalanceCallbackMetricsManager extends AbstractConsumerMetricsManager {
     final MetricName partitionRevokeLatencyAvg;
     final MetricName partitionAssignLatencyAvg;
     final MetricName partitionLostLatencyAvg;
@@ -41,34 +41,28 @@ public class RebalanceCallbackMetricsManager {
     }
 
     public RebalanceCallbackMetricsManager(Metrics metrics, String grpMetricsPrefix) {
-        final String metricGroupName = grpMetricsPrefix + COORDINATOR_METRICS_SUFFIX;
-        partitionRevokeCallbackSensor = metrics.sensor("partition-revoked-latency");
-        partitionRevokeLatencyAvg = metrics.metricName("partition-revoked-latency-avg",
-            metricGroupName,
+        super(metrics, grpMetricsPrefix + COORDINATOR_METRICS_SUFFIX);
+        partitionRevokeCallbackSensor = sensor("partition-revoked-latency");
+        partitionRevokeLatencyAvg = metricName("partition-revoked-latency-avg",
             "The average time taken for a partition-revoked rebalance listener callback");
         partitionRevokeCallbackSensor.add(partitionRevokeLatencyAvg, new Avg());
-        partitionRevokeLatencyMax = metrics.metricName("partition-revoked-latency-max",
-            metricGroupName,
+        partitionRevokeLatencyMax = metricName("partition-revoked-latency-max",
             "The max time taken for a partition-revoked rebalance listener callback");
         partitionRevokeCallbackSensor.add(partitionRevokeLatencyMax, new Max());
 
-        partitionAssignCallbackSensor = metrics.sensor("partition-assigned-latency");
-        partitionAssignLatencyAvg = metrics.metricName("partition-assigned-latency-avg",
-            metricGroupName,
+        partitionAssignCallbackSensor = sensor("partition-assigned-latency");
+        partitionAssignLatencyAvg = metricName("partition-assigned-latency-avg",
             "The average time taken for a partition-assigned rebalance listener callback");
         partitionAssignCallbackSensor.add(partitionAssignLatencyAvg, new Avg());
-        partitionAssignLatencyMax = metrics.metricName("partition-assigned-latency-max",
-            metricGroupName,
+        partitionAssignLatencyMax = metricName("partition-assigned-latency-max",
             "The max time taken for a partition-assigned rebalance listener callback");
         partitionAssignCallbackSensor.add(partitionAssignLatencyMax, new Max());
 
-        partitionLostCallbackSensor = metrics.sensor("partition-lost-latency");
-        partitionLostLatencyAvg = metrics.metricName("partition-lost-latency-avg",
-            metricGroupName,
+        partitionLostCallbackSensor = sensor("partition-lost-latency");
+        partitionLostLatencyAvg = metricName("partition-lost-latency-avg",
             "The average time taken for a partition-lost rebalance listener callback");
         partitionLostCallbackSensor.add(partitionLostLatencyAvg, new Avg());
-        partitionLostLatencyMax = metrics.metricName("partition-lost-latency-max",
-            metricGroupName,
+        partitionLostLatencyMax = metricName("partition-lost-latency-max",
             "The max time taken for a partition-lost rebalance listener callback");
         partitionLostCallbackSensor.add(partitionLostLatencyMax, new Max());
     }
