@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft.internals;
+package org.apache.kafka.server.metrics;
 
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -46,11 +46,26 @@ public class TimeRatio implements MeasurableStat {
 
     @Override
     public double measure(MetricConfig config, long currentTimestampMs) {
+        return measure();
+    }
+
+    @Override
+    public void record(MetricConfig config, double value, long currentTimestampMs) {
+        record(value, currentTimestampMs);
+    }
+
+    /**
+     * Measures the ratio of recorded duration to the interval duration
+     * since the last measurement.
+     *
+     * @return The measured ratio value between 0.0 and 1.0
+     */
+    public double measure() {
         if (lastRecordedTimestampMs < 0) {
             // Return the default value if no recordings have been captured.
             return defaultRatio;
         } else {
-            // We measure the ratio over the
+            // We measure the ratio over the interval
             double intervalDurationMs = Math.max(lastRecordedTimestampMs - intervalStartTimestampMs, 0);
             final double ratio;
             if (intervalDurationMs == 0) {
@@ -61,15 +76,20 @@ public class TimeRatio implements MeasurableStat {
                 ratio = totalRecordedDurationMs / intervalDurationMs;
             }
 
-            // The next interval begins at the
+            // The next interval begins at the last recorded timestamp
             intervalStartTimestampMs = lastRecordedTimestampMs;
             totalRecordedDurationMs = 0;
             return ratio;
         }
     }
 
-    @Override
-    public void record(MetricConfig config, double value, long currentTimestampMs) {
+    /**
+     * Records a duration value at the specified timestamp.
+     *
+     * @param value The duration value to record
+     * @param currentTimestampMs The current timestamp in milliseconds
+     */
+    public void record(double value, long currentTimestampMs) {
         if (intervalStartTimestampMs < 0) {
             // Discard the initial value since the value occurred prior to the interval start
             intervalStartTimestampMs = currentTimestampMs;
@@ -78,5 +98,4 @@ public class TimeRatio implements MeasurableStat {
             lastRecordedTimestampMs = currentTimestampMs;
         }
     }
-
 }

@@ -45,6 +45,7 @@ public class QuorumControllerMetricsTest {
                 Set<String> expected = Set.of(
                     "kafka.controller:type=ControllerEventManager,name=EventQueueProcessingTimeMs",
                     "kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs",
+                    "kafka.controller:type=ControllerEventManager,name=AvgIdleRatio",
                     "kafka.controller:type=KafkaController,name=ActiveControllerCount",
                     "kafka.controller:type=KafkaController,name=EventQueueOperationsStartedCount",
                     "kafka.controller:type=KafkaController,name=EventQueueOperationsTimedOutCount",
@@ -184,6 +185,35 @@ public class QuorumControllerMetricsTest {
             assertEquals(sessionTimeoutMs, timeSinceLastHeartbeatReceivedMs.value());
             metrics.removeTimeSinceLastHeartbeatMetrics();
             assertEquals(numMetrics - 1, registry.allMetrics().size());
+        } finally {
+            registry.shutdown();
+        }
+    }
+
+    @Test
+    public void testAvgIdleRatio() {
+        final double delta = 0.001;
+        MetricsRegistry registry = new MetricsRegistry();
+        MockTime time = new MockTime();
+        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, 9000)) {
+            Gauge<Double> avgIdleRatio = (Gauge<Double>) registry.allMetrics().get(metricName("ControllerEventManager", "AvgIdleRatio"));
+
+            // No idle time recorded yet; returns default ratio of 1.0
+            assertEquals(1.0, avgIdleRatio.value(), delta);
+
+            // First recording is dropped to establish the interval start time
+            // This is because TimeRatio needs an initial timestamp to measure intervals from
+            metrics.updateIdleTime(10);
+            time.sleep(40);
+            metrics.updateIdleTime(20);
+            // avgIdleRatio = (20ms idle) / (40ms interval) = 0.5
+            assertEquals(0.5, avgIdleRatio.value(), delta);
+
+            time.sleep(20);
+            metrics.updateIdleTime(1);
+            // avgIdleRatio = (1ms idle) / (20ms interval) = 0.05
+            assertEquals(0.05, avgIdleRatio.value(), delta);
+
         } finally {
             registry.shutdown();
         }
