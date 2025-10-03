@@ -1884,9 +1884,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     public void shutdown(final boolean leaveGroup) {
         log.info("Informed to shut down");
         final State oldState = setState(State.PENDING_SHUTDOWN);
-        if (leaveGroup) {
-            leaveGroupRequested.set(true);
-        }
+        leaveGroupRequested.set(leaveGroup);
         if (oldState == State.CREATED) {
             // The thread may not have been started. Take responsibility for shutting down
             completeShutdown(true);
