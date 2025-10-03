@@ -732,7 +732,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         AsyncPollEventProcessorContext context = asyncPollContext.orElseThrow(IllegalArgumentException::new);
         ApplicationEvent.Type nextEventType = event.startingEventType();
 
-        if (context.maybeCompleteExceptionally(event) || context.maybeCompleteWithCallbackRequired(event, nextEventType))
+        if (context.maybeCompleteWithCallbackRequired(event, nextEventType))
             return;
 
         if (nextEventType == ApplicationEvent.Type.ASYNC_POLL) {
@@ -759,7 +759,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
             nextEventType = ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS;
 
-            if (context.maybeCompleteExceptionally(event) || context.maybeCompleteWithCallbackRequired(event, nextEventType))
+            if (context.maybeCompleteWithCallbackRequired(event, nextEventType))
                 return;
         }
 

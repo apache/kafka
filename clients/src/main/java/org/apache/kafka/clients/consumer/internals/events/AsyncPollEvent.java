@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer;
+import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.common.KafkaException;
 
 import java.time.Duration;
@@ -58,7 +59,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * application thread. The background thread is able to detect when it needs to complete processing so that the
  * application thread can execute the awaiting callbacks.
  */
-public class AsyncPollEvent extends ApplicationEvent {
+public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNotifiable {
 
     public enum State {
 
@@ -199,6 +200,11 @@ public class AsyncPollEvent extends ApplicationEvent {
     public void completeWithCallbackRequired(Type nextEventType) {
         Result r = new Result(State.CALLBACKS_REQUIRED, Objects.requireNonNull(nextEventType));
         result.compareAndSet(Result.STARTED, r);
+    }
+
+    @Override
+    public void metadataError(Exception metadataException) {
+        completeExceptionally(ConsumerUtils.maybeWrapAsKafkaException(metadataException));
     }
 
     @Override

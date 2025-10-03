@@ -16,19 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 
-import java.util.List;
-import java.util.Map;
+/**
+ * This interface is used for events that need to be notified when the
+ * {@link NetworkClientDelegate#getAndClearMetadataError()} has an error.
+ */
+public interface MetadataErrorNotifiable {
 
-public abstract class AbstractTopicMetadataEvent extends CompletableApplicationEvent<Map<String, List<PartitionInfo>>> implements MetadataErrorNotifiable {
-
-    protected AbstractTopicMetadataEvent(final Type type, final long deadlineMs) {
-        super(type, deadlineMs);
-    }
-
-    @Override
-    public void metadataError(Exception metadataException) {
-        future().completeExceptionally(metadataException);
-    }
+    void metadataError(Exception metadataException);
 }
