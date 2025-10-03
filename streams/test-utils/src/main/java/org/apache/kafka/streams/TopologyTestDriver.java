@@ -493,7 +493,6 @@ public class TopologyTestDriver implements Closeable {
                 streamsMetrics,
                 cache
             );
-            context.setRecordContext(new ProcessorRecordContext(0L, -1L, -1, null, new RecordHeaders()));
 
             task = new StreamTask(
                 TASK_ID,
