@@ -25,7 +25,6 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.security.test.JaasTestUtils;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.network.SocketServerConfigs;
@@ -327,13 +326,6 @@ public class TestUtils {
             rack.ifPresent(r -> props.put(ServerConfigs.BROKER_RACK_CONFIG, r));
 
             try {
-                if (protocolAndPorts.stream().anyMatch(entry -> JaasTestUtils.usesSslTransportLayer(entry.getKey()))) {
-                    props.putAll(JaasTestUtils.sslConfigs(org.apache.kafka.common.network.ConnectionMode.SERVER, false, trustStoreFile, "server" + nodeId));
-                }
-
-                if (protocolAndPorts.stream().anyMatch(entry -> JaasTestUtils.usesSaslAuthentication(entry.getKey()))) {
-                    saslProperties.ifPresent(p -> props.putAll(JaasTestUtils.saslConfigs(Optional.of(p))));
-                }
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
