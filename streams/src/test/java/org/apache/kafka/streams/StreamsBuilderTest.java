@@ -170,6 +170,41 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    public void shouldAddReadOnlyStore() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.addReadOnlyStore(
+            Stores.keyValueStoreBuilder(
+                inMemoryKeyValueStore("store"),
+                Serdes.String(),
+                Serdes.String()
+            ),
+            "topic",
+            Consumed.with(Serdes.String(), Serdes.String()),
+            () -> new Processor<String, String, Void, Void>() {
+                private KeyValueStore<String, String> store;
+
+                @Override
+                public void init(final ProcessorContext<Void, Void> context) {
+                    store = context.getStateStore("store");
+                }
+
+                @Override
+                public void process(final Record<String, String> record) {
+                    store.put(record.key(), record.value());
+                }
+            }
+        );
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build())) {
+            final TestInputTopic<String, String> inputTopic =
+                    driver.createInputTopic("topic", new StringSerializer(), new StringSerializer());
+            inputTopic.pipeInput("hey", "there");
+            final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
+            final String hey = store.get("hey");
+            assertThat(hey, is("there"));
+        }
+    }
+
+    @Test
     public void shouldNotThrowNullPointerIfOptimizationsNotSpecified() {
         final Properties properties = new Properties();
 
@@ -1406,6 +1441,23 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    public void shouldUseSpecifiedNameForReadOnlyStoreProcessor() {
+        builder.addReadOnlyStore(Stores.keyValueStoreBuilder(
+                        inMemoryKeyValueStore("store"),
+                        Serdes.String(),
+                        Serdes.String()
+                ),
+                "topic",
+                Consumed.with(Serdes.String(), Serdes.String()).withName("test"),
+                new MockApiProcessorSupplier<>()
+        );
+        builder.build();
+
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertNamesForOperation(topology, "test-source", "test");
+    }
+
+    @Test
     public void shouldUseDefaultNameForGlobalStoreProcessor() {
         builder.addGlobalStore(Stores.keyValueStoreBuilder(
                         inMemoryKeyValueStore("store"),
@@ -1419,6 +1471,23 @@ public class StreamsBuilderTest {
         builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildGlobalStateTopology();
+        assertNamesForOperation(topology, "KSTREAM-SOURCE-0000000000", "KTABLE-SOURCE-0000000001");
+    }
+
+    @Test
+    public void shouldUseDefaultNameForReadOnlyStoreProcessor() {
+        builder.addReadOnlyStore(Stores.keyValueStoreBuilder(
+                        inMemoryKeyValueStore("store"),
+                        Serdes.String(),
+                        Serdes.String()
+                ),
+                "topic",
+                Consumed.with(Serdes.String(), Serdes.String()),
+                new MockApiProcessorSupplier<>()
+        );
+        builder.build();
+
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
         assertNamesForOperation(topology, "KSTREAM-SOURCE-0000000000", "KTABLE-SOURCE-0000000001");
     }
 

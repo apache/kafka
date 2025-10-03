@@ -181,6 +181,32 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
   ): StreamsBuilderJ =
     inner.addGlobalStore(storeBuilder, topic, consumed, stateUpdateSupplier)
 
+  /**
+   * Adds a read-only `StateStore` to the topology. The state store will be populated with data from the specified
+   * source topic.
+   * <p>
+   * Unlike regular state stores, read-only state stores don't create their own changelog topics.
+   * Instead, they use the source topic for recovery, so the source topic should be configured with log compaction.
+   * <p>
+   * Read-only state stores are partition-specific (unlike global stores which maintain a full copy on each instance).
+   * This means the data is distributed across the application instances based on partition assignment.
+   * <p>
+   * It is optional to connect a read-only state store to a processor. If connected, the processor will
+   * have read-only access to the state store for the partitions it's processing.
+   * <p>
+   * The provided `ProcessorSupplier` creates processors that receive records from the source topic
+   * and are responsible for maintaining the state store.
+   *
+   * @see `org.apache.kafka.streams.StreamsBuilder#addReadOnlyStore`
+   */
+  def addReadOnlyStateStore[K, V](
+    storeBuilder: StoreBuilder[_ <: StateStore],
+    topic: String,
+    consumed: Consumed[K, V],
+    stateUpdateSupplier: org.apache.kafka.streams.processor.api.ProcessorSupplier[K, V, Void, Void]
+  ): StreamsBuilderJ =
+    inner.addReadOnlyStore(storeBuilder, topic, consumed, stateUpdateSupplier)
+
   def build(): Topology = inner.build()
 
   /**

@@ -31,6 +31,7 @@ import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.NodesWithRelaxedNullKeyJoinDownstream;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
+import org.apache.kafka.streams.kstream.internals.graph.ReadOnlyStoreNode;
 import org.apache.kafka.streams.kstream.internals.graph.StateStoreNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
@@ -243,6 +244,29 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         );
 
         addGraphNode(root, globalStoreNode);
+    }
+
+    public synchronized <KIn, VIn> void addReadOnlyStore(final StoreFactory storeFactory,
+                                                         final String topic,
+                                                         final ConsumedInternal<KIn, VIn> consumed,
+                                                         final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
+        // explicitly disable logging for read-only state stores
+        storeFactory.withLoggingDisabled();
+
+        final NamedInternal named = new NamedInternal(consumed.name());
+        final String sourceName = named.suffixWithOrElseGet(TABLE_SOURCE_SUFFIX, this, KStreamImpl.SOURCE_NAME);
+        final String processorName = named.orElseGenerateWithPrefix(this, KTableImpl.SOURCE_NAME);
+
+        final GraphNode readOnlyStateStoreNode = new ReadOnlyStoreNode<>(
+            storeFactory,
+            sourceName,
+            topic,
+            consumed,
+            processorName,
+            stateUpdateSupplier
+        );
+
+        addGraphNode(root, readOnlyStateStoreNode);
     }
 
     void addGraphNode(final GraphNode parent,

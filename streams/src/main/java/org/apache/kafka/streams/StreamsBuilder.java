@@ -575,6 +575,49 @@ public class StreamsBuilder {
     }
 
     /**
+     * Adds a read-only {@link StateStore} to the topology.
+     * The {@link StateStore} sources its data from the provided input topic.
+     * State stores are sharded and the number of shards is determined at runtime by the number of input topic
+     * partitions for the source topic <em>and</em> the connected processors (if any).
+     * <p>
+     * A {@link SourceNode} will be added to consume the data arriving from the partitions
+     * of the input topic.
+     * <p>
+     * The provided {@link ProcessorSupplier} will be used to create an
+     * {@link Processor} that will receive records from the input topic.
+     * The supplier should always generate a new instance. Creating a single {@link Processor} object
+     * and returning the same object reference in {@link ProcessorSupplier#get()} is a
+     * violation of the supplier pattern and leads to runtime exceptions.
+     * This {@link Processor} should be used to keep the {@link StateStore} up-to-date.
+     * <p>
+     * Read-only state stores do not create their own changelog topics. Instead, they use the source topic
+     * for recovery, so the source topic should be configured with log compaction.
+     * <p>
+     * It is optional to connect read-only state stores to other processors. If connected, those processors
+     * will have read-only access to the state store for the partitions they're processing.
+     *
+     * @param storeBuilder          user defined {@link StoreBuilder}; can't be {@code null}
+     * @param topic                 the topic to source the data from
+     * @param consumed              the instance of {@link Consumed} used to define optional parameters; can't be {@code null}
+     * @param stateUpdateSupplier   the instance of {@link ProcessorSupplier}
+     * @return itself
+     * @throws TopologyException if the processor or state is already registered
+     */
+    public synchronized <KIn, VIn> StreamsBuilder addReadOnlyStore(final StoreBuilder<?> storeBuilder,
+                                                                   final String topic,
+                                                                   final Consumed<KIn, VIn> consumed,
+                                                                   final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
+        Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
+        Objects.requireNonNull(consumed, "consumed can't be null");
+        internalStreamsBuilder.addReadOnlyStore(
+            StoreBuilderWrapper.wrapStoreBuilder(storeBuilder),
+            topic,
+            new ConsumedInternal<>(consumed),
+            stateUpdateSupplier);
+        return this;
+    }
+
+    /**
      * Returns the {@link Topology} that represents the specified processing logic.
      * Note that using this method means no optimizations are performed.
      *
