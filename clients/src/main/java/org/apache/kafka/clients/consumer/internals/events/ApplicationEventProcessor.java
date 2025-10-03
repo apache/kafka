@@ -421,16 +421,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         event.future().complete(null);
     }
 
-    private void processUpdatePatternSubscriptionEvent() {
-        if (!subscriptions.hasPatternSubscription()) {
-            return;
-        }
-        if (this.metadataVersionSnapshot < metadata.updateVersion()) {
-            this.metadataVersionSnapshot = metadata.updateVersion();
-            updatePatternSubscription(metadata.fetch());
-        }
-    }
-
     /**
      * Process event indicating that the consumer unsubscribed from all topics. This will make
      * the consumer release its assignment and send a request to leave the group.
