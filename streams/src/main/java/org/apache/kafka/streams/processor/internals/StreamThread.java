@@ -1841,12 +1841,6 @@ public class StreamThread extends Thread implements ProcessingThread {
                     .collect(Collectors.toSet())
             );
 
-            if ((now - lastPurgeMs) > purgeTimeMs) {
-                // try to purge the committed records for repartition topics if possible
-                taskManager.maybePurgeCommittedRecords();
-                lastPurgeMs = now;
-            }
-
             if (committed == -1) {
                 log.debug("Unable to commit as we are in the middle of a rebalance, will try again when it completes.");
             } else {
@@ -1855,6 +1849,12 @@ public class StreamThread extends Thread implements ProcessingThread {
             }
         } else {
             committed = taskManager.maybeCommitActiveTasksPerUserRequested();
+        }
+
+        if ((now - lastPurgeMs) > purgeTimeMs) {
+            // try to purge the committed records for repartition topics if possible
+            taskManager.maybePurgeCommittedRecords();
+            lastPurgeMs = now;
         }
 
         return committed;

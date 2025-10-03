@@ -625,6 +625,39 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
+    @MethodSource("data")
+    public void shouldAlsoPurgeBeforeTheCommitInterval(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+        final long purgeInterval = 1000L;
+        final long commitInterval = Long.MAX_VALUE;
+        final Properties props = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
+        props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(commitInterval));
+        props.setProperty(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG, Long.toString(purgeInterval));
+
+        final StreamsConfig config = new StreamsConfig(props);
+        @SuppressWarnings("unchecked")
+        final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        final TaskManager taskManager = mock(TaskManager.class);
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        thread = buildStreamThread(consumer, taskManager, config, topologyMetadata);
+
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
+
+        mockTime.sleep(purgeInterval + 1);
+
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
+
+        verify(taskManager, times(2)).maybePurgeCommittedRecords();
+    }
+
+    @ParameterizedTest
     @MethodSource("data")        
     public void shouldNotProcessWhenPartitionRevoked(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
         assumeFalse(processingThreadsEnabled);
