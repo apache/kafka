@@ -18,9 +18,12 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
+import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
@@ -29,7 +32,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 public class LogTestUtils {
@@ -44,27 +46,27 @@ public class LogTestUtils {
         return new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time);
     }
 
-    public static UnifiedLog createLog(File dir,
-                                       LogConfig config,
-                                       BrokerTopicStats brokerTopicStats,
-                                       Scheduler scheduler,
-                                       Time time) throws IOException {
-        return createLog(
-                dir,
-                config,
-                brokerTopicStats,
-                scheduler,
-                time,
-                0L, // logStartOffset
-                0L, // recoveryPoint
-                5 * 60 * 1000, // maxTransactionTimeoutMs
-                new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
-                TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,                true, // lastShutdownClean
-                Optional.empty(), // topicId
-                new ConcurrentHashMap<>(), // numRemainingSegments
-                false, // remoteStorageSystemEnable
-                LogOffsetsListener.NO_OP_OFFSETS_LISTENER
-        );
+    public static LogAppendInfo appendEndTxnMarkerAsLeader(UnifiedLog log,
+                                                           long producerId,
+                                                           short producerEpoch,
+                                                           ControlRecordType controlType,
+                                                           long timestamp,
+                                                           int coordinatorEpoch,
+                                                           int leaderEpoch) {
+        MemoryRecords records = endTxnRecords(controlType, producerId, producerEpoch, 0L, coordinatorEpoch, leaderEpoch, timestamp);
+
+        return log.appendAsLeader(records, leaderEpoch, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL);
+    }
+
+    public static MemoryRecords endTxnRecords(ControlRecordType controlRecordType,
+                                              long producerId,
+                                              short epoch,
+                                              long offset,
+                                              int coordinatorEpoch,
+                                              int partitionLeaderEpoch,
+                                              long timestamp) {
+        EndTransactionMarker marker = new EndTransactionMarker(controlRecordType, coordinatorEpoch);
+        return MemoryRecords.withEndTransactionMarker(offset, timestamp, partitionLeaderEpoch, producerId, epoch, marker);
     }
 
     @SuppressWarnings("ParameterNumber")
@@ -195,7 +197,6 @@ public class LogTestUtils {
             return this;
         }
 
-        // 3. 建立一個 build() 方法，它使用 builder 中設定的值來建立最終的 LogConfig 物件
         public LogConfig build() {
             Properties logProps = new Properties();
             logProps.put(TopicConfig.SEGMENT_MS_CONFIG, String.valueOf(segmentMs));

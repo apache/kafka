@@ -24,15 +24,8 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.network.SocketServerConfigs;
-import org.apache.kafka.raft.QuorumConfig;
-import org.apache.kafka.server.config.KRaftConfigs;
-import org.apache.kafka.server.config.ReplicationConfigs;
-import org.apache.kafka.server.config.ServerConfigs;
-import org.apache.kafka.server.config.ServerLogConfigs;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,17 +34,9 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
-import java.util.AbstractMap;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
 import java.util.Random;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static java.lang.String.format;
 

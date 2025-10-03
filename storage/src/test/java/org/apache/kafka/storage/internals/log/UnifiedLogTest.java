@@ -57,7 +57,7 @@ public class UnifiedLogTest {
     private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
     private final MockTime mockTime = new MockTime();
     private final int maxTransactionTimeoutMs = 60 * 60 * 1000;
-    private final ProducerStateManagerConfig producerStateManagerConfig = new ProducerStateManagerConfig(maxTransactionTimeoutMs, true);
+    private final ProducerStateManagerConfig producerStateManagerConfig = new ProducerStateManagerConfig(maxTransactionTimeoutMs, false);
     private final List<UnifiedLog> logsToClose = new ArrayList<>();
 
     private UnifiedLog log;
@@ -564,7 +564,8 @@ public class UnifiedLogTest {
     @Test
     public void testFirstUnstableOffsetWithTransactionalData() throws IOException {
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(1024 * 1024 * 5).build();
+                .withSegmentBytes(1024 * 1024 * 5)
+                .build();
         log = createLog(logDir, logConfig);
 
         long pid = 137L;
@@ -588,7 +589,8 @@ public class UnifiedLogTest {
         assertEquals(Optional.of(firstAppendInfo.firstOffset()), log.firstUnstableOffset());
 
         // now transaction is committed
-        LogAppendInfo commitAppendInfo = appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.COMMIT, mockTime.milliseconds());
+        LogAppendInfo commitAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch,
+                ControlRecordType.COMMIT, mockTime.milliseconds(), 0, 0);
 
         // first unstable offset is not updated until the high watermark is advanced
         assertEquals(Optional.of(firstAppendInfo.firstOffset()), log.firstUnstableOffset());
