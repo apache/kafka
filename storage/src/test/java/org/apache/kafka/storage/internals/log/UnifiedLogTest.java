@@ -18,6 +18,7 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -65,7 +66,13 @@ public class UnifiedLogTest {
     public void tearDown() throws IOException {
         brokerTopicStats.close();
         for (UnifiedLog log : logsToClose) {
-            log.close();
+            try {
+                // some test like testLogDeletionAfterClose and testLogDeletionAfterClose
+                // they are closed from test so KafkaStorageException is expected.
+                log.close();
+            } catch (KafkaStorageException ignore) {
+                // ignore
+            }
         }
         Utils.delete(tmpDir);
     }
@@ -460,6 +467,7 @@ public class UnifiedLogTest {
         log.assignEpochStartOffset(0, 40);
         log.assignEpochStartOffset(1, 90);
 
+        // segments are not eligible for deletion if no high watermark has been set
         int numSegments = log.numberOfSegments();
         log.deleteOldSegments();
         assertEquals(numSegments, log.numberOfSegments());
@@ -579,7 +587,7 @@ public class UnifiedLogTest {
         assertEquals(Optional.of(firstAppendInfo.firstOffset()), log.firstUnstableOffset());
 
         // now transaction is committed
-        LogAppendInfo commitAppendInfo = appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.COMMIT, mockTime.milliseconds());
+        LogAppendInfo commitAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.COMMIT, mockTime.milliseconds(), 0, 0);
 
         // first unstable offset is not updated until the high watermark is advanced
         assertEquals(Optional.of(firstAppendInfo.firstOffset()), log.firstUnstableOffset());
