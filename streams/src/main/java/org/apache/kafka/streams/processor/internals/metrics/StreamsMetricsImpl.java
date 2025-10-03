@@ -356,7 +356,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             storeSensorPrefix(
                 metricName.tags().get("thread-id"),
                 metricName.tags().get("task-id"),
-                metricName.tags(). get(metricsScopeCandidates.get(0))
+                metricName.tags().get(metricsScopeCandidates.get(0))
             )
         ).remove(metricName);
     }
