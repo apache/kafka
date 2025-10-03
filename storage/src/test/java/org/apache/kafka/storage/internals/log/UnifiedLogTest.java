@@ -192,8 +192,9 @@ public class UnifiedLogTest {
 
     @Test
     public void shouldTruncateLeaderEpochCheckpointFileWhenTruncatingLog() throws IOException {
+        Supplier<MemoryRecords> records = () -> TestUtils.records(List.of(new SimpleRecord("value".getBytes())), 0, 0);
         LogConfig config = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(10 * createRecords(0, 0).sizeInBytes())
+                .withSegmentBytes(10 * records.get().sizeInBytes())
                 .build();
         log = createLog(logDir, config);
         LeaderEpochFileCache cache = epochCache(log);
@@ -587,7 +588,7 @@ public class UnifiedLogTest {
         assertEquals(Optional.of(firstAppendInfo.firstOffset()), log.firstUnstableOffset());
 
         // now transaction is committed
-        LogAppendInfo commitAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.COMMIT, mockTime.milliseconds(), 0, 0);
+        LogAppendInfo commitAppendInfo = appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.COMMIT, mockTime.milliseconds());
 
         // first unstable offset is not updated until the high watermark is advanced
         assertEquals(Optional.of(firstAppendInfo.firstOffset()), log.firstUnstableOffset());
@@ -598,18 +599,15 @@ public class UnifiedLogTest {
     }
 
     private void append(int epoch, long startOffset, int count) {
+        Function<Integer, MemoryRecords> records = i ->
+                TestUtils.records(List.of(new SimpleRecord("value".getBytes())), startOffset + i, epoch);
         for (int i = 0; i < count; i++) {
-            log.appendAsFollower(createRecords(startOffset + i, epoch), epoch);
+            log.appendAsFollower(records.apply(i), epoch);
         }
     }
 
     private LeaderEpochFileCache epochCache(UnifiedLog log) {
         return log.leaderEpochCache();
-    }
-
-    private void appendAsFollower(UnifiedLog log, MemoryRecords records, int leaderEpoch) {
-        records.batches().forEach(batch -> batch.setPartitionLeaderEpoch(leaderEpoch));
-        log.appendAsFollower(records, leaderEpoch);
     }
 
     private LogAppendInfo appendEndTxnMarkerAsLeader(UnifiedLog log, long producerId, short producerEpoch, ControlRecordType controlType, long timestamp) throws IOException {
@@ -643,10 +641,5 @@ public class UnifiedLogTest {
 
         this.logsToClose.add(log);
         return log;
-    }
-
-    // FIXME: remove
-    private MemoryRecords createRecords(long startOffset, int epoch) {
-        return TestUtils.records(List.of(new SimpleRecord("value".getBytes())), startOffset, epoch);
     }
 }
