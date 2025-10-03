@@ -41,12 +41,14 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 public class StreamsMetricsImpl implements StreamsMetrics {
 
@@ -341,11 +343,16 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public void removeStoreLevelMetric(final MetricName metricName) {
         metrics.removeMetric(metricName);
+        final List<String> tagCandidates = metricName.tags().keySet().stream().filter(tag -> !tag.equals("thread-id") && !tag.equals("task-id")).collect(Collectors.toList());
+        if (tagCandidates.size() != 1) {
+            // should never happen
+            throw new IllegalStateException("Expected exactly one store tag, but found " + tagCandidates);
+        }
         storeLevelMetrics.get(
             storeSensorPrefix(
                 metricName.tags().get("thread-id"),
                 metricName.tags().get("task-id"),
-                metricName.tags().get("scope-state-id")
+                metricName.tags(). get(tagCandidates.get(0))
             )
         ).remove(metricName);
     }
