@@ -343,16 +343,20 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public void removeStoreLevelMetric(final MetricName metricName) {
         metrics.removeMetric(metricName);
-        final List<String> tagCandidates = metricName.tags().keySet().stream().filter(tag -> !tag.equals("thread-id") && !tag.equals("task-id")).collect(Collectors.toList());
-        if (tagCandidates.size() != 1) {
+
+        final List<String> metricsScopeCandidates = metricName.tags().keySet().stream()
+            .filter(tag -> !tag.equals("thread-id") && !tag.equals("task-id"))
+            .collect(Collectors.toList());
+        if (metricsScopeCandidates.size() != 1) {
             // should never happen
-            throw new IllegalStateException("Expected exactly one store tag, but found " + tagCandidates);
+            throw new IllegalStateException("Expected exactly one metric scope tag, but found " + metricsScopeCandidates);
         }
+
         storeLevelMetrics.get(
             storeSensorPrefix(
                 metricName.tags().get("thread-id"),
                 metricName.tags().get("task-id"),
-                metricName.tags(). get(tagCandidates.get(0))
+                metricName.tags(). get(metricsScopeCandidates.get(0))
             )
         ).remove(metricName);
     }
