@@ -148,7 +148,7 @@ object StorageTool extends Logging {
     if (!namespace.getBoolean("no_initial_controllers") &&
       config.processRoles.contains(ProcessRole.ControllerRole) &&
       staticVotersEmpty &&
-      formatter.initialVoters().isEmpty) {
+      !formatter.initialVoters().isPresent) {
           throw new TerseFailure("Because " + QuorumConfig.QUORUM_VOTERS_CONFIG +
             " is not set on this controller, you must specify one of the following: " +
             "--standalone, --initial-controllers, or --no-initial-controllers.");
