@@ -35,7 +35,7 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer
-import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
+import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, ConsumerRecords, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, SslConfigs, TopicConfig}
@@ -568,10 +568,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       try {
         consumer.assign(util.Set.of(tp))
         consumer.seekToBeginning(util.Set.of(tp))
-        TestUtils.waitUntilTrue(() => {
-          val records = consumer.poll(time.Duration.ofSeconds(3))
+        def verifyRecordCount(records: ConsumerRecords[Array[Byte], Array[Byte]]): Boolean = {
           expectedNumber == records.count()
-        }, s"Consumer.poll() did not return the expected number of records ($expectedNumber) within the timeout")
+        }
+        TestUtils.pollRecordsUntilTrue(
+          consumer,
+          verifyRecordCount,
+          s"Consumer.poll() did not return the expected number of records ($expectedNumber) within the timeout",
+          pollTimeoutMs = 3000
+        )
       } finally consumer.close()
     }
 
@@ -4624,10 +4629,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     try {
       var counter = 0
 
-      TestUtils.waitUntilTrue(() => {
-        counter += streams.poll(JDuration.ofMillis(100L)).count()
+      def verifyRecordCount(records: ConsumerRecords[Nothing, Nothing]): Boolean = {
+        counter += records.count()
         counter >= numRecords
-      }, "Consumer not assigned to partitions")
+      }
+      TestUtils.pollRecordsUntilTrue(
+        streams,
+        verifyRecordCount,
+        s"Consumer not assigned to partitions"
+      )
 
       streams.commitSync()
 
@@ -4691,10 +4701,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     try {
       var counter = 0
 
-      TestUtils.waitUntilTrue(() => {
-        counter += streams.poll(JDuration.ofMillis(100L)).count()
+      def verifyRecordCount(records: ConsumerRecords[Nothing, Nothing]): Boolean = {
+        counter += records.count()
         counter >= numRecords
-      }, "Consumer not assigned to partitions")
+      }
+      TestUtils.pollRecordsUntilTrue(
+        streams,
+        verifyRecordCount,
+        s"Consumer not assigned to partitions"
+      )
 
       streams.commitSync()
 
@@ -4775,10 +4790,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     try {
       var counter = 0
 
-      TestUtils.waitUntilTrue(() => {
-        counter += streams.poll(JDuration.ofMillis(100L)).count()
+      def verifyRecordCount(records: ConsumerRecords[Nothing, Nothing]): Boolean = {
+        counter += records.count()
         counter >= numRecords
-      }, "Consumer not assigned to partitions")
+      }
+      TestUtils.pollRecordsUntilTrue(
+        streams,
+        verifyRecordCount,
+        s"Consumer not assigned to partitions"
+      )
 
       streams.commitSync()
 

@@ -14,11 +14,10 @@ package kafka.api
 
 import kafka.security.JaasTestUtils
 
-import java.time.Duration
 import java.util.Properties
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecords}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.SaslAuthenticationException
@@ -146,14 +145,12 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
 
   private def verifyConsumerWithAuthenticationFailure(consumer: Consumer[Array[Byte], Array[Byte]]): Unit = {
     val startMs = System.currentTimeMillis
-    TestUtils.waitUntilTrue(() => {
-      try {
-        consumer.poll(Duration.ofMillis(1000))
-        false
-      } catch {
-        case _: Exception => true
-      }
-    }, s"Consumer.poll() did not throw an exception within the timeout")
+    TestUtils.pollUntilException(
+      consumer,
+      _ => true,
+      s"Consumer.poll() did not throw an exception within the timeout",
+      pollTimeoutMs = 1000
+    )
     val elapsedMs = System.currentTimeMillis - startMs
     assertTrue(elapsedMs <= 5000, s"Poll took too long, elapsed=$elapsedMs")
     verifyAuthenticationException(consumer.partitionsFor(topic))
@@ -161,13 +158,15 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     createClientCredential()
     val producer = createProducer()
     verifyWithRetry(sendOneRecord(producer))()
-    TestUtils.waitUntilTrue(() => {
-      try {
-        consumer.poll(Duration.ofMillis(1000)).count == 1
-      } catch {
-        case _: SaslAuthenticationException => false
-      }
-    }, s"Consumer.poll() did not read the expected number of records within the timeout")
+    def verifyRecordCount(records: ConsumerRecords[Array[Byte], Array[Byte]]): Boolean = {
+      records.count() == 1
+    }
+    TestUtils.pollRecordsUntilTrue(
+      consumer,
+      verifyRecordCount,
+      s"Consumer.poll() did not read the expected number of records within the timeout",
+      pollTimeoutMs = 1000
+    )
   }
 
   @Test
