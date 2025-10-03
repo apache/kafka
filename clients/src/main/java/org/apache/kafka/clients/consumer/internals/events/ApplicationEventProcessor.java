@@ -736,7 +736,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return;
 
         if (nextEventType == ApplicationEvent.Type.ASYNC_POLL) {
-            log.debug("Processing {} logic for {}", nextEventType, event);
+            log.trace("Processing {} logic for {}", nextEventType, event);
 
             // Trigger a reconciliation that can safely commit offsets if needed to rebalance,
             // as we're processing before any new fetching starts
@@ -764,7 +764,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         }
 
         if (nextEventType == ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS) {
-            log.debug("Processing {} logic for {}", nextEventType, event);
+            log.trace("Processing {} logic for {}", nextEventType, event);
             CompletableFuture<Boolean> updatePositionsFuture = requestManagers.offsetsRequestManager.updateFetchPositions(event.deadlineMs());
             context.trackCheckAndUpdatePositionsForTimeout(updatePositionsFuture, event.deadlineMs());
 
@@ -772,7 +772,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 if (context.maybeCompleteExceptionally(event, updatePositionsError))
                     return;
 
-                log.debug("Processing {} logic for {}", ApplicationEvent.Type.CREATE_FETCH_REQUESTS, event);
+                log.trace("Processing {} logic for {}", ApplicationEvent.Type.CREATE_FETCH_REQUESTS, event);
 
                 // Create a fetch request if there's no data in the FetchBuffer.
                 requestManagers.fetchRequestManager.createFetchRequests().whenComplete((___, fetchError) -> {
