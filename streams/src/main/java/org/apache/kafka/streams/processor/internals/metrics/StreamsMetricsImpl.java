@@ -339,6 +339,17 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         metrics.removeMetric(metricName);
     }
 
+    public void removeStoreLevelMetric(final MetricName metricName) {
+        metrics.removeMetric(metricName);
+        storeLevelMetrics.get(
+            storeSensorPrefix(
+                metricName.tags().get("thread-id"),
+                metricName.tags().get("task-id"),
+                metricName.tags().get("scope-state-id")
+            )
+        ).remove(metricName);
+    }
+
     public Map<String, String> taskLevelTagMap(final String threadId, final String taskId) {
         final Map<String, String> tagMap = new LinkedHashMap<>();
         tagMap.put(THREAD_ID_TAG, threadId);

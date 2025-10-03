@@ -487,9 +487,11 @@ public class MeteredKeyValueStore<K, V>
         private final long startTimestamp;
         private final Function<byte[], V> valueDeserializer;
 
-        private MeteredKeyValueTimestampedIterator(final KeyValueIterator<Bytes, byte[]> iter,
-                                        final Sensor sensor,
-                                        final Function<byte[], V> valueDeserializer) {
+        private MeteredKeyValueTimestampedIterator(
+            final KeyValueIterator<Bytes, byte[]> iter,
+            final Sensor sensor,
+            final Function<byte[], V> valueDeserializer
+        ) {
             this.iter = iter;
             this.sensor = sensor;
             this.valueDeserializer = valueDeserializer;
