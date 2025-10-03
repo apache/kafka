@@ -345,20 +345,24 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         metrics.removeMetric(metricName);
 
         final List<String> metricsScopeCandidates = metricName.tags().keySet().stream()
-            .filter(tag -> !tag.equals("thread-id") && !tag.equals("task-id"))
+            .filter(tag -> !tag.equals(THREAD_ID_TAG) && !tag.equals(TASK_ID_TAG))
             .collect(Collectors.toList());
         if (metricsScopeCandidates.size() != 1) {
             // should never happen
             throw new IllegalStateException("Expected exactly one metric scope tag, but found " + metricsScopeCandidates);
         }
 
-        storeLevelMetrics.get(
+        final Deque<MetricName> metrics = storeLevelMetrics.get(
             storeSensorPrefix(
-                metricName.tags().get("thread-id"),
-                metricName.tags().get("task-id"),
+                metricName.tags().get(THREAD_ID_TAG),
+                metricName.tags().get(TASK_ID_TAG),
                 metricName.tags().get(metricsScopeCandidates.get(0))
             )
-        ).remove(metricName);
+        );
+
+        if (metrics != null) {
+            metrics.remove(metricName);
+        }
     }
 
     public Map<String, String> taskLevelTagMap(final String threadId, final String taskId) {
