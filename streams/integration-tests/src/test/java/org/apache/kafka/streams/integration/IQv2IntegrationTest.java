@@ -383,10 +383,6 @@ public class IQv2IntegrationTest {
                         }
 
                         @Override
-                        public void assignThread() {
-                        }
-
-                        @Override
                         public void flush() {
 
                         }

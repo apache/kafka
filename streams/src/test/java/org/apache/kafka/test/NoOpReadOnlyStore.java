@@ -89,10 +89,6 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
     }
 
     @Override
-    public void assignThread() {
-    }
-
-    @Override
     public void flush() {
         flushed = true;
     }

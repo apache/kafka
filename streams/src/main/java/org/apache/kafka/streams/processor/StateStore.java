@@ -71,7 +71,16 @@ public interface StateStore {
      */
     void init(final StateStoreContext stateStoreContext, final StateStore root);
 
-    void assignThread();
+
+    /**
+     * Assigns the store to a stream thread.
+     * <p>
+     * This function is called from the final stream thread,
+     * thus can be used to initialize resources that might require to know the running thread, e.g. metrics.
+     * </p>
+     * To access the thread use {@link Thread#currentThread()}
+     */
+    default void assignThread() { }
 
     /**
      * Flush any cached data

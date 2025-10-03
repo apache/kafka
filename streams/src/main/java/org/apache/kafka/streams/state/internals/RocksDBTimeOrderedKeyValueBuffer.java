@@ -195,10 +195,6 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     }
 
     @Override
-    public void assignThread() {
-    }
-
-    @Override
     public void flush() {
         store.flush();
     }

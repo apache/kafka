@@ -821,10 +821,6 @@ public class VersionedKeyValueStoreIntegrationTest {
             }
 
             @Override
-            public void assignThread() {
-            }
-
-            @Override
             public void flush() {
                 // do nothing
             }

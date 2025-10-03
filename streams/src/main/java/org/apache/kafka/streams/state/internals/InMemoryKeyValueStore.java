@@ -99,10 +99,6 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public void assignThread() {
-    }
-
-    @Override
     public boolean persistent() {
         return false;
     }

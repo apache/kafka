@@ -187,10 +187,6 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
     public void init(StateStoreContext stateStoreContext, StateStore root) {}
 
     @Override
-    public void assignThread() {
-    }
-
-    @Override
     public void flush() {
 
     }
