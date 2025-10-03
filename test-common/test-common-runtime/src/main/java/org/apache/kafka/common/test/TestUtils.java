@@ -16,14 +16,7 @@
  */
 package org.apache.kafka.common.test;
 
-import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.record.DefaultRecordBatch;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.SimpleRecord;
-import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 
@@ -32,9 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
-import java.util.List;
 import java.util.Random;
 import java.util.function.Supplier;
 
@@ -57,7 +48,6 @@ class TestUtils {
 
     private static final long DEFAULT_POLL_INTERVAL_MS = 100;
     private static final long DEFAULT_MAX_WAIT_MS = 15_000;
-    private static final Random RANDOM = new Random();
 
     /**
      * Create an empty file in the default temporary-file directory, using `kafka` as the prefix and `tmp` as the
@@ -154,98 +144,5 @@ class TestUtils {
                                         final long maxWaitMs,
                                         String conditionDetails) throws InterruptedException {
         waitForCondition(testCondition, maxWaitMs, () -> conditionDetails);
-    }
-
-    public static File randomPartitionLogDir(File parentDir) {
-        int attempts = 1000;
-        while (attempts > 0) {
-            File f = new File(parentDir, "kafka-" + RANDOM.nextInt(1000000));
-            if (f.mkdir()) {
-                f.deleteOnExit();
-                return f;
-            }
-            attempts--;
-        }
-        throw new RuntimeException("Failed to create directory after 1000 attempts");
-    }
-
-    public static MemoryRecords singletonRecords(byte[] value, byte[] key) {
-        return singletonRecords(value, key, Compression.NONE, RecordBatch.NO_TIMESTAMP, RecordBatch.CURRENT_MAGIC_VALUE);
-    }
-
-    public static MemoryRecords singletonRecords(byte[] value, long timestamp) {
-        return singletonRecords(value, null, Compression.NONE, timestamp, RecordBatch.CURRENT_MAGIC_VALUE);
-    }
-
-    public static MemoryRecords singletonRecords(
-            byte[] value
-    ) {
-        return records(List.of(new SimpleRecord(RecordBatch.NO_TIMESTAMP, null, value)),
-                RecordBatch.CURRENT_MAGIC_VALUE,
-                Compression.NONE,
-                RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH,
-                RecordBatch.NO_SEQUENCE,
-                0,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH
-        );
-    }
-
-    public static MemoryRecords singletonRecords(
-            byte[] value,
-            byte[] key,
-            Compression codec,
-            long timestamp,
-            byte magicValue
-            ) {
-        return records(List.of(new SimpleRecord(timestamp, key, value)),
-                magicValue, codec,
-                RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH,
-                RecordBatch.NO_SEQUENCE,
-                0,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH
-        );
-    }
-
-    public static MemoryRecords singletonRecords(byte[] value, byte[] key, long timestamp) {
-        return singletonRecords(value, key, Compression.NONE, timestamp, RecordBatch.CURRENT_MAGIC_VALUE);
-    }
-
-    public static MemoryRecords records(List<SimpleRecord> records) {
-        return records(records, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, 0L, RecordBatch.NO_PARTITION_LEADER_EPOCH);
-    }
-
-    public static MemoryRecords records(List<SimpleRecord> records, long baseOffset) {
-        return records(records, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, baseOffset, RecordBatch.NO_PARTITION_LEADER_EPOCH);
-    }
-
-    public static MemoryRecords records(List<SimpleRecord> records, long baseOffset, int partitionLeaderEpoch) {
-        return records(records, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, baseOffset, partitionLeaderEpoch);
-    }
-
-    public static MemoryRecords records(List<SimpleRecord> records, byte magicValue, Compression compression) {
-        return records(records, magicValue, compression, RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, 0L, RecordBatch.NO_PARTITION_LEADER_EPOCH);
-    }
-
-    public static MemoryRecords records(List<SimpleRecord> records,
-                                        byte magicValue,
-                                        Compression compression,
-                                        long producerId,
-                                        short producerEpoch,
-                                        int sequence,
-                                        long baseOffset,
-                                        int partitionLeaderEpoch) {
-        ByteBuffer buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records));
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buf, magicValue, compression, TimestampType.CREATE_TIME, baseOffset,
-            System.currentTimeMillis(), producerId, producerEpoch, sequence, false, partitionLeaderEpoch);
-        for (SimpleRecord record : records) {
-            builder.append(record);
-        }
-        return builder.build();
     }
 }
