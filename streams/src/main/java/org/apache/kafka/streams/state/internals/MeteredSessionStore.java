@@ -57,7 +57,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 
 public class MeteredSessionStore<K, V>
     extends WrappedStateStore<SessionStore<Bytes, byte[]>, Windowed<K>, V>
-    implements SessionStore<K, V> {
+    implements SessionStore<K, V>, MeteredStateStore {
 
     private final String metricsScope;
     private final Serde<K> keySerde;
@@ -73,6 +73,7 @@ public class MeteredSessionStore<K, V>
     private Sensor iteratorDurationSensor;
     private InternalProcessorContext<?, ?> internalContext;
     private TaskId taskId;
+    private Sensor restoreSensor;
 
     private final LongAdder numOpenIterators = new LongAdder();
     private final NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
@@ -85,7 +86,6 @@ public class MeteredSessionStore<K, V>
                             (query, positionBound, config, store) -> runRangeQuery(query, positionBound, config)
                     )
             );
-    private Sensor restoreSensor;
 
 
     MeteredSessionStore(final SessionStore<Bytes, byte[]> inner,
@@ -134,6 +134,11 @@ public class MeteredSessionStore<K, V>
         );
 
         restoreSensor = StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+    }
+
+    @Override
+    public void recordRestoreTime(final long restoreTimeNs) {
+        restoreSensor.record(restoreTimeNs);
     }
 
     private void initStoreSerde(final StateStoreContext context) {

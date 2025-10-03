@@ -213,18 +213,19 @@ public class ShareConsumerImplTest {
         props.put(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "an.invalid.class");
         final ConsumerConfig config = new ConsumerConfig(props);
 
-        LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        KafkaException ce = assertThrows(
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            KafkaException ce = assertThrows(
                 KafkaException.class,
                 () -> newConsumer(config));
-        assertTrue(ce.getMessage().contains("Failed to construct Kafka share consumer"), "Unexpected exception message: " + ce.getMessage());
-        assertTrue(ce.getCause().getMessage().contains("Class an.invalid.class cannot be found"), "Unexpected cause: " + ce.getCause());
+            assertTrue(ce.getMessage().contains("Failed to construct Kafka share consumer"), "Unexpected exception message: " + ce.getMessage());
+            assertTrue(ce.getCause().getMessage().contains("Class an.invalid.class cannot be found"), "Unexpected cause: " + ce.getCause());
 
-        boolean npeLogged = appender.getEvents().stream()
+            boolean npeLogged = appender.getEvents().stream()
                 .flatMap(event -> event.getThrowableInfo().stream())
                 .anyMatch(str -> str.contains("NullPointerException"));
 
-        assertFalse(npeLogged, "Unexpected NullPointerException during consumer construction");
+            assertFalse(npeLogged, "Unexpected NullPointerException during consumer construction");
+        }
     }
 
     @Test

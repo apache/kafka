@@ -69,7 +69,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  */
 public class MeteredKeyValueStore<K, V>
     extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, K, V>
-    implements KeyValueStore<K, V> {
+    implements KeyValueStore<K, V>, MeteredStateStore {
 
     final Serde<K> keySerde;
     final Serde<V> valueSerde;
@@ -91,6 +91,7 @@ public class MeteredKeyValueStore<K, V>
     protected InternalProcessorContext<?, ?> internalContext;
     private StreamsMetricsImpl streamsMetrics;
     private TaskId taskId;
+    private Sensor restoreSensor;
 
     protected OpenIterators openIterators;
 
@@ -106,7 +107,6 @@ public class MeteredKeyValueStore<K, V>
                 (query, positionBound, config, store) -> runKeyQuery(query, positionBound, config)
             )
         );
-    private Sensor restoreSensor;
 
     MeteredKeyValueStore(final KeyValueStore<Bytes, byte[]> inner,
                          final String metricsScope,
@@ -153,6 +153,11 @@ public class MeteredKeyValueStore<K, V>
                 (config, now) -> openIterators.sum());
         openIterators = new OpenIterators(taskId, metricsScope, name(), streamsMetrics);
         restoreSensor = StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+    }
+
+    @Override
+    public void recordRestoreTime(final long restoreTimeNs) {
+        restoreSensor.record(restoreTimeNs);
     }
 
     protected Serde<V> prepareValueSerdeForStore(final Serde<V> valueSerde, final SerdeGetter getter) {

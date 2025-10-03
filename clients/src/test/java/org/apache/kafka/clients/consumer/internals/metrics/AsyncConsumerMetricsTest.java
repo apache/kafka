@@ -113,13 +113,13 @@ public class AsyncConsumerMetricsTest {
 
         // Then:
         assertEquals(
+            (double) 10,
             metrics.metric(
                 metrics.metricName(
                     "application-event-queue-size",
                     groupName
                 )
-            ).metricValue(),
-            (double) 10
+            ).metricValue()
         );
     }
 
@@ -156,13 +156,13 @@ public class AsyncConsumerMetricsTest {
 
         // Then:
         assertEquals(
+            (double) 10,
             metrics.metric(
                 metrics.metricName(
                     "unsent-requests-queue-size",
                     groupName
                 )
-            ).metricValue(),
-            (double) 10
+            ).metricValue()
         );
     }
 
@@ -187,13 +187,13 @@ public class AsyncConsumerMetricsTest {
 
         // Then:
         assertEquals(
+            (double) 10,
             metrics.metric(
                 metrics.metricName(
                     "background-event-queue-size",
                     groupName
                 )
-            ).metricValue(),
-            (double) 10
+            ).metricValue()
         );
     }
 
@@ -223,13 +223,13 @@ public class AsyncConsumerMetricsTest {
 
     private void assertMetricValue(final String name, final String groupName) {
         assertEquals(
+            (double) METRIC_VALUE,
             metrics.metric(
                 metrics.metricName(
                     name,
                     groupName
                 )
-            ).metricValue(),
-            (double) METRIC_VALUE
+            ).metricValue()
         );
     }
 }

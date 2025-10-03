@@ -60,7 +60,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 
 public class MeteredWindowStore<K, V>
     extends WrappedStateStore<WindowStore<Bytes, byte[]>, Windowed<K>, V>
-    implements WindowStore<K, V> {
+    implements WindowStore<K, V>, MeteredStateStore {
 
     private final long windowSizeMs;
     private final String metricsScope;
@@ -76,6 +76,7 @@ public class MeteredWindowStore<K, V>
     private Sensor iteratorDurationSensor;
     private InternalProcessorContext<?, ?> internalContext;
     private TaskId taskId;
+    private Sensor restoreSensor;
 
     private final LongAdder numOpenIterators = new LongAdder();
     private final NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
@@ -124,8 +125,8 @@ public class MeteredWindowStore<K, V>
         streamsMetrics = (StreamsMetricsImpl) stateStoreContext.metrics();
 
         registerMetrics();
-        final Sensor restoreSensor =
-            StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+
+        restoreSensor = StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
 
         // register and possibly restore the state from the logs
         maybeMeasureLatency(() -> super.init(stateStoreContext, root), time, restoreSensor);
@@ -148,6 +149,11 @@ public class MeteredWindowStore<K, V>
                     return openIteratorsIterator.hasNext() ? openIteratorsIterator.next().startTimestamp() : null;
                 }
         );
+    }
+
+    @Override
+    public void recordRestoreTime(final long restoreTimeNs) {
+        restoreSensor.record(restoreTimeNs);
     }
 
     private void initStoreSerde(final StateStoreContext context) {

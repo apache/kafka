@@ -38,4 +38,9 @@ public record TaskId(String subtopologyId, int partition) implements Comparable<
             .compare(this, other);
     }
 
+    @Override
+    public String toString() {
+        return subtopologyId + '_' + partition;
+    }
+
 }
