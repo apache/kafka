@@ -406,7 +406,14 @@ public final class QuorumController implements Controller {
 
             KafkaEventQueue queue = null;
             try {
-                queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
+                queue = new KafkaEventQueue(
+                    time,
+                    logContext,
+                    threadNamePrefix,
+                    EventQueue.VoidEvent.INSTANCE,
+                    controllerMetrics::updateIdleTime
+                );
+
                 return new QuorumController(
                     nonFatalFaultHandler,
                     fatalFaultHandler,

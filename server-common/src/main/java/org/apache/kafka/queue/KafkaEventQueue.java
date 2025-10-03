@@ -33,6 +33,7 @@ import java.util.TreeMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
@@ -278,22 +279,22 @@ public final class KafkaEventQueue implements EventQueue {
                         remove(toRun);
                         continue;
                     }
-                    if (awaitNs == Long.MAX_VALUE) {
-                        try {
+
+                    long startIdleMs = time.milliseconds();
+                    try {
+                        if (awaitNs == Long.MAX_VALUE) {
                             cond.await();
-                        } catch (InterruptedException e) {
-                            log.warn("Interrupted while waiting for a new event. " +
-                                "Shutting down event queue");
-                            interrupted = true;
-                        }
-                    } else {
-                        try {
+                        } else {
                             cond.awaitNanos(awaitNs);
-                        } catch (InterruptedException e) {
-                            log.warn("Interrupted while waiting for a deferred event. " +
-                                "Shutting down event queue");
-                            interrupted = true;
                         }
+                    } catch (InterruptedException e) {
+                        log.warn(
+                                "Interrupted while waiting for a {} event. Shutting down event queue",
+                                (awaitNs == Long.MAX_VALUE) ? "new" : "deferred"
+                        );
+                        interrupted = true;
+                    } finally {
+                        idleTimeCallback.accept(Math.max(time.milliseconds() - startIdleMs, 0));
                     }
                 } finally {
                     lock.unlock();
@@ -440,12 +441,18 @@ public final class KafkaEventQueue implements EventQueue {
      */
     private boolean interrupted;
 
+    /**
+     * Optional callback for queue idle time tracking.
+     */
+    private final Consumer<Long> idleTimeCallback;
+
+
     public KafkaEventQueue(
         Time time,
         LogContext logContext,
         String threadNamePrefix
     ) {
-        this(time, logContext, threadNamePrefix, VoidEvent.INSTANCE);
+        this(time, logContext, threadNamePrefix, VoidEvent.INSTANCE, __ -> { });
     }
 
     public KafkaEventQueue(
@@ -453,6 +460,16 @@ public final class KafkaEventQueue implements EventQueue {
         LogContext logContext,
         String threadNamePrefix,
         Event cleanupEvent
+    ) {
+        this(time, logContext, threadNamePrefix, cleanupEvent, __ -> { });
+    }
+
+    public KafkaEventQueue(
+        Time time,
+        LogContext logContext,
+        String threadNamePrefix,
+        Event cleanupEvent,
+        Consumer<Long> idleTimeCallback
     ) {
         this.time = time;
         this.cleanupEvent = Objects.requireNonNull(cleanupEvent);
@@ -463,6 +480,7 @@ public final class KafkaEventQueue implements EventQueue {
             this.eventHandler, false);
         this.shuttingDown = false;
         this.interrupted = false;
+        this.idleTimeCallback = Objects.requireNonNull(idleTimeCallback);
         this.eventHandlerThread.start();
     }
 
