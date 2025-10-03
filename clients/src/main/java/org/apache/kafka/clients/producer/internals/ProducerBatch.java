@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -235,6 +236,20 @@ public final class ProducerBatch {
         Objects.requireNonNull(topLevelException);
         Objects.requireNonNull(recordExceptions);
         return done(ProduceResponse.INVALID_OFFSET, RecordBatch.NO_TIMESTAMP, topLevelException, recordExceptions);
+    }
+
+    /**
+     * Get all record futures for this batch.
+     * This is used by flush() to wait on individual records rather than the batch-level future.
+     * When batches are split, individual futures are chained to the new batches,
+     * ensuring flush() waits for all split batches to complete.
+     *
+     * @return List of FutureRecordMetadata for all records in this batch
+     */
+    public List<FutureRecordMetadata> recordFutures() {
+        return thunks.stream()
+            .map(thunk -> thunk.future)
+            .collect(Collectors.toList());
     }
 
     /**
