@@ -1003,8 +1003,8 @@ public class TaskManagerTest {
             )
         );
 
-        assertEquals(illegalStateException.getMessage(), "Standby tasks should only be managed by the state updater, " +
-            "but standby task " + taskId03 + " is managed by the stream thread");
+        assertEquals("Standby tasks should only be managed by the state updater, " +
+            "but standby task " + taskId03 + " is managed by the stream thread", illegalStateException.getMessage());
         verifyNoInteractions(activeTaskCreator);
     }
 
@@ -1040,8 +1040,8 @@ public class TaskManagerTest {
             () -> taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap())
         );
 
-        assertEquals(illegalStateException.getMessage(), "Standby tasks should only be managed by the state updater, " +
-            "but standby task " + taskId03 + " is managed by the stream thread");
+        assertEquals("Standby tasks should only be managed by the state updater, " +
+            "but standby task " + taskId03 + " is managed by the stream thread", illegalStateException.getMessage());
         verifyNoInteractions(activeTaskCreator);
     }
 
@@ -1123,8 +1123,8 @@ public class TaskManagerTest {
             )
         );
 
-        assertEquals(illegalStateException.getMessage(), "Standby tasks should only be managed by the state updater, " +
-            "but standby task " + taskId02 + " is managed by the stream thread");
+        assertEquals("Standby tasks should only be managed by the state updater, " +
+            "but standby task " + taskId02 + " is managed by the stream thread", illegalStateException.getMessage());
         verifyNoInteractions(activeTaskCreator);
     }
 
@@ -4689,11 +4689,11 @@ public class TaskManagerTest {
     public void shouldListNotPausedTasks() {
         handleAssignment(taskId00Assignment, taskId01Assignment, emptyMap());
 
-        assertEquals(taskManager.notPausedTasks().size(), 2);
+        assertEquals(2, taskManager.notPausedTasks().size());
 
         topologyMetadata.pauseTopology(UNNAMED_TOPOLOGY);
 
-        assertEquals(taskManager.notPausedTasks().size(), 0);
+        assertEquals(0, taskManager.notPausedTasks().size());
     }
 
     @Test

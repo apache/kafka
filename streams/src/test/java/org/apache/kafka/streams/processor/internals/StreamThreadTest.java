@@ -383,7 +383,7 @@ public class StreamThreadTest {
 
         final StateListenerStub stateListener = new StateListenerStub();
         thread.setStateListener(stateListener);
-        assertEquals(thread.state(), StreamThread.State.CREATED);
+        assertEquals(StreamThread.State.CREATED, thread.state());
 
         final ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener();
 
@@ -395,7 +395,7 @@ public class StreamThreadTest {
         revokedPartitions = Collections.emptyList();
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
 
-        assertEquals(thread.state(), StreamThread.State.PARTITIONS_REVOKED);
+        assertEquals(StreamThread.State.PARTITIONS_REVOKED, thread.state());
 
         // assign single partition
         assignedPartitions = Collections.singletonList(t1p1);
@@ -405,7 +405,7 @@ public class StreamThreadTest {
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
         runOnce(processingThreadsEnabled);
-        assertEquals(thread.state(), StreamThread.State.RUNNING);
+        assertEquals(StreamThread.State.RUNNING, thread.state());
         assertEquals(4, stateListener.numChanges);
         assertEquals(StreamThread.State.PARTITIONS_ASSIGNED, stateListener.oldState);
 
@@ -434,7 +434,7 @@ public class StreamThreadTest {
             "Thread never shut down.");
 
         thread.shutdown();
-        assertEquals(thread.state(), StreamThread.State.DEAD);
+        assertEquals(StreamThread.State.DEAD, thread.state());
     }
 
     @ParameterizedTest
