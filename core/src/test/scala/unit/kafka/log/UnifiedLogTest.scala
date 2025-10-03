@@ -53,6 +53,7 @@ import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyLong}
 import org.mockito.Mockito.{doAnswer, doThrow, spy}
+
 import net.jqwik.api.AfterFailureMode
 import net.jqwik.api.ForAll
 import net.jqwik.api.Property
@@ -75,7 +76,6 @@ class UnifiedLogTest {
   val mockTime = new MockTime()
   var logsToClose: Seq[UnifiedLog] = Seq()
   val producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false)
-
   def metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
 
   @BeforeEach
@@ -182,7 +182,7 @@ class UnifiedLogTest {
     assertEquals(simpleRecords.size, secondAppendInfo.firstOffset)
 
     log.roll()
-    val afterRollAppendInfo = log.appendAsLeader(TestUtils.records(simpleRecords), leaderEpoch = 0)
+    val afterRollAppendInfo =  log.appendAsLeader(TestUtils.records(simpleRecords), leaderEpoch = 0)
     assertEquals(simpleRecords.size * 2, afterRollAppendInfo.firstOffset)
   }
 
@@ -287,7 +287,7 @@ class UnifiedLogTest {
       new SimpleRecord(mockTime.milliseconds, "a".getBytes, "value".getBytes),
       new SimpleRecord(mockTime.milliseconds, "b".getBytes, "value".getBytes),
       new SimpleRecord(mockTime.milliseconds, "c".getBytes, "value".getBytes)
-    ), baseOffset = offset, partitionLeaderEpoch = leaderEpoch)
+    ), baseOffset = offset, partitionLeaderEpoch= leaderEpoch)
 
     def assertHighWatermark(offset: Long): Unit = {
       assertEquals(offset, log.highWatermark)
@@ -428,12 +428,12 @@ class UnifiedLogTest {
     val log = createLog(logDir, logConfig)
 
     def assertProducerState(
-                             producerId: Long,
-                             producerEpoch: Short,
-                             lastSequence: Int,
-                             currentTxnStartOffset: Option[Long],
-                             coordinatorEpoch: Option[Int]
-                           ): Unit = {
+      producerId: Long,
+      producerEpoch: Short,
+      lastSequence: Int,
+      currentTxnStartOffset: Option[Long],
+      coordinatorEpoch: Option[Int]
+    ): Unit = {
       val producerStateOpt = log.activeProducers.find(_.producerId == producerId)
       assertTrue(producerStateOpt.isDefined)
 
@@ -547,7 +547,6 @@ class UnifiedLogTest {
   @Test
   def testTimeBasedLogRollDuringAppend(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes)
-
     val logConfig = LogTestUtils.createLogConfig(segmentMs = 1 * 60 * 60L)
 
     // create a log
@@ -569,9 +568,7 @@ class UnifiedLogTest {
 
     // Append a message with timestamp to a segment whose first message do not have a timestamp.
     val timestamp = mockTime.milliseconds + log.config.segmentMs + 1
-
     def createRecordsWithTimestamp = TestUtils.singletonRecords(value = "test".getBytes, timestamp = timestamp)
-
     log.appendAsLeader(createRecordsWithTimestamp, leaderEpoch = 0)
     assertEquals(4, log.numberOfSegments, "Segment should not have been rolled out because the log rolling should be based on wall clock.")
 
@@ -694,14 +691,10 @@ class UnifiedLogTest {
   def testLogSegmentsCallCorrect(): Unit = {
     // Create 3 segments and make sure we get the right values from various logSegments calls.
     def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
-
-    def getSegmentOffsets(log: UnifiedLog, from: Long, to: Long) = log.logSegments(from, to).map {
-      _.baseOffset
-    }
-
+    def getSegmentOffsets(log :UnifiedLog, from: Long, to: Long) = log.logSegments(from, to).map { _.baseOffset }
     val setSize = createRecords.sizeInBytes
     val msgPerSeg = 10
-    val segmentSize = msgPerSeg * setSize // each segment will be 10 messages
+    val segmentSize = msgPerSeg * setSize  // each segment will be 10 messages
     // create a log
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = segmentSize)
     val log = createLog(logDir, logConfig)
@@ -838,7 +831,6 @@ class UnifiedLogTest {
     records.filterTo(new RecordFilter(0, 0) {
       override def checkBatchRetention(batch: RecordBatch): RecordFilter.BatchRetentionResult =
         new RecordFilter.BatchRetentionResult(RecordFilter.BatchRetention.DELETE_EMPTY, false)
-
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
     }, filtered, BufferSupplier.NO_CACHING)
     filtered.flip()
@@ -893,7 +885,6 @@ class UnifiedLogTest {
     records.filterTo(new RecordFilter(0, 0) {
       override def checkBatchRetention(batch: RecordBatch): RecordFilter.BatchRetentionResult =
         new RecordFilter.BatchRetentionResult(RecordFilter.BatchRetention.RETAIN_EMPTY, true)
-
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = false
     }, filtered, BufferSupplier.NO_CACHING)
     filtered.flip()
@@ -950,7 +941,6 @@ class UnifiedLogTest {
     records.filterTo(new RecordFilter(0, 0) {
       override def checkBatchRetention(batch: RecordBatch): RecordFilter.BatchRetentionResult =
         new RecordFilter.BatchRetentionResult(RecordFilter.BatchRetention.DELETE_EMPTY, false)
-
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
     }, filtered, BufferSupplier.NO_CACHING)
     filtered.flip()
@@ -1320,14 +1310,12 @@ class UnifiedLogTest {
       log.appendAsLeader(record, leaderEpoch = 0)
       seq = seq + 1
     }
-
     // Append an entry with multiple log records.
     def createRecords = TestUtils.records(List(
       new SimpleRecord(mockTime.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes),
       new SimpleRecord(mockTime.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes),
       new SimpleRecord(mockTime.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes)
     ), producerId = pid, producerEpoch = epoch, sequence = seq)
-
     val multiEntryAppendInfo = log.appendAsLeader(createRecords, leaderEpoch = 0)
     assertEquals(
       multiEntryAppendInfo.lastOffset - multiEntryAppendInfo.firstOffset + 1,
@@ -1372,7 +1360,6 @@ class UnifiedLogTest {
     // Append a duplicate entry with a single records at the tail of the log. This should return the appendInfo of the original entry.
     def createRecordsWithDuplicate = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)),
       producerId = pid, producerEpoch = epoch, sequence = seq)
-
     val origAppendInfo = log.appendAsLeader(createRecordsWithDuplicate, leaderEpoch = 0)
     val newAppendInfo = log.appendAsLeader(createRecordsWithDuplicate, leaderEpoch = 0)
     assertEquals(
@@ -1615,7 +1602,6 @@ class UnifiedLogTest {
   @Test
   def testSizeBasedLogRoll(): Unit = {
     def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
-
     val setSize = createRecords.sizeInBytes
     val msgPerSeg = 10
     val segmentSize = msgPerSeg * (setSize - 1) // each segment will be 10 messages
@@ -1715,7 +1701,7 @@ class UnifiedLogTest {
   @Test
   def testLogRollAfterLogHandlerClosed(): Unit = {
     val logConfig = LogTestUtils.createLogConfig()
-    val log = createLog(logDir, logConfig)
+    val log = createLog(logDir,  logConfig)
     log.closeHandlers()
     assertThrows(classOf[KafkaStorageException], () => log.roll(Some(1L)))
   }
@@ -1723,7 +1709,7 @@ class UnifiedLogTest {
   @Test
   def testReadWithMinMessage(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 72)
-    val log = createLog(logDir, logConfig)
+    val log = createLog(logDir,  logConfig)
     val messageIds = ((0 until 50) ++ (50 until 200 by 7)).toArray
     val records = messageIds.map(id => new SimpleRecord(id.toString.getBytes))
 
@@ -1752,7 +1738,7 @@ class UnifiedLogTest {
   @Test
   def testReadWithTooSmallMaxLength(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 72)
-    val log = createLog(logDir, logConfig)
+    val log = createLog(logDir,  logConfig)
     val messageIds = ((0 until 50) ++ (50 until 200 by 7)).toArray
     val records = messageIds.map(id => new SimpleRecord(id.toString.getBytes))
 
@@ -1826,14 +1812,14 @@ class UnifiedLogTest {
     val log = createLog(logDir, logConfig)
     val numMessages = 100
     val messageSets = (0 until numMessages).map(i => TestUtils.singletonRecords(value = i.toString.getBytes,
-      timestamp = mockTime.milliseconds))
+                                                                                timestamp = mockTime.milliseconds))
     messageSets.foreach(log.appendAsLeader(_, leaderEpoch = 0))
     log.flush(false)
 
     /* do successive reads to ensure all our messages are there */
     var offset = 0L
     for (i <- 0 until numMessages) {
-      val messages = LogTestUtils.readLog(log, offset, 1024 * 1024).records.batches
+      val messages = LogTestUtils.readLog(log, offset, 1024*1024).records.batches
       val head = messages.iterator.next()
       assertEquals(offset, head.lastOffset, "Offsets not equal")
 
@@ -1844,7 +1830,7 @@ class UnifiedLogTest {
       assertEquals(expected.timestamp, actual.timestamp, s"Timestamps not equal at offset $offset")
       offset = head.lastOffset + 1
     }
-    val lastRead = LogTestUtils.readLog(log, startOffset = numMessages, maxLength = 1024 * 1024).records
+    val lastRead = LogTestUtils.readLog(log, startOffset = numMessages, maxLength = 1024*1024).records
     assertEquals(0, lastRead.records.asScala.size, "Should be no more messages")
 
     // check that rolling the log forced a flushed, the flush is async so retry in case of failure
@@ -1913,7 +1899,7 @@ class UnifiedLogTest {
   }
 
   /**
-   * MessageSet size shouldn't exceed the config.segmentSize, check that it is properly enforced by
+   *  MessageSet size shouldn't exceed the config.segmentSize, check that it is properly enforced by
    * appending a message set larger than the config.segmentSize setting and checking that an exception is thrown.
    */
   @Test
@@ -1964,7 +1950,7 @@ class UnifiedLogTest {
       () => log.appendAsLeader(messageSetWithCompressedUnkeyedMessage, leaderEpoch = 0))
     assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
     assertEquals(1, e.recordErrors.size)
-    assertEquals(1, e.recordErrors.get(0).batchIndex) // batch index is 1
+    assertEquals(1, e.recordErrors.get(0).batchIndex)     // batch index is 1
     assertTrue(e.recordErrors.get(0).message.startsWith(errorMsgPrefix))
 
     // check if metric for NoKeyCompactedTopicRecordsPerSec is logged
@@ -2028,7 +2014,7 @@ class UnifiedLogTest {
         () => log.appendAsFollower(records, Int.MaxValue)
       )
     } else {
-      log.appendAsFollower(records, Int.MaxValue)
+        log.appendAsFollower(records, Int.MaxValue)
     }
 
     assertEquals(previousEndOffset, log.logEndOffsetMetadata.messageOffset)
@@ -2036,8 +2022,8 @@ class UnifiedLogTest {
 
   @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
   def testRandomRecords(
-                         @ForAll(supplier = classOf[ArbitraryMemoryRecords]) records: MemoryRecords
-                       ): Unit = {
+    @ForAll(supplier = classOf[ArbitraryMemoryRecords]) records: MemoryRecords
+  ): Unit = {
     val tempDir = TestUtils.tempDir()
     val logDir = TestUtils.randomPartitionLogDir(tempDir)
     try {
@@ -2160,7 +2146,7 @@ class UnifiedLogTest {
     assertEquals(None, log.topicId)
     log.close()
 
-    val log2 = createLog(logDir, logConfig, topicId = Some(Uuid.randomUuid()), keepPartitionMetadataFile = false)
+    val log2 = createLog(logDir, logConfig, topicId = Some(Uuid.randomUuid()),  keepPartitionMetadataFile = false)
 
     // We should not write to this file or set the topic ID
     assertFalse(log2.partitionMetadataFile.get.exists())
@@ -2471,10 +2457,9 @@ class UnifiedLogTest {
   @Test
   def testTruncateTo(): Unit = {
     def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
-
     val setSize = createRecords.sizeInBytes
     val msgPerSeg = 10
-    val segmentSize = msgPerSeg * setSize // each segment will be 10 messages
+    val segmentSize = msgPerSeg * setSize  // each segment will be 10 messages
 
     // create a log
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = segmentSize)
@@ -2495,8 +2480,8 @@ class UnifiedLogTest {
     log.truncateTo(log.logEndOffset + 1) // try to truncate beyond lastOffset
     assertEquals(lastOffset, log.logEndOffset, "Should not change offset but should log error")
     assertEquals(size, log.size, "Should not change log size")
-    log.truncateTo(msgPerSeg / 2) // truncate somewhere in between
-    assertEquals(log.logEndOffset, msgPerSeg / 2, "Should change offset")
+    log.truncateTo(msgPerSeg/2) // truncate somewhere in between
+    assertEquals(log.logEndOffset, msgPerSeg/2, "Should change offset")
     assertTrue(log.size < size, "Should change log size")
     log.truncateTo(0) // truncate the entire log
     assertEquals(0, log.logEndOffset, "Should change offset")
@@ -2528,17 +2513,17 @@ class UnifiedLogTest {
   def testIndexResizingAtTruncation(): Unit = {
     val setSize = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds).sizeInBytes
     val msgPerSeg = 10
-    val segmentSize = msgPerSeg * setSize // each segment will be 10 messages
+    val segmentSize = msgPerSeg * setSize  // each segment will be 10 messages
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = segmentSize, indexIntervalBytes = setSize - 1)
     val log = createLog(logDir, logConfig)
     assertEquals(1, log.numberOfSegments, "There should be exactly 1 segment.")
 
-    for (i <- 1 to msgPerSeg)
+    for (i<- 1 to msgPerSeg)
       log.appendAsLeader(TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds + i), leaderEpoch = 0)
     assertEquals(1, log.numberOfSegments, "There should be exactly 1 segment.")
 
     mockTime.sleep(msgPerSeg)
-    for (i <- 1 to msgPerSeg)
+    for (i<- 1 to msgPerSeg)
       log.appendAsLeader(TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds + i), leaderEpoch = 0)
     assertEquals(2, log.numberOfSegments, "There should be exactly 2 segment.")
     val expectedEntries = msgPerSeg - 1
@@ -2550,13 +2535,13 @@ class UnifiedLogTest {
 
     log.truncateTo(0)
     assertEquals(1, log.numberOfSegments, "There should be exactly 1 segment.")
-    assertEquals(log.config.maxIndexSize / 8, log.logSegments.asScala.toList.head.offsetIndex.maxEntries,
+    assertEquals(log.config.maxIndexSize/8, log.logSegments.asScala.toList.head.offsetIndex.maxEntries,
       "The index of segment 1 should be resized to maxIndexSize")
-    assertEquals(log.config.maxIndexSize / 12, log.logSegments.asScala.toList.head.timeIndex.maxEntries,
+    assertEquals(log.config.maxIndexSize/12, log.logSegments.asScala.toList.head.timeIndex.maxEntries,
       "The time index of segment 1 should be resized to maxIndexSize")
 
     mockTime.sleep(msgPerSeg)
-    for (i <- 1 to msgPerSeg)
+    for (i<- 1 to msgPerSeg)
       log.appendAsLeader(TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds + i), leaderEpoch = 0)
     assertEquals(1, log.numberOfSegments,
       "There should be exactly 1 segment.")
@@ -2568,10 +2553,9 @@ class UnifiedLogTest {
   @Test
   def testAsyncDelete(): Unit = {
     def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds - 1000L)
-
     val asyncDeleteMs = 1000
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000, indexIntervalBytes = 10000,
-      retentionMs = 999, fileDeleteDelayMs = asyncDeleteMs)
+                                    retentionMs = 999, fileDeleteDelayMs = asyncDeleteMs)
     val log = createLog(logDir, logConfig)
 
     // append some messages to create some segments
@@ -2617,8 +2601,8 @@ class UnifiedLogTest {
     val buffer = ByteBuffer.allocate(512)
     for (offset <- appendOffsets) {
       val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
-        TimestampType.LOG_APPEND_TIME, offset, mockTime.milliseconds(),
-        1L, 0, 0, false, epoch)
+                                          TimestampType.LOG_APPEND_TIME, offset, mockTime.milliseconds(),
+                                          1L, 0, 0, false, epoch)
       builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
       builder.close()
     }
@@ -2662,10 +2646,10 @@ class UnifiedLogTest {
     val compressionTypes = Seq(CompressionType.NONE, CompressionType.LZ4)
     for (magic <- magicVals; compressionType <- compressionTypes) {
       val batch = TestUtils.records(List(new SimpleRecord("k1".getBytes, "v1".getBytes),
-        new SimpleRecord("k2".getBytes, "v2".getBytes),
-        new SimpleRecord("k3".getBytes, "v3".getBytes)),
-        magicValue = magic, codec = Compression.of(compressionType).build(),
-        baseOffset = firstOffset)
+                                         new SimpleRecord("k2".getBytes, "v2".getBytes),
+                                         new SimpleRecord("k3".getBytes, "v3".getBytes)),
+                                    magicValue = magic, codec = Compression.of(compressionType).build(),
+                                    baseOffset = firstOffset)
 
       val exception = assertThrows(
         classOf[UnexpectedAppendOffsetException],
@@ -2877,7 +2861,6 @@ class UnifiedLogTest {
   @Test
   def testDeleteOldSegments(): Unit = {
     def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds - 1000)
-
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000, retentionMs = 999)
     val log = createLog(logDir, logConfig)
 
@@ -2928,7 +2911,6 @@ class UnifiedLogTest {
   @Test
   def testLogDeletionAfterClose(): Unit = {
     def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds - 1000)
-
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000, retentionMs = 999)
     val log = createLog(logDir, logConfig)
 
@@ -2947,7 +2929,6 @@ class UnifiedLogTest {
   @Test
   def testLogDeletionAfterDeleteRecords(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes)
-
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5)
     val log = createLog(logDir, logConfig)
 
@@ -2978,7 +2959,6 @@ class UnifiedLogTest {
   @Test
   def shouldDeleteSizeBasedSegments(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes)
-
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionBytes = createRecords.sizeInBytes * 10)
     val log = createLog(logDir, logConfig)
 
@@ -2988,13 +2968,12 @@ class UnifiedLogTest {
 
     log.updateHighWatermark(log.logEndOffset)
     log.deleteOldSegments()
-    assertEquals(2, log.numberOfSegments, "should have 2 segments")
+    assertEquals(2,log.numberOfSegments, "should have 2 segments")
   }
 
   @Test
   def shouldNotDeleteSizeBasedSegmentsWhenUnderRetentionSize(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes)
-
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionBytes = createRecords.sizeInBytes * 15)
     val log = createLog(logDir, logConfig)
 
@@ -3004,13 +2983,12 @@ class UnifiedLogTest {
 
     log.updateHighWatermark(log.logEndOffset)
     log.deleteOldSegments()
-    assertEquals(3, log.numberOfSegments, "should have 3 segments")
+    assertEquals(3,log.numberOfSegments, "should have 3 segments")
   }
 
   @Test
   def shouldDeleteTimeBasedSegmentsReadyToBeDeleted(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes, timestamp = 10)
-
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionMs = 10000)
     val log = createLog(logDir, logConfig)
 
@@ -3026,7 +3004,6 @@ class UnifiedLogTest {
   @Test
   def shouldNotDeleteTimeBasedSegmentsWhenNoneReadyToBeDeleted(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes, timestamp = mockTime.milliseconds)
-
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionMs = 10000000)
     val log = createLog(logDir, logConfig)
 
@@ -3042,7 +3019,6 @@ class UnifiedLogTest {
   @Test
   def shouldNotDeleteSegmentsWhenPolicyDoesNotIncludeDelete(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes, key = "test".getBytes(), timestamp = 10L)
-
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionMs = 10000, cleanupPolicy = "compact")
     val log = createLog(logDir, logConfig)
 
@@ -3062,7 +3038,6 @@ class UnifiedLogTest {
   @Test
   def shouldDeleteSegmentsReadyToBeDeletedWhenCleanupPolicyIsCompactAndDelete(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes, key = "test".getBytes, timestamp = 10L)
-
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionMs = 10000, cleanupPolicy = "compact,delete")
     val log = createLog(logDir, logConfig)
 
@@ -3078,7 +3053,6 @@ class UnifiedLogTest {
   @Test
   def shouldDeleteStartOffsetBreachedSegmentsWhenPolicyDoesNotIncludeDelete(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes, key = "test".getBytes, timestamp = 10L)
-
     val recordsPerSegment = 5
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * recordsPerSegment, retentionMs = 10000, cleanupPolicy = "compact")
     val log = createLog(logDir, logConfig, brokerTopicStats)
@@ -3133,7 +3107,7 @@ class UnifiedLogTest {
     //Given each message has an offset & epoch, as msgs from leader would
     def recordsForEpoch(i: Int): MemoryRecords = {
       val recs = MemoryRecords.withRecords(messageIds(i), Compression.NONE, records(i))
-      recs.batches.forEach { record =>
+      recs.batches.forEach{record =>
         record.setPartitionLeaderEpoch(42)
         record.setLastOffset(i)
       }
@@ -3152,7 +3126,6 @@ class UnifiedLogTest {
   @Test
   def shouldTruncateLeaderEpochsWhenDeletingSegments(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes)
-
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionBytes = createRecords.sizeInBytes * 10)
     val log = createLog(logDir, logConfig)
     val cache = epochCache(log)
@@ -3178,7 +3151,6 @@ class UnifiedLogTest {
   @Test
   def shouldUpdateOffsetForLeaderEpochsWhenDeletingSegments(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes)
-
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionBytes = createRecords.sizeInBytes * 10)
     val log = createLog(logDir, logConfig)
     val cache = epochCache(log)
@@ -3922,55 +3894,55 @@ class UnifiedLogTest {
   }
 
   def testEnableRemoteLogStorageOnCompactedTopics(): Unit = {
-    var logConfig = LogTestUtils.createLogConfig()
-    var log = createLog(logDir, logConfig)
-    assertFalse(log.remoteLogEnabled())
+      var logConfig = LogTestUtils.createLogConfig()
+      var log = createLog(logDir, logConfig)
+      assertFalse(log.remoteLogEnabled())
 
-    log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
-    assertFalse(log.remoteLogEnabled())
+      log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
+      assertFalse(log.remoteLogEnabled())
 
-    logConfig = LogTestUtils.createLogConfig(remoteLogStorageEnable = true)
-    log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
-    assertTrue(log.remoteLogEnabled())
+      logConfig = LogTestUtils.createLogConfig(remoteLogStorageEnable = true)
+      log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
+      assertTrue(log.remoteLogEnabled())
 
-    logConfig = LogTestUtils.createLogConfig(cleanupPolicy = TopicConfig.CLEANUP_POLICY_COMPACT, remoteLogStorageEnable = true)
-    log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
-    assertFalse(log.remoteLogEnabled())
+      logConfig = LogTestUtils.createLogConfig(cleanupPolicy = TopicConfig.CLEANUP_POLICY_COMPACT, remoteLogStorageEnable = true)
+      log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
+      assertFalse(log.remoteLogEnabled())
 
-    logConfig = LogTestUtils.createLogConfig(cleanupPolicy = TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE,
-      remoteLogStorageEnable = true)
-    log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
-    assertFalse(log.remoteLogEnabled())
-  }
-
-  @Test
-  def testRemoteLogStorageIsDisabledOnInternalAndRemoteLogMetadataTopic(): Unit = {
-    val partitions = Seq(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME,
-      Topic.TRANSACTION_STATE_TOPIC_NAME, Topic.TRANSACTION_STATE_TOPIC_NAME)
-      .map(topic => new TopicPartition(topic, 0))
-    for (partition <- partitions) {
-      val logConfig = LogTestUtils.createLogConfig(remoteLogStorageEnable = true)
-      val internalLogDir = new File(TestUtils.tempDir(), partition.toString)
-      internalLogDir.mkdir()
-      val log = createLog(internalLogDir, logConfig, remoteStorageSystemEnable = true)
+      logConfig = LogTestUtils.createLogConfig(cleanupPolicy = TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE,
+        remoteLogStorageEnable = true)
+      log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
       assertFalse(log.remoteLogEnabled())
     }
-  }
 
-  @Test
-  def testNoOpWhenRemoteLogStorageIsDisabled(): Unit = {
-    val logConfig = LogTestUtils.createLogConfig()
-    val log = createLog(logDir, logConfig)
-
-    for (i <- 0 until 100) {
-      val records = TestUtils.singletonRecords(value = s"test$i".getBytes)
-      log.appendAsLeader(records, leaderEpoch = 0)
+    @Test
+    def testRemoteLogStorageIsDisabledOnInternalAndRemoteLogMetadataTopic(): Unit = {
+      val partitions = Seq(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME,
+        Topic.TRANSACTION_STATE_TOPIC_NAME, Topic.TRANSACTION_STATE_TOPIC_NAME)
+        .map(topic => new TopicPartition(topic, 0))
+      for (partition <- partitions) {
+        val logConfig = LogTestUtils.createLogConfig(remoteLogStorageEnable = true)
+        val internalLogDir = new File(TestUtils.tempDir(), partition.toString)
+        internalLogDir.mkdir()
+        val log = createLog(internalLogDir, logConfig, remoteStorageSystemEnable = true)
+        assertFalse(log.remoteLogEnabled())
+      }
     }
 
-    log.updateHighWatermark(90L)
-    log.maybeIncrementLogStartOffset(20L, LogStartOffsetIncrementReason.SegmentDeletion)
-    assertEquals(20, log.logStartOffset)
-  }
+    @Test
+    def testNoOpWhenRemoteLogStorageIsDisabled(): Unit = {
+      val logConfig = LogTestUtils.createLogConfig()
+      val log = createLog(logDir, logConfig)
+
+      for (i <- 0 until 100) {
+        val records = TestUtils.singletonRecords(value = s"test$i".getBytes)
+        log.appendAsLeader(records, leaderEpoch = 0)
+      }
+
+      log.updateHighWatermark(90L)
+      log.maybeIncrementLogStartOffset(20L, LogStartOffsetIncrementReason.SegmentDeletion)
+      assertEquals(20, log.logStartOffset)
+    }
 
   @Test
   def testStartOffsetsRemoteLogStorageIsEnabled(): Unit = {
@@ -4471,7 +4443,6 @@ class UnifiedLogTest {
   @Test
   def testRetentionOnLocalLogDeletionWhenRemoteLogCopyEnabledAndDefaultLocalRetentionBytes(): Unit = {
     def createRecords = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds(), "a".getBytes)))
-
     val segmentBytes = createRecords.sizeInBytes()
     val retentionBytesConfig = LogTestUtils.createLogConfig(segmentBytes = segmentBytes, retentionBytes = 1,
       fileDeleteDelayMs = 0, remoteLogStorageEnable = true)
@@ -4495,7 +4466,6 @@ class UnifiedLogTest {
   @Test
   def testRetentionOnLocalLogDeletionWhenRemoteLogCopyEnabledAndDefaultLocalRetentionMs(): Unit = {
     def createRecords = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds(), "a".getBytes)))
-
     val segmentBytes = createRecords.sizeInBytes()
     val retentionBytesConfig = LogTestUtils.createLogConfig(segmentBytes = segmentBytes, retentionMs = 1000,
       fileDeleteDelayMs = 0, remoteLogStorageEnable = true)
@@ -4521,10 +4491,9 @@ class UnifiedLogTest {
   @Test
   def testRetentionOnLocalLogDeletionWhenRemoteLogCopyDisabled(): Unit = {
     def createRecords = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds(), "a".getBytes)))
-
     val segmentBytes = createRecords.sizeInBytes()
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = segmentBytes, localRetentionBytes = 1, retentionBytes = segmentBytes * 5,
-      fileDeleteDelayMs = 0, remoteLogStorageEnable = true)
+          fileDeleteDelayMs = 0, remoteLogStorageEnable = true)
     val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
 
     // Given 6 segments of 1 message each
@@ -4607,7 +4576,7 @@ class UnifiedLogTest {
     val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
 
     var offset = 0L
-    for (_ <- 0 until 50) {
+    for(_ <- 0 until 50) {
       val records = TestUtils.singletonRecords("test".getBytes())
       val info = log.appendAsLeader(records, leaderEpoch = 0)
       offset = info.lastOffset
@@ -4631,7 +4600,7 @@ class UnifiedLogTest {
     val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
 
     var offset = 0L
-    for (_ <- 0 until 50) {
+    for(_ <- 0 until 50) {
       val records = TestUtils.singletonRecords("test".getBytes())
       val info = log.appendAsLeader(records, leaderEpoch = 0)
       offset = info.lastOffset
@@ -4690,83 +4659,6 @@ class UnifiedLogTest {
     val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
     val result = log.fetchOffsetByTimestamp(mockTime.milliseconds(), Some(null))
     assertEquals(new OffsetResultHolder(Optional.empty(), Optional.empty()), result)
-  }
-
-  private def appendTransactionalToBuffer(buffer: ByteBuffer,
-                                          producerId: Long,
-                                          producerEpoch: Short,
-                                          leaderEpoch: Int = 0): (Long, Int) => Unit = {
-    var sequence = 0
-    (offset: Long, numRecords: Int) => {
-      val builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, TimestampType.CREATE_TIME,
-        offset, mockTime.milliseconds(), producerId, producerEpoch, sequence, true, leaderEpoch)
-      for (seq <- sequence until sequence + numRecords) {
-        val record = new SimpleRecord(s"$seq".getBytes)
-        builder.append(record)
-      }
-
-      sequence += numRecords
-      builder.close()
-    }
-  }
-
-  private def appendEndTxnMarkerToBuffer(buffer: ByteBuffer,
-                                         producerId: Long,
-                                         producerEpoch: Short,
-                                         offset: Long,
-                                         controlType: ControlRecordType,
-                                         coordinatorEpoch: Int = 0,
-                                         leaderEpoch: Int = 0): Unit = {
-    val marker = new EndTransactionMarker(controlType, coordinatorEpoch)
-    MemoryRecords.writeEndTransactionalMarker(buffer, offset, mockTime.milliseconds(), leaderEpoch, producerId, producerEpoch, marker)
-  }
-
-  private def appendNonTransactionalToBuffer(buffer: ByteBuffer, offset: Long, numRecords: Int): Unit = {
-    val builder = MemoryRecords.builder(buffer, Compression.NONE, TimestampType.CREATE_TIME, offset)
-    (0 until numRecords).foreach { seq =>
-      builder.append(new SimpleRecord(s"$seq".getBytes))
-    }
-    builder.close()
-  }
-
-  private def appendAsFollower(log: UnifiedLog, records: MemoryRecords, leaderEpoch: Int): Unit = {
-    records.batches.forEach(_.setPartitionLeaderEpoch(leaderEpoch))
-    log.appendAsFollower(records, leaderEpoch)
-  }
-
-  private def createLog(dir: File,
-                        config: LogConfig,
-                        brokerTopicStats: BrokerTopicStats = brokerTopicStats,
-                        logStartOffset: Long = 0L,
-                        recoveryPoint: Long = 0L,
-                        scheduler: Scheduler = mockTime.scheduler,
-                        time: Time = mockTime,
-                        maxTransactionTimeoutMs: Int = 60 * 60 * 1000,
-                        producerStateManagerConfig: ProducerStateManagerConfig = producerStateManagerConfig,
-                        producerIdExpirationCheckIntervalMs: Int = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
-                        lastShutdownClean: Boolean = true,
-                        topicId: Option[Uuid] = None,
-                        keepPartitionMetadataFile: Boolean = true,
-                        remoteStorageSystemEnable: Boolean = false,
-                        remoteLogManager: Option[RemoteLogManager] = None,
-                        logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER): UnifiedLog = {
-    val log = LogTestUtils.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
-      maxTransactionTimeoutMs, producerStateManagerConfig, producerIdExpirationCheckIntervalMs,
-      lastShutdownClean, topicId, keepPartitionMetadataFile, new ConcurrentHashMap[String, Integer],
-      remoteStorageSystemEnable, remoteLogManager, logOffsetsListener)
-    logsToClose = logsToClose :+ log
-    log
-  }
-
-  private def createLogWithOffsetOverflow(logConfig: LogConfig): (UnifiedLog, LogSegment) = {
-    LogTestUtils.initializeLogDirWithOverflowedSegment(logDir)
-
-    val log = createLog(logDir, logConfig, recoveryPoint = Long.MaxValue)
-    val segmentWithOverflow = LogTestUtils.firstOverflowSegment(log).getOrElse {
-      throw new AssertionError("Failed to create log with a segment which has overflowed offsets")
-    }
-
-    (log, segmentWithOverflow)
   }
 
   @Test
@@ -4859,19 +4751,96 @@ class UnifiedLogTest {
     assertTrue(exception.getMessage.contains(s"$bumpedEpoch"))
   }
 
-  object UnifiedLogTest {
-    def allRecords(log: UnifiedLog): List[Record] = {
-      val recordsFound = ListBuffer[Record]()
-      for (logSegment <- log.logSegments.asScala) {
-        for (batch <- logSegment.log.batches.asScala) {
-          recordsFound ++= batch.iterator().asScala
-        }
+  private def appendTransactionalToBuffer(buffer: ByteBuffer,
+                                          producerId: Long,
+                                          producerEpoch: Short,
+                                          leaderEpoch: Int = 0): (Long, Int) => Unit = {
+    var sequence = 0
+    (offset: Long, numRecords: Int) => {
+      val builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, TimestampType.CREATE_TIME,
+        offset, mockTime.milliseconds(), producerId, producerEpoch, sequence, true, leaderEpoch)
+      for (seq <- sequence until sequence + numRecords) {
+        val record = new SimpleRecord(s"$seq".getBytes)
+        builder.append(record)
       }
-      recordsFound.toList
+
+      sequence += numRecords
+      builder.close()
+    }
+  }
+
+  private def appendEndTxnMarkerToBuffer(buffer: ByteBuffer,
+                                         producerId: Long,
+                                         producerEpoch: Short,
+                                         offset: Long,
+                                         controlType: ControlRecordType,
+                                         coordinatorEpoch: Int = 0,
+                                         leaderEpoch: Int = 0): Unit = {
+    val marker = new EndTransactionMarker(controlType, coordinatorEpoch)
+    MemoryRecords.writeEndTransactionalMarker(buffer, offset, mockTime.milliseconds(), leaderEpoch, producerId, producerEpoch, marker)
+  }
+
+  private def appendNonTransactionalToBuffer(buffer: ByteBuffer, offset: Long, numRecords: Int): Unit = {
+    val builder = MemoryRecords.builder(buffer, Compression.NONE, TimestampType.CREATE_TIME, offset)
+    (0 until numRecords).foreach { seq =>
+      builder.append(new SimpleRecord(s"$seq".getBytes))
+    }
+    builder.close()
+  }
+
+  private def appendAsFollower(log: UnifiedLog, records: MemoryRecords, leaderEpoch: Int): Unit = {
+    records.batches.forEach(_.setPartitionLeaderEpoch(leaderEpoch))
+    log.appendAsFollower(records, leaderEpoch)
+  }
+
+  private def createLog(dir: File,
+                        config: LogConfig,
+                        brokerTopicStats: BrokerTopicStats = brokerTopicStats,
+                        logStartOffset: Long = 0L,
+                        recoveryPoint: Long = 0L,
+                        scheduler: Scheduler = mockTime.scheduler,
+                        time: Time = mockTime,
+                        maxTransactionTimeoutMs: Int = 60 * 60 * 1000,
+                        producerStateManagerConfig: ProducerStateManagerConfig = producerStateManagerConfig,
+                        producerIdExpirationCheckIntervalMs: Int = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+                        lastShutdownClean: Boolean = true,
+                        topicId: Option[Uuid] = None,
+                        keepPartitionMetadataFile: Boolean = true,
+                        remoteStorageSystemEnable: Boolean = false,
+                        remoteLogManager: Option[RemoteLogManager] = None,
+                        logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER): UnifiedLog = {
+    val log = LogTestUtils.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
+      maxTransactionTimeoutMs, producerStateManagerConfig, producerIdExpirationCheckIntervalMs,
+      lastShutdownClean, topicId, keepPartitionMetadataFile, new ConcurrentHashMap[String, Integer],
+      remoteStorageSystemEnable, remoteLogManager, logOffsetsListener)
+    logsToClose = logsToClose :+ log
+    log
+  }
+
+  private def createLogWithOffsetOverflow(logConfig: LogConfig): (UnifiedLog, LogSegment) = {
+    LogTestUtils.initializeLogDirWithOverflowedSegment(logDir)
+
+    val log = createLog(logDir, logConfig, recoveryPoint = Long.MaxValue)
+    val segmentWithOverflow = LogTestUtils.firstOverflowSegment(log).getOrElse {
+      throw new AssertionError("Failed to create log with a segment which has overflowed offsets")
     }
 
-    def verifyRecordsInLog(log: UnifiedLog, expectedRecords: List[Record]): Unit = {
-      assertEquals(expectedRecords, allRecords(log))
+    (log, segmentWithOverflow)
+  }
+}
+
+object UnifiedLogTest {
+  def allRecords(log: UnifiedLog): List[Record] = {
+    val recordsFound = ListBuffer[Record]()
+    for (logSegment <- log.logSegments.asScala) {
+      for (batch <- logSegment.log.batches.asScala) {
+        recordsFound ++= batch.iterator().asScala
+      }
     }
+    recordsFound.toList
+  }
+
+  def verifyRecordsInLog(log: UnifiedLog, expectedRecords: List[Record]): Unit = {
+    assertEquals(expectedRecords, allRecords(log))
   }
 }
