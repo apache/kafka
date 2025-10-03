@@ -873,7 +873,7 @@ public class ProcessorTopologyTest {
         final String initialKey = "key1";
         final String initialValue = "value1";
         final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
-                Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(DEFAULT_STORE_NAME), Serdes.String(), Serdes.String());
+                Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(DEFAULT_STORE_NAME), Serdes.String(), Serdes.String()).withLoggingEnabled(Collections.emptyMap());
         topology.addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1);
         topology.addProcessor("processor1", defineWithStores(() -> new StatefulProcessorWithInitialization(DEFAULT_STORE_NAME, initialKey, initialValue), Collections.singleton(storeBuilder)), "source1");
         driver = new TopologyTestDriver(topology, props);
