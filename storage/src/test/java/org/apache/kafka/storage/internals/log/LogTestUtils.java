@@ -22,7 +22,6 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.server.config.ServerLogConfigs;
-import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
 import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
@@ -64,11 +63,11 @@ public class LogTestUtils {
                 Optional.empty(), // topicId
                 new ConcurrentHashMap<>(), // numRemainingSegments
                 false, // remoteStorageSystemEnable
-                Optional.empty(), // remoteLogManager
                 LogOffsetsListener.NO_OP_OFFSETS_LISTENER
         );
     }
 
+    @SuppressWarnings("ParameterNumber")
     public static UnifiedLog createLog(File dir,
                                        LogConfig config,
                                        BrokerTopicStats brokerTopicStats,
@@ -83,7 +82,6 @@ public class LogTestUtils {
                                        Optional<Uuid> topicId,
                                        ConcurrentMap<String, Integer> numRemainingSegments,
                                        boolean remoteStorageSystemEnable,
-                                       Optional<RemoteLogManager> remoteLogManager,
                                        LogOffsetsListener logOffsetsListener) throws IOException {
         return UnifiedLog.create(
                 dir,
@@ -98,7 +96,7 @@ public class LogTestUtils {
                 producerIdExpirationCheckIntervalMs,
                 new LogDirFailureChannel(10),
                 lastShutdownClean,
-                topicId, // 直接傳入 Java Optional
+                topicId,
                 numRemainingSegments,
                 remoteStorageSystemEnable,
                 logOffsetsListener
@@ -119,10 +117,9 @@ public class LogTestUtils {
         private int segmentIndexBytes = ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT;
         private long fileDeleteDelayMs = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT;
         private boolean remoteLogStorageEnable = LogConfig.DEFAULT_REMOTE_STORAGE_ENABLE;
-        private boolean remoteLogCopyDisable = false;
-        private boolean remoteLogDeleteOnDisable = false;
+        private boolean remoteLogCopyDisable = LogConfig.DEFAULT_REMOTE_LOG_COPY_DISABLE_CONFIG;
+        private boolean remoteLogDeleteOnDisable = LogConfig.DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG;
 
-        // 2. 為每個參數建立一個 "with" 方法，用於設定值並回傳 builder 本身 (fluent interface)
         public LogConfigBuilder withSegmentMs(long segmentMs) {
             this.segmentMs = segmentMs;
             return this;
