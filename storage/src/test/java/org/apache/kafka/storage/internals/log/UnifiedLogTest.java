@@ -24,7 +24,6 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.test.TestUtils;
-import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.server.storage.log.FetchIsolation;
@@ -44,6 +43,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -109,16 +109,20 @@ public class UnifiedLogTest {
             .mapToObj(id -> new SimpleRecord(String.valueOf(id).getBytes()))
             .toArray(SimpleRecord[]::new);
 
+        Function<Integer, MemoryRecords> recordsForEpoch = i -> {
+            MemoryRecords recs = MemoryRecords.withRecords(messageIds[i], Compression.NONE, records[i]);
+            recs.batches().forEach(record -> {
+                record.setPartitionLeaderEpoch(42);
+                record.setLastOffset(i);
+            });
+            return recs;
+        };
+
+        // Given each message has an offset & epoch, as msgs from leader would
         try (UnifiedLog log = createLog(logDir, new LogConfig(new Properties()))) {
             // Given each message has an offset & epoch, as msgs from leader would
             for (int i = 0; i < records.length; i++) {
-                long finalI = i;
-                MemoryRecords recordsForEpoch = MemoryRecords.withRecords(messageIds[i], Compression.NONE, records[i]);
-                recordsForEpoch.batches().forEach(batch -> {
-                    batch.setPartitionLeaderEpoch(42);
-                    batch.setLastOffset(finalI);
-                });
-                appendAsFollower(log, recordsForEpoch, i);
+                log.appendAsFollower(recordsForEpoch.apply(i), i);
             }
 
             assertEquals(Optional.of(42), log.latestEpoch());
@@ -154,17 +158,17 @@ public class UnifiedLogTest {
 
     @Test
     public void shouldUpdateOffsetForLeaderEpochsWhenDeletingSegments() throws IOException {
-        MemoryRecords records = TestUtils.singletonRecords("test".getBytes());
+        Supplier<MemoryRecords> records = () -> TestUtils.singletonRecords("test".getBytes());
         LogConfig config = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(records.sizeInBytes() * 5)
-                .withRetentionBytes(records.sizeInBytes() * 10L)
+                .withSegmentBytes(records.get().sizeInBytes() * 5)
+                .withRetentionBytes(records.get().sizeInBytes() * 10L)
                 .build();
 
         log = createLog(logDir, config);
         LeaderEpochFileCache cache = epochCache(log);
 
         for (int i = 0; i < 15; i++) {
-            log.appendAsLeader(records, 0);
+            log.appendAsLeader(records.get(), 0);
         }
 
         // Given epochs
@@ -214,15 +218,16 @@ public class UnifiedLogTest {
 
     @Test
     public void shouldDeleteSizeBasedSegments() throws IOException {
-        MemoryRecords records = TestUtils.singletonRecords("test".getBytes());
+        Supplier<MemoryRecords> records = () -> TestUtils.singletonRecords("test".getBytes());
         LogConfig config = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(1024 * 1024 * 5)
+                .withSegmentBytes(records.get().sizeInBytes() * 5)
+                .withRetentionBytes(records.get().sizeInBytes() * 10L)
                 .build();
         log = createLog(logDir, config);
 
         // append some messages to create some segments
         for (int i = 0; i < 15; i++) {
-            log.appendAsLeader(records, 0);
+            log.appendAsLeader(records.get(), 0);
         }
 
         log.updateHighWatermark(log.logEndOffset());
@@ -232,17 +237,17 @@ public class UnifiedLogTest {
 
     @Test
     public void shouldNotDeleteSizeBasedSegmentsWhenUnderRetentionSize() throws IOException {
-        MemoryRecords records = TestUtils.singletonRecords("test".getBytes());
+        Supplier<MemoryRecords> records = () -> TestUtils.singletonRecords("test".getBytes());
         LogConfig config = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(records.sizeInBytes() * 5)
-                .withRetentionBytes(records.sizeInBytes() * 15L)
+                .withSegmentBytes(records.get().sizeInBytes() * 5)
+                .withRetentionBytes(records.get().sizeInBytes() * 15L)
                 .build();
 
         log = createLog(logDir, config);
 
         // append some messages to create some segments
         for (int i = 0; i < 15; i++) {
-            log.appendAsLeader(records, 0);
+            log.appendAsLeader(records.get(), 0);
         }
 
         log.updateHighWatermark(log.logEndOffset());
@@ -252,15 +257,15 @@ public class UnifiedLogTest {
 
     @Test
     public void shouldDeleteTimeBasedSegmentsReadyToBeDeleted() throws IOException {
-        MemoryRecords records = TestUtils.singletonRecords("test".getBytes(), 10L);
+        Supplier<MemoryRecords> records = () -> TestUtils.singletonRecords("test".getBytes(), 10L);
         LogConfig config = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(records.sizeInBytes() * 15)
+                .withSegmentBytes(records.get().sizeInBytes() * 15)
                 .withRetentionMs(10000L)
                 .build();
         log = createLog(logDir, config);
 
         for (int i = 0; i < 15; i++) {
-            log.appendAsLeader(records, 0);
+            log.appendAsLeader(records.get(), 0);
         }
 
         log.updateHighWatermark(log.logEndOffset());
@@ -426,15 +431,16 @@ public class UnifiedLogTest {
                 .build();
         log = createLog(logDir, logConfig);
 
+        // append some messages to create some segments
         log.appendAsLeader(records.get(), 0);
 
-        assertEquals(1, log.numberOfSegments());
-        assertEquals(1, epochCache(log).epochEntries().size());
+        assertEquals(1, log.numberOfSegments(), "The deleted segments should be gone.");
+        assertEquals(1, epochCache(log).epochEntries().size(), "Epoch entries should have gone.");
 
         log.close();
         log.delete();
         assertEquals(0, log.numberOfSegments());
-        assertEquals(0, epochCache(log).epochEntries().size());
+        assertEquals(0, epochCache(log).epochEntries().size(), "Epoch entries should have gone.");
     }
 
     @Test
@@ -459,6 +465,7 @@ public class UnifiedLogTest {
         assertEquals(numSegments, log.numberOfSegments());
         assertEquals(0L, log.logStartOffset());
 
+        // only segments with offset before the current high watermark are eligible for deletion
         for (long hw = 25; hw <= 30; hw++) {
             log.updateHighWatermark(hw);
             log.deleteOldSegments();
@@ -531,41 +538,54 @@ public class UnifiedLogTest {
 
     @Test
     public void testFirstUnstableOffsetNoTransactionalData() throws IOException {
-        Supplier<MemoryRecords> records = () -> MemoryRecords.withRecords(Compression.NONE,
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .withSegmentBytes(1024 * 1024 * 5)
+                .build();
+        log = createLog(logDir, logConfig);
+
+        MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
             new SimpleRecord("foo".getBytes()),
             new SimpleRecord("bar".getBytes()),
             new SimpleRecord("baz".getBytes()));
 
-        log.appendAsLeader(records.get(), 0);
+        log.appendAsLeader(records, 0);
         assertEquals(Optional.empty(), log.firstUnstableOffset());
     }
 
     @Test
     public void testFirstUnstableOffsetWithTransactionalData() throws IOException {
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .withSegmentBytes(1024 * 1024 * 5).build();
+        log = createLog(logDir, logConfig);
+
         long pid = 137L;
         short epoch = 5;
-        PrimitiveRef.IntRef seq = PrimitiveRef.ofInt(0);
+        int seq = 0;
 
-        Supplier<MemoryRecords> records = () -> MemoryRecords.withTransactionalRecords(
-                Compression.NONE, pid, epoch, seq.value,
+        // add some transactional records
+        MemoryRecords records = MemoryRecords.withTransactionalRecords(
+                Compression.NONE, pid, epoch, seq,
                 new SimpleRecord("foo".getBytes()),
                 new SimpleRecord("bar".getBytes()),
                 new SimpleRecord("baz".getBytes()));
 
-        LogAppendInfo firstAppendInfo = log.appendAsLeader(records.get(), 0);
+        LogAppendInfo firstAppendInfo = log.appendAsLeader(records, 0);
         assertEquals(Optional.of(firstAppendInfo.firstOffset()), log.firstUnstableOffset());
 
-        seq.value += 3;
-        log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.NONE, pid, epoch, seq.value,
+        // add more transactional records
+        seq += 3;
+        log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.NONE, pid, epoch, seq,
             new SimpleRecord("blah".getBytes())), 0);
-
         assertEquals(Optional.of(firstAppendInfo.firstOffset()), log.firstUnstableOffset());
 
+        // now transaction is committed
         LogAppendInfo commitAppendInfo = appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.COMMIT, mockTime.milliseconds());
 
+        // first unstable offset is not updated until the high watermark is advanced
         assertEquals(Optional.of(firstAppendInfo.firstOffset()), log.firstUnstableOffset());
         log.updateHighWatermark(commitAppendInfo.lastOffset() + 1);
 
+        // now there should be no first unstable offset
         assertEquals(Optional.empty(), log.firstUnstableOffset());
     }
 
