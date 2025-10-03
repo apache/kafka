@@ -352,7 +352,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             throw new IllegalStateException("Expected exactly one metric scope tag, but found " + metricsScopeCandidates);
         }
 
-        final Deque<MetricName> metrics = storeLevelMetrics.get(
+        final Deque<MetricName> metricsForStore = storeLevelMetrics.get(
             storeSensorPrefix(
                 metricName.tags().get(THREAD_ID_TAG),
                 metricName.tags().get(TASK_ID_TAG),
@@ -360,8 +360,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             )
         );
 
-        if (metrics != null) {
-            metrics.remove(metricName);
+        if (metricsForStore != null) {
+            metricsForStore.remove(metricName);
         }
     }
 
