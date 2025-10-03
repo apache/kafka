@@ -27,9 +27,9 @@ Configuration:
 
   Loggers:
     Root:
-      level: DEBUG
+      level: INFO
       AppenderRef:
         - ref: STDOUT
     Logger:
       - name: org.apache.kafka
-        level: DEBUG
+        level: INFO

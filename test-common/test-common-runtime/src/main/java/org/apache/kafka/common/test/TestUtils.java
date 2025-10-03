@@ -40,9 +40,15 @@ import java.util.function.Supplier;
 
 import static java.lang.String.format;
 
-public class TestUtils {
+/**
+ * Helper functions for writing unit tests.
+ * <p>
+ * <b>Package-private:</b> Not intended for use outside {@code org.apache.kafka.common.test}.
+ */
+class TestUtils {
     private static final Logger log = LoggerFactory.getLogger(TestUtils.class);
 
+    /* A consistent random number generator to make tests repeatable */
     public static final Random SEEDED_RANDOM = new Random(192348092834L);
     
     public static final String LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -53,12 +59,22 @@ public class TestUtils {
     private static final long DEFAULT_MAX_WAIT_MS = 15_000;
     private static final Random RANDOM = new Random();
 
+    /**
+     * Create an empty file in the default temporary-file directory, using `kafka` as the prefix and `tmp` as the
+     * suffix to generate its name.
+     */
     public static File tempFile() throws IOException {
         final File file = Files.createTempFile("kafka", ".tmp").toFile();
         file.deleteOnExit();
         return file;
     }
 
+    /**
+     * Generate a random string of letters and digits of the given length
+     *
+     * @param len The length of the string
+     * @return The random string
+     */
     public static String randomString(final int len) {
         final StringBuilder b = new StringBuilder();
         for (int i = 0; i < len; i++)
@@ -66,7 +82,11 @@ public class TestUtils {
         return b.toString();
     }
 
-    public static File tempDirectory() {
+    /**
+     * Create a temporary relative directory in the specified parent directory with the given prefix.
+     *
+     */
+    static File tempDirectory() {
         final File file;
         String prefix = "kafka-";
         try {
@@ -86,17 +106,19 @@ public class TestUtils {
         return file;
     }
 
-    public static File tempRelativeDir(String parent) {
-        File file = new File(parent, "kafka-" + SEEDED_RANDOM.nextInt(1000000));
-        file.mkdirs();
-        file.deleteOnExit();
-        return file;
-    }
-
+    /**
+     * uses default value of 15 seconds for timeout
+     */
     public static void waitForCondition(final Supplier<Boolean> testCondition, final String conditionDetails) throws InterruptedException {
         waitForCondition(testCondition, DEFAULT_MAX_WAIT_MS, () -> conditionDetails);
     }
 
+    /**
+     * Wait for condition to be met for at most {@code maxWaitMs} and throw assertion failure otherwise.
+     * This should be used instead of {@code Thread.sleep} whenever possible as it allows a longer timeout to be used
+     * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
+     * avoid transient failures due to slow or overloaded machines.
+     */
     public static void waitForCondition(final Supplier<Boolean> testCondition,
                                         final long maxWaitMs,
                                         final Supplier<String> conditionDetails) throws InterruptedException {
@@ -122,6 +144,12 @@ public class TestUtils {
         }
     }
 
+    /**
+     * Wait for condition to be met for at most {@code maxWaitMs} and throw assertion failure otherwise.
+     * This should be used instead of {@code Thread.sleep} whenever possible as it allows a longer timeout to be used
+     * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
+     * avoid transient failures due to slow or overloaded machines.
+     */
     public static void waitForCondition(final Supplier<Boolean> testCondition,
                                         final long maxWaitMs,
                                         String conditionDetails) throws InterruptedException {
