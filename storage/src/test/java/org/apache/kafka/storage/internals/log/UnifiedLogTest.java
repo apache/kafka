@@ -116,6 +116,7 @@ public class UnifiedLogTest {
             .mapToObj(id -> new SimpleRecord(String.valueOf(id).getBytes()))
             .toArray(SimpleRecord[]::new);
 
+        //Given each message has an offset & epoch, as msgs from leader would
         Function<Integer, MemoryRecords> recordsForEpoch = i -> {
             MemoryRecords recs = MemoryRecords.withRecords(messageIds[i], Compression.NONE, records[i]);
             recs.batches().forEach(record -> {
@@ -125,7 +126,6 @@ public class UnifiedLogTest {
             return recs;
         };
 
-        // Given each message has an offset & epoch, as msgs from leader would
         try (UnifiedLog log = createLog(logDir, new LogConfig(new Properties()))) {
             // Given each message has an offset & epoch, as msgs from leader would
             for (int i = 0; i < records.length; i++) {
@@ -147,6 +147,7 @@ public class UnifiedLogTest {
         log = createLog(logDir, config);
         LeaderEpochFileCache cache = epochCache(log);
 
+        // Given three segments of 5 messages each
         for (int i = 0; i < 15; i++) {
             log.appendAsLeader(records.get(), 0);
         }
@@ -160,6 +161,7 @@ public class UnifiedLogTest {
         log.updateHighWatermark(log.logEndOffset());
         log.deleteOldSegments();
 
+        //The oldest epoch entry should have been removed
         assertEquals(List.of(new EpochEntry(1, 5), new EpochEntry(2, 10)), cache.epochEntries());
     }
 
@@ -174,6 +176,7 @@ public class UnifiedLogTest {
         log = createLog(logDir, config);
         LeaderEpochFileCache cache = epochCache(log);
 
+        // Given three segments of 5 messages each
         for (int i = 0; i < 15; i++) {
             log.appendAsLeader(records.get(), 0);
         }
@@ -187,6 +190,7 @@ public class UnifiedLogTest {
         log.updateHighWatermark(log.logEndOffset());
         log.deleteOldSegments();
 
+        //The first entry should have gone from (0,0) => (0,5)
         assertEquals(List.of(new EpochEntry(0, 5), new EpochEntry(1, 7), new EpochEntry(2, 10)), cache.epochEntries());
     }
 
@@ -199,6 +203,7 @@ public class UnifiedLogTest {
         log = createLog(logDir, config);
         LeaderEpochFileCache cache = epochCache(log);
 
+        //Given 2 segments, 10 messages per segment
         append(0, 0, 10);
         append(1, 10, 6);
         append(2, 16, 4);
@@ -219,6 +224,7 @@ public class UnifiedLogTest {
         // When truncate
         log.truncateTo(10);
         assertEquals(1, cache.epochEntries().size());
+
         // When truncate all
         log.truncateTo(0);
         assertEquals(0, cache.epochEntries().size());
@@ -272,6 +278,7 @@ public class UnifiedLogTest {
                 .build();
         log = createLog(logDir, config);
 
+        // append some messages to create some segments
         for (int i = 0; i < 15; i++) {
             log.appendAsLeader(records.get(), 0);
         }
@@ -290,6 +297,7 @@ public class UnifiedLogTest {
                 .build();
         log = createLog(logDir, logConfig);
 
+        // append some messages to create some segments
         for (int i = 0; i < 15; i++) {
             log.appendAsLeader(records.get(), 0);
         }
@@ -309,10 +317,12 @@ public class UnifiedLogTest {
                 .build();
         log = createLog(logDir, config);
 
+        // append some messages to create some segments
         for (int i = 0; i < 15; i++) {
             log.appendAsLeader(records.get(), 0);
         }
 
+        // mark the oldest segment as older the retention.ms
         log.logSegments().iterator().next().setLastModified(mockTime.milliseconds() - 20000);
 
         int segments = log.numberOfSegments();
@@ -332,6 +342,7 @@ public class UnifiedLogTest {
 
         log = createLog(logDir, config);
 
+        // append some messages to create some segments
         for (int i = 0; i < 15; i++) {
             log.appendAsLeader(records.get(), 0);
         }
@@ -461,6 +472,7 @@ public class UnifiedLogTest {
                 .build();
         log = createLog(logDir, logConfig);
 
+        // append some messages to create some segments
         for (int i = 0; i < 100; i++) {
             log.appendAsLeader(records.get(), 0);
         }
@@ -487,7 +499,6 @@ public class UnifiedLogTest {
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
-                // FIXME: think
                 Optional<RecordBatch> lastBatch = Optional.empty();
                 for (RecordBatch batch : segmentFetchInfo.records.batches()) {
                     lastBatch = Optional.of(batch);
@@ -523,6 +534,7 @@ public class UnifiedLogTest {
                 .build();
         log = createLog(logDir, logConfig);
 
+        // append some messages to create some segments
         for (int i = 0; i < 15; i++) {
             log.appendAsLeader(records.get(), 0);
         }
