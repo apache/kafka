@@ -18,7 +18,6 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
@@ -65,13 +64,7 @@ public class UnifiedLogTest {
     public void tearDown() throws IOException {
         brokerTopicStats.close();
         for (UnifiedLog log : logsToClose) {
-            try {
-                // some test like testLogDeletionAfterClose and testLogDeletionAfterClose
-                // they are closed from test so KafkaStorageException is expected.
-                log.close();
-            } catch (KafkaStorageException ignore) {
-                // ignore
-            }
+            log.close();
         }
         Utils.delete(tmpDir);
     }
@@ -448,6 +441,8 @@ public class UnifiedLogTest {
                 .withRetentionMs(999)
                 .build();
         log = createLog(logDir, logConfig);
+        // avoid close after test because it is closed in this test
+        logsToClose.remove(log);
 
         // append some messages to create some segments
         log.appendAsLeader(records.get(), 0);
@@ -470,6 +465,8 @@ public class UnifiedLogTest {
                 .withRetentionMs(999)
                 .build();
         log = createLog(logDir, logConfig);
+        // avoid close after test because it is closed in this test
+        logsToClose.remove(log);
 
         // append some messages to create some segments
         for (int i = 0; i < 100; i++) {
