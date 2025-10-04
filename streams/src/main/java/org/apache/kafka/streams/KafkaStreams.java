@@ -19,9 +19,6 @@ package org.apache.kafka.streams;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
-import org.apache.kafka.clients.admin.MemberToRemove;
-import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
-import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupResult;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.KafkaFuture;
@@ -492,7 +489,7 @@ public class KafkaStreams implements AutoCloseable {
             closeToError();
         }
         final StreamThread deadThread = (StreamThread) Thread.currentThread();
-        deadThread.shutdown();
+        deadThread.shutdown(false);
         addStreamThread();
         if (throwable instanceof RuntimeException) {
             throw (RuntimeException) throwable;
@@ -1140,7 +1137,7 @@ public class KafkaStreams implements AutoCloseable {
                     return Optional.of(streamThread.getName());
                 } else {
                     log.warn("Terminating the new thread because the Kafka Streams client is in state {}", state);
-                    streamThread.shutdown();
+                    streamThread.shutdown(true);
                     threads.remove(streamThread);
                     final long cacheSizePerThread = cacheSizePerThread(numLiveStreamThreads());
                     log.info("Resizing thread cache due to terminating added thread, new cache size per thread is {}", cacheSizePerThread);
@@ -1160,6 +1157,10 @@ public class KafkaStreams implements AutoCloseable {
      * The removed stream thread is gracefully shut down. This method does not specify which stream
      * thread is shut down.
      * <p>
+     * The consumer associated with the stream thread is closed using consumer.close() during the shutdown process.
+     * Note that this method does not guarantee immediate removal of the consumer from the consumer group.
+     * The consumer is only kicked off from the group after the stream thread completes its run function.
+     * <p>
      * Since the number of stream threads decreases, the sizes of the caches in the remaining stream
      * threads are adapted so that the sum of the cache sizes over all stream threads equals the total
      * cache size specified in configuration {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG}.
@@ -1172,17 +1173,15 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * Removes one stream thread out of the running stream threads from this Kafka Streams client.
-     * <p>
-     * The removed stream thread is gracefully shut down. This method does not specify which stream
-     * thread is shut down.
+     * The consumer associated with the stream thread is closed using consumer.close() during the shutdown process.
+     * Note that this method does not guarantee immediate removal of the consumer from the consumer group.
+     * The consumer is only kicked off from the group after the stream thread completes its run function.
      * <p>
      * Since the number of stream threads decreases, the sizes of the caches in the remaining stream
      * threads are adapted so that the sum of the cache sizes over all stream threads equals the total
      * cache size specified in configuration {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG}.
      *
      * @param timeout The length of time to wait for the thread to shut down
-     * @throws org.apache.kafka.common.errors.TimeoutException if the thread does not stop in time
      * @return name of the removed stream thread or empty if a stream thread could not be removed because
      *         no stream threads are alive
      */
@@ -1202,10 +1201,8 @@ public class KafkaStreams implements AutoCloseable {
                     final boolean callingThreadIsNotCurrentStreamThread = !streamThread.getName().equals(Thread.currentThread().getName());
                     if (streamThread.isThreadAlive() && (callingThreadIsNotCurrentStreamThread || numLiveStreamThreads() == 1)) {
                         log.info("Removing StreamThread {}", streamThread.getName());
-                        final Optional<String> groupInstanceID = streamThread.groupInstanceID();
-                        streamThread.requestLeaveGroupDuringShutdown();
-                        streamThread.shutdown();
-                        if (!streamThread.getName().equals(Thread.currentThread().getName())) {
+                        streamThread.shutdown(true);
+                        if (callingThreadIsNotCurrentStreamThread) {
                             final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
                             if (remainingTimeMs <= 0 || !streamThread.waitOnThreadState(StreamThread.State.DEAD, remainingTimeMs)) {
                                 log.warn("{} did not shutdown in the allotted time.", streamThread.getName());
@@ -1225,46 +1222,6 @@ public class KafkaStreams implements AutoCloseable {
                         final long cacheSizePerThread = cacheSizePerThread(numLiveStreamThreads());
                         log.info("Resizing thread cache due to thread removal, new cache size per thread is {}", cacheSizePerThread);
                         resizeThreadCache(cacheSizePerThread);
-                        if (groupInstanceID.isPresent() && callingThreadIsNotCurrentStreamThread) {
-                            final MemberToRemove memberToRemove = new MemberToRemove(groupInstanceID.get());
-                            final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);
-                            final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult =
-                                adminClient.removeMembersFromConsumerGroup(
-                                    applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG),
-                                    new RemoveMembersFromConsumerGroupOptions(membersToRemove)
-                                );
-                            try {
-                                final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
-                                removeMembersFromConsumerGroupResult.memberResult(memberToRemove).get(remainingTimeMs, TimeUnit.MILLISECONDS);
-                            } catch (final java.util.concurrent.TimeoutException exception) {
-                                log.error(
-                                    String.format(
-                                        "Could not remove static member %s from consumer group %s due to a timeout:",
-                                        groupInstanceID.get(),
-                                        applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG)
-                                    ),
-                                        exception
-                                );
-                                throw new TimeoutException(exception.getMessage(), exception);
-                            } catch (final InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                            } catch (final ExecutionException exception) {
-                                log.error(
-                                    String.format(
-                                        "Could not remove static member %s from consumer group %s due to:",
-                                        groupInstanceID.get(),
-                                        applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG)
-                                    ),
-                                        exception
-                                );
-                                throw new StreamsException(
-                                        "Could not remove static member " + groupInstanceID.get()
-                                            + " from consumer group " + applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG)
-                                            + " for the following reason: ",
-                                        exception.getCause()
-                                );
-                            }
-                        }
                         final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
                         if (remainingTimeMs <= 0) {
                             throw new TimeoutException("Thread " + streamThread.getName() + " did not stop in the allotted time");
@@ -1504,7 +1461,7 @@ public class KafkaStreams implements AutoCloseable {
         return new Thread(() -> {
             // notify all the threads to stop; avoid deadlocks by stopping any
             // further state reports from the thread since we're shutting down
-            int numStreamThreads = processStreamThread(StreamThread::shutdown);
+            int numStreamThreads = processStreamThread(streamThread -> streamThread.shutdown(leaveGroup));
 
             log.info("Shutting down {} stream threads", numStreamThreads);
 
@@ -1688,33 +1645,6 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         return close(Optional.of(timeoutMs), optionsInternal.operation());
-    }
-
-    private Consumer<StreamThread> streamThreadLeaveConsumerGroup(final long remainingTimeMs) {
-        return thread -> {
-            final Optional<String> groupInstanceId = thread.groupInstanceID();
-            if (groupInstanceId.isPresent()) {
-                log.debug("Sending leave group trigger to removing instance from consumer group: {}.",
-                    groupInstanceId.get());
-                final MemberToRemove memberToRemove = new MemberToRemove(groupInstanceId.get());
-                final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);
-
-                final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult = adminClient
-                    .removeMembersFromConsumerGroup(
-                        applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG),
-                        new RemoveMembersFromConsumerGroupOptions(membersToRemove)
-                    );
-
-                try {
-                    removeMembersFromConsumerGroupResult.memberResult(memberToRemove)
-                        .get(remainingTimeMs, TimeUnit.MILLISECONDS);
-                } catch (final Exception e) {
-                    final String msg = String.format("Could not remove static member %s from consumer group %s.",
-                                                     groupInstanceId.get(), applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG));
-                    log.error(msg, e);
-                }
-            }
-        };
     }
 
     /**

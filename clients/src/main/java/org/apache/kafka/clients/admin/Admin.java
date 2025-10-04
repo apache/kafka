@@ -32,6 +32,7 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.FeatureUpdateFailedException;
+import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -1866,10 +1867,17 @@ public interface Admin extends AutoCloseable {
     /**
      * Add a new voter node to the KRaft metadata quorum.
      *
+     * <p>
+     * The clusterId in {@link AddRaftVoterOptions} is optional.
+     * If provided, the operation will only succeed if the cluster id matches the id
+     * of the current cluster. If the cluster id does not match, the operation
+     * will fail with {@link InconsistentClusterIdException}.
+     * If not provided, the cluster id check is skipped.
+     *
      * @param voterId           The node ID of the voter.
      * @param voterDirectoryId  The directory ID of the voter.
      * @param endpoints         The endpoints that the new voter has.
-     * @param options           The options to use when adding the new voter node.
+     * @param options           Additional options for the operation, including optional cluster ID.
      */
     AddRaftVoterResult addRaftVoter(
         int voterId,
@@ -1894,9 +1902,16 @@ public interface Admin extends AutoCloseable {
     /**
      * Remove a voter node from the KRaft metadata quorum.
      *
+     * <p>
+     * The clusterId in {@link AddRaftVoterOptions} is optional.
+     * If provided, the operation will only succeed if the cluster id matches the id
+     * of the current cluster. If the cluster id does not match, the operation
+     * will fail with {@link InconsistentClusterIdException}.
+     * If not provided, the cluster id check is skipped.
+     *
      * @param voterId           The node ID of the voter.
      * @param voterDirectoryId  The directory ID of the voter.
-     * @param options           The options to use when removing the voter node.
+     * @param options           Additional options for the operation, including optional cluster ID.
      */
     RemoveRaftVoterResult removeRaftVoter(
         int voterId,

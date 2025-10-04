@@ -19,6 +19,7 @@ package org.apache.kafka.streams;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaFuture;
@@ -309,8 +310,8 @@ public class KafkaStreamsTest {
 
     private void prepareConsumer(final StreamThread thread, final AtomicReference<StreamThread.State> state) {
         doAnswer(invocation -> {
-            supplier.consumer.close();
-            supplier.restoreConsumer.close();
+            supplier.consumer.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP));
+            supplier.restoreConsumer.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP));
             for (final MockProducer<byte[], byte[]> producer : supplier.producers) {
                 producer.close();
             }
@@ -319,7 +320,7 @@ public class KafkaStreamsTest {
             threadStateListenerCapture.getValue().onChange(thread, StreamThread.State.PENDING_SHUTDOWN, StreamThread.State.RUNNING);
             threadStateListenerCapture.getValue().onChange(thread, StreamThread.State.DEAD, StreamThread.State.PENDING_SHUTDOWN);
             return null;
-        }).when(thread).shutdown();
+        }).when(thread).shutdown(false);
     }
 
     private void prepareThreadLock(final StreamThread thread) {
@@ -570,7 +571,7 @@ public class KafkaStreamsTest {
 
             for (int i = 0; i < NUM_THREADS; i++) {
                 final StreamThread tmpThread = streams.threads.get(i);
-                tmpThread.shutdown();
+                tmpThread.shutdown(false);
                 waitForCondition(() -> tmpThread.state() == StreamThread.State.DEAD,
                     "Thread never stopped.");
                 streams.threads.get(i).join();
@@ -789,7 +790,7 @@ public class KafkaStreamsTest {
         prepareThreadLock(streamThreadTwo);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
-            streamThreadOne.shutdown();
+            streamThreadOne.shutdown(true);
             final Set<ThreadMetadata> threads = streams.metadataForLocalThreads();
             assertThat(threads.size(), equalTo(1));
             assertThat(threads, hasItem(streamThreadTwo.threadMetadata()));
