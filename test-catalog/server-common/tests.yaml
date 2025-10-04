@@ -15,6 +15,7 @@ org.apache.kafka.queue.KafkaEventQueueTest:
 - testDeferredIsQueuedAfterTriggering
 - testHandleEvents
 - testHandleExceptionThrowingAnException
+- testIdleTimeCallback
 - testInterruptedExceptionHandling
 - testInterruptedWithDeferredEvents
 - testInterruptedWithEmptyQueue
@@ -193,6 +194,9 @@ org.apache.kafka.server.metrics.KafkaYammerMetricsTest:
 - testTaggedMetricName
 - testTaggedMetricNameWithEmptyValue
 - testUntaggedMetric
+org.apache.kafka.server.metrics.TimeRatioTest:
+- testRatio
+- testRatioMisalignedWindow
 org.apache.kafka.server.mutable.BoundedListTest:
 - testAddAll
 - testAddingToBoundedList

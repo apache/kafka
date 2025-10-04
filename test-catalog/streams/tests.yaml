@@ -297,7 +297,6 @@ org.apache.kafka.streams.StreamsConfigTest:
 - shouldSetGroupProtocolToClassic
 - shouldSetGroupProtocolToClassicByDefault
 - shouldSetGroupProtocolToStreams
-- shouldSetInternalLeaveGroupOnCloseConfigToFalseInConsumer
 - shouldSetMinTrafficRackAwareAssignmentConfig
 - shouldSetRackAwareAssignmentTags
 - shouldSpecifyCorrectKeySerdeClassOnError
@@ -2580,8 +2579,10 @@ org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapterTest:
 - shouldThrowOnRestore
 - shouldThrowOnRestoreAll
 org.apache.kafka.streams.processor.internals.StoreChangelogReaderTest:
+- shouldCallRecordRestoreTimeAtTheEndOfRestore
 - shouldCheckCompletionIfPositionLargerThanEndOffset
 - shouldInitializeChangelogAndCheckForCompletion
+- shouldNotCallRecordRestoreTimeIfRestoreDoesNotComplete
 - shouldNotRegisterSameStoreMultipleTimes
 - shouldNotRegisterStoreWithoutMetadata
 - shouldNotThrowOnUnknownRevokedPartition
@@ -2870,7 +2871,6 @@ org.apache.kafka.streams.processor.internals.StreamsPartitionAssignorTest:
 - shouldThrowIllegalStateExceptionIfAnyTopicsMissingFromChangelogEndOffsets
 - shouldThrowKafkaExceptionIfReferenceContainerConfigIsNotTaskManagerInstance
 - shouldThrowKafkaExceptionIfReferenceContainerNotConfigured
-- shouldThrowOnEagerSubscription
 - shouldThrowTaskAssignmentExceptionWhenUnableToResolvePartitionCount
 - shouldThrowTimeoutExceptionWhenCreatingChangelogTopicsTimesOut
 - shouldThrowTimeoutExceptionWhenCreatingRepartitionTopicsTimesOut
@@ -4551,7 +4551,7 @@ org.apache.kafka.streams.state.internals.MeteredKeyValueStoreTest:
 - shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled
 - shouldPutAllToInnerStoreAndRecordPutAllMetric
 - shouldPutIfAbsentAndRecordPutIfAbsentMetric
-- shouldRecordRestoreLatencyOnInit
+- shouldRecordRestoreLatencyOnRecordRestoreTime
 - shouldRemoveMetricsEvenIfWrappedStoreThrowsOnClose
 - shouldRemoveMetricsOnClose
 - shouldSetFlushListenerOnWrappedCachingStore
@@ -4586,7 +4586,7 @@ org.apache.kafka.streams.state.internals.MeteredSessionStoreTest:
 - shouldNotThrowNullPointerExceptionIfFetchSessionReturnsNull
 - shouldPassChangelogTopicNameToStateStoreSerde
 - shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled
-- shouldRecordRestoreTimeOnInit
+- shouldRecordRestoreLatencyOnRecordRestoreTime
 - shouldRemoveFromStoreAndRecordRemoveMetric
 - shouldRemoveMetricsEvenIfWrappedStoreThrowsOnClose
 - shouldRemoveMetricsOnClose
@@ -4664,7 +4664,6 @@ org.apache.kafka.streams.state.internals.MeteredVersionedKeyValueStoreTest:
 - shouldNotSetFlushListenerIfInnerIsNotCaching
 - shouldPassChangelogTopicNameToStateStoreSerde
 - shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled
-- shouldRecordMetricsOnInit
 - shouldRemoveMetricsOnCloseEvenIfInnerThrows
 - shouldThrowNullPointerOnDeleteIfKeyIsNull
 - shouldThrowNullPointerOnGetIfKeyIsNull
@@ -4691,7 +4690,7 @@ org.apache.kafka.streams.state.internals.MeteredWindowStoreTest:
 - shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled
 - shouldPutToInnerStoreAndRecordPutMetrics
 - shouldRecordFlushLatency
-- shouldRecordRestoreLatencyOnInit
+- shouldRecordRestoreLatencyOnRecordRestoreTime
 - shouldRemoveMetricsEvenIfWrappedStoreThrowsOnClose
 - shouldRemoveMetricsOnClose
 - shouldReturnNoRecordWhenFetchedKeyHasExpired

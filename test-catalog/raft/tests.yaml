@@ -722,9 +722,6 @@ org.apache.kafka.raft.internals.ThresholdPurgatoryTest:
 - testExpiration
 - testExternalCompletion
 - testThresholdCompletion
-org.apache.kafka.raft.internals.TimeRatioTest:
-- testRatio
-- testRatioMisalignedWindow
 org.apache.kafka.raft.internals.TreeMapLogHistoryTest:
 - testAddAt
 - testClear

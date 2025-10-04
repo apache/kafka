@@ -241,6 +241,7 @@ org.apache.kafka.streams.integration.ResetPartitionTimeIntegrationTest:
 org.apache.kafka.streams.integration.RestoreIntegrationTest:
 - shouldInvokeUserDefinedGlobalStateRestoreListener
 - shouldProcessDataFromStoresWithLoggingDisabled
+- shouldRecordRestoreMetrics
 - shouldRecycleStateFromStandbyTaskPromotedToActiveTaskAndNotRestore
 - shouldRestoreNullRecord
 - shouldRestoreStateFromChangelogTopic

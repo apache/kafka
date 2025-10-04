@@ -385,6 +385,7 @@ org.apache.kafka.controller.metrics.ControllerMetricsChangesTest:
 - testTopicChange
 - testTopicElectionResult
 org.apache.kafka.controller.metrics.QuorumControllerMetricsTest:
+- testAvgIdleRatio
 - testLastAppliedRecordMetrics
 - testMetricNames
 - testTimeSinceLastHeartbeatReceivedMs

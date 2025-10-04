@@ -3642,8 +3642,11 @@ org.apache.kafka.common.metrics.KafkaMbeanTest:
 - testSetAttribute
 - testSetAttributes
 org.apache.kafka.common.metrics.KafkaMetricTest:
+- testConstructorWithNullProvider
 - testIsMeasurable
 - testIsMeasurableWithGaugeProvider
+- testKafkaMetricAcceptsNonMeasurableNonGaugeProvider
+- testMeasurableValueReturnsZeroWhenNotMeasurable
 org.apache.kafka.common.metrics.KafkaMetricsContextTest:
 - testCreationWithNullNamespaceAndLabels
 - testCreationWithValidNamespaceAndLabels
