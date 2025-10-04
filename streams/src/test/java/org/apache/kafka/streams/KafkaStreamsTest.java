@@ -19,7 +19,6 @@ package org.apache.kafka.streams;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.MockAdminClient;
-import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaFuture;
@@ -310,8 +309,12 @@ public class KafkaStreamsTest {
 
     private void prepareConsumer(final StreamThread thread, final AtomicReference<StreamThread.State> state) {
         doAnswer(invocation -> {
-            supplier.consumer.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP));
-            supplier.restoreConsumer.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP));
+            supplier.consumer.close(
+                org.apache.kafka.clients.consumer.CloseOptions.groupMembershipOperation(org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP)
+            );
+            supplier.restoreConsumer.close(
+                org.apache.kafka.clients.consumer.CloseOptions.groupMembershipOperation(org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP)
+            );
             for (final MockProducer<byte[], byte[]> producer : supplier.producers) {
                 producer.close();
             }
@@ -1712,7 +1715,7 @@ public class KafkaStreamsTest {
         producerFuture.complete(producerInstanceId);
         final Uuid adminInstanceId = Uuid.randomUuid();
         adminClient.setClientInstanceId(adminInstanceId);
-        
+
         final Map<String, KafkaFuture<Uuid>> expectedClientIds = Map.of("main-consumer", consumerFuture, "some-thread-producer", producerFuture);
         when(streamThreadOne.clientInstanceIds(any())).thenReturn(expectedClientIds);
 

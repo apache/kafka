@@ -1446,9 +1446,9 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private Thread shutdownHelper(
-            final boolean error,
-            final long timeoutMs,
-            final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation
+        final boolean error,
+        final long timeoutMs,
+        final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation
     ) {
         stateDirCleaner.shutdownNow();
         if (rocksDBMetricsRecordingService != null) {
@@ -1461,7 +1461,9 @@ public class KafkaStreams implements AutoCloseable {
         return new Thread(() -> {
             // notify all the threads to stop; avoid deadlocks by stopping any
             // further state reports from the thread since we're shutting down
-            int numStreamThreads = processStreamThread(streamThread -> streamThread.shutdown(leaveGroup));
+            int numStreamThreads = processStreamThread(
+                streamThread -> streamThread.shutdown(operation == org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP)
+            );
 
             log.info("Shutting down {} stream threads", numStreamThreads);
 
@@ -1480,10 +1482,6 @@ public class KafkaStreams implements AutoCloseable {
                     Thread.currentThread().interrupt();
                 }
             });
-
-            if (operation == org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP) {
-                processStreamThread(streamThreadLeaveConsumerGroup(timeoutMs));
-            }
 
             log.info("Shutdown {} stream threads complete", numStreamThreads);
 
@@ -1574,8 +1572,7 @@ public class KafkaStreams implements AutoCloseable {
         if (!setState(State.PENDING_ERROR)) {
             log.info("Skipping shutdown since we are already in {}", state());
         } else {
-            final Thread shutdownThread = shutdownHelper(true, -1,
-                    org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+            final Thread shutdownThread = shutdownHelper(true, -1, org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
 
             shutdownThread.setDaemon(true);
             shutdownThread.start();
