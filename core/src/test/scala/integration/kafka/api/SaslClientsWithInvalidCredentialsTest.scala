@@ -13,11 +13,12 @@
 package kafka.api
 
 import kafka.security.JaasTestUtils
+import kafka.utils.TestUtils.waitUntilTrue
 
 import java.util.Properties
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecords}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.SaslAuthenticationException
@@ -32,6 +33,7 @@ import org.apache.kafka.metadata.storage.Formatter
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
 
+import java.time.Duration
 import scala.jdk.javaapi.OptionConverters
 import scala.util.Using
 
@@ -158,15 +160,13 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     createClientCredential()
     val producer = createProducer()
     verifyWithRetry(sendOneRecord(producer))()
-    def verifyRecordCount(records: ConsumerRecords[Array[Byte], Array[Byte]]): Boolean = {
-      records.count() == 1
-    }
-    TestUtils.pollRecordsUntilTrue(
-      consumer,
-      verifyRecordCount,
-      s"Consumer.poll() did not read the expected number of records within the timeout",
-      pollTimeoutMs = 1000
-    )
+    waitUntilTrue(() => {
+      try {
+        consumer.poll(Duration.ofMillis(1000)).count() == 1
+      } catch {
+        case _:Throwable => false
+      }
+    }, msg = s"Consumer.poll() did not read the expected number of records within the timeout")
   }
 
   @Test
