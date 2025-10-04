@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -50,6 +51,11 @@ class ConsumerRebalanceMetricsManagerTest {
         metrics = new Metrics(time);
         subscriptionState = new SubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
         metricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
+    }
+
+    @AfterEach
+    public void tearDown() {
+        metrics.close();
     }
 
     @Test
