@@ -20,7 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class StateChangeLogger {
-    private static final Logger logger = LoggerFactory.getLogger("state.change.logger");
+    private static final Logger log = LoggerFactory.getLogger("state.change.logger");
 
     private final String logIdent;
 
@@ -33,22 +33,22 @@ public class StateChangeLogger {
     }
 
     public void trace(String message) {
-        logger.info("{}{}", logIdent, message);
+        log.info("{}{}", logIdent, message);
     }
 
     public void info(String message) {
-        logger.info("{}{}", logIdent, message);
+        log.info("{}{}", logIdent, message);
     }
 
     public void warn(String message) {
-        logger.warn("{}{}", logIdent, message);
+        log.warn("{}{}", logIdent, message);
     }
 
     public void error(String message) {
-        logger.error("{}{}", logIdent, message);
+        log.error("{}{}", logIdent, message);
     }
 
     public void error(String message, Throwable e) {
-        logger.error("{}{}", logIdent, message, e);
+        log.error("{}{}", logIdent, message, e);
     }
 }
