@@ -1527,7 +1527,7 @@ public class TaskManagerTest {
     }
 
     private TaskManager setupForRevocationAndLost(final Set<Task> tasksInStateUpdater,
-        final TasksRegistry tasks) {
+                                                  final TasksRegistry tasks) {
         final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
         when(stateUpdater.tasks()).thenReturn(tasksInStateUpdater);
 
@@ -1564,7 +1564,7 @@ public class TaskManagerTest {
     }
 
     private void verifyTransitionToRunningOfRestoredTask(final Set<StreamTask> restoredTasks,
-        final TasksRegistry tasks) {
+                                                         final TasksRegistry tasks) {
         for (final StreamTask restoredTask : restoredTasks) {
             verify(restoredTask).completeRestoration(noOpResetter);
             verify(restoredTask).clearTaskTimeout();
@@ -1593,7 +1593,7 @@ public class TaskManagerTest {
     }
 
     private TaskManager setUpTransitionToRunningOfRestoredTask(final Set<StreamTask> statefulTasks,
-        final TasksRegistry tasks) {
+                                                               final TasksRegistry tasks) {
         when(stateUpdater.restoresActiveTasks()).thenReturn(true);
         when(stateUpdater.drainRestoredActiveTasks(any(Duration.class))).thenReturn(statefulTasks);
 
@@ -1920,7 +1920,7 @@ public class TaskManagerTest {
     }
 
     private void computeOffsetSumAndVerify(final Map<TopicPartition, Long> changelogOffsets,
-        final Map<TaskId, Long> expectedOffsetSums) throws Exception {
+                                           final Map<TaskId, Long> expectedOffsetSums) throws Exception {
         expectLockObtainedFor(taskId00);
         expectDirectoryNotEmpty(taskId00);
         makeTaskFolders(taskId00.toString());
@@ -2678,7 +2678,7 @@ public class TaskManagerTest {
             mkEntry(taskId00, taskId00Partitions),
             mkEntry(taskId01, taskId01Partitions),
             mkEntry(taskId02, taskId02Partitions)
-        );
+            );
 
         when(consumer.assignment())
             .thenReturn(assignment)
