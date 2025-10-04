@@ -624,11 +624,6 @@ public class UnifiedLogTest {
         return log.leaderEpochCache();
     }
 
-    private LogAppendInfo appendEndTxnMarkerAsLeader(UnifiedLog log, long producerId, short producerEpoch, ControlRecordType controlType, long timestamp) throws IOException {
-        MemoryRecords records = MemoryRecords.withEndTransactionMarker(producerId, producerEpoch, new EndTransactionMarker(controlType, 0));
-        return log.appendAsLeader(records, 0);
-    }
-
     private UnifiedLog createLog(File dir, LogConfig config) throws IOException {
         return createLog(dir, config, false);
     }
