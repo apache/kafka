@@ -465,7 +465,7 @@ public class UnifiedLogTest {
                 .withRetentionMs(999)
                 .build();
         log = createLog(logDir, logConfig);
-        // Avoid close after test because it is deleted in this test. See line 517.
+        // avoid close after test because it is closed in this test
         logsToClose.remove(log);
 
         // append some messages to create some segments
@@ -513,10 +513,6 @@ public class UnifiedLogTest {
             log.appendAsLeader(records.get(), 0);
         }
 
-        // Bug? Due to log.delete() we can't  close the unifiedLog
-        // because we delete log and the memory map is closed.
-        // When we close UnifiedLog, it will check that memory map again and
-        // will throw KafkaStorageException.
         log.delete();
         assertEquals(0, log.numberOfSegments(), "The number of segments should be 0");
         assertEquals(0, log.deleteOldSegments(), "The number of deleted segments should be zero.");
