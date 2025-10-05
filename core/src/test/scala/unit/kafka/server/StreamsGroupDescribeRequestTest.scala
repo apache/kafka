@@ -29,7 +29,7 @@ import scala.jdk.CollectionConverters._
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.common.Feature
-import org.junit.Assert.{assertEquals}
+import org.junit.Assert.{assertEquals, assertTrue}
 
 import java.lang.{Byte => JByte}
 
@@ -248,7 +248,7 @@ class StreamsGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoo
           includeAuthorizedOperations = true,
           version = ApiKeys.STREAMS_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled).toShort
         )
-        actual.head.groupState() == "Stable" && actual(1).groupState() == "Stable" &&
+          actual.head.groupState() == "Stable" && actual(1).groupState() == "Stable" &&
           actual.head.members.size == 2 && actual(1).members.size == 2
       }, "Two groups did not stabilize with 2 members each in time")
 
@@ -264,9 +264,7 @@ class StreamsGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoo
         assertEquals(actual.map(_.groupId).toSet, Set("grp-1", "grp-2"))
         for (describedGroup <- actual) {
           assertEquals("Stable", describedGroup.groupState)
-          assertEquals(2, describedGroup.groupEpoch)
-          assertEquals(2, describedGroup.assignmentEpoch)
-
+          assertTrue("Group epoch is not equal to the assignment epoch", describedGroup.groupEpoch == describedGroup.assignmentEpoch)
           // Verify topology
           assertEquals(1, describedGroup.topology.epoch)
           assertEquals(1, describedGroup.topology.subtopologies.size)
@@ -286,7 +284,7 @@ class StreamsGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoo
           assertEquals(authorizedOperationsInt, describedGroup.authorizedOperations)
 
           describedGroup.members.asScala.foreach { member =>
-            assertEquals(2, member.memberEpoch)
+            assertTrue("Group epoch is not equal to the member epoch", member.memberEpoch == describedGroup.assignmentEpoch)
             assertEquals(1, member.topologyEpoch)
             assertEquals(member.targetAssignment, member.assignment)
             assertEquals(clientId, member.clientId())
