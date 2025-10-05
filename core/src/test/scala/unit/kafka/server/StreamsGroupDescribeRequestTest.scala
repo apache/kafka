@@ -50,19 +50,19 @@ class StreamsGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoo
   )
   def testStreamsGroupDescribeWhenFeatureFlagNotEnabled(): Unit = {
     val streamsGroupDescribeRequest = new StreamsGroupDescribeRequest.Builder(
-      new StreamsGroupDescribeRequestData().setGroupIds(List("grp-1", "grp-2").asJava)
+      new StreamsGroupDescribeRequestData().setGroupIds(List("grp-mock-1", "grp-mock-2").asJava)
     ).build(ApiKeys.STREAMS_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled))
 
     val streamsGroupDescribeResponse = connectAndReceive[StreamsGroupDescribeResponse](streamsGroupDescribeRequest)
     val expectedResponse = new StreamsGroupDescribeResponseData()
     expectedResponse.groups().add(
       new StreamsGroupDescribeResponseData.DescribedGroup()
-        .setGroupId("grp-1")
+        .setGroupId("grp-mock-1")
         .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
     )
     expectedResponse.groups().add(
       new StreamsGroupDescribeResponseData.DescribedGroup()
-        .setGroupId("grp-2")
+        .setGroupId("grp-mock-2")
         .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
     )
     assertEquals(expectedResponse, streamsGroupDescribeResponse.data)
