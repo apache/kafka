@@ -323,7 +323,7 @@ public class KafkaStreamsTest {
             threadStateListenerCapture.getValue().onChange(thread, StreamThread.State.PENDING_SHUTDOWN, StreamThread.State.RUNNING);
             threadStateListenerCapture.getValue().onChange(thread, StreamThread.State.DEAD, StreamThread.State.PENDING_SHUTDOWN);
             return null;
-        }).when(thread).shutdown(false);
+        }).when(thread).shutdown(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
     }
 
     private void prepareThreadLock(final StreamThread thread) {
@@ -574,7 +574,7 @@ public class KafkaStreamsTest {
 
             for (int i = 0; i < NUM_THREADS; i++) {
                 final StreamThread tmpThread = streams.threads.get(i);
-                tmpThread.shutdown(false);
+                tmpThread.shutdown(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
                 waitForCondition(() -> tmpThread.state() == StreamThread.State.DEAD,
                     "Thread never stopped.");
                 streams.threads.get(i).join();
@@ -793,7 +793,7 @@ public class KafkaStreamsTest {
         prepareThreadLock(streamThreadTwo);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
-            streamThreadOne.shutdown(true);
+            streamThreadOne.shutdown(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
             final Set<ThreadMetadata> threads = streams.metadataForLocalThreads();
             assertThat(threads.size(), equalTo(1));
             assertThat(threads, hasItem(streamThreadTwo.threadMetadata()));
