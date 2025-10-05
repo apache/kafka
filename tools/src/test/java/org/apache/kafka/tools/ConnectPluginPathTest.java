@@ -341,7 +341,7 @@ public class ConnectPluginPathTest {
                 ""
         );
         assertNotEquals(0, res.returnCode);
-        assertTrue("'--plugin-path' must not be empty.\n".equals(res.err));
+        assertEquals("'--plugin-path' must not be empty.\n", res.err);
     }
 
     @Test
@@ -352,7 +352,7 @@ public class ConnectPluginPathTest {
                 "location-a,,location-b"
         );
         assertNotEquals(0, res.returnCode);
-        assertTrue("'--plugin-path' values must not be empty.\n".equals(res.err));
+        assertEquals("'--plugin-path' values must not be empty.\n", res.err);
     }
 
     @Test
@@ -370,7 +370,7 @@ public class ConnectPluginPathTest {
                 configPath.toString()
         );
         assertNotEquals(0, res.returnCode);
-        assertTrue("'plugin.path' must not be empty.\n".equals(res.err));
+        assertEquals("'plugin.path' must not be empty.\n", res.err);
     }
 
     @Test
@@ -388,7 +388,7 @@ public class ConnectPluginPathTest {
                 configPath.toString()
         );
         assertNotEquals(0, res.returnCode);
-        assertTrue("'plugin.path' values must not be empty.\n".equals(res.err));
+        assertEquals("'plugin.path' values must not be empty.\n", res.err);
     }
 
     private static Map<String, List<String[]>> assertListSuccess(CommandResult result) {

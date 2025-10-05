@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -85,7 +86,7 @@ public class ConnectPluginPath {
         } catch (ArgumentParserException e) {
             parser.handleError(e);
             return 1;
-        } catch (TerseException e) {
+        } catch (TerseException | ConfigException e) {
             err.println(e.getMessage());
             return 2;
         } catch (Throwable e) {
@@ -199,17 +200,17 @@ public class ConnectPluginPath {
         return pluginLocations;
     }
 
-    private static void validatePluginPath(String pluginPath, String configName) throws TerseException {
+    private static void validatePluginPath(String pluginPath, String configName) throws ConfigException {
         String trimmed = pluginPath.trim();
         if (trimmed.isEmpty()) {
-            throw new TerseException("'" + configName + "' must not be empty.");
+            throw new ConfigException("'" + configName + "' must not be empty.");
         }
 
         String[] pluginPathElements = COMMA_WITH_WHITESPACE.split(trimmed, -1);
 
         for (String path : pluginPathElements) {
             if (path.isEmpty()) {
-                throw new TerseException("'" + configName + "' values must not be empty.");
+                throw new ConfigException("'" + configName + "' values must not be empty.");
             }
         }
     }
