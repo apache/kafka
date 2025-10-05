@@ -1903,7 +1903,7 @@ public interface Admin extends AutoCloseable {
      * Remove a voter node from the KRaft metadata quorum.
      *
      * <p>
-     * The clusterId in {@link AddRaftVoterOptions} is optional.
+     * The clusterId in {@link RemoveRaftVoterOptions} is optional.
      * If provided, the operation will only succeed if the cluster id matches the id
      * of the current cluster. If the cluster id does not match, the operation
      * will fail with {@link InconsistentClusterIdException}.
