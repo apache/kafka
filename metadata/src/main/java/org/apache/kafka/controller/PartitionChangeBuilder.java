@@ -494,7 +494,7 @@ public class PartitionChangeBuilder {
 
     private void maybeUpdateLastKnownLeader(PartitionChangeRecord record) {
         if (!useLastKnownLeaderInBalancedRecovery || !eligibleLeaderReplicasEnabled) return;
-        if (record.leader() == NO_LEADER && (partition.lastKnownElr.length == 0)) {
+        if (record.leader() == NO_LEADER && partition.lastKnownElr.length == 0) {
             // Only update the last known leader when the first time the partition becomes leaderless.
             record.setLastKnownElr(List.of(partition.leader));
         } else if (record.leader() >= 0 && partition.lastKnownElr.length > 0) {
