@@ -22,7 +22,7 @@ import java.util.Optional;
 
 public class CloseOptions {
     /**
-     * Enum to specify the group membership operation upon leaving group.
+     * Enum to specify the group membership operation upon closing the Kafka Streams application.
      *
      * <ul>
      *   <li><b>{@code LEAVE_GROUP}</b>: means the consumer leave the group.</li>

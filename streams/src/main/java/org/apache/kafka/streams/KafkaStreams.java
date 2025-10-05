@@ -1624,9 +1624,9 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * Shutdown this {@code KafkaStreams} by signaling all the threads to stop, and then wait up to the timeout for the
      * threads to join.
-     * @param options  contains timeout to specify how long to wait for the threads to shut down, and a flag
-     *                 {@link org.apache.kafka.streams.CloseOptions.GroupMembershipOperation#LEAVE_GROUP} to
-     *                 trigger consumer leave call
+     * @param options  contains timeout to specify how long to wait for the threads to shut down,
+     *                 and a {@link org.apache.kafka.streams.CloseOptions.GroupMembershipOperation}
+     *                 to trigger consumer leave call or remain in the group
      * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
      * before all threads stopped
      * Note that this method must not be called in the {@link StateListener#onChange(KafkaStreams.State, KafkaStreams.State)} callback of {@link StateListener}.
