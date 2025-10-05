@@ -16,14 +16,14 @@
 {
   "apiKey": 67,
   "type": "request",
-  "listeners": ["zkBroker", "controller"],
+  "listeners": ["controller"],
   "name": "AllocateProducerIdsRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
-      "about": "The ID of the requesting broker" },
+      "about": "The ID of the requesting broker." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "0+", "default": "-1",
-      "about": "The epoch of the requesting broker" }
+      "about": "The epoch of the requesting broker." }
   ]
 }

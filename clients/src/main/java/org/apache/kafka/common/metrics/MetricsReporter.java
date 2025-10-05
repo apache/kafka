@@ -17,7 +17,6 @@
 package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.Reconfigurable;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigException;
 
 import java.util.Collections;
@@ -71,7 +70,6 @@ public interface MetricsReporter extends Reconfigurable, AutoCloseable {
      *
      * @param metricsContext the metric context
      */
-    @InterfaceStability.Evolving
     default void contextChange(MetricsContext metricsContext) {
     }
 }

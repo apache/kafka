@@ -17,25 +17,21 @@
 
 package kafka.utils
 
-import java.io._
-import java.nio._
+import java.io.File
 import java.util.concurrent.locks.{Lock, ReadWriteLock}
-import java.lang.management._
-import java.util.{Base64, Properties, UUID}
+import java.lang.management.ManagementFactory
 import com.typesafe.scalalogging.Logger
 
-import javax.management._
-import scala.collection._
+import javax.management.ObjectName
 import scala.collection.Seq
-import kafka.cluster.EndPoint
 import org.apache.commons.validator.routines.InetAddressValidator
+import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.network.SocketServerConfigs
 import org.slf4j.event.Level
 
-import java.util
 import scala.jdk.CollectionConverters._
 
 /**
@@ -78,9 +74,9 @@ object CoreUtils {
 
   /**
    * Recursively delete the list of files/directories and any subfiles (if any exist)
-   * @param files sequence of files to be deleted
+   * @param files list of files to be deleted
    */
-  def delete(files: Seq[String]): Unit = files.foreach(f => Utils.delete(new File(f)))
+  def delete(files: java.util.List[String]): Unit = files.forEach(f => Utils.delete(new File(f)))
 
   /**
    * Register the given mbean with the platform mbean server,
@@ -110,15 +106,6 @@ object CoreUtils {
   }
 
   /**
-   * Create an instance of the class with the given class name
-   */
-  def createObject[T <: AnyRef](className: String, args: AnyRef*): T = {
-    val klass = Utils.loadClass(className, classOf[Object]).asInstanceOf[Class[T]]
-    val constructor = klass.getConstructor(args.map(_.getClass): _*)
-    constructor.newInstance(args: _*)
-  }
-
-  /**
    * Execute the given function inside the lock
    */
   def inLock[T](lock: Lock)(fun: => T): T = {
@@ -134,32 +121,22 @@ object CoreUtils {
 
   def inWriteLock[T](lock: ReadWriteLock)(fun: => T): T = inLock[T](lock.writeLock)(fun)
 
-  /**
-   * Returns a list of duplicated items
-   */
-  def duplicates[T](s: Iterable[T]): Iterable[T] = {
-    s.groupBy(identity)
-      .map { case (k, l) => (k, l.size)}
-      .filter { case (_, l) => l > 1 }
-      .keys
-  }
-
-  def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol]): Seq[EndPoint] = {
+  def listenerListToEndPoints(listeners: java.util.List[String], securityProtocolMap: java.util.Map[ListenerName, SecurityProtocol]): Seq[Endpoint] = {
     listenerListToEndPoints(listeners, securityProtocolMap, requireDistinctPorts = true)
   }
 
-  private def checkDuplicateListenerPorts(endpoints: Seq[EndPoint], listeners: String): Unit = {
+  private def checkDuplicateListenerPorts(endpoints: Seq[Endpoint], listeners: java.util.List[String]): Unit = {
     val distinctPorts = endpoints.map(_.port).distinct
     require(distinctPorts.size == endpoints.map(_.port).size, s"Each listener must have a different port, listeners: $listeners")
   }
 
-  def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol], requireDistinctPorts: Boolean): Seq[EndPoint] = {
+  def listenerListToEndPoints(listeners: java.util.List[String], securityProtocolMap: java.util.Map[ListenerName, SecurityProtocol], requireDistinctPorts: Boolean): Seq[Endpoint] = {
     def validateOneIsIpv4AndOtherIpv6(first: String, second: String): Boolean =
       (inetAddressValidator.isValidInet4Address(first) && inetAddressValidator.isValidInet6Address(second)) ||
         (inetAddressValidator.isValidInet6Address(first) && inetAddressValidator.isValidInet4Address(second))
 
-    def validate(endPoints: Seq[EndPoint]): Unit = {
-      val distinctListenerNames = endPoints.map(_.listenerName).distinct
+    def validate(endPoints: Seq[Endpoint]): Unit = {
+      val distinctListenerNames = endPoints.map(_.listener).distinct
       require(distinctListenerNames.size == endPoints.size, s"Each listener must have a different name, listeners: $listeners")
 
       val (duplicatePorts, _) = endPoints.filter {
@@ -208,40 +185,12 @@ object CoreUtils {
     }
 
     val endPoints = try {
-      SocketServerConfigs.listenerListToEndPoints(listeners, securityProtocolMap.asJava).
-        asScala.map(EndPoint.fromJava(_))
+      SocketServerConfigs.listenerListToEndPoints(listeners, securityProtocolMap).asScala
     } catch {
       case e: Exception =>
         throw new IllegalArgumentException(s"Error creating broker listeners from '$listeners': ${e.getMessage}", e)
     }
     validate(endPoints)
     endPoints
-  }
-
-  def generateUuidAsBase64(): String = {
-    val uuid = UUID.randomUUID()
-    Base64.getUrlEncoder.withoutPadding.encodeToString(getBytesFromUuid(uuid))
-  }
-
-  def getBytesFromUuid(uuid: UUID): Array[Byte] = {
-    // Extract bytes for uuid which is 128 bits (or 16 bytes) long.
-    val uuidBytes = ByteBuffer.wrap(new Array[Byte](16))
-    uuidBytes.putLong(uuid.getMostSignificantBits)
-    uuidBytes.putLong(uuid.getLeastSignificantBits)
-    uuidBytes.array
-  }
-
-  def propsWith(key: String, value: String): Properties = {
-    propsWith((key, value))
-  }
-
-  def propsWith(props: (String, String)*): Properties = {
-    val properties = new Properties()
-    props.foreach { case (k, v) => properties.put(k, v) }
-    properties
-  }
-
-  def replicaToBrokerAssignmentAsScala(map: util.Map[Integer, util.List[Integer]]): Map[Int, Seq[Int]] = {
-    map.asScala.map(e => (e._1.asInstanceOf[Int], e._2.asScala.map(_.asInstanceOf[Int])))
   }
 }

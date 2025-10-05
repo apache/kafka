@@ -17,8 +17,7 @@
 package org.apache.kafka.streams.processor.api;
 
 /**
- * An abstract implementation of {@link Processor} that manages the {@link ProcessorContext} instance and provides default no-op
- * implementation of {@link #close()}.
+ * An abstract implementation of {@link Processor} that manages the {@link ProcessorContext} instance.
  *
  * @param <KIn> the type of input keys
  * @param <VIn> the type of input values

@@ -22,7 +22,9 @@ import org.apache.kafka.common.record.ControlRecordUtils;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class KRaftVersionTest {
     @Test
@@ -52,7 +54,7 @@ public final class KRaftVersionTest {
             MetadataVersion metadataVersion = KRaftVersion.values()[i].bootstrapMetadataVersion();
             switch (i) {
                 case 0:
-                    assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION, metadataVersion);
+                    assertEquals(MetadataVersion.MINIMUM_VERSION, metadataVersion);
                     break;
                 case 1:
                     assertEquals(MetadataVersion.IBP_3_9_IV0, metadataVersion);
@@ -109,5 +111,21 @@ public final class KRaftVersionTest {
                     throw new RuntimeException("Unsupported value " + kraftVersion);
             }
         }
+    }
+
+    @Test
+    public void testIsAtLeast() {
+        assertTrue(KRaftVersion.KRAFT_VERSION_0.isAtLeast(KRaftVersion.KRAFT_VERSION_0));
+        assertFalse(KRaftVersion.KRAFT_VERSION_0.isAtLeast(KRaftVersion.KRAFT_VERSION_1));
+        assertTrue(KRaftVersion.KRAFT_VERSION_1.isAtLeast(KRaftVersion.KRAFT_VERSION_0));
+        assertTrue(KRaftVersion.KRAFT_VERSION_1.isAtLeast(KRaftVersion.KRAFT_VERSION_1));
+    }
+
+    @Test
+    public void testIsMoreThan() {
+        assertFalse(KRaftVersion.KRAFT_VERSION_0.isMoreThan(KRaftVersion.KRAFT_VERSION_0));
+        assertFalse(KRaftVersion.KRAFT_VERSION_0.isMoreThan(KRaftVersion.KRAFT_VERSION_1));
+        assertTrue(KRaftVersion.KRAFT_VERSION_1.isMoreThan(KRaftVersion.KRAFT_VERSION_0));
+        assertFalse(KRaftVersion.KRAFT_VERSION_1.isMoreThan(KRaftVersion.KRAFT_VERSION_1));
     }
 }

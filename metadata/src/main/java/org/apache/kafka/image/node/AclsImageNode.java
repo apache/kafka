@@ -20,7 +20,7 @@ package org.apache.kafka.image.node;
 import org.apache.kafka.image.AclsImage;
 
 import java.util.Collection;
-import java.util.Collections;
+import java.util.List;
 
 
 public class AclsImageNode implements MetadataNode {
@@ -40,7 +40,7 @@ public class AclsImageNode implements MetadataNode {
 
     @Override
     public Collection<String> childNames() {
-        return Collections.singletonList(AclsImageByIdNode.NAME);
+        return List.of(AclsImageByIdNode.NAME);
     }
 
     @Override

@@ -14,13 +14,17 @@
 // limitations under the License.
 
 {
-  "type": "data",
+  "apiKey": 1,
+  "type": "coordinator-key",
   "name": "OffsetCommitKey",
-  "validVersions": "0-1",
+  "validVersions": "0",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "group", "type": "string", "versions": "0-1" },
-    { "name": "topic", "type": "string", "versions": "0-1" },
-    { "name": "partition", "type": "int32", "versions": "0-1" }
+    { "name": "group", "type": "string", "versions": "0",
+      "about": "The consumer group id."},
+    { "name": "topic", "type": "string", "versions": "0",
+      "about": "The topic name."},
+    { "name": "partition", "type": "int32", "versions": "0",
+      "about": "The topic partition index."}
   ]
 }

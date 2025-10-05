@@ -24,9 +24,19 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.state.internals.SessionKeySchema;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Map;
 
 public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
+
+    /**
+     * Default serializer for the inner serializer class of a windowed record. Must implement the {@link Serde} interface.
+     */
+    public static final String WINDOWED_INNER_SERIALIZER_CLASS = "windowed.inner.serializer.class";
+
+    private final Logger log = LoggerFactory.getLogger(SessionWindowedSerializer.class);
 
     private Serializer<T> inner;
 
@@ -37,32 +47,42 @@ public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
         this.inner = inner;
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"deprecation", "unchecked"})
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
-        final String windowedInnerClassSerdeConfig = (String) configs.get(StreamsConfig.WINDOWED_INNER_CLASS_SERDE);
-        Serde<T> windowInnerClassSerde = null;
-        if (windowedInnerClassSerdeConfig != null) {
+        String serializerConfigKey = WINDOWED_INNER_SERIALIZER_CLASS;
+        String serializerConfigValue = (String) configs.get(WINDOWED_INNER_SERIALIZER_CLASS);
+        if (serializerConfigValue == null) {
+            final String windowedInnerClassSerdeConfig = (String) configs.get(StreamsConfig.WINDOWED_INNER_CLASS_SERDE);
+            if (windowedInnerClassSerdeConfig != null) {
+                serializerConfigKey = StreamsConfig.WINDOWED_INNER_CLASS_SERDE;
+                serializerConfigValue = windowedInnerClassSerdeConfig;
+                log.warn("Config {} is deprecated. Please use {} instead.",
+                    StreamsConfig.WINDOWED_INNER_CLASS_SERDE, WINDOWED_INNER_SERIALIZER_CLASS);
+            }
+        }
+        Serde<T> windowedInnerSerializerClass = null;
+        if (serializerConfigValue != null) {
             try {
-                windowInnerClassSerde = Utils.newInstance(windowedInnerClassSerdeConfig, Serde.class);
+                windowedInnerSerializerClass = Utils.newInstance(serializerConfigValue, Serde.class);
             } catch (final ClassNotFoundException e) {
-                throw new ConfigException(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, windowedInnerClassSerdeConfig,
-                    "Serde class " + windowedInnerClassSerdeConfig + " could not be found.");
+                throw new ConfigException(serializerConfigKey, serializerConfigValue,
+                    "Serde class " + serializerConfigValue + " could not be found.");
             }
         }
 
-        if (inner != null && windowedInnerClassSerdeConfig != null) {
-            if (!inner.getClass().getName().equals(windowInnerClassSerde.serializer().getClass().getName())) {
+        if (inner != null && serializerConfigValue != null) {
+            if (!inner.getClass().getName().equals(windowedInnerSerializerClass.serializer().getClass().getName())) {
                 throw new IllegalArgumentException("Inner class serializer set using constructor "
                     + "(" + inner.getClass().getName() + ")" +
-                    " is different from the one set in windowed.inner.class.serde config " +
-                    "(" + windowInnerClassSerde.serializer().getClass().getName() + ").");
+                    " is different from the one set in " + serializerConfigKey + " config " +
+                    "(" + windowedInnerSerializerClass.serializer().getClass().getName() + ").");
             }
-        } else if (inner == null && windowedInnerClassSerdeConfig == null) {
+        } else if (inner == null && serializerConfigValue == null) {
             throw new IllegalArgumentException("Inner class serializer should be set either via constructor " +
-                "or via the windowed.inner.class.serde config");
+                "or via the " + WINDOWED_INNER_SERIALIZER_CLASS + " config");
         } else if (inner == null)
-            inner = windowInnerClassSerde.serializer();
+            inner = windowedInnerSerializerClass.serializer();
     }
 
     @Override

@@ -53,9 +53,9 @@ public class SystemTimerReaperTest {
             CompletableFuture<Void> t1 = add(timer, 100L);
             CompletableFuture<Void> t2 = add(timer, 200L);
             CompletableFuture<Void> t3 = add(timer, 300L);
-            TestUtils.assertFutureThrows(t1, TimeoutException.class);
-            TestUtils.assertFutureThrows(t2, TimeoutException.class);
-            TestUtils.assertFutureThrows(t3, TimeoutException.class);
+            TestUtils.assertFutureThrows(TimeoutException.class, t1);
+            TestUtils.assertFutureThrows(TimeoutException.class, t2);
+            TestUtils.assertFutureThrows(TimeoutException.class, t3);
         }
     }
 

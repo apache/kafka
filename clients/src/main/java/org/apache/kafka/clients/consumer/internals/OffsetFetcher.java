@@ -101,12 +101,13 @@ public class OffsetFetcher {
      *                                                                         and one or more partitions aren't awaiting a seekToBeginning() or seekToEnd().
      */
     public void resetPositionsIfNeeded() {
-        Map<TopicPartition, Long> offsetResetTimestamps = offsetFetcherUtils.getOffsetResetTimestamp();
+        Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap =
+                offsetFetcherUtils.getOffsetResetStrategyForPartitions();
 
-        if (offsetResetTimestamps.isEmpty())
+        if (partitionAutoOffsetResetStrategyMap.isEmpty())
             return;
 
-        resetPositionsAsync(offsetResetTimestamps);
+        resetPositionsAsync(partitionAutoOffsetResetStrategyMap);
     }
 
     /**
@@ -209,7 +210,9 @@ public class OffsetFetcher {
         }
     }
 
-    private void resetPositionsAsync(Map<TopicPartition, Long> partitionResetTimestamps) {
+    private void resetPositionsAsync(Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap) {
+        Map<TopicPartition, Long> partitionResetTimestamps = partitionAutoOffsetResetStrategyMap.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().timestamp().get()));
         Map<Node, Map<TopicPartition, ListOffsetsPartition>> timestampsToSearchByNode =
                 groupListOffsetRequests(partitionResetTimestamps, new HashSet<>());
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetsPartition>> entry : timestampsToSearchByNode.entrySet()) {
@@ -221,7 +224,7 @@ public class OffsetFetcher {
             future.addListener(new RequestFutureListener<>() {
                 @Override
                 public void onSuccess(ListOffsetResult result) {
-                    offsetFetcherUtils.onSuccessfulResponseForResettingPositions(resetTimestamps, result);
+                    offsetFetcherUtils.onSuccessfulResponseForResettingPositions(result, partitionAutoOffsetResetStrategyMap);
                 }
 
                 @Override

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
@@ -29,8 +29,8 @@ import java.util.Map;
  * Regular segments with {@code segmentId >= 0} expire according to the specified
  * retention period. "Reserved" segments with {@code segmentId < 0} do not expire
  * and are completely separate from regular segments in that methods such as
- * {@link #segmentForTimestamp(long)}, {@link #getOrCreateSegment(long, ProcessorContext)},
- * {@link #getOrCreateSegmentIfLive(long, ProcessorContext, long)},
+ * {@link #segmentForTimestamp(long)}, {@link #getOrCreateSegment(long, StateStoreContext)},
+ * {@link #getOrCreateSegmentIfLive(long, StateStoreContext, long)},
  * {@link #segments(long, long, boolean)}, and {@link #allSegments(boolean)}
  * only return regular segments and not reserved segments. The methods {@link #flush()}
  * and {@link #close()} flush and close both regular and reserved segments, due to
@@ -62,7 +62,7 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
 
     @Override
     public LogicalKeyValueSegment getOrCreateSegment(final long segmentId,
-                                                     final ProcessorContext context) {
+                                                     final StateStoreContext context) {
         if (segments.containsKey(segmentId)) {
             return segments.get(segmentId);
         } else {
@@ -103,7 +103,7 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
     }
 
     @Override
-    public void openExisting(final ProcessorContext context, final long streamTime) {
+    public void openExisting(final StateStoreContext context, final long streamTime) {
         metricsRecorder.init(ProcessorContextUtils.metricsImpl(context), context.taskId());
         physicalStore.openDB(context.appConfigs(), context.stateDir());
     }

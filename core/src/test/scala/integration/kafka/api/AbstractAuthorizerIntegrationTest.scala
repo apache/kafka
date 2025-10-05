@@ -71,6 +71,7 @@ class AbstractAuthorizerIntegrationTest extends BaseRequestTest {
 
   val brokerId: Integer = 0
   val topic = "topic"
+  val sourceTopic = "source-topic"
   val topicPattern = "topic.*"
   val transactionalId = "transactional.id"
   val producerId = 83392L
@@ -80,11 +81,16 @@ class AbstractAuthorizerIntegrationTest extends BaseRequestTest {
   val tp = new TopicPartition(topic, part)
   val logDir = "logDir"
   val group = "my-group"
+  val shareGroup = "share-group"
+  val streamsGroup = "streams-group"
   val protocolType = "consumer"
   val protocolName = "consumer-range"
   val clusterResource = new ResourcePattern(CLUSTER, Resource.CLUSTER_NAME, LITERAL)
   val topicResource = new ResourcePattern(TOPIC, topic, LITERAL)
+  val sourceTopicResource = new ResourcePattern(TOPIC, sourceTopic, LITERAL)
   val groupResource = new ResourcePattern(GROUP, group, LITERAL)
+  val shareGroupResource = new ResourcePattern(GROUP, shareGroup, LITERAL)
+  val streamsGroupResource = new ResourcePattern(GROUP, streamsGroup, LITERAL)
   val transactionalIdResource = new ResourcePattern(TRANSACTIONAL_ID, transactionalId, LITERAL)
 
   producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "1")
@@ -109,6 +115,7 @@ class AbstractAuthorizerIntegrationTest extends BaseRequestTest {
 
     properties.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
     properties.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
+    properties.put(GroupCoordinatorConfig.CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_CONFIG, "10000")
     properties.put(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, "1")
     properties.put(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
     properties.put(TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, "1")

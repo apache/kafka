@@ -22,10 +22,9 @@ import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricsContext, MetricsReporter}
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.metrics.MetricConfigs
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.apache.kafka.test.{TestUtils => JTestUtils}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 
 object KafkaMetricsReporterTest {
@@ -45,7 +44,6 @@ object KafkaMetricsReporterTest {
 
       MockMetricsReporter.JMXPREFIX.set(contextLabelOrNull("_namespace", metricsContext))
       MockMetricsReporter.CLUSTERID.set(contextLabelOrNull("kafka.cluster.id", metricsContext))
-      MockMetricsReporter.BROKERID.set(contextLabelOrNull("kafka.broker.id", metricsContext))
       MockMetricsReporter.NODEID.set(contextLabelOrNull("kafka.node.id", metricsContext))
     }
 
@@ -58,7 +56,6 @@ object KafkaMetricsReporterTest {
 
   object MockMetricsReporter {
     val JMXPREFIX: AtomicReference[String] = new AtomicReference[String]
-    val BROKERID : AtomicReference[String] = new AtomicReference[String]
     val NODEID : AtomicReference[String] = new AtomicReference[String]
     val CLUSTERID : AtomicReference[String] = new AtomicReference[String]
   }
@@ -71,25 +68,22 @@ class KafkaMetricsReporterTest extends QuorumTestHarness {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-    val props = TestUtils.createBrokerConfig(1, zkConnectOrNull)
+    val props = TestUtils.createBrokerConfig(1)
     props.setProperty(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, "kafka.server.KafkaMetricsReporterTest$MockMetricsReporter")
-    props.setProperty(ServerConfigs.BROKER_ID_GENERATION_ENABLE_CONFIG, "true")
     props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
     config = KafkaConfig.fromProps(props)
     broker = createBroker(config, threadNamePrefix = Option(this.getClass.getName))
     broker.startup()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testMetricsContextNamespacePresent(quorum: String): Unit = {
+  @Test
+  def testMetricsContextNamespacePresent(): Unit = {
     assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.CLUSTERID.get())
-    assertNull(KafkaMetricsReporterTest.MockMetricsReporter.BROKERID.get())
     assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.NODEID.get())
     assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.JMXPREFIX.get())
 
     broker.shutdown()
-    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
+    JTestUtils.assertNoLeakedThreadsWithNameAndDaemonStatus(this.getClass.getName, true)
   }
 
   @AfterEach

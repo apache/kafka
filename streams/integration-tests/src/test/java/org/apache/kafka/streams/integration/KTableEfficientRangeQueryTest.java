@@ -26,7 +26,6 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -117,8 +116,7 @@ public class KTableEfficientRangeQueryTest {
         final Materialized<String, String, KeyValueStore<Bytes, byte[]>> stateStoreConfig = getStoreConfig(storeType, TABLE_NAME, enableLogging, enableCaching);
         //Create topology: table from input topic
         final StreamsBuilder builder = new StreamsBuilder();
-        final KTable<String, String> table =
-                builder.table("input", stateStoreConfig);
+        builder.table("input", stateStoreConfig);
         final Topology topology = builder.build();
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology)) {

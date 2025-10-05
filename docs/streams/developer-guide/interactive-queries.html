@@ -269,7 +269,7 @@ public class MyCustomStoreBuilder implements StoreBuilder {
                     interface to get access to the underlying instances of your store.
                     <code class="docutils literal"><span class="pre">StateStoreProvider#stores(String</span> <span class="pre">storeName,</span> <span class="pre">QueryableStoreType&lt;T&gt;</span> <span class="pre">queryableStoreType)</span></code> returns a <code class="docutils literal"><span class="pre">List</span></code> of state
                     stores with the given storeName and of the type as defined by <code class="docutils literal"><span class="pre">queryableStoreType</span></code>.</p>
-                <p>Here is an example implementation of the wrapper follows (Java 8+):</p>
+                <p>Here is an example implementation of the wrapper:</p>
                 <pre class="line-numbers"><code class="language-java">// We strongly recommended implementing a read-only interface
 // to restrict usage of the store to safe read operations!
 public class MyCustomStoreTypeWrapper&lt;K,V&gt; implements MyReadableCustomStore&lt;K,V&gt; {

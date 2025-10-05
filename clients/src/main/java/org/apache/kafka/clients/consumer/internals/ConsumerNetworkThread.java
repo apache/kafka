@@ -20,8 +20,10 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
+import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -33,11 +35,11 @@ import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.function.Supplier;
 
@@ -60,6 +62,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier;
     private final Supplier<NetworkClientDelegate> networkClientDelegateSupplier;
     private final Supplier<RequestManagers> requestManagersSupplier;
+    private final AsyncConsumerMetrics asyncConsumerMetrics;
     private ApplicationEventProcessor applicationEventProcessor;
     private NetworkClientDelegate networkClientDelegate;
     private RequestManagers requestManagers;
@@ -67,6 +70,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private final IdempotentCloser closer = new IdempotentCloser();
     private volatile Duration closeTimeout = Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS);
     private volatile long cachedMaximumTimeToWait = MAX_POLL_TIMEOUT_MS;
+    private long lastPollTimeMs = 0L;
 
     public ConsumerNetworkThread(LogContext logContext,
                                  Time time,
@@ -74,7 +78,8 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                                  CompletableEventReaper applicationEventReaper,
                                  Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                                  Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                                 Supplier<RequestManagers> requestManagersSupplier) {
+                                 Supplier<RequestManagers> requestManagersSupplier,
+                                 AsyncConsumerMetrics asyncConsumerMetrics) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
         this.log = logContext.logger(getClass());
@@ -84,6 +89,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         this.networkClientDelegateSupplier = networkClientDelegateSupplier;
         this.requestManagersSupplier = requestManagersSupplier;
         this.running = true;
+        this.asyncConsumerMetrics = asyncConsumerMetrics;
     }
 
     @Override
@@ -102,6 +108,8 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                     log.error("Unexpected error caught in consumer network thread", e);
                 }
             }
+        } catch (final Throwable e) {
+            log.error("Failed to initialize resources for consumer network thread", e);
         } finally {
             cleanup();
         }
@@ -136,24 +144,37 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * </ol>
      */
     void runOnce() {
+        // The following code avoids use of the Java Collections Streams API to reduce overhead in this loop.
         processApplicationEvents();
 
         final long currentTimeMs = time.milliseconds();
-        final long pollWaitTimeMs = requestManagers.entries().stream()
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .map(rm -> rm.poll(currentTimeMs))
-                .map(networkClientDelegate::addAll)
-                .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
+        if (lastPollTimeMs != 0L) {
+            asyncConsumerMetrics.recordTimeBetweenNetworkThreadPoll(currentTimeMs - lastPollTimeMs);
+        }
+        lastPollTimeMs = currentTimeMs;
+
+        long pollWaitTimeMs = MAX_POLL_TIMEOUT_MS;
+
+        for (RequestManager rm : requestManagers.entries()) {
+            NetworkClientDelegate.PollResult pollResult = rm.poll(currentTimeMs);
+            long timeoutMs = networkClientDelegate.addAll(pollResult);
+            pollWaitTimeMs = Math.min(pollWaitTimeMs, timeoutMs);
+        }
+
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
 
-        cachedMaximumTimeToWait = requestManagers.entries().stream()
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .map(rm -> rm.maximumTimeToWait(currentTimeMs))
-                .reduce(Long.MAX_VALUE, Math::min);
+        long maxTimeToWaitMs = Long.MAX_VALUE;
+
+        for (RequestManager rm : requestManagers.entries()) {
+            long waitMs = rm.maximumTimeToWait(currentTimeMs);
+            maxTimeToWaitMs = Math.min(maxTimeToWaitMs, waitMs);
+        }
+
+        cachedMaximumTimeToWait = maxTimeToWaitMs;
 
         reapExpiredApplicationEvents(currentTimeMs);
+        List<CompletableEvent<?>> uncompletedEvents = applicationEventReaper.uncompletedEvents();
+        maybeFailOnMetadataError(uncompletedEvents);
     }
 
     /**
@@ -162,17 +183,27 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private void processApplicationEvents() {
         LinkedList<ApplicationEvent> events = new LinkedList<>();
         applicationEventQueue.drainTo(events);
+        if (events.isEmpty())
+            return;
 
+        asyncConsumerMetrics.recordApplicationEventQueueSize(0);
+        long startMs = time.milliseconds();
         for (ApplicationEvent event : events) {
+            asyncConsumerMetrics.recordApplicationEventQueueTime(time.milliseconds() - event.enqueuedMs());
             try {
-                if (event instanceof CompletableEvent)
+                if (event instanceof CompletableEvent) {
                     applicationEventReaper.add((CompletableEvent<?>) event);
-
+                    // Check if there are any metadata errors and fail the CompletableEvent if an error is present.
+                    // This call is meant to handle "immediately completed events" which may not enter the awaiting state,
+                    // so metadata errors need to be checked and handled right away.
+                    maybeFailOnMetadataError(List.of((CompletableEvent<?>) event));
+                }
                 applicationEventProcessor.process(event);
             } catch (Throwable t) {
                 log.warn("Error processing event {}", t.getMessage(), t);
             }
         }
+        asyncConsumerMetrics.recordApplicationEventQueueProcessingTime(time.milliseconds() - startMs);
     }
 
     /**
@@ -181,7 +212,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * is given least one attempt to satisfy any network requests <em>before</em> checking if a timeout has expired.
      */
     private void reapExpiredApplicationEvents(long currentTimeMs) {
-        applicationEventReaper.reap(currentTimeMs);
+        asyncConsumerMetrics.recordApplicationEventExpiredSize(applicationEventReaper.reap(currentTimeMs));
     }
 
     /**
@@ -207,15 +238,14 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * </ol>
      */
     // Visible for testing
-    static void runAtClose(final Collection<Optional<? extends RequestManager>> requestManagers,
+    static void runAtClose(final Collection<RequestManager> requestManagers,
                            final NetworkClientDelegate networkClientDelegate,
                            final long currentTimeMs) {
-        // These are the optional outgoing requests at the
-        requestManagers.stream()
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .map(rm -> rm.pollOnClose(currentTimeMs))
-                .forEach(networkClientDelegate::addAll);
+        // These are the optional outgoing requests at the time of closing the consumer
+        for (RequestManager rm : requestManagers) {
+            NetworkClientDelegate.PollResult pollResult = rm.pollOnClose(currentTimeMs);
+            networkClientDelegate.addAll(pollResult);
+        }
     }
 
     public boolean isRunning() {
@@ -313,16 +343,43 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         log.trace("Closing the consumer network thread");
         Timer timer = time.timer(closeTimeout);
         try {
-            runAtClose(requestManagers.entries(), networkClientDelegate, time.milliseconds());
+            // If an error was thrown from initializeResources(), it's possible that the list of request managers
+            // is null, so check before using. If the request manager list is null, there wasn't any real work
+            // performed, so not being able to close the request managers isn't so bad.
+            if (requestManagers != null && networkClientDelegate != null)
+                runAtClose(requestManagers.entries(), networkClientDelegate, time.milliseconds());
         } catch (Exception e) {
             log.error("Unexpected error during shutdown. Proceed with closing.", e);
         } finally {
-            sendUnsentRequests(timer);
-            applicationEventReaper.reap(applicationEventQueue);
+            // Likewise, if an error was thrown from initializeResources(), it's possible for the network client
+            // to be null, so check before using. If the network client is null, things have failed catastrophically
+            // enough that there aren't any outstanding requests to be sent anyway.
+            if (networkClientDelegate != null)
+                sendUnsentRequests(timer);
+
+            asyncConsumerMetrics.recordApplicationEventExpiredSize(applicationEventReaper.reap(applicationEventQueue));
 
             closeQuietly(requestManagers, "request managers");
             closeQuietly(networkClientDelegate, "network client delegate");
             log.debug("Closed the consumer network thread");
         }
+    }
+
+    /**
+     * If there is a metadata error, complete all uncompleted events that require subscription metadata.
+     */
+    private void maybeFailOnMetadataError(List<CompletableEvent<?>> events) {
+        List<CompletableApplicationEvent<?>> subscriptionMetadataEvent = new ArrayList<>();
+
+        for (CompletableEvent<?> ce : events) {
+            if (ce instanceof CompletableApplicationEvent && ((CompletableApplicationEvent<?>) ce).requireSubscriptionMetadata())
+                subscriptionMetadataEvent.add((CompletableApplicationEvent<?>) ce);
+        }
+
+        if (subscriptionMetadataEvent.isEmpty())
+            return;
+        networkClientDelegate.getAndClearMetadataError().ifPresent(metadataError ->
+                subscriptionMetadataEvent.forEach(event -> event.future().completeExceptionally(metadataError))
+        );
     }
 }

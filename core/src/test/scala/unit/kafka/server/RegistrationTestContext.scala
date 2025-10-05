@@ -43,7 +43,7 @@ class SimpleControllerNodeProvider extends ControllerNodeProvider {
   def saslMechanism: String = SaslConfigs.DEFAULT_SASL_MECHANISM
 
   override def getControllerInfo(): ControllerInformation = ControllerInformation(Option(node.get()),
-    listenerName, securityProtocol, saslMechanism, isZkController = false)
+    listenerName, securityProtocol, saslMechanism)
 }
 
 class RegistrationTestContext(
@@ -66,7 +66,7 @@ class RegistrationTestContext(
   val controllerEpoch = new AtomicInteger(123)
   config.effectiveAdvertisedBrokerListeners.foreach { ep =>
     advertisedListeners.add(new Listener().setHost(ep.host).
-      setName(ep.listenerName.value()).
+      setName(ep.listener).
       setPort(ep.port.shortValue()).
       setSecurityProtocol(ep.securityProtocol.id))
   }

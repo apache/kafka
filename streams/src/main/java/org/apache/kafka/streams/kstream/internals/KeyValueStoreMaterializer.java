@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.DslKeyValueParams;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -44,7 +43,7 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
     }
 
     @Override
-    public StateStore build() {
+    public StoreBuilder<?> builder() {
         final KeyValueBytesStoreSupplier supplier = materialized.storeSupplier() == null
                 ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName(), true))
                 : (KeyValueBytesStoreSupplier) materialized.storeSupplier();
@@ -77,7 +76,7 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
         }
 
 
-        return builder.build();
+        return builder;
     }
 
     @Override

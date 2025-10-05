@@ -19,7 +19,7 @@ package org.apache.kafka.snapshot;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import java.nio.ByteBuffer;
 import java.util.function.Consumer;

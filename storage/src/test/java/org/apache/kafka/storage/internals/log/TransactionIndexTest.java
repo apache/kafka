@@ -24,8 +24,6 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -46,7 +44,7 @@ public class TransactionIndexTest {
 
     @Test
     public void testPositionSetCorrectlyWhenOpened() throws IOException {
-        List<AbortedTxn> abortedTxns = new ArrayList<>(Arrays.asList(
+        List<AbortedTxn> abortedTxns = new ArrayList<>(List.of(
                 new AbortedTxn(0L, 0, 10, 11),
                 new AbortedTxn(1L, 5, 15, 13),
                 new AbortedTxn(2L, 18, 35, 25),
@@ -63,7 +61,7 @@ public class TransactionIndexTest {
 
     @Test
     public void testSanityCheck() throws IOException {
-        List<AbortedTxn> abortedTxns = Arrays.asList(
+        List<AbortedTxn> abortedTxns = List.of(
                 new AbortedTxn(0L, 0, 10, 11),
                 new AbortedTxn(1L, 5, 15, 13),
                 new AbortedTxn(2L, 18, 35, 25),
@@ -93,7 +91,7 @@ public class TransactionIndexTest {
 
     @Test
     public void testCollectAbortedTransactions() {
-        List<AbortedTxn> abortedTransactions = Arrays.asList(
+        List<AbortedTxn> abortedTransactions = List.of(
                 new AbortedTxn(0L, 0, 10, 11),
                 new AbortedTxn(1L, 5, 15, 13),
                 new AbortedTxn(2L, 18, 35, 25),
@@ -102,33 +100,33 @@ public class TransactionIndexTest {
         abortedTransactions.forEach(txn -> assertDoesNotThrow(() -> index.append(txn)));
 
         TxnIndexSearchResult result = index.collectAbortedTxns(0L, 100L);
-        assertEquals(abortedTransactions, result.abortedTransactions);
-        assertFalse(result.isComplete);
+        assertEquals(abortedTransactions, result.abortedTransactions());
+        assertFalse(result.isComplete());
 
         result = index.collectAbortedTxns(0L, 32);
-        assertEquals(abortedTransactions.subList(0, 3), result.abortedTransactions);
-        assertTrue(result.isComplete);
+        assertEquals(abortedTransactions.subList(0, 3), result.abortedTransactions());
+        assertTrue(result.isComplete());
 
         result = index.collectAbortedTxns(0L, 35);
-        assertEquals(abortedTransactions, result.abortedTransactions);
-        assertTrue(result.isComplete);
+        assertEquals(abortedTransactions, result.abortedTransactions());
+        assertTrue(result.isComplete());
 
         result = index.collectAbortedTxns(10, 35);
-        assertEquals(abortedTransactions, result.abortedTransactions);
-        assertTrue(result.isComplete);
+        assertEquals(abortedTransactions, result.abortedTransactions());
+        assertTrue(result.isComplete());
 
         result = index.collectAbortedTxns(11, 35);
-        assertEquals(abortedTransactions.subList(1, 4), result.abortedTransactions);
-        assertTrue(result.isComplete);
+        assertEquals(abortedTransactions.subList(1, 4), result.abortedTransactions());
+        assertTrue(result.isComplete());
 
         result = index.collectAbortedTxns(20, 41);
-        assertEquals(abortedTransactions.subList(2, 4), result.abortedTransactions);
-        assertFalse(result.isComplete);
+        assertEquals(abortedTransactions.subList(2, 4), result.abortedTransactions());
+        assertFalse(result.isComplete());
     }
 
     @Test
     public void testTruncate() throws IOException {
-        List<AbortedTxn> abortedTransactions = Arrays.asList(
+        List<AbortedTxn> abortedTransactions = List.of(
                 new AbortedTxn(0L, 0, 10, 2),
                 new AbortedTxn(1L, 5, 15, 16),
                 new AbortedTxn(2L, 18, 35, 25),
@@ -137,13 +135,13 @@ public class TransactionIndexTest {
         abortedTransactions.forEach(txn -> assertDoesNotThrow(() -> index.append(txn)));
 
         index.truncateTo(51);
-        assertEquals(abortedTransactions, index.collectAbortedTxns(0L, 100L).abortedTransactions);
+        assertEquals(abortedTransactions, index.collectAbortedTxns(0L, 100L).abortedTransactions());
 
         index.truncateTo(50);
-        assertEquals(abortedTransactions.subList(0, 3), index.collectAbortedTxns(0L, 100L).abortedTransactions);
+        assertEquals(abortedTransactions.subList(0, 3), index.collectAbortedTxns(0L, 100L).abortedTransactions());
 
         index.reset();
-        assertEquals(Collections.emptyList(), index.collectAbortedTxns(0L, 100L).abortedTransactions);
+        assertEquals(List.of(), index.collectAbortedTxns(0L, 100L).abortedTransactions());
     }
 
     @Test
@@ -169,7 +167,7 @@ public class TransactionIndexTest {
         index.renameTo(renamed);
         index.append(new AbortedTxn(1L, 5, 15, 16));
 
-        List<AbortedTxn> abortedTxns = index.collectAbortedTxns(0L, 100L).abortedTransactions;
+        List<AbortedTxn> abortedTxns = index.collectAbortedTxns(0L, 100L).abortedTransactions();
         assertEquals(2, abortedTxns.size());
         assertEquals(0, abortedTxns.get(0).firstOffset());
         assertEquals(5, abortedTxns.get(1).firstOffset());

@@ -65,6 +65,11 @@ public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicParti
     }
 
     @Override
+    public boolean requireSubscriptionMetadata() {
+        return true;
+    }
+
+    @Override
     public String toStringBase() {
         return super.toStringBase() +
                 ", timestampsToSearch=" + timestampsToSearch +

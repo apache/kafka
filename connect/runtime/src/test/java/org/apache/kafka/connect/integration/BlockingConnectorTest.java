@@ -48,7 +48,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -63,7 +62,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -109,9 +108,7 @@ public class BlockingConnectorTest {
     private static final String SINK_TASK_FLUSH = "SinkTask::flush";
     private static final String SINK_TASK_PRE_COMMIT = "SinkTask::preCommit";
     private static final String SINK_TASK_OPEN = "SinkTask::open";
-    private static final String SINK_TASK_ON_PARTITIONS_ASSIGNED = "SinkTask::onPartitionsAssigned";
     private static final String SINK_TASK_CLOSE = "SinkTask::close";
-    private static final String SINK_TASK_ON_PARTITIONS_REVOKED = "SinkTask::onPartitionsRevoked";
     private static final String SOURCE_TASK_INITIALIZE = "SourceTask::initialize";
     private static final String SOURCE_TASK_POLL = "SourceTask::poll";
     private static final String SOURCE_TASK_COMMIT = "SourceTask::commit";
@@ -325,9 +322,9 @@ public class BlockingConnectorTest {
         normalConnectorHandle.expectedCommits(NUM_RECORDS_PRODUCED);
 
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getName());
         props.put(TASKS_MAX_CONFIG, "1");
-        props.put(MonitorableSourceConnector.TOPIC_CONFIG, TEST_TOPIC);
+        props.put(TestableSourceConnector.TOPIC_CONFIG, TEST_TOPIC);
         log.info("Creating normal connector");
         try {
             connect.configureConnector(NORMAL_CONNECTOR_NAME, props);
@@ -579,7 +576,7 @@ public class BlockingConnectorTest {
         @Override
         public List<Map<String, String>> taskConfigs(int maxTasks) {
             block.maybeBlockOn(CONNECTOR_TASK_CONFIGS);
-            return Collections.singletonList(Collections.emptyMap());
+            return List.of(Map.of());
         }
 
         @Override
@@ -739,15 +736,12 @@ public class BlockingConnectorTest {
             }
 
             @Override
-            @SuppressWarnings("deprecation")
-            public void commitRecord(SourceRecord record) throws InterruptedException {
-                block.maybeBlockOn(SOURCE_TASK_COMMIT_RECORD);
-                super.commitRecord(record);
-            }
-
-            @Override
             public void commitRecord(SourceRecord record, RecordMetadata metadata) throws InterruptedException {
-                block.maybeBlockOn(SOURCE_TASK_COMMIT_RECORD_WITH_METADATA);
+                if (metadata == null) {
+                    block.maybeBlockOn(SOURCE_TASK_COMMIT_RECORD);
+                } else {
+                    block.maybeBlockOn(SOURCE_TASK_COMMIT_RECORD_WITH_METADATA);
+                }
                 super.commitRecord(record, metadata);
             }
         }
@@ -870,23 +864,9 @@ public class BlockingConnectorTest {
             }
 
             @Override
-            @SuppressWarnings("deprecation")
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                block.maybeBlockOn(SINK_TASK_ON_PARTITIONS_ASSIGNED);
-                super.onPartitionsAssigned(partitions);
-            }
-
-            @Override
             public void close(Collection<TopicPartition> partitions) {
                 block.maybeBlockOn(SINK_TASK_CLOSE);
                 super.close(partitions);
-            }
-
-            @Override
-            @SuppressWarnings("deprecation")
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                block.maybeBlockOn(SINK_TASK_ON_PARTITIONS_REVOKED);
-                super.onPartitionsRevoked(partitions);
             }
         }
     }

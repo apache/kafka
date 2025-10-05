@@ -17,19 +17,17 @@
 package kafka.coordinator.transaction
 
 import java.{lang, util}
-import java.util.Arrays.asList
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
+import org.apache.kafka.coordinator.transaction.{TransactionMetadata, TransactionState}
 import org.apache.kafka.server.common.TransactionVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{mock, verify, when}
-
-import scala.collection.mutable
 
 class TransactionMarkerRequestCompletionHandlerTest {
 
@@ -44,11 +42,11 @@ class TransactionMarkerRequestCompletionHandlerTest {
   private val txnResult = TransactionResult.COMMIT
   private val topicPartition = new TopicPartition("topic1", 0)
   private val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
-    producerEpoch, lastProducerEpoch, txnTimeoutMs, PrepareCommit, mutable.Set[TopicPartition](topicPartition), 0L, 0L, TransactionVersion.TV_2)
-  private val pendingCompleteTxnAndMarkers = asList(
+    producerEpoch, lastProducerEpoch, txnTimeoutMs, TransactionState.PREPARE_COMMIT, util.Set.of(topicPartition), 0L, 0L, TransactionVersion.TV_2)
+  private val pendingCompleteTxnAndMarkers = util.List.of(
     PendingCompleteTxnAndMarkerEntry(
       PendingCompleteTxn(transactionalId, coordinatorEpoch, txnMetadata, txnMetadata.prepareComplete(42)),
-      new WriteTxnMarkersRequest.TxnMarkerEntry(producerId, producerEpoch, coordinatorEpoch, txnResult, asList(topicPartition))))
+      new WriteTxnMarkersRequest.TxnMarkerEntry(producerId, producerEpoch, coordinatorEpoch, txnResult, util.List.of(topicPartition))))
 
   private val markerChannelManager: TransactionMarkerChannelManager =
     mock(classOf[TransactionMarkerChannelManager])
@@ -194,7 +192,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
     handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
       null, null, 0, 0, false, null, null, response))
 
-    assertEquals(txnMetadata.topicPartitions, mutable.Set[TopicPartition](topicPartition))
+    assertEquals(txnMetadata.topicPartitions, util.Set.of(topicPartition))
     verify(markerChannelManager).addTxnMarkersToBrokerQueue(producerId,
       producerEpoch, txnResult, pendingCompleteTxnAndMarkers.get(0).pendingCompleteTxn,
       Set[TopicPartition](topicPartition))

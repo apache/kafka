@@ -19,14 +19,12 @@ package org.apache.kafka.server.authorizer;
 
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.Endpoint;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 
 /**
  * Runtime broker configuration metadata provided to authorizers during start up.
  */
-@InterfaceStability.Evolving
 public interface AuthorizerServerInfo {
 
     /**

@@ -21,6 +21,8 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.Map;
 
 /**
@@ -30,8 +32,12 @@ import java.util.Map;
  * <p>Kafka Connect may discover implementations of this interface using the Java {@link java.util.ServiceLoader} mechanism.
  * To support this, implementations of this interface should also contain a service provider configuration file in
  * {@code META-INF/services/org.apache.kafka.connect.storage.Converter}.
+ *
+ * <p>Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the converter to register metrics.
+ * The following tags are automatically added to all metrics registered: <code>connector</code> set to connector name,
+ * <code>task</code> set to the task id and <code>converter</code> set to either <code>key</code> or <code>value</code>.
  */
-public interface Converter {
+public interface Converter extends Closeable {
 
     /**
      * Configure this class.
@@ -97,5 +103,10 @@ public interface Converter {
      */
     default ConfigDef config() {
         return new ConfigDef();
+    }
+
+    @Override
+    default void close() throws IOException  {
+        // no op
     }
 }

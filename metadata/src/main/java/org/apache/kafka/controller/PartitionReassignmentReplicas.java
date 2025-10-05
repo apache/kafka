@@ -129,14 +129,7 @@ class PartitionReassignmentReplicas {
         );
     }
 
-    static class CompletedReassignment {
-        final List<Integer> replicas;
-        final List<Integer> isr;
-
-        public CompletedReassignment(List<Integer> replicas, List<Integer> isr) {
-            this.replicas = replicas;
-            this.isr = isr;
-        }
+    record CompletedReassignment(List<Integer> replicas, List<Integer> isr) {
     }
 
     List<Integer> originalReplicas() {
@@ -152,8 +145,7 @@ class PartitionReassignmentReplicas {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof PartitionReassignmentReplicas)) return false;
-        PartitionReassignmentReplicas other = (PartitionReassignmentReplicas) o;
+        if (!(o instanceof PartitionReassignmentReplicas other)) return false;
         return removing.equals(other.removing) &&
             adding.equals(other.adding) &&
             replicas.equals(other.replicas);

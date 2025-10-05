@@ -23,19 +23,27 @@ USER root
 # Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments
 ARG kafka_url
 
+ENV KAFKA_URL=$kafka_url
+
 COPY jsa_launch /etc/kafka/docker/jsa_launch
+COPY server.properties /etc/kafka/docker/server.properties
+
+COPY *kafka.tgz kafka.tgz
 
 RUN set -eux ; \
     apk update ; \
     apk upgrade ; \
-    apk add --no-cache wget gcompat gpg gpg-agent procps bash; \
+    apk add --no-cache bash; \
+    if [ -n "$KAFKA_URL" ]; then \
+        apk add --no-cache wget gcompat gpg gpg-agent procps; \
+        wget -nv -O kafka.tgz "$KAFKA_URL"; \
+        wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
+        wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
+        gpg --import KEYS; \
+        gpg --batch --verify kafka.tgz.asc kafka.tgz; \
+    fi; \
     mkdir opt/kafka; \
-    wget -nv -O kafka.tgz "$kafka_url"; \
-    wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
-    tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
-    wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
-    gpg --import KEYS; \
-    gpg --batch --verify kafka.tgz.asc kafka.tgz
+    tar xfz kafka.tgz -C opt/kafka --strip-components 1;
 
 # Generate jsa files using dynamic CDS for kafka server start command and kafka storage format command
 RUN /etc/kafka/docker/jsa_launch
@@ -52,37 +60,46 @@ USER root
 ARG kafka_url
 ARG build_date
 
+ENV KAFKA_URL=$kafka_url
+
+COPY *kafka.tgz kafka.tgz
 
 LABEL org.label-schema.name="kafka" \
       org.label-schema.description="Apache Kafka" \
       org.label-schema.build-date="${build_date}" \
       org.label-schema.vcs-url="https://github.com/apache/kafka" \
-      maintainer="Apache Kafka"
+      org.opencontainers.image.authors="Apache Kafka"
 
-RUN set -eux ; \
+RUN mkdir opt/kafka; \
+    set -eux ; \
     apk update ; \
     apk upgrade ; \
-    apk add --no-cache wget gcompat gpg gpg-agent procps bash; \
-    mkdir opt/kafka; \
-    wget -nv -O kafka.tgz "$kafka_url"; \
-    wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
-    tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
-    wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
-    gpg --import KEYS; \
-    gpg --batch --verify kafka.tgz.asc kafka.tgz; \
+    apk add --no-cache bash; \
+    if [ -n "$KAFKA_URL" ]; then \
+        apk add --no-cache wget gcompat gpg gpg-agent procps; \
+        wget -nv -O kafka.tgz "$KAFKA_URL"; \
+        wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
+        tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
+        wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
+        gpg --import KEYS; \
+        gpg --batch --verify kafka.tgz.asc kafka.tgz; \
+        rm kafka.tgz kafka.tgz.asc KEYS; \
+        apk del wget gpg gpg-agent; \
+    else \
+        tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
+        rm kafka.tgz; \
+    fi; \
     mkdir -p /var/lib/kafka/data /etc/kafka/secrets; \
     mkdir -p /etc/kafka/docker /usr/logs /mnt/shared/config; \
     adduser -h /home/appuser -D --shell /bin/bash appuser; \
     chown appuser:appuser -R /usr/logs /opt/kafka /mnt/shared/config; \
     chown appuser:root -R /var/lib/kafka /etc/kafka/secrets /etc/kafka; \
     chmod -R ug+w /etc/kafka /var/lib/kafka /etc/kafka/secrets; \
-    cp /opt/kafka/config/log4j.properties /etc/kafka/docker/log4j.properties; \
-    cp /opt/kafka/config/tools-log4j.properties /etc/kafka/docker/tools-log4j.properties; \
-    cp /opt/kafka/config/kraft/reconfig-server.properties /etc/kafka/docker/server.properties; \
-    rm kafka.tgz kafka.tgz.asc KEYS; \
-    apk del wget gpg gpg-agent; \
+    cp /opt/kafka/config/log4j2.yaml /etc/kafka/docker/log4j2.yaml; \
+    cp /opt/kafka/config/tools-log4j2.yaml /etc/kafka/docker/tools-log4j2.yaml; \
     apk cache clean;
 
+COPY server.properties /etc/kafka/docker/server.properties
 COPY --from=build-jsa kafka.jsa /opt/kafka/kafka.jsa
 COPY --from=build-jsa storage.jsa /opt/kafka/storage.jsa
 COPY --chown=appuser:appuser resources/common-scripts /etc/kafka/docker

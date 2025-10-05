@@ -20,11 +20,12 @@ import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.serialization.Deserializer;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class MockDeserializer implements ClusterResourceListener, Deserializer<byte[]> {
+public class MockDeserializer implements ClusterResourceListener, Deserializer<String> {
     public static AtomicInteger initCount = new AtomicInteger(0);
     public static AtomicInteger closeCount = new AtomicInteger(0);
     public static AtomicReference<ClusterResource> clusterMeta = new AtomicReference<>();
@@ -52,11 +53,12 @@ public class MockDeserializer implements ClusterResourceListener, Deserializer<b
     }
 
     @Override
-    public byte[] deserialize(String topic, byte[] data) {
+    public String deserialize(String topic, byte[] data) {
         // This will ensure that we get the cluster metadata when deserialize is called for the first time
         // as subsequent compareAndSet operations will fail.
         clusterIdBeforeDeserialize.compareAndSet(noClusterId, clusterMeta.get());
-        return data;
+        if (data == null) return null;
+        return new String(data, StandardCharsets.UTF_8);
     }
 
     @Override

@@ -32,17 +32,18 @@ import java.util.stream.Collectors;
  * The following table shows the correspondence between the group states and types.
  * <table>
  *     <thead>
- *         <tr><th>State</th><th>Classic group</th><th>Consumer group</th><th>Share group</th></tr>
+ *         <tr><th>State</th><th>Classic group</th><th>Consumer group</th><th>Share group</th><th>Streams group</th></tr>
  *     </thead>
  *     <tbody>
- *         <tr><td>UNKNOWN</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
- *         <tr><td>PREPARING_REBALANCE</td><td>Yes</td><td>Yes</td><td></td></tr>
- *         <tr><td>COMPLETING_REBALANCE</td><td>Yes</td><td>Yes</td><td></td></tr>
- *         <tr><td>STABLE</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
- *         <tr><td>DEAD</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
- *         <tr><td>EMPTY</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
- *         <tr><td>ASSIGNING</td><td></td><td>Yes</td><td></td></tr>
- *         <tr><td>RECONCILING</td><td></td><td>Yes</td><td></td></tr>
+ *         <tr><td>UNKNOWN</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+ *         <tr><td>PREPARING_REBALANCE</td><td>Yes</td><td>Yes</td><td></td><td></td></tr>
+ *         <tr><td>COMPLETING_REBALANCE</td><td>Yes</td><td>Yes</td><td></td><td></td></tr>
+ *         <tr><td>STABLE</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+ *         <tr><td>DEAD</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+ *         <tr><td>EMPTY</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+ *         <tr><td>ASSIGNING</td><td></td><td>Yes</td><td></td><td>Yes</td></tr>
+ *         <tr><td>RECONCILING</td><td></td><td>Yes</td><td></td><td>Yes</td></tr>
+ *         <tr><td>NOT_READY</td><td></td><td></td><td></td><td>Yes</td></tr>
  *     </tbody>
  * </table>
  */
@@ -55,7 +56,8 @@ public enum GroupState {
     DEAD("Dead"),
     EMPTY("Empty"),
     ASSIGNING("Assigning"),
-    RECONCILING("Reconciling");
+    RECONCILING("Reconciling"),
+    NOT_READY("NotReady");
 
     private static final Map<String, GroupState> NAME_TO_ENUM = Arrays.stream(values())
             .collect(Collectors.toMap(state -> state.name.toUpperCase(Locale.ROOT), Function.identity()));
@@ -79,6 +81,8 @@ public enum GroupState {
             return Set.of(PREPARING_REBALANCE, COMPLETING_REBALANCE, STABLE, DEAD, EMPTY);
         } else if (type == GroupType.CONSUMER) {
             return Set.of(PREPARING_REBALANCE, COMPLETING_REBALANCE, STABLE, DEAD, EMPTY, ASSIGNING, RECONCILING);
+        } else if (type == GroupType.STREAMS) {
+            return Set.of(STABLE, DEAD, EMPTY, ASSIGNING, RECONCILING, NOT_READY);
         } else if (type == GroupType.SHARE) {
             return Set.of(STABLE, DEAD, EMPTY);
         } else {

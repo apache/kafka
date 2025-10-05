@@ -36,7 +36,7 @@
           "about": "The entity name, or null if the default." }
       ]},
       { "name": "Values", "type": "[]ValueData", "versions": "0+",
-	"about": "The quota values for the entity.", "fields": [
+        "about": "The quota values for the entity.", "fields": [
         { "name": "Key", "type": "string", "versions": "0+",
           "about": "The quota configuration key." },
         { "name": "Value", "type": "float64", "versions": "0+",

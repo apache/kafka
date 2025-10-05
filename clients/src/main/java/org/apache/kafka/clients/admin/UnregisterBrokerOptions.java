@@ -17,13 +17,8 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 /**
  * Options for {@link Admin#unregisterBroker(int, UnregisterBrokerOptions)}.
- *
- * The API of this class is evolving. See {@link Admin} for details.
  */
-@InterfaceStability.Evolving
-public class UnregisterBrokerOptions extends AbstractOptions<UpdateFeaturesOptions> {
+public class UnregisterBrokerOptions extends AbstractOptions<UnregisterBrokerOptions> {
 }

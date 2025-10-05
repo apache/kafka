@@ -378,7 +378,7 @@ public final class StandaloneHerder extends AbstractHerder {
         }
 
         Optional<RestartPlan> maybePlan = buildRestartPlan(request);
-        if (!maybePlan.isPresent()) {
+        if (maybePlan.isEmpty()) {
             cb.onCompletion(new NotFoundException("Status for connector " + connectorName + " not found", null), null);
             return;
         }
@@ -463,7 +463,7 @@ public final class StandaloneHerder extends AbstractHerder {
     private void startConnector(String connName, Callback<TargetState> onStart) {
         Map<String, String> connConfigs = configState.connectorConfig(connName);
         TargetState targetState = configState.targetState(connName);
-        worker.startConnector(connName, connConfigs, new HerderConnectorContext(this, connName), this, targetState, onStart);
+        worker.startConnector(connName, connConfigs, new HerderConnectorContext(this, connName, worker.metrics().connectorPluginMetrics(connName)), this, targetState, onStart);
     }
 
     private List<Map<String, String>> recomputeTaskConfigs(String connName) {
@@ -489,28 +489,26 @@ public final class StandaloneHerder extends AbstractHerder {
     }
 
     private boolean startTask(ConnectorTaskId taskId, Map<String, String> connProps) {
-        switch (connectorType(connProps)) {
-            case SINK:
-                return worker.startSinkTask(
-                        taskId,
-                        configState,
-                        connProps,
-                        configState.taskConfig(taskId),
-                        this,
-                        configState.targetState(taskId.connector())
-                );
-            case SOURCE:
-                return worker.startSourceTask(
-                        taskId,
-                        configState,
-                        connProps,
-                        configState.taskConfig(taskId),
-                        this,
-                        configState.targetState(taskId.connector())
-                );
-            default:
-                throw new ConnectException("Failed to start task " + taskId + " since it is not a recognizable type (source or sink)");
-        }
+        return switch (connectorType(connProps)) {
+            case SINK -> worker.startSinkTask(
+                    taskId,
+                    configState,
+                    connProps,
+                    configState.taskConfig(taskId),
+                    this,
+                    configState.targetState(taskId.connector())
+            );
+            case SOURCE -> worker.startSourceTask(
+                    taskId,
+                    configState,
+                    connProps,
+                    configState.taskConfig(taskId),
+                    this,
+                    configState.targetState(taskId.connector())
+            );
+            default ->
+                    throw new ConnectException("Failed to start task " + taskId + " since it is not a recognizable type (source or sink)");
+        };
     }
 
     private void removeConnectorTasks(String connName) {
@@ -624,9 +622,8 @@ public final class StandaloneHerder extends AbstractHerder {
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof StandaloneHerderRequest))
+            if (!(o instanceof StandaloneHerderRequest other))
                 return false;
-            StandaloneHerderRequest other = (StandaloneHerderRequest) o;
             return seq == other.seq;
         }
 

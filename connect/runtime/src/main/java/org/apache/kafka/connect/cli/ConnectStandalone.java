@@ -49,7 +49,6 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Paths;
-import java.util.Collections;
 import java.util.Map;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.NAME_CONFIG;
@@ -121,9 +120,7 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneHerder, Stan
 
         File connectorConfigurationFile = Paths.get(filePath).toFile();
         try {
-            Map<String, String> connectorConfigs = objectMapper.readValue(
-                connectorConfigurationFile,
-                new TypeReference<Map<String, String>>() { });
+            Map<String, String> connectorConfigs = objectMapper.readValue(connectorConfigurationFile, new TypeReference<>() { });
 
             if (!connectorConfigs.containsKey(NAME_CONFIG)) {
                 throw new ConnectException("Connector configuration at '" + filePath + "' is missing the mandatory '" + NAME_CONFIG + "' "
@@ -136,8 +133,7 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneHerder, Stan
 
         try {
             objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-            CreateConnectorRequest createConnectorRequest = objectMapper.readValue(connectorConfigurationFile,
-                new TypeReference<CreateConnectorRequest>() { });
+            CreateConnectorRequest createConnectorRequest = objectMapper.readValue(connectorConfigurationFile, new TypeReference<>() { });
             if (createConnectorRequest.config().containsKey(NAME_CONFIG)) {
                 if (!createConnectorRequest.config().get(NAME_CONFIG).equals(createConnectorRequest.name())) {
                     throw new ConnectException("Connector name configuration in 'config' doesn't match the one specified in 'name' at '" + filePath
@@ -166,7 +162,7 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneHerder, Stan
                                   RestServer restServer, RestClient restClient) {
 
         OffsetBackingStore offsetBackingStore = new FileOffsetBackingStore(plugins.newInternalConverter(
-                true, JsonConverter.class.getName(), Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false")));
+                true, JsonConverter.class.getName(), Map.of(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false")));
         offsetBackingStore.configure(config);
 
         Worker worker = new Worker(workerId, Time.SYSTEM, plugins, config, offsetBackingStore,

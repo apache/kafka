@@ -93,6 +93,7 @@ public class AclControlManager {
     }
 
     ControllerResult<List<AclCreateResult>> createAcls(List<AclBinding> acls) {
+        Set<StandardAcl> aclsToCreate = new HashSet<>(acls.size());
         List<AclCreateResult> results = new ArrayList<>(acls.size());
         List<ApiMessageAndVersion> records =
                 BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
@@ -106,11 +107,18 @@ public class AclControlManager {
                 continue;
             }
             StandardAcl standardAcl = StandardAcl.fromAclBinding(acl);
-            if (existingAcls.add(standardAcl)) {
-                StandardAclWithId standardAclWithId = new StandardAclWithId(newAclId(), standardAcl);
-                idToAcl.put(standardAclWithId.id(), standardAcl);
-                records.add(new ApiMessageAndVersion(standardAclWithId.toRecord(), (short) 0));
+            if (!existingAcls.contains(standardAcl)) {
+                if (aclsToCreate.add(standardAcl)) {
+                    StandardAclWithId standardAclWithId = new StandardAclWithId(newAclId(), standardAcl);
+                    records.add(new ApiMessageAndVersion(standardAclWithId.toRecord(), (short) 0));
+                } else {
+                    log.debug("Ignoring duplicate ACL from request: {}", standardAcl);
+                }
+            } else {
+                log.debug("Not creating ACL since it already exists: {}", standardAcl);
             }
+
+
             results.add(AclCreateResult.SUCCESS);
         }
         return new ControllerResult<>(records, results, true);
@@ -176,6 +184,10 @@ public class AclControlManager {
                 validateFilter(filter);
                 AclDeleteResult result = deleteAclsForFilter(filter, records);
                 results.add(result);
+            } catch (BoundedListTooLongException e) {
+                // we do not return partial results here because the fact that only a portion of the deletions
+                // succeeded can be easily missed due to response size. instead fail the entire response
+                throw new InvalidRequestException(e.getMessage(), e);
             } catch (Throwable e) {
                 results.add(new AclDeleteResult(ApiError.fromThrowable(e).exception()));
             }
@@ -191,13 +203,14 @@ public class AclControlManager {
             StandardAcl acl = entry.getValue();
             AclBinding binding = acl.toBinding();
             if (filter.matches(binding)) {
-                deleted.add(new AclBindingDeleteResult(binding));
-                records.add(new ApiMessageAndVersion(
-                    new RemoveAccessControlEntryRecord().setId(id), (short) 0));
-                if (records.size() > MAX_RECORDS_PER_USER_OP) {
+                // check size limitation first before adding additional records
+                if (records.size() >= MAX_RECORDS_PER_USER_OP) {
                     throw new BoundedListTooLongException("Cannot remove more than " +
                         MAX_RECORDS_PER_USER_OP + " acls in a single delete operation.");
                 }
+                deleted.add(new AclBindingDeleteResult(binding));
+                records.add(new ApiMessageAndVersion(
+                    new RemoveAccessControlEntryRecord().setId(id), (short) 0));
             }
         }
         return new AclDeleteResult(deleted);

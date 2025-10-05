@@ -29,9 +29,11 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.CommandLineUtils;
+import org.apache.kafka.server.util.Csv;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.impl.Arguments;
@@ -49,7 +51,6 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -65,7 +66,6 @@ import java.util.stream.Stream;
 
 import static java.lang.String.format;
 import static java.lang.String.valueOf;
-import static java.util.Arrays.asList;
 
 /**
  * A tool for describing quorum status
@@ -126,35 +126,36 @@ public class MetadataQuorumCommand {
                 Optional.ofNullable(namespace.getString("bootstrap_controller")));
             admin = Admin.create(props);
 
-            if (command.equals("describe")) {
-                if (namespace.getBoolean("status") && namespace.getBoolean("replication")) {
-                    throw new TerseException("Only one of --status or --replication should be specified with describe sub-command");
-                } else if (namespace.getBoolean("replication")) {
-                    boolean humanReadable = Optional.of(namespace.getBoolean("human_readable")).orElse(false);
-                    handleDescribeReplication(admin, humanReadable);
-                } else if (namespace.getBoolean("status")) {
-                    if (namespace.getBoolean("human_readable")) {
-                        throw new TerseException("The option --human-readable is only supported along with --replication");
+            switch (command) {
+                case "describe" -> {
+                    if (namespace.getBoolean("status") && namespace.getBoolean("replication")) {
+                        throw new TerseException("Only one of --status or --replication should be specified with describe sub-command");
+                    } else if (namespace.getBoolean("replication")) {
+                        boolean humanReadable = Optional.of(namespace.getBoolean("human_readable")).orElse(false);
+                        handleDescribeReplication(admin, humanReadable);
+                    } else if (namespace.getBoolean("status")) {
+                        if (namespace.getBoolean("human_readable")) {
+                            throw new TerseException("The option --human-readable is only supported along with --replication");
+                        }
+                        handleDescribeStatus(admin);
+                    } else {
+                        throw new TerseException("One of --status or --replication must be specified with describe sub-command");
                     }
-                    handleDescribeStatus(admin);
-                } else {
-                    throw new TerseException("One of --status or --replication must be specified with describe sub-command");
                 }
-            } else if (command.equals("add-controller")) {
-                if (optionalCommandConfig == null) {
-                    throw new TerseException("You must supply the configuration file of the controller you are " +
-                        "adding when using add-controller.");
+                case "add-controller" -> {
+                    if (optionalCommandConfig == null) {
+                        throw new TerseException("You must supply the configuration file of the controller you are " +
+                            "adding when using add-controller.");
+                    }
+                    handleAddController(admin,
+                        namespace.getBoolean("dry_run"),
+                        props);
                 }
-                handleAddController(admin,
-                    namespace.getBoolean("dry_run"),
-                    props);
-            } else if (command.equals("remove-controller")) {
-                handleRemoveController(admin,
+                case "remove-controller" -> handleRemoveController(admin,
                     namespace.getInt("controller_id"),
                     namespace.getString("controller_directory_id"),
                     namespace.getBoolean("dry_run"));
-            } else {
-                throw new IllegalStateException(format("Unknown command: %s", command));
+                default -> throw new IllegalStateException(format("Unknown command: %s", command));
             }
         } finally {
             if (admin != null)
@@ -205,7 +206,7 @@ public class MetadataQuorumCommand {
         rows.addAll(quorumInfoToRows(leader, quorumInfo.observers().stream(), "Observer", humanReadable));
 
         ToolsUtils.prettyPrintTable(
-            asList("NodeId", "DirectoryId", "LogEndOffset", "Lag", "LastFetchTimestamp", "LastCaughtUpTimestamp", "Status"),
+            List.of("NodeId", "DirectoryId", "LogEndOffset", "Lag", "LastFetchTimestamp", "LastCaughtUpTimestamp", "Status"),
             rows,
             System.out
         );
@@ -216,10 +217,10 @@ public class MetadataQuorumCommand {
                                                        String status,
                                                        boolean humanReadable) {
         return infos.map(info -> {
-            String lastFetchTimestamp = !info.lastFetchTimestamp().isPresent() ? "-1" :
+            String lastFetchTimestamp = info.lastFetchTimestamp().isEmpty() ? "-1" :
                 humanReadable ? format("%d ms ago", relativeTimeMs(info.lastFetchTimestamp().getAsLong(), "last fetch")) :
                     valueOf(info.lastFetchTimestamp().getAsLong());
-            String lastCaughtUpTimestamp = !info.lastCaughtUpTimestamp().isPresent() ? "-1" :
+            String lastCaughtUpTimestamp = info.lastCaughtUpTimestamp().isEmpty() ? "-1" :
                 humanReadable ? format("%d ms ago", relativeTimeMs(info.lastCaughtUpTimestamp().getAsLong(), "last caught up")) :
                     valueOf(info.lastCaughtUpTimestamp().getAsLong());
             return Stream.of(
@@ -230,7 +231,7 @@ public class MetadataQuorumCommand {
                 lastFetchTimestamp,
                 lastCaughtUpTimestamp,
                 status
-            ).map(r -> r.toString()).collect(Collectors.toList());
+            ).map(Object::toString).collect(Collectors.toList());
         }).collect(Collectors.toList());
     }
 
@@ -252,7 +253,7 @@ public class MetadataQuorumCommand {
         QuorumInfo quorumInfo = admin.describeMetadataQuorum().quorumInfo().get();
         int leaderId = quorumInfo.leaderId();
         QuorumInfo.ReplicaState leader = quorumInfo.voters().stream().filter(voter -> voter.replicaId() == leaderId).findFirst().get();
-        QuorumInfo.ReplicaState maxLagFollower = quorumInfo.voters().stream().min(Comparator.comparingLong(qi -> qi.logEndOffset())).get();
+        QuorumInfo.ReplicaState maxLagFollower = quorumInfo.voters().stream().min(Comparator.comparingLong(QuorumInfo.ReplicaState::logEndOffset)).get();
         long maxFollowerLag = leader.logEndOffset() - maxLagFollower.logEndOffset();
 
         long maxFollowerLagTimeMs;
@@ -291,7 +292,7 @@ public class MetadataQuorumCommand {
         List<Node> currentVoterList = replicas.stream().map(voter -> new Node(
             voter.replicaId(),
             voter.replicaDirectoryId(),
-            getEndpoints(quorumInfo.nodes().get(voter.replicaId())))).collect(Collectors.toList());
+            getEndpoints(quorumInfo.nodes().get(voter.replicaId())))).toList();
         return currentVoterList.stream().map(Objects::toString).collect(Collectors.joining(", ", "[", "]"));
     }
 
@@ -314,8 +315,10 @@ public class MetadataQuorumCommand {
         public String toString() {
             StringBuilder sb = new StringBuilder();
             sb.append("{");
-            sb.append("\"id\": ").append(id).append(", ");
-            sb.append("\"directoryId\": ").append(directoryId.equals(Uuid.ZERO_UUID) ? "null" : "\"" + directoryId + "\"");
+            sb.append("\"id\": ").append(id);
+            if (!directoryId.equals(Uuid.ZERO_UUID)) {
+                sb.append(", ").append("\"directoryId\": ").append("\"").append(directoryId).append("\"");
+            }
             if (!endpoints.isEmpty()) {
                 sb.append(", \"endpoints\": [");
                 for (RaftVoterEndpoint endpoint : endpoints) {
@@ -359,8 +362,8 @@ public class MetadataQuorumCommand {
     }
 
     static String getMetadataDirectory(Properties props) throws TerseException {
-        if (props.containsKey(KRaftConfigs.METADATA_LOG_DIR_CONFIG)) {
-            return props.getProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG);
+        if (props.containsKey(MetadataLogConfig.METADATA_LOG_DIR_CONFIG)) {
+            return props.getProperty(MetadataLogConfig.METADATA_LOG_DIR_CONFIG);
         }
         if (props.containsKey(ServerLogConfigs.LOG_DIRS_CONFIG)) {
             String[] logDirs = props.getProperty(ServerLogConfigs.LOG_DIRS_CONFIG).trim().split(",");
@@ -368,21 +371,21 @@ public class MetadataQuorumCommand {
                 return logDirs[0];
             }
         }
-        throw new TerseException("Neither " + KRaftConfigs.METADATA_LOG_DIR_CONFIG + " nor " +
+        throw new TerseException("Neither " + MetadataLogConfig.METADATA_LOG_DIR_CONFIG + " nor " +
             ServerLogConfigs.LOG_DIRS_CONFIG + " were found. Is this a valid controller " +
             "configuration file?");
     }
 
     static Uuid getMetadataDirectoryId(String metadataDirectory) throws Exception {
         MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble.Loader().
-            addLogDirs(Collections.singletonList(metadataDirectory)).
+            addLogDirs(List.of(metadataDirectory)).
             addMetadataLogDir(metadataDirectory).
             load();
         MetaProperties metaProperties = ensemble.logDirProps().get(metadataDirectory);
         if (metaProperties == null) {
             throw new TerseException("Unable to read meta.properties from " + metadataDirectory);
         }
-        if (!metaProperties.directoryId().isPresent()) {
+        if (metaProperties.directoryId().isEmpty()) {
             throw new TerseException("No directory id found in " + metadataDirectory);
         }
         return metaProperties.directoryId().get();
@@ -393,11 +396,11 @@ public class MetadataQuorumCommand {
     ) throws Exception {
         Map<String, Endpoint> listeners = new HashMap<>();
         SocketServerConfigs.listenerListToEndPoints(
-            props.getOrDefault(SocketServerConfigs.LISTENERS_CONFIG, "").toString(),
-            __ -> SecurityProtocol.PLAINTEXT).forEach(e -> listeners.put(e.listenerName().get(), e));
+            Csv.parseCsvList(props.getOrDefault(SocketServerConfigs.LISTENERS_CONFIG, "").toString()),
+            __ -> SecurityProtocol.PLAINTEXT).forEach(e -> listeners.put(e.listener(), e));
         SocketServerConfigs.listenerListToEndPoints(
-            props.getOrDefault(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "").toString(),
-            __ -> SecurityProtocol.PLAINTEXT).forEach(e -> listeners.put(e.listenerName().get(), e));
+            Csv.parseCsvList(props.getOrDefault(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "").toString()),
+            __ -> SecurityProtocol.PLAINTEXT).forEach(e -> listeners.put(e.listener(), e));
         if (!props.containsKey(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG)) {
             throw new TerseException(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG +
                 " was not found. Is this a valid controller configuration file?");
@@ -411,7 +414,7 @@ public class MetadataQuorumCommand {
                 throw new TerseException("Cannot find information about controller listener name: " +
                     listenerName);
             }
-            results.add(new RaftVoterEndpoint(endpoint.listenerName().get(),
+            results.add(new RaftVoterEndpoint(endpoint.listener(),
                     endpoint.host() == null ? "localhost" : endpoint.host(),
                     endpoint.port()));
         }
@@ -442,7 +445,7 @@ public class MetadataQuorumCommand {
         output.append(" and endpoints: ");
         String prefix = "";
         for (RaftVoterEndpoint endpoint : endpoints) {
-            output.append(prefix).append(endpoint.name()).append("://");
+            output.append(prefix).append(endpoint.listener()).append("://");
             if (endpoint.host().contains(":")) {
                 output.append("[");
             }

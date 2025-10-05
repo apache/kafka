@@ -24,6 +24,7 @@ import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import java.util.Collection;
 
+@SuppressWarnings("rawtypes")
 public class KTablePassThrough<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, VIn> {
     private final Collection<KStreamAggProcessorSupplier> parents;
     private final String storeName;

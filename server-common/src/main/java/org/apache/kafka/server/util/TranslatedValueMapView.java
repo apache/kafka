@@ -43,8 +43,7 @@ public final class TranslatedValueMapView<K, V, B> extends AbstractMap<K, V> {
         @SuppressWarnings("rawtypes")
         @Override
         public boolean contains(Object o) {
-            if (!(o instanceof Entry)) return false;
-            Entry other = (Entry) o;
+            if (!(o instanceof Entry other)) return false;
             if (!underlyingMap.containsKey(other.getKey())) return false;
             B value = underlyingMap.get(other.getKey());
             V translatedValue = valueMapping.apply(value);

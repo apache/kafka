@@ -16,10 +16,9 @@
 {
   "apiKey": 3,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["broker"],
   "name": "MetadataRequest",
   "validVersions": "0-13",
-  "deprecatedVersions": "0-3",
   "flexibleVersions": "9+",
   "fields": [
     // In version 0, an empty array indicates "request metadata for all topics."  In version 1 and

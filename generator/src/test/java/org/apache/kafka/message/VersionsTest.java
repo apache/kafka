@@ -40,6 +40,7 @@ public class VersionsTest {
 
     @Test
     public void testVersionsParse() {
+        assertEquals(Versions.NONE, Versions.parse(" none ", null));
         assertEquals(Versions.NONE, Versions.parse(null, Versions.NONE));
         assertEquals(Versions.ALL, Versions.parse(" ", Versions.ALL));
         assertEquals(Versions.ALL, Versions.parse("", Versions.ALL));

@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 
 import java.util.ArrayList;
@@ -29,14 +28,16 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 public class ShareInFlightBatch<K, V> {
+    private final int nodeId;
     final TopicIdPartition partition;
     private final Map<Long, ConsumerRecord<K, V>> inFlightRecords;
     private final Set<Long> acknowledgedRecords;
     private Acknowledgements acknowledgements;
-    private KafkaException exception;
+    private ShareInFlightBatchException exception;
     private boolean hasCachedException = false;
 
-    public ShareInFlightBatch(TopicIdPartition partition) {
+    public ShareInFlightBatch(int nodeId, TopicIdPartition partition) {
+        this.nodeId = nodeId;
         this.partition = partition;
         inFlightRecords = new TreeMap<>();
         acknowledgedRecords = new TreeSet<>();
@@ -87,6 +88,10 @@ public class ShareInFlightBatch<K, V> {
         return inFlightRecords.size();
     }
 
+    int nodeId() {
+        return nodeId;
+    }
+
     Acknowledgements takeAcknowledgedRecords() {
         // Usually, all records will be acknowledged, so we can just clear the in-flight records leaving
         // an empty batch, which will trigger more fetching
@@ -96,6 +101,7 @@ public class ShareInFlightBatch<K, V> {
             acknowledgedRecords.forEach(inFlightRecords::remove);
         }
         acknowledgedRecords.clear();
+        exception = null;
 
         Acknowledgements currentAcknowledgements = acknowledgements;
         acknowledgements = Acknowledgements.empty();
@@ -110,11 +116,11 @@ public class ShareInFlightBatch<K, V> {
         return inFlightRecords.isEmpty() && acknowledgements.isEmpty();
     }
 
-    public void setException(KafkaException exception) {
+    public void setException(ShareInFlightBatchException exception) {
         this.exception = exception;
     }
 
-    public KafkaException getException() {
+    public ShareInFlightBatchException getException() {
         return exception;
     }
 

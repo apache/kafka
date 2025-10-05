@@ -367,7 +367,7 @@ public class PartitionLeaderStrategyIntegrationTest {
 
         driver.onFailure(time.milliseconds(), spec, new UnknownServerException());
         assertTrue(result.all().get(tp0).isDone());
-        TestUtils.assertFutureThrows(result.all().get(tp0), UnknownServerException.class);
+        TestUtils.assertFutureThrows(UnknownServerException.class, result.all().get(tp0));
         assertEquals(Collections.emptyList(), driver.poll());
     }
 

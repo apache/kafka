@@ -272,7 +272,7 @@ public class ExternalCommandWorker implements TaskWorker {
                 while (true) {
                     log.info("{}: stdin writer ready.", id);
                     Optional<JsonNode> node = stdinQueue.take();
-                    if (!node.isPresent()) {
+                    if (node.isEmpty()) {
                         log.trace("{}: StdinWriter terminating.", id);
                         return;
                     }

@@ -1,0 +1,75 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// The streams rebalance protocol is in development. This schema is subject to non-backwards-compatible changes.
+{
+  "apiKey": 23,
+  "type": "coordinator-value",
+  "name": "StreamsGroupTopologyValue",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+    { "name": "Epoch", "type": "int32", "versions": "0+",
+      "about": "The epoch of the topology." },
+    { "name":  "Subtopologies", "type": "[]Subtopology", "versions": "0+",
+      "about": "The sub-topologies of the streams application.",
+      "fields": [
+        { "name": "SubtopologyId", "type": "string", "versions": "0+",
+          "about": "String to uniquely identify the subtopology." },
+        { "name": "SourceTopics", "type": "[]string", "versions": "0+",
+          "about": "The topics the topology reads from." },
+        { "name": "SourceTopicRegex", "type": "[]string", "versions": "0+",
+          "about": "Regular expressions identifying topics the subtopology reads from." },
+        { "name": "StateChangelogTopics", "type": "[]TopicInfo", "versions": "0+",
+          "about": "The set of state changelog topics associated with this subtopology." },
+        { "name": "RepartitionSinkTopics", "type": "[]string", "versions": "0+",
+          "about": "The repartition topics the subtopology writes to." },
+        { "name": "RepartitionSourceTopics", "type": "[]TopicInfo", "versions": "0+",
+          "about": "The set of source topics that are internally created repartition topics." },
+        { "name": "CopartitionGroups", "type": "[]CopartitionGroup", "versions": "0+",
+          "about": "A subset of source topics that must be copartitioned.",
+          "fields": [
+            { "name": "SourceTopics", "type": "[]int16", "versions": "0+",
+              "about": "The topics the topology reads from. Index into the array on the subtopology level." },
+            { "name": "SourceTopicRegex", "type": "[]int16", "versions": "0+",
+              "about": "Regular expressions identifying topics the subtopology reads from. Index into the array on the subtopology level." },
+            { "name": "RepartitionSourceTopics", "type": "[]int16", "versions": "0+",
+              "about": "The set of source topics that are internally created repartition topics. Index into the array on the subtopology level." }
+          ]
+        }
+      ]
+    }
+  ],
+  "commonStructs": [
+    { "name": "TopicConfig", "versions": "0+", "fields": [
+      { "name": "key", "type": "string", "versions": "0+",
+        "about": "The key of the topic-level configuration." },
+      { "name": "value", "type": "string", "versions": "0+",
+        "about": "The value of the topic-level configuration." }
+    ]
+    },
+    { "name": "TopicInfo", "versions": "0+", "fields": [
+      { "name": "Name", "type": "string", "versions": "0+",
+        "about": "The name of the topic." },
+      { "name": "Partitions", "type": "int32", "versions": "0+",
+        "about": "The number of partitions in the topic. Can be 0 if no specific number of partitions is enforced. Always 0 for changelog topics." },
+      { "name": "ReplicationFactor", "type": "int16", "versions": "0+",
+        "about": "The replication factor of the topic. Can be 0 if the default replication factor should be used." },
+      { "name": "TopicConfigs", "type": "[]TopicConfig", "versions": "0+",
+        "about": "Topic-level configurations as key-value pairs."
+      }
+    ]}
+  ]
+}

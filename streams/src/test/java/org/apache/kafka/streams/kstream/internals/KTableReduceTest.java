@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
@@ -42,7 +43,7 @@ public class KTableReduceTest {
 
         final Processor<String, Change<Set<String>>, String, Change<Set<String>>> reduceProcessor =
             new KTableReduce<String, Set<String>>(
-                "myStore",
+                new MaterializedInternal<>(Materialized.as("myStore")),
                 this::unionNotNullArgs,
                 this::differenceNotNullArgs
             ).get();

@@ -142,7 +142,7 @@ public class TaskExecutor {
         for (final Task task : tasksToCommit) {
             // we need to call commitNeeded first since we need to update committable offsets
             if (task.commitNeeded()) {
-                final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.prepareCommit();
+                final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.prepareCommit(true);
                 if (!offsetAndMetadata.isEmpty()) {
                     consumedOffsetsAndMetadata.put(task, offsetAndMetadata);
                 }

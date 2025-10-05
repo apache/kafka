@@ -18,34 +18,38 @@
   "type": "request",
   "listeners": ["controller"],
   "name": "VoteRequest",
-  // Version 1 adds voter key and candidate directory id (KIP-853)
-  "validVersions": "0-1",
+  // Version 1 adds voter key and directory id (KIP-853)
+  // Version 2 adds PreVote field and renames candidate to replica
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "0+",
-      "nullableVersions": "0+", "default": "null"},
+      "nullableVersions": "0+", "default": "null",
+      "about":  "The cluster id."},
     { "name": "VoterId", "type": "int32", "versions": "1+", "ignorable": true, "default": "-1", "entityType": "brokerId",
-      "about": "The replica id of the voter receiving the request" },
-    { "name": "Topics", "type": "[]TopicData",
-      "versions": "0+", "fields": [
+      "about": "The replica id of the voter receiving the request." },
+    { "name": "Topics", "type": "[]TopicData", "versions": "0+",
+      "about": "The topic data.", "fields": [
         { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
           "about": "The topic name." },
         { "name": "Partitions", "type": "[]PartitionData",
-          "versions": "0+", "fields": [
+          "versions": "0+", "about": "The partition data.", "fields": [
             { "name": "PartitionIndex", "type": "int32", "versions": "0+",
               "about": "The partition index." },
-            { "name": "CandidateEpoch", "type": "int32", "versions": "0+",
-              "about": "The bumped epoch of the candidate sending the request"},
-            { "name": "CandidateId", "type": "int32", "versions": "0+", "entityType": "brokerId",
+            { "name": "ReplicaEpoch", "type": "int32", "versions": "0+",
+              "about": "The epoch of the voter sending the request"},
+            { "name": "ReplicaId", "type": "int32", "versions": "0+", "entityType": "brokerId",
               "about": "The replica id of the voter sending the request"},
-            { "name": "CandidateDirectoryId", "type": "uuid", "versions": "1+", "ignorable": true,
+            { "name": "ReplicaDirectoryId", "type": "uuid", "versions": "1+", "ignorable": true,
               "about": "The directory id of the voter sending the request" },
             { "name": "VoterDirectoryId", "type": "uuid", "versions": "1+", "ignorable": true,
-              "about": "The ID of the voter sending the request"},
+              "about": "The directory id of the voter receiving the request"},
             { "name": "LastOffsetEpoch", "type": "int32", "versions": "0+",
-              "about": "The epoch of the last record written to the metadata log"},
+              "about": "The epoch of the last record written to the metadata log."},
             { "name": "LastOffset", "type": "int64", "versions": "0+",
-              "about": "The offset of the last record written to the metadata log"}
+              "about": "The log end offset of the metadata log of the voter sending the request."},
+            { "name": "PreVote", "type": "bool", "versions": "2+",
+              "about": "Whether the request is a PreVote request (not persisted) or not."}
           ]
         }
       ]

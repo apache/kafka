@@ -24,6 +24,7 @@ import kafka.network
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.{ClientInformation, ListenerName, NetworkSend}
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.network.RequestConvertToJson
@@ -32,14 +33,13 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 
-import java.util.Collections
 import scala.jdk.OptionConverters.RichOption
 
 class RequestConvertToJsonTest {
 
   @Test
   def testRequestHeaderNode(): Unit = {
-    val alterIsrRequest = new AlterPartitionRequest(new AlterPartitionRequestData(), 0)
+    val alterIsrRequest = new AlterPartitionRequest(new AlterPartitionRequestData(), ApiKeys.ALTER_PARTITION.latestVersion)
     val req = request(alterIsrRequest)
     val header = req.header
 
@@ -52,23 +52,8 @@ class RequestConvertToJsonTest {
   }
 
   @Test
-  def testRequestHeaderNodeWithDeprecatedApiVersion(): Unit = {
-    val fetchRequest = FetchRequest.Builder.forConsumer(0, 0, 0, Collections.emptyMap()).build(0)
-    val req = request(fetchRequest)
-    val header = req.header
-
-    val expectedNode = RequestHeaderDataJsonConverter.write(header.data, header.headerVersion, false).asInstanceOf[ObjectNode]
-    expectedNode.set("requestApiKeyName", new TextNode(header.apiKey.toString))
-    expectedNode.set("requestApiVersionDeprecated", BooleanNode.TRUE)
-
-    val actualNode = RequestConvertToJson.requestHeaderNode(header)
-
-    assertEquals(expectedNode, actualNode)
-  }
-
-  @Test
   def testRequestDesc(): Unit = {
-    val alterIsrRequest = new AlterPartitionRequest(new AlterPartitionRequestData(), 0)
+    val alterIsrRequest = new AlterPartitionRequest(new AlterPartitionRequestData(), ApiKeys.ALTER_PARTITION.latestVersion)
     val req = request(alterIsrRequest)
 
     val expectedNode = new ObjectNode(JsonNodeFactory.instance)
@@ -83,7 +68,7 @@ class RequestConvertToJsonTest {
 
   @Test
   def testRequestDescMetrics(): Unit = {
-    val alterIsrRequest = new AlterPartitionRequest(new AlterPartitionRequestData(), 0)
+    val alterIsrRequest = new AlterPartitionRequest(new AlterPartitionRequestData(), ApiKeys.ALTER_PARTITION.latestVersion)
     val req = request(alterIsrRequest)
     val send = new NetworkSend(req.context.connectionId, alterIsrRequest.toSend(req.header))
     val headerLog = RequestConvertToJson.requestHeaderNode(req.header)

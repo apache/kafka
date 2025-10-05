@@ -135,8 +135,8 @@ public class LogicalKeyValueSegmentsTest {
 
     @Test
     public void shouldCleanupSegmentsThatHaveExpired() {
-        final LogicalKeyValueSegment segment1 = segments.getOrCreateSegmentIfLive(0, context, 0);
-        final LogicalKeyValueSegment segment2 = segments.getOrCreateSegmentIfLive(2, context, SEGMENT_INTERVAL * 2L);
+        segments.getOrCreateSegmentIfLive(0, context, 0);
+        segments.getOrCreateSegmentIfLive(2, context, SEGMENT_INTERVAL * 2L);
         final LogicalKeyValueSegment segment3 = segments.getOrCreateSegmentIfLive(3, context, SEGMENT_INTERVAL * 3L);
         final LogicalKeyValueSegment segment4 = segments.getOrCreateSegmentIfLive(7, context, SEGMENT_INTERVAL * 7L);
 
@@ -151,7 +151,7 @@ public class LogicalKeyValueSegmentsTest {
     @Test
     public void shouldNotCleanUpReservedSegments() {
         final LogicalKeyValueSegment reservedSegment = segments.createReservedSegment(-1, "reserved");
-        final LogicalKeyValueSegment segment1 = segments.getOrCreateSegmentIfLive(1, context, SEGMENT_INTERVAL);
+        segments.getOrCreateSegmentIfLive(1, context, SEGMENT_INTERVAL);
         final LogicalKeyValueSegment segment2 = segments.getOrCreateSegmentIfLive(2, context, SEGMENT_INTERVAL * 2L);
 
         segments.cleanupExpiredSegments(SEGMENT_INTERVAL * 6L);

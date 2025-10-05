@@ -36,13 +36,13 @@ import org.junit.platform.suite.api.Suite;
  */
 @Suite
 @SelectClasses({
-                        CompositeReadOnlyKeyValueStoreTest.class,
-                        CompositeReadOnlyWindowStoreTest.class,
-                        CompositeReadOnlySessionStoreTest.class,
-                        GlobalStateStoreProviderTest.class,
-                        StreamThreadStateStoreProviderTest.class,
-                        WrappingStoreProviderTest.class,
-                        QueryableStateIntegrationTest.class,
-                    })
+    CompositeReadOnlyKeyValueStoreTest.class,
+    CompositeReadOnlyWindowStoreTest.class,
+    CompositeReadOnlySessionStoreTest.class,
+    GlobalStateStoreProviderTest.class,
+    StreamThreadStateStoreProviderTest.class,
+    WrappingStoreProviderTest.class,
+    QueryableStateIntegrationTest.class,
+})
 public class StoreQuerySuite {
 }

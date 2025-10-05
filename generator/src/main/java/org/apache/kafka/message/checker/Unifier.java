@@ -51,7 +51,7 @@ class Unifier {
         this.structRegistry1.register(topLevelMessage1);
         this.topLevelMessage2 = topLevelMessage2;
         this.structRegistry2 = new StructRegistry();
-        this.structRegistry1.register(topLevelMessage2);
+        this.structRegistry2.register(topLevelMessage2);
     }
 
     static FieldSpec structSpecToFieldSpec(StructSpec structSpec) {

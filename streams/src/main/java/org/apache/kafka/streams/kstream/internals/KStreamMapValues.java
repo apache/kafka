@@ -24,9 +24,9 @@ import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 
 class KStreamMapValues<KIn, VIn, VOut> implements FixedKeyProcessorSupplier<KIn, VIn, VOut> {
 
-    private final ValueMapperWithKey<KIn, VIn, VOut> mapper;
+    private final ValueMapperWithKey<? super KIn, ? super VIn, ? extends VOut> mapper;
 
-    public KStreamMapValues(final ValueMapperWithKey<KIn, VIn, VOut> mapper) {
+    public KStreamMapValues(final ValueMapperWithKey<? super KIn, ? super VIn, ? extends VOut> mapper) {
         this.mapper = mapper;
     }
 

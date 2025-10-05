@@ -17,15 +17,16 @@
 package org.apache.kafka.tools.consumer.group;
 
 import kafka.api.AbstractSaslTest;
-import kafka.api.Both$;
 import kafka.security.JaasTestUtils;
-import kafka.zk.ConfigEntityChangeNotificationZNode;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.metadata.storage.Formatter;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -38,8 +39,13 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import scala.Option;
 import scala.Some$;
@@ -55,14 +61,14 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     public static final int NUM_PARTITIONS = 1;
     public static final int BROKER_COUNT = 1;
     public static final String KAFKA_CLIENT_SASL_MECHANISM = "SCRAM-SHA-256";
-    private static final Seq<String> KAFKA_SERVER_SASL_MECHANISMS =  CollectionConverters.asScala(Collections.singletonList(KAFKA_CLIENT_SASL_MECHANISM)).toSeq();
+    private static final Seq<String> KAFKA_SERVER_SASL_MECHANISMS =  CollectionConverters.asScala(List.of(KAFKA_CLIENT_SASL_MECHANISM)).toSeq();
 
     private Consumer<byte[], byte[]> createConsumer() {
         return createConsumer(
             new ByteArrayDeserializer(),
             new ByteArrayDeserializer(),
             new Properties(),
-            CollectionConverters.asScala(Collections.<String>emptySet()).toList()
+            CollectionConverters.asScala(Set.<String>of()).toList()
         );
     }
 
@@ -89,9 +95,13 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     @Override
     public void configureSecurityBeforeServersStart(TestInfo testInfo) {
         super.configureSecurityBeforeServersStart(testInfo);
-        zkClient().makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path());
-        // Create broker credentials before starting brokers
-        createScramCredentials(zkConnect(), JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD);
+    }
+
+    @Override
+    public void addFormatterSettings(Formatter formatter) {
+        formatter.setClusterId("XcZZOzUqS4yHOjhMQB6JLQ");
+        formatter.setScramArguments(List.of("SCRAM-SHA-256=[name=" + JaasTestUtils.KAFKA_SCRAM_ADMIN +
+            ",password=" + JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD + "]"));
     }
 
     @Override
@@ -103,16 +113,19 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     @BeforeEach
     @Override
     public void setUp(TestInfo testInfo) {
-        startSasl(jaasSections(KAFKA_SERVER_SASL_MECHANISMS, Some$.MODULE$.apply(KAFKA_CLIENT_SASL_MECHANISM), Both$.MODULE$,
+        startSasl(jaasSections(KAFKA_SERVER_SASL_MECHANISMS,
+            Some$.MODULE$.apply(KAFKA_CLIENT_SASL_MECHANISM),
             JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME));
+        String superuserLoginContext = jaasAdminLoginModule(KAFKA_CLIENT_SASL_MECHANISM, Option.empty());
+        this.superuserClientConfig().put(SaslConfigs.SASL_JAAS_CONFIG, superuserLoginContext);
         super.setUp(testInfo);
-        createTopic(
-            TOPIC,
-            NUM_PARTITIONS,
-            BROKER_COUNT,
-            new Properties(),
-            listenerName(),
-            new Properties());
+        try (Admin admin = createPrivilegedAdminClient()) {
+            admin.createTopics(List.of(
+                new NewTopic(TOPIC, NUM_PARTITIONS, (short) BROKER_COUNT))).all().
+                    get(5, TimeUnit.MINUTES);
+        } catch (ExecutionException | InterruptedException | TimeoutException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @AfterEach
@@ -122,27 +135,29 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
         closeSasl();
     }
 
-    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedQuorumName() in the ParameterizedTest name.
-    @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
-    @MethodSource("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit")
-    public void testConsumerGroupServiceWithAuthenticationFailure(String quorum, String groupProtocol) throws Exception {
-        ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
-        try (Consumer<byte[], byte[]> consumer = createConsumer()) {
-            consumer.subscribe(Collections.singletonList(TOPIC));
-
+    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedGroupProtocolNames() in the ParameterizedTest name.
+    @ParameterizedTest(name = "{displayName}.groupProtocol={0}")
+    @MethodSource("getTestGroupProtocolParametersAll")
+    public void testConsumerGroupServiceWithAuthenticationFailure(String groupProtocol) throws Exception {
+        try (
+            ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
+            Consumer<byte[], byte[]> consumer = createConsumer()
+        ) {
+            consumer.subscribe(List.of(TOPIC));
             verifyAuthenticationException(consumerGroupService::listGroups);
-        } finally {
-            consumerGroupService.close();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
-    @MethodSource("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit")
-    public void testConsumerGroupServiceWithAuthenticationSuccess(String quorum, String groupProtocol) throws Exception {
+    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedGroupProtocolNames() in the ParameterizedTest name.
+    @ParameterizedTest(name = "{displayName}.groupProtocol={0}")
+    @MethodSource("getTestGroupProtocolParametersAll")
+    public void testConsumerGroupServiceWithAuthenticationSuccess(String groupProtocol) throws Exception {
         createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KAFKA_SCRAM_USER_2, JaasTestUtils.KAFKA_SCRAM_PASSWORD_2);
-        ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
-        try (Consumer<byte[], byte[]> consumer = createConsumer()) {
-            consumer.subscribe(Collections.singletonList(TOPIC));
+        try (
+            ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
+            Consumer<byte[], byte[]> consumer = createConsumer()
+        ) {
+            consumer.subscribe(List.of(TOPIC));
 
             TestUtils.waitForCondition(() -> {
                 try {
@@ -153,8 +168,6 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
                 }
             }, "failed to poll data with authentication");
             assertEquals(1, consumerGroupService.listConsumerGroups().size());
-        } finally {
-            consumerGroupService.close();
         }
     }
 
@@ -168,7 +181,7 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
             "--group", "test.group",
             "--command-config", propsFile.getAbsolutePath()};
         ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(cgcArgs);
-        return new ConsumerGroupCommand.ConsumerGroupService(opts, Collections.emptyMap());
+        return new ConsumerGroupCommand.ConsumerGroupService(opts, Map.of());
     }
 
     private void verifyAuthenticationException(Executable action) {

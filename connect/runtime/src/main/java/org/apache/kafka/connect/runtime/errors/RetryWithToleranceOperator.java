@@ -26,7 +26,6 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -101,7 +100,7 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
         this.errorHandlingMetrics = errorHandlingMetrics;
         this.stopRequestedLatch = stopRequestedLatch;
         this.stopping = false;
-        this.reporters = Collections.emptyList();
+        this.reporters = List.of();
     }
 
     /**
@@ -137,7 +136,7 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
     // Visible for testing
     synchronized Future<Void> report(ProcessingContext<T> context) {
         if (reporters.size() == 1) {
-            return new WorkerErrantRecordReporter.ErrantRecordFuture(Collections.singletonList(reporters.iterator().next().report(context)));
+            return new WorkerErrantRecordReporter.ErrantRecordFuture(List.of(reporters.get(0).report(context)));
         }
         List<Future<RecordMetadata>> futures = reporters.stream()
                 .map(r -> r.report(context))
@@ -214,8 +213,7 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
                     errorHandlingMetrics.recordRetry();
                 } else {
                     log.trace("Can't retry. start={}, attempt={}, deadline={}", startTime, attempt, deadline);
-                    context.error(e);
-                    return null;
+                    throw e;
                 }
                 if (stopping) {
                     log.trace("Shutdown has been scheduled. Marking operation as failed.");
@@ -312,7 +310,7 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
         try {
             stopRequestedLatch.await(delay, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
-            return;
+            // ignore
         }
     }
 
@@ -358,7 +356,7 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
                 e.addSuppressed(t);
             }
         }
-        reporters = Collections.emptyList();
+        reporters = List.of();
         if (e != null) {
             throw e;
         }

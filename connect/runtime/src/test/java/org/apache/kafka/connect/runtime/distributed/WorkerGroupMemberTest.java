@@ -59,6 +59,7 @@ public class WorkerGroupMemberTest {
     public void testMetrics() throws Exception {
         WorkerGroupMember member;
         Map<String, String> workerProps = new HashMap<>();
+        workerProps.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
@@ -78,9 +79,8 @@ public class WorkerGroupMemberTest {
         boolean foundJmxReporter = false;
         assertEquals(2, member.metrics().reporters().size());
         for (MetricsReporter reporter : member.metrics().reporters()) {
-            if (reporter instanceof MockConnectMetrics.MockMetricsReporter) {
+            if (reporter instanceof MockConnectMetrics.MockMetricsReporter mockMetricsReporter) {
                 foundMockReporter = true;
-                MockConnectMetrics.MockMetricsReporter mockMetricsReporter = (MockConnectMetrics.MockMetricsReporter) reporter;
                 assertEquals("cluster-1", mockMetricsReporter.getMetricsContext().contextLabels().get(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID));
                 assertEquals("group-1", mockMetricsReporter.getMetricsContext().contextLabels().get(WorkerConfig.CONNECT_GROUP_ID));
             }
@@ -103,6 +103,7 @@ public class WorkerGroupMemberTest {
     public void testDisableJmxReporter() {
         WorkerGroupMember member;
         Map<String, String> workerProps = new HashMap<>();
+        workerProps.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("group.id", "group-1");

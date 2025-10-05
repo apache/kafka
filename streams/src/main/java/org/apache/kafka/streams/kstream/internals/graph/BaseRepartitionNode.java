@@ -32,18 +32,17 @@ public abstract class BaseRepartitionNode<K, V> extends GraphNode {
     protected final String repartitionTopic;
     protected final StreamPartitioner<K, V> partitioner;
     protected final InternalTopicProperties internalTopicProperties;
-    protected ProcessorParameters<K, V, ?, ?> processorParameters;
+    protected ProcessorParameters<K, V, K, V> processorParameters;
 
     BaseRepartitionNode(final String nodeName,
                         final String sourceName,
-                        final ProcessorParameters<K, V, ?, ?> processorParameters,
+                        final ProcessorParameters<K, V, K, V> processorParameters,
                         final Serde<K> keySerde,
                         final Serde<V> valueSerde,
                         final String sinkName,
                         final String repartitionTopic,
                         final StreamPartitioner<K, V> partitioner,
                         final InternalTopicProperties internalTopicProperties) {
-
         super(nodeName);
 
         this.keySerde = keySerde;
@@ -72,11 +71,11 @@ public abstract class BaseRepartitionNode<K, V> extends GraphNode {
         return keySerde != null ? keySerde.deserializer() : null;
     }
 
-    public void setProcessorParameters(final ProcessorParameters<K, V, ?, ?> processorParameters) {
+    public void setProcessorParameters(final ProcessorParameters<K, V, K, V> processorParameters) {
         this.processorParameters = processorParameters;
     }
 
-    public ProcessorParameters<K, V, ?, ?> processorParameters() {
+    public ProcessorParameters<K, V, K, V> processorParameters() {
         return processorParameters;
     }
 
@@ -94,9 +93,9 @@ public abstract class BaseRepartitionNode<K, V> extends GraphNode {
                "} " + super.toString();
     }
 
-    public abstract static class BaseRepartitionNodeBuilder<K, V, T extends BaseRepartitionNode<K, V>> {
+    public abstract static class BaseRepartitionNodeBuilder<K, V, RepartitionNode extends BaseRepartitionNode<K, V>> {
         protected String nodeName;
-        protected ProcessorParameters<K, V, ?, ?> processorParameters;
+        protected ProcessorParameters<K, V, K, V> processorParameters;
         protected Serde<K> keySerde;
         protected Serde<V> valueSerde;
         protected String sinkName;
@@ -105,51 +104,51 @@ public abstract class BaseRepartitionNode<K, V> extends GraphNode {
         protected StreamPartitioner<K, V> partitioner;
         protected InternalTopicProperties internalTopicProperties = InternalTopicProperties.empty();
 
-        public BaseRepartitionNodeBuilder<K, V, T> withProcessorParameters(final ProcessorParameters<K, V, ?, ?> processorParameters) {
+        public BaseRepartitionNodeBuilder<K, V, RepartitionNode> withProcessorParameters(final ProcessorParameters<K, V, K, V> processorParameters) {
             this.processorParameters = processorParameters;
             return this;
         }
 
-        public BaseRepartitionNodeBuilder<K, V, T> withKeySerde(final Serde<K> keySerde) {
+        public BaseRepartitionNodeBuilder<K, V, RepartitionNode> withKeySerde(final Serde<K> keySerde) {
             this.keySerde = keySerde;
             return this;
         }
 
-        public BaseRepartitionNodeBuilder<K, V, T> withValueSerde(final Serde<V> valueSerde) {
+        public BaseRepartitionNodeBuilder<K, V, RepartitionNode> withValueSerde(final Serde<V> valueSerde) {
             this.valueSerde = valueSerde;
             return this;
         }
 
-        public BaseRepartitionNodeBuilder<K, V, T> withSinkName(final String sinkName) {
+        public BaseRepartitionNodeBuilder<K, V, RepartitionNode> withSinkName(final String sinkName) {
             this.sinkName = sinkName;
             return this;
         }
 
-        public BaseRepartitionNodeBuilder<K, V, T> withSourceName(final String sourceName) {
+        public BaseRepartitionNodeBuilder<K, V, RepartitionNode> withSourceName(final String sourceName) {
             this.sourceName = sourceName;
             return this;
         }
 
-        public BaseRepartitionNodeBuilder<K, V, T> withRepartitionTopic(final String repartitionTopic) {
+        public BaseRepartitionNodeBuilder<K, V, RepartitionNode> withRepartitionTopic(final String repartitionTopic) {
             this.repartitionTopic = repartitionTopic;
             return this;
         }
 
-        public BaseRepartitionNodeBuilder<K, V, T> withStreamPartitioner(final StreamPartitioner<K, V> partitioner) {
+        public BaseRepartitionNodeBuilder<K, V, RepartitionNode> withStreamPartitioner(final StreamPartitioner<K, V> partitioner) {
             this.partitioner = partitioner;
             return this;
         }
 
-        public BaseRepartitionNodeBuilder<K, V, T> withNodeName(final String nodeName) {
+        public BaseRepartitionNodeBuilder<K, V, RepartitionNode> withNodeName(final String nodeName) {
             this.nodeName = nodeName;
             return this;
         }
 
-        public BaseRepartitionNodeBuilder<K, V, T> withInternalTopicProperties(final InternalTopicProperties internalTopicProperties) {
+        public BaseRepartitionNodeBuilder<K, V, RepartitionNode> withInternalTopicProperties(final InternalTopicProperties internalTopicProperties) {
             this.internalTopicProperties = internalTopicProperties;
             return this;
         }
 
-        public abstract T build();
+        public abstract RepartitionNode build();
     }
 }

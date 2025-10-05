@@ -22,8 +22,6 @@ import org.apache.kafka.server.util.CommandLineUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -35,7 +33,7 @@ import static org.apache.kafka.tools.ToolsUtils.minus;
 public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConsumerGroupCommandOptions.class);
 
-    private static final String BOOTSTRAP_SERVER_DOC = "REQUIRED: The server(s) to connect to.";
+    private static final String BOOTSTRAP_SERVER_DOC = "The server(s) to connect to. REQUIRED for all options except for --validate-regex.";
     private static final String GROUP_DOC = "The consumer group we wish to act on.";
     private static final String TOPIC_DOC = "The topic whose consumer group information should be deleted or topic whose should be included in the reset offset process. " +
         "In `reset-offsets` case, partitions can be specified using this format: `topic1:0,1,2`, where 0,1,2 are the partition to be included in the process. " +
@@ -62,7 +60,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
     private static final String EXPORT_DOC = "Export operation execution to a CSV file. Supported operations: reset-offsets.";
     private static final String RESET_TO_OFFSET_DOC = "Reset offsets to a specific offset.";
     private static final String RESET_FROM_FILE_DOC = "Reset offsets to values defined in CSV file.";
-    private static final String RESET_TO_DATETIME_DOC = "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDTHH:mm:SS.sss'";
+    private static final String RESET_TO_DATETIME_DOC = "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDThh:mm:ss.sss'";
     private static final String RESET_BY_DURATION_DOC = "Reset offsets to offset by duration from current timestamp. Format: 'PnDTnHnMnS'";
     private static final String RESET_TO_EARLIEST_DOC = "Reset offsets to earliest offset.";
     private static final String RESET_TO_LATEST_DOC = "Reset offsets to latest offset.";
@@ -84,6 +82,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
         "Example: --bootstrap-server localhost:9092 --list --type classic,consumer" + NL +
         "This option may be used with the '--list' option only.";
     private static final String DELETE_OFFSETS_DOC = "Delete offsets of consumer group. Supports one consumer group at the time, and multiple topics.";
+    private static final String VALIDATE_REGEX_DOC = "Validate that the syntax of the provided regular expression is valid according to the RE2 format.";
 
     final OptionSpec<String> bootstrapServerOpt;
     final OptionSpec<String> groupOpt;
@@ -113,6 +112,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
     final OptionSpec<Void> offsetsOpt;
     final OptionSpec<String> stateOpt;
     final OptionSpec<String> typeOpt;
+    final OptionSpec<String> validateRegexOpt;
 
     final Set<OptionSpec<?>> allGroupSelectionScopeOpts;
     final Set<OptionSpec<?>> allConsumerGroupLevelOpts;
@@ -149,7 +149,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
             .withRequiredArg()
             .describedAs("timeout (ms)")
             .ofType(Long.class)
-            .defaultsTo(5000L);
+            .defaultsTo(30000L);
         commandConfigOpt = parser.accepts("command-config", COMMAND_CONFIG_DOC)
             .withRequiredArg()
             .describedAs("command config property file")
@@ -196,12 +196,16 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
             .availableIf(listOpt)
             .withOptionalArg()
             .ofType(String.class);
+        validateRegexOpt = parser.accepts("validate-regex", VALIDATE_REGEX_DOC)
+            .withRequiredArg()
+            .describedAs("regex")
+            .ofType(String.class);
 
-        allGroupSelectionScopeOpts = new HashSet<>(Arrays.asList(groupOpt, allGroupsOpt));
-        allConsumerGroupLevelOpts = new HashSet<>(Arrays.asList(listOpt, describeOpt, deleteOpt, resetOffsetsOpt));
-        allResetOffsetScenarioOpts = new HashSet<>(Arrays.asList(resetToOffsetOpt, resetShiftByOpt,
-            resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt));
-        allDeleteOffsetsOpts = new HashSet<>(Arrays.asList(groupOpt, topicOpt));
+        allGroupSelectionScopeOpts = Set.of(groupOpt, allGroupsOpt);
+        allConsumerGroupLevelOpts = Set.of(listOpt, describeOpt, deleteOpt, resetOffsetsOpt);
+        allResetOffsetScenarioOpts = Set.of(resetToOffsetOpt, resetShiftByOpt,
+            resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt);
+        allDeleteOffsetsOpts = Set.of(groupOpt, topicOpt);
 
         options = parser.parse(args);
     }
@@ -210,13 +214,15 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
     void checkArgs() {
         CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to list all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.");
 
-        CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
+        if (!options.has(validateRegexOpt)) {
+            CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
+        }
 
         if (options.has(describeOpt)) {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
             "Option " + describeOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
-            List<OptionSpec<?>> mutuallyExclusiveOpts = Arrays.asList(membersOpt, offsetsOpt, stateOpt);
+            List<OptionSpec<?>> mutuallyExclusiveOpts = List.of(membersOpt, offsetsOpt, stateOpt);
             if (mutuallyExclusiveOpts.stream().mapToInt(o -> options.has(o) ? 1 : 0).sum() > 1) {
                 CommandLineUtils.printUsageAndExit(parser,
                     "Option " + describeOpt + " takes at most one of these options: " + mutuallyExclusiveOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
@@ -249,7 +255,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
                 CommandLineUtils.printUsageAndExit(parser, "Option " + resetOffsetsOpt + " only accepts one of " + executeOpt + " and " + dryRunOpt);
 
             if (!options.has(dryRunOpt) && !options.has(executeOpt)) {
-                System.err.println("WARN: No action will be performed as the --execute option is missing." +
+                System.err.println("WARN: No action will be performed as the --execute option is missing. " +
                     "In a future major release, the default behavior of this command will be to prompt the user before " +
                     "executing the reset rather than doing a dry run. You should add the --dry-run option explicitly " +
                     "if you are scripting this command and want to keep the current default behavior without prompting.");

@@ -63,9 +63,9 @@ public final class MetaPropertiesEnsemble {
     /**
      * A completely empty MetaPropertiesEnsemble object.
      */
-    public static final MetaPropertiesEnsemble EMPTY = new MetaPropertiesEnsemble(Collections.emptySet(),
-        Collections.emptySet(),
-        Collections.emptyMap(),
+    public static final MetaPropertiesEnsemble EMPTY = new MetaPropertiesEnsemble(Set.of(),
+        Set.of(),
+        Map.of(),
         Optional.empty());
 
     /**
@@ -517,7 +517,7 @@ public final class MetaPropertiesEnsemble {
             }
             if (metaProps.directoryId().isPresent()) {
                 if (DirectoryId.reserved(metaProps.directoryId().get())) {
-                    throw new RuntimeException("Invalid resrved directory ID " +
+                    throw new RuntimeException("Invalid reserved directory ID " +
                         metaProps.directoryId().get() + " found in " + logDir);
                 }
                 String prevLogDir = seenUuids.put(metaProps.directoryId().get(), logDir);

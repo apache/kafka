@@ -19,6 +19,7 @@ package org.apache.kafka.common.config;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.provider.EnvVarConfigProvider;
 import org.apache.kafka.common.config.provider.FileConfigProvider;
 import org.apache.kafka.common.config.provider.MockFileConfigProvider;
 import org.apache.kafka.common.config.provider.MockVaultConfigProvider;
@@ -111,6 +112,13 @@ public class AbstractConfigTest {
         Map<String, Object> expected = new HashMap<>();
         expected.put("bar", "abc");
         assertEquals(expected, originalsWithPrefix);
+    }
+
+    @Test
+    public void testPreprocessConfig() {
+        Properties props = new Properties();
+        TestConfig config = new TestConfig(props);
+        assertEquals("success", config.get("preprocess"));
     }
 
     @Test
@@ -371,8 +379,8 @@ public class AbstractConfigTest {
         Properties props = new Properties();
         props.put("config.providers", "file");
         TestIndirectConfigResolution config = new TestIndirectConfigResolution(props);
-        assertEquals(config.originals().get("config.providers"), "file");
-        assertEquals(config.originals(Collections.singletonMap("config.providers", "file2")).get("config.providers"), "file2");
+        assertEquals("file", config.originals().get("config.providers"));
+        assertEquals("file2", config.originals(Collections.singletonMap("config.providers", "file2")).get("config.providers"));
     }
 
     @Test
@@ -448,6 +456,28 @@ public class AbstractConfigTest {
         assertEquals("testKey", config.originals().get("sasl.kerberos.key"));
         assertEquals("randomPassword", config.originals().get("sasl.kerberos.password"));
         MockFileConfigProvider.assertClosed(id);
+    }
+
+    @Test
+    public void testAutomaticConfigProvidersWithFullClassName() {
+        // case0: MockFileConfigProvider is disallowed by org.apache.kafka.automatic.config.providers
+        System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, "file");
+        assertThrows(ConfigException.class, () -> new TestIndirectConfigResolution(Map.of("config.providers", "file",
+                "config.providers.file.class", MockFileConfigProvider.class.getName()),
+                Map.of()));
+
+        // case1: MockFileConfigProvider is allowed by org.apache.kafka.automatic.config.providers
+        System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, MockFileConfigProvider.class.getName());
+        Map<String, String> props = Map.of("config.providers", "file",
+                "config.providers.file.class", MockFileConfigProvider.class.getName(),
+                "config.providers.file.param.testId", UUID.randomUUID().toString(),
+                "test.key", "${file:/path:key}");
+        assertEquals("testKey", new TestIndirectConfigResolution(props, Map.of()).originals().get("test.key"));
+
+        // case2: MockFileConfigProvider and EnvVarConfigProvider are allowed by org.apache.kafka.automatic.config.providers
+        System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY,
+                MockFileConfigProvider.class.getName() + "," + EnvVarConfigProvider.class.getName());
+        assertEquals("testKey", new TestIndirectConfigResolution(props, Map.of()).originals().get("test.key"));
     }
 
     @Test
@@ -679,16 +709,31 @@ public class AbstractConfigTest {
 
         public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
         private static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters.";
+        public static final String PREPROCESSOR_CONFIG = "preprocess";
+        private static final String PREPROCESSOR_CONFIG_DOC = "Override from preprocess step.";
+
         static {
             CONFIG = new ConfigDef().define(METRIC_REPORTER_CLASSES_CONFIG,
                                             Type.LIST,
                                             "",
                                             Importance.LOW,
-                                            METRIC_REPORTER_CLASSES_DOC);
+                                            METRIC_REPORTER_CLASSES_DOC)
+                                    .define(PREPROCESSOR_CONFIG,
+                                            Type.STRING,
+                                            "",
+                                            Importance.LOW,
+                                            PREPROCESSOR_CONFIG_DOC);
         }
 
         public TestConfig(Map<?, ?> props) {
             super(CONFIG, props);
+        }
+
+        @Override
+        protected Map<String, Object> preProcessParsedConfig(Map<String, Object> parsedValues) {
+            Map<String, Object> ret = new HashMap<>(parsedValues);
+            ret.put("preprocess", "success");
+            return ret;
         }
     }
 

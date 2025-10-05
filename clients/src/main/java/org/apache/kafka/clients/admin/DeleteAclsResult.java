@@ -21,7 +21,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ApiException;
 
 import java.util.ArrayList;
@@ -31,10 +30,7 @@ import java.util.Map;
 
 /**
  * The result of the {@link Admin#deleteAcls(Collection)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DeleteAclsResult {
 
     /**
@@ -101,7 +97,7 @@ public class DeleteAclsResult {
      * Note that it if the filters don't match any ACLs, this is not considered an error.
      */
     public KafkaFuture<Collection<AclBinding>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).thenApply(v -> getAclBindings(futures));
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0])).thenApply(v -> getAclBindings(futures));
     }
 
     private List<AclBinding> getAclBindings(Map<AclBindingFilter, KafkaFuture<FilterResults>> futures) {

@@ -18,16 +18,14 @@
 package kafka.server
 
 import kafka.network.RequestChannel
-import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
-import org.apache.kafka.common.test.MockController
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.internals.{Plugin, Topic}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => OldAlterConfigsResource, AlterConfigsResourceCollection => OldAlterConfigsResourceCollection, AlterableConfig => OldAlterableConfig, AlterableConfigCollection => OldAlterableConfigCollection}
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
@@ -47,18 +45,25 @@ import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.test.MockController
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{ElectionType, Uuid}
+import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.controller.{Controller, ControllerRequestContext, ResultOrError}
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.network.metrics.RequestChannelMetrics
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.network.Session
+import org.apache.kafka.raft.{QuorumConfig, RaftManager}
+import org.apache.kafka.server.SimpleApiVersionManager
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, KRaftVersion, MetadataVersion, ProducerIdsBlock, RequestLocal}
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs}
+import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager}
 import org.apache.kafka.server.util.FutureUtils
 import org.apache.kafka.storage.internals.log.CleanerConfig
+import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -111,21 +116,23 @@ class ControllerApisTest {
   private val clientRequestQuotaManager: ClientRequestQuotaManager = mock(classOf[ClientRequestQuotaManager])
   private val neverThrottlingClientControllerQuotaManager: ControllerMutationQuotaManager = mock(classOf[ControllerMutationQuotaManager])
   when(neverThrottlingClientControllerQuotaManager.newQuotaFor(
-    any(classOf[RequestChannel.Request]),
+    any(classOf[Session]),
+    any(classOf[RequestHeader]),
     any(classOf[Short])
   )).thenReturn(
     MockControllerMutationQuota(Integer.MAX_VALUE) // never throttles
   )
   private val alwaysThrottlingClientControllerQuotaManager: ControllerMutationQuotaManager = mock(classOf[ControllerMutationQuotaManager])
   when(alwaysThrottlingClientControllerQuotaManager.newQuotaFor(
-    any(classOf[RequestChannel.Request]),
+    any(classOf[Session]),
+    any(classOf[RequestHeader]),
     any(classOf[Short])
   )).thenReturn(
     MockControllerMutationQuota(0) // always throttles
   )
   private val replicaQuotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
   private val raftManager: RaftManager[ApiMessageAndVersion] = mock(classOf[RaftManager[ApiMessageAndVersion]])
-  private val metadataCache: KRaftMetadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
+  private val metadataCache: KRaftMetadataCache = new KRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
 
   private val quotasNeverThrottleControllerMutations = new QuotaManagers(
     clientQuotaManager,
@@ -149,13 +156,14 @@ class ControllerApisTest {
 
   private var controllerApis: ControllerApis = _
 
-  private def createControllerApis(authorizer: Option[Authorizer],
+  private def createControllerApis(authorizer: Option[Plugin[Authorizer]],
                                    controller: Controller,
                                    props: Properties = new Properties(),
                                    throttle: Boolean = false): ControllerApis = {
     props.put(KRaftConfigs.NODE_ID_CONFIG, nodeId: java.lang.Integer)
     props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
-    props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "PLAINTEXT")
+    props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    props.put(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://:9092")
     props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9092")
     new ControllerApis(
       requestChannel,
@@ -197,7 +205,7 @@ class ControllerApisTest {
       requestChannelMetrics)
   }
 
-  def createDenyAllAuthorizer(): Authorizer = {
+  def createDenyAllAuthorizer(): Plugin[Authorizer] = {
     val authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(
       any(classOf[AuthorizableRequestContext]),
@@ -205,7 +213,7 @@ class ControllerApisTest {
     )).thenReturn(
       singletonList(AuthorizationResult.DENIED)
     )
-    authorizer
+    Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
   }
 
   @Test
@@ -409,7 +417,7 @@ class ControllerApisTest {
     assertThrows(classOf[ClusterAuthorizationException], () => {
       controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
       controllerApis.handleAlterPartitionRequest(buildRequest(new AlterPartitionRequest.Builder(
-        new AlterPartitionRequestData(), false).build(0)))
+        new AlterPartitionRequestData()).build(ApiKeys.ALTER_PARTITION.latestVersion)))
     })
   }
 
@@ -948,18 +956,18 @@ class ControllerApisTest {
     controllerApis = createControllerApis(None, controller, props)
     val request = new DeleteTopicsRequestData()
     request.topics().add(new DeleteTopicState().setName("foo").setTopicId(ZERO_UUID))
-    assertThrows(classOf[TopicDeletionDisabledException],
-      () => controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
-        ApiKeys.DELETE_TOPICS.latestVersion().toInt,
-        hasClusterAuth = false,
-        _ => Set("foo", "bar"),
-        _ => Set("foo", "bar")))
-    assertThrows(classOf[InvalidRequestException],
-      () => controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
-        1,
-        hasClusterAuth = false,
-        _ => Set("foo", "bar"),
-        _ => Set("foo", "bar")))
+
+    TestUtils.assertFutureThrows(classOf[TopicDeletionDisabledException], controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
+      ApiKeys.DELETE_TOPICS.latestVersion().toInt,
+      hasClusterAuth = false,
+      _ => Set("foo", "bar"),
+      _ => Set("foo", "bar")))
+
+    TestUtils.assertFutureThrows(classOf[InvalidRequestException], controllerApis.deleteTopics(ANONYMOUS_CONTEXT, request,
+      1,
+      hasClusterAuth = false,
+      _ => Set("foo", "bar"),
+      _ => Set("foo", "bar")))
   }
 
   @ParameterizedTest
@@ -1006,7 +1014,8 @@ class ControllerApisTest {
       .newInitialTopic("foo", Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q"))
       .build()
     val authorizer = mock(classOf[Authorizer])
-    controllerApis = createControllerApis(Some(authorizer), controller)
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
+    controllerApis = createControllerApis(Some(authorizerPlugin), controller)
     val requestData = new CreatePartitionsRequestData()
     requestData.topics().add(new CreatePartitionsTopic().setName("foo").setAssignments(null).setCount(2))
     requestData.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(10))
@@ -1066,8 +1075,9 @@ class ControllerApisTest {
   @Test
   def testElectLeadersAuthorization(): Unit = {
     val authorizer = mock(classOf[Authorizer])
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
     val controller = mock(classOf[Controller])
-    controllerApis = createControllerApis(Some(authorizer), controller)
+    controllerApis = createControllerApis(Some(authorizerPlugin), controller)
     val request = new ElectLeadersRequest.Builder(
       ElectionType.PREFERRED,
       null,
@@ -1210,7 +1220,8 @@ class ControllerApisTest {
   def testAssignReplicasToDirs(): Unit = {
     val controller = mock(classOf[Controller])
     val authorizer = mock(classOf[Authorizer])
-    controllerApis = createControllerApis(Some(authorizer), controller)
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
+    controllerApis = createControllerApis(Some(authorizerPlugin), controller)
     val request = new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData()).build()
 
     when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(Collections.singletonList(new Action(
@@ -1284,20 +1295,22 @@ class ControllerApisTest {
 
   @Test
   def testUnauthorizedControllerRegistrationRequest(): Unit = {
-    assertThrows(classOf[ClusterAuthorizationException], () => {
+    val exception = assertThrows(classOf[ClusterAuthorizationException], () => {
       controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
       controllerApis.handleControllerRegistration(buildRequest(
         new ControllerRegistrationRequest(new ControllerRegistrationRequestData(), 0.toShort)))
     })
+    assertTrue(exception.getMessage.contains("needs CLUSTER_ACTION permission"))
   }
 
   @Test
   def testUnauthorizedDescribeClusterRequest(): Unit = {
-    assertThrows(classOf[ClusterAuthorizationException], () => {
+    val exception = assertThrows(classOf[ClusterAuthorizationException], () => {
       controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
       controllerApis.handleDescribeCluster(buildRequest(
         new DescribeClusterRequest(new DescribeClusterRequestData(), 1.toShort)))
     })
+    assertTrue(exception.getMessage.contains("needs ALTER permission"))
   }
 
   @AfterEach

@@ -40,7 +40,7 @@ final class ControllerResultAndOffset<T> extends ControllerResult<T> {
         if (o == null || (!o.getClass().equals(getClass()))) {
             return false;
         }
-        ControllerResultAndOffset other = (ControllerResultAndOffset) o;
+        ControllerResultAndOffset<?> other = (ControllerResultAndOffset<?>) o;
         return records().equals(other.records()) &&
             response().equals(other.response()) &&
             isAtomic() == other.isAtomic() &&

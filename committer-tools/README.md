@@ -46,11 +46,13 @@ See: https://cli.github.com/
 brew install gh
 ```
 
-## Find Reviewers
+## Find Reviewers and Update to PR body
 
 The reviewers.py script is used to simplify the process of producing our "Reviewers:"
-Git trailer. It parses the Git log to gather a set of "Authors" and "Reviewers". 
-Some simple string prefix matching is done to find candidates.
+Git trailer to PR body. It parses the Git log to gather a set of "Authors" and "Reviewers". 
+Some simple string prefix matching is done to find candidates. 
+After entering the pull request number, the script updates the "Reviewers:" trailer accordingly. 
+If the PR body already contains a "Reviewers:" trailer, the script replaces it with the updated list of reviewers.
 
 Usage:
 

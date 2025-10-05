@@ -36,8 +36,6 @@ import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
-import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.NavigableSet;
 import java.util.Set;
@@ -108,8 +106,6 @@ public class StandardAuthorizerData {
      */
     private AclCache aclCache;
 
-
-
     private static Logger createLogger(int nodeId) {
         return new LogContext("[StandardAuthorizer " + nodeId + "] ").logger(StandardAuthorizerData.class);
     }
@@ -122,7 +118,7 @@ public class StandardAuthorizerData {
         return new StandardAuthorizerData(createLogger(-1),
             null,
             false,
-            Collections.emptySet(),
+            Set.of(),
             DENIED,
             new AclCache());
     }
@@ -174,7 +170,7 @@ public class StandardAuthorizerData {
     }
 
     StandardAuthorizerData copyWithNewAcls(AclCache aclCache) {
-        StandardAuthorizerData newData =  new StandardAuthorizerData(
+        StandardAuthorizerData newData = new StandardAuthorizerData(
             log,
             aclMutator,
             loadingComplete,
@@ -437,14 +433,14 @@ public class StandardAuthorizerData {
     /**
      * The set of operations which imply DESCRIBE permission, when used in an ALLOW acl.
      */
-    private static final Set<AclOperation> IMPLIES_DESCRIBE = Collections.unmodifiableSet(
-        EnumSet.of(DESCRIBE, READ, WRITE, DELETE, ALTER));
+    private static final Set<AclOperation> IMPLIES_DESCRIBE =
+        Set.of(DESCRIBE, READ, WRITE, DELETE, ALTER);
 
     /**
      * The set of operations which imply DESCRIBE_CONFIGS permission, when used in an ALLOW acl.
      */
-    private static final Set<AclOperation> IMPLIES_DESCRIBE_CONFIGS = Collections.unmodifiableSet(
-        EnumSet.of(DESCRIBE_CONFIGS, ALTER_CONFIGS));
+    private static final Set<AclOperation> IMPLIES_DESCRIBE_CONFIGS =
+        Set.of(DESCRIBE_CONFIGS, ALTER_CONFIGS);
 
     static AuthorizationResult findResult(Action action,
                                           AuthorizableRequestContext requestContext,
@@ -554,17 +550,7 @@ public class StandardAuthorizerData {
         }
     }
 
-    private static class DefaultRule implements MatchingRule {
-        private final AuthorizationResult result;
-
-        private DefaultRule(AuthorizationResult result) {
-            this.result = result;
-        }
-
-        @Override
-        public AuthorizationResult result() {
-            return result;
-        }
+    private record DefaultRule(AuthorizationResult result) implements MatchingRule {
 
         @Override
         public String toString() {
@@ -572,19 +558,7 @@ public class StandardAuthorizerData {
         }
     }
 
-    private static class MatchingAclRule implements MatchingRule {
-        private final StandardAcl acl;
-        private final AuthorizationResult result;
-
-        private MatchingAclRule(StandardAcl acl, AuthorizationResult result) {
-            this.acl = acl;
-            this.result = result;
-        }
-
-        @Override
-        public AuthorizationResult result() {
-            return result;
-        }
+    private record MatchingAclRule(StandardAcl acl, AuthorizationResult result) implements MatchingRule {
 
         @Override
         public String toString() {

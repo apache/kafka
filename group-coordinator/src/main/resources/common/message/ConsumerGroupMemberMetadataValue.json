@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// KIP-848 is in development. This schema is subject to non-backwards-compatible changes.
 {
-  "type": "data",
+  "apiKey": 5,
+  "type": "coordinator-value",
   "name": "ConsumerGroupMemberMetadataValue",
   "validVersions": "0",
   "flexibleVersions": "0+",
@@ -33,7 +33,7 @@
     { "name": "SubscribedTopicRegex", "versions": "0+", "nullableVersions": "0+", "type": "string",
       "about": "The subscribed topic regular expression." },
     { "name": "RebalanceTimeoutMs", "type": "int32", "versions": "0+", "default": -1,
-      "about": "The rebalance timeout" },
+      "about": "The rebalance timeout." },
     { "name": "ServerAssignor", "versions": "0+", "nullableVersions": "0+", "type": "string",
       "about": "The server assignor to use; or null if not used." },
     { "name": "ClassicMemberMetadata", "versions": "0+", "nullableVersions": "0+", "type": "ClassicMemberMetadata",

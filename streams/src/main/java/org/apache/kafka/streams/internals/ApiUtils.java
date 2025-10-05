@@ -18,6 +18,7 @@ package org.apache.kafka.streams.internals;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 import static java.lang.String.format;
@@ -80,21 +81,11 @@ public final class ApiUtils {
     /**
      * @throws IllegalArgumentException if the same instance is obtained each time
      */
-    public static void checkSupplier(final Supplier<?> supplier) {
-        if (supplier.get() == supplier.get()) {
-            final String supplierClass = supplier.getClass().getName();
-            throw new IllegalArgumentException(String.format("%s generates single reference." +
-                    " %s#get() must return a new object each time it is called.", supplierClass, supplierClass));
-        }
-    }
+    public static void checkSupplier(final Supplier<?> processorSupplier) {
+        Objects.requireNonNull(processorSupplier, "processorSupplier cannot be null");
 
-    /**
-     * @throws IllegalArgumentException if the same instance is obtained each time
-     */
-    @SuppressWarnings("deprecation")
-    public static <VR, V> void checkSupplier(final org.apache.kafka.streams.kstream.ValueTransformerSupplier<V, VR> supplier) {
-        if (supplier.get() == supplier.get()) {
-            final String supplierClass = supplier.getClass().getName();
+        if (processorSupplier.get() == processorSupplier.get()) {
+            final String supplierClass = processorSupplier.getClass().getName();
             throw new IllegalArgumentException(String.format("%s generates single reference." +
                     " %s#get() must return a new object each time it is called.", supplierClass, supplierClass));
         }

@@ -217,7 +217,7 @@ public class RepartitionTopics {
                     final Optional<Integer> repartitionSourceTopicPartitionCount =
                         repartitionTopicMetadata.get(repartitionSourceTopic).numberOfPartitions();
 
-                    if (!repartitionSourceTopicPartitionCount.isPresent()) {
+                    if (repartitionSourceTopicPartitionCount.isEmpty()) {
                         final Integer numPartitions = computePartitionCount(
                             repartitionTopicMetadata,
                             topicGroups,

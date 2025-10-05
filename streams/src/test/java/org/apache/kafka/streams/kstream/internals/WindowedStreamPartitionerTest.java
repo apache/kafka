@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -58,8 +59,6 @@ public class WindowedStreamPartitionerTest {
     @Test
     public void testCopartitioning() {
         final Random rand = new Random();
-        @SuppressWarnings("deprecation")
-        final org.apache.kafka.clients.producer.internals.DefaultPartitioner defaultPartitioner = new org.apache.kafka.clients.producer.internals.DefaultPartitioner();
         final WindowedSerializer<Integer> timeWindowedSerializer = new TimeWindowedSerializer<>(intSerializer);
         final WindowedStreamPartitioner<Integer, String> streamPartitioner = new WindowedStreamPartitioner<>(timeWindowedSerializer);
 
@@ -68,9 +67,8 @@ public class WindowedStreamPartitionerTest {
             final byte[] keyBytes = intSerializer.serialize(topicName, key);
 
             final String value = key.toString();
-            final byte[] valueBytes = stringSerializer.serialize(topicName, value);
 
-            final Set<Integer> expected = Collections.singleton(defaultPartitioner.partition(topicName, key, keyBytes, value, valueBytes, cluster));
+            final Set<Integer> expected = Set.of(BuiltInPartitioner.partitionForKey(keyBytes, cluster.partitionsForTopic(topicName).size()));
 
             for (int w = 1; w < 10; w++) {
                 final TimeWindow window = new TimeWindow(10 * w, 20 * w);
@@ -82,7 +80,5 @@ public class WindowedStreamPartitionerTest {
                 assertEquals(expected, actual.get());
             }
         }
-
-        defaultPartitioner.close();
     }
 }

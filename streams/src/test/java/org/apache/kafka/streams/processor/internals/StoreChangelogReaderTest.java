@@ -41,11 +41,12 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
+import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
 import org.apache.kafka.test.MockStandbyUpdateListener;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.StreamsTestUtils;
 
-import org.apache.log4j.Level;
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -89,7 +90,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -389,7 +392,7 @@ public class StoreChangelogReaderTest {
 
             adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
 
-            final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+            final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
                 @Override
                 public long position(final TopicPartition partition) {
                     throw new TimeoutException("KABOOM!");
@@ -674,7 +677,7 @@ public class StoreChangelogReaderTest {
         when(activeStateManager.taskId()).thenReturn(taskId);
 
         final AtomicBoolean clearException = new AtomicBoolean(false);
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public long position(final TopicPartition partition) {
                 if (clearException.get()) {
@@ -720,7 +723,7 @@ public class StoreChangelogReaderTest {
         when(activeStateManager.taskId()).thenReturn(taskId);
         when(storeMetadata.offset()).thenReturn(10L);
 
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public long position(final TopicPartition partition) {
                 throw kaboom;
@@ -770,7 +773,7 @@ public class StoreChangelogReaderTest {
         };
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
 
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
                 throw new AssertionError("Should not trigger this function");
@@ -928,7 +931,7 @@ public class StoreChangelogReaderTest {
 
     @Test
     public void shouldThrowIfUnsubscribeFail() {
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public void unsubscribe() {
                 throw kaboom;
@@ -1362,6 +1365,58 @@ public class StoreChangelogReaderTest {
                     " it could be already cleaned up during the handling of task corruption and never restore again")
             );
         }
+    }
+
+    @Test
+    public void shouldCallRecordRestoreTimeAtTheEndOfRestore() {
+        setupActiveStateManager();
+
+        final MeteredKeyValueStore<?, ?> meteredStateStore = mock(MeteredKeyValueStore.class);
+
+        when(storeMetadata.changelogPartition()).thenReturn(tp);
+        when(storeMetadata.store()).thenReturn(meteredStateStore);
+        when(meteredStateStore.name()).thenReturn(storeName);
+        final TaskId taskId = new TaskId(0, 0);
+
+        when(storeMetadata.offset()).thenReturn(0L);
+        when(activeStateManager.taskId()).thenReturn(taskId);
+
+        setupConsumer(2, tp);
+        consumer.updateEndOffsets(Collections.singletonMap(tp, 2L));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, 2L));
+
+        changelogReader.register(tp, activeStateManager);
+
+        changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+
+        assertEquals(1L, changelogReader.changelogMetadata(tp).totalRestored());
+        verify(meteredStateStore).recordRestoreTime(anyLong());
+    }
+
+    @Test
+    public void shouldNotCallRecordRestoreTimeIfRestoreDoesNotComplete() {
+        setupActiveStateManager();
+
+        final MeteredKeyValueStore<?, ?> meteredStateStore = mock(MeteredKeyValueStore.class);
+
+        when(storeMetadata.changelogPartition()).thenReturn(tp);
+        when(storeMetadata.store()).thenReturn(meteredStateStore);
+        when(meteredStateStore.name()).thenReturn(storeName);
+        final TaskId taskId = new TaskId(0, 0);
+
+        when(storeMetadata.offset()).thenReturn(0L);
+        when(activeStateManager.taskId()).thenReturn(taskId);
+
+        setupConsumer(2, tp);
+        consumer.updateEndOffsets(Collections.singletonMap(tp, 3L));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, 3L));
+
+        changelogReader.register(tp, activeStateManager);
+
+        changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+
+        assertEquals(1L, changelogReader.changelogMetadata(tp).totalRestored());
+        verify(meteredStateStore, never()).recordRestoreTime(anyLong());
     }
 
     private void setupConsumer(final long messages, final TopicPartition topicPartition) {

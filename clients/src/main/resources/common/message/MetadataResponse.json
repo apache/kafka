@@ -17,8 +17,7 @@
   "apiKey": 3,
   "type": "response",
   "name": "MetadataResponse",
-  // Version 1 adds fields for the rack of each broker, the controller id, and
-  // whether or not the topic is internal.
+  // Version 1 adds fields for the rack of each broker, the controller id, and whether or not the topic is internal.
   //
   // Version 2 adds the cluster ID field.
   //

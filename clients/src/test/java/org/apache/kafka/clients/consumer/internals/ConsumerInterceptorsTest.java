@@ -116,7 +116,7 @@ public class ConsumerInterceptorsTest {
         FilterConsumerInterceptor<Integer, Integer> interceptor2 = new FilterConsumerInterceptor<>(filterPartition2);
         interceptorList.add(interceptor1);
         interceptorList.add(interceptor2);
-        ConsumerInterceptors<Integer, Integer> interceptors = new ConsumerInterceptors<>(interceptorList);
+        ConsumerInterceptors<Integer, Integer> interceptors = new ConsumerInterceptors<>(interceptorList, null);
 
         // verify that onConsumer modifies ConsumerRecords
         Map<TopicPartition, List<ConsumerRecord<Integer, Integer>>> records = new HashMap<>();
@@ -177,7 +177,7 @@ public class ConsumerInterceptorsTest {
         FilterConsumerInterceptor<Integer, Integer> interceptor2 = new FilterConsumerInterceptor<>(filterPartition2);
         interceptorList.add(interceptor1);
         interceptorList.add(interceptor2);
-        ConsumerInterceptors<Integer, Integer> interceptors = new ConsumerInterceptors<>(interceptorList);
+        ConsumerInterceptors<Integer, Integer> interceptors = new ConsumerInterceptors<>(interceptorList, null);
 
         // verify that onCommit is called for all interceptors in the chain
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();

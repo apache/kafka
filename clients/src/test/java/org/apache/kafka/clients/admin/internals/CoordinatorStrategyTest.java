@@ -55,9 +55,9 @@ public class CoordinatorStrategyTest {
     @Test
     public void testBuildLookupRequest() {
         CoordinatorStrategy strategy = new CoordinatorStrategy(CoordinatorType.GROUP, new LogContext());
-        FindCoordinatorRequest.Builder request = strategy.buildRequest(new HashSet<>(Arrays.asList(
+        FindCoordinatorRequest.Builder request = strategy.buildRequest(Set.of(
             CoordinatorKey.byGroupId("foo"),
-            CoordinatorKey.byGroupId("bar"))));
+            CoordinatorKey.byGroupId("bar")));
         assertEquals("", request.data().key());
         assertEquals(2, request.data().coordinatorKeys().size());
         assertEquals(CoordinatorType.GROUP, CoordinatorType.forId(request.data().keyType()));
@@ -67,8 +67,8 @@ public class CoordinatorStrategyTest {
     public void testBuildLookupRequestNonRepresentable() {
         CoordinatorStrategy strategy = new CoordinatorStrategy(CoordinatorType.GROUP, new LogContext());
         FindCoordinatorRequest.Builder request = strategy.buildRequest(new HashSet<>(Arrays.asList(
-                CoordinatorKey.byGroupId("foo"),
-                null)));
+            CoordinatorKey.byGroupId("foo"),
+            null)));
         assertEquals("", request.data().key());
         assertEquals(1, request.data().coordinatorKeys().size());
     }
@@ -90,7 +90,7 @@ public class CoordinatorStrategyTest {
         strategy.disableBatch();
 
         assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(
-                new HashSet<>(Collections.singletonList(CoordinatorKey.byTransactionalId("txnid")))));
+                Set.of(CoordinatorKey.byTransactionalId("txnid"))));
     }
 
     @Test
@@ -105,9 +105,9 @@ public class CoordinatorStrategyTest {
         CoordinatorStrategy strategy = new CoordinatorStrategy(CoordinatorType.GROUP, new LogContext());
 
         assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(
-                new HashSet<>(Arrays.asList(
-                        CoordinatorKey.byGroupId("group"),
-                        CoordinatorKey.byTransactionalId("txnid")))));
+            Set.of(
+                CoordinatorKey.byGroupId("group"),
+                CoordinatorKey.byTransactionalId("txnid"))));
     }
 
     @Test
@@ -161,7 +161,7 @@ public class CoordinatorStrategyTest {
                         .setPort(9092)
                         .setNodeId(2)));
 
-        AdminApiLookupStrategy.LookupResult<CoordinatorKey> result = runLookup(new HashSet<>(Arrays.asList(group1, group2)), responseData);
+        AdminApiLookupStrategy.LookupResult<CoordinatorKey> result = runLookup(Set.of(group1, group2), responseData);
         Map<CoordinatorKey, Integer> expectedResult = new HashMap<>();
         expectedResult.put(group1, 1);
         expectedResult.put(group2, 2);
@@ -204,7 +204,7 @@ public class CoordinatorStrategyTest {
                             .setHost("localhost")
                             .setPort(9092)
                             .setNodeId(2)));
-        AdminApiLookupStrategy.LookupResult<CoordinatorKey> result = runLookup(new HashSet<>(Arrays.asList(group1, group2)), responseData);
+        AdminApiLookupStrategy.LookupResult<CoordinatorKey> result = runLookup(Set.of(group1, group2), responseData);
 
         assertEquals(emptyMap(), result.failedKeys);
         assertEquals(singletonMap(group2, 2), result.mappedKeys);

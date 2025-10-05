@@ -17,13 +17,11 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CloseableIterator;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 
@@ -33,7 +31,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ArgumentsProvider;
 import org.junit.jupiter.params.provider.ArgumentsSource;
-import org.junit.jupiter.params.provider.EnumSource;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -50,10 +47,8 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V0;
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V1;
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
-import static org.apache.kafka.common.utils.Utils.utf8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -93,8 +88,6 @@ public class MemoryRecordsBuilderTest {
             return values.stream();
         }
     }
-
-    private final Time time = Time.SYSTEM;
 
     @Test
     public void testUnsupportedCompress() {
@@ -536,153 +529,6 @@ public class MemoryRecordsBuilderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(CompressionType.class)
-    public void convertV2ToV1UsingMixedCreateAndLogAppendTime(CompressionType compressionType) {
-        ByteBuffer buffer = ByteBuffer.allocate(512);
-        Compression compression = Compression.of(compressionType).build();
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2,
-                compression, TimestampType.LOG_APPEND_TIME, 0L);
-        builder.append(10L, "1".getBytes(), "a".getBytes());
-        builder.close();
-
-        int sizeExcludingTxnMarkers = buffer.position();
-
-        MemoryRecords.writeEndTransactionalMarker(buffer, 1L, System.currentTimeMillis(), 0, 15L, (short) 0,
-                new EndTransactionMarker(ControlRecordType.ABORT, 0));
-
-        int position = buffer.position();
-
-        builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compression,
-                TimestampType.CREATE_TIME, 1L);
-        builder.append(12L, "2".getBytes(), "b".getBytes());
-        builder.append(13L, "3".getBytes(), "c".getBytes());
-        builder.close();
-
-        sizeExcludingTxnMarkers += buffer.position() - position;
-
-        MemoryRecords.writeEndTransactionalMarker(buffer, 14L, System.currentTimeMillis(), 0, 1L, (short) 0,
-                new EndTransactionMarker(ControlRecordType.COMMIT, 0));
-
-        buffer.flip();
-
-        Supplier<ConvertedRecords<MemoryRecords>> convertedRecordsSupplier = () ->
-            MemoryRecords.readableRecords(buffer).downConvert(MAGIC_VALUE_V1, 0, time);
-
-        if (compression.type() != CompressionType.ZSTD) {
-            ConvertedRecords<MemoryRecords> convertedRecords = convertedRecordsSupplier.get();
-            MemoryRecords records = convertedRecords.records();
-
-            // Transactional markers are skipped when down converting to V1, so exclude them from size
-            verifyRecordsProcessingStats(compression, convertedRecords.recordConversionStats(),
-                3, 3, records.sizeInBytes(), sizeExcludingTxnMarkers);
-
-            List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
-            if (compression.type() != CompressionType.NONE) {
-                assertEquals(2, batches.size());
-                assertEquals(TimestampType.LOG_APPEND_TIME, batches.get(0).timestampType());
-                assertEquals(TimestampType.CREATE_TIME, batches.get(1).timestampType());
-            } else {
-                assertEquals(3, batches.size());
-                assertEquals(TimestampType.LOG_APPEND_TIME, batches.get(0).timestampType());
-                assertEquals(TimestampType.CREATE_TIME, batches.get(1).timestampType());
-                assertEquals(TimestampType.CREATE_TIME, batches.get(2).timestampType());
-            }
-
-            List<Record> logRecords = Utils.toList(records.records().iterator());
-            assertEquals(3, logRecords.size());
-            assertEquals(ByteBuffer.wrap("1".getBytes()), logRecords.get(0).key());
-            assertEquals(ByteBuffer.wrap("2".getBytes()), logRecords.get(1).key());
-            assertEquals(ByteBuffer.wrap("3".getBytes()), logRecords.get(2).key());
-        } else {
-            Exception e = assertThrows(UnsupportedCompressionTypeException.class, convertedRecordsSupplier::get);
-            assertEquals("Down-conversion of zstandard-compressed batches is not supported", e.getMessage());
-        }
-    }
-
-    @ParameterizedTest
-    @EnumSource(CompressionType.class)
-    public void convertToV1WithMixedV0AndV2Data(CompressionType compressionType) {
-        ByteBuffer buffer = ByteBuffer.allocate(512);
-
-        Compression compression = Compression.of(compressionType).build();
-        Supplier<MemoryRecordsBuilder> supplier = () -> MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0,
-               compression, TimestampType.NO_TIMESTAMP_TYPE, 0L);
-
-        if (compressionType == CompressionType.ZSTD) {
-            assertThrows(IllegalArgumentException.class, supplier::get);
-        } else {
-            MemoryRecordsBuilder builder = supplier.get();
-            builder.append(RecordBatch.NO_TIMESTAMP, "1".getBytes(), "a".getBytes());
-            builder.close();
-
-            builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compression,
-                    TimestampType.CREATE_TIME, 1L);
-            builder.append(11L, "2".getBytes(), "b".getBytes());
-            builder.append(12L, "3".getBytes(), "c".getBytes());
-            builder.close();
-
-            buffer.flip();
-
-            ConvertedRecords<MemoryRecords> convertedRecords = MemoryRecords.readableRecords(buffer)
-                    .downConvert(MAGIC_VALUE_V1, 0, time);
-            MemoryRecords records = convertedRecords.records();
-            verifyRecordsProcessingStats(compression, convertedRecords.recordConversionStats(), 3, 2,
-                    records.sizeInBytes(), buffer.limit());
-
-            List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
-            if (compressionType != CompressionType.NONE) {
-                assertEquals(2, batches.size());
-                assertEquals(RecordBatch.MAGIC_VALUE_V0, batches.get(0).magic());
-                assertEquals(0, batches.get(0).baseOffset());
-                assertEquals(MAGIC_VALUE_V1, batches.get(1).magic());
-                assertEquals(1, batches.get(1).baseOffset());
-            } else {
-                assertEquals(3, batches.size());
-                assertEquals(RecordBatch.MAGIC_VALUE_V0, batches.get(0).magic());
-                assertEquals(0, batches.get(0).baseOffset());
-                assertEquals(MAGIC_VALUE_V1, batches.get(1).magic());
-                assertEquals(1, batches.get(1).baseOffset());
-                assertEquals(MAGIC_VALUE_V1, batches.get(2).magic());
-                assertEquals(2, batches.get(2).baseOffset());
-            }
-
-            List<Record> logRecords = Utils.toList(records.records().iterator());
-            assertEquals("1", utf8(logRecords.get(0).key()));
-            assertEquals("2", utf8(logRecords.get(1).key()));
-            assertEquals("3", utf8(logRecords.get(2).key()));
-
-            convertedRecords = MemoryRecords.readableRecords(buffer).downConvert(MAGIC_VALUE_V1, 2L, time);
-            records = convertedRecords.records();
-
-            batches = Utils.toList(records.batches().iterator());
-            logRecords = Utils.toList(records.records().iterator());
-
-            if (compressionType != CompressionType.NONE) {
-                assertEquals(2, batches.size());
-                assertEquals(RecordBatch.MAGIC_VALUE_V0, batches.get(0).magic());
-                assertEquals(0, batches.get(0).baseOffset());
-                assertEquals(MAGIC_VALUE_V1, batches.get(1).magic());
-                assertEquals(1, batches.get(1).baseOffset());
-                assertEquals("1", utf8(logRecords.get(0).key()));
-                assertEquals("2", utf8(logRecords.get(1).key()));
-                assertEquals("3", utf8(logRecords.get(2).key()));
-                verifyRecordsProcessingStats(compression, convertedRecords.recordConversionStats(), 3, 2,
-                        records.sizeInBytes(), buffer.limit());
-            } else {
-                assertEquals(2, batches.size());
-                assertEquals(RecordBatch.MAGIC_VALUE_V0, batches.get(0).magic());
-                assertEquals(0, batches.get(0).baseOffset());
-                assertEquals(MAGIC_VALUE_V1, batches.get(1).magic());
-                assertEquals(2, batches.get(1).baseOffset());
-                assertEquals("1", utf8(logRecords.get(0).key()));
-                assertEquals("3", utf8(logRecords.get(1).key()));
-                verifyRecordsProcessingStats(compression, convertedRecords.recordConversionStats(), 3, 1,
-                        records.sizeInBytes(), buffer.limit());
-            }
-        }
-    }
-
-    @ParameterizedTest
     @ArgumentsSource(MemoryRecordsBuilderArgumentsProvider.class)
     public void shouldThrowIllegalStateExceptionOnBuildWhenAborted(Args args) {
         ByteBuffer buffer = allocateBuffer(128, args);
@@ -785,31 +631,6 @@ public class MemoryRecordsBuilderTest {
                     values.add(Arguments.of(new Args(bufferOffset, Compression.of(type).build(), MAGIC_VALUE_V2)));
                 }
             return values.stream();
-        }
-    }
-
-    private void verifyRecordsProcessingStats(Compression compression, RecordValidationStats processingStats,
-                                              int numRecords, int numRecordsConverted, long finalBytes,
-                                              long preConvertedBytes) {
-        assertNotNull(processingStats, "Records processing info is null");
-        assertEquals(numRecordsConverted, processingStats.numRecordsConverted());
-        // Since nanoTime accuracy on build machines may not be sufficient to measure small conversion times,
-        // only check if the value >= 0. Default is -1, so this checks if time has been recorded.
-        assertTrue(processingStats.conversionTimeNanos() >= 0, "Processing time not recorded: " + processingStats);
-        long tempBytes = processingStats.temporaryMemoryBytes();
-        if (compression.type() == CompressionType.NONE) {
-            if (numRecordsConverted == 0)
-                assertEquals(finalBytes, tempBytes);
-            else if (numRecordsConverted == numRecords)
-                assertEquals(preConvertedBytes + finalBytes, tempBytes);
-            else {
-                assertTrue(tempBytes > finalBytes && tempBytes < finalBytes + preConvertedBytes,
-                    String.format("Unexpected temp bytes %d final %d pre %d", tempBytes, finalBytes, preConvertedBytes));
-            }
-        } else {
-            long compressedBytes = finalBytes - Records.LOG_OVERHEAD - LegacyRecord.RECORD_OVERHEAD_V0;
-            assertTrue(tempBytes > compressedBytes,
-                String.format("Uncompressed size expected temp=%d, compressed=%d", tempBytes, compressedBytes));
         }
     }
 

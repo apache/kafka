@@ -22,7 +22,7 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 public class ForeignJoinSubscriptionSendNode<K, V> extends ProcessorGraphNode<K, V> implements VersionedSemanticsGraphNode {
 
     public ForeignJoinSubscriptionSendNode(final ProcessorParameters<K, V, ?, ?> processorParameters) {
-        super(processorParameters);
+        super(processorParameters.processorName(), processorParameters);
     }
 
     @SuppressWarnings("unchecked")

@@ -54,7 +54,7 @@ public class ListOffsetsRequestTest {
         ListOffsetsRequestData data = new ListOffsetsRequestData()
                 .setTopics(topics)
                 .setReplicaId(-1);
-        ListOffsetsRequest request = ListOffsetsRequest.parse(MessageUtil.toByteBuffer(data, (short) 0), (short) 0);
+        ListOffsetsRequest request = ListOffsetsRequest.parse(MessageUtil.toByteBufferAccessor(data, (short) 1), (short) 1);
         assertEquals(Collections.singleton(new TopicPartition("topic", 0)), request.duplicatePartitions());
         assertEquals(0, data.timeoutMs()); // default value
     }
@@ -94,46 +94,14 @@ public class ListOffsetsRequestTest {
     }
 
     @Test
-    public void testGetErrorResponseV0() {
-        List<ListOffsetsTopic> topics = Collections.singletonList(
-                new ListOffsetsTopic()
-                    .setName("topic")
-                    .setPartitions(Collections.singletonList(
-                            new ListOffsetsPartition()
-                                .setPartitionIndex(0))));
-        ListOffsetsRequest request = ListOffsetsRequest.Builder
-                .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
-                .setTargetTimes(topics)
-                .build((short) 0);
-        ListOffsetsResponse response = (ListOffsetsResponse) request.getErrorResponse(0, Errors.NOT_LEADER_OR_FOLLOWER.exception());
-
-        List<ListOffsetsTopicResponse> v = Collections.singletonList(
-                new ListOffsetsTopicResponse()
-                    .setName("topic")
-                    .setPartitions(Collections.singletonList(
-                            new ListOffsetsPartitionResponse()
-                                .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code())
-                                .setOldStyleOffsets(Collections.emptyList())
-                                .setPartitionIndex(0))));
-        ListOffsetsResponseData data = new ListOffsetsResponseData()
-                .setThrottleTimeMs(0)
-                .setTopics(v);
-        ListOffsetsResponse expectedResponse = new ListOffsetsResponse(data);
-        assertEquals(expectedResponse.data().topics(), response.data().topics());
-        assertEquals(expectedResponse.throttleTimeMs(), response.throttleTimeMs());
-    }
-
-    @Test
     public void testToListOffsetsTopics() {
         ListOffsetsPartition lop0 = new ListOffsetsPartition()
                 .setPartitionIndex(0)
                 .setCurrentLeaderEpoch(1)
-                .setMaxNumOffsets(2)
                 .setTimestamp(123L);
         ListOffsetsPartition lop1 = new ListOffsetsPartition()
                 .setPartitionIndex(1)
                 .setCurrentLeaderEpoch(3)
-                .setMaxNumOffsets(4)
                 .setTimestamp(567L);
         Map<TopicPartition, ListOffsetsPartition> timestampsToSearch = new HashMap<>();
         timestampsToSearch.put(new TopicPartition("topic", 0), lop0);
@@ -159,19 +127,23 @@ public class ListOffsetsRequestTest {
             .forConsumer(false, IsolationLevel.READ_COMMITTED);
 
         ListOffsetsRequest.Builder maxTimestampRequestBuilder = ListOffsetsRequest.Builder
-            .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, true, false, false);
+            .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, true, false, false, false);
 
         ListOffsetsRequest.Builder requireEarliestLocalTimestampRequestBuilder = ListOffsetsRequest.Builder
-            .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, true, false);
+            .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, true, false, false);
 
         ListOffsetsRequest.Builder requireTieredStorageTimestampRequestBuilder = ListOffsetsRequest.Builder
-            .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false, true);
+            .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false, true, false);
 
-        assertEquals((short) 0, consumerRequestBuilder.oldestAllowedVersion());
+        ListOffsetsRequest.Builder requireEarliestPendingUploadTimestampRequestBuilder = ListOffsetsRequest.Builder
+            .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false, false, true);
+
+        assertEquals((short) 1, consumerRequestBuilder.oldestAllowedVersion());
         assertEquals((short) 1, requireTimestampRequestBuilder.oldestAllowedVersion());
         assertEquals((short) 2, requestCommittedRequestBuilder.oldestAllowedVersion());
         assertEquals((short) 7, maxTimestampRequestBuilder.oldestAllowedVersion());
         assertEquals((short) 8, requireEarliestLocalTimestampRequestBuilder.oldestAllowedVersion());
         assertEquals((short) 9, requireTieredStorageTimestampRequestBuilder.oldestAllowedVersion());
+        assertEquals((short) 11, requireEarliestPendingUploadTimestampRequestBuilder.oldestAllowedVersion());
     }
 }

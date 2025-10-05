@@ -17,12 +17,12 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.MetadataImageBuilder;
-import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -35,30 +35,30 @@ public class TopicIdsTest {
 
     @Test
     public void testTopicNamesCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new TopicIds(null, TopicsImage.EMPTY));
+        assertThrows(NullPointerException.class, () -> new TopicIds(null, CoordinatorMetadataImage.EMPTY));
     }
 
     @Test
     public void testTopicsImageCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new TopicIds(Collections.emptySet(), (TopicsImage) null));
+        assertThrows(NullPointerException.class, () -> new TopicIds(Set.of(), (CoordinatorMetadataImage) null));
     }
 
     @Test
     public void testTopicResolverCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new TopicIds(Collections.emptySet(), (TopicIds.TopicResolver) null));
+        assertThrows(NullPointerException.class, () -> new TopicIds(Set.of(), (TopicIds.TopicResolver) null));
     }
 
     @Test
     public void testSize() {
         Set<String> topicNames = Set.of("foo", "bar", "baz");
-        Set<Uuid> topicIds = new TopicIds(topicNames, TopicsImage.EMPTY);
+        Set<Uuid> topicIds = new TopicIds(topicNames, CoordinatorMetadataImage.EMPTY);
         assertEquals(topicNames.size(), topicIds.size());
     }
 
     @Test
     public void testIsEmpty() {
-        Set<String> topicNames = Collections.emptySet();
-        Set<Uuid> topicIds = new TopicIds(topicNames, TopicsImage.EMPTY);
+        Set<String> topicNames = Set.of();
+        Set<Uuid> topicIds = new TopicIds(topicNames, CoordinatorMetadataImage.EMPTY);
         assertEquals(topicNames.size(), topicIds.size());
     }
 
@@ -68,14 +68,13 @@ public class TopicIdsTest {
         Uuid barUuid = Uuid.randomUuid();
         Uuid bazUuid = Uuid.randomUuid();
         Uuid quxUuid = Uuid.randomUuid();
-        TopicsImage topicsImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
             .addTopic(fooUuid, "foo", 3)
             .addTopic(barUuid, "bar", 3)
             .addTopic(bazUuid, "qux", 3)
-            .build()
-            .topics();
+            .build());
 
-        Set<Uuid> topicIds = new TopicIds(Set.of("foo", "bar", "baz"), topicsImage);
+        Set<Uuid> topicIds = new TopicIds(Set.of("foo", "bar", "baz"), metadataImage);
 
         assertTrue(topicIds.contains(fooUuid));
         assertTrue(topicIds.contains(barUuid));
@@ -89,15 +88,14 @@ public class TopicIdsTest {
         Uuid barUuid = Uuid.randomUuid();
         Uuid bazUuid = Uuid.randomUuid();
         Uuid quxUuid = Uuid.randomUuid();
-        TopicsImage topicsImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
             .addTopic(fooUuid, "foo", 3)
             .addTopic(barUuid, "bar", 3)
             .addTopic(bazUuid, "baz", 3)
             .addTopic(quxUuid, "qux", 3)
-            .build()
-            .topics();
+            .build());
 
-        Set<Uuid> topicIds = new TopicIds(Set.of("foo", "bar", "baz", "qux"), topicsImage);
+        Set<Uuid> topicIds = new TopicIds(Set.of("foo", "bar", "baz", "qux"), metadataImage);
 
         assertTrue(topicIds.contains(fooUuid));
         assertTrue(topicIds.contains(barUuid));
@@ -113,14 +111,13 @@ public class TopicIdsTest {
         Uuid barUuid = Uuid.randomUuid();
         Uuid bazUuid = Uuid.randomUuid();
         Uuid quxUuid = Uuid.randomUuid();
-        TopicsImage topicsImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
             .addTopic(fooUuid, "foo", 3)
             .addTopic(barUuid, "bar", 3)
             .addTopic(bazUuid, "baz", 3)
-            .build()
-            .topics();
+            .build());
 
-        Set<Uuid> topicIds = new TopicIds(Set.of("foo", "bar", "baz", "qux"), topicsImage);
+        Set<Uuid> topicIds = new TopicIds(Set.of("foo", "bar", "baz", "qux"), metadataImage);
 
         assertTrue(topicIds.contains(fooUuid));
         assertTrue(topicIds.contains(barUuid));
@@ -135,15 +132,14 @@ public class TopicIdsTest {
         Uuid barUuid = Uuid.randomUuid();
         Uuid bazUuid = Uuid.randomUuid();
         Uuid quxUuid = Uuid.randomUuid();
-        TopicsImage topicsImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
             .addTopic(fooUuid, "foo", 3)
             .addTopic(barUuid, "bar", 3)
             .addTopic(bazUuid, "baz", 3)
             .addTopic(quxUuid, "qux", 3)
-            .build()
-            .topics();
+            .build());
 
-        Set<Uuid> topicIds = new TopicIds(Set.of("foo", "bar", "baz", "qux"), topicsImage);
+        Set<Uuid> topicIds = new TopicIds(Set.of("foo", "bar", "baz", "qux"), metadataImage);
         Set<Uuid> expectedIds = Set.of(fooUuid, barUuid, bazUuid, quxUuid);
         Set<Uuid> actualIds = new HashSet<>(topicIds);
 
@@ -158,15 +154,14 @@ public class TopicIdsTest {
         Uuid barUuid = Uuid.randomUuid();
         Uuid bazUuid = Uuid.randomUuid();
         Uuid qux = Uuid.randomUuid();
-        TopicsImage topicsImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
             .addTopic(fooUuid, "foo", 3)
             .addTopic(barUuid, "bar", 3)
             .addTopic(bazUuid, "baz", 3)
             .addTopic(qux, "qux", 3)
-            .build()
-            .topics();
+            .build());
 
-        Set<Uuid> topicIds = new TopicIds(Set.of("foo", "bar", "baz", "quux"), topicsImage);
+        Set<Uuid> topicIds = new TopicIds(Set.of("foo", "bar", "baz", "quux"), metadataImage);
         Set<Uuid> expectedIds = Set.of(fooUuid, barUuid, bazUuid);
         Set<Uuid> actualIds = new HashSet<>(topicIds);
 
@@ -176,19 +171,12 @@ public class TopicIdsTest {
     @Test
     public void testEquals() {
         Uuid topicId = Uuid.randomUuid();
-        TopicIds topicIds1 = new TopicIds(Collections.singleton("topic"),
-            new MetadataImageBuilder()
-                .addTopic(topicId, "topicId", 3)
-                .build()
-                .topics()
-        );
+        KRaftCoordinatorMetadataImage metadataImage = new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
+            .addTopic(topicId, "topicId", 3)
+            .build());
 
-        TopicIds topicIds2 = new TopicIds(Collections.singleton("topic"),
-            new MetadataImageBuilder()
-                .addTopic(topicId, "topicId", 3)
-                .build()
-                .topics()
-        );
+        TopicIds topicIds1 = new TopicIds(Set.of("topic"), metadataImage);
+        TopicIds topicIds2 = new TopicIds(Set.of("topic"), metadataImage);
 
         assertEquals(topicIds1, topicIds2);
     }

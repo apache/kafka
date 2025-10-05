@@ -17,7 +17,6 @@
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Objects;
 
@@ -25,7 +24,6 @@ import java.util.Objects;
  * This class represents the metadata about the remote partition. It can be created/updated with {@link RemoteLogMetadataManager#putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata)}.
  * Possible state transitions are mentioned at {@link RemotePartitionDeleteState}.
  */
-@InterfaceStability.Evolving
 public class RemotePartitionDeleteMetadata extends RemoteLogMetadata {
 
     private final TopicIdPartition topicIdPartition;

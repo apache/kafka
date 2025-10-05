@@ -148,7 +148,7 @@ public class ConnectorClientPolicyIntegrationTest {
 
     public Map<String, String> basicConnectorConfig() {
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSinkConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPICS_CONFIG, "test-topic");
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());

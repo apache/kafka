@@ -45,11 +45,10 @@ import org.slf4j.LoggerFactory;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-import javax.ws.rs.core.UriBuilder;
+import jakarta.ws.rs.core.UriBuilder;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
@@ -275,9 +274,7 @@ public class AgentClient {
                     System.out.printf("\tStart time: %s%n",
                         dateString(status.serverStartMs(), localOffset));
                     List<List<String>> lines = new ArrayList<>();
-                    List<String> header = new ArrayList<>(
-                        Arrays.asList("WORKER_ID", "TASK_ID", "STATE", "TASK_TYPE"));
-                    lines.add(header);
+                    lines.add(List.of("WORKER_ID", "TASK_ID", "STATE", "TASK_TYPE"));
                     for (Map.Entry<Long, WorkerState> entry : status.workers().entrySet()) {
                         List<String> cols = new ArrayList<>();
                         cols.add(Long.toString(entry.getKey()));

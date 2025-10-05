@@ -32,8 +32,7 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -98,7 +97,10 @@ public class BrokerRegistrationTrackerTest {
         delta.replay(new RegisterBrokerRecord().
             setBrokerId(1).
             setIncarnationId(INCARNATION_ID).
-            setLogDirs(Arrays.asList(A, B, C)));
+            setLogDirs(List.of(A, B, C)));
+        delta.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel()));
         ctx.onMetadataUpdate(delta);
         assertEquals(0, ctx.numCalls.get());
     }
@@ -111,7 +113,7 @@ public class BrokerRegistrationTrackerTest {
         delta.replay(new RegisterBrokerRecord().
             setBrokerId(1).
             setIncarnationId(INCARNATION_ID).
-            setLogDirs(Collections.emptyList()));
+            setLogDirs(List.of()));
         delta.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
             setFeatureLevel(jbodMv ? MetadataVersion.IBP_3_7_IV2.featureLevel() :
@@ -132,9 +134,12 @@ public class BrokerRegistrationTrackerTest {
         delta.replay(new RegisterBrokerRecord().
             setBrokerId(1).
             setIncarnationId(INCARNATION_ID).
-            setLogDirs(Collections.emptyList()));
+            setLogDirs(List.of()));
+        delta.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.IBP_3_7_IV1.featureLevel()));
         ctx.onMetadataUpdate(delta);
-        // No calls are made because MetadataVersion is 3.0-IV1 initially
+        // No calls are made because MetadataVersion is older than IBP_3_7_IV2 initially
         assertEquals(0, ctx.numCalls.get());
 
         delta = ctx.newDelta();

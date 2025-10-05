@@ -45,6 +45,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -268,24 +269,28 @@ public class ConsumerNetworkClientTest {
     public void testFutureCompletionOutsidePoll() throws Exception {
         // Tests the scenario in which the request that is being awaited in one thread
         // is received and completed in another thread.
-
         final RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
         consumerClient.pollNoWakeup(); // dequeue and send the request
 
+        CountDownLatch bothThreadsReady = new CountDownLatch(2);
+
         client.enableBlockingUntilWakeup(2);
-        Thread t1 = new Thread(() -> consumerClient.pollNoWakeup());
+
+        Thread t1 = new Thread(() -> {
+            bothThreadsReady.countDown();
+            consumerClient.pollNoWakeup();
+        });
+
+        Thread t2 = new Thread(() -> {
+            bothThreadsReady.countDown();
+            consumerClient.poll(future);
+        });
+
         t1.start();
-
-        // Sleep a little so that t1 is blocking in poll
-        Thread.sleep(50);
-
-        Thread t2 = new Thread(() -> consumerClient.poll(future));
         t2.start();
 
-        // Sleep a little so that t2 is awaiting the network client lock
-        Thread.sleep(50);
-
-        // Simulate a network response and return from the poll in t1
+        // Wait until both threads are blocked in poll
+        bothThreadsReady.await();
         client.respond(heartbeatResponse(Errors.NONE));
         client.wakeup();
 

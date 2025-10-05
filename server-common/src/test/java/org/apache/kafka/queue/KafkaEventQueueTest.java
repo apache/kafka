@@ -29,7 +29,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
@@ -209,7 +208,7 @@ public class KafkaEventQueueTest {
         MockTime time = new MockTime(0, 100000, 1);
         try (KafkaEventQueue queue = new KafkaEventQueue(time, logContext, "testDeferredIsQueuedAfterTriggering")) {
             AtomicInteger count = new AtomicInteger(0);
-            List<CompletableFuture<Integer>> futures = Arrays.asList(
+            List<CompletableFuture<Integer>> futures = List.of(
                     new CompletableFuture<>(),
                     new CompletableFuture<>(),
                     new CompletableFuture<>());
@@ -423,6 +422,50 @@ public class KafkaEventQueueTest {
             cleanupFuture.get();
             assertEquals(InterruptedException.class, ieTrapper1.exception.get().getClass());
             assertEquals(InterruptedException.class, ieTrapper2.exception.get().getClass());
+        }
+    }
+
+    @Test
+    public void testIdleTimeCallback() throws Exception {
+        MockTime time = new MockTime();
+        AtomicLong lastIdleTimeMs = new AtomicLong(0);
+
+        try (KafkaEventQueue queue = new KafkaEventQueue(
+                time,
+                logContext,
+                "testIdleTimeCallback",
+                EventQueue.VoidEvent.INSTANCE,
+                lastIdleTimeMs::set)) {
+            time.sleep(2);
+            assertEquals(0, lastIdleTimeMs.get(), "Last idle time should be 0ms");
+
+            // Test 1: Two events with a wait in between using FutureEvent
+            CompletableFuture<String> event1 = new CompletableFuture<>();
+            queue.append(new FutureEvent<>(event1, () -> {
+                time.sleep(1);
+                return "event1-processed";
+            }));
+            assertEquals("event1-processed", event1.get());
+
+            long waitTime5Ms = 5;
+            time.sleep(waitTime5Ms);
+            CompletableFuture<String> event2 = new CompletableFuture<>();
+            queue.append(new FutureEvent<>(event2, () -> {
+                time.sleep(1);
+                return "event2-processed";
+            }));
+            assertEquals("event2-processed", event2.get());
+            assertEquals(waitTime5Ms, lastIdleTimeMs.get(), "Idle time should be " + waitTime5Ms + "ms, was: " + lastIdleTimeMs.get());
+
+            // Test 2: Deferred event
+            long waitTime2Ms = 2;
+            CompletableFuture<Void> deferredEvent2 = new CompletableFuture<>();
+            queue.scheduleDeferred("deferred2",
+                    __ -> OptionalLong.of(time.nanoseconds() + TimeUnit.MILLISECONDS.toNanos(waitTime2Ms)),
+                    () -> deferredEvent2.complete(null));
+            time.sleep(waitTime2Ms);
+            deferredEvent2.get();
+            assertEquals(waitTime2Ms, lastIdleTimeMs.get(), "Idle time should be " + waitTime2Ms + "ms, was: " + lastIdleTimeMs.get());
         }
     }
 }

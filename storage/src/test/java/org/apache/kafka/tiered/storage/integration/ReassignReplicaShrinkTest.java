@@ -20,8 +20,6 @@ import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
 import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -50,18 +48,18 @@ public final class ReassignReplicaShrinkTest extends TieredStorageTestHarness {
 
     @Override
     protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
-        final Integer broker0 = 0;
-        final Integer broker1 = 1;
+        final int broker0 = 0;
+        final int broker1 = 1;
         final String topicA = "topicA";
-        final Integer p0 = 0;
-        final Integer p1 = 1;
-        final Integer partitionCount = 2;
-        final Integer replicationFactor = 2;
-        final Integer maxBatchCountPerSegment = 1;
+        final int p0 = 0;
+        final int p1 = 1;
+        final int partitionCount = 2;
+        final int replicationFactor = 2;
+        final int maxBatchCountPerSegment = 1;
         final boolean enableRemoteLogStorage = true;
         final Map<Integer, List<Integer>> replicaAssignment = mkMap(
-                mkEntry(p0, Arrays.asList(broker0, broker1)),
-                mkEntry(p1, Arrays.asList(broker1, broker0))
+                mkEntry(p0, List.of(broker0, broker1)),
+                mkEntry(p1, List.of(broker1, broker0))
         );
 
         builder
@@ -81,8 +79,8 @@ public final class ReassignReplicaShrinkTest extends TieredStorageTestHarness {
                 .produce(topicA, p1, new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"),
                         new KeyValueSpec("k2", "v2"))
                 // shrink the replication factor to 1
-                .shrinkReplica(topicA, p0, Collections.singletonList(broker1))
-                .shrinkReplica(topicA, p1, Collections.singletonList(broker0))
+                .shrinkReplica(topicA, p0, List.of(broker1))
+                .shrinkReplica(topicA, p1, List.of(broker0))
                 .expectLeader(topicA, p0, broker1, false)
                 .expectLeader(topicA, p1, broker0, false)
                 // produce some more events to partition 0

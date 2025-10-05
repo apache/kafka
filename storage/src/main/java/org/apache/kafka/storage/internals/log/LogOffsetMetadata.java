@@ -26,18 +26,16 @@ import org.apache.kafka.common.KafkaException;
  */
 public final class LogOffsetMetadata {
 
-    //TODO KAFKA-14484 remove once UnifiedLog has been moved to the storage module
-    private static final long UNIFIED_LOG_UNKNOWN_OFFSET = -1L;
     private static final int UNKNOWN_FILE_POSITION = -1;
 
-    public static final LogOffsetMetadata UNKNOWN_OFFSET_METADATA = new LogOffsetMetadata(-1L, UNIFIED_LOG_UNKNOWN_OFFSET, UNKNOWN_FILE_POSITION);
+    public static final LogOffsetMetadata UNKNOWN_OFFSET_METADATA = new LogOffsetMetadata(-1L, UnifiedLog.UNKNOWN_OFFSET, UNKNOWN_FILE_POSITION);
 
     public final long messageOffset;
     public final long segmentBaseOffset;
     public final int relativePositionInSegment;
 
     public LogOffsetMetadata(long messageOffset) {
-        this(messageOffset, UNIFIED_LOG_UNKNOWN_OFFSET, UNKNOWN_FILE_POSITION);
+        this(messageOffset, UnifiedLog.UNKNOWN_OFFSET, UNKNOWN_FILE_POSITION);
     }
 
     public LogOffsetMetadata(long messageOffset,
@@ -75,7 +73,7 @@ public final class LogOffsetMetadata {
 
     // decide if the offset metadata only contains message offset info
     public boolean messageOffsetOnly() {
-        return segmentBaseOffset == UNIFIED_LOG_UNKNOWN_OFFSET && relativePositionInSegment == UNKNOWN_FILE_POSITION;
+        return segmentBaseOffset == UnifiedLog.UNKNOWN_OFFSET && relativePositionInSegment == UNKNOWN_FILE_POSITION;
     }
 
     @Override

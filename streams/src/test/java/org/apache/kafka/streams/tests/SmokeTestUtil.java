@@ -39,7 +39,7 @@ public class SmokeTestUtil {
     }
 
     static ProcessorSupplier<Object, Object, Void, Void> printProcessorSupplier(final String topic, final String name) {
-        return () -> new ContextualProcessor<Object, Object, Void, Void>() {
+        return () -> new ContextualProcessor<>() {
             private int numRecordsProcessed = 0;
             private long smallestOffset = Long.MAX_VALUE;
             private long largestOffset = Long.MIN_VALUE;

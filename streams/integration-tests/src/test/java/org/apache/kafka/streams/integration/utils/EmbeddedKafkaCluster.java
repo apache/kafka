@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration.utils;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
@@ -25,6 +26,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -40,6 +42,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.network.SocketServerConfigs;
@@ -58,6 +61,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -71,6 +75,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
@@ -170,7 +175,10 @@ public class EmbeddedKafkaCluster {
     public void verifyClusterReadiness() {
         final UUID uuid = UUID.randomUUID();
         final String consumerGroupId = "group-warmup-" + uuid;
-        final Map<String, Object> consumerConfig = Collections.singletonMap(GROUP_ID_CONFIG, consumerGroupId);
+        final Map<String, Object> consumerConfig = Map.of(
+            GROUP_ID_CONFIG, consumerGroupId,
+            GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name()
+        );
         final String topic = "topic-warmup-" + uuid;
 
         createTopic(topic);
@@ -393,6 +401,8 @@ public class EmbeddedKafkaCluster {
 
     private void addDefaultBrokerPropsIfAbsent(final Properties brokerConfig) {
         brokerConfig.putIfAbsent(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
+        brokerConfig.putIfAbsent(GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "100");
+        brokerConfig.putIfAbsent(GroupCoordinatorConfig.STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, "100");
         brokerConfig.putIfAbsent(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "0");
         brokerConfig.putIfAbsent(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0");
         brokerConfig.putIfAbsent(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "5");
@@ -426,6 +436,45 @@ public class EmbeddedKafkaCluster {
                 }
             }
             return properties;
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void setGroupSessionTimeout(final String groupId, final int sessionTimeoutMs) {
+        try (final Admin adminClient = createAdminClient()) {
+            adminClient.incrementalAlterConfigs(
+                Map.of(
+                    new ConfigResource(ConfigResource.Type.GROUP, groupId),
+                    List.of(new AlterConfigOp(new ConfigEntry(GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, String.valueOf(sessionTimeoutMs)), AlterConfigOp.OpType.SET))
+                )
+            ).all().get();
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void setGroupHeartbeatTimeout(final String groupId, final int heartbeatTimeoutMs) {
+        try (final Admin adminClient = createAdminClient()) {
+            adminClient.incrementalAlterConfigs(
+                Map.of(
+                    new ConfigResource(ConfigResource.Type.GROUP, groupId),
+                    List.of(new AlterConfigOp(new ConfigEntry(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(heartbeatTimeoutMs)), AlterConfigOp.OpType.SET))
+                )
+            ).all().get();
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void setGroupStandbyReplicas(final String groupId, final int numStandbyReplicas) {
+        try (final Admin adminClient = createAdminClient()) {
+            adminClient.incrementalAlterConfigs(
+                Map.of(
+                    new ConfigResource(ConfigResource.Type.GROUP, groupId),
+                    List.of(new AlterConfigOp(new ConfigEntry(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(numStandbyReplicas)), AlterConfigOp.OpType.SET))
+                )
+            ).all().get();
         } catch (final InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
         }

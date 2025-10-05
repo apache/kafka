@@ -28,7 +28,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
 import org.apache.kafka.queue.EventQueue.DeadlineFunction
-import org.apache.kafka.common.utils.{ExponentialBackoff, LogContext, Time}
+import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 
@@ -58,7 +58,6 @@ class BrokerLifecycleManager(
   val config: KafkaConfig,
   val time: Time,
   val threadNamePrefix: String,
-  val isZkBroker: Boolean,
   val logDirs: Set[Uuid],
   val shutdownHook: () => Unit = () => {}
 ) extends Logging {
@@ -66,9 +65,6 @@ class BrokerLifecycleManager(
   private def logPrefix(): String = {
     val builder = new StringBuilder("[BrokerLifecycleManager")
     builder.append(" id=").append(config.nodeId)
-    if (isZkBroker) {
-      builder.append(" isZkBroker=true")
-    }
     builder.append("] ")
     builder.toString()
   }
@@ -92,18 +88,6 @@ class BrokerLifecycleManager(
    */
   private val initialTimeoutNs =
     MILLISECONDS.toNanos(config.initialRegistrationTimeoutMs.longValue())
-
-  /**
-   * The exponential backoff to use for resending communication.
-   */
-  private val resendExponentialBackoff =
-    new ExponentialBackoff(100, 2, config.brokerSessionTimeoutMs.toLong, 0.02)
-
-  /**
-   * The number of times we've tried and failed to communicate.  This variable can only be
-   * read or written from the BrokerToControllerRequestThread.
-   */
-  private var failedAttempts = 0L
 
   /**
    * The broker incarnation ID.  This ID uniquely identifies each time we start the broker
@@ -158,7 +142,7 @@ class BrokerLifecycleManager(
   private var offlineDirs = mutable.Map[Uuid, Boolean]()
 
   /**
-   * True if we sent a event queue to the active controller requesting controlled
+   * True if we sent an event queue to the active controller requesting controlled
    * shutdown.  This variable can only be read or written from the event queue thread.
    */
   private var gotControlledShutdownResponse = false
@@ -264,16 +248,14 @@ class BrokerLifecycleManager(
       new OfflineDirBrokerFailureEvent(directory))
   }
 
-  def resendBrokerRegistrationUnlessZkMode(): Unit = {
-    eventQueue.append(new ResendBrokerRegistrationUnlessZkModeEvent())
+  def resendBrokerRegistration(): Unit = {
+    eventQueue.append(new ResendBrokerRegistrationEvent())
   }
 
-  private class ResendBrokerRegistrationUnlessZkModeEvent extends EventQueue.Event {
+  private class ResendBrokerRegistrationEvent extends EventQueue.Event {
     override def run(): Unit = {
-      if (!isZkBroker) {
-        registered = false
-        scheduleNextCommunicationImmediately()
-      }
+      registered = false
+      scheduleNextCommunicationImmediately()
     }
   }
 
@@ -366,12 +348,9 @@ class BrokerLifecycleManager(
       _clusterId = clusterId
       _advertisedListeners = advertisedListeners.duplicate()
       _supportedFeatures = new util.HashMap[String, VersionRange](supportedFeatures)
-      if (!isZkBroker) {
-        // Only KRaft brokers block on registration during startup
-        eventQueue.scheduleDeferred("initialRegistrationTimeout",
-          new DeadlineFunction(time.nanoseconds() + initialTimeoutNs),
-          new RegistrationTimeoutEvent())
-      }
+      eventQueue.scheduleDeferred("initialRegistrationTimeout",
+        new DeadlineFunction(time.nanoseconds() + initialTimeoutNs),
+        new RegistrationTimeoutEvent())
       sendBrokerRegistration()
       info(s"Incarnation $incarnationId of broker $nodeId in cluster $clusterId " +
         "is now STARTING.")
@@ -393,7 +372,7 @@ class BrokerLifecycleManager(
     })
     val data = new BrokerRegistrationRequestData().
         setBrokerId(nodeId).
-        setIsMigratingZkBroker(isZkBroker).
+        setIsMigratingZkBroker(false).
         setClusterId(_clusterId).
         setFeatures(features).
         setIncarnationId(incarnationId).
@@ -449,7 +428,6 @@ class BrokerLifecycleManager(
         val message = response.responseBody().asInstanceOf[BrokerRegistrationResponse]
         val errorCode = Errors.forCode(message.data().errorCode())
         if (errorCode == Errors.NONE) {
-          failedAttempts = 0
           _brokerEpoch = message.data().brokerEpoch()
           registered = true
           initialRegistrationSucceeded = true
@@ -523,7 +501,6 @@ class BrokerLifecycleManager(
         val errorCode = Errors.forCode(message.data().errorCode())
         if (errorCode == Errors.NONE) {
           val responseData = message.data()
-          failedAttempts = 0
           currentOfflineDirs.foreach(cur => offlineDirs.put(cur, true))
           _state match {
             case BrokerState.STARTING =>
@@ -586,10 +563,9 @@ class BrokerLifecycleManager(
   }
 
   private def scheduleNextCommunicationAfterFailure(): Unit = {
-    val delayMs = resendExponentialBackoff.backoff(failedAttempts)
-    failedAttempts = failedAttempts + 1
     nextSchedulingShouldBeImmediate = false // never immediately reschedule after a failure
-    scheduleNextCommunication(NANOSECONDS.convert(delayMs, MILLISECONDS))
+    scheduleNextCommunication(NANOSECONDS.convert(
+      config.brokerHeartbeatIntervalMs.longValue() , MILLISECONDS))
   }
 
   private def scheduleNextCommunicationAfterSuccess(): Unit = {

@@ -26,50 +26,57 @@
       "about": "The top level error code."},
     { "name": "ErrorMessage", "type": "string", "versions": "2+", "nullableVersions": "2+", "ignorable": true,
       "about": "The error message, or null if there was no error." },
-    { "name": "Topics", "type": "[]TopicData",
-      "versions": "0+", "fields": [
+    { "name": "Topics", "type": "[]TopicData", "versions": "0+",
+      "about": "The response from the describe quorum API.", "fields": [
       { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
-      { "name": "Partitions", "type": "[]PartitionData",
-        "versions": "0+", "fields": [
+      { "name": "Partitions", "type": "[]PartitionData", "versions": "0+",
+        "about": "The partition data.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index." },
-        { "name": "ErrorCode", "type": "int16", "versions": "0+"},
+        { "name": "ErrorCode", "type": "int16", "versions": "0+",
+          "about": "The partition error code."},
         { "name": "ErrorMessage", "type": "string", "versions": "2+", "nullableVersions": "2+", "ignorable": true,
           "about": "The error message, or null if there was no error." },
         { "name": "LeaderId", "type": "int32", "versions": "0+", "entityType": "brokerId",
           "about": "The ID of the current leader or -1 if the leader is unknown."},
         { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
-          "about": "The latest known leader epoch"},
-        { "name": "HighWatermark", "type": "int64", "versions": "0+"},
-        { "name": "CurrentVoters", "type": "[]ReplicaState", "versions": "0+" },
-        { "name": "Observers", "type": "[]ReplicaState", "versions": "0+" }
+          "about": "The latest known leader epoch."},
+        { "name": "HighWatermark", "type": "int64", "versions": "0+",
+          "about": "The high water mark."},
+        { "name": "CurrentVoters", "type": "[]ReplicaState", "versions": "0+",
+          "about": "The current voters of the partition."},
+        { "name": "Observers", "type": "[]ReplicaState", "versions": "0+",
+          "about": "The observers of the partition."}
       ]}
     ]},
-    { "name": "Nodes", "type": "[]Node", "versions": "2+", "fields": [
+    { "name": "Nodes", "type": "[]Node", "versions": "2+",
+      "about": "The nodes in the quorum.", "fields": [
       { "name": "NodeId", "type": "int32", "versions": "2+",
-        "mapKey": true, "entityType": "brokerId", "about": "The ID of the associated node" },
+        "mapKey": true, "entityType": "brokerId", "about": "The ID of the associated node." },
       { "name": "Listeners", "type": "[]Listener",
-        "about": "The listeners of this controller", "versions": "2+", "fields": [
+        "about": "The listeners of this controller.", "versions": "2+", "fields": [
         { "name": "Name", "type": "string", "versions": "2+", "mapKey": true,
-          "about": "The name of the endpoint" },
+          "about": "The name of the endpoint." },
         { "name": "Host", "type": "string", "versions": "2+",
-          "about": "The hostname" },
+          "about": "The hostname." },
         { "name": "Port", "type": "uint16", "versions": "2+",
-          "about": "The port" }
+          "about": "The port." }
       ]}
     ]}
   ],
   "commonStructs": [
     { "name": "ReplicaState", "versions": "0+", "fields": [
-      { "name": "ReplicaId", "type": "int32", "versions": "0+", "entityType": "brokerId" },
-      { "name": "ReplicaDirectoryId", "type": "uuid", "versions": "2+" },
+      { "name": "ReplicaId", "type": "int32", "versions": "0+", "entityType": "brokerId",
+        "about": "The ID of the replica."},
+      { "name": "ReplicaDirectoryId", "type": "uuid", "versions": "2+",
+        "about": "The replica directory ID of the replica."},
       { "name": "LogEndOffset", "type": "int64", "versions": "0+",
-        "about": "The last known log end offset of the follower or -1 if it is unknown"},
+        "about": "The last known log end offset of the follower or -1 if it is unknown."},
       { "name": "LastFetchTimestamp", "type": "int64", "versions": "1+", "ignorable": true, "default": -1,
-        "about": "The last known leader wall clock time time when a follower fetched from the leader. This is reported as -1 both for the current leader or if it is unknown for a voter"},
+        "about": "The last known leader wall clock time time when a follower fetched from the leader. This is reported as -1 both for the current leader or if it is unknown for a voter."},
       { "name": "LastCaughtUpTimestamp", "type": "int64", "versions": "1+", "ignorable": true, "default": -1,
-        "about": "The leader wall clock append time of the offset for which the follower made the most recent fetch request. This is reported as the current time for the leader and -1 if unknown for a voter"}
+        "about": "The leader wall clock append time of the offset for which the follower made the most recent fetch request. This is reported as the current time for the leader and -1 if unknown for a voter."}
     ]}
   ]
 }

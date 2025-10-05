@@ -26,7 +26,6 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.EndTransactionMarker;
@@ -54,7 +53,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -712,7 +710,7 @@ public class FetchCollectorTest {
             mock(ConsumerMetadata.class),
             subscriptions,
             new FetchConfig(new ConsumerConfig(consumerProps)),
-            new Deserializers<>(new StringDeserializer(), new StringDeserializer()),
+            new Deserializers<>(new StringDeserializer(), new StringDeserializer(), null),
             mock(FetchMetricsManager.class),
             new MockTime()
         );
@@ -722,7 +720,7 @@ public class FetchCollectorTest {
      * This is a handy utility method for returning a set from a varargs array.
      */
     private static Set<TopicPartition> partitions(TopicPartition... partitions) {
-        return new HashSet<>(Arrays.asList(partitions));
+        return Set.of(partitions);
     }
 
     private void buildDependencies() {
@@ -741,12 +739,11 @@ public class FetchCollectorTest {
         Properties p = consumerProperties(maxPollRecords);
         ConsumerConfig config = new ConsumerConfig(p);
 
-        deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer());
-
         subscriptions = createSubscriptionState(config, logContext);
         fetchConfig = createFetchConfig(config, isolationLevel);
         Metrics metrics = createMetrics(config, time);
         metricsManager = createFetchMetricsManager(metrics);
+        deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer(), metrics);
         metadata = new ConsumerMetadata(
                 0,
                 1000,
@@ -916,14 +913,13 @@ public class FetchCollectorTest {
 
             FetchMetricsAggregator metricsAggregator = new FetchMetricsAggregator(metricsManager, allPartitions);
             return new CompletedFetch(
-                    logContext,
+                    logContext.logger(CompletedFetch.class),
                     subscriptions,
                     BufferSupplier.create(),
                     topicPartition,
                     partitionData,
                     metricsAggregator,
-                    fetchOffset,
-                    ApiKeys.FETCH.latestVersion());
+                    fetchOffset);
         }
     }
 

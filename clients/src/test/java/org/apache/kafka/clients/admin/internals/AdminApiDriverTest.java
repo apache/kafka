@@ -40,7 +40,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -397,7 +396,7 @@ class AdminApiDriverTest {
     public void testRetryLookupAndDisableBatchAfterNoBatchedFindCoordinatorsException() {
         MockTime time = new MockTime();
         LogContext lc = new LogContext();
-        Set<String> groupIds = new HashSet<>(Arrays.asList("g1", "g2"));
+        Set<String> groupIds = Set.of("g1", "g2");
         DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(lc);
         AdminApiFuture<CoordinatorKey, Void> future = AdminApiFuture.forKeys(
                 groupIds.stream().map(CoordinatorKey::byGroupId).collect(Collectors.toSet()));

@@ -22,6 +22,7 @@ import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClientUtils;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -44,6 +45,9 @@ import org.slf4j.helpers.MessageFormatter;
 
 import java.io.Closeable;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -51,7 +55,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMetadataUpdate;
 
@@ -61,6 +64,9 @@ import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMeta
 public abstract class AbstractFetch implements Closeable {
 
     private final Logger log;
+    // Calling LoggerFactory.getLogger() is pretty expensive with log4j2. See KAFKA-18046 for details.
+    // We cache the logger used by CompletedFetch because it is created on every fetch responses.
+    private final Logger completedFetchLog;
     private final IdempotentCloser idempotentCloser = new IdempotentCloser();
     protected final LogContext logContext;
     protected final ConsumerMetadata metadata;
@@ -85,6 +91,7 @@ public abstract class AbstractFetch implements Closeable {
                          final Time time,
                          final ApiVersions apiVersions) {
         this.log = logContext.logger(AbstractFetch.class);
+        this.completedFetchLog = logContext.logger(CompletedFetch.class);
         this.logContext = logContext;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
@@ -140,6 +147,7 @@ public abstract class AbstractFetch implements Closeable {
      * @param data {@link FetchSessionHandler.FetchRequestData} that represents the session data
      * @param resp {@link ClientResponse} from which the {@link FetchResponse} will be retrieved
      */
+    @SuppressWarnings("NPathComplexity")
     protected void handleFetchSuccess(final Node fetchTarget,
                                       final FetchSessionHandler.FetchRequestData data,
                                       final ClientResponse resp) {
@@ -166,6 +174,8 @@ public abstract class AbstractFetch implements Closeable {
             final Map<TopicPartition, FetchResponseData.PartitionData> responseData = response.responseData(handler.sessionTopicNames(), requestVersion);
             final Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
             final FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metricsManager, partitions);
+
+            boolean needsWakeup = true;
 
             Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo = new HashMap<>();
             for (Map.Entry<TopicPartition, FetchResponseData.PartitionData> entry : responseData.entrySet()) {
@@ -205,22 +215,32 @@ public abstract class AbstractFetch implements Closeable {
                 }
 
                 CompletedFetch completedFetch = new CompletedFetch(
-                        logContext,
+                        completedFetchLog,
                         subscriptions,
                         decompressionBufferSupplier,
                         partition,
                         partitionData,
                         metricAggregator,
-                        fetchOffset,
-                        requestVersion);
+                        fetchOffset);
                 fetchBuffer.add(completedFetch);
+                needsWakeup = false;
             }
 
+            // "Wake" the fetch buffer on any response, even if it's empty, to allow the consumer to not block
+            // indefinitely waiting on the fetch buffer to get data.
+            if (needsWakeup)
+                fetchBuffer.wakeup();
+
             if (!partitionsWithUpdatedLeaderInfo.isEmpty()) {
-                List<Node> leaderNodes = response.data().nodeEndpoints().stream()
-                    .map(e -> new Node(e.nodeId(), e.host(), e.port(), e.rack()))
-                    .filter(e -> !e.equals(Node.noNode()))
-                    .collect(Collectors.toList());
+                List<Node> leaderNodes = new ArrayList<>();
+
+                for (FetchResponseData.NodeEndpoint e : response.data().nodeEndpoints()) {
+                    Node node = new Node(e.nodeId(), e.host(), e.port(), e.rack());
+
+                    if (!node.equals(Node.noNode()))
+                        leaderNodes.add(node);
+                }
+
                 Set<TopicPartition> updatedPartitions = metadata.updatePartitionLeadership(partitionsWithUpdatedLeaderInfo, leaderNodes);
                 updatedPartitions.forEach(
                     tp -> {
@@ -315,17 +335,15 @@ public abstract class AbstractFetch implements Closeable {
     }
 
     /**
-     * Return the list of <em>fetchable</em> partitions, which are the set of partitions to which we are subscribed,
+     * Return the set of <em>fetchable</em> partitions, which are the set of partitions to which we are subscribed,
      * but <em>excluding</em> any partitions for which we still have buffered data. The idea is that since the user
      * has yet to process the data for the partition that has already been fetched, we should not go send for more data
      * until the previously-fetched data has been processed.
      *
+     * @param buffered The set of partitions we have in our buffer
      * @return {@link Set} of {@link TopicPartition topic partitions} for which we should fetch data
      */
-    private Set<TopicPartition> fetchablePartitions() {
-        // This is the set of partitions we have in our buffer
-        Set<TopicPartition> buffered = fetchBuffer.bufferedPartitions();
-
+    private Set<TopicPartition> fetchablePartitions(Set<TopicPartition> buffered) {
         // This is the test that returns true if the partition is *not* buffered
         Predicate<TopicPartition> isNotBuffered = tp -> !buffered.contains(tp);
 
@@ -393,7 +411,7 @@ public abstract class AbstractFetch implements Closeable {
             fetchable.put(fetchTarget, sessionHandler.newBuilder());
         });
 
-        return fetchable.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().build()));
+        return convert(fetchable);
     }
 
     /**
@@ -408,22 +426,28 @@ public abstract class AbstractFetch implements Closeable {
         long currentTimeMs = time.milliseconds();
         Map<String, Uuid> topicIds = metadata.topicIds();
 
-        for (TopicPartition partition : fetchablePartitions()) {
-            SubscriptionState.FetchPosition position = subscriptions.position(partition);
+        // This is the set of partitions that have buffered data
+        Set<TopicPartition> buffered = Collections.unmodifiableSet(fetchBuffer.bufferedPartitions());
 
-            if (position == null)
-                throw new IllegalStateException("Missing position for fetchable partition " + partition);
+        // This is the set of partitions that do not have buffered data
+        Set<TopicPartition> unbuffered = fetchablePartitions(buffered);
 
-            Optional<Node> leaderOpt = position.currentLeader.leader;
+        if (unbuffered.isEmpty()) {
+            // If there are no partitions that don't already have data locally buffered, there's no need to issue
+            // any fetch requests at the present time.
+            return Collections.emptyMap();
+        }
 
-            if (leaderOpt.isEmpty()) {
-                log.debug("Requesting metadata update for partition {} since the position {} is missing the current leader node", partition, position);
-                metadata.requestUpdate(false);
+        Set<Integer> bufferedNodes = bufferedNodes(buffered, currentTimeMs);
+
+        for (TopicPartition partition : unbuffered) {
+            SubscriptionState.FetchPosition position = positionForPartition(partition);
+            Optional<Node> nodeOpt = maybeNodeForPosition(partition, position, currentTimeMs);
+
+            if (nodeOpt.isEmpty())
                 continue;
-            }
 
-            // Use the preferred read replica if set, otherwise the partition's leader
-            Node node = selectReadReplica(partition, leaderOpt.get(), currentTimeMs);
+            Node node = nodeOpt.get();
 
             if (isUnavailable(node)) {
                 maybeThrowAuthFailure(node);
@@ -432,7 +456,14 @@ public abstract class AbstractFetch implements Closeable {
                 // going to be failed anyway before being sent, so skip sending the request for now
                 log.trace("Skipping fetch for partition {} because node {} is awaiting reconnect backoff", partition, node);
             } else if (nodesWithPendingFetchRequests.contains(node.id())) {
+                // If there's already an inflight request for this node, don't issue another request.
                 log.trace("Skipping fetch for partition {} because previous request to {} has not been processed", partition, node);
+            } else if (bufferedNodes.contains(node.id())) {
+                // While a node has buffered data, don't fetch other partition data from it. Because the buffered
+                // partitions are not included in the fetch request, those partitions will be inadvertently dropped
+                // from the broker fetch session cache. In some cases, that could lead to the entire fetch session
+                // being evicted.
+                log.trace("Skipping fetch for partition {} because its leader node {} hosts buffered partitions", partition, node);
             } else {
                 // if there is a leader and no in-flight requests, issue a new fetch
                 FetchSessionHandler.Builder builder = fetchable.computeIfAbsent(node, k -> {
@@ -453,7 +484,128 @@ public abstract class AbstractFetch implements Closeable {
             }
         }
 
-        return fetchable.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().build()));
+        return convert(fetchable);
+    }
+
+    /**
+     * This method converts {@link FetchSessionHandler.Builder} instances to
+     * {@link FetchSessionHandler.FetchRequestData} instances. It intentionally forgoes use of the Java Collections
+     * Streams API to reduce overhead in the critical network path.
+     */
+    private Map<Node, FetchSessionHandler.FetchRequestData> convert(Map<Node, FetchSessionHandler.Builder> fetchable) {
+        Map<Node, FetchSessionHandler.FetchRequestData> map = new HashMap<>(fetchable.size());
+
+        for (Map.Entry<Node, FetchSessionHandler.Builder> entry : fetchable.entrySet())
+            map.put(entry.getKey(), entry.getValue().build());
+
+        return map;
+    }
+
+    /**
+     * Simple utility method that returns a {@link SubscriptionState.FetchPosition position} for the partition. If
+     * no position exists, an {@link IllegalStateException} is thrown.
+     */
+    private SubscriptionState.FetchPosition positionForPartition(TopicPartition partition) {
+        SubscriptionState.FetchPosition position = subscriptions.position(partition);
+
+        if (position == null)
+            throw new IllegalStateException("Missing position for fetchable partition " + partition);
+
+        return position;
+    }
+
+    /**
+     * Retrieves the node from which to fetch the partition data. If the given
+     * {@link SubscriptionState.FetchPosition position} does not have a current
+     * {@link Metadata.LeaderAndEpoch#leader leader} defined the method will return {@link Optional#empty()}.
+     *
+     * @return Three options: 1) {@link Optional#empty()} if the position's leader is empty, 2) the
+     * {@link #selectReadReplica(TopicPartition, Node, long) read replica, if defined}, or 3) the position's
+     * {@link Metadata.LeaderAndEpoch#leader leader}
+     */
+    private Optional<Node> maybeNodeForPosition(TopicPartition partition,
+                                                SubscriptionState.FetchPosition position,
+                                                long currentTimeMs) {
+        Optional<Node> leaderOpt = position.currentLeader.leader;
+
+        if (leaderOpt.isEmpty()) {
+            log.debug("Requesting metadata update for partition {} since the position {} is missing the current leader node", partition, position);
+            metadata.requestUpdate(false);
+            return Optional.empty();
+        }
+
+        // Use the preferred read replica if set, otherwise the partition's leader
+        Node node = selectReadReplica(partition, leaderOpt.get(), currentTimeMs);
+        return Optional.of(node);
+    }
+
+    /**
+     * Returns the set of IDs for {@link Node}s to which fetch requests should <em>not</em> be sent.
+     *
+     * <p>
+     * When a partition has buffered data in {@link FetchBuffer}, that means that at some point in the <em>past</em>,
+     * the following steps occurred:
+     *
+     * <ol>
+     *     <li>The client submitted a fetch request to the partition's leader</li>
+     *     <li>The leader responded with data</li>
+     *     <li>The client received a response from the leader and stored that data in memory</li>
+     * </ol>
+     *
+     * But it's possible that at the <em>current</em> point in time, that same partition might not be in a fetchable
+     * state. For example:
+     *
+     * <ul>
+     *     <li>
+     *         The partition is no longer assigned to the client. This also includes when the partition assignment
+     *         is either {@link SubscriptionState#markPendingRevocation(Set) pending revocation} or
+     *         {@link SubscriptionState#markPendingOnAssignedCallback(Collection, boolean) pending assignment}.
+     *     </li>
+     *     <li>
+     *         The client {@link Consumer#pause(Collection) paused} the partition. A paused partition remains in
+     *         the fetch buffer, because {@link FetchCollector#collectFetch(FetchBuffer)} explicitly skips over
+     *         paused partitions and does not return them to the user.
+     *     </li>
+     *     <li>
+     *         The partition does not have a valid position on the client. This could be due to the partition
+     *         awaiting validation or awaiting reset.
+     *     </li>
+     * </ul>
+     *
+     * For those reasons, a partition that was <em>previously</em> in a fetchable state might not <em>currently</em>
+     * be in a fetchable state.
+     * </p>
+     *
+     * <p>
+     * Here's why this is important—in a production system, a given leader node serves as a leader for many partitions.
+     * From the client's perspective, it's possible that a node has a mix of both fetchable and unfetchable partitions.
+     * When the client determines which nodes to skip and which to fetch from, it's important that unfetchable
+     * partitions don't block fetchable partitions from being fetched.
+     * </p>
+     *
+     * <p>
+     * So, when it's determined that a buffered partition is not in a fetchable state, it should be skipped.
+     * Otherwise, its node would end up in the set of nodes with buffered data and no fetch would be requested.
+     * </p>
+     *
+     * @param partitions Buffered partitions
+     * @param currentTimeMs Current timestamp
+     *
+     * @return Set of zero or more IDs for leader nodes of buffered partitions
+     */
+    private Set<Integer> bufferedNodes(Set<TopicPartition> partitions, long currentTimeMs) {
+        Set<Integer> ids = new HashSet<>();
+
+        for (TopicPartition partition : partitions) {
+            if (!subscriptions.isFetchable(partition))
+                continue;
+
+            SubscriptionState.FetchPosition position = positionForPartition(partition);
+            Optional<Node> nodeOpt = maybeNodeForPosition(partition, position, currentTimeMs);
+            nodeOpt.ifPresent(node -> ids.add(node.id()));
+        }
+
+        return ids;
     }
 
     // Visible for testing

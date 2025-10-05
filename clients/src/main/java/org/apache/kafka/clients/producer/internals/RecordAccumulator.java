@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.producer.Callback;
@@ -27,7 +26,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -83,7 +81,6 @@ public class RecordAccumulator {
     private final boolean enableAdaptivePartitioning;
     private final BufferPool free;
     private final Time time;
-    private final ApiVersions apiVersions;
     private final ConcurrentMap<String /*topic*/, TopicInfo> topicInfoMap = new CopyOnWriteMap<>();
     private final ConcurrentMap<Integer /*nodeId*/, NodeLatencyStats> nodeStats = new CopyOnWriteMap<>();
     private final IncompleteBatches incomplete;
@@ -110,7 +107,6 @@ public class RecordAccumulator {
      * @param metrics The metrics
      * @param metricGrpName The metric group name
      * @param time The time instance to use
-     * @param apiVersions Request API versions for current connected brokers
      * @param transactionManager The shared transaction state object which tracks producer IDs, epochs, and sequence
      *                           numbers per partition.
      * @param bufferPool The buffer pool
@@ -126,7 +122,6 @@ public class RecordAccumulator {
                              Metrics metrics,
                              String metricGrpName,
                              Time time,
-                             ApiVersions apiVersions,
                              TransactionManager transactionManager,
                              BufferPool bufferPool) {
         this.logContext = logContext;
@@ -148,7 +143,6 @@ public class RecordAccumulator {
         this.incomplete = new IncompleteBatches();
         this.muted = new HashSet<>();
         this.time = time;
-        this.apiVersions = apiVersions;
         nodesDrainIndex = new HashMap<>();
         this.transactionManager = transactionManager;
         registerMetrics(metrics, metricGrpName);
@@ -170,7 +164,6 @@ public class RecordAccumulator {
      * @param metrics The metrics
      * @param metricGrpName The metric group name
      * @param time The time instance to use
-     * @param apiVersions Request API versions for current connected brokers
      * @param transactionManager The shared transaction state object which tracks producer IDs, epochs, and sequence
      *                           numbers per partition.
      * @param bufferPool The buffer pool
@@ -185,7 +178,6 @@ public class RecordAccumulator {
                              Metrics metrics,
                              String metricGrpName,
                              Time time,
-                             ApiVersions apiVersions,
                              TransactionManager transactionManager,
                              BufferPool bufferPool) {
         this(logContext,
@@ -199,7 +191,6 @@ public class RecordAccumulator {
             metrics,
             metricGrpName,
             time,
-            apiVersions,
             transactionManager,
             bufferPool);
     }
@@ -278,8 +269,6 @@ public class RecordAccumulator {
      * @param headers the Headers for the record
      * @param callbacks The callbacks to execute
      * @param maxTimeToBlock The maximum time in milliseconds to block for buffer memory to be available
-     * @param abortOnNewBatch A boolean that indicates returning before a new batch is created and
-     *                        running the partitioner's onNewBatch method before trying to append again
      * @param nowMs The current time, in milliseconds
      * @param cluster The cluster metadata
      */
@@ -291,7 +280,6 @@ public class RecordAccumulator {
                                      Header[] headers,
                                      AppendCallbacks callbacks,
                                      long maxTimeToBlock,
-                                     boolean abortOnNewBatch,
                                      long nowMs,
                                      Cluster cluster) throws InterruptedException {
         TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic, k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize)));
@@ -337,15 +325,9 @@ public class RecordAccumulator {
                     }
                 }
 
-                // we don't have an in-progress record batch try to allocate a new batch
-                if (abortOnNewBatch) {
-                    // Return a result that will cause another call to append.
-                    return new RecordAppendResult(null, false, false, true, 0);
-                }
-
                 if (buffer == null) {
-                    byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
-                    int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(maxUsableMagic, compression.type(), key, value, headers));
+                    int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(
+                            RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers));
                     log.trace("Allocating a new {} byte message buffer for topic {} partition {} with remaining timeout {}ms", size, topic, effectivePartition, maxTimeToBlock);
                     // This call may block if we exhausted buffer space.
                     buffer = free.allocate(size, maxTimeToBlock);
@@ -408,7 +390,7 @@ public class RecordAccumulator {
             return appendResult;
         }
 
-        MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, apiVersions.maxUsableProduceMagic());
+        MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer);
         ProducerBatch batch = new ProducerBatch(new TopicPartition(topic, partition), recordsBuilder, nowMs);
         FutureRecordMetadata future = Objects.requireNonNull(batch.tryAppend(timestamp, key, value, headers,
                 callbacks, nowMs));
@@ -416,15 +398,11 @@ public class RecordAccumulator {
         dq.addLast(batch);
         incomplete.add(batch);
 
-        return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true, false, batch.estimatedSizeInBytes());
+        return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true, batch.estimatedSizeInBytes());
     }
 
-    private MemoryRecordsBuilder recordsBuilder(ByteBuffer buffer, byte maxUsableMagic) {
-        if (transactionManager != null && maxUsableMagic < RecordBatch.MAGIC_VALUE_V2) {
-            throw new UnsupportedVersionException("Attempting to use idempotence with a broker which does not " +
-                "support the required message format (v2). The broker must be version 0.11 or later.");
-        }
-        return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, 0L);
+    private MemoryRecordsBuilder recordsBuilder(ByteBuffer buffer) {
+        return MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compression, TimestampType.CREATE_TIME, 0L);
     }
 
     /**
@@ -456,7 +434,7 @@ public class RecordAccumulator {
                 last.closeForRecordAppends();
             } else {
                 int appendedBytes = last.estimatedSizeInBytes() - initialBytes;
-                return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false, false, appendedBytes);
+                return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false, appendedBytes);
             }
         }
         return null;
@@ -536,7 +514,12 @@ public class RecordAccumulator {
         // the split doesn't happen too often.
         CompressionRatioEstimator.setEstimation(bigBatch.topicPartition.topic(), compression.type(),
                                                 Math.max(1.0f, (float) bigBatch.compressionRatio()));
-        Deque<ProducerBatch> dq = bigBatch.split(this.batchSize);
+        int targetSplitBatchSize = this.batchSize;
+
+        if (bigBatch.isSplitBatch()) {
+            targetSplitBatchSize = Math.max(bigBatch.maxRecordSize, bigBatch.estimatedSizeInBytes() / 2);
+        }
+        Deque<ProducerBatch> dq = bigBatch.split(targetSplitBatchSize);
         int numSplitBatches = dq.size();
         Deque<ProducerBatch> partitionDequeue = getOrCreateDeque(bigBatch.topicPartition);
         while (!dq.isEmpty()) {
@@ -1218,18 +1201,15 @@ public class RecordAccumulator {
         public final FutureRecordMetadata future;
         public final boolean batchIsFull;
         public final boolean newBatchCreated;
-        public final boolean abortForNewBatch;
         public final int appendedBytes;
 
         public RecordAppendResult(FutureRecordMetadata future,
                                   boolean batchIsFull,
                                   boolean newBatchCreated,
-                                  boolean abortForNewBatch,
                                   int appendedBytes) {
             this.future = future;
             this.batchIsFull = batchIsFull;
             this.newBatchCreated = newBatchCreated;
-            this.abortForNewBatch = abortForNewBatch;
             this.appendedBytes = appendedBytes;
         }
     }

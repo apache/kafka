@@ -35,7 +35,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -46,11 +46,12 @@ import net.jqwik.api.Property;
 import net.jqwik.api.Tag;
 import net.jqwik.api.constraints.IntRange;
 
+import org.mockito.Mockito;
+
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -296,6 +297,111 @@ public class RaftEventSimulationTest {
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
+    void leadershipAssignedOnlyOnceWithNetworkPartitionIfThereExistsMajority(
+        @ForAll int seed,
+        @ForAll @IntRange(min = 0, max = 3) int numObservers
+    ) {
+        int numVoters = 5;
+        Random random = new Random(seed);
+        Cluster cluster = new Cluster(numVoters, numObservers, random);
+        MessageRouter router = new MessageRouter(cluster);
+        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+        scheduler.addInvariant(new StableLeadership(cluster));
+
+        // Create network partition which would result in ping-pong of leadership between nodes 2 and 3 without PreVote
+        // Scenario explained in detail in KIP-996
+        // 0   1
+        // |   |
+        // 2 - 3
+        //  \ /
+        //   4
+        router.filter(
+            0,
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(1, 3, 4)))
+        );
+        router.filter(
+            1,
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 2, 4)))
+        );
+        router.filter(2, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(1))));
+        router.filter(3, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0))));
+        router.filter(4, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
+
+        // Start cluster
+        cluster.startAll();
+        schedulePolling(scheduler, cluster, 3, 5);
+        scheduler.schedule(router::deliverAll, 0, 2, 1);
+        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 1);
+        scheduler.runUntil(cluster::hasConsistentLeader);
+
+        // Check that leadership remains stable after majority processes some data
+        int leaderId = cluster.latestLeader().getAsInt();
+        // Determine the voters in the majority based on the leader
+        Set<Integer> majority = new HashSet<>(Set.of(0, 1, 2, 3, 4));
+        switch (leaderId) {
+            case 2 -> majority.remove(1);
+            case 3 -> majority.remove(0);
+            case 4 -> {
+                majority.remove(0);
+                majority.remove(1);
+            }
+            default -> throw new IllegalStateException("Unexpected leader: " + leaderId);
+        }
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(20, majority));
+    }
+
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
+    void leadershipWillNotChangeDuringNetworkPartitionIfMajorityStillReachable(
+        @ForAll int seed,
+        @ForAll @IntRange(min = 0, max = 3) int numObservers
+    ) {
+        int numVoters = 5;
+        Random random = new Random(seed);
+        Cluster cluster = new Cluster(numVoters, numObservers, random);
+        MessageRouter router = new MessageRouter(cluster);
+        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+        scheduler.addInvariant(new StableLeadership(cluster));
+
+        // Seed the cluster with some data
+        cluster.startAll();
+        schedulePolling(scheduler, cluster, 3, 5);
+        scheduler.schedule(router::deliverAll, 0, 2, 1);
+        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 1);
+        scheduler.runUntil(cluster::hasConsistentLeader);
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(5));
+
+        int leaderId = cluster.latestLeader().orElseThrow(() ->
+            new AssertionError("Failed to find current leader during setup")
+        );
+
+        // Create network partition which would result in ping-pong of leadership between nodes C and D without PreVote
+        // Scenario explained in detail in KIP-996
+        // A   B
+        // |   |
+        // C - D  (have leader start in position C)
+        //  \ /
+        //   E
+        int nodeA = (leaderId + 1) % numVoters;
+        int nodeB = (leaderId + 2) % numVoters;
+        int nodeD = (leaderId + 3) % numVoters;
+        int nodeE = (leaderId + 4) % numVoters;
+        router.filter(
+            nodeA,
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeB, nodeD, nodeE)))
+        );
+        router.filter(
+            nodeB,
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeA, leaderId, nodeE)))
+        );
+        router.filter(leaderId, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeB))));
+        router.filter(nodeD, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeA))));
+        router.filter(nodeE, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeA, nodeB))));
+
+        // Check that leadership remains stable
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(20, Set.of(nodeA, leaderId, nodeD, nodeE)));
+    }
+
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canMakeProgressAfterBackToBackLeaderFailures(
         @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters,
@@ -439,12 +545,7 @@ public class RaftEventSimulationTest {
         }
     }
 
-    private static class SequentialAppendAction implements Runnable {
-        final Cluster cluster;
-
-        private SequentialAppendAction(Cluster cluster) {
-            this.cluster = cluster;
-        }
+    private record SequentialAppendAction(Cluster cluster) implements Runnable {
 
         @Override
         public void run() {
@@ -651,14 +752,18 @@ public class RaftEventSimulationTest {
                 return false;
 
             RaftNode first = iter.next();
-            ElectionState election = first.store.readElectionState().get();
-            if (!election.hasLeader())
+            OptionalInt firstLeaderId = first.store.readElectionState().get().optionalLeaderId();
+            int firstEpoch = first.store.readElectionState().get().epoch();
+            if (firstLeaderId.isEmpty())
                 return false;
 
             while (iter.hasNext()) {
                 RaftNode next = iter.next();
-                if (!election.equals(next.store.readElectionState().get()))
+                OptionalInt nextLeaderId = next.store.readElectionState().get().optionalLeaderId();
+                int nextEpoch = next.store.readElectionState().get().epoch();
+                if (!firstLeaderId.equals(nextLeaderId) || firstEpoch != nextEpoch) {
                     return false;
+                }
             }
 
             return true;
@@ -746,7 +851,7 @@ public class RaftEventSimulationTest {
 
         private static Endpoints endpointsFromId(int nodeId, ListenerName listenerName) {
             return Endpoints.fromInetSocketAddresses(
-                Collections.singletonMap(
+                Map.of(
                     listenerName,
                     InetSocketAddress.createUnresolved(hostFromId(nodeId), PORT)
                 )
@@ -791,9 +896,9 @@ public class RaftEventSimulationTest {
                 FETCH_MAX_WAIT_MS,
                 true,
                 clusterId,
-                Collections.emptyList(),
+                List.of(),
                 endpointsFromId(nodeId, channel.listenerName()),
-                Features.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(),
                 logContext,
                 random,
                 quorumConfig
@@ -817,6 +922,7 @@ public class RaftEventSimulationTest {
     }
 
     private static class RaftNode {
+        final LogContext logContext;
         final int nodeId;
         final KafkaRaftClient<Integer> client;
         final MockLog log;
@@ -838,6 +944,7 @@ public class RaftEventSimulationTest {
             Random random,
             RecordSerde<Integer> intSerde
         ) {
+            this.logContext = logContext;
             this.nodeId = nodeId;
             this.client = client;
             this.log = log;
@@ -853,7 +960,8 @@ public class RaftEventSimulationTest {
             client.initialize(
                 voterAddresses,
                 store,
-                metrics
+                metrics,
+                Mockito.mock(ExternalKRaftMetrics.class)
             );
         }
 
@@ -886,16 +994,13 @@ public class RaftEventSimulationTest {
                 logEndOffset()
             );
         }
+
+        LogContext logContext() {
+            return logContext;
+        }
     }
 
-    private static class InflightRequest {
-        final int sourceId;
-        final Node destination;
-
-        private InflightRequest(int sourceId, Node destination) {
-            this.sourceId = sourceId;
-            this.destination = destination;
-        }
+    private record InflightRequest(int sourceId, Node destination) {
     }
 
     private interface NetworkFilter {
@@ -929,16 +1034,13 @@ public class RaftEventSimulationTest {
         }
     }
 
-    private static class DropOutboundRequestsTo implements NetworkFilter {
-        private final Set<InetSocketAddress> unreachable;
-
+    private record DropOutboundRequestsTo(Set<InetSocketAddress> unreachable) implements NetworkFilter {
         /**
          * This network filter drops any outbound message sent to the {@code unreachable} nodes.
          *
          * @param unreachable the set of destination address which are not reachable
          */
-        private DropOutboundRequestsTo(Set<InetSocketAddress> unreachable) {
-            this.unreachable = unreachable;
+        private DropOutboundRequestsTo {
         }
 
         @Override
@@ -958,8 +1060,7 @@ public class RaftEventSimulationTest {
          */
         @Override
         public boolean acceptOutbound(RaftMessage message) {
-            if (message instanceof RaftRequest.Outbound) {
-                RaftRequest.Outbound request = (RaftRequest.Outbound) message;
+            if (message instanceof RaftRequest.Outbound request) {
                 InetSocketAddress destination = InetSocketAddress.createUnresolved(
                     request.destination().host(),
                     request.destination().port()
@@ -1007,12 +1108,7 @@ public class RaftEventSimulationTest {
         }
     }
 
-    private static class MajorityReachedHighWatermark implements Invariant {
-        final Cluster cluster;
-
-        private MajorityReachedHighWatermark(Cluster cluster) {
-            this.cluster = cluster;
-        }
+    private record MajorityReachedHighWatermark(Cluster cluster) implements Invariant {
 
         @Override
         public void verify() {
@@ -1057,6 +1153,45 @@ public class RaftEventSimulationTest {
         }
     }
 
+    /**
+     * This invariant currently checks that the leader does not change after the first successful election
+     * and should only be applied to tests where we expect leadership not to change (e.g. non-impactful
+     * routing filter changes, no network jitter)
+     */
+    private static class StableLeadership implements Invariant {
+        final Cluster cluster;
+        OptionalInt epochWithFirstLeader = OptionalInt.empty();
+        OptionalInt firstLeaderId = OptionalInt.empty();
+
+        private StableLeadership(Cluster cluster) {
+            this.cluster = cluster;
+        }
+
+        @Override
+        public void verify() {
+            // KAFKA-18439: Currently this just checks the leader is never changed after the first successful election.
+            // KAFKA-18439 will generalize the invariant so it holds for all tests even if routing filters are changed.
+            // i.e. if the current leader is reachable by majority, we do not expect leadership to change
+            for (Map.Entry<Integer, PersistentState> nodeEntry : cluster.nodes.entrySet()) {
+                PersistentState state = nodeEntry.getValue();
+                Optional<ElectionState> electionState = state.store.readElectionState();
+
+                electionState.ifPresent(election -> {
+                    if (election.hasLeader()) {
+                        // verify there were no leaders prior to this one
+                        if (epochWithFirstLeader.isEmpty()) {
+                            epochWithFirstLeader = OptionalInt.of(election.epoch());
+                            firstLeaderId = OptionalInt.of(election.leaderId());
+                        } else {
+                            assertEquals(epochWithFirstLeader.getAsInt(), election.epoch());
+                            assertEquals(firstLeaderId.getAsInt(), election.leaderId());
+                        }
+                    }
+                });
+            }
+        }
+    }
+
     private static class MonotonicHighWatermark implements Invariant {
         final Cluster cluster;
         long highWatermark = 0;
@@ -1079,12 +1214,7 @@ public class RaftEventSimulationTest {
         }
     }
 
-    private static class SnapshotAtLogStart implements Invariant {
-        final Cluster cluster;
-
-        private SnapshotAtLogStart(Cluster cluster) {
-            this.cluster = cluster;
-        }
+    private record SnapshotAtLogStart(Cluster cluster) implements Invariant {
 
         @Override
         public void verify() {
@@ -1125,12 +1255,7 @@ public class RaftEventSimulationTest {
         }
     }
 
-    private static class LeaderNeverLoadSnapshot implements Invariant {
-        final Cluster cluster;
-
-        private LeaderNeverLoadSnapshot(Cluster cluster) {
-            this.cluster = cluster;
-        }
+    private record LeaderNeverLoadSnapshot(Cluster cluster) implements Invariant {
 
         @Override
         public void verify() {
@@ -1186,7 +1311,8 @@ public class RaftEventSimulationTest {
                         node.intSerde,
                         BufferSupplier.create(),
                         Integer.MAX_VALUE,
-                        true
+                        true,
+                        node.logContext()
                     )
                 ) {
                     // Since the state machine is only on e value we only expect one data record in the snapshot
@@ -1214,15 +1340,15 @@ public class RaftEventSimulationTest {
             });
 
             for (LogBatch batch : log.readBatches(startOffset.get(), highWatermark)) {
-                if (batch.isControlBatch) {
+                if (batch.isControlBatch()) {
                     continue;
                 }
 
-                for (LogEntry entry : batch.entries) {
-                    long offset = entry.offset;
+                for (LogEntry entry : batch.entries()) {
+                    long offset = entry.offset();
                     assertTrue(offset < highWatermark.getAsLong());
 
-                    int sequence = parseSequenceNumber(entry.record.value().duplicate());
+                    int sequence = parseSequenceNumber(entry.record().value().duplicate());
                     committedSequenceNumbers.putIfAbsent(offset, sequence);
 
                     int committedSequence = committedSequenceNumbers.get(offset);

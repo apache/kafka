@@ -826,7 +826,7 @@ public class RackAwareTaskAssignorTest {
 
     @ParameterizedTest
     @MethodSource("paramStoreType")
-    public void shouldThrowIfMissingCallcanEnableRackAwareAssignor(final boolean stateful, final String assignmentStrategy) {
+    public void shouldThrowIfMissingCallCanEnableRackAwareAssignor(final boolean stateful, final String assignmentStrategy) {
         setUp(stateful);
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForAllTopics(),
@@ -1125,28 +1125,28 @@ public class RackAwareTaskAssignorTest {
         setUp(stateful);
         final int nodeSize = 50;
         final int tpSize = 60;
-        final int partionSize = 3;
+        final int partitionSize = 3;
         final int clientSize = 50;
         final int replicaCount = 3;
         final int maxCapacity = 3;
         final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = getTaskTopicPartitionMap(
-            tpSize, partionSize, false);
+            tpSize, partitionSize, false);
         final AssignmentConfigs assignorConfiguration = getRackAwareEnabledConfigWithStandby(replicaCount, assignmentStrategy);
 
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
-            getRandomCluster(nodeSize, tpSize, partionSize),
+            getRandomCluster(nodeSize, tpSize, partitionSize),
             taskTopicPartitionMap,
-            getTaskTopicPartitionMap(tpSize, partionSize, true),
+            getTaskTopicPartitionMap(tpSize, partitionSize, true),
             getTopologyGroupTaskMap(),
             getRandomProcessRacks(clientSize, nodeSize),
-            mockInternalTopicManagerForRandomChangelog(nodeSize, tpSize, partionSize),
+            mockInternalTopicManagerForRandomChangelog(nodeSize, tpSize, partitionSize),
             assignorConfiguration,
             time
         );
 
         final SortedSet<TaskId> taskIds = (SortedSet<TaskId>) taskTopicPartitionMap.keySet();
         final SortedMap<ProcessId, ClientState> clientStateMap = getRandomClientState(clientSize,
-            tpSize, partionSize, maxCapacity, taskIds);
+            tpSize, partitionSize, maxCapacity, taskIds);
 
         final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(
             assignorConfiguration, assignor);

@@ -24,11 +24,12 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
-import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -41,7 +42,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
-import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.Header;
@@ -49,9 +49,6 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.FetchResponseData;
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -76,7 +73,6 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchRequest.PartitionData;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.BytesDeserializer;
@@ -110,6 +106,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -117,11 +114,13 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -212,11 +211,15 @@ public class FetchRequestManagerTest {
     }
 
     private void assignFromUser(Set<TopicPartition> partitions) {
+        assignFromUser(partitions, 1);
+    }
+
+    private void assignFromUser(Set<TopicPartition> partitions, int numNodes) {
         subscriptions.assignFromUser(partitions);
-        client.updateMetadata(initialUpdateResponse);
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(numNodes, singletonMap(topicName, 4), topicIds));
 
         // A dummy metadata update to ensure valid leader epoch.
-        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
+        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", numNodes,
                 Collections.emptyMap(), singletonMap(topicName, 4),
                 tp -> validLeaderEpoch, topicIds), false, 0L);
     }
@@ -379,7 +382,7 @@ public class FetchRequestManagerTest {
         // NOTE: by design the FetchRequestManager doesn't perform network I/O internally. That means that calling
         // the close() method with a Timer will NOT send out the close session requests on close. The network
         // I/O logic is handled inside ConsumerNetworkThread.runAtClose, so we need to run that logic here.
-        ConsumerNetworkThread.runAtClose(singletonList(Optional.of(fetcher)), networkClientDelegate, time.milliseconds());
+        ConsumerNetworkThread.runAtClose(List.of(fetcher), networkClientDelegate, time.milliseconds());
         // the network is polled during the last state of clean up.
         networkClientDelegate.poll(time.timer(1));
         // validate that closing the fetcher has sent a request with final epoch. 2 requests are sent, one for the
@@ -1263,25 +1266,6 @@ public class FetchRequestManagerTest {
     }
 
     /**
-     * Test the case where the client makes a pre-v3 FetchRequest, but the server replies with only a partial
-     * request. This happens when a single message is larger than the per-partition limit.
-     */
-    @Test
-    public void testFetchRequestWhenRecordTooLarge() {
-        try {
-            buildFetcher();
-
-            client.setNodeApiVersions(NodeApiVersions.create(ApiKeys.FETCH.id, (short) 2, (short) 2));
-            makeFetchRequestWithIncompleteRecord();
-            assertThrows(RecordTooLargeException.class, this::collectFetch);
-            // the position should not advance since no data has been returned
-            assertEquals(0, subscriptions.position(tp0).offset);
-        } finally {
-            client.setNodeApiVersions(NodeApiVersions.create());
-        }
-    }
-
-    /**
      * Test the case where the client makes a post KIP-74 FetchRequest, but the server replies with only a
      * partial request. For v3 and later FetchRequests, the implementation of KIP-74 changed the behavior
      * so that at least one message is always returned. Therefore, this case should not happen, and it indicates
@@ -1449,7 +1433,7 @@ public class FetchRequestManagerTest {
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords;
 
-        assignFromUser(Set.of(tp0, tp1));
+        assignFromUser(Set.of(tp0, tp1), 2);    // Use multiple nodes so partitions have different leaders
 
         // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
 
@@ -1481,7 +1465,7 @@ public class FetchRequestManagerTest {
     public void testFetchOnCompletedFetchesForAllPausedPartitions() {
         buildFetcher();
 
-        assignFromUser(Set.of(tp0, tp1));
+        assignFromUser(Set.of(tp0, tp1), 2);    // Use multiple nodes so partitions have different leaders
 
         // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
 
@@ -1749,7 +1733,7 @@ public class FetchRequestManagerTest {
                 .setPartitionIndex(tp0.partition())
                 .setErrorCode(Errors.OFFSET_OUT_OF_RANGE.code())
                 .setHighWatermark(100));
-        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions)));
+        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions), List.of()));
         networkClientDelegate.poll(time.timer(0));
 
         List<ConsumerRecord<byte[], byte[]>> allFetchedRecords = new ArrayList<>();
@@ -1810,7 +1794,7 @@ public class FetchRequestManagerTest {
                 .setLastStableOffset(4)
                 .setLogStartOffset(0)
                 .setRecords(partialRecords));
-        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions)));
+        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions), List.of()));
         networkClientDelegate.poll(time.timer(0));
 
         List<ConsumerRecord<byte[], byte[]>> fetchedRecords = new ArrayList<>();
@@ -1831,7 +1815,7 @@ public class FetchRequestManagerTest {
         assertEquals(1, oorExceptions.size());
         OffsetOutOfRangeException oor = oorExceptions.get(0);
         assertTrue(oor.offsetOutOfRangePartitions().containsKey(tp0));
-        assertEquals(oor.offsetOutOfRangePartitions().size(), 1);
+        assertEquals(1, oor.offsetOutOfRangePartitions().size());
 
         fetchRecordsInto(fetchedRecords);
 
@@ -1857,7 +1841,9 @@ public class FetchRequestManagerTest {
         buildFetcher(AutoOffsetResetStrategy.NONE, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), 2, IsolationLevel.READ_UNCOMMITTED);
 
-        assignFromUser(Set.of(tp0));
+        // Use multiple nodes so partitions have different leaders. tp0 is added here, but tp1 is also assigned
+        // about halfway down.
+        assignFromUser(Set.of(tp0), 2);
         subscriptions.seek(tp0, 1);
         assertEquals(1, sendFetches());
         Map<TopicIdPartition, FetchResponseData.PartitionData> partitions = new HashMap<>();
@@ -1879,7 +1865,7 @@ public class FetchRequestManagerTest {
                 .setPartitionIndex(tp1.partition())
                 .setErrorCode(Errors.OFFSET_OUT_OF_RANGE.code())
                 .setHighWatermark(100));
-        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions)));
+        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions), List.of()));
         networkClientDelegate.poll(time.timer(0));
         assertEquals(1, fetchRecords().get(tp0).size());
 
@@ -1922,7 +1908,7 @@ public class FetchRequestManagerTest {
                 MetadataRecoveryStrategy.NONE);
 
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
-                400, ApiMessageType.ListenerType.ZK_BROKER);
+                400, ApiMessageType.ListenerType.BROKER);
         ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(apiVersionsResponse, ApiKeys.API_VERSIONS.latestVersion(), 0);
 
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
@@ -2127,7 +2113,7 @@ public class FetchRequestManagerTest {
         }
 
         assertEquals(1, sendFetches());
-        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, fetchPartitionData));
+        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, fetchPartitionData, List.of()));
         networkClientDelegate.poll(time.timer(0));
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
@@ -2199,7 +2185,7 @@ public class FetchRequestManagerTest {
                 .setLogStartOffset(0));
 
         assertEquals(1, sendFetches());
-        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions)));
+        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions), List.of()));
         networkClientDelegate.poll(time.timer(0));
         collectFetch();
 
@@ -2245,7 +2231,7 @@ public class FetchRequestManagerTest {
                 .setLogStartOffset(0)
                 .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("val".getBytes()))));
 
-        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions)));
+        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions), List.of()));
         networkClientDelegate.poll(time.timer(0));
         collectFetch();
 
@@ -2373,7 +2359,7 @@ public class FetchRequestManagerTest {
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
         assertTrue(fetchedRecords.containsKey(tp0));
-        assertEquals(fetchedRecords.get(tp0).size(), 2);
+        assertEquals(2, fetchedRecords.get(tp0).size());
     }
 
     @Test
@@ -2491,9 +2477,9 @@ public class FetchRequestManagerTest {
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
         assertTrue(fetchedRecords.containsKey(tp0));
-        assertEquals(fetchedRecords.get(tp0).size(), 2);
+        assertEquals(2, fetchedRecords.get(tp0).size());
         List<ConsumerRecord<byte[], byte[]>> fetchedConsumerRecords = fetchedRecords.get(tp0);
-        Set<String> expectedCommittedKeys = new HashSet<>(Arrays.asList("commit1-1", "commit1-2"));
+        Set<String> expectedCommittedKeys = Set.of("commit1-1", "commit1-2");
         Set<String> actuallyCommittedKeys = new HashSet<>();
         for (ConsumerRecord<byte[], byte[]> consumerRecord : fetchedConsumerRecords) {
             actuallyCommittedKeys.add(new String(consumerRecord.key(), StandardCharsets.UTF_8));
@@ -2552,7 +2538,7 @@ public class FetchRequestManagerTest {
                 new SimpleRecord(null, "value".getBytes()));
 
         // Remove the last record to simulate compaction
-        MemoryRecords.FilterResult result = records.filterTo(tp0, new MemoryRecords.RecordFilter(0, 0) {
+        MemoryRecords.FilterResult result = records.filterTo(new MemoryRecords.RecordFilter(0, 0) {
             @Override
             protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
                 return new BatchRetentionResult(BatchRetention.DELETE_EMPTY, false);
@@ -2562,7 +2548,7 @@ public class FetchRequestManagerTest {
             protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return record.key() != null;
             }
-        }, ByteBuffer.allocate(1024), Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+        }, ByteBuffer.allocate(1024), BufferSupplier.NO_CACHING);
         result.outputBuffer().flip();
         MemoryRecords compactedRecords = MemoryRecords.readableRecords(result.outputBuffer());
 
@@ -2755,7 +2741,7 @@ public class FetchRequestManagerTest {
     public void testConsumingViaIncrementalFetchRequests() {
         buildFetcher(2);
 
-        assignFromUser(new HashSet<>(Arrays.asList(tp0, tp1)));
+        assignFromUser(Set.of(tp0, tp1));
         subscriptions.seekValidated(tp0, new SubscriptionState.FetchPosition(0, Optional.empty(), metadata.currentLeader(tp0)));
         subscriptions.seekValidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
 
@@ -2772,7 +2758,7 @@ public class FetchRequestManagerTest {
                 .setHighWatermark(100)
                 .setLogStartOffset(0)
                 .setRecords(emptyRecords));
-        FetchResponse resp1 = FetchResponse.of(Errors.NONE, 0, 123, partitions1);
+        FetchResponse resp1 = FetchResponse.of(Errors.NONE, 0, 123, partitions1, List.of());
         client.prepareResponse(resp1);
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
@@ -2798,7 +2784,7 @@ public class FetchRequestManagerTest {
 
         // The second response contains no new records.
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> partitions2 = new LinkedHashMap<>();
-        FetchResponse resp2 = FetchResponse.of(Errors.NONE, 0, 123, partitions2);
+        FetchResponse resp2 = FetchResponse.of(Errors.NONE, 0, 123, partitions2, List.of());
         client.prepareResponse(resp2);
         assertEquals(1, sendFetches());
         networkClientDelegate.poll(time.timer(0));
@@ -2815,7 +2801,7 @@ public class FetchRequestManagerTest {
                 .setLastStableOffset(4)
                 .setLogStartOffset(0)
                 .setRecords(nextRecords));
-        FetchResponse resp3 = FetchResponse.of(Errors.NONE, 0, 123, partitions3);
+        FetchResponse resp3 = FetchResponse.of(Errors.NONE, 0, 123, partitions3, List.of());
         client.prepareResponse(resp3);
         assertEquals(1, sendFetches());
         networkClientDelegate.poll(time.timer(0));
@@ -2868,7 +2854,7 @@ public class FetchRequestManagerTest {
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
         assertTrue(fetchedRecords.containsKey(tp0));
-        assertEquals(fetchedRecords.get(tp0).size(), 2);
+        assertEquals(2, fetchedRecords.get(tp0).size());
     }
 
     private MemoryRecords buildRecords(long baseOffset, int count, long firstMessageId) {
@@ -2953,8 +2939,8 @@ public class FetchRequestManagerTest {
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
 
-        assertEquals(subscriptions.position(tp0).offset, 3L);
-        assertOptional(subscriptions.position(tp0).offsetEpoch, value -> assertEquals(value.intValue(), 1));
+        assertEquals(3L, subscriptions.position(tp0).offset);
+        assertOptional(subscriptions.position(tp0).offsetEpoch, value -> assertEquals(1, value.intValue()));
     }
 
     @Test
@@ -3124,7 +3110,7 @@ public class FetchRequestManagerTest {
         fetchRecords();
 
         Node selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
-        assertEquals(selected.id(), 1);
+        assertEquals(1, selected.id());
 
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
@@ -3138,7 +3124,7 @@ public class FetchRequestManagerTest {
         fetchRecords();
 
         selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
-        assertEquals(selected.id(), -1);
+        assertEquals(-1, selected.id());
     }
 
     @Test
@@ -3210,7 +3196,7 @@ public class FetchRequestManagerTest {
 
         // Setup so that tp0 & tp1 are subscribed and will be fetched from.
         // Also, setup client's metadata for tp0 & tp1.
-        subscriptions.assignFromUser(new HashSet<>(Arrays.asList(tp0, tp1)));
+        subscriptions.assignFromUser(Set.of(tp0, tp1));
         client.updateMetadata(
             RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 4),
                 tp -> validLeaderEpoch, topicIds, false));
@@ -3260,7 +3246,7 @@ public class FetchRequestManagerTest {
                 .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
                 .setLogStartOffset(0)
                 .setRecords(nextRecords));
-        client.prepareResponseFrom(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, partitions), nodeId0);
+        client.prepareResponseFrom(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, partitions, List.of()), nodeId0);
         networkClientDelegate.poll(time.timer(0));
         partitionRecords = fetchRecords();
         assertFalse(partitionRecords.containsKey(tp0));
@@ -3303,7 +3289,7 @@ public class FetchRequestManagerTest {
 
         // Setup so that tp0 & tp1 are subscribed and will be fetched from.
         // Also, setup client's metadata for tp0 & tp1.
-        subscriptions.assignFromUser(new HashSet<>(Arrays.asList(tp0, tp1)));
+        subscriptions.assignFromUser(Set.of(tp0, tp1));
         client.updateMetadata(
             RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 4),
                 tp -> validLeaderEpoch, topicIds, false));
@@ -3432,7 +3418,7 @@ public class FetchRequestManagerTest {
         assertFalse(future.isDone());
 
         assertDoesNotThrow(() -> sendFetches(false));
-        assertFutureThrows(future, AuthenticationException.class);
+        assertFutureThrows(AuthenticationException.class, future);
     }
 
     @Test
@@ -3457,21 +3443,461 @@ public class FetchRequestManagerTest {
 
     }
 
-    private OffsetsForLeaderEpochResponse prepareOffsetsForLeaderEpochResponse(
-            TopicPartition topicPartition,
-            Errors error,
-            int leaderEpoch,
-            long endOffset
-    ) {
-        OffsetForLeaderEpochResponseData data = new OffsetForLeaderEpochResponseData();
-        data.topics().add(new OffsetForLeaderTopicResult()
-                .setTopic(topicPartition.topic())
-                .setPartitions(Collections.singletonList(new EpochEndOffset()
-                        .setPartition(topicPartition.partition())
-                        .setErrorCode(error.code())
-                        .setLeaderEpoch(leaderEpoch)
-                        .setEndOffset(endOffset))));
-        return new OffsetsForLeaderEpochResponse(data);
+    /**
+     * This test makes several calls to {@link #sendFetches()}, and after each, the buffered partitions are
+     * modified to either cause (or prevent) a fetch from being requested.
+     */
+    @Test
+    public void testFetchRequestWithBufferedPartitions() {
+        buildFetcher();
+
+        // The partitions are spread across multiple nodes to ensure the fetcher's logic correctly handles the
+        // partition-to-node mapping.
+        int numNodes = 2;
+        Set<TopicPartition> partitions = Set.of(tp0, tp1, tp2, tp3);
+        assignFromUser(partitions, numNodes);
+
+        // Seek each partition so that it becomes eligible to fetch.
+        partitions.forEach(tp -> subscriptions.seek(tp, 0));
+
+        // Get all the nodes serving as the leader for these partitions.
+        List<Node> nodes = nodesForPartitionLeaders(partitions);
+
+        // Extract the nodes and their respective set of partitions to make things easier to keep track of later.
+        assertEquals(2, nodes.size());
+        Node node0 = nodes.get(0);
+        Node node1 = nodes.get(1);
+        List<TopicPartition> node0Partitions = partitionsForNode(node0, partitions);
+        List<TopicPartition> node1Partitions = partitionsForNode(node1, partitions);
+        assertEquals(2, node0Partitions.size());
+        assertEquals(2, node1Partitions.size());
+        TopicPartition node0Partition1 = node0Partitions.get(0);
+        TopicPartition node0Partition2 = node0Partitions.get(1);
+        TopicPartition node1Partition1 = node1Partitions.get(0);
+        TopicPartition node1Partition2 = node1Partitions.get(1);
+
+        // sendFetches() call #1 should issue requests to node 0 or node 1 since neither has buffered data.
+        List<NetworkClientDelegate.UnsentRequest> call1 = fetcher.sendFetches();
+        assertEquals(2, call1.size());
+        assertEquals(partitions, partitionsRequested(call1));
+        assertEquals(new HashSet<>(nodes), nodesRequested(call1));
+
+        prepareFetchResponses(node0, node0Partitions, 0);
+        prepareFetchResponses(node1, node1Partitions, 0);
+        networkClientDelegate.poll(time.timer(0));
+
+        assertEquals(4, fetcher.fetchBuffer.bufferedPartitions().size());
+        collectSelectedPartition(node0Partition1, partitions);
+        node0Partitions.remove(node0Partition1);
+        assertEquals(3, fetcher.fetchBuffer.bufferedPartitions().size());
+
+        // sendFetches() call #2 shouldn't issue requests to either node 0 or node 1 since they both have buffered data.
+        List<NetworkClientDelegate.UnsentRequest> call2 = fetcher.sendFetches();
+        assertEquals(0, call2.size());
+
+        networkClientDelegate.poll(time.timer(0));
+        collectSelectedPartition(node1Partition1, partitions);
+        node1Partitions.remove(node1Partition1);
+        assertEquals(2, fetcher.fetchBuffer.bufferedPartitions().size());
+
+        // sendFetches() call #3 shouldn't issue requests to either node 0 or node 1 since they both have buffered data.
+        List<NetworkClientDelegate.UnsentRequest> call3 = fetcher.sendFetches();
+        assertEquals(0, call3.size());
+
+        networkClientDelegate.poll(time.timer(0));
+        collectSelectedPartition(node0Partition2, partitions);
+        node0Partitions.remove(node0Partition2);
+        assertEquals(1, fetcher.fetchBuffer.bufferedPartitions().size());
+
+        // Validate that all of node 0's partitions have all been collected.
+        assertTrue(node0Partitions.isEmpty());
+
+        // Reset the list of partitions for node 0 so the next fetch pass requests data.
+        node0Partitions = partitionsForNode(node0, partitions);
+
+        // sendFetches() call #4 should issue a request to node 0 since its buffered data was collected.
+        List<NetworkClientDelegate.UnsentRequest> call4 = fetcher.sendFetches();
+        assertEquals(1, call4.size());
+        assertEquals(Set.of(node0Partition1, node0Partition2), partitionsRequested(call4));
+        assertEquals(Set.of(node0), nodesRequested(call4));
+
+        prepareFetchResponses(node0, node0Partitions, 10);
+        networkClientDelegate.poll(time.timer(0));
+
+        collectSelectedPartition(node1Partition2, partitions);
+        node1Partitions.remove(node1Partition2);
+        assertEquals(2, fetcher.fetchBuffer.bufferedPartitions().size());
+
+        // Node 1's partitions have likewise all been collected, so validate that.
+        assertTrue(node1Partitions.isEmpty());
+
+        // Again, reset the list of partitions, this time for node 1, so the next fetch pass requests data.
+        node1Partitions = partitionsForNode(node1, partitions);
+
+        // sendFetches() call #5 should issue a request to node 1 since its buffered data was collected.
+        List<NetworkClientDelegate.UnsentRequest> call5 = fetcher.sendFetches();
+        assertEquals(1, call5.size());
+        assertEquals(Set.of(node1Partition1, node1Partition2), partitionsRequested(call5));
+        assertEquals(Set.of(node1), nodesRequested(call5));
+
+        prepareFetchResponses(node1, node1Partitions, 10);
+        networkClientDelegate.poll(time.timer(0));
+        assertEquals(4, fetcher.fetchBuffer.bufferedPartitions().size());
+
+        // Collect all the records and make sure they include all the partitions, and validate that there is no data
+        // remaining in the fetch buffer.
+        assertEquals(partitions, fetchRecords().keySet());
+        assertEquals(0, fetcher.fetchBuffer.bufferedPartitions().size());
+
+        // sendFetches() call #6 should issue a request to nodes 0 and 1 since its buffered data was collected.
+        List<NetworkClientDelegate.UnsentRequest> call6 = fetcher.sendFetches();
+        assertEquals(2, call6.size());
+        assertEquals(partitions, partitionsRequested(call6));
+        assertEquals(new HashSet<>(nodes), nodesRequested(call6));
+
+        prepareFetchResponses(node0, node0Partitions, 20);
+        prepareFetchResponses(node1, node1Partitions, 20);
+        networkClientDelegate.poll(time.timer(0));
+        assertEquals(4, fetcher.fetchBuffer.bufferedPartitions().size());
+
+        // Just for completeness, collect all the records and make sure they include all the partitions, and validate
+        // that there is no data remaining in the fetch buffer.
+        assertEquals(partitions, fetchRecords().keySet());
+        assertEquals(0, fetcher.fetchBuffer.bufferedPartitions().size());
+    }
+
+    @Test
+    public void testFetchRequestWithBufferedPartitionNotAssigned() {
+        buildFetcher();
+
+        // The partitions are spread across multiple nodes to ensure the fetcher's logic correctly handles the
+        // partition-to-node mapping.
+        int numNodes = 2;
+        Set<TopicPartition> partitions = Set.of(tp0, tp1, tp2, tp3);
+        assignFromUser(partitions, numNodes);
+
+        // Seek each partition so that it becomes eligible to fetch.
+        partitions.forEach(tp -> subscriptions.seek(tp, 0));
+
+        // Get all the nodes serving as the leader for these partitions.
+        List<Node> nodes = nodesForPartitionLeaders(partitions);
+
+        // Extract the nodes and their respective set of partitions to make things easier to keep track of later.
+        assertEquals(2, nodes.size());
+        Node node0 = nodes.get(0);
+        Node node1 = nodes.get(1);
+        List<TopicPartition> node0Partitions = partitionsForNode(node0, partitions);
+        List<TopicPartition> node1Partitions = partitionsForNode(node1, partitions);
+        assertEquals(2, node0Partitions.size());
+        assertEquals(2, node1Partitions.size());
+        TopicPartition node0Partition1 = node0Partitions.get(0);
+        TopicPartition node0Partition2 = node0Partitions.get(1);
+        TopicPartition node1Partition1 = node1Partitions.get(0);
+        TopicPartition node1Partition2 = node1Partitions.get(1);
+
+        // sendFetches() call #1 should issue requests to node 0 or node 1 since neither has buffered data.
+        List<NetworkClientDelegate.UnsentRequest> call1 = fetcher.sendFetches();
+        assertEquals(2, call1.size());
+        assertEquals(partitions, partitionsRequested(call1));
+        assertEquals(new HashSet<>(nodes), nodesRequested(call1));
+
+        prepareFetchResponses(node0, node0Partitions, 0);
+        prepareFetchResponses(node1, node1Partitions, 0);
+        networkClientDelegate.poll(time.timer(0));
+
+        // Collect node0Partition1 so that it doesn't have anything in the fetch buffer.
+        assertEquals(4, fetcher.fetchBuffer.bufferedPartitions().size());
+        collectSelectedPartition(node0Partition1, partitions);
+        assertEquals(3, fetcher.fetchBuffer.bufferedPartitions().size());
+
+        // Exclude node0Partition2 (the remaining buffered partition for node 0) when updating the assigned partitions
+        // to cause it to become unassigned.
+        subscriptions.assignFromUser(Set.of(
+            node0Partition1,
+            // node0Partition2,         // Intentionally omit this partition so that it is unassigned
+            node1Partition1,
+            node1Partition2
+        ));
+
+        // node0Partition1 (the collected partition) should have a retrievable position, but node0Partition2
+        // (the unassigned position) should throw an error when attempting to retrieve its position.
+        assertDoesNotThrow(() -> subscriptions.position(node0Partition1));
+        assertThrows(IllegalStateException.class, () -> subscriptions.position(node0Partition2));
+
+        // sendFetches() call #2 should issue a request to node 0 because the first partition in node 0 was collected
+        // (and its buffer removed) and the second partition for node 0 was unassigned. As a result, there are now no
+        // *assigned* partitions for node 0 that are buffered.
+        List<NetworkClientDelegate.UnsentRequest> call2 = fetcher.sendFetches();
+        assertEquals(1, call2.size());
+        assertEquals(Set.of(node0Partition1), partitionsRequested(call2));
+        assertEquals(Set.of(node0), nodesRequested(call2));
+    }
+
+    @Test
+    public void testFetchRequestWithBufferedPartitionMissingLeader() {
+        buildFetcher();
+
+        Set<TopicPartition> partitions = Set.of(tp0, tp1);
+        assignFromUser(partitions);
+
+        // Seek each partition so that it becomes eligible to fetch.
+        partitions.forEach(tp -> subscriptions.seek(tp, 0));
+
+        Node leader = metadata.fetch().leaderFor(tp0);
+        assertNotNull(leader);
+
+        // sendFetches() call #1 should issue a request since there's no buffered data.
+        List<NetworkClientDelegate.UnsentRequest> call1 = fetcher.sendFetches();
+        assertEquals(1, call1.size());
+        assertEquals(Set.of(tp0, tp1), partitionsRequested(call1));
+        assertEquals(Set.of(leader), nodesRequested(call1));
+
+        prepareFetchResponses(leader, Set.of(tp0, tp1), 0);
+        networkClientDelegate.poll(time.timer(0));
+
+        // Per the fetch response, data for both of the partitions are in the fetch buffer.
+        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(tp0));
+        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(tp1));
+
+        // Collect the first partition (tp0) which will remove it from the fetch buffer.
+        collectSelectedPartition(tp0, partitions);
+
+        // Since tp0 was collected, it's not in the fetch buffer, but tp1 remains in the fetch buffer.
+        assertFalse(fetcher.fetchBuffer.bufferedPartitions().contains(tp0));
+        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(tp1));
+
+        // Overwrite tp1's position with an empty leader, but verify that it is still buffered. Having a leaderless,
+        // buffered partition is key to triggering the test case.
+        subscriptions.position(tp1, new SubscriptionState.FetchPosition(
+            0,
+            Optional.empty(),
+            Metadata.LeaderAndEpoch.noLeaderOrEpoch()
+        ));
+        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(tp1));
+
+        // Validate the state of the collected partition (tp0) and leaderless partition (tp1) before sending the
+        // fetch request.
+        assertTrue(subscriptions.position(tp0).currentLeader.leader.isPresent());
+        assertFalse(subscriptions.position(tp1).currentLeader.leader.isPresent());
+
+        // sendFetches() call #2 should issue a fetch request because it has no buffered partitions:
+        //
+        // - tp0 was collected and thus not in the fetch buffer
+        // - tp1, while still in the fetch buffer, is leaderless
+        //
+        // As a result, there are now effectively no buffered partitions for which there is a leader.
+        List<NetworkClientDelegate.UnsentRequest> call2 = fetcher.sendFetches();
+        assertEquals(1, call2.size());
+        assertEquals(Set.of(tp0), partitionsRequested(call2));
+        assertEquals(Set.of(leader), nodesRequested(call2));
+    }
+
+    @Test
+    public void testFetchRequestWithBufferedPartitionMissingPosition() {
+        buildFetcher();
+
+        // The partitions are spread across multiple nodes to ensure the fetcher's logic correctly handles the
+        // partition-to-node mapping.
+        int numNodes = 2;
+        Set<TopicPartition> partitions = Set.of(tp0, tp1, tp2, tp3);
+        assignFromUser(partitions, numNodes);
+
+        // Seek each partition so that it becomes eligible to fetch.
+        partitions.forEach(tp -> subscriptions.seek(tp, 0));
+
+        // Get all the nodes serving as the leader for these partitions.
+        List<Node> nodes = nodesForPartitionLeaders(partitions);
+
+        // Extract the nodes and their respective set of partitions to make things easier to keep track of later.
+        assertEquals(2, nodes.size());
+        Node node0 = nodes.get(0);
+        Node node1 = nodes.get(1);
+        List<TopicPartition> node0Partitions = partitionsForNode(node0, partitions);
+        List<TopicPartition> node1Partitions = partitionsForNode(node1, partitions);
+        assertEquals(2, node0Partitions.size());
+        assertEquals(2, node1Partitions.size());
+        TopicPartition node0Partition1 = node0Partitions.get(0);
+        TopicPartition node0Partition2 = node0Partitions.get(1);
+
+        // sendFetches() call #1 should issue requests to node 0 or node 1 since neither has buffered data.
+        List<NetworkClientDelegate.UnsentRequest> call1 = fetcher.sendFetches();
+        assertEquals(2, call1.size());
+        assertEquals(partitions, partitionsRequested(call1));
+        assertEquals(new HashSet<>(nodes), nodesRequested(call1));
+
+        prepareFetchResponses(node0, node0Partitions, 0);
+        prepareFetchResponses(node1, node1Partitions, 0);
+        networkClientDelegate.poll(time.timer(0));
+
+        // Collect node 0's first partition (node0Partition1) which will remove it from the fetch buffer.
+        assertEquals(4, fetcher.fetchBuffer.bufferedPartitions().size());
+        collectSelectedPartition(node0Partition1, partitions);
+        assertEquals(3, fetcher.fetchBuffer.bufferedPartitions().size());
+
+        // Overwrite node0Partition2's position with an empty leader to trigger the test case.
+        subscriptions.position(node0Partition2, null);
+
+        // Confirm that calling SubscriptionState.position() succeeds for a leaderless partition. While it shouldn't
+        // throw an exception, it should return a null position.
+        SubscriptionState.FetchPosition position = assertDoesNotThrow(() -> subscriptions.position(node0Partition2));
+        assertNull(position);
+
+        // sendFetches() call #2 will now fail to send any requests as we have an invalid position in the assignment.
+        // The Consumer.poll() API will throw an IllegalStateException to the user.
+        Future<Void> future = fetcher.createFetchRequests();
+        List<NetworkClientDelegate.UnsentRequest> call2 = fetcher.sendFetches();
+        assertEquals(0, call2.size());
+        assertFutureThrows(IllegalStateException.class, future);
+    }
+
+    @Test
+    public void testFetchRequestWithBufferedPartitionPaused() {
+        testFetchRequestWithBufferedPartitionUnfetchable(tp -> subscriptions.pause(tp));
+    }
+
+    @Test
+    public void testFetchRequestWithBufferedPartitionPendingRevocation() {
+        testFetchRequestWithBufferedPartitionUnfetchable(tp -> subscriptions.markPendingRevocation(Set.of(tp)));
+    }
+
+    @Test
+    public void testFetchRequestWithBufferedPartitionPendingAssignment() {
+        testFetchRequestWithBufferedPartitionUnfetchable(tp -> subscriptions.markPendingOnAssignedCallback(Set.of(tp), true));
+    }
+
+    @Test
+    public void testFetchRequestWithBufferedPartitionResetOffset() {
+        testFetchRequestWithBufferedPartitionUnfetchable(tp -> subscriptions.requestOffsetReset(tp));
+    }
+
+    private void testFetchRequestWithBufferedPartitionUnfetchable(java.util.function.Consumer<TopicPartition> partitionMutator) {
+        buildFetcher();
+
+        Set<TopicPartition> partitions = Set.of(tp0, tp1);
+        assignFromUser(partitions);
+
+        // Seek each partition so that it becomes eligible to fetch.
+        partitions.forEach(tp -> subscriptions.seek(tp, 0));
+
+        // sendFetches() call #1 should issue a request since there's no buffered data.
+        List<NetworkClientDelegate.UnsentRequest> call1 = fetcher.sendFetches();
+        assertEquals(1, call1.size());
+        assertEquals(Set.of(tp0, tp1), partitionsRequested(call1));
+        prepareFetchResponses(metadata.fetch().leaderFor(tp0), Set.of(tp0, tp1), 0);
+        networkClientDelegate.poll(time.timer(0));
+
+        // Per the fetch response, data for both of the partitions are in the fetch buffer.
+        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(tp0));
+        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(tp1));
+
+        // Collect the first partition (tp0) which will remove it from the fetch buffer.
+        collectSelectedPartition(tp0, partitions);
+        assertFalse(fetcher.fetchBuffer.bufferedPartitions().contains(tp0));
+
+        // Mutate tp1 to make it unfetchable, but verify that it is still buffered. Having a buffered partition that
+        // is also unfetchable is key to triggering the test case.
+        partitionMutator.accept(tp1);
+        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(tp1));
+
+        // sendFetches() call #2 should issue a fetch request because it has no buffered partitions:
+        //
+        // - tp0 was collected and thus not in the fetch buffer
+        // - tp1, while still in the fetch buffer, is unfetchable and should be ignored
+        List<NetworkClientDelegate.UnsentRequest> call2 = fetcher.sendFetches();
+        assertEquals(1, call2.size());
+        assertEquals(Set.of(tp0), partitionsRequested(call2));
+    }
+
+    /**
+     * For each partition given, return the set of nodes that represent the partition's leader using
+     * {@link Cluster#leaderFor(TopicPartition)}.
+     */
+    private List<Node> nodesForPartitionLeaders(Set<TopicPartition> partitions) {
+        Cluster cluster = metadata.fetch();
+
+        return partitions.stream()
+            .map(cluster::leaderFor)
+            .filter(Objects::nonNull)
+            .distinct()
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * For the given set of partitions, filter the partitions to be those where the partition's leader node
+     * (via {@link Cluster#leaderFor(TopicPartition)}) matches the given node.
+     */
+    private List<TopicPartition> partitionsForNode(Node node, Set<TopicPartition> partitions) {
+        Cluster cluster = metadata.fetch();
+
+        return partitions.stream()
+            .filter(tp -> node.equals(cluster.leaderFor(tp)))
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * Creates 10 dummy records starting at the given offset for each given partition and directs each response to the
+     * given node.
+     */
+    private void prepareFetchResponses(Node node, Collection<TopicPartition> partitions, int offset) {
+        LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> partitionDataMap = new LinkedHashMap<>();
+
+        partitions.forEach(tp -> {
+            MemoryRecords records = buildRecords(offset, 10, 1);
+            FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp.partition())
+                .setHighWatermark(100)
+                .setRecords(records);
+            partitionDataMap.put(new TopicIdPartition(topicId, tp), partitionData);
+        });
+
+        client.prepareResponseFrom(
+            FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, partitionDataMap, List.of()),
+            node
+        );
+    }
+
+    /**
+     * Invokes {@link #collectFetch()}, but before doing so it {@link Consumer#pause(Collection) pauses} all the
+     * partitions in the given set of partitions <em>except</em> for {@code partition}. This is done so that only
+     * that partition will be collected. Once the collection has been performed, the previously-paused partitions
+     * are then {@link Consumer#resume(Collection) resumed}.
+     */
+    private void collectSelectedPartition(TopicPartition partition, Set<TopicPartition> partitions) {
+        // Pause any remaining partitions so that when fetchRecords() is called, only the records for the
+        // "fetched" partition are collected, leaving the remaining in the fetch buffer.
+        Set<TopicPartition> pausedPartitions = partitions.stream()
+            .filter(tp -> !tp.equals(partition))
+            .collect(Collectors.toSet());
+
+        // Fetch the records, which should be just for the expected topic partition since the others were paused.
+        pausedPartitions.forEach(tp -> subscriptions.pause(tp));
+        fetchRecords();
+        pausedPartitions.forEach(tp -> subscriptions.resume(tp));
+    }
+
+    /**
+     * Returns the unique set of partitions that were included in the given requests.
+     */
+    private Set<TopicPartition> partitionsRequested(List<NetworkClientDelegate.UnsentRequest> requests) {
+        return requests.stream()
+            .map(NetworkClientDelegate.UnsentRequest::requestBuilder)
+            .filter(FetchRequest.Builder.class::isInstance)
+            .map(FetchRequest.Builder.class::cast)
+            .map(FetchRequest.Builder::fetchData)
+            .map(Map::keySet)
+            .flatMap(Set::stream)
+            .collect(Collectors.toSet());
+    }
+
+    /**
+     * Returns the unique set of nodes to which fetch requests were sent.
+     */
+    private Set<Node> nodesRequested(List<NetworkClientDelegate.UnsentRequest> requests) {
+        return requests.stream()
+            .map(NetworkClientDelegate.UnsentRequest::node)
+            .filter(Optional::isPresent)
+            .map(Optional::get)
+            .collect(Collectors.toSet());
     }
 
     private FetchResponse fetchResponseWithTopLevelError(TopicIdPartition tp, Errors error, int throttleTime) {
@@ -3480,7 +3906,7 @@ public class FetchRequestManagerTest {
                         .setPartitionIndex(tp.topicPartition().partition())
                         .setErrorCode(error.code())
                         .setHighWatermark(FetchResponse.INVALID_HIGH_WATERMARK));
-        return FetchResponse.of(error, throttleTime, INVALID_SESSION_ID, new LinkedHashMap<>(partitions));
+        return FetchResponse.of(error, throttleTime, INVALID_SESSION_ID, new LinkedHashMap<>(partitions), List.of());
     }
 
     private FetchResponse fullFetchResponseWithAbortedTransactions(MemoryRecords records,
@@ -3498,7 +3924,7 @@ public class FetchRequestManagerTest {
                         .setLogStartOffset(0)
                         .setAbortedTransactions(abortedTransactions)
                         .setRecords(records));
-        return FetchResponse.of(Errors.NONE, throttleTime, INVALID_SESSION_ID, new LinkedHashMap<>(partitions));
+        return FetchResponse.of(Errors.NONE, throttleTime, INVALID_SESSION_ID, new LinkedHashMap<>(partitions), List.of());
     }
 
     private FetchResponse fullFetchResponse(int sessionId, TopicIdPartition tp, MemoryRecords records, Errors error, long hw, int throttleTime) {
@@ -3524,7 +3950,7 @@ public class FetchRequestManagerTest {
                         .setLastStableOffset(lastStableOffset)
                         .setLogStartOffset(0)
                         .setRecords(records));
-        return FetchResponse.of(Errors.NONE, throttleTime, sessionId, new LinkedHashMap<>(partitions));
+        return FetchResponse.of(Errors.NONE, throttleTime, sessionId, new LinkedHashMap<>(partitions), List.of());
     }
 
     private FetchResponse fullFetchResponse(TopicIdPartition tp, MemoryRecords records, Errors error, long hw,
@@ -3538,7 +3964,7 @@ public class FetchRequestManagerTest {
                         .setLogStartOffset(0)
                         .setRecords(records)
                         .setPreferredReadReplica(preferredReplicaId.orElse(FetchResponse.INVALID_PREFERRED_REPLICA_ID)));
-        return FetchResponse.of(Errors.NONE, throttleTime, INVALID_SESSION_ID, new LinkedHashMap<>(partitions));
+        return FetchResponse.of(Errors.NONE, throttleTime, INVALID_SESSION_ID, new LinkedHashMap<>(partitions), List.of());
     }
 
     private FetchResponse fetchResponse(TopicIdPartition tp, MemoryRecords records, Errors error, long hw,
@@ -3551,7 +3977,7 @@ public class FetchRequestManagerTest {
                         .setLastStableOffset(lastStableOffset)
                         .setLogStartOffset(logStartOffset)
                         .setRecords(records));
-        return FetchResponse.of(Errors.NONE, throttleTime, INVALID_SESSION_ID, new LinkedHashMap<>(partitions));
+        return FetchResponse.of(Errors.NONE, throttleTime, INVALID_SESSION_ID, new LinkedHashMap<>(partitions), List.of());
     }
 
     /**
@@ -3633,7 +4059,7 @@ public class FetchRequestManagerTest {
                                      SubscriptionState subscriptionState,
                                      LogContext logContext) {
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
-        Deserializers<K, V> deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
+        Deserializers<K, V> deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);
         FetchConfig fetchConfig = new FetchConfig(
                 minBytes,
                 maxBytes,
@@ -3699,8 +4125,9 @@ public class FetchRequestManagerTest {
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.setProperty(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, String.valueOf(requestTimeoutMs));
         properties.setProperty(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(retryBackoffMs));
+        properties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         ConsumerConfig config = new ConsumerConfig(properties);
-        networkClientDelegate = spy(new TestableNetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler));
+        networkClientDelegate = spy(new TestableNetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, true));
     }
 
     private <T> List<Long> collectRecordOffsets(List<ConsumerRecord<T, T>> records) {
@@ -3762,6 +4189,14 @@ public class FetchRequestManagerTest {
             return pollResult.unsentRequests.size();
         }
 
+        private List<NetworkClientDelegate.UnsentRequest> sendFetches() {
+            offsetFetcher.validatePositionsOnMetadataChange();
+            createFetchRequests();
+            NetworkClientDelegate.PollResult pollResult = poll(time.milliseconds());
+            networkClientDelegate.addAll(pollResult.unsentRequests);
+            return pollResult.unsentRequests;
+        }
+
         private void clearBufferedDataForUnassignedPartitions(Set<TopicPartition> partitions) {
             fetchBuffer.retainAll(partitions);
         }
@@ -3769,7 +4204,7 @@ public class FetchRequestManagerTest {
 
     private class TestableNetworkClientDelegate extends NetworkClientDelegate {
 
-        private final Logger log = LoggerFactory.getLogger(NetworkClientDelegate.class);
+        private final Logger log = LoggerFactory.getLogger(TestableNetworkClientDelegate.class);
         private final ConcurrentLinkedQueue<Node> pendingDisconnects = new ConcurrentLinkedQueue<>();
 
         public TestableNetworkClientDelegate(Time time,
@@ -3777,8 +4212,9 @@ public class FetchRequestManagerTest {
                                              LogContext logContext,
                                              KafkaClient client,
                                              Metadata metadata,
-                                             BackgroundEventHandler backgroundEventHandler) {
-            super(time, config, logContext, client, metadata, backgroundEventHandler);
+                                             BackgroundEventHandler backgroundEventHandler,
+                                             boolean notifyMetadataErrorsViaErrorQueue) {
+            super(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, mock(AsyncConsumerMetrics.class));
         }
 
         @Override

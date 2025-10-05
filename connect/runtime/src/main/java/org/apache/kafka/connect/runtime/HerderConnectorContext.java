@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.metrics.PluginMetrics;
+import org.apache.kafka.common.metrics.internals.PluginMetricsImpl;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 
 import org.slf4j.Logger;
@@ -30,11 +33,13 @@ public class HerderConnectorContext implements CloseableConnectorContext {
 
     private final AbstractHerder herder;
     private final String connectorName;
+    private final PluginMetricsImpl pluginMetrics;
     private volatile boolean closed;
 
-    public HerderConnectorContext(AbstractHerder herder, String connectorName) {
+    public HerderConnectorContext(AbstractHerder herder, String connectorName, PluginMetricsImpl pluginMetrics) {
         this.herder = herder;
         this.connectorName = connectorName;
+        this.pluginMetrics = pluginMetrics;
         this.closed = false;
     }
 
@@ -64,7 +69,13 @@ public class HerderConnectorContext implements CloseableConnectorContext {
     }
 
     @Override
+    public PluginMetrics pluginMetrics() {
+        return pluginMetrics;
+    }
+
+    @Override
     public void close() {
+        Utils.closeQuietly(pluginMetrics, "Plugin metrics for " + connectorName);
         closed = true;
     }
 }

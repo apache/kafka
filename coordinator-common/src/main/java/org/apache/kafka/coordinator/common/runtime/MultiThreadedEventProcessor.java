@@ -138,7 +138,7 @@ public final class MultiThreadedEventProcessor implements CoordinatorEventProces
                 CoordinatorEvent event = accumulator.poll(POLL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
                 long idleEndTimeMs = time.milliseconds();
                 long idleTimeMs = idleEndTimeMs - idleStartTimeMs;
-                metrics.recordThreadIdleTime(idleTimeMs / threads.size());
+                metrics.recordThreadIdleTime((double) idleTimeMs / (double) threads.size());
                 if (event != null) {
                     try {
                         log.debug("Executing event: {}.", event);

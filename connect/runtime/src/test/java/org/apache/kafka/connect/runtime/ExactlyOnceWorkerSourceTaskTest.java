@@ -26,15 +26,17 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.integration.MonitorableSourceConnector;
+import org.apache.kafka.connect.integration.TestableSourceConnector;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
@@ -66,8 +68,6 @@ import org.mockito.stubbing.OngoingStubbing;
 import org.mockito.verification.VerificationMode;
 
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -82,8 +82,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.emptySet;
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -117,7 +116,7 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.WARN)
 public class ExactlyOnceWorkerSourceTaskTest {
     private static final String TOPIC = "topic";
-    private static final Map<String, byte[]> PARTITION = Collections.singletonMap("key", "partition".getBytes());
+    private static final Map<String, byte[]> PARTITION = Map.of("key", "partition".getBytes());
     private static final Map<String, ?> OFFSET = offset(12);
 
     // Connect-format data
@@ -167,7 +166,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     private static final SourceRecord SOURCE_RECORD_2 =
             new SourceRecord(PARTITION, OFFSET, TOPIC, null, KEY_SCHEMA, KEY, RECORD_SCHEMA, VALUE_2);
 
-    private static final List<SourceRecord> RECORDS = Arrays.asList(SOURCE_RECORD_1, SOURCE_RECORD_2);
+    private static final List<SourceRecord> RECORDS = List.of(SOURCE_RECORD_1, SOURCE_RECORD_2);
     private final AtomicReference<CountDownLatch> pollLatch = new AtomicReference<>(new CountDownLatch(0));
     private final AtomicReference<List<SourceRecord>> pollRecords = new AtomicReference<>(RECORDS);
 
@@ -196,6 +195,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
             Thread.sleep(10);
             return result;
         });
+        when(sourceTask.version()).thenReturn(null);
     }
 
     @AfterEach
@@ -220,8 +220,8 @@ public class ExactlyOnceWorkerSourceTaskTest {
         }
 
         verify(statusBackingStore, MockitoUtils.anyTimes()).getTopic(any(), any());
-
         verify(offsetStore, MockitoUtils.anyTimes()).primaryOffsetsTopic();
+        verify(sourceTask).version();
 
         verifyNoMoreInteractions(statusListener, producer, sourceTask, admin, offsetWriter, statusBackingStore, offsetStore, preProducerCheck, postProducerCheck);
         if (metrics != null) metrics.stop();
@@ -229,6 +229,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
 
     private Map<String, String> workerProps() {
         Map<String, String> props = new HashMap<>();
+        props.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         props.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         props.put("internal.key.converter", "org.apache.kafka.connect.json.JsonConverter");
@@ -248,7 +249,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         // setup up props for the source connector
         Map<String, String> props = new HashMap<>();
         props.put("name", "foo-connector");
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(1));
         props.put(TOPIC_CONFIG, TOPIC);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -264,7 +265,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     private static Map<String, ?> offset(int n) {
-        return Collections.singletonMap("key", n);
+        return Map.of("key", n);
     }
 
     private void createWorkerTask() {
@@ -276,10 +277,13 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
-        workerTask = new ExactlyOnceWorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, headerConverter,
+        Plugin<Converter> keyConverterPlugin = metrics.wrap(keyConverter, taskId,  true);
+        Plugin<Converter> valueConverterPlugin = metrics.wrap(valueConverter, taskId,  false);
+        Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
+        workerTask = new ExactlyOnceWorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin,
                 transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
-                config, clusterConfigState, metrics, errorHandlingMetrics, plugins.delegatingLoader(), time, RetryWithToleranceOperatorTest.noopOperator(), statusBackingStore,
-                sourceConfig, Runnable::run, preProducerCheck, postProducerCheck, Collections::emptyList);
+                config, clusterConfigState, metrics, errorHandlingMetrics, plugins.delegatingLoader(), time, RetryWithToleranceOperatorTest.noneOperator(), statusBackingStore,
+                sourceConfig, Runnable::run, preProducerCheck, postProducerCheck, List::of, null, TestPlugins.noOpLoaderSwap());
     }
 
     @ParameterizedTest
@@ -290,7 +294,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
 
         workerTask.removeMetrics();
 
-        assertEquals(emptySet(), filterToTaskMetrics(metrics.metrics().metrics().keySet()));
+        assertEquals(Set.of(), filterToTaskMetrics(metrics.metrics().metrics().keySet()));
     }
 
     private Set<MetricName> filterToTaskMetrics(Set<MetricName> metricNames) {
@@ -556,7 +560,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         createWorkerTask();
 
         // Make sure the task returns empty batches from poll before we start polling it
-        pollRecords.set(Collections.emptyList());
+        pollRecords.set(List.of());
 
         when(offsetWriter.beginFlush()).thenReturn(false);
 
@@ -632,7 +636,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         time.sleep(commitInterval * 2);
 
         awaitPolls(2);
-        assertEquals(2, flushCount(), 
+        assertEquals(2, flushCount(),
                 "Two flushes should have taken place after offset commit interval has elapsed again");
 
         awaitShutdown();
@@ -950,7 +954,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         expectConvertHeadersAndKeyValue();
 
         // We're trying to send three records
-        workerTask.toSend = Arrays.asList(record1, record2, record3);
+        workerTask.toSend = List.of(record1, record2, record3);
         OngoingStubbing<Future<RecordMetadata>> producerSend = when(producer.send(any(), any()));
         // The first one is sent successfully
         producerSend = expectSuccessfulSend(producerSend);
@@ -960,7 +964,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         expectSuccessfulSend(producerSend);
 
         assertFalse(workerTask.sendRecords());
-        assertEquals(Arrays.asList(record2, record3), workerTask.toSend);
+        assertEquals(List.of(record2, record3), workerTask.toSend);
         verify(producer).beginTransaction();
         // When using poll-based transaction boundaries, we do not commit transactions while retrying delivery for a batch
         verify(producer, never()).commitTransaction();
@@ -995,7 +999,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         when(producer.send(any(), any()))
                 .thenThrow(new KafkaException("Producer closed while send in progress", new InvalidTopicException(TOPIC)));
 
-        workerTask.toSend = Arrays.asList(record1, record2);
+        workerTask.toSend = List.of(record1, record2);
         assertThrows(ConnectException.class, workerTask::sendRecords);
 
         verify(producer).beginTransaction();
@@ -1074,7 +1078,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     private void awaitEmptyPolls(int minimum) {
-        awaitPolls(minimum, Collections.emptyList());
+        awaitPolls(minimum, List.of());
     }
 
     private void awaitPolls(int minimum) {
@@ -1162,8 +1166,8 @@ public class ExactlyOnceWorkerSourceTaskTest {
 
     private void expectPossibleTopicCreation() {
         if (config.topicCreationEnable()) {
-            Set<String> created = Collections.singleton(TOPIC);
-            Set<String> existing = Collections.emptySet();
+            Set<String> created = Set.of(TOPIC);
+            Set<String> existing = Set.of();
             TopicAdmin.TopicCreationResponse creationResponse = new TopicAdmin.TopicCreationResponse(created, existing);
             when(admin.createOrFindTopics(any())).thenReturn(creationResponse);
         }

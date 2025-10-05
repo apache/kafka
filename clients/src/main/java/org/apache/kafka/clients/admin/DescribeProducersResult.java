@@ -19,14 +19,12 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
-@InterfaceStability.Evolving
 public class DescribeProducersResult {
 
     private final Map<TopicPartition, KafkaFuture<PartitionProducerState>> futures;
@@ -45,7 +43,7 @@ public class DescribeProducersResult {
     }
 
     public KafkaFuture<Map<TopicPartition, PartitionProducerState>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]))
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]))
             .thenApply(nil -> {
                 Map<TopicPartition, PartitionProducerState> results = new HashMap<>(futures.size());
                 for (Map.Entry<TopicPartition, KafkaFuture<PartitionProducerState>> entry : futures.entrySet()) {

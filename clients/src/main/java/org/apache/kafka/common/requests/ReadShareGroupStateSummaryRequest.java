@@ -20,10 +20,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateSummaryResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -34,11 +33,7 @@ public class ReadShareGroupStateSummaryRequest extends AbstractRequest {
         private final ReadShareGroupStateSummaryRequestData data;
 
         public Builder(ReadShareGroupStateSummaryRequestData data) {
-            this(data, false);
-        }
-
-        public Builder(ReadShareGroupStateSummaryRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY, enableUnstableLastVersion);
+            super(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY);
             this.data = data;
         }
 
@@ -64,16 +59,16 @@ public class ReadShareGroupStateSummaryRequest extends AbstractRequest {
     public ReadShareGroupStateSummaryResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         List<ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult> results = new ArrayList<>();
         data.topics().forEach(
-                topicResult -> results.add(new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
-                        .setTopicId(topicResult.topicId())
-                        .setPartitions(topicResult.partitions().stream()
-                                .map(partitionData -> new ReadShareGroupStateSummaryResponseData.PartitionResult()
-                                        .setPartition(partitionData.partition())
-                                        .setErrorCode(Errors.forException(e).code())
-                                        .setErrorMessage(Errors.forException(e).message()))
-                                .collect(Collectors.toList()))));
+            topicResult -> results.add(new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+                .setTopicId(topicResult.topicId())
+                .setPartitions(topicResult.partitions().stream()
+                    .map(partitionData -> new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                        .setPartition(partitionData.partition())
+                        .setErrorCode(Errors.forException(e).code())
+                        .setErrorMessage(Errors.forException(e).message()))
+                    .collect(Collectors.toList()))));
         return new ReadShareGroupStateSummaryResponse(new ReadShareGroupStateSummaryResponseData()
-                .setResults(results));
+            .setResults(results));
     }
 
     @Override
@@ -81,10 +76,10 @@ public class ReadShareGroupStateSummaryRequest extends AbstractRequest {
         return data;
     }
 
-    public static ReadShareGroupStateSummaryRequest parse(ByteBuffer buffer, short version) {
+    public static ReadShareGroupStateSummaryRequest parse(Readable readable, short version) {
         return new ReadShareGroupStateSummaryRequest(
-                new ReadShareGroupStateSummaryRequestData(new ByteBufferAccessor(buffer), version),
-                version
+            new ReadShareGroupStateSummaryRequestData(readable, version),
+            version
         );
     }
 }

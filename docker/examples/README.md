@@ -13,6 +13,25 @@ Kafka server can be started using following ways:
 - File input
 - Environment variables
 
+Installation Preparation
+------------
+
+Note that the `Docker` version **must be >= 20.10.4**.
+
+The prior Docker versions may cause permission errors when running the Kafka container, as they do not correctly set directory permissions when creating container paths like `/opt/kafka/config`.
+
+If you are using the prior version, you may encounter the following error during container startup:
+```text
+===> User
+uid=1000(appuser) gid=1000(appuser) groups=1000(appuser)
+===> Setting default values of environment variables if not already set.
+===> Configuring …
+Running in KRaft mode…
+/opt/kafka/config/ file not writable
+```
+
+To avoid this, **please upgrade Docker to 20.10.4 or later**.
+
 Running on default configs
 --------------------------
 
@@ -48,11 +67,11 @@ It is also possible to use the input file to have a common set of configurations
         
 - To provide configs to log4j property files, following points should be considered:
   - log4j properties provided via environment variables will be appended to the default properties file (log4j properties files bundled with Kafka).
-  - `KAFKA_LOG4J_ROOT_LOGLEVEL` can be provided to set the value of `log4j.rootLogger` in log4j.properties and `tools-log4j.properties`.
-  - log4j loggers can be added to log4j.properties by setting them in `KAFKA_LOG4J_LOGGERS` environment variable in a single comma separated string.
+  - `KAFKA_LOG4J_ROOT_LOGLEVEL` can be provided to set the value of `log4j.rootLogger` in `log4j2.yaml` and `tools-log4j2.yaml`.
+  - log4j loggers can be added to `log4j2.yaml` by setting them in `KAFKA_LOG4J_LOGGERS` environment variable in a single comma separated string.
       - Example:
           - Assuming that `KAFKA_LOG4J_LOGGERS='property1=value1,property2=value2'` environment variable is provided to Docker container.
-          - `log4j.logger.property1=value1` and `log4j.logger.property2=value2` will be added to the `log4j.properties` file inside Docker container.
+          - `log4j.logger.property1=value1` and `log4j.logger.property2=value2` will be added to the `log4j2.yaml` file inside Docker container.
 
 Running in SSL mode
 -------------------
@@ -128,7 +147,7 @@ Single Node
     - To produce messages using client scripts (Ensure that java version >= 17):
     ```
     # Run from root of the repo
-    $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+    $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
     ```
 - File Input:
     - Here ssl configs are provided via file input.
@@ -148,7 +167,7 @@ Single Node
     - To produce messages using client scripts (Ensure that java version >= 17):
     ```
     # Run from root of the repo
-    $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+    $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
     ```
 
 Multi Node Cluster
@@ -200,7 +219,7 @@ Multi Node Cluster
         - To produce messages using client scripts (Ensure that java version >= 17):
         ```
         # Run from root of the repo
-        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
         ```
 - Isolated:
     - Examples are present in `docker-compose-files/cluster/isolated` directory.
@@ -239,7 +258,7 @@ Multi Node Cluster
         - To produce messages using client scripts (Ensure that java version >= 17):
         ```
         # Run from root of the repo
-        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
         ```
 
 - Note that the examples are meant to be tried one at a time, make sure you close an example server before trying out the other to avoid conflicts.

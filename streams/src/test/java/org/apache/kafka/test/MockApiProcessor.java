@@ -77,7 +77,6 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
     public void process(final Record<KIn, VIn> record) {
         final KIn key = record.key();
         final VIn value = record.value();
-        final KeyValueTimestamp<KIn, VIn> keyValueTimestamp = new KeyValueTimestamp<>(key, value, record.timestamp());
 
         if (value != null) {
             lastValueAndTimestampPerKey.put(key, ValueAndTimestamp.make(value, record.timestamp()));

@@ -25,7 +25,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
-import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -754,7 +753,7 @@ public class LegacyStickyTaskAssignorTest {
     public void shouldMoveMinimalNumberOfTasksWhenPreviouslyAboveCapacityAndNewClientAdded(final String rackAwareStrategy) {
         setUp(rackAwareStrategy);
         final Set<TaskId> p1PrevTasks = new HashSet<>(List.of(TASK_0_0, TASK_0_2));
-        final Set<TaskId> p2PrevTasks = new HashSet<>(List.of(TASK_0_1, TASK_0_3));
+        final Set<TaskId> p2PrevTasks = Set.of(TASK_0_1, TASK_0_3);
 
         createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_2);
         createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_1, TASK_0_3);
@@ -968,7 +967,6 @@ public class LegacyStickyTaskAssignorTest {
         final Cluster cluster = getRandomCluster(nodeSize, topicSize, partitionSize);
         final Map<TaskId, Set<TopicPartition>> partitionsForTask = getTaskTopicPartitionMap(topicSize, partitionSize, false);
         final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask = getTaskTopicPartitionMap(topicSize, partitionSize, true);
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = new HashMap<>();
         final Map<ProcessId, Map<String, Optional<String>>> racksForProcessConsumer = getRandomProcessRacks(clientSize, nodeSize);
         final InternalTopicManager internalTopicManager = mockInternalTopicManagerForRandomChangelog(nodeSize, topicSize, partitionSize);
 
@@ -1263,6 +1261,119 @@ public class LegacyStickyTaskAssignorTest {
             assertThat(entry.getValue().statefulActiveTasks(), equalTo(clientStateMapCopy.get(entry.getKey()).statefulActiveTasks()));
             assertThat(entry.getValue().standbyTasks(), equalTo(clientStateMapCopy.get(entry.getKey()).standbyTasks()));
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
+    public void shouldReassignTasksWhenNewNodeJoinsWithExistingActiveAndStandbyAssignments(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
+
+        // Initial setup: Node 1 has active tasks 0,1 and standby tasks 2,3
+        // Node 2 has active tasks 2,3 and standby tasks 0,1
+        final ClientState node1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1);
+        node1.addPreviousStandbyTasks(Set.of(TASK_0_2, TASK_0_3));
+
+        final ClientState node2 = createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_2, TASK_0_3);
+        node2.addPreviousStandbyTasks(Set.of(TASK_0_0, TASK_0_1));
+
+        // Node 3 joins as new client
+        final ClientState node3 = createClient(PID_3, 1);
+
+        final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        assertThat(probingRebalanceNeeded, is(false));
+
+        // Verify all active tasks are assigned
+        final Set<TaskId> allAssignedActiveTasks = new HashSet<>();
+        allAssignedActiveTasks.addAll(node1.activeTasks());
+        allAssignedActiveTasks.addAll(node2.activeTasks());
+        allAssignedActiveTasks.addAll(node3.activeTasks());
+        assertThat(allAssignedActiveTasks, equalTo(Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
+
+        // Verify all standby tasks are assigned
+        final Set<TaskId> allAssignedStandbyTasks = new HashSet<>();
+        allAssignedStandbyTasks.addAll(node1.standbyTasks());
+        allAssignedStandbyTasks.addAll(node2.standbyTasks());
+        allAssignedStandbyTasks.addAll(node3.standbyTasks());
+        assertThat(allAssignedStandbyTasks, equalTo(Set.of(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)));
+
+        // Verify each client has 1-2 active tasks and at most 3 tasks total
+        assertThat(node1.activeTasks().size(), greaterThanOrEqualTo(1));
+        assertThat(node1.activeTasks().size(), lessThanOrEqualTo(2));
+        assertThat(node1.activeTasks().size() + node1.standbyTasks().size(), lessThanOrEqualTo(3));
+
+        assertThat(node2.activeTasks().size(), greaterThanOrEqualTo(1));
+        assertThat(node2.activeTasks().size(), lessThanOrEqualTo(2));
+        assertThat(node2.activeTasks().size() + node2.standbyTasks().size(), lessThanOrEqualTo(3));
+
+        assertThat(node3.activeTasks().size(), greaterThanOrEqualTo(1));
+        assertThat(node3.activeTasks().size(), lessThanOrEqualTo(2));
+        assertThat(node3.activeTasks().size() + node3.standbyTasks().size(), lessThanOrEqualTo(3));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
+    })
+    public void shouldRangeAssignTasksWhenStartingEmpty(final String rackAwareStrategy) {
+        setUp(rackAwareStrategy);
+        
+        // Two clients with capacity 1 each, starting empty (no previous tasks)
+        createClient(PID_1, 1);
+        createClient(PID_2, 1);
+        
+        // Two subtopologies with 2 tasks each (4 tasks total)
+        final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
+        assertThat(probingRebalanceNeeded, is(false));
+        
+        // Each client should get one active task from each subtopology
+        final ClientState client1 = clients.get(PID_1);
+        final ClientState client2 = clients.get(PID_2);
+        
+        // Check that each client has one active task from subtopology 0
+        final long client1Subtopology0ActiveCount = client1.activeTasks().stream()
+            .filter(task -> task.subtopology() == 0)
+            .count();
+        final long client2Subtopology0ActiveCount = client2.activeTasks().stream()
+            .filter(task -> task.subtopology() == 0)
+            .count();
+        assertThat(client1Subtopology0ActiveCount, equalTo(1L));
+        assertThat(client2Subtopology0ActiveCount, equalTo(1L));
+        
+        // Check that each client has one active task from subtopology 1
+        final long client1Subtopology1ActiveCount = client1.activeTasks().stream()
+            .filter(task -> task.subtopology() == 1)
+            .count();
+        final long client2Subtopology1ActiveCount = client2.activeTasks().stream()
+            .filter(task -> task.subtopology() == 1)
+            .count();
+        assertThat(client1Subtopology1ActiveCount, equalTo(1L));
+        assertThat(client2Subtopology1ActiveCount, equalTo(1L));
+        
+        // Check that each client has one standby task from subtopology 0
+        final long client1Subtopology0StandbyCount = client1.standbyTasks().stream()
+            .filter(task -> task.subtopology() == 0)
+            .count();
+        final long client2Subtopology0StandbyCount = client2.standbyTasks().stream()
+            .filter(task -> task.subtopology() == 0)
+            .count();
+        assertThat(client1Subtopology0StandbyCount, equalTo(1L));
+        assertThat(client2Subtopology0StandbyCount, equalTo(1L));
+        
+        // Check that each client has one standby task from subtopology 1
+        final long client1Subtopology1StandbyCount = client1.standbyTasks().stream()
+            .filter(task -> task.subtopology() == 1)
+            .count();
+        final long client2Subtopology1StandbyCount = client2.standbyTasks().stream()
+            .filter(task -> task.subtopology() == 1)
+            .count();
+        assertThat(client1Subtopology1StandbyCount, equalTo(1L));
+        assertThat(client2Subtopology1StandbyCount, equalTo(1L));
     }
 
     private boolean assign(final String rackAwareStrategy, final TaskId... tasks) {

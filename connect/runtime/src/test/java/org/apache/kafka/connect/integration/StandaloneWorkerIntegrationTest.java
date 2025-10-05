@@ -30,7 +30,6 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -38,14 +37,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 
 import static org.apache.kafka.connect.integration.BlockingConnectorTest.Block.BLOCK_CONFIG;
 import static org.apache.kafka.connect.integration.BlockingConnectorTest.CONNECTOR_START;
 import static org.apache.kafka.connect.integration.BlockingConnectorTest.CONNECTOR_TASK_CONFIGS;
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.NAME_CONFIG;
@@ -102,7 +100,7 @@ public class StandaloneWorkerIntegrationTest {
                 StandaloneWorkerIntegrationTest::isModified
         );
         assertEquals(
-                Collections.emptyMap(),
+                Map.of(),
                 invalidModifiedLoggers,
                 "No loggers should have a non-null last-modified timestamp"
         );
@@ -155,9 +153,9 @@ public class StandaloneWorkerIntegrationTest {
             assertTrue(affectedLoggers.contains(namespace));
             List<String> invalidAffectedLoggers = affectedLoggers.stream()
                     .filter(l -> !l.startsWith(namespace))
-                    .collect(Collectors.toList());
+                    .toList();
             assertEquals(
-                    Collections.emptyList(),
+                    List.of(),
                     invalidAffectedLoggers,
                     "No loggers outside the namespace '" + namespace
                             + "' should have been included in the response for a request to modify that namespace"
@@ -184,12 +182,11 @@ public class StandaloneWorkerIntegrationTest {
                 newLevels,
                 e -> hasNamespace(e, namespace)
                         && (!level(e).equals(level)
-                            || !isModified(e)
-                            || lastModified(e) < requestTime
+                            || (isModified(e) && lastModified(e) < requestTime)
                         )
         );
         assertEquals(
-                Collections.emptyMap(),
+                Map.of(),
                 invalidAffectedLoggerLevels,
                 "At least one logger in the affected namespace '" + namespace
                         + "' does not have the expected level of '" + level
@@ -200,7 +197,7 @@ public class StandaloneWorkerIntegrationTest {
 
         Set<String> droppedLoggers = Utils.diff(HashSet::new, initialLevels.keySet(), newLevels.keySet());
         assertEquals(
-                Collections.emptySet(),
+                Set.of(),
                 droppedLoggers,
                 "At least one logger was present in the listing of all loggers "
                         + "before the logging level for namespace '" + namespace
@@ -213,7 +210,7 @@ public class StandaloneWorkerIntegrationTest {
                 e -> !hasNamespace(e, namespace) && !e.getValue().equals(initialLevels.get(e.getKey()))
         );
         assertEquals(
-                Collections.emptyMap(),
+                Map.of(),
                 invalidUnaffectedLoggerLevels,
                 "At least one logger outside of the affected namespace '" + namespace
                         + "' has a different logging level or last-modified timestamp than it did "
@@ -257,8 +254,8 @@ public class StandaloneWorkerIntegrationTest {
             CONNECTOR_NAME,
             "Connector was not created in a stopped state"
         );
-        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
-        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+        assertEquals(List.of(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(List.of(), connect.taskConfigs(CONNECTOR_NAME));
 
         // Verify that a connector created in the STOPPED state can be resumed successfully
         connect.resumeConnector(CONNECTOR_NAME);
@@ -371,7 +368,7 @@ public class StandaloneWorkerIntegrationTest {
         // setup props for the source connector
         Map<String, String> props = new HashMap<>();
         props.put(NAME_CONFIG, CONNECTOR_NAME);
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPIC_CONFIG, topic);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());

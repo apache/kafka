@@ -50,7 +50,7 @@ public class DescribeShareGroupsResult {
      * Return a future which yields all ShareGroupDescription objects, if all the describes succeed.
      */
     public KafkaFuture<Map<String, ShareGroupDescription>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).thenApply(
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0])).thenApply(
             nil -> {
                 Map<String, ShareGroupDescription> descriptions = new HashMap<>(futures.size());
                 futures.forEach((key, future) -> {

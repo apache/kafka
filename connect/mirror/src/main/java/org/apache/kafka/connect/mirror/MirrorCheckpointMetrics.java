@@ -26,9 +26,7 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.metrics.stats.Value;
 
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -38,7 +36,7 @@ class MirrorCheckpointMetrics implements AutoCloseable {
 
     private static final String CHECKPOINT_CONNECTOR_GROUP = MirrorCheckpointConnector.class.getSimpleName();
 
-    private static final Set<String> GROUP_TAGS = new HashSet<>(Arrays.asList("source", "target", "group", "topic", "partition"));
+    private static final Set<String> GROUP_TAGS = Set.of("source", "target", "group", "topic", "partition");
 
     private static final MetricNameTemplate CHECKPOINT_LATENCY = new MetricNameTemplate(
             "checkpoint-latency-ms", CHECKPOINT_CONNECTOR_GROUP,

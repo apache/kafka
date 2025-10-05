@@ -40,6 +40,14 @@ class RangeSet implements Set<Integer> {
     public RangeSet(int from, int to) {
         this.from = from;
         this.to = to;
+
+        if (to < from) {
+            throw new IllegalArgumentException("Invalid range: to must be greater than or equal to from");
+        }
+
+        if ((long) to - (long) from > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Range exceeds the maximum size of Integer.MAX_VALUE");
+        }
     }
 
     @Override
@@ -160,14 +168,13 @@ class RangeSet implements Set<Integer> {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Set)) return false;
+        if (!(o instanceof Set<?> otherSet)) return false;
 
-        if (o instanceof RangeSet) {
-            RangeSet other = (RangeSet) o;
+        if (o instanceof RangeSet other) {
+            if (this.size() == 0 && other.size() == 0) return true;
             return this.from == other.from && this.to == other.to;
         }
 
-        Set<?> otherSet = (Set<?>) o;
         if (otherSet.size() != this.size()) return false;
 
         for (int i = from; i < to; i++) {
@@ -178,8 +185,16 @@ class RangeSet implements Set<Integer> {
 
     @Override
     public int hashCode() {
-        int result = from;
-        result = 31 * result + to;
-        return result;
+        // The hash code of a Set is defined as the sum of the hash codes of its elements.
+        // The hash code of an integer is the integer itself.
+
+        // The sum of the integers from 1 to n is n * (n + 1) / 2.
+        // To get the sum of the integers from 1 + k to n + k, we can add n * k.
+        // So our hash code comes out to n * (from + to - 1) / 2.
+
+        // The arithmetic has to be done using longs, since the division by 2 is equivalent to
+        // shifting the 33rd bit right.
+        long sum = size() * ((long) from + (long) to - 1) / 2;
+        return (int) sum;
     }
 }

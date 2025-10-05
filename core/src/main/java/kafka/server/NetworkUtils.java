@@ -31,7 +31,7 @@ import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
-import java.util.Collections;
+import java.util.Map;
 
 public class NetworkUtils {
 
@@ -47,7 +47,6 @@ public class NetworkUtils {
             config.interBrokerListenerName(),
             config.saslMechanismInterBrokerProtocol(),
             time,
-            config.saslInterBrokerHandshakeRequestEnable(),
             logContext
         );
 
@@ -63,7 +62,7 @@ public class NetworkUtils {
             metrics,
             time,
             metricGroupPrefix,
-            Collections.emptyMap(),
+            Map.of(),
             false,
             channelBuilder,
             logContext

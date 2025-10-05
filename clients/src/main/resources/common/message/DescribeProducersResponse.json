@@ -25,7 +25,7 @@
     { "name": "Topics", "type": "[]TopicResponse", "versions": "0+",
       "about": "Each topic in the response.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
-        "about": "The topic name" },
+        "about": "The topic name." },
       { "name": "Partitions", "type": "[]PartitionResponse", "versions": "0+",
         "about": "Each partition in the response.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
@@ -33,14 +33,21 @@
         { "name": "ErrorCode", "type": "int16", "versions": "0+",
           "about": "The partition error code, or 0 if there was no error." },
         { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
-          "about": "The partition error message, which may be null if no additional details are available" },
-        { "name": "ActiveProducers", "type": "[]ProducerState", "versions": "0+", "fields": [
-          { "name": "ProducerId", "type": "int64", "versions": "0+", "entityType": "producerId" },
-          { "name": "ProducerEpoch", "type": "int32", "versions": "0+" },
-          { "name": "LastSequence", "type": "int32", "versions": "0+", "default":  "-1" },
-          { "name": "LastTimestamp", "type": "int64", "versions": "0+", "default": "-1" },
-          { "name": "CoordinatorEpoch", "type":  "int32", "versions":  "0+" },
-          { "name": "CurrentTxnStartOffset", "type": "int64", "versions": "0+", "default": "-1" }
+          "about": "The partition error message, which may be null if no additional details are available." },
+        { "name": "ActiveProducers", "type": "[]ProducerState", "versions": "0+",
+          "about": "The active producers for the partition.", "fields": [
+          { "name": "ProducerId", "type": "int64", "versions": "0+", "entityType": "producerId",
+            "about": "The producer id."},
+          { "name": "ProducerEpoch", "type": "int32", "versions": "0+",
+            "about": "The producer epoch."},
+          { "name": "LastSequence", "type": "int32", "versions": "0+", "default":  "-1",
+            "about": "The last sequence number sent by the producer."},
+          { "name": "LastTimestamp", "type": "int64", "versions": "0+", "default": "-1",
+            "about": "The last timestamp sent by the producer."},
+          { "name": "CoordinatorEpoch", "type":  "int32", "versions":  "0+",
+            "about": "The current epoch of the producer group."},
+          { "name": "CurrentTxnStartOffset", "type": "int64", "versions": "0+", "default": "-1",
+            "about": "The current transaction start offset of the producer."}
         ]}
       ]}
     ]}

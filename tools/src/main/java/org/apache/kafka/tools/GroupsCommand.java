@@ -33,6 +33,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
@@ -40,6 +41,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import joptsimple.ArgumentAcceptingOptionSpec;
+import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
 
@@ -74,11 +76,7 @@ public class GroupsCommand {
             }
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
-            if (cause != null) {
-                printException(cause);
-            } else {
-                printException(e);
-            }
+            printException(Objects.requireNonNullElse(cause, e));
             exitCode = 1;
         } catch (Throwable t) {
             printException(t);
@@ -103,18 +101,19 @@ public class GroupsCommand {
         public void listGroups(GroupsCommandOptions opts) throws Exception {
             Collection<GroupListing> resources = adminClient.listGroups()
                     .all().get(30, TimeUnit.SECONDS);
-            printGroupDetails(resources, opts.groupType(), opts.protocol(), opts.hasConsumerOption(), opts.hasShareOption());
+            printGroupDetails(resources, opts.groupType(), opts.protocol(), opts.hasConsumerOption(), opts.hasShareOption(), opts.hasStreamsOption());
         }
 
         private void printGroupDetails(Collection<GroupListing> groups,
                                        Optional<GroupType> groupTypeFilter,
                                        Optional<String> protocolFilter,
                                        boolean consumerGroupFilter,
-                                       boolean shareGroupFilter) {
+                                       boolean shareGroupFilter,
+                                       boolean streamsGroupFilter) {
             List<List<String>> lineItems = new ArrayList<>();
             int maxLen = 20;
             for (GroupListing group : groups) {
-                if (combinedFilter(group, groupTypeFilter, protocolFilter, consumerGroupFilter, shareGroupFilter)) {
+                if (combinedFilter(group, groupTypeFilter, protocolFilter, consumerGroupFilter, shareGroupFilter, streamsGroupFilter)) {
                     List<String> lineItem = new ArrayList<>();
                     lineItem.add(group.groupId());
                     lineItem.add(group.type().map(GroupType::toString).orElse(""));
@@ -144,7 +143,8 @@ public class GroupsCommand {
                                        Optional<GroupType> groupTypeFilter,
                                        Optional<String> protocolFilter,
                                        boolean consumerGroupFilter,
-                                       boolean shareGroupFilter) {
+                                       boolean shareGroupFilter,
+                                       boolean streamsGroupFilter) {
             boolean pass = true;
             Optional<GroupType> groupType = group.type();
             String protocol = group.protocol();
@@ -158,6 +158,8 @@ public class GroupsCommand {
                 pass = protocol.equals("consumer") || protocol.isEmpty() || groupType.filter(gt -> gt == GroupType.CONSUMER).isPresent();
             } else if (shareGroupFilter) {
                 pass = groupType.filter(gt -> gt == GroupType.SHARE).isPresent();
+            } else if (streamsGroupFilter) {
+                pass = groupType.filter(gt -> gt == GroupType.STREAMS).isPresent();
             }
             return pass;
         }
@@ -188,6 +190,8 @@ public class GroupsCommand {
 
         private final OptionSpecBuilder shareOpt;
 
+        private final OptionSpecBuilder streamsOpt;
+
         public GroupsCommandOptions(String[] args) {
             super(args);
             bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The Kafka server to connect to.")
@@ -203,7 +207,7 @@ public class GroupsCommand {
             listOpt = parser.accepts("list", "List the groups.");
 
             groupTypeOpt = parser.accepts("group-type", "Filter the groups based on group type. "
-                            + "Valid types are: 'classic', 'consumer' and 'share'.")
+                            + "Valid types are: 'classic', 'consumer', 'share' and 'streams'.")
                     .withRequiredArg()
                     .describedAs("type")
                     .ofType(String.class);
@@ -216,13 +220,18 @@ public class GroupsCommand {
             consumerOpt = parser.accepts("consumer", "Filter the groups to show all kinds of consumer groups, including classic and simple consumer groups. "
                             + "This matches group type 'consumer', and group type 'classic' where the protocol type is 'consumer' or empty.");
             shareOpt = parser.accepts("share", "Filter the groups to show share groups.");
+            streamsOpt = parser.accepts("streams", "Filter the groups to show streams groups.");
 
-            options = parser.parse(args);
+            try {
+                options = parser.parse(args);
+            } catch (OptionException oe) {
+                CommandLineUtils.printUsageAndExit(parser, oe.getMessage());
+            }
 
             checkArgs();
         }
 
-        public Boolean has(OptionSpec<?> builder) {
+        public boolean has(OptionSpec<?> builder) {
             return options.has(builder);
         }
 
@@ -270,6 +279,10 @@ public class GroupsCommand {
             return has(shareOpt);
         }
 
+        public boolean hasStreamsOption() {
+            return has(streamsOpt);
+        }
+
         public void checkArgs() {
             if (args.length == 0)
                 CommandLineUtils.printUsageAndExit(parser, "This tool helps to list groups of all types.");
@@ -288,8 +301,9 @@ public class GroupsCommand {
             }
 
             // check invalid args
-            CommandLineUtils.checkInvalidArgs(parser, options, consumerOpt, groupTypeOpt, protocolOpt, shareOpt);
-            CommandLineUtils.checkInvalidArgs(parser, options, shareOpt, consumerOpt, groupTypeOpt, protocolOpt);
+            CommandLineUtils.checkInvalidArgs(parser, options, consumerOpt, groupTypeOpt, protocolOpt, shareOpt, streamsOpt);
+            CommandLineUtils.checkInvalidArgs(parser, options, shareOpt, consumerOpt, groupTypeOpt, protocolOpt, streamsOpt);
+            CommandLineUtils.checkInvalidArgs(parser, options, streamsOpt, consumerOpt, groupTypeOpt, protocolOpt, shareOpt);
         }
     }
 }

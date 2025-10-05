@@ -88,8 +88,8 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
     }
 
     @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        inner.init(context, root);
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        inner.init(stateStoreContext, root);
     }
 
     @Override

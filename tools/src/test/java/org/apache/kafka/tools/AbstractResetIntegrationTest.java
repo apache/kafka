@@ -19,6 +19,7 @@ package org.apache.kafka.tools;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
@@ -50,12 +51,10 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.stream.Collectors;
+import java.util.Set;
 
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
@@ -127,6 +126,7 @@ public abstract class AbstractResetIntegrationTest {
         resultConsumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         resultConsumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
         resultConsumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
+        resultConsumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
         resultConsumerConfig.putAll(commonClientConfig);
 
         streamsConfig = new Properties();
@@ -174,7 +174,7 @@ public abstract class AbstractResetIntegrationTest {
     }
 
     private void add10InputElements() {
-        final List<KeyValue<Long, String>> records = Arrays.asList(KeyValue.pair(0L, "aaa"),
+        final List<KeyValue<Long, String>> records = List.of(KeyValue.pair(0L, "aaa"),
                                                                    KeyValue.pair(1L, "bbb"),
                                                                    KeyValue.pair(0L, "ccc"),
                                                                    KeyValue.pair(1L, "ddd"),
@@ -187,7 +187,7 @@ public abstract class AbstractResetIntegrationTest {
 
         for (final KeyValue<Long, String> record : records) {
             mockTime.sleep(10);
-            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(record), producerConfig, mockTime.milliseconds());
+            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Set.of(record), producerConfig, mockTime.milliseconds());
         }
     }
 
@@ -209,7 +209,7 @@ public abstract class AbstractResetIntegrationTest {
 
         final List<String> internalTopics = cluster.getAllTopicsInCluster().stream()
                 .filter(StreamsResetter::matchesInternalTopicFormat)
-                .collect(Collectors.toList());
+                .toList();
         cleanGlobal(false,
                 "--internal-topics",
                 String.join(",", internalTopics.subList(1, internalTopics.size())),
@@ -286,7 +286,7 @@ public abstract class AbstractResetIntegrationTest {
         if (!useRepartitioned) {
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 INTERMEDIATE_USER_TOPIC,
-                Collections.singleton(badMessage),
+                Set.of(badMessage),
                 producerConfig,
                 mockTime.milliseconds());
         }
@@ -373,7 +373,7 @@ public abstract class AbstractResetIntegrationTest {
                                    final String resetScenarioArg,
                                    final String appID) throws Exception {
         final List<String> parameterList = new ArrayList<>(
-            Arrays.asList("--application-id", appID,
+            List.of("--application-id", appID,
                     "--bootstrap-server", cluster.bootstrapServers(),
                     "--input-topics", INPUT_TOPIC
             ));

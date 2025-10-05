@@ -79,7 +79,9 @@ public class BrokerSecurityConfigs {
             "name from the client certificate if one is provided; otherwise, if client authentication is not required, " +
             "the principal name will be ANONYMOUS. For SASL authentication, the principal will be derived using the " +
             "rules defined by <code>" + SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG + "</code> if GSSAPI is in use, " +
-            "and the SASL authentication ID for other mechanisms. For PLAINTEXT, the principal will be ANONYMOUS.";
+            "and the SASL authentication ID for other mechanisms. For PLAINTEXT, the principal will be ANONYMOUS. " +
+            "Note that custom implementations of <code>KafkaPrincipalBuilder</code> is required to implement <code>KafkaPrincipalSerde</code> " +
+            "interface, otherwise brokers will not be able to forward requests to the controller.";
 
     public static final String SSL_CLIENT_AUTH_CONFIG = "ssl.client.auth";
     public static final String SSL_CLIENT_AUTH_DEFAULT = SslClientAuth.NONE.toString();
@@ -130,6 +132,14 @@ public class BrokerSecurityConfigs {
 
     public static final String SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG = "sasl.mechanism.inter.broker.protocol";
     public static final String SASL_MECHANISM_INTER_BROKER_PROTOCOL_DOC = "SASL mechanism used for inter-broker communication. Default is GSSAPI.";
+
+    // The allowlist of the SASL OAUTHBEARER endpoints
+    public static final String ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG = "org.apache.kafka.sasl.oauthbearer.allowed.urls";
+    public static final String ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT = "";
+
+    public static final String ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG = "org.apache.kafka.sasl.oauthbearer.allowed.files";
+    public static final String ALLOWED_SASL_OAUTHBEARER_FILES_DEFAULT = "";
+
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
             // General Security Configuration
             .define(BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG, LONG, BrokerSecurityConfigs.DEFAULT_CONNECTIONS_MAX_REAUTH_MS, MEDIUM, BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_DOC)
@@ -144,7 +154,7 @@ public class BrokerSecurityConfigs {
             .define(BrokerSecurityConfigs.SSL_ALLOW_SAN_CHANGES_CONFIG, BOOLEAN, BrokerSecurityConfigs.DEFAULT_SSL_ALLOW_SAN_CHANGES_VALUE, LOW, BrokerSecurityConfigs.SSL_ALLOW_SAN_CHANGES_DOC)
             .define(SslConfigs.SSL_PROTOCOL_CONFIG, STRING, SslConfigs.DEFAULT_SSL_PROTOCOL, MEDIUM, SslConfigs.SSL_PROTOCOL_DOC)
             .define(SslConfigs.SSL_PROVIDER_CONFIG, STRING, null, MEDIUM, SslConfigs.SSL_PROVIDER_DOC)
-            .define(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, LIST, SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS, MEDIUM, SslConfigs.SSL_ENABLED_PROTOCOLS_DOC)
+            .define(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, LIST, SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS, ConfigDef.ValidList.anyNonDuplicateValues(true, false), MEDIUM, SslConfigs.SSL_ENABLED_PROTOCOLS_DOC)
             .define(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, STRING, SslConfigs.DEFAULT_SSL_KEYSTORE_TYPE, MEDIUM, SslConfigs.SSL_KEYSTORE_TYPE_DOC)
             .define(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, STRING, null, MEDIUM, SslConfigs.SSL_KEYSTORE_LOCATION_DOC)
             .define(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, PASSWORD, null, MEDIUM, SslConfigs.SSL_KEYSTORE_PASSWORD_DOC)
@@ -184,6 +194,22 @@ public class BrokerSecurityConfigs {
             .define(SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS, INT, null, LOW, SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS_DOC)
             .define(SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS, LONG, SaslConfigs.DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MAX_MS, LOW, SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS_DOC)
             .define(SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS, LONG, SaslConfigs.DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MS, LOW, SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS, CLASS, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS, CLASS, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_SCOPE, STRING, null, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_SCOPE_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, STRING, null, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET, PASSWORD, null, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_ALGORITHM, STRING, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_ASSERTION_ALGORITHM, ConfigDef.CaseInsensitiveValidString.in("ES256", "RS256"), MEDIUM, SaslConfigs.SASL_OAUTHBEARER_ASSERTION_ALGORITHM_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD, STRING, null, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_SECONDS, INT, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_SECONDS, ConfigDef.Range.between(0, 86400), LOW, SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_SECONDS_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS, STRING, null, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_JTI_INCLUDE, BOOLEAN, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_ASSERTION_CLAIM_JTI_INCLUDE, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_JTI_INCLUDE_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_SECONDS, INT, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_SECONDS, ConfigDef.Range.between(0, 3600), LOW, SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_SECONDS_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB, STRING, null, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE, STRING, null, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE, STRING, null, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE, PASSWORD, null, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE, STRING, null, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE_DOC)
             .define(SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, STRING, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, LOW, SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_DOC)
             .define(SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME, STRING, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME, LOW, SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME_DOC)
             .define(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, STRING, null, MEDIUM, SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_DOC)
@@ -192,6 +218,6 @@ public class BrokerSecurityConfigs {
             .define(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS, LONG, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS, LOW, SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_DOC)
             .define(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS, LONG, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS, LOW, SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_DOC)
             .define(SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, INT, SaslConfigs.DEFAULT_SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, LOW, SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_DOC)
-            .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, LIST, null, LOW, SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC)
+            .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, LIST, List.of(), LOW, SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC)
             .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, STRING, null, LOW, SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC);
 }

@@ -24,6 +24,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.utils.LogContext;
 
 import java.time.Duration;
@@ -104,6 +105,10 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
     }
 
     @Override
+    public synchronized void acknowledge(String topic, int partition, long offset, AcknowledgeType type) {
+    }
+
+    @Override
     public synchronized Map<TopicIdPartition, Optional<KafkaException>> commitSync() {
         return new HashMap<>();
     }
@@ -138,6 +143,14 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
     public synchronized Map<MetricName, ? extends Metric> metrics() {
         ensureNotClosed();
         return Collections.emptyMap();
+    }
+
+    @Override
+    public void registerMetricForSubscription(KafkaMetric metric) {
+    }
+
+    @Override
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
     }
 
     @Override

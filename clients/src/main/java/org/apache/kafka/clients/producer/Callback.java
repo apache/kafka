@@ -20,6 +20,7 @@ package org.apache.kafka.clients.producer;
  * A callback interface that the user can implement to allow code to execute when the request is complete. This callback
  * will generally execute in the background I/O thread so it should be fast.
  */
+@FunctionalInterface
 public interface Callback {
 
     /**
@@ -42,6 +43,8 @@ public interface Callback {
      *                      <li>{@link org.apache.kafka.common.errors.UnknownServerException UnknownServerException}
      *                      <li>{@link org.apache.kafka.common.errors.UnknownProducerIdException UnknownProducerIdException}
      *                      <li>{@link org.apache.kafka.common.errors.InvalidProducerEpochException InvalidProducerEpochException}
+     *                      <li>{@link org.apache.kafka.common.errors.AuthenticationException AuthenticationException}
+     *                      <li>{@link org.apache.kafka.common.errors.AuthorizationException AuthorizationException}
      *                  </ul>
      *                  Retriable exceptions (transient, may be covered by increasing #.retries):
      *                  <ul>
@@ -52,6 +55,7 @@ public interface Callback {
      *                      <li>{@link org.apache.kafka.common.errors.OffsetOutOfRangeException OffsetOutOfRangeException}
      *                      <li>{@link org.apache.kafka.common.errors.TimeoutException TimeoutException}
      *                      <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException UnknownTopicOrPartitionException}
+     *                      <li>{@link org.apache.kafka.clients.producer.BufferExhaustedException BufferExhaustedException}
      *                  </ul>
      */
     void onCompletion(RecordMetadata metadata, Exception exception);

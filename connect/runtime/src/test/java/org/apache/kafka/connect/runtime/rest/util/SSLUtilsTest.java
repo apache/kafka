@@ -17,13 +17,16 @@
 package org.apache.kafka.connect.runtime.rest.util;
 
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.network.CertStores;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 
 import org.eclipse.jetty.util.ssl.SslContextFactory;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -32,6 +35,21 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SSLUtilsTest {
+
+    private String keystorePath;
+    private String truststorePath;
+    private Password keystorePassword;
+    private Password truststorePassword;
+
+    @BeforeEach
+    public void before() throws Exception {
+        CertStores serverCertStores = new CertStores(true, "localhost");
+        Map<String, Object> sslConfig = serverCertStores.getUntrustingConfig();
+        keystorePath = sslConfig.get("ssl.keystore.location").toString();
+        truststorePath = sslConfig.get("ssl.truststore.location").toString();
+        keystorePassword = (Password) sslConfig.get("ssl.keystore.password");
+        truststorePassword = (Password) sslConfig.get("ssl.keystore.password");
+    }
 
     @Test
     public void testGetOrDefault() {
@@ -42,18 +60,18 @@ public class SSLUtilsTest {
         Map<String, Object> map = new HashMap<>();
         map.put("exists", "value");
 
-        assertEquals(SSLUtils.getOrDefault(map, existingKey, defaultValue), value);
-        assertEquals(SSLUtils.getOrDefault(map, missingKey, defaultValue), defaultValue);
+        assertEquals(value, SSLUtils.getOrDefault(map, existingKey, defaultValue));
+        assertEquals(defaultValue, SSLUtils.getOrDefault(map, missingKey, defaultValue));
     }
 
     @Test
     public void testCreateServerSideSslContextFactory() {
         Map<String, String> configMap = new HashMap<>();
-        configMap.put("ssl.keystore.location", "/path/to/keystore");
-        configMap.put("ssl.keystore.password", "123456");
-        configMap.put("ssl.key.password", "123456");
-        configMap.put("ssl.truststore.location", "/path/to/truststore");
-        configMap.put("ssl.truststore.password", "123456");
+        configMap.put("ssl.keystore.location", keystorePath);
+        configMap.put("ssl.keystore.password", keystorePassword.value());
+        configMap.put("ssl.key.password", keystorePassword.value());
+        configMap.put("ssl.truststore.location", truststorePath);
+        configMap.put("ssl.truststore.password", truststorePassword.value());
         configMap.put("ssl.provider", "SunJSSE");
         configMap.put("ssl.cipher.suites", "SSL_RSA_WITH_RC4_128_SHA,SSL_RSA_WITH_RC4_128_MD5");
         configMap.put("ssl.secure.random.implementation", "SHA1PRNG");
@@ -69,8 +87,8 @@ public class SSLUtilsTest {
         RestServerConfig config = RestServerConfig.forPublic(null, configMap);
         SslContextFactory.Server ssl = SSLUtils.createServerSideSslContextFactory(config);
 
-        assertEquals("file:///path/to/keystore", ssl.getKeyStorePath());
-        assertEquals("file:///path/to/truststore", ssl.getTrustStorePath());
+        assertEquals("file://" + keystorePath, ssl.getKeyStorePath());
+        assertEquals("file://" + truststorePath, ssl.getTrustStorePath());
         assertEquals("SunJSSE", ssl.getProvider());
         assertArrayEquals(new String[] {"SSL_RSA_WITH_RC4_128_SHA", "SSL_RSA_WITH_RC4_128_MD5"}, ssl.getIncludeCipherSuites());
         assertEquals("SHA1PRNG", ssl.getSecureRandomAlgorithm());
@@ -87,11 +105,11 @@ public class SSLUtilsTest {
     @Test
     public void testCreateClientSideSslContextFactory() {
         Map<String, String> configMap = new HashMap<>();
-        configMap.put("ssl.keystore.location", "/path/to/keystore");
-        configMap.put("ssl.keystore.password", "123456");
-        configMap.put("ssl.key.password", "123456");
-        configMap.put("ssl.truststore.location", "/path/to/truststore");
-        configMap.put("ssl.truststore.password", "123456");
+        configMap.put("ssl.keystore.location", keystorePath);
+        configMap.put("ssl.keystore.password", keystorePassword.value());
+        configMap.put("ssl.key.password", keystorePassword.value());
+        configMap.put("ssl.truststore.location", truststorePath);
+        configMap.put("ssl.truststore.password", truststorePassword.value());
         configMap.put("ssl.provider", "SunJSSE");
         configMap.put("ssl.cipher.suites", "SSL_RSA_WITH_RC4_128_SHA,SSL_RSA_WITH_RC4_128_MD5");
         configMap.put("ssl.secure.random.implementation", "SHA1PRNG");
@@ -107,8 +125,8 @@ public class SSLUtilsTest {
         RestServerConfig config = RestServerConfig.forPublic(null, configMap);
         SslContextFactory.Client ssl = SSLUtils.createClientSideSslContextFactory(config);
 
-        assertEquals("file:///path/to/keystore", ssl.getKeyStorePath());
-        assertEquals("file:///path/to/truststore", ssl.getTrustStorePath());
+        assertEquals("file://" + keystorePath, ssl.getKeyStorePath());
+        assertEquals("file://" + truststorePath, ssl.getTrustStorePath());
         assertEquals("SunJSSE", ssl.getProvider());
         assertArrayEquals(new String[] {"SSL_RSA_WITH_RC4_128_SHA", "SSL_RSA_WITH_RC4_128_MD5"}, ssl.getIncludeCipherSuites());
         assertEquals("SHA1PRNG", ssl.getSecureRandomAlgorithm());
@@ -123,11 +141,11 @@ public class SSLUtilsTest {
     @Test
     public void testCreateServerSideSslContextFactoryDefaultValues() {
         Map<String, String> configMap = new HashMap<>();
-        configMap.put("ssl.keystore.location", "/path/to/keystore");
-        configMap.put("ssl.keystore.password", "123456");
-        configMap.put("ssl.key.password", "123456");
-        configMap.put("ssl.truststore.location", "/path/to/truststore");
-        configMap.put("ssl.truststore.password", "123456");
+        configMap.put("ssl.keystore.location", keystorePath);
+        configMap.put("ssl.keystore.password", keystorePassword.value());
+        configMap.put("ssl.key.password", keystorePassword.value());
+        configMap.put("ssl.truststore.location", truststorePath);
+        configMap.put("ssl.truststore.password", truststorePassword.value());
         configMap.put("ssl.provider", "SunJSSE");
         configMap.put("ssl.cipher.suites", "SSL_RSA_WITH_RC4_128_SHA,SSL_RSA_WITH_RC4_128_MD5");
         configMap.put("ssl.secure.random.implementation", "SHA1PRNG");
@@ -138,7 +156,7 @@ public class SSLUtilsTest {
         assertEquals(SslConfigs.DEFAULT_SSL_KEYSTORE_TYPE, ssl.getKeyStoreType());
         assertEquals(SslConfigs.DEFAULT_SSL_TRUSTSTORE_TYPE, ssl.getTrustStoreType());
         assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, ssl.getProtocol());
-        assertArrayEquals(Arrays.asList(SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS.split("\\s*,\\s*")).toArray(), ssl.getIncludeProtocols());
+        assertArrayEquals(List.of(SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS.split("\\s*,\\s*")).toArray(), ssl.getIncludeProtocols());
         assertEquals(SslConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM, ssl.getKeyManagerFactoryAlgorithm());
         assertEquals(SslConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM, ssl.getTrustManagerFactoryAlgorithm());
         assertFalse(ssl.getNeedClientAuth());
@@ -148,11 +166,11 @@ public class SSLUtilsTest {
     @Test
     public void testCreateClientSideSslContextFactoryDefaultValues() {
         Map<String, String> configMap = new HashMap<>();
-        configMap.put("ssl.keystore.location", "/path/to/keystore");
-        configMap.put("ssl.keystore.password", "123456");
-        configMap.put("ssl.key.password", "123456");
-        configMap.put("ssl.truststore.location", "/path/to/truststore");
-        configMap.put("ssl.truststore.password", "123456");
+        configMap.put("ssl.keystore.location", keystorePath);
+        configMap.put("ssl.keystore.password", keystorePassword.value());
+        configMap.put("ssl.key.password", keystorePassword.value());
+        configMap.put("ssl.truststore.location", truststorePath);
+        configMap.put("ssl.truststore.password", truststorePassword.value());
         configMap.put("ssl.provider", "SunJSSE");
         configMap.put("ssl.cipher.suites", "SSL_RSA_WITH_RC4_128_SHA,SSL_RSA_WITH_RC4_128_MD5");
         configMap.put("ssl.secure.random.implementation", "SHA1PRNG");
@@ -163,7 +181,7 @@ public class SSLUtilsTest {
         assertEquals(SslConfigs.DEFAULT_SSL_KEYSTORE_TYPE, ssl.getKeyStoreType());
         assertEquals(SslConfigs.DEFAULT_SSL_TRUSTSTORE_TYPE, ssl.getTrustStoreType());
         assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, ssl.getProtocol());
-        assertArrayEquals(Arrays.asList(SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS.split("\\s*,\\s*")).toArray(), ssl.getIncludeProtocols());
+        assertArrayEquals(List.of(SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS.split("\\s*,\\s*")).toArray(), ssl.getIncludeProtocols());
         assertEquals(SslConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM, ssl.getKeyManagerFactoryAlgorithm());
         assertEquals(SslConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM, ssl.getTrustManagerFactoryAlgorithm());
     }

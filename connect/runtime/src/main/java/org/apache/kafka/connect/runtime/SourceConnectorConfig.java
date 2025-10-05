@@ -26,12 +26,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.enumOptions;
@@ -125,14 +125,14 @@ public final class SourceConnectorConfig extends ConnectorConfig {
     private final EnrichedSourceConnectorConfig enrichedSourceConfig;
     private final String offsetsTopic;
 
-    public static ConfigDef configDef() {
+    private static ConfigDef configDef(ConfigDef baseConfigDef) {
         ConfigDef.Validator atLeastZero = ConfigDef.Range.atLeast(0);
         int orderInGroup = 0;
-        return new ConfigDef(ConnectorConfig.configDef())
+        return new ConfigDef(baseConfigDef)
                 .define(
                         TOPIC_CREATION_GROUPS_CONFIG,
                         ConfigDef.Type.LIST,
-                        Collections.emptyList(),
+                        List.of(),
                         ConfigDef.CompositeValidator.of(
                                 new ConfigDef.NonNullValidator(),
                                 ConfigDef.LambdaValidator.with(
@@ -203,6 +203,18 @@ public final class SourceConnectorConfig extends ConnectorConfig {
                         OFFSETS_TOPIC_DISPLAY);
     }
 
+    public static ConfigDef configDef() {
+        return configDef(ConnectorConfig.configDef());
+    }
+
+    public static ConfigDef enrichedConfigDef(Plugins plugins, Map<String, String> connProps, WorkerConfig workerConfig) {
+        return configDef(ConnectorConfig.enrichedConfigDef(plugins, connProps, workerConfig));
+    }
+
+    public static ConfigDef enrichedConfigDef(Plugins plugins, String connectorClass) {
+        return configDef(ConnectorConfig.enrichedConfigDef(plugins, connectorClass));
+    }
+
     public static ConfigDef embedDefaultGroup(ConfigDef baseConfigDef) {
         String defaultGroup = "default";
         ConfigDef newDefaultDef = new ConfigDef(baseConfigDef);
@@ -228,7 +240,7 @@ public final class SourceConnectorConfig extends ConnectorConfig {
         if (topicCreationGroups.contains(DEFAULT_TOPIC_CREATION_GROUP)) {
             log.warn("'{}' topic creation group always exists and does not need to be listed explicitly",
                 DEFAULT_TOPIC_CREATION_GROUP);
-            topicCreationGroups.removeAll(Collections.singleton(DEFAULT_TOPIC_CREATION_GROUP));
+            topicCreationGroups.removeAll(Set.of(DEFAULT_TOPIC_CREATION_GROUP));
         }
 
         ConfigDef newDef = new ConfigDef(baseConfigDef);
@@ -236,10 +248,9 @@ public final class SourceConnectorConfig extends ConnectorConfig {
         short defaultGroupReplicationFactor = defaultGroupConfig.getShort(defaultGroupPrefix + REPLICATION_FACTOR_CONFIG);
         int defaultGroupPartitions = defaultGroupConfig.getInt(defaultGroupPrefix + PARTITIONS_CONFIG);
         topicCreationGroups.stream().distinct().forEach(group -> {
-            if (!(group instanceof String)) {
+            if (!(group instanceof String alias)) {
                 throw new ConfigException("Item in " + TOPIC_CREATION_GROUPS_CONFIG + " property is not of type String");
             }
-            String alias = (String) group;
             String prefix = TOPIC_CREATION_PREFIX + alias + ".";
             String configGroup = TOPIC_CREATION_GROUP + ": " + alias;
             newDef.embed(prefix, configGroup, 0,
@@ -321,7 +332,7 @@ public final class SourceConnectorConfig extends ConnectorConfig {
 
     public Map<String, Object> topicCreationOtherConfigs(String group) {
         if (enrichedSourceConfig == null) {
-            return Collections.emptyMap();
+            return Map.of();
         }
         return enrichedSourceConfig.originalsWithPrefix(TOPIC_CREATION_PREFIX + group + '.').entrySet().stream()
                 .filter(e -> {

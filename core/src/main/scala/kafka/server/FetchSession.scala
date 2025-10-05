@@ -19,7 +19,7 @@ package kafka.server
 
 import com.typesafe.scalalogging.Logger
 import kafka.utils.Logging
-import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOCH, INVALID_SESSION_ID}
@@ -224,7 +224,7 @@ class CachedPartition(var topic: String,
   * fields are read or modified.  This includes modification of the session partition map.
   *
   * @param id                 The unique fetch session ID.
-  * @param privileged         True if this session is privileged.  Sessions crated by followers
+  * @param privileged         True if this session is privileged.  Sessions created by followers
   *                           are privileged; session created by consumers are not.
   * @param partitionMap       The CachedPartitionMap.
   * @param usesTopicIds       True if this session is using topic IDs
@@ -270,8 +270,7 @@ class FetchSession(val id: Int,
 
   // Update the cached partition data based on the request.
   def update(fetchData: FetchSession.REQ_MAP,
-             toForget: util.List[TopicIdPartition],
-             reqMetadata: JFetchMetadata): (TL, TL, TL) = synchronized {
+             toForget: util.List[TopicIdPartition]): (TL, TL, TL) = synchronized {
     val added = new TL
     val updated = new TL
     val removed = new TL
@@ -326,7 +325,7 @@ trait FetchContext extends Logging {
     * Updates the fetch context with new partition information.  Generates response data.
     * The response data may require subsequent down-conversion.
     */
-  def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse
+  def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP, nodeEndpoints: util.List[Node]): FetchResponse
 
   def partitionsToLogString(partitions: util.Collection[TopicIdPartition]): String =
     FetchSession.partitionsToLogString(partitions, isTraceEnabled)
@@ -334,8 +333,8 @@ trait FetchContext extends Logging {
   /**
     * Return an empty throttled response due to quota violation.
     */
-  def getThrottledResponse(throttleTimeMs: Int): FetchResponse =
-    FetchResponse.of(Errors.NONE, throttleTimeMs, INVALID_SESSION_ID, new FetchSession.RESP_MAP)
+  def getThrottledResponse(throttleTimeMs: Int, nodeEndpoints: util.List[Node]): FetchResponse =
+    FetchResponse.of(Errors.NONE, throttleTimeMs, INVALID_SESSION_ID, new FetchSession.RESP_MAP, nodeEndpoints)
 }
 
 /**
@@ -352,9 +351,9 @@ class SessionErrorContext(val error: Errors,
   }
 
   // Because of the fetch session error, we don't know what partitions were supposed to be in this request.
-  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
+  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP, nodeEndpoints: util.List[Node]): FetchResponse = {
     debug(s"Session error fetch context returning $error")
-    FetchResponse.of(error, 0, INVALID_SESSION_ID, new FetchSession.RESP_MAP)
+    FetchResponse.of(error, 0, INVALID_SESSION_ID, new FetchSession.RESP_MAP, nodeEndpoints)
   }
 }
 
@@ -382,9 +381,9 @@ class SessionlessFetchContext(val fetchData: util.Map[TopicIdPartition, FetchReq
     FetchResponse.sizeOf(versionId, updates.entrySet.iterator)
   }
 
-  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
+  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP, nodeEndpoints: util.List[Node]): FetchResponse = {
     debug(s"Sessionless fetch context returning ${partitionsToLogString(updates.keySet)}")
-    FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, updates)
+    FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, updates, nodeEndpoints)
   }
 }
 
@@ -430,7 +429,7 @@ class FullFetchContext(private val time: Time,
     FetchResponse.sizeOf(versionId, updates.entrySet.iterator)
   }
 
-  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
+  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP, nodeEndpoints: util.List[Node]): FetchResponse = {
     def createNewSession: FetchSession.CACHE_MAP = {
       val cachedPartitions = new FetchSession.CACHE_MAP(updates.size)
       updates.forEach { (part, respData) =>
@@ -444,7 +443,7 @@ class FullFetchContext(private val time: Time,
         updates.size, usesTopicIds, () => createNewSession)
     debug(s"Full fetch context with session id $responseSessionId returning " +
       s"${partitionsToLogString(updates.keySet)}")
-    FetchResponse.of(Errors.NONE, 0, responseSessionId, updates)
+    FetchResponse.of(Errors.NONE, 0, responseSessionId, updates, nodeEndpoints)
   }
 }
 
@@ -533,7 +532,7 @@ class IncrementalFetchContext(private val time: Time,
     }
   }
 
-  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse = {
+  override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP, nodeEndpoints: util.List[Node]): FetchResponse = {
     session.synchronized {
       // Check to make sure that the session epoch didn't change in between
       // creating this fetch context and generating this response.
@@ -541,7 +540,7 @@ class IncrementalFetchContext(private val time: Time,
       if (session.epoch != expectedEpoch) {
         info(s"Incremental fetch session ${session.id} expected epoch $expectedEpoch, but " +
           s"got ${session.epoch}.  Possible duplicate request.")
-        FetchResponse.of(Errors.INVALID_FETCH_SESSION_EPOCH, 0, session.id, new FetchSession.RESP_MAP)
+        FetchResponse.of(Errors.INVALID_FETCH_SESSION_EPOCH, 0, session.id, new FetchSession.RESP_MAP, nodeEndpoints)
       } else {
         // Iterate over the update list using PartitionIterator. This will prune updates which don't need to be sent
         val partitionIter = new PartitionIterator(updates.entrySet.iterator, true)
@@ -550,12 +549,12 @@ class IncrementalFetchContext(private val time: Time,
         }
         debug(s"Incremental fetch context with session id ${session.id} returning " +
           s"${partitionsToLogString(updates.keySet)}")
-        FetchResponse.of(Errors.NONE, 0, session.id, updates)
+        FetchResponse.of(Errors.NONE, 0, session.id, updates, nodeEndpoints)
       }
     }
   }
 
-  override def getThrottledResponse(throttleTimeMs: Int): FetchResponse = {
+  override def getThrottledResponse(throttleTimeMs: Int, nodeEndpoints: util.List[Node]): FetchResponse = {
     session.synchronized {
       // Check to make sure that the session epoch didn't change in between
       // creating this fetch context and generating this response.
@@ -563,9 +562,9 @@ class IncrementalFetchContext(private val time: Time,
       if (session.epoch != expectedEpoch) {
         info(s"Incremental fetch session ${session.id} expected epoch $expectedEpoch, but " +
           s"got ${session.epoch}.  Possible duplicate request.")
-        FetchResponse.of(Errors.INVALID_FETCH_SESSION_EPOCH, throttleTimeMs, session.id, new FetchSession.RESP_MAP)
+        FetchResponse.of(Errors.INVALID_FETCH_SESSION_EPOCH, throttleTimeMs, session.id, new FetchSession.RESP_MAP, nodeEndpoints)
       } else {
-        FetchResponse.of(Errors.NONE, throttleTimeMs, session.id, new FetchSession.RESP_MAP)
+        FetchResponse.of(Errors.NONE, throttleTimeMs, session.id, new FetchSession.RESP_MAP, nodeEndpoints)
       }
     }
   }
@@ -880,7 +879,7 @@ class FetchManager(private val time: Time,
                 s", but request version $reqVersion means that we can not.")
               new SessionErrorContext(Errors.FETCH_SESSION_TOPIC_ID_ERROR, reqMetadata)
             } else {
-              val (added, updated, removed) = session.update(fetchData, toForget, reqMetadata)
+              val (added, updated, removed) = session.update(fetchData, toForget)
               if (session.isEmpty) {
                 debug(s"Created a new sessionless FetchContext and closing session id ${session.id}, " +
                   s"epoch ${session.epoch}: after removing ${partitionsToLogString(removed)}, " +

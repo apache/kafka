@@ -17,65 +17,35 @@
 package org.apache.kafka.tools.consumer;
 
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
-import org.apache.kafka.coordinator.group.generated.GroupMetadataKeyJsonConverter;
-import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.GroupMetadataValueJsonConverter;
-import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
+import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde;
+import org.apache.kafka.coordinator.group.generated.CoordinatorRecordJsonConverters;
+import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.NullNode;
-import com.fasterxml.jackson.databind.node.TextNode;
 
-import java.nio.ByteBuffer;
-import java.util.Optional;
+import java.util.Set;
 
-public class GroupMetadataMessageFormatter extends ApiMessageFormatter {
+public class GroupMetadataMessageFormatter extends CoordinatorRecordMessageFormatter {
+    private static final Set<Short> ALLOWED_RECORDS = Set.of(
+        CoordinatorRecordType.GROUP_METADATA.id()
+    );
 
-    @Override
-    protected JsonNode readToKeyJson(ByteBuffer byteBuffer, short version) {
-        return readToGroupMetadataKey(byteBuffer)
-                .map(logKey -> transferKeyMessageToJsonNode(logKey, version))
-                .orElseGet(() -> new TextNode(UNKNOWN));
+    public GroupMetadataMessageFormatter() {
+        super(new GroupCoordinatorRecordSerde());
     }
 
     @Override
-    protected JsonNode readToValueJson(ByteBuffer byteBuffer, short version) {
-        return readToGroupMetadataValue(byteBuffer)
-                .map(logValue -> GroupMetadataValueJsonConverter.write(logValue, version))
-                .orElseGet(() -> new TextNode(UNKNOWN));
+    protected boolean isRecordTypeAllowed(short recordType) {
+        return ALLOWED_RECORDS.contains(recordType);
     }
 
-    private Optional<ApiMessage> readToGroupMetadataKey(ByteBuffer byteBuffer) {
-        short version = byteBuffer.getShort();
-        if (version >= OffsetCommitKey.LOWEST_SUPPORTED_VERSION
-                && version <= OffsetCommitKey.HIGHEST_SUPPORTED_VERSION) {
-            return Optional.of(new OffsetCommitKey(new ByteBufferAccessor(byteBuffer), version));
-        } else if (version >= GroupMetadataKey.LOWEST_SUPPORTED_VERSION && version <= GroupMetadataKey.HIGHEST_SUPPORTED_VERSION) {
-            return Optional.of(new GroupMetadataKey(new ByteBufferAccessor(byteBuffer), version));
-        } else {
-            return Optional.empty();
-        }
+    @Override
+    protected JsonNode keyAsJson(ApiMessage message) {
+        return CoordinatorRecordJsonConverters.writeRecordKeyAsJson(message);
     }
 
-    private JsonNode transferKeyMessageToJsonNode(ApiMessage message, short version) {
-        if (message instanceof OffsetCommitKey) {
-            return NullNode.getInstance();
-        } else if (message instanceof GroupMetadataKey) {
-            return GroupMetadataKeyJsonConverter.write((GroupMetadataKey) message, version);
-        } else {
-            return new TextNode(UNKNOWN);
-        }
-    }
-
-    private Optional<GroupMetadataValue> readToGroupMetadataValue(ByteBuffer byteBuffer) {
-        short version = byteBuffer.getShort();
-        if (version >= GroupMetadataValue.LOWEST_SUPPORTED_VERSION
-                && version <= GroupMetadataValue.HIGHEST_SUPPORTED_VERSION) {
-            return Optional.of(new GroupMetadataValue(new ByteBufferAccessor(byteBuffer), version));
-        } else {
-            return Optional.empty();
-        }
+    @Override
+    protected JsonNode valueAsJson(ApiMessage message, short version) {
+        return CoordinatorRecordJsonConverters.writeRecordValueAsJson(message, version);
     }
 }

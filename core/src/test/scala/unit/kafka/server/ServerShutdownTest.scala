@@ -21,7 +21,6 @@ import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
 import java.io.File
 import java.util.concurrent.CancellationException
 import kafka.integration.KafkaServerTestHarness
-import kafka.log.LogManager
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -29,11 +28,12 @@ import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerial
 import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
-import org.junit.jupiter.api.{BeforeEach, TestInfo, Timeout}
+import org.apache.kafka.storage.internals.log.LogManager
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
+import org.junit.jupiter.params.provider.MethodSource
 
 import java.time.Duration
 import java.util.Properties
@@ -61,7 +61,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
         propsToChangeUponRestart.put(ServerLogConfigs.LOG_DIR_CONFIG, originals.get(ServerLogConfigs.LOG_DIR_CONFIG))
       }
     }
-    priorConfig = Some(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, null).head, propsToChangeUponRestart))
+    priorConfig = Some(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1).head, propsToChangeUponRestart))
     Seq(priorConfig.get)
   }
 
@@ -74,9 +74,9 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     super.setUp(testInfo)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testCleanShutdown(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testCleanShutdown(groupProtocol: String): Unit = {
 
     def createProducer(): KafkaProducer[Integer, String] =
       TestUtils.createProducer(
@@ -104,8 +104,8 @@ class ServerShutdownTest extends KafkaServerTestHarness {
 
     // do a clean shutdown and check that offset checkpoint file exists
     shutdownBroker()
-    for (logDir <- config.logDirs) {
-      val OffsetCheckpointFile = new File(logDir, LogManager.RecoveryPointCheckpointFile)
+    for (logDir <- config.logDirs.asScala) {
+      val OffsetCheckpointFile = new File(logDir, LogManager.RECOVERY_POINT_CHECKPOINT_FILE)
       assertTrue(OffsetCheckpointFile.exists)
       assertTrue(OffsetCheckpointFile.length() > 0)
     }
@@ -134,21 +134,19 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     producer.close()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testCleanShutdownAfterFailedStartup(quorum: String): Unit = {
+  @Test
+  def testCleanShutdownAfterFailedStartup(): Unit = {
     propsToChangeUponRestart.setProperty(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG, "1000")
     shutdownBroker()
     shutdownKRaftController()
     verifyCleanShutdownAfterFailedStartup[CancellationException]
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testNoCleanShutdownAfterFailedStartupDueToCorruptLogs(quorum: String): Unit = {
+  @Test
+  def testNoCleanShutdownAfterFailedStartupDueToCorruptLogs(): Unit = {
     createTopic(topic)
     shutdownBroker()
-    config.logDirs.foreach { dirName =>
+    config.logDirs.forEach { dirName =>
       val partitionDir = new File(dirName, s"$topic-0")
       partitionDir.listFiles.foreach(f => TestUtils.appendNonsenseToFile(f, TestUtils.random.nextInt(1024) + 1))
     }
@@ -174,9 +172,8 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testShutdownWithKRaftControllerUnavailable(quorum: String): Unit = {
+  @Test
+  def testShutdownWithKRaftControllerUnavailable(): Unit = {
     shutdownKRaftController()
     killBroker(0, Duration.ofSeconds(1))
     CoreUtils.delete(broker.config.logDirs)
@@ -220,9 +217,8 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       .count(isNonDaemonKafkaThread))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testConsecutiveShutdown(quorum: String): Unit = {
+  @Test
+  def testConsecutiveShutdown(): Unit = {
     shutdownBroker()
     brokers.head.shutdown()
   }

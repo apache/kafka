@@ -49,9 +49,9 @@ public interface StreamsMetadata {
     Set<TopicPartition> topicPartitions();
 
     /**
-     * Changelog topic partitions for the state stores the standby tasks of the Streams client replicates.
+     * Source topic partitions for which the instance acts as standby.
      *
-     * @return set of changelog topic partitions of the standby tasks
+     * @return source topic partitions of the standby tasks
      */
     Set<TopicPartition> standbyTopicPartitions();
 

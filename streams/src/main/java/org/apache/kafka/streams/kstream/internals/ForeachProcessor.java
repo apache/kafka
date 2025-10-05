@@ -22,9 +22,9 @@ import org.apache.kafka.streams.processor.api.Record;
 
 public class ForeachProcessor<K, V> implements Processor<K, V, Void, Void> {
 
-    private final ForeachAction<K, V> action;
+    private final ForeachAction<? super K, ? super V> action;
 
-    public ForeachProcessor(final ForeachAction<K, V> action) {
+    public ForeachProcessor(final ForeachAction<? super K, ? super V> action) {
         this.action = action;
     }
 

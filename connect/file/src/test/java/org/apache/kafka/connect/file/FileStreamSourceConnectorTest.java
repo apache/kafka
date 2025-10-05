@@ -158,48 +158,48 @@ public class FileStreamSourceConnectorTest {
     @Test
     public void testAlterOffsetsStdin() {
         sourceProperties.remove(FileStreamSourceConnector.FILE_CONFIG);
-        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
-                Collections.singletonMap(FILENAME_FIELD, FILENAME),
-                Collections.singletonMap(POSITION_FIELD, 0L)
+        Map<Map<String, ?>, Map<String, ?>> offsets = Map.of(
+                Map.of(FILENAME_FIELD, FILENAME),
+                Map.of(POSITION_FIELD, 0L)
         );
         assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, offsets));
     }
 
     @Test
     public void testAlterOffsetsIncorrectPartitionKey() {
-        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
-                Collections.singletonMap("other_partition_key", FILENAME),
-                Collections.singletonMap(POSITION_FIELD, 0L)
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Map.of(
+                Map.of("other_partition_key", FILENAME),
+                Map.of(POSITION_FIELD, 0L)
         )));
 
         // null partitions are invalid
         assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
                 null,
-                Collections.singletonMap(POSITION_FIELD, 0L)
+                Map.of(POSITION_FIELD, 0L)
         )));
     }
 
     @Test
     public void testAlterOffsetsMultiplePartitions() {
         Map<Map<String, ?>, Map<String, ?>> offsets = new HashMap<>();
-        offsets.put(Collections.singletonMap(FILENAME_FIELD, FILENAME), Collections.singletonMap(POSITION_FIELD, 0L));
+        offsets.put(Map.of(FILENAME_FIELD, FILENAME), Map.of(POSITION_FIELD, 0L));
         offsets.put(Collections.singletonMap(FILENAME_FIELD, "/someotherfilename"), null);
         assertTrue(connector.alterOffsets(sourceProperties, offsets));
     }
 
     @Test
     public void testAlterOffsetsIncorrectOffsetKey() {
-        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
-                Collections.singletonMap(FILENAME_FIELD, FILENAME),
-                Collections.singletonMap("other_offset_key", 0L)
+        Map<Map<String, ?>, Map<String, ?>> offsets = Map.of(
+                Map.of(FILENAME_FIELD, FILENAME),
+                Map.of("other_offset_key", 0L)
         );
         assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, offsets));
     }
 
     @Test
     public void testAlterOffsetsOffsetPositionValues() {
-        Function<Object, Boolean> alterOffsets = offset -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
-                Collections.singletonMap(FILENAME_FIELD, FILENAME),
+        Function<Object, Boolean> alterOffsets = offset -> connector.alterOffsets(sourceProperties, Map.of(
+                Map.of(FILENAME_FIELD, FILENAME),
                 Collections.singletonMap(POSITION_FIELD, offset)
         ));
 
@@ -217,9 +217,9 @@ public class FileStreamSourceConnectorTest {
 
     @Test
     public void testSuccessfulAlterOffsets() {
-        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
-                Collections.singletonMap(FILENAME_FIELD, FILENAME),
-                Collections.singletonMap(POSITION_FIELD, 0L)
+        Map<Map<String, ?>, Map<String, ?>> offsets = Map.of(
+                Map.of(FILENAME_FIELD, FILENAME),
+                Map.of(POSITION_FIELD, 0L)
         );
 
         // Expect no exception to be thrown when a valid offsets map is passed. An empty offsets map is treated as valid
@@ -237,9 +237,9 @@ public class FileStreamSourceConnectorTest {
         );
 
         assertTrue(alterOffsets.apply(null));
-        assertTrue(alterOffsets.apply(Collections.emptyMap()));
-        assertTrue(alterOffsets.apply(Collections.singletonMap(FILENAME_FIELD, FILENAME)));
-        assertTrue(alterOffsets.apply(Collections.singletonMap(FILENAME_FIELD, "/someotherfilename")));
-        assertTrue(alterOffsets.apply(Collections.singletonMap("garbage_partition_key", "garbage_partition_value")));
+        assertTrue(alterOffsets.apply(Map.of()));
+        assertTrue(alterOffsets.apply(Map.of(FILENAME_FIELD, FILENAME)));
+        assertTrue(alterOffsets.apply(Map.of(FILENAME_FIELD, "/someotherfilename")));
+        assertTrue(alterOffsets.apply(Map.of("garbage_partition_key", "garbage_partition_value")));
     }
 }

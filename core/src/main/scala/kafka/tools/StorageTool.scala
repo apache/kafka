@@ -27,12 +27,11 @@ import net.sourceforge.argparse4j.inf.{ArgumentParserException, Namespace, Subpa
 import net.sourceforge.argparse4j.internal.HelpScreenException
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.{Exit, Utils}
-import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.metadata.storage.{Formatter, FormatterException}
 import org.apache.kafka.raft.{DynamicVoters, QuorumConfig}
 import org.apache.kafka.server.ProcessRole
-import org.apache.kafka.server.config.ReplicationConfigs
 
 import java.util
 import scala.collection.mutable
@@ -88,11 +87,11 @@ object StorageTool extends Logging {
         0
 
       case "version-mapping" =>
-        runVersionMappingCommand(namespace, printStream, Features.PRODUCTION_FEATURES)
+        runVersionMappingCommand(namespace, printStream, Feature.PRODUCTION_FEATURES)
         0
 
       case "feature-dependencies" =>
-        runFeatureDependenciesCommand(namespace, printStream, Features.PRODUCTION_FEATURES)
+        runFeatureDependenciesCommand(namespace, printStream, Feature.PRODUCTION_FEATURES)
         0
 
       case "random-uuid" =>
@@ -127,32 +126,46 @@ object StorageTool extends Logging {
       setClusterId(namespace.getString("cluster_id")).
       setUnstableFeatureVersionsEnabled(config.unstableFeatureVersionsEnabled).
       setIgnoreFormatted(namespace.getBoolean("ignore_formatted")).
-      setControllerListenerName(config.controllerListenerNames.head).
+      setControllerListenerName(config.controllerListenerNames.get(0)).
       setMetadataLogDirectory(config.metadataLogDir)
-    Option(namespace.getString("release_version")) match {
-      case Some(releaseVersion) => formatter.setReleaseVersion(MetadataVersion.fromVersionString(releaseVersion))
-      case None => Option(config.originals.get(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)).
-        foreach(v => formatter.setReleaseVersion(MetadataVersion.fromVersionString(v.toString)))
-    }
+
+    Option(namespace.getString("release_version")).foreach(releaseVersion => {
+      try {
+        formatter.setReleaseVersion(MetadataVersion.fromVersionString(releaseVersion, config.unstableFeatureVersionsEnabled))
+      } catch {
+        case e: Throwable =>
+          throw new TerseFailure(e.getMessage)
+      }
+    })
+
     Option(namespace.getList[String]("feature")).foreach(
       featureNamesAndLevels(_).foreachEntry {
         (k, v) => formatter.setFeatureLevel(k, v)
       })
-    Option(namespace.getString("initial_controllers")).
+    val initialControllers = namespace.getString("initial_controllers")
+    val isStandalone = namespace.getBoolean("standalone")
+    val staticVotersEmpty = config.quorumConfig.voters().isEmpty
+    formatter.setHasDynamicQuorum(staticVotersEmpty)
+    if (!staticVotersEmpty && (Option(initialControllers).isDefined || isStandalone)) {
+      throw new TerseFailure("You cannot specify " +
+        QuorumConfig.QUORUM_VOTERS_CONFIG + " and format the node " +
+        "with --initial-controllers or --standalone. " +
+        "If you want to use dynamic quorum, please remove " +
+        QuorumConfig.QUORUM_VOTERS_CONFIG + " and specify " +
+        QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG + " instead.")
+    }
+    Option(initialControllers).
       foreach(v => formatter.setInitialControllers(DynamicVoters.parse(v)))
-    if (namespace.getBoolean("standalone")) {
+    if (isStandalone) {
       formatter.setInitialControllers(createStandaloneDynamicVoters(config))
     }
-    if (namespace.getBoolean("no_initial_controllers")) {
-      formatter.setNoInitialControllersFlag(true)
-    } else {
-      if (config.processRoles.contains(ProcessRole.ControllerRole)) {
-        if (config.quorumConfig.voters().isEmpty && formatter.initialVoters().isEmpty) {
+    if (!namespace.getBoolean("no_initial_controllers") &&
+      config.processRoles.contains(ProcessRole.ControllerRole) &&
+      staticVotersEmpty &&
+      formatter.initialVoters().isEmpty) {
           throw new TerseFailure("Because " + QuorumConfig.QUORUM_VOTERS_CONFIG +
             " is not set on this controller, you must specify one of the following: " +
             "--standalone, --initial-controllers, or --no-initial-controllers.");
-        }
-      }
     }
     Option(namespace.getList("add_scram")).
       foreach(scramArgs => formatter.setScramArguments(scramArgs.asInstanceOf[util.List[String]]))
@@ -164,37 +177,36 @@ object StorageTool extends Logging {
    * Maps the given release version to the corresponding metadata version
    * and prints the corresponding features.
    *
-   * @param namespace       Arguments containing the release version.
-   * @param printStream     The print stream to output the version mapping.
-   * @param validFeatures   List of features to be considered in the output
+   * @param namespace                     Arguments containing the release version.
+   * @param printStream                   The print stream to output the version mapping.
+   * @param validFeatures                 List of features to be considered in the output.
    */
   def runVersionMappingCommand(
     namespace: Namespace,
     printStream: PrintStream,
-    validFeatures: java.util.List[Features]
+    validFeatures: java.util.List[Feature]
   ): Unit = {
     val releaseVersion = Option(namespace.getString("release_version")).getOrElse(MetadataVersion.LATEST_PRODUCTION.toString)
     try {
-      val metadataVersion = MetadataVersion.fromVersionString(releaseVersion)
+      val metadataVersion = MetadataVersion.fromVersionString(releaseVersion, true)
 
       val metadataVersionLevel = metadataVersion.featureLevel()
       printStream.print(f"metadata.version=$metadataVersionLevel%d ($releaseVersion%s)%n")
 
       for (feature <- validFeatures.asScala) {
-        val featureLevel = feature.defaultValue(metadataVersion)
+        val featureLevel = feature.defaultLevel(metadataVersion)
         printStream.print(f"${feature.featureName}%s=$featureLevel%d%n")
       }
     } catch {
       case e: IllegalArgumentException =>
-        throw new TerseFailure(s"Unknown release version '$releaseVersion'. Supported versions are: " +
-          s"${MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version} to ${MetadataVersion.LATEST_PRODUCTION.version}")
+        throw new TerseFailure(e.getMessage)
     }
   }
 
   def runFeatureDependenciesCommand(
     namespace: Namespace,
     printStream: PrintStream,
-    validFeatures: java.util.List[Features]
+    validFeatures: java.util.List[Feature]
   ): Unit = {
     val featureArgs = Option(namespace.getList[String]("feature")).map(_.asScala.toList).getOrElse(List.empty)
 
@@ -314,7 +326,7 @@ object StorageTool extends Logging {
     formatParser.addArgument("--release-version", "-r")
       .action(store())
       .help(s"The release version to use for the initial feature settings. The minimum is " +
-        s"${MetadataVersion.IBP_3_0_IV0}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
+        s"${MetadataVersion.MINIMUM_VERSION}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
 
     formatParser.addArgument("--feature", "-f")
       .help("The setting to use for a specific feature, in feature=level format. For example: `kraft.version=1`.")
@@ -322,18 +334,21 @@ object StorageTool extends Logging {
 
     val reconfigurableQuorumOptions = formatParser.addMutuallyExclusiveGroup()
     reconfigurableQuorumOptions.addArgument("--standalone", "-s")
-      .help("Used to initialize a controller as a single-node dynamic quorum.")
+      .help("Used to initialize a controller as a single-node dynamic quorum. When setting this flag, " +
+        "the controller.quorum.voters config must not be set, and controller.quorum.bootstrap.servers is set instead.")
       .action(storeTrue())
 
     reconfigurableQuorumOptions.addArgument("--no-initial-controllers", "-N")
-      .help("Used to initialize a server without a dynamic quorum topology.")
+      .help("Used to initialize a server without specifying a dynamic quorum. When setting this flag, " +
+        "the controller.quorum.voters config should not be set, and controller.quorum.bootstrap.servers is set instead.")
       .action(storeTrue())
 
     reconfigurableQuorumOptions.addArgument("--initial-controllers", "-I")
-      .help("Used to initialize a server with a specific dynamic quorum topology. The argument " +
+      .help("Used to initialize a server with the specified dynamic quorum. The argument " +
         "is a comma-separated list of id@hostname:port:directory. The same values must be used to " +
         "format all nodes. For example:\n0@example.com:8082:JEXY6aqzQY-32P5TStzaFg,1@example.com:8083:" +
-        "MvDxzVmcRsaTz33bUuRU6A,2@example.com:8084:07R5amHmR32VDA6jHkGbTA\n")
+        "MvDxzVmcRsaTz33bUuRU6A,2@example.com:8084:07R5amHmR32VDA6jHkGbTA\n. When setting this flag, " +
+        "the controller.quorum.voters config must not be set, and controller.quorum.bootstrap.servers is set instead.")
       .action(store())
   }
 
@@ -347,7 +362,7 @@ object StorageTool extends Logging {
     versionMappingParser.addArgument("--release-version", "-r")
       .action(store())
       .help(s"The release version to use for the corresponding feature mapping. The minimum is " +
-        s"${MetadataVersion.IBP_3_0_IV0}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
+        s"${MetadataVersion.MINIMUM_VERSION}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
   }
 
   private def addFeatureDependenciesParser(subparsers: Subparsers): Unit = {
@@ -379,7 +394,7 @@ object StorageTool extends Logging {
 
   def configToLogDirectories(config: KafkaConfig): Seq[String] = {
     val directories = new mutable.TreeSet[String]
-    directories ++= config.logDirs
+    directories ++= config.logDirs.asScala
     Option(config.metadataLogDir).foreach(directories.add)
     directories.toSeq
   }

@@ -29,10 +29,8 @@ import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -257,14 +255,14 @@ public class ProducerMetadataTest {
 
         assertTrue(metadata.updateRequested());
         assertEquals(0, metadata.timeToNextUpdate(now));
-        assertEquals(metadata.topics(), new HashSet<>(Arrays.asList(topic1, topic2, topic3)));
-        assertEquals(metadata.newTopics(), new HashSet<>(Arrays.asList(topic2, topic3)));
+        assertEquals(metadata.topics(), Set.of(topic1, topic2, topic3));
+        assertEquals(metadata.newTopics(), Set.of(topic2, topic3));
 
         // Perform the partial update for a subset of the new topics.
         now += 1000;
         assertTrue(metadata.updateRequested());
         metadata.updateWithCurrentRequestVersion(responseWithTopics(Collections.singleton(topic2)), true, now);
-        assertEquals(metadata.topics(), new HashSet<>(Arrays.asList(topic1, topic2, topic3)));
+        assertEquals(metadata.topics(), Set.of(topic1, topic2, topic3));
         assertEquals(metadata.newTopics(), Collections.singleton(topic3));
     }
 
@@ -302,7 +300,7 @@ public class ProducerMetadataTest {
 
         // Perform the full update. This should clear the update request.
         now += 1000;
-        metadata.updateWithCurrentRequestVersion(responseWithTopics(new HashSet<>(Arrays.asList(topic1, topic2))), false, now);
+        metadata.updateWithCurrentRequestVersion(responseWithTopics(Set.of(topic1, topic2)), false, now);
         assertFalse(metadata.updateRequested());
     }
 

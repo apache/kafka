@@ -30,7 +30,6 @@ import org.slf4j.Logger;
 import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
-import java.util.stream.Collectors;
 
 /**
  * This class encapsulates the invocation of the callback methods defined in the {@link ConsumerRebalanceListener}
@@ -71,30 +70,27 @@ public class ConsumerRebalanceListenerInvoker {
      * @return an exception if an error occurred, or null if no error
      */
     public Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
-        return invokeRebalanceCallback("Adding newly assigned partitions", assignedPartitions,
-                listener -> listener.onPartitionsAssigned(assignedPartitions),
-                metricsManager::recordPartitionsAssignedLatency);
-    }
+        log.info("Adding newly assigned partitions: {}", assignedPartitions);
 
-    /**
-     * Invokes the onPartitionsRevoked callback method from the rebalance listener and logs the result.
-     *
-     * @param revokedPartitions the partitions revoked from the consumer
-     * @return an exception if an error occurred, or null if no error
-     */
-    public Exception invokePartitionsRevoked(final SortedSet<TopicPartition> revokedPartitions) {
-        return invokeRebalanceCallback("Revoke previously assigned partitions", revokedPartitions,
-                listener -> {
-                    Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
-                    revokePausedPartitions.retainAll(revokedPartitions);
-                    if (!revokePausedPartitions.isEmpty()) {
-                        log.info("The pause flag in partitions [{}] will be removed due to revocation.",
-                                revokePausedPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
-                    }
-                    listener.onPartitionsRevoked(revokedPartitions);
-                },
-                metricsManager::recordPartitionsRevokedLatency);
-    }
+        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
+
+        if (listener.isPresent()) {
+            try {
+                final long startMs = time.milliseconds();
+                listener.get().onPartitionsAssigned(assignedPartitions);
+                metricsManager.recordPartitionsAssignedLatency(time.milliseconds() - startMs);
+            } catch (WakeupException | InterruptException e) {
+                throw e;
+            } catch (Exception e) {
+                log.error(
+                    "User provided listener {} failed on invocation of onPartitionsAssigned for partitions {}",
+                    listener.get().getClass().getName(),
+                    assignedPartitions,
+                    e
+                );
+                return e;
+            }
+        }
 
     /**
      * Invokes the onPartitionsLost callback method from the rebalance listener and logs the result.
@@ -116,19 +112,12 @@ public class ConsumerRebalanceListenerInvoker {
                 metricsManager::recordPartitionsLostLatency);
     }
 
-    /**
-     * General method to invoke a rebalance callback method (assigned, revoked, or lost) and record latency.
-     *
-     * @param logMessage a message describing the action being taken (e.g., adding, revoking, losing)
-     * @param partitions the partitions affected by the rebalance
-     * @param invoker the specific method to invoke on the listener
-     * @param latencyRecorder the method to record latency for the operation
-     * @return an exception if an error occurred, or null if no error
-     */
-    private Exception invokeRebalanceCallback(String logMessage, SortedSet<TopicPartition> partitions,
-                                              RebalanceListenerInvoker invoker,
-                                              LatencyRecorder latencyRecorder) {
-        log.info("{}: {}", logMessage, partitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
+    public Exception invokePartitionsRevoked(final SortedSet<TopicPartition> revokedPartitions) {
+        log.info("Revoke previously assigned partitions {}", revokedPartitions);
+        Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
+        revokePausedPartitions.retainAll(revokedPartitions);
+        if (!revokePausedPartitions.isEmpty())
+            log.info("The pause flag in partitions {} will be removed due to revocation.", revokePausedPartitions);
 
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
         if (listener.isPresent()) {
@@ -139,21 +128,44 @@ public class ConsumerRebalanceListenerInvoker {
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {
-                log.error("User provided listener {} failed on invocation for partitions {}",
-                        listener.get().getClass().getName(), partitions, e);
+                log.error(
+                    "User provided listener {} failed on invocation of onPartitionsRevoked for partitions {}",
+                    listener.get().getClass().getName(),
+                    revokedPartitions,
+                    e
+                );
                 return e;
             }
         }
         return null;
     }
 
-    /**
-     * Functional interface for invoking a rebalance callback method on the listener.
-     */
-    @FunctionalInterface
-    private interface RebalanceListenerInvoker {
-        void invoke(ConsumerRebalanceListener listener) throws Exception;
-    }
+    public Exception invokePartitionsLost(final SortedSet<TopicPartition> lostPartitions) {
+        log.info("Lost previously assigned partitions {}", lostPartitions);
+        Set<TopicPartition> lostPausedPartitions = subscriptions.pausedPartitions();
+        lostPausedPartitions.retainAll(lostPartitions);
+        if (!lostPausedPartitions.isEmpty())
+            log.info("The pause flag in partitions {} will be removed due to partition lost.", lostPartitions);
+
+        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
+
+        if (listener.isPresent()) {
+            try {
+                final long startMs = time.milliseconds();
+                listener.get().onPartitionsLost(lostPartitions);
+                metricsManager.recordPartitionsLostLatency(time.milliseconds() - startMs);
+            } catch (WakeupException | InterruptException e) {
+                throw e;
+            } catch (Exception e) {
+                log.error(
+                    "User provided listener {} failed on invocation of onPartitionsLost for partitions {}",
+                    listener.get().getClass().getName(),
+                    lostPartitions,
+                    e
+                );
+                return e;
+            }
+        }
 
     /**
      * Functional interface for recording latency during rebalance callback invocations.

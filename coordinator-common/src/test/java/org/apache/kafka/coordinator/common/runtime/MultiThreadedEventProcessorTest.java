@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -451,7 +451,7 @@ public class MultiThreadedEventProcessorTest {
             // Second event (e2)
 
             // e1, e2 poll time
-            verify(mockRuntimeMetrics, times(2)).recordThreadIdleTime(500L);
+            verify(mockRuntimeMetrics, times(2)).recordThreadIdleTime(500.0);
             // event queue time = e2 enqueue time + e2 poll time
             verify(mockRuntimeMetrics, times(1)).recordEventQueueTime(3500L);
         }
@@ -470,12 +470,12 @@ public class MultiThreadedEventProcessorTest {
             mockRuntimeMetrics,
             new DelayEventAccumulator(time, 100L)
         )) {
-            List<Long> recordedIdleTimesMs = new ArrayList<>();
+            List<Double> recordedIdleTimesMs = new ArrayList<>();
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
-            ArgumentCaptor<Long> idleTimeCaptured = ArgumentCaptor.forClass(Long.class);
+            ArgumentCaptor<Double> idleTimeCaptured = ArgumentCaptor.forClass(Double.class);
             doAnswer(invocation -> {
-                long threadIdleTime = idleTimeCaptured.getValue();
-                assertEquals(100, threadIdleTime);
+                double threadIdleTime = idleTimeCaptured.getValue();
+                assertEquals(100.0, threadIdleTime);
 
                 // No synchronization required as the test uses a single event processor thread.
                 recordedIdleTimesMs.add(threadIdleTime);
@@ -507,12 +507,12 @@ public class MultiThreadedEventProcessorTest {
             });
 
             assertEquals(events.size(), numEventsExecuted.get());
-            verify(mockRuntimeMetrics, times(8)).recordThreadIdleTime(anyLong());
+            verify(mockRuntimeMetrics, times(8)).recordThreadIdleTime(anyDouble());
             assertEquals(8, recordedIdleTimesMs.size());
 
             long diff = time.milliseconds() - startMs;
-            long sum = recordedIdleTimesMs.stream().mapToLong(Long::longValue).sum();
-            double idleRatio = (double) sum / diff;
+            double sum = recordedIdleTimesMs.stream().mapToDouble(Double::doubleValue).sum();
+            double idleRatio = sum / diff;
 
             assertEquals(1.0, idleRatio, "idle ratio should be 1.0 but was: " + idleRatio);
         }

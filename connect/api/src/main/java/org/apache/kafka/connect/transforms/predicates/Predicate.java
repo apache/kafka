@@ -31,6 +31,10 @@ import org.apache.kafka.connect.connector.ConnectRecord;
  * To support this, implementations of this interface should also contain a service provider configuration file in
  * {@code META-INF/services/org.apache.kafka.connect.transforms.predicates.Predicate}.
  *
+ * <p>Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the predicate to register metrics.
+ * The following tags are automatically added to all metrics registered: <code>connector</code> set to connector name,
+ * <code>task</code> set to the task id and <code>predicate</code> set to the predicate alias.
+ *
  * @param <R> The type of record.
  */
 public interface Predicate<R extends ConnectRecord<R>> extends Configurable, AutoCloseable {

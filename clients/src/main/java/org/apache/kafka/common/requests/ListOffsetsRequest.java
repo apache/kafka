@@ -25,12 +25,10 @@ import org.apache.kafka.common.message.ListOffsetsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -49,6 +47,8 @@ public class ListOffsetsRequest extends AbstractRequest {
 
     public static final long LATEST_TIERED_TIMESTAMP = -5L;
 
+    public static final long EARLIEST_PENDING_UPLOAD_TIMESTAMP = -6L;
+
     public static final int CONSUMER_REPLICA_ID = -1;
     public static final int DEBUGGING_REPLICA_ID = -2;
 
@@ -60,16 +60,19 @@ public class ListOffsetsRequest extends AbstractRequest {
 
         public static Builder forConsumer(boolean requireTimestamp,
                                           IsolationLevel isolationLevel) {
-            return forConsumer(requireTimestamp, isolationLevel, false, false, false);
+            return forConsumer(requireTimestamp, isolationLevel, false, false, false, false);
         }
 
         public static Builder forConsumer(boolean requireTimestamp,
                                           IsolationLevel isolationLevel,
                                           boolean requireMaxTimestamp,
                                           boolean requireEarliestLocalTimestamp,
-                                          boolean requireTieredStorageTimestamp) {
-            short minVersion = 0;
-            if (requireTieredStorageTimestamp)
+                                          boolean requireTieredStorageTimestamp,
+                                          boolean requireEarliestPendingUploadTimestamp) {
+            short minVersion = ApiKeys.LIST_OFFSETS.oldestVersion();
+            if (requireEarliestPendingUploadTimestamp)
+                minVersion = 11;
+            else if (requireTieredStorageTimestamp)
                 minVersion = 9;
             else if (requireEarliestLocalTimestamp)
                 minVersion = 8;
@@ -83,7 +86,7 @@ public class ListOffsetsRequest extends AbstractRequest {
         }
 
         public static Builder forReplica(short allowedVersion, int replicaId) {
-            return new Builder((short) 0, allowedVersion, replicaId, IsolationLevel.READ_UNCOMMITTED);
+            return new Builder(ApiKeys.LIST_OFFSETS.oldestVersion(), allowedVersion, replicaId, IsolationLevel.READ_UNCOMMITTED);
         }
 
         private Builder(short oldestAllowedVersion,
@@ -137,7 +140,6 @@ public class ListOffsetsRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        short versionId = version();
         short errorCode = Errors.forException(e).code();
 
         List<ListOffsetsTopicResponse> responses = new ArrayList<>();
@@ -148,12 +150,8 @@ public class ListOffsetsRequest extends AbstractRequest {
                 ListOffsetsPartitionResponse partitionResponse = new ListOffsetsPartitionResponse()
                         .setErrorCode(errorCode)
                         .setPartitionIndex(partition.partitionIndex());
-                if (versionId == 0) {
-                    partitionResponse.setOldStyleOffsets(Collections.emptyList());
-                } else {
-                    partitionResponse.setOffset(ListOffsetsResponse.UNKNOWN_OFFSET)
-                                     .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP);
-                }
+                partitionResponse.setOffset(ListOffsetsResponse.UNKNOWN_OFFSET)
+                         .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP);
                 partitions.add(partitionResponse);
             }
             topicResponse.setPartitions(partitions);
@@ -190,8 +188,8 @@ public class ListOffsetsRequest extends AbstractRequest {
         return data.timeoutMs();
     }
 
-    public static ListOffsetsRequest parse(ByteBuffer buffer, short version) {
-        return new ListOffsetsRequest(new ListOffsetsRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static ListOffsetsRequest parse(Readable readable, short version) {
+        return new ListOffsetsRequest(new ListOffsetsRequestData(readable, version), version);
     }
 
     public static List<ListOffsetsTopic> toListOffsetsTopics(Map<TopicPartition, ListOffsetsPartition> timestampsToSearch) {

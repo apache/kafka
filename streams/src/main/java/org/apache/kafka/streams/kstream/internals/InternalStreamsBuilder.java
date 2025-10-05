@@ -72,6 +72,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private static final String TABLE_SOURCE_SUFFIX = "-source";
 
     final InternalTopologyBuilder internalTopologyBuilder;
+    private final boolean processProcessValueFixEnabled;
     private final AtomicInteger index = new AtomicInteger(0);
 
     private final AtomicInteger buildPriorityIndex = new AtomicInteger(0);
@@ -79,7 +80,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private final LinkedHashSet<GraphNode> mergeNodes = new LinkedHashSet<>();
     private final LinkedHashSet<GraphNode> tableSourceNodes = new LinkedHashSet<>();
     private final LinkedHashSet<GraphNode> versionedSemanticsNodes = new LinkedHashSet<>();
-    private final LinkedHashSet<TableSuppressNode> tableSuppressNodesNodes = new LinkedHashSet<>();
+    private final LinkedHashSet<TableSuppressNode<?, ?>> tableSuppressNodesNodes = new LinkedHashSet<>();
 
     private static final String TOPOLOGY_ROOT = "root";
     private static final Logger LOG = LoggerFactory.getLogger(InternalStreamsBuilder.class);
@@ -91,8 +92,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         }
     };
 
-    public InternalStreamsBuilder(final InternalTopologyBuilder internalTopologyBuilder) {
+    public InternalStreamsBuilder(final InternalTopologyBuilder internalTopologyBuilder,
+                                  final boolean processProcessValueFixEnabled) {
         this.internalTopologyBuilder = internalTopologyBuilder;
+        this.processProcessValueFixEnabled = processProcessValueFixEnabled;
     }
 
     public <K, V> KStream<K, V> stream(final Collection<String> topics,
@@ -140,7 +143,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final String tableSourceName = named
             .orElseGenerateWithPrefix(this, KTableImpl.SOURCE_NAME);
 
-        final KTableSource<K, V> tableSource = new KTableSource<>(materialized.storeName(), materialized.queryableStoreName());
+        final KTableSource<K, V> tableSource = new KTableSource<>(materialized);
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(tableSource, tableSourceName);
 
         final TableSourceNode<K, V> tableSourceNode = TableSourceNode.<K, V>tableSourceNodeBuilder()
@@ -148,7 +151,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             .withSourceName(sourceName)
             .withNodeName(tableSourceName)
             .withConsumedInternal(consumed)
-            .withMaterializedInternal(materialized)
             .withProcessorParameters(processorParameters)
             .build();
         tableSourceNode.setOutputVersioned(materialized.storeSupplier() instanceof VersionedBytesStoreSupplier);
@@ -186,9 +188,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final String processorName = named
                 .orElseGenerateWithPrefix(this, KTableImpl.SOURCE_NAME);
 
-        // enforce store name as queryable name to always materialize global table stores
-        final String storeName = materialized.storeName();
-        final KTableSource<K, V> tableSource = new KTableSource<>(storeName, storeName);
+        final KTableSource<K, V> tableSource = new KTableSource<>(materialized);
 
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(tableSource, processorName);
 
@@ -197,12 +197,12 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             .isGlobalKTable(true)
             .withSourceName(sourceName)
             .withConsumedInternal(consumed)
-            .withMaterializedInternal(materialized)
             .withProcessorParameters(processorParameters)
             .build();
 
         addGraphNode(root, tableSourceNode);
 
+        final String storeName = materialized.storeName();
         return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<>(storeName), materialized.queryableStoreName());
     }
 
@@ -331,6 +331,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             }
         }
         internalTopologyBuilder.validateCopartition();
+
+        internalTopologyBuilder.checkUnprovidedNames();
+
     }
 
     /**
@@ -434,20 +437,19 @@ public class InternalStreamsBuilder implements InternalNameProvider {
      * We iterate over all the siblings to identify these two nodes so that we can remove the
      * latter.
      */
-    @SuppressWarnings("unchecked")
     private void rewriteSingleStoreSelfJoin(
         final GraphNode currentNode, final Map<GraphNode, Boolean> visited) {
         visited.put(currentNode, true);
         if (currentNode instanceof StreamStreamJoinNode && currentNode.parentNodes().size() == 1) {
-            final StreamStreamJoinNode joinNode = (StreamStreamJoinNode) currentNode;
+            final StreamStreamJoinNode<?, ?, ?, ?> joinNode = (StreamStreamJoinNode<?, ?, ?, ?>) currentNode;
             // Remove JoinOtherWindowed node
             final GraphNode parent = joinNode.parentNodes().stream().findFirst().get();
             GraphNode left = null, right = null;
             for (final GraphNode child: parent.children()) {
                 if (child instanceof WindowedStreamProcessorNode && child.buildPriority() < joinNode.buildPriority()) {
-                    if (child.nodeName().equals(joinNode.thisWindowedStreamProcessorParameters().processorName())) {
+                    if (child.nodeName().equals(joinNode.thisWindowedStreamProcessorName())) {
                         left = child;
-                    } else if (child.nodeName().equals(joinNode.otherWindowedStreamProcessorParameters().processorName())) {
+                    } else if (child.nodeName().equals(joinNode.otherWindowedStreamProcessorName())) {
                         right = child;
                     }
                 }
@@ -592,7 +594,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 valueSerde,
                 repartitionTopicName,
                 null,
-                repartitionNodeBuilder
+                repartitionNodeBuilder,
+                true
         );
 
         // ensures setting the repartition topic to the name of the
@@ -709,4 +712,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return internalTopologyBuilder;
     }
 
+    public boolean processProcessValueFixEnabled() {
+        return processProcessValueFixEnabled;
+    }
 }

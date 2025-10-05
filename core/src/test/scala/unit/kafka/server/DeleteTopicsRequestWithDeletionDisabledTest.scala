@@ -25,9 +25,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse}
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.TestInfo
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{Test, TestInfo}
 
 class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
 
@@ -40,7 +38,7 @@ class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
   }
 
   override def generateConfigs = {
-    val props = TestUtils.createBrokerConfigs(brokerCount, zkConnectOrNull,
+    val props = TestUtils.createBrokerConfigs(brokerCount,
       enableControlledShutdown = false, enableDeleteTopic = false,
       interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
@@ -48,9 +46,8 @@ class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
     props.map(KafkaConfig.fromProps)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDeleteRecordsRequest(quorum: String): Unit = {
+  @Test
+  def testDeleteRecordsRequest(): Unit = {
     val topic = "topic-1"
     val request = new DeleteTopicsRequest.Builder(
         new DeleteTopicsRequestData()

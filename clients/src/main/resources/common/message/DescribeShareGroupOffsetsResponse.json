@@ -1,0 +1,63 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 90,
+  "type": "response",
+  "name": "DescribeShareGroupOffsetsResponse",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  // Supported errors:
+  // - GROUP_AUTHORIZATION_FAILED (version 0+)
+  // - TOPIC_AUTHORIZATION_FAILED (version 0+)
+  // - NOT_COORDINATOR (version 0+)
+  // - COORDINATOR_NOT_AVAILABLE (version 0+)
+  // - COORDINATOR_LOAD_IN_PROGRESS (version 0+)
+  // - GROUP_ID_NOT_FOUND (version 0+)
+  // - INVALID_REQUEST (version 0+)
+  // - UNKNOWN_SERVER_ERROR (version 0+)
+  "fields": [
+    { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
+      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
+    { "name": "Groups", "type": "[]DescribeShareGroupOffsetsResponseGroup", "versions": "0+",
+      "about": "The results for each group.", "fields": [
+      { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
+        "about": "The group identifier." },
+      { "name": "Topics", "type": "[]DescribeShareGroupOffsetsResponseTopic", "versions": "0+",
+        "about": "The results for each topic.", "fields": [
+        { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+          "about": "The topic name." },
+        { "name": "TopicId", "type": "uuid", "versions": "0+",
+          "about": "The unique topic ID." },
+        { "name": "Partitions", "type": "[]DescribeShareGroupOffsetsResponsePartition", "versions": "0+", "fields": [
+          { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+            "about": "The partition index." },
+          { "name": "StartOffset", "type": "int64", "versions": "0+",
+            "about": "The share-partition start offset." },
+          { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
+            "about": "The leader epoch of the partition." },
+          { "name": "ErrorCode", "type": "int16", "versions": "0+",
+            "about": "The partition-level error code, or 0 if there was no error." },
+          { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+            "about": "The partition-level error message, or null if there was no error." }
+        ]}
+      ]},
+      { "name": "ErrorCode", "type": "int16", "versions": "0+",
+        "about": "The group-level error code, or 0 if there was no error." },
+      { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+        "about": "The group-level error message, or null if there was no error." }
+    ]}
+  ]
+}

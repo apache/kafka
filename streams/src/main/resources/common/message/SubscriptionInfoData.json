@@ -21,55 +21,65 @@
     {
       "name": "version",
       "versions": "1+",
-      "type": "int32"
+      "type": "int32",
+      "about": "The version of the subscription info data."
     },
     {
       "name": "latestSupportedVersion",
       "versions": "3+",
       "default": "-1",
-      "type": "int32"
+      "type": "int32",
+      "about": "The latest supported version of the subscription info data."
     },
     {
       "name": "processId",
       "versions": "1+",
-      "type": "uuid"
+      "type": "uuid",
+      "about": "The process id of the client that sent the request."
     },
     /***** Protocol version 1-6 only (after 6 this is encoded in task offset sum map) *****/
     {
       "name": "prevTasks",
       "versions": "1-6",
-      "type": "[]TaskId"
+      "type": "[]TaskId",
+      "about": "The previous tasks that were assigned to the client."
     },
     {
       "name": "standbyTasks",
       "versions": "1-6",
-      "type": "[]TaskId"
+      "type": "[]TaskId",
+      "about": "The standby tasks that were assigned to the client."
     },
     /***************/
     {
       "name": "userEndPoint",
       "versions": "2+",
-      "type": "bytes"
+      "type": "bytes",
+      "about": "The user end point of the client that sent the request."
     },
     {
       "name": "taskOffsetSums",
       "versions": "7+",
-      "type": "[]TaskOffsetSum"
+      "type": "[]TaskOffsetSum",
+      "about": "The task offset sums that were assigned to the client."
     },
     {
       "name": "uniqueField",
       "versions": "8+",
-      "type": "int8"
+      "type": "int8",
+      "about": "A unique field that is used to identify the client that sent the request."
     },
     {
       "name": "errorCode",
       "versions": "9+",
-      "type": "int32"
+      "type": "int32",
+      "about": "The error code of the request."
     },
     {
       "name": "clientTags",
       "versions": "11+",
-      "type": "[]ClientTag"
+      "type": "[]ClientTag",
+      "about": "The client tags that were assigned to the client."
     }
   ],
   "commonStructs": [
@@ -81,12 +91,14 @@
         {
           "name": "topicGroupId",
           "versions": "1-6",
-          "type": "int32"
+          "type": "int32",
+          "about": "The topic group id of the task."
         },
         {
           "name": "partition",
           "versions": "1-6",
-          "type": "int32"
+          "type": "int32",
+          "about": "The partition of the task."
         }
       ]
     },
@@ -97,31 +109,36 @@
         {
           "name": "topicGroupId",
           "versions": "7+",
-          "type": "int32"
+          "type": "int32",
+          "about": "The topic group id of the task."
         },
         // Prior to version 10, in 7-9, the below fields (partition and offsetSum) were encoded via the nested
         // partitionToOffsetSum struct. In 10+ all fields are encoded directly in the TaskOffsetSum struct
         {
           "name": "partition",
           "versions": "10+",
-          "type": "int32"
+          "type": "int32",
+          "about": "The partition of the task."
         },
         {
           "name": "offsetSum",
           "versions": "10+",
-          "type": "int64"
+          "type": "int64",
+          "about": "The offset sum of the task."
         },
         {
           "name": "namedTopology",
           "versions": "10+",
           "nullableVersions": "10+",
           "ignorable":  "false",  // namedTopology is not ignorable because if you do, a TaskId may not be unique
-          "type": "string"
+          "type": "string",
+          "about": "The named topology of the task."
         },
         {
           "name": "partitionToOffsetSum",
           "versions": "7-9",
-          "type": "[]PartitionToOffsetSum"
+          "type": "[]PartitionToOffsetSum",
+          "about": "The partition to offset sum of the task."
         }
       ]
     },
@@ -133,12 +150,14 @@
         {
           "name": "partition",
           "versions": "7-9",
-          "type": "int32"
+          "type": "int32",
+          "about": "The partition of the task."
         },
         {
           "name": "offsetSum",
           "versions": "7-9",
-          "type": "int64"
+          "type": "int64",
+          "about": "The offset sum of the task."
         }
       ]
     },
@@ -149,12 +168,14 @@
         {
           "name": "key",
           "versions": "11+",
-          "type": "bytes"
+          "type": "bytes",
+          "about": "The key of the client tag."
         },
         {
           "name": "value",
           "versions": "11+",
-          "type": "bytes"
+          "type": "bytes",
+          "about": "The value of the client tag."
         }
       ]
     }

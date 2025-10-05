@@ -16,22 +16,12 @@
  */
 package kafka.security;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class JaasModule {
-    public static JaasModule zkDigestModule(boolean debug, Map<String, String> entries) {
-        String name = "org.apache.zookeeper.server.auth.DigestLoginModule";
-        return new JaasModule(
-            name,
-            debug,
-            entries
-        );
-    }
-
     public static JaasModule krb5LoginModule(boolean useKeyTab, boolean storeKey, String keyTab, String principal, boolean debug, Optional<String> serviceName, boolean isIbmSecurity) {
         String name = isIbmSecurity ? "com.ibm.security.auth.module.Krb5LoginModule" : "com.sun.security.auth.module.Krb5LoginModule";
 
@@ -70,10 +60,6 @@ public class JaasModule {
         );
     }
 
-    public static JaasModule plainLoginModule(String username, String password) {
-        return plainLoginModule(username, password, false, Collections.emptyMap());
-    }
-
     public static JaasModule plainLoginModule(String username, String password, boolean debug, Map<String, String> validUsers) {
         String name = "org.apache.kafka.common.security.plain.PlainLoginModule";
 
@@ -90,7 +76,7 @@ public class JaasModule {
     }
 
     public static JaasModule scramLoginModule(String username, String password) {
-        return scramLoginModule(username, password, false, Collections.emptyMap());
+        return scramLoginModule(username, password, false, Map.of());
     }
 
     public static JaasModule scramLoginModule(String username, String password, boolean debug, Map<String, String> tokenProps) {

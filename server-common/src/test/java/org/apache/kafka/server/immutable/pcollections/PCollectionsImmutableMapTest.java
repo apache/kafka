@@ -27,7 +27,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.pcollections.HashPMap;
 import org.pcollections.HashTreePMap;
 
-import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -149,8 +150,8 @@ public class PCollectionsImmutableMapTest {
     @Test
     public void testDelegationOfUnsupportedFunctionPutAll() {
         new PCollectionsHashMapWrapperDelegationChecker<>()
-            .defineMockConfigurationForVoidMethodInvocation(mock -> mock.putAll(eq(Collections.emptyMap())))
-            .defineWrapperVoidMethodInvocation(wrapper -> wrapper.putAll(Collections.emptyMap()))
+            .defineMockConfigurationForVoidMethodInvocation(mock -> mock.putAll(eq(Map.of())))
+            .defineWrapperVoidMethodInvocation(wrapper -> wrapper.putAll(Map.of()))
             .doUnsupportedVoidFunctionDelegationCheck();
     }
 
@@ -166,7 +167,7 @@ public class PCollectionsImmutableMapTest {
     @Test
     public void testDelegationOfKeySet() {
         new PCollectionsHashMapWrapperDelegationChecker<>()
-            .defineMockConfigurationForFunctionInvocation(HashPMap::keySet, Collections.emptySet())
+            .defineMockConfigurationForFunctionInvocation(HashPMap::keySet, Set.of())
             .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsImmutableMap::keySet, identity())
             .doFunctionDelegationCheck();
     }
@@ -174,7 +175,7 @@ public class PCollectionsImmutableMapTest {
     @Test
     public void testDelegationOfValues() {
         new PCollectionsHashMapWrapperDelegationChecker<>()
-            .defineMockConfigurationForFunctionInvocation(HashPMap::values, Collections.emptySet())
+            .defineMockConfigurationForFunctionInvocation(HashPMap::values, Set.of())
             .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsImmutableMap::values, identity())
             .doFunctionDelegationCheck();
     }
@@ -182,7 +183,7 @@ public class PCollectionsImmutableMapTest {
     @Test
     public void testDelegationOfEntrySet() {
         new PCollectionsHashMapWrapperDelegationChecker<>()
-            .defineMockConfigurationForFunctionInvocation(HashPMap::entrySet, Collections.emptySet())
+            .defineMockConfigurationForFunctionInvocation(HashPMap::entrySet, Set.of())
             .defineWrapperFunctionInvocationAndMockReturnValueTransformation(PCollectionsImmutableMap::entrySet, identity())
             .doFunctionDelegationCheck();
     }

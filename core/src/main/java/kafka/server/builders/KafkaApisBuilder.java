@@ -19,37 +19,37 @@ package kafka.server.builders;
 
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
-import kafka.server.ApiVersionManager;
 import kafka.server.AutoTopicCreationManager;
-import kafka.server.DelegationTokenManager;
 import kafka.server.FetchManager;
+import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
-import kafka.server.MetadataCache;
-import kafka.server.MetadataSupport;
 import kafka.server.QuotaFactory.QuotaManagers;
 import kafka.server.ReplicaManager;
-import kafka.server.metadata.ConfigRepository;
 import kafka.server.share.SharePartitionManager;
 
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.coordinator.share.ShareCoordinator;
+import org.apache.kafka.metadata.ConfigRepository;
+import org.apache.kafka.metadata.MetadataCache;
+import org.apache.kafka.security.DelegationTokenManager;
+import org.apache.kafka.server.ApiVersionManager;
 import org.apache.kafka.server.ClientMetricsManager;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
-import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
 
 import scala.jdk.javaapi.OptionConverters;
 
-
-
 public class KafkaApisBuilder {
     private RequestChannel requestChannel = null;
-    private MetadataSupport metadataSupport = null;
+    private ForwardingManager forwardingManager = null;
     private ReplicaManager replicaManager = null;
     private GroupCoordinator groupCoordinator = null;
     private TransactionCoordinator txnCoordinator = null;
@@ -59,25 +59,26 @@ public class KafkaApisBuilder {
     private ConfigRepository configRepository = null;
     private MetadataCache metadataCache = null;
     private Metrics metrics = null;
-    private Optional<Authorizer> authorizer = Optional.empty();
+    private Optional<Plugin<Authorizer>> authorizerPlugin = Optional.empty();
     private QuotaManagers quotas = null;
     private FetchManager fetchManager = null;
-    private Optional<SharePartitionManager> sharePartitionManager = Optional.empty();
+    private SharePartitionManager sharePartitionManager = null;
     private BrokerTopicStats brokerTopicStats = null;
     private String clusterId = "clusterId";
     private Time time = Time.SYSTEM;
     private DelegationTokenManager tokenManager = null;
     private ApiVersionManager apiVersionManager = null;
-    private Optional<ClientMetricsManager> clientMetricsManager = Optional.empty();
-    private Optional<ShareCoordinator> shareCoordinator = Optional.empty();
+    private ClientMetricsManager clientMetricsManager = null;
+    private ShareCoordinator shareCoordinator = null;
+    private GroupConfigManager groupConfigManager = null;
 
     public KafkaApisBuilder setRequestChannel(RequestChannel requestChannel) {
         this.requestChannel = requestChannel;
         return this;
     }
 
-    public KafkaApisBuilder setMetadataSupport(MetadataSupport metadataSupport) {
-        this.metadataSupport = metadataSupport;
+    public KafkaApisBuilder setForwardingManager(ForwardingManager forwardingManager) {
+        this.forwardingManager = forwardingManager;
         return this;
     }
 
@@ -96,7 +97,7 @@ public class KafkaApisBuilder {
         return this;
     }
 
-    public KafkaApisBuilder setShareCoordinator(Optional<ShareCoordinator> shareCoordinator) {
+    public KafkaApisBuilder setShareCoordinator(ShareCoordinator shareCoordinator) {
         this.shareCoordinator = shareCoordinator;
         return this;
     }
@@ -131,8 +132,8 @@ public class KafkaApisBuilder {
         return this;
     }
 
-    public KafkaApisBuilder setAuthorizer(Optional<Authorizer> authorizer) {
-        this.authorizer = authorizer;
+    public KafkaApisBuilder setAuthorizerPlugin(Optional<Plugin<Authorizer>> authorizerPlugin) {
+        this.authorizerPlugin = authorizerPlugin;
         return this;
     }
 
@@ -146,7 +147,7 @@ public class KafkaApisBuilder {
         return this;
     }
 
-    public KafkaApisBuilder setSharePartitionManager(Optional<SharePartitionManager> sharePartitionManager) {
+    public KafkaApisBuilder setSharePartitionManager(SharePartitionManager sharePartitionManager) {
         this.sharePartitionManager = sharePartitionManager;
         return this;
     }
@@ -176,49 +177,59 @@ public class KafkaApisBuilder {
         return this;
     }
 
-    public KafkaApisBuilder setClientMetricsManager(Optional<ClientMetricsManager> clientMetricsManager) {
+    public KafkaApisBuilder setClientMetricsManager(ClientMetricsManager clientMetricsManager) {
         this.clientMetricsManager = clientMetricsManager;
         return this;
     }
 
+    public KafkaApisBuilder setGroupConfigManager(GroupConfigManager groupConfigManager) {
+        this.groupConfigManager = groupConfigManager;
+        return this;
+    }
+
+    @SuppressWarnings({"CyclomaticComplexity"})
     public KafkaApis build() {
         if (requestChannel == null) throw new RuntimeException("you must set requestChannel");
-        if (metadataSupport == null) throw new RuntimeException("you must set metadataSupport");
+        if (forwardingManager == null) throw new RuntimeException("you must set forwardingManager");
         if (replicaManager == null) throw new RuntimeException("You must set replicaManager");
         if (groupCoordinator == null) throw new RuntimeException("You must set groupCoordinator");
         if (txnCoordinator == null) throw new RuntimeException("You must set txnCoordinator");
-        if (autoTopicCreationManager == null)
-            throw new RuntimeException("You must set autoTopicCreationManager");
-        if (config == null) config = new KafkaConfig(Collections.emptyMap());
+        if (shareCoordinator == null) throw new RuntimeException("You must set shareCoordinator");
+        if (autoTopicCreationManager == null) throw new RuntimeException("You must set autoTopicCreationManager");
+        if (config == null) config = new KafkaConfig(Map.of());
         if (configRepository == null) throw new RuntimeException("You must set configRepository");
         if (metadataCache == null) throw new RuntimeException("You must set metadataCache");
         if (metrics == null) throw new RuntimeException("You must set metrics");
         if (quotas == null) throw new RuntimeException("You must set quotas");
         if (fetchManager == null) throw new RuntimeException("You must set fetchManager");
+        if (sharePartitionManager == null) throw new RuntimeException("You must set sharePartitionManager");
+        if (clientMetricsManager == null) throw new RuntimeException("You must set clientMetricsManager");
         if (brokerTopicStats == null) brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig().isRemoteStorageSystemEnabled());
         if (apiVersionManager == null) throw new RuntimeException("You must set apiVersionManager");
+        if (groupConfigManager == null) throw new RuntimeException("You must set groupConfigManager");
 
         return new KafkaApis(requestChannel,
-                             metadataSupport,
+                             forwardingManager,
                              replicaManager,
                              groupCoordinator,
                              txnCoordinator,
-                             OptionConverters.toScala(shareCoordinator),
+                             shareCoordinator,
                              autoTopicCreationManager,
                              brokerId,
                              config,
                              configRepository,
                              metadataCache,
                              metrics,
-                             OptionConverters.toScala(authorizer),
+                             OptionConverters.toScala(authorizerPlugin),
                              quotas,
                              fetchManager,
-                             OptionConverters.toScala(sharePartitionManager),
+                             sharePartitionManager,
                              brokerTopicStats,
                              clusterId,
                              time,
                              tokenManager,
                              apiVersionManager,
-                             OptionConverters.toScala(clientMetricsManager));
+                             clientMetricsManager,
+                             groupConfigManager);
     }
 }

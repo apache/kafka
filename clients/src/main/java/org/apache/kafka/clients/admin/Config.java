@@ -17,8 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -27,9 +25,7 @@ import java.util.Map;
 /**
  * A configuration object containing the configuration entries for a resource.
  * <p>
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class Config {
 
     private final Map<String, ConfigEntry> entries = new HashMap<>();

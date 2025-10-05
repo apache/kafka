@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -80,7 +79,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
             Serdes.String())
             .build();
 
-        @SuppressWarnings("rawtypes") final InternalMockProcessorContext context =
+        final InternalMockProcessorContext<String, String> context =
             new InternalMockProcessorContext<>(
                 new StateSerdes<>(
                     ProcessorStateManager.storeChangelogTopic("appId", storeName, null),
@@ -91,7 +90,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
             );
         context.setTime(1L);
 
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
 
         return store;
     }
@@ -141,6 +140,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
         assertThrows(NullPointerException.class, () -> theStore.prefixScan(null, new StringSerializer()));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerExceptionOnPrefixScanNullPrefixKeySerializer() {
         assertThrows(NullPointerException.class, () -> theStore.prefixScan("aa", null));
@@ -444,26 +444,31 @@ public class CompositeReadOnlyKeyValueStoreTest {
         assertThrows(InvalidStateStoreException.class, () -> rebalancing().approximateNumEntries());
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowInvalidStoreExceptionOnRangeDuringRebalance() {
         assertThrows(InvalidStateStoreException.class, () -> rebalancing().range("anything", "something"));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowInvalidStoreExceptionOnReverseRangeDuringRebalance() {
         assertThrows(InvalidStateStoreException.class, () -> rebalancing().reverseRange("anything", "something"));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowInvalidStoreExceptionOnPrefixScanDuringRebalance() {
         assertThrows(InvalidStateStoreException.class, () -> rebalancing().prefixScan("anything", new StringSerializer()));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowInvalidStoreExceptionOnAllDuringRebalance() {
         assertThrows(InvalidStateStoreException.class, () -> rebalancing().all());
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowInvalidStoreExceptionOnReverseAllDuringRebalance() {
         assertThrows(InvalidStateStoreException.class, () -> rebalancing().reverseAll());
@@ -487,7 +492,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
 
     @Test
     public void shouldReturnLongMaxValueOnOverflow() {
-        stubProviderTwo.addStore(storeName, new NoOpReadOnlyStore<Object, Object>() {
+        stubProviderTwo.addStore(storeName, new NoOpReadOnlyStore<>() {
             @Override
             public long approximateNumEntries() {
                 return Long.MAX_VALUE;
@@ -500,13 +505,13 @@ public class CompositeReadOnlyKeyValueStoreTest {
 
     @Test
     public void shouldReturnLongMaxValueOnUnderflow() {
-        stubProviderTwo.addStore(storeName, new NoOpReadOnlyStore<Object, Object>() {
+        stubProviderTwo.addStore(storeName, new NoOpReadOnlyStore<>() {
             @Override
             public long approximateNumEntries() {
                 return Long.MAX_VALUE;
             }
         });
-        stubProviderTwo.addStore("my-storeA", new NoOpReadOnlyStore<Object, Object>() {
+        stubProviderTwo.addStore("my-storeA", new NoOpReadOnlyStore<>() {
             @Override
             public long approximateNumEntries() {
                 return Long.MAX_VALUE;

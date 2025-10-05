@@ -43,9 +43,8 @@ public abstract class CoordinatorRecordSerde implements Serializer<CoordinatorRe
     @Override
     public byte[] serializeKey(CoordinatorRecord record) {
         // Record does not accept a null key.
-        return MessageUtil.toVersionPrefixedBytes(
-            record.key().version(),
-            record.key().message()
+        return MessageUtil.toCoordinatorTypePrefixedBytes(
+            record.key()
         );
     }
 
@@ -72,15 +71,20 @@ public abstract class CoordinatorRecordSerde implements Serializer<CoordinatorRe
         readMessage(keyMessage, keyBuffer, recordType, "key");
 
         if (valueBuffer == null) {
-            return new CoordinatorRecord(new ApiMessageAndVersion(keyMessage, recordType), null);
+            return CoordinatorRecord.tombstone(keyMessage);
         }
 
         final ApiMessage valueMessage = apiMessageValueFor(recordType);
         final short valueVersion = readVersion(valueBuffer, "value");
+
+        if (valueVersion < valueMessage.lowestSupportedVersion() || valueVersion > valueMessage.highestSupportedVersion()) {
+            throw new UnknownRecordVersionException(recordType, valueVersion);
+        }
+
         readMessage(valueMessage, valueBuffer, valueVersion, "value");
 
-        return new CoordinatorRecord(
-            new ApiMessageAndVersion(keyMessage, recordType),
+        return CoordinatorRecord.record(
+            keyMessage,
             new ApiMessageAndVersion(valueMessage, valueVersion)
         );
     }
@@ -106,17 +110,17 @@ public abstract class CoordinatorRecordSerde implements Serializer<CoordinatorRe
      * Concrete child class must provide implementation which returns appropriate
      * type of {@link ApiMessage} objects representing the key.
      *
-     * @param recordVersion - short representing version
+     * @param recordType - short representing type
      * @return ApiMessage object
      */
-    protected abstract ApiMessage apiMessageKeyFor(short recordVersion);
+    protected abstract ApiMessage apiMessageKeyFor(short recordType);
 
     /**
      * Concrete child class must provide implementation which returns appropriate
      * type of {@link ApiMessage} objects representing the value.
      *
-     * @param recordVersion - short representing version
+     * @param recordType - short representing type
      * @return ApiMessage object
      */
-    protected abstract ApiMessage apiMessageValueFor(short recordVersion);
+    protected abstract ApiMessage apiMessageValueFor(short recordType);
 }

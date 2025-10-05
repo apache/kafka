@@ -17,15 +17,15 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -42,6 +42,11 @@ public class AlterPartitionReassignmentsRequest extends AbstractRequest {
 
         @Override
         public AlterPartitionReassignmentsRequest build(short version) {
+            if (!data.allowReplicationFactorChange() && version < 1) {
+                throw new UnsupportedVersionException("The broker does not support the AllowReplicationFactorChange " +
+                        "option for the AlterPartitionReassignments API. Consider re-sending the request without the " +
+                        "option or updating the server version");
+            }
             return new AlterPartitionReassignmentsRequest(data, version);
         }
 
@@ -58,9 +63,9 @@ public class AlterPartitionReassignmentsRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public static AlterPartitionReassignmentsRequest parse(ByteBuffer buffer, short version) {
+    public static AlterPartitionReassignmentsRequest parse(Readable readable, short version) {
         return new AlterPartitionReassignmentsRequest(new AlterPartitionReassignmentsRequestData(
-            new ByteBufferAccessor(buffer), version), version);
+            readable, version), version);
     }
 
     public AlterPartitionReassignmentsRequestData data() {

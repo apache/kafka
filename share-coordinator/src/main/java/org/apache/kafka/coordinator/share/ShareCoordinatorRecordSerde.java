@@ -17,36 +17,27 @@
 
 package org.apache.kafka.coordinator.share;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
-import org.apache.kafka.coordinator.share.generated.ShareSnapshotKey;
-import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
-import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
-import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
+import org.apache.kafka.coordinator.share.generated.CoordinatorRecordType;
 
 public class ShareCoordinatorRecordSerde extends CoordinatorRecordSerde {
     @Override
-    protected ApiMessage apiMessageKeyFor(short recordVersion) {
-        switch (recordVersion) {
-            case ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION:
-                return new ShareSnapshotKey();
-            case ShareCoordinator.SHARE_UPDATE_RECORD_KEY_VERSION:
-                return new ShareUpdateKey();
-            default:
-                throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
+    protected ApiMessage apiMessageKeyFor(short recordType) {
+        try {
+            return CoordinatorRecordType.fromId(recordType).newRecordKey();
+        } catch (UnsupportedVersionException ex) {
+            throw new UnknownRecordTypeException(recordType);
         }
     }
 
     @Override
-    protected ApiMessage apiMessageValueFor(short recordVersion) {
-        switch (recordVersion) {
-            case ShareCoordinator.SHARE_SNAPSHOT_RECORD_VALUE_VERSION:
-                return new ShareSnapshotValue();
-            case ShareCoordinator.SHARE_UPDATE_RECORD_VALUE_VERSION:
-                return new ShareUpdateValue();
-            default:
-                throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
+    protected ApiMessage apiMessageValueFor(short recordType) {
+        try {
+            return CoordinatorRecordType.fromId(recordType).newRecordValue();
+        } catch (UnsupportedVersionException ex) {
+            throw new UnknownRecordTypeException(recordType);
         }
     }
 }

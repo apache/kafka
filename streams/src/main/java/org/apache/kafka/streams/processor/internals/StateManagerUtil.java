@@ -87,7 +87,7 @@ final class StateManagerUtil {
                                     final ProcessorTopology topology,
                                     final ProcessorStateManager stateMgr,
                                     final StateDirectory stateDirectory,
-                                    final InternalProcessorContext processorContext) {
+                                    final InternalProcessorContext<?, ?> processorContext) {
         if (topology.stateStores().isEmpty()) {
             return;
         }

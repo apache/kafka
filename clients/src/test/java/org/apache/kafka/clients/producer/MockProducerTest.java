@@ -53,13 +53,13 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class MockProducerTest {
 
     private final String topic = "topic";
-    private MockProducer<byte[], byte[]> producer;
-    private final ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(topic, "key1".getBytes(), "value1".getBytes());
-    private final ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(topic, "key2".getBytes(), "value2".getBytes());
+    private MockProducer<String, String> producer;
+    private final ProducerRecord<String, String> record1 = new ProducerRecord<>(topic, "key1", "value1");
+    private final ProducerRecord<String, String> record2 = new ProducerRecord<>(topic, "key2", "value2");
     private final String groupId = "group";
 
     private void buildMockProducer(boolean autoComplete) {
-        this.producer = new MockProducer<>(autoComplete, new MockSerializer(), new MockSerializer());
+        this.producer = new MockProducer<>(Cluster.empty(), autoComplete, null, new MockSerializer(), new MockSerializer());
     }
 
     @AfterEach
@@ -87,10 +87,16 @@ public class MockProducerTest {
         PartitionInfo partitionInfo1 = new PartitionInfo(topic, 1, null, null, null);
         Cluster cluster = new Cluster(null, new ArrayList<>(0), asList(partitionInfo0, partitionInfo1),
                 Collections.emptySet(), Collections.emptySet());
-        MockProducer<String, String> producer = new MockProducer<>(cluster, true, new StringSerializer(), new StringSerializer());
+        MockProducer<String, String> producer = new MockProducer<>(
+            cluster,
+            true,
+            new org.apache.kafka.clients.producer.RoundRobinPartitioner(),
+            new StringSerializer(),
+            new StringSerializer()
+        );
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "key", "value");
         Future<RecordMetadata> metadata = producer.send(record);
-        assertEquals(1, metadata.get().partition(), "Partition should be correct");
+        assertEquals(0, metadata.get().partition(), "Partition should be correct");
         producer.clear();
         assertEquals(0, producer.history().size(), "Clear should erase our history");
         producer.close();
@@ -312,7 +318,7 @@ public class MockProducerTest {
 
         producer.commitTransaction();
 
-        List<ProducerRecord<byte[], byte[]>> expectedResult = new ArrayList<>();
+        List<ProducerRecord<String, String>> expectedResult = new ArrayList<>();
         expectedResult.add(record1);
         expectedResult.add(record2);
 
@@ -379,7 +385,7 @@ public class MockProducerTest {
         producer.beginTransaction();
         producer.abortTransaction();
 
-        List<ProducerRecord<byte[], byte[]>> expectedResult = new ArrayList<>();
+        List<ProducerRecord<String, String>> expectedResult = new ArrayList<>();
         expectedResult.add(record1);
         expectedResult.add(record2);
 
@@ -680,7 +686,7 @@ public class MockProducerTest {
     @Test
     @SuppressWarnings("unchecked")
     public void shouldThrowClassCastException() {
-        try (MockProducer<Integer, String> customProducer = new MockProducer<>(true, new IntegerSerializer(), new StringSerializer())) {
+        try (MockProducer<Integer, String> customProducer = new MockProducer<>(Cluster.empty(), true, null, new IntegerSerializer(), new StringSerializer())) {
             assertThrows(ClassCastException.class, () -> customProducer.send(new ProducerRecord(topic, "key1", "value1")));
         }
     }
@@ -718,10 +724,10 @@ public class MockProducerTest {
         buildMockProducer(false);
         Future<RecordMetadata> metadata = producer.send(record2, (md, exception) -> {
             assertNotNull(md);
-            assertEquals(md.offset(), -1L, "Invalid offset");
-            assertEquals(md.timestamp(), RecordBatch.NO_TIMESTAMP, "Invalid timestamp");
-            assertEquals(md.serializedKeySize(), -1L, "Invalid Serialized Key size");
-            assertEquals(md.serializedValueSize(), -1L, "Invalid Serialized value size");
+            assertEquals(-1L, md.offset(), "Invalid offset");
+            assertEquals(RecordBatch.NO_TIMESTAMP, md.timestamp(), "Invalid timestamp");
+            assertEquals(-1L, md.serializedKeySize(), "Invalid Serialized Key size");
+            assertEquals(-1L, md.serializedValueSize(), "Invalid Serialized value size");
         });
         IllegalArgumentException e = new IllegalArgumentException("dummy exception");
         assertTrue(producer.errorNext(e), "Complete the second request with an error");

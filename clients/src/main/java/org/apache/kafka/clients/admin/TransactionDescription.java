@@ -17,13 +17,11 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Objects;
 import java.util.OptionalLong;
 import java.util.Set;
 
-@InterfaceStability.Evolving
 public class TransactionDescription {
     private final int coordinatorId;
     private final TransactionState state;

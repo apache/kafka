@@ -37,13 +37,13 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
  * <p>
  * Given the input, it can output at most two records (one mapped from old value and one mapped from new value).
  */
-public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapSupplier<K, V, KeyValue<K1, V1>, K1, V1> {
+public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapSupplier<K, V, KeyValue<? extends K1, ? extends V1>, K1, V1> {
 
     private final KTableImpl<K, ?, V> parent;
-    private final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> mapper;
+    private final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> mapper;
     private boolean useVersionedSemantics = false;
 
-    KTableRepartitionMap(final KTableImpl<K, ?, V> parent, final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> mapper) {
+    KTableRepartitionMap(final KTableImpl<K, ?, V> parent, final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> mapper) {
         this.parent = parent;
         this.mapper = mapper;
     }
@@ -63,12 +63,12 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
     }
 
     @Override
-    public KTableValueGetterSupplier<K, KeyValue<K1, V1>> view() {
+    public KTableValueGetterSupplier<K, KeyValue<? extends K1, ? extends V1>> view() {
         final KTableValueGetterSupplier<K, V> parentValueGetterSupplier = parent.valueGetterSupplier();
 
-        return new KTableValueGetterSupplier<K, KeyValue<K1, V1>>() {
+        return new KTableValueGetterSupplier<>() {
 
-            public KTableValueGetter<K, KeyValue<K1, V1>> get() {
+            public KTableValueGetter<K, KeyValue<? extends K1, ? extends V1>> get() {
                 return new KTableMapValueGetter(parentValueGetterSupplier.get());
             }
 
@@ -100,16 +100,6 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
             }
 
             switch (UpgradeFromValues.fromString((String) upgradeFrom)) {
-                case UPGRADE_FROM_0100:
-                case UPGRADE_FROM_0101:
-                case UPGRADE_FROM_0102:
-                case UPGRADE_FROM_0110:
-                case UPGRADE_FROM_10:
-                case UPGRADE_FROM_11:
-                case UPGRADE_FROM_20:
-                case UPGRADE_FROM_21:
-                case UPGRADE_FROM_22:
-                case UPGRADE_FROM_23:
                 case UPGRADE_FROM_24:
                 case UPGRADE_FROM_25:
                 case UPGRADE_FROM_26:
@@ -176,7 +166,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
         }
     }
 
-    private class KTableMapValueGetter implements KTableValueGetter<K, KeyValue<K1, V1>> {
+    private class KTableMapValueGetter implements KTableValueGetter<K, KeyValue<? extends K1, ? extends V1>> {
         private final KTableValueGetter<K, V> parentGetter;
         private InternalProcessorContext<?, ?> context;
 
@@ -191,12 +181,12 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
         }
 
         @Override
-        public ValueAndTimestamp<KeyValue<K1, V1>> get(final K key) {
+        public ValueAndTimestamp<KeyValue<? extends K1, ? extends V1>> get(final K key) {
             return mapValue(key, parentGetter.get(key));
         }
 
         @Override
-        public ValueAndTimestamp<KeyValue<K1, V1>> get(final K key, final long asOfTimestamp) {
+        public ValueAndTimestamp<KeyValue<? extends K1, ? extends V1>> get(final K key, final long asOfTimestamp) {
             return mapValue(key, parentGetter.get(key, asOfTimestamp));
         }
 
@@ -210,10 +200,10 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
             parentGetter.close();
         }
 
-        private ValueAndTimestamp<KeyValue<K1, V1>> mapValue(final K key, final ValueAndTimestamp<V> valueAndTimestamp) {
+        private ValueAndTimestamp<KeyValue<? extends K1, ? extends V1>> mapValue(final K key, final ValueAndTimestamp<V> valueAndTimestamp) {
             return ValueAndTimestamp.make(
                 mapper.apply(key, getValueOrNull(valueAndTimestamp)),
-                valueAndTimestamp == null ? context.timestamp() : valueAndTimestamp.timestamp()
+                valueAndTimestamp == null ? context.recordContext().timestamp() : valueAndTimestamp.timestamp()
             );
         }
     }

@@ -29,7 +29,9 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.ServiceLoader;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -77,7 +79,7 @@ public class ReflectionScanner extends PluginScanner {
     @Override
     protected PluginScanResult scanPlugins(PluginSource source) {
         ClassGraph classGraphBuilder = new ClassGraph()
-                .addClassLoader(source.loader())
+                .overrideClassLoaders(classLoaderOrder(source))
                 .enableExternalClasses()
                 .enableClassInfo();
         try (ScanResult classGraph = classGraphBuilder.scan()) {
@@ -103,6 +105,21 @@ public class ReflectionScanner extends PluginScanner {
     @SuppressWarnings({"unchecked"})
     private SortedSet<PluginDesc<Transformation<?>>> getTransformationPluginDesc(PluginSource source, ScanResult classGraph) {
         return (SortedSet<PluginDesc<Transformation<?>>>) (SortedSet<?>) getPluginDesc(classGraph, PluginType.TRANSFORMATION, source);
+    }
+
+    private ClassLoader[] classLoaderOrder(PluginSource source) {
+        // Classgraph will first scan all the class URLs from the provided classloader chain and use said chain during classloading.
+        // We compute and provide the classloader chain starting from the isolated PluginClassLoader to ensure that it adheres
+        // to the child first delegation model used in connect. In addition, classgraph can fail to find URLs from the
+        // application classloader as it uses an illegal reflections access. Providing the entire chain of classloaders
+        // which included the application classloader forces classpath URLs to be scanned separately.
+        List<ClassLoader> classLoaderOrder = new ArrayList<>();
+        ClassLoader cl = source.loader();
+        while (cl != null) {
+            classLoaderOrder.add(cl);
+            cl = cl.getParent();
+        }
+        return classLoaderOrder.toArray(new ClassLoader[0]);
     }
 
     @SuppressWarnings({"unchecked"})

@@ -22,7 +22,7 @@ package org.apache.kafka.common.errors;
  * given time, and the latest one to be started "fences" the previous instances so that they can no longer
  * make transactional requests. When you encounter this exception, you must close the producer instance.
  */
-public class ProducerFencedException extends ApiException {
+public class ProducerFencedException extends ApplicationRecoverableException {
 
     public ProducerFencedException(String msg) {
         super(msg);

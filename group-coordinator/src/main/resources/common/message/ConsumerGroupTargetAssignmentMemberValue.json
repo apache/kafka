@@ -13,17 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// KIP-848 is in development. This schema is subject to non-backwards-compatible changes.
 {
-  "type": "data",
+  "apiKey": 7,
+  "type": "coordinator-value",
   "name": "ConsumerGroupTargetAssignmentMemberValue",
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "TopicPartitions", "versions": "0+", "type": "[]TopicPartition",
       "about": "The assigned partitions.", "fields": [
-      { "name": "TopicId", "versions": "0+", "type": "uuid" },
-      { "name": "Partitions", "versions": "0+", "type": "[]int32" }
+      { "name": "TopicId", "versions": "0+", "type": "uuid",
+        "about": "The topic id."},
+      { "name": "Partitions", "versions": "0+", "type": "[]int32",
+        "about": "The partition indexes."}
     ]}
   ]
 }

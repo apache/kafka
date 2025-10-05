@@ -39,7 +39,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG;
@@ -228,7 +228,7 @@ public class ConnectorValidationIntegrationTest {
         Map<String, String> config = defaultSinkConnectorProps();
         String transformName = "t";
         config.put(TRANSFORMS_CONFIG, transformName);
-        config.put(TRANSFORMS_CONFIG + "." + transformName + ".type", MonitorableSinkConnector.class.getName());
+        config.put(TRANSFORMS_CONFIG + "." + transformName + ".type", TestableSinkConnector.class.getName());
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
@@ -289,7 +289,7 @@ public class ConnectorValidationIntegrationTest {
         Map<String, String> config = defaultSinkConnectorProps();
         String predicateName = "p";
         config.put(PREDICATES_CONFIG, predicateName);
-        config.put(PREDICATES_CONFIG + "." + predicateName + ".type", MonitorableSinkConnector.class.getName());
+        config.put(PREDICATES_CONFIG + "." + predicateName + ".type", TestableSinkConnector.class.getName());
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
@@ -315,7 +315,7 @@ public class ConnectorValidationIntegrationTest {
     @Test
     public void testConnectorHasInvalidConverterClassType() throws InterruptedException {
         Map<String, String> config = defaultSinkConnectorProps();
-        config.put(KEY_CONVERTER_CLASS_CONFIG, MonitorableSinkConnector.class.getName());
+        config.put(KEY_CONVERTER_CLASS_CONFIG, TestableSinkConnector.class.getName());
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
@@ -413,7 +413,7 @@ public class ConnectorValidationIntegrationTest {
     @Test
     public void testConnectorHasInvalidHeaderConverterClassType() throws InterruptedException {
         Map<String, String> config = defaultSinkConnectorProps();
-        config.put(HEADER_CONVERTER_CLASS_CONFIG, MonitorableSinkConnector.class.getName());
+        config.put(HEADER_CONVERTER_CLASS_CONFIG, TestableSinkConnector.class.getName());
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
@@ -560,7 +560,7 @@ public class ConnectorValidationIntegrationTest {
         // setup up props for the source connector
         Map<String, String> props = new HashMap<>();
         props.put(NAME_CONFIG, "source-connector");
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, "1");
         props.put(TOPIC_CONFIG, "t1");
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -572,7 +572,7 @@ public class ConnectorValidationIntegrationTest {
         // setup up props for the sink connector
         Map<String, String> props = new HashMap<>();
         props.put(NAME_CONFIG, "sink-connector");
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSinkConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, "1");
         props.put(TOPICS_CONFIG, "t1");
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());

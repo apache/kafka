@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
@@ -55,10 +54,9 @@ public class SegmentIteratorTest {
 
     private SegmentIterator<KeyValueSegment> iterator = null;
 
-    @SuppressWarnings("rawtypes")
     @BeforeEach
     public void before() {
-        final InternalMockProcessorContext context = new InternalMockProcessorContext<>(
+        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.String(),
@@ -67,8 +65,8 @@ public class SegmentIteratorTest {
                 new LogContext("testCache "),
                 0,
                 new MockStreamsMetrics(new Metrics())));
-        segmentOne.init((StateStoreContext) context, segmentOne);
-        segmentTwo.init((StateStoreContext) context, segmentTwo);
+        segmentOne.init(context, segmentOne);
+        segmentTwo.init(context, segmentTwo);
         segmentOne.put(Bytes.wrap("a".getBytes()), "1".getBytes());
         segmentOne.put(Bytes.wrap("b".getBytes()), "2".getBytes());
         segmentTwo.put(Bytes.wrap("c".getBytes()), "3".getBytes());

@@ -18,7 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.internals.RocksDBVersionedStore.RocksDBVersionedStoreClient;
 import org.apache.kafka.streams.state.internals.RocksDBVersionedStore.VersionedStoreClient;
 import org.apache.kafka.streams.state.internals.RocksDBVersionedStore.VersionedStoreSegment;
@@ -91,7 +91,7 @@ public class RocksDBVersionedStoreRestoreWriteBuffer {
         // older segments/stores before later ones
         try (final WriteBatch segmentsBatch = new WriteBatch()) {
             final List<WriteBufferSegmentWithDbFallback> allSegments = restoreClient.reversedSegments(Long.MIN_VALUE);
-            if (allSegments.size() > 0) {
+            if (!allSegments.isEmpty()) {
                 // collect entries into write batch
                 for (final WriteBufferSegmentWithDbFallback bufferSegment : allSegments) {
                     final LogicalKeyValueSegment dbSegment = bufferSegment.dbSegment();
@@ -206,7 +206,7 @@ public class RocksDBVersionedStoreRestoreWriteBuffer {
         }
 
         @Override
-        public WriteBufferSegmentWithDbFallback getOrCreateSegmentIfLive(final long segmentId, final ProcessorContext context, final long streamTime) {
+        public WriteBufferSegmentWithDbFallback getOrCreateSegmentIfLive(final long segmentId, final StateStoreContext context, final long streamTime) {
             if (segmentsWriteBuffer.containsKey(segmentId)) {
                 return segmentsWriteBuffer.get(segmentId);
             }

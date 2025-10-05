@@ -65,6 +65,10 @@ public class AbstractConfig {
     public static final String AUTOMATIC_CONFIG_PROVIDERS_PROPERTY = "org.apache.kafka.automatic.config.providers";
 
     public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
+    public static final String CONFIG_PROVIDERS_DOC = 
+            "Comma-separated alias names for classes implementing the <code>ConfigProvider</code> interface. " +
+            "This enables loading configuration data (such as passwords, API keys, and other credentials) from external " +
+            "sources. For example, see <a href=\"https://kafka.apache.org/documentation/#config_providers\">Configuration Providers</a>.";
 
     private static final String CONFIG_PROVIDERS_PARAM = ".param.";
 
@@ -109,8 +113,7 @@ public class AbstractConfig {
      */
     @SuppressWarnings({"this-escape"})
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
-        Map<String, Object> originalMap = Utils.castToStringObjectMap(originals);
-
+        Map<String, Object> originalMap = preProcessParsedConfig(Collections.unmodifiableMap(Utils.castToStringObjectMap(originals)));
         this.originals = resolveConfigVariables(configProviderProps, originalMap);
         this.values = definition.parse(this.originals);
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
@@ -144,7 +147,17 @@ public class AbstractConfig {
      */
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
         this(definition, originals, Collections.emptyMap(), doLog);
+    }
 
+    /**
+     * Called directly after user configs got parsed (and thus default values is not set).
+     * This allows to check user's config.
+     *
+     * @param parsedValues unmodifiable map of current configuration
+     * @return a map of updates that should be applied to the configuration (will be validated to prevent bad updates)
+     */
+    protected Map<String, Object> preProcessParsedConfig(Map<String, Object> parsedValues) {
+        return parsedValues;
     }
 
     /**

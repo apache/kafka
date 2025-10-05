@@ -33,7 +33,6 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -165,7 +164,7 @@ public class MirrorClient implements AutoCloseable {
             // to use ReplicationPolicy to create the checkpoint topic here.
             String checkpointTopic = replicationPolicy.checkpointsTopic(remoteClusterAlias);
             List<TopicPartition> checkpointAssignment =
-                Collections.singletonList(new TopicPartition(checkpointTopic, 0));
+                List.of(new TopicPartition(checkpointTopic, 0));
             consumer.assign(checkpointAssignment);
             consumer.seekToBeginning(checkpointAssignment);
             while (System.currentTimeMillis() < deadline && !endOfStream(consumer, checkpointAssignment)) {

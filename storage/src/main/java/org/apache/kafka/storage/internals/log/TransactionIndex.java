@@ -28,7 +28,6 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
@@ -48,13 +47,7 @@ import java.util.function.Supplier;
  */
 public class TransactionIndex implements Closeable {
 
-    private static class AbortedTxnWithPosition {
-        final AbortedTxn txn;
-        final int position;
-        AbortedTxnWithPosition(AbortedTxn txn, int position) {
-            this.txn = txn;
-            this.position = position;
-        }
+    private record AbortedTxnWithPosition(AbortedTxn txn, int position) {
     }
 
     private final long startOffset;
@@ -110,7 +103,7 @@ public class TransactionIndex implements Closeable {
 
     public void close() throws IOException {
         FileChannel channel = channelOrNull();
-        if (channel != null)
+        if (channel != null && channel.isOpen())
             channel.close();
         maybeChannel = Optional.empty();
     }
@@ -229,11 +222,11 @@ public class TransactionIndex implements Closeable {
     private Iterable<AbortedTxnWithPosition> iterable(Supplier<ByteBuffer> allocate) {
         FileChannel channel = channelOrNull();
         if (channel == null)
-            return Collections.emptyList();
+            return List.of();
 
         PrimitiveRef.IntRef position = PrimitiveRef.ofInt(0);
 
-        return () -> new Iterator<AbortedTxnWithPosition>() {
+        return () -> new Iterator<>() {
 
             @Override
             public boolean hasNext() {

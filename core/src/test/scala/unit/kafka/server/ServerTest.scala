@@ -20,7 +20,7 @@ import java.util.Properties
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.MetricsContext
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ZkConfigs}
+import org.apache.kafka.server.config.KRaftConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -29,7 +29,7 @@ import scala.jdk.CollectionConverters._
 class ServerTest {
 
   @Test
-  def testCreateSelfManagedKafkaMetricsContext(): Unit = {
+  def testCreateKafkaMetricsContext(): Unit = {
     val nodeId = 0
     val clusterId = Uuid.randomUuid().toString
 
@@ -47,23 +47,4 @@ class ServerTest {
       Server.NodeIdLabel -> nodeId.toString
     ), context.contextLabels.asScala)
   }
-
-  @Test
-  def testCreateZkKafkaMetricsContext(): Unit = {
-    val brokerId = 0
-    val clusterId = Uuid.randomUuid().toString
-
-    val props = new Properties()
-    props.put(ServerConfigs.BROKER_ID_CONFIG, brokerId.toString)
-    props.put(ZkConfigs.ZK_CONNECT_CONFIG, "127.0.0.1:0")
-    val config = KafkaConfig.fromProps(props)
-
-    val context = Server.createKafkaMetricsContext(config, clusterId)
-    assertEquals(Map(
-      MetricsContext.NAMESPACE -> Server.MetricsPrefix,
-      Server.ClusterIdLabel -> clusterId,
-      Server.BrokerIdLabel -> brokerId.toString
-    ), context.contextLabels.asScala)
-  }
-
 }

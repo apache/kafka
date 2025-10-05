@@ -29,8 +29,14 @@ import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -176,7 +182,7 @@ public class ValuesTest {
         SchemaAndValue schemaAndValue = Values.parseString("[true, false]");
         assertEquals(Type.ARRAY, schemaAndValue.schema().type());
         assertEquals(Type.BOOLEAN, schemaAndValue.schema().valueSchema().type());
-        assertEquals(Arrays.asList(true, false), schemaAndValue.value());
+        assertEquals(List.of(true, false), schemaAndValue.value());
     }
 
     @Test
@@ -209,14 +215,14 @@ public class ValuesTest {
     public void shouldParseEmptyMap() {
         SchemaAndValue schemaAndValue = Values.parseString("{}");
         assertEquals(Type.MAP, schemaAndValue.schema().type());
-        assertEquals(Collections.emptyMap(), schemaAndValue.value());
+        assertEquals(Map.of(), schemaAndValue.value());
     }
 
     @Test
     public void shouldParseEmptyArray() {
         SchemaAndValue schemaAndValue = Values.parseString("[]");
         assertEquals(Type.ARRAY, schemaAndValue.schema().type());
-        assertEquals(Collections.emptyList(), schemaAndValue.value());
+        assertEquals(List.of(), schemaAndValue.value());
     }
 
     @Test
@@ -460,16 +466,16 @@ public class ValuesTest {
     @Test
     public void shouldParseStringListWithMultipleElementTypes() {
         assertParseStringArrayWithNoSchema(
-                Arrays.asList((byte) 1, (byte) 2, (short) 300, "four"),
+                List.of((byte) 1, (byte) 2, (short) 300, "four"),
                 "[1, 2, 300, \"four\"]");
         assertParseStringArrayWithNoSchema(
-                Arrays.asList((byte) 2, (short) 300, "four", (byte) 1),
+                List.of((byte) 2, (short) 300, "four", (byte) 1),
                 "[2, 300, \"four\", 1]");
         assertParseStringArrayWithNoSchema(
-                Arrays.asList((short) 300, "four", (byte) 1, (byte) 2),
+                List.of((short) 300, "four", (byte) 1, (byte) 2),
                 "[300, \"four\", 1, 2]");
         assertParseStringArrayWithNoSchema(
-                Arrays.asList("four", (byte) 1, (byte) 2, (short) 300),
+                List.of("four", (byte) 1, (byte) 2, (short) 300),
                 "[\"four\", 1, 2, 300]");
     }
 
@@ -640,7 +646,7 @@ public class ValuesTest {
         assertEquals(Type.INT32, elementSchema.type());
         assertEquals(Date.LOGICAL_NAME, elementSchema.name());
         java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_DATE_FORMAT_PATTERN).parse(dateStr);
-        assertEquals(Collections.singletonList(expected), result.value());
+        assertEquals(List.of(expected), result.value());
     }
 
     @Test
@@ -653,7 +659,7 @@ public class ValuesTest {
         assertEquals(Type.INT32, elementSchema.type());
         assertEquals(Time.LOGICAL_NAME, elementSchema.name());
         java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIME_FORMAT_PATTERN).parse(timeStr);
-        assertEquals(Collections.singletonList(expected), result.value());
+        assertEquals(List.of(expected), result.value());
     }
 
     @Test
@@ -666,7 +672,7 @@ public class ValuesTest {
         assertEquals(Type.INT64, elementSchema.type());
         assertEquals(Timestamp.LOGICAL_NAME, elementSchema.name());
         java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(tsStr);
-        assertEquals(Collections.singletonList(expected), result.value());
+        assertEquals(List.of(expected), result.value());
     }
 
     @Test
@@ -683,7 +689,7 @@ public class ValuesTest {
         java.util.Date expected1 = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(tsStr1);
         java.util.Date expected2 = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(tsStr2);
         java.util.Date expected3 = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(tsStr3);
-        assertEquals(Arrays.asList(expected1, expected2, expected3), result.value());
+        assertEquals(List.of(expected1, expected2, expected3), result.value());
     }
 
     @Test
@@ -699,7 +705,7 @@ public class ValuesTest {
         assertEquals(Type.INT32, valueSchema.type());
         assertEquals(Time.LOGICAL_NAME, valueSchema.name());
         java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIME_FORMAT_PATTERN).parse(timeStr);
-        assertEquals(Collections.singletonMap(keyStr, expected), result.value());
+        assertEquals(Map.of(keyStr, expected), result.value());
     }
 
     @Test
@@ -715,7 +721,7 @@ public class ValuesTest {
         assertEquals(Type.INT32, valueSchema.type());
         assertEquals(Time.LOGICAL_NAME, valueSchema.name());
         java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIME_FORMAT_PATTERN).parse(timeStr);
-        assertEquals(Collections.singletonMap(keyStr, expected), result.value());
+        assertEquals(Map.of(keyStr, expected), result.value());
     }
 
     @Test
@@ -849,7 +855,10 @@ public class ValuesTest {
 
     @Test
     public void shouldConvertTimeValues() {
-        java.util.Date current = new java.util.Date();
+        LocalDateTime localTime = LocalDateTime.now();
+        LocalTime localTimeTruncated = localTime.toLocalTime().truncatedTo(ChronoUnit.MILLIS);
+        ZoneOffset zoneOffset = ZoneId.systemDefault().getRules().getOffset(localTime);
+        java.util.Date current = new java.util.Date(localTime.toEpochSecond(zoneOffset) * 1000);
         long currentMillis = current.getTime() % MILLIS_PER_DAY;
 
         // java.util.Date - just copy
@@ -857,23 +866,28 @@ public class ValuesTest {
         assertEquals(current, t1);
 
         // java.util.Date as a Timestamp - discard the date and keep just day's milliseconds
-        t1 = Values.convertToTime(Timestamp.SCHEMA, current);
-        assertEquals(new java.util.Date(currentMillis), t1);
+        java.util.Date t2 = Values.convertToTime(Timestamp.SCHEMA, current);
+        assertEquals(new java.util.Date(currentMillis), t2);
 
-        // ISO8601 strings - currently broken because tokenization breaks at colon
+        // ISO8601 strings - accept a string matching pattern "HH:mm:ss.SSS'Z'"
+        java.util.Date t3 = Values.convertToTime(Time.SCHEMA, localTime.format(DateTimeFormatter.ofPattern(Values.ISO_8601_TIME_FORMAT_PATTERN)));
+        LocalTime time3 = LocalDateTime.ofInstant(Instant.ofEpochMilli(t3.getTime()), ZoneId.systemDefault()).toLocalTime();
+        assertEquals(localTimeTruncated, time3);
 
         // Millis as string
-        java.util.Date t3 = Values.convertToTime(Time.SCHEMA, Long.toString(currentMillis));
-        assertEquals(currentMillis, t3.getTime());
+        java.util.Date t4 = Values.convertToTime(Time.SCHEMA, Long.toString(currentMillis));
+        assertEquals(currentMillis, t4.getTime());
 
         // Millis as long
-        java.util.Date t4 = Values.convertToTime(Time.SCHEMA, currentMillis);
-        assertEquals(currentMillis, t4.getTime());
+        java.util.Date t5 = Values.convertToTime(Time.SCHEMA, currentMillis);
+        assertEquals(currentMillis, t5.getTime());
     }
 
     @Test
     public void shouldConvertDateValues() {
-        java.util.Date current = new java.util.Date();
+        LocalDateTime localTime = LocalDateTime.now();
+        ZoneOffset zoneOffset = ZoneId.systemDefault().getRules().getOffset(localTime);
+        java.util.Date current = new java.util.Date(localTime.toEpochSecond(zoneOffset) * 1000);
         long currentMillis = current.getTime() % MILLIS_PER_DAY;
         long days = current.getTime() / MILLIS_PER_DAY;
 
@@ -883,23 +897,30 @@ public class ValuesTest {
 
         // java.util.Date as a Timestamp - discard the day's milliseconds and keep the date
         java.util.Date currentDate = new java.util.Date(current.getTime() - currentMillis);
-        d1 = Values.convertToDate(Timestamp.SCHEMA, currentDate);
-        assertEquals(currentDate, d1);
+        java.util.Date d2 = Values.convertToDate(Timestamp.SCHEMA, currentDate);
+        assertEquals(currentDate, d2);
 
-        // ISO8601 strings - currently broken because tokenization breaks at colon
+        // ISO8601 strings - accept a string matching pattern "yyyy-MM-dd"
+        LocalDateTime localTimeTruncated = localTime.truncatedTo(ChronoUnit.DAYS);
+        java.util.Date d3 = Values.convertToDate(Date.SCHEMA, localTime.format(DateTimeFormatter.ISO_LOCAL_DATE));
+        LocalDateTime date3 = LocalDateTime.ofInstant(Instant.ofEpochMilli(d3.getTime()), ZoneId.systemDefault());
+        assertEquals(localTimeTruncated, date3);
 
         // Days as string
-        java.util.Date d3 = Values.convertToDate(Date.SCHEMA, Long.toString(days));
-        assertEquals(currentDate, d3);
+        java.util.Date d4 = Values.convertToDate(Date.SCHEMA, Long.toString(days));
+        assertEquals(currentDate, d4);
 
         // Days as long
-        java.util.Date d4 = Values.convertToDate(Date.SCHEMA, days);
-        assertEquals(currentDate, d4);
+        java.util.Date d5 = Values.convertToDate(Date.SCHEMA, days);
+        assertEquals(currentDate, d5);
     }
 
     @Test
     public void shouldConvertTimestampValues() {
-        java.util.Date current = new java.util.Date();
+        LocalDateTime localTime = LocalDateTime.now();
+        LocalDateTime localTimeTruncated = localTime.truncatedTo(ChronoUnit.MILLIS);
+        ZoneOffset zoneOffset = ZoneId.systemDefault().getRules().getOffset(localTime);
+        java.util.Date current = new java.util.Date(localTime.toEpochSecond(zoneOffset) * 1000);
         long currentMillis = current.getTime() % MILLIS_PER_DAY;
 
         // java.util.Date - just copy
@@ -912,18 +933,21 @@ public class ValuesTest {
         assertEquals(currentDate, ts1);
 
         // java.util.Date as a Time - discard the date and keep the day's milliseconds
-        ts1 = Values.convertToTimestamp(Time.SCHEMA, currentMillis);
-        assertEquals(new java.util.Date(currentMillis), ts1);
+        java.util.Date ts2 = Values.convertToTimestamp(Time.SCHEMA, currentMillis);
+        assertEquals(new java.util.Date(currentMillis), ts2);
 
-        // ISO8601 strings - currently broken because tokenization breaks at colon
+        // ISO8601 strings - accept a string matching pattern "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+        java.util.Date ts3 = Values.convertToTime(Time.SCHEMA, localTime.format(DateTimeFormatter.ofPattern(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN)));
+        LocalDateTime time3 = LocalDateTime.ofInstant(Instant.ofEpochMilli(ts3.getTime()), ZoneId.systemDefault());
+        assertEquals(localTimeTruncated, time3);
 
         // Millis as string
-        java.util.Date ts3 = Values.convertToTimestamp(Timestamp.SCHEMA, Long.toString(current.getTime()));
-        assertEquals(current, ts3);
+        java.util.Date ts4 = Values.convertToTimestamp(Timestamp.SCHEMA, Long.toString(current.getTime()));
+        assertEquals(current, ts4);
 
         // Millis as long
-        java.util.Date ts4 = Values.convertToTimestamp(Timestamp.SCHEMA, current.getTime());
-        assertEquals(current, ts4);
+        java.util.Date ts5 = Values.convertToTimestamp(Timestamp.SCHEMA, current.getTime());
+        assertEquals(current, ts5);
     }
 
     @Test
@@ -965,25 +989,25 @@ public class ValuesTest {
 
     @Test
     public void shouldInferNoSchemaForEmptyList() {
-        Schema listSchema = Values.inferSchema(Collections.emptyList());
+        Schema listSchema = Values.inferSchema(List.of());
         assertNull(listSchema);
     }
 
     @Test
     public void shouldInferNoSchemaForListContainingObject() {
-        Schema listSchema = Values.inferSchema(Collections.singletonList(new Object()));
+        Schema listSchema = Values.inferSchema(List.of(new Object()));
         assertNull(listSchema);
     }
 
     @Test
     public void shouldInferNoSchemaForEmptyMap() {
-        Schema listSchema = Values.inferSchema(Collections.emptyMap());
+        Schema listSchema = Values.inferSchema(Map.of());
         assertNull(listSchema);
     }
 
     @Test
     public void shouldInferNoSchemaForMapContainingObject() {
-        Schema listSchema = Values.inferSchema(Collections.singletonMap(new Object(), new Object()));
+        Schema listSchema = Values.inferSchema(Map.of(new Object(), new Object()));
         assertNull(listSchema);
     }
 
@@ -993,7 +1017,7 @@ public class ValuesTest {
      */
     @Test
     public void shouldNotConvertArrayValuesToDecimal() {
-        List<Object> decimals = Arrays.asList("\"1.0\"", BigDecimal.valueOf(Long.MAX_VALUE).add(BigDecimal.ONE),
+        List<Object> decimals = List.of("\"1.0\"", BigDecimal.valueOf(Long.MAX_VALUE).add(BigDecimal.ONE),
                 BigDecimal.valueOf(Long.MIN_VALUE).subtract(BigDecimal.ONE), (byte) 1, (byte) 1);
         List<Object> expected = new ArrayList<>(decimals); // most values are directly reproduced with the same type
         expected.set(0, "1.0"); // The quotes are parsed away, but the value remains a string
@@ -1006,7 +1030,7 @@ public class ValuesTest {
 
     @Test
     public void shouldParseArrayOfOnlyDecimals() {
-        List<Object> decimals = Arrays.asList(BigDecimal.valueOf(Long.MAX_VALUE).add(BigDecimal.ONE),
+        List<Object> decimals = List.of(BigDecimal.valueOf(Long.MAX_VALUE).add(BigDecimal.ONE),
                 BigDecimal.valueOf(Long.MIN_VALUE).subtract(BigDecimal.ONE));
         SchemaAndValue schemaAndValue = Values.parseString(decimals.toString());
         Schema schema = schemaAndValue.schema();
@@ -1153,6 +1177,17 @@ public class ValuesTest {
         assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, 300.01f), Values.parseString("300.01"));
         assertEquals(new SchemaAndValue(Schema.INT32_SCHEMA, 66000), Values.parseString("66000.0"));
         assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, 66000.0008f), Values.parseString("66000.0008"));
+    }
+
+    @Test
+    public void avoidCpuAndMemoryIssuesConvertingExtremeBigDecimals() {
+        String parsingBig = "1e+100000000"; // new BigDecimal().setScale(0, RoundingMode.FLOOR) takes around two minutes and uses 3GB;
+        BigDecimal valueBig = new BigDecimal(parsingBig);
+        assertEquals(new SchemaAndValue(Decimal.schema(-100000000), valueBig), Values.parseString(parsingBig), "parsing number that's too big");
+
+        String parsingSmall = "1e-100000000";
+        BigDecimal valueSmall = new BigDecimal(parsingSmall);
+        assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, (float) valueSmall.doubleValue()), Values.parseString(parsingSmall), "parsing number that's too big, strictly this should return a bigdecimal");
     }
 
     protected void assertParsed(String input) {

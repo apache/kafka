@@ -29,6 +29,7 @@ import java.time.Duration;
  * @param <VIn> the type of input values
  * @param <VOut> the type of output values
  */
+@FunctionalInterface
 public interface FixedKeyProcessor<KIn, VIn, VOut> {
 
     /**

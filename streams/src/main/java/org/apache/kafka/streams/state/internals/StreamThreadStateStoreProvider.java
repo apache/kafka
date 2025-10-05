@@ -41,7 +41,7 @@ public class StreamThreadStateStoreProvider {
         this.streamThread = streamThread;
     }
 
-    @SuppressWarnings({"unchecked", "deprecation"})
+    @SuppressWarnings({"deprecation", "unchecked", "rawtypes"})
     public <T> List<T> stores(final StoreQueryParameters storeQueryParams) {
         final StreamThread.State state = streamThread.state();
         if (state == StreamThread.State.DEAD) {

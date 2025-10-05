@@ -17,16 +17,11 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Map;
 
 /**
- * Options for {@link Admin#incrementalAlterConfigs(Map)} and {@link Admin#alterConfigs(Map)}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
+ * Options for {@link Admin#incrementalAlterConfigs(Map)}.
  */
-@InterfaceStability.Evolving
 public class AlterConfigsOptions extends AbstractOptions<AlterConfigsOptions> {
 
     private boolean validateOnly = false;

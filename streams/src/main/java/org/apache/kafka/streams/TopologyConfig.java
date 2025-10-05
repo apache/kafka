@@ -34,6 +34,7 @@ import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.function.Supplier;
@@ -55,6 +56,8 @@ import static org.apache.kafka.streams.StreamsConfig.DESERIALIZATION_EXCEPTION_H
 import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_DEFAULT;
 import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_DOC;
+import static org.apache.kafka.streams.StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_DOC;
 import static org.apache.kafka.streams.StreamsConfig.IN_MEMORY;
 import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_DOC;
@@ -84,6 +87,28 @@ import static org.apache.kafka.streams.internals.StreamsConfigUtils.totalCacheSi
  */
 @SuppressWarnings("deprecation")
 public final class TopologyConfig extends AbstractConfig {
+
+    public static class InternalConfig {
+        // Cf https://issues.apache.org/jira/browse/KAFKA-19668
+        public static final String ENABLE_PROCESS_PROCESSVALUE_FIX = "__enable.process.processValue.fix__";
+
+        public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
+            final Object value = configs.getOrDefault(key, defaultValue);
+            if (value instanceof Boolean) {
+                return (boolean) value;
+            } else if (value instanceof String) {
+                return Boolean.parseBoolean((String) value);
+            } else {
+                log.warn(
+                    "Invalid value ({}) on internal configuration '{}'. Please specify a true/false value.",
+                    value,
+                    key
+                );
+                return defaultValue;
+            }
+        }
+    }
+
     private static final ConfigDef CONFIG;
     static {
         CONFIG = new ConfigDef()
@@ -142,7 +167,12 @@ public final class TopologyConfig extends AbstractConfig {
                 Type.CLASS,
                 DSL_STORE_SUPPLIERS_CLASS_DEFAULT,
                 Importance.LOW,
-                DSL_STORE_SUPPLIERS_CLASS_DOC);
+                DSL_STORE_SUPPLIERS_CLASS_DOC)
+            .define(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG,
+                Type.BOOLEAN,
+                false,
+                Importance.HIGH,
+                ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_DOC);
     }
     private static final Logger log = LoggerFactory.getLogger(TopologyConfig.class);
 
@@ -163,6 +193,8 @@ public final class TopologyConfig extends AbstractConfig {
     public final Supplier<TimestampExtractor> timestampExtractorSupplier;
     public final Supplier<DeserializationExceptionHandler> deserializationExceptionHandlerSupplier;
     public final Supplier<ProcessingExceptionHandler> processingExceptionHandlerSupplier;
+
+    public final boolean ensureExplicitInternalResourceNaming;
 
     public TopologyConfig(final StreamsConfig configs) {
         this(null, configs, mkObjectProperties(configs.originals()));
@@ -272,6 +304,8 @@ public final class TopologyConfig extends AbstractConfig {
         } else {
             dslStoreSuppliers = globalAppConfigs.getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
         }
+
+        ensureExplicitInternalResourceNaming = globalAppConfigs.getBoolean(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG);
     }
 
     @Deprecated

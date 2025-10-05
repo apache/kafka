@@ -17,17 +17,13 @@
 
 package org.apache.kafka.common.acl;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 
 import java.util.Objects;
 
 /**
  * A filter which can match AclBinding objects.
- *
- * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
-@InterfaceStability.Evolving
 public class AclBindingFilter {
     private final ResourcePatternFilter patternFilter;
     private final AccessControlEntryFilter entryFilter;

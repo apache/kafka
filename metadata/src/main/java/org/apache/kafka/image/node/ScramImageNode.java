@@ -23,7 +23,6 @@ import org.apache.kafka.metadata.ScramCredentialData;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Map;
 
 
@@ -58,6 +57,6 @@ public class ScramImageNode implements MetadataNode {
         ScramMechanism mechanism = ScramMechanism.fromMechanismName(name);
         if (mechanism.equals(ScramMechanism.UNKNOWN)) return null;
         Map<String, ScramCredentialData> userData = image.mechanisms().get(mechanism);
-        return new ScramMechanismNode(userData == null ? Collections.emptyMap() : userData);
+        return new ScramMechanismNode(userData == null ? Map.of() : userData);
     }
 }

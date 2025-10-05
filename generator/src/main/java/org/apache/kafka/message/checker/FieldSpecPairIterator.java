@@ -72,6 +72,7 @@ class FieldSpecPairIterator implements Iterator<FieldSpecPair> {
                                     "message2, but should not be, based on its versions.");
                         }
                     }
+                    field1 = iterator1.hasNext() ? iterator1.next() : null;
                     break;
                 }
                 case MESSAGE2_ONLY:

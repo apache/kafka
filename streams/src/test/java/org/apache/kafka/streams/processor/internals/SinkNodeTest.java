@@ -48,8 +48,8 @@ public class SinkNodeTest {
             new StaticTopicNameExtractor<>("any-output-topic"), anySerializer, anySerializer, null);
 
     // Used to verify that the correct exceptions are thrown if the compiler checks are bypassed
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private final SinkNode<Object, Object> illTypedSink = (SinkNode) sink;
+    @SuppressWarnings("unchecked")
+    private final SinkNode<Object, Object> illTypedSink = (SinkNode<Object, Object>) ((SinkNode<?, ?>) sink);
     private MockedStatic<WrappingNullableUtils> utilsMock;
 
     @BeforeEach
@@ -77,7 +77,7 @@ public class SinkNodeTest {
 
     @Test
     public void shouldThrowStreamsExceptionOnUndefinedKeySerde() {
-        utilsMock.when(() -> WrappingNullableUtils.prepareKeySerializer(any(), any(), any()))
+        utilsMock.when(() -> WrappingNullableUtils.prepareKeySerializer(any(), any()))
             .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
 
         final Throwable exception = assertThrows(StreamsException.class, () -> sink.init(context));
@@ -94,7 +94,7 @@ public class SinkNodeTest {
 
     @Test
     public void shouldThrowStreamsExceptionOnUndefinedValueSerde() {
-        utilsMock.when(() -> WrappingNullableUtils.prepareValueSerializer(any(), any(), any()))
+        utilsMock.when(() -> WrappingNullableUtils.prepareValueSerializer(any(), any()))
             .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG"));
 
         final Throwable exception = assertThrows(StreamsException.class, () -> sink.init(context));
@@ -111,7 +111,7 @@ public class SinkNodeTest {
 
     @Test
     public void shouldThrowStreamsExceptionWithExplicitErrorMessage() {
-        utilsMock.when(() -> WrappingNullableUtils.prepareKeySerializer(any(), any(), any())).thenThrow(new StreamsException(""));
+        utilsMock.when(() -> WrappingNullableUtils.prepareKeySerializer(any(), any())).thenThrow(new StreamsException(""));
 
         final Throwable exception = assertThrows(StreamsException.class, () -> sink.init(context));
 

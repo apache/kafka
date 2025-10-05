@@ -26,4 +26,9 @@ public abstract class AbstractTopicMetadataEvent extends CompletableApplicationE
     protected AbstractTopicMetadataEvent(final Type type, final long deadlineMs) {
         super(type, deadlineMs);
     }
+
+    @Override
+    public boolean requireSubscriptionMetadata() {
+        return true;
+    }
 }

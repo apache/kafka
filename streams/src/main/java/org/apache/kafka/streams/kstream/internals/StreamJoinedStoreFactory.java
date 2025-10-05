@@ -20,7 +20,6 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.JoinWindows;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.DslWindowParams;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -81,7 +80,7 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
     }
 
     @Override
-    public StateStore build() {
+    public StoreBuilder<?> builder() {
         final WindowBytesStoreSupplier supplier = storeSupplier == null
                 ? dslStoreSuppliers().windowStore(new DslWindowParams(
                         this.name,
@@ -106,7 +105,7 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
             builder.withLoggingDisabled();
         }
 
-        return builder.build();
+        return builder;
     }
 
     @Override
@@ -126,7 +125,7 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
     }
 
     @Override
-    public String name() {
+    public String storeName() {
         return name;
     }
 

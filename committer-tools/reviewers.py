@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import json
+import shlex
+import subprocess
+import tempfile
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -33,6 +37,43 @@ def prompt_for_user():
         clean_input = user_input.strip().lower()
         if clean_input != "":
             return clean_input
+
+
+def update_trailers(body, trailer):
+    with tempfile.NamedTemporaryFile() as fp:
+        fp.write(body.encode())
+        fp.flush()
+        cmd = f"git interpret-trailers --if-exists replace --trailer '{trailer}' {fp.name} "
+        p = subprocess.run(shlex.split(cmd), capture_output=True, text=True)
+        fp.close()
+
+    return p.stdout
+
+
+def append_message_to_pr_body(pr: int , message: str):
+    try:
+        pr_url = f"https://github.com/apache/kafka/pull/{pr}"
+        cmd_get_pr = f"gh pr view {pr_url} --json title,body"
+        result = subprocess.run(shlex.split(cmd_get_pr), capture_output=True, text=True, check=True)
+        current_pr_body = json.loads(result.stdout).get("body", {}).strip() + "\n"
+        pr_title = json.loads(result.stdout).get("title", {})
+        updated_pr_body = update_trailers(current_pr_body, message)
+    except subprocess.CalledProcessError as e:
+        print("Failed to retrieve PR body:", e.stderr)
+        return
+
+    print(f"""New PR body will be:\n\n---\n{updated_pr_body}---\n""")
+    choice = input(f'Update the body of "{pr_title}"? [Y/n] ').strip().lower()
+    if choice not in ['', 'y']:
+        print("Abort.")
+        return
+
+    try:
+        cmd_edit_body = f"gh pr edit {pr_url} --body {shlex.quote(updated_pr_body)}"
+        subprocess.run(shlex.split(cmd_edit_body), check=True)
+        print("PR body updated successfully!")
+    except subprocess.CalledProcessError as e:
+        print("Failed to update PR body:", e.stderr)
 
 
 if __name__ == "__main__":
@@ -87,9 +128,12 @@ if __name__ == "__main__":
             continue
 
     if selected_reviewers:
-        out = "\n\nReviewers: "
-        out += ", ".join([f"{name} <{email}>" for name, email, _ in selected_reviewers])
-        out += "\n"
-        print(out)
+        reviewer_message = "Reviewers: "
+        reviewer_message += ", ".join([f"{name} <{email}>" for name, email, _ in selected_reviewers])
+        print(f"\n\n{reviewer_message}\n")
 
-
+        try:
+            pr_number = int(input("\nPull Request (Ctrl+D or Ctrl+C to skip): "))
+            append_message_to_pr_body(pr_number, reviewer_message)
+        except (EOFError, KeyboardInterrupt):
+            exit(0)

@@ -175,8 +175,7 @@ public class LazyIndex<T extends AbstractIndex> implements Closeable {
             try {
                 if (indexWrapper instanceof IndexValue<?>)
                     return ((IndexValue<T>) indexWrapper).index;
-                else if (indexWrapper instanceof IndexFile) {
-                    IndexFile indexFile = (IndexFile) indexWrapper;
+                else if (indexWrapper instanceof IndexFile indexFile) {
                     IndexValue<T> indexValue = new IndexValue<>(loadIndex(indexFile.file));
                     indexWrapper = indexValue;
                     return indexValue.index;
@@ -236,14 +235,10 @@ public class LazyIndex<T extends AbstractIndex> implements Closeable {
 
     @SuppressWarnings("unchecked")
     private T loadIndex(File file) throws IOException {
-        switch (indexType) {
-            case OFFSET:
-                return (T) new OffsetIndex(file, baseOffset, maxIndexSize, true);
-            case TIME:
-                return (T) new TimeIndex(file, baseOffset, maxIndexSize, true);
-            default:
-                throw new IllegalStateException("Unexpected indexType " + indexType);
-        }
+        return switch (indexType) {
+            case OFFSET -> (T) new OffsetIndex(file, baseOffset, maxIndexSize, true);
+            case TIME -> (T) new TimeIndex(file, baseOffset, maxIndexSize, true);
+        };
     }
 
 }

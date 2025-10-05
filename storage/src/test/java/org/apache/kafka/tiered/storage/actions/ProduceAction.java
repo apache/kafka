@@ -35,7 +35,6 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageCondition.expectEvent;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.COPY_SEGMENT;
@@ -81,11 +80,11 @@ public final class ProduceAction implements TieredStorageTestAction {
                 .map(spec -> expectEvent(
                         tieredStorages,
                         COPY_SEGMENT,
-                        spec.getSourceBrokerId(),
-                        spec.getTopicPartition(),
-                        spec.getBaseOffset(),
+                        spec.sourceBrokerId(),
+                        spec.topicPartition(),
+                        spec.baseOffset(),
                         false))
-                .collect(Collectors.toList());
+                .toList();
 
         // Retrieve the offset of the next record which would be consumed from the topic-partition
         // before records are produced. This allows consuming only the newly produced records afterwards.
@@ -110,7 +109,7 @@ public final class ProduceAction implements TieredStorageTestAction {
         TopicSpec topicSpec = context.topicSpec(topicPartition.topic());
         long earliestLocalOffset = expectedEarliestLocalOffset != -1L ? expectedEarliestLocalOffset
                 : startOffset + recordsToProduce.size()
-                - (recordsToProduce.size() % topicSpec.getMaxBatchCountPerSegment()) - 1;
+                - (recordsToProduce.size() % topicSpec.maxBatchCountPerSegment()) - 1;
 
         for (BrokerLocalStorage localStorage : localStorages) {
             // Select brokers which are assigned a replica of the topic-partition
@@ -139,8 +138,8 @@ public final class ProduceAction implements TieredStorageTestAction {
                 tieredStorageRecords.subList((int) (startOffset - beginOffset), tieredStorageRecords.size());
 
         List<ProducerRecord<String, String>> producerRecords = offloadedSegmentSpecs.stream()
-                .flatMap(spec -> spec.getRecords().stream())
-                .collect(Collectors.toList());
+                .flatMap(spec -> spec.records().stream())
+                .toList();
         compareRecords(discoveredRecords, producerRecords, topicPartition);
     }
 

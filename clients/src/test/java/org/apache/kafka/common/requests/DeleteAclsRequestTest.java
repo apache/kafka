@@ -23,13 +23,13 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DeleteAclsRequestData;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 
 import org.junit.jupiter.api.Test;
 
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
@@ -63,39 +63,13 @@ public class DeleteAclsRequestTest {
     }
 
     @Test
-    public void shouldRoundTripLiteralV0() {
-        final DeleteAclsRequest original = new DeleteAclsRequest.Builder(requestData(LITERAL_FILTER)).build(V0);
-        final ByteBuffer buffer = original.serialize();
-
-        final DeleteAclsRequest result = DeleteAclsRequest.parse(buffer, V0);
-
-        assertRequestEquals(original, result);
-    }
-
-    @Test
-    public void shouldRoundTripAnyV0AsLiteral() {
-        final DeleteAclsRequest original = new DeleteAclsRequest.Builder(requestData(ANY_FILTER)).build(V0);
-        final DeleteAclsRequest expected = new DeleteAclsRequest.Builder(requestData(
-            new AclBindingFilter(new ResourcePatternFilter(
-                ANY_FILTER.patternFilter().resourceType(),
-                ANY_FILTER.patternFilter().name(),
-                PatternType.LITERAL),
-                ANY_FILTER.entryFilter()))
-        ).build(V0);
-
-        final DeleteAclsRequest result = DeleteAclsRequest.parse(original.serialize(), V0);
-
-        assertRequestEquals(expected, result);
-    }
-
-    @Test
     public void shouldRoundTripV1() {
         final DeleteAclsRequest original = new DeleteAclsRequest.Builder(
                 requestData(LITERAL_FILTER, PREFIXED_FILTER, ANY_FILTER)
         ).build(V1);
-        final ByteBuffer buffer = original.serialize();
+        final Readable readable = original.serialize();
 
-        final DeleteAclsRequest result = DeleteAclsRequest.parse(buffer, V1);
+        final DeleteAclsRequest result = DeleteAclsRequest.parse(readable, V1);
 
         assertRequestEquals(original, result);
     }

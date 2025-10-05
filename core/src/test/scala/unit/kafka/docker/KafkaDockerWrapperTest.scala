@@ -16,7 +16,7 @@
  */
 package kafka.docker
 
-import org.junit.jupiter.api.Assertions.{assertArrayEquals, assertEquals, assertThrows}
+import org.junit.jupiter.api.Assertions.{assertArrayEquals, assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 
 import java.nio.charset.StandardCharsets
@@ -150,31 +150,35 @@ class KafkaDockerWrapperTest {
       "KAFKA_LOG4J_ROOT_LOGLEVEL" -> "ERROR",
       "SOME_VARIABLE" -> "Some Value"
     )
-    val expected = "\n" + "log4j.rootLogger=ERROR, stdout" + "\n" +
-      "log4j.logger.kafka=INFO" + "\n" +
-      "log4j.logger.kafka.network.RequestChannel$=WARN" + "\n" +
-      "log4j.logger.kafka.producer.async.DefaultEventHandler=DEBUG"
 
-    val actual = KafkaDockerWrapper.getLog4jConfigsFromEnv(envVars)
-    assertEquals(expected, actual)
+    val kafkaLogger = new Logger
+    kafkaLogger.setName("kafka")
+    kafkaLogger.setLevel("INFO")
+
+    val requestChannelLogger = new Logger
+    requestChannelLogger.setName("kafka.network.RequestChannel$")
+    requestChannelLogger.setLevel("WARN")
+
+    val defaultEventHandlerLogger = new Logger
+    defaultEventHandlerLogger.setName("kafka.producer.async.DefaultEventHandler")
+    defaultEventHandlerLogger.setLevel("DEBUG")
+
+    val actual = KafkaDockerWrapper.getLog4j2ConfigsFromEnv(envVars)
+    assertEquals(List.apply(kafkaLogger, requestChannelLogger, defaultEventHandlerLogger), actual.toList)
   }
 
   @Test
   def testGetLog4jConfigsFromEnvInvalidEnvVariable(): Unit = {
     val envVars = Map("SOME_VARIABLE" -> "Some Value")
-    val expected = ""
-
-    val actual = KafkaDockerWrapper.getLog4jConfigsFromEnv(envVars)
-    assertEquals(expected, actual)
+    val actual = KafkaDockerWrapper.getLog4j2ConfigsFromEnv(envVars)
+    assertTrue(actual.isEmpty)
   }
 
   @Test
   def testGetLog4jConfigsFromEnvWithEmptyEnvVariable(): Unit = {
     val envVars = Map("SOME_VARIABLE" -> "Some Value", "KAFKA_LOG4J_LOGGERS" -> "", "KAFKA_LOG4J_ROOT_LOGLEVEL" -> "")
-    val expected = ""
-
-    val actual = KafkaDockerWrapper.getLog4jConfigsFromEnv(envVars)
-    assertEquals(expected, actual)
+    val actual = KafkaDockerWrapper.getLog4j2ConfigsFromEnv(envVars)
+    assertTrue(actual.isEmpty)
   }
 
   @Test
@@ -187,18 +191,26 @@ class KafkaDockerWrapperTest {
       "SOME_VARIABLE" -> "Some Value"
     )
 
-    Files.write(defaultConfigsPath.resolve("log4j.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(mountedConfigsPath.resolve("log4j.properties"), "mounted.config=mounted value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(finalConfigsPath.resolve("log4j.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(defaultConfigsPath.resolve("log4j2.yaml"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(mountedConfigsPath.resolve("log4j2.yaml"), "mounted.config=mounted value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("log4j2.yaml"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
 
-    KafkaDockerWrapper.prepareLog4jConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
+    KafkaDockerWrapper.prepareLog4j2Configs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
 
-    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/log4j.properties")
-    val actual = try source.mkString finally source.close()
-    val expected = "mounted.config=mounted value" + "\n" + "log4j.rootLogger=ERROR, stdout" + "\n" +
-      "log4j.logger.kafka=INFO" + "\n" +
-      "log4j.logger.kafka.network.RequestChannel$=WARN" + "\n" +
-      "log4j.logger.kafka.producer.async.DefaultEventHandler=DEBUG"
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/log4j2.yaml")
+    val actual = try source.mkString.trim finally source.close()
+    val expected =
+      """Configuration:
+        |  Loggers:
+        |    Root:
+        |      level: "ERROR"
+        |    Logger:
+        |    - name: "kafka"
+        |      level: "INFO"
+        |    - name: "kafka.network.RequestChannel$"
+        |      level: "WARN"
+        |    - name: "kafka.producer.async.DefaultEventHandler"
+        |      level: "DEBUG"""".stripMargin
 
     assertEquals(expected, actual)
   }
@@ -213,17 +225,47 @@ class KafkaDockerWrapperTest {
       "SOME_VARIABLE" -> "Some Value"
     )
 
-    Files.write(defaultConfigsPath.resolve("log4j.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(finalConfigsPath.resolve("log4j.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    val default =
+      """Configuration:
+        |  Appenders:
+        |    Console:
+        |      name: "Console"
+        |      target: "SYSTEM_OUT"
+        |      PatternLayout:
+        |        pattern: "123"
+        |  Loggers:
+        |    Root:
+        |      level: "123"
+        |    Logger:
+        |    - name: kafka
+        |      level: 123""".stripMargin
 
-    KafkaDockerWrapper.prepareLog4jConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
+    Files.write(defaultConfigsPath.resolve("log4j2.yaml"), default.getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("log4j2.yaml"), "".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
 
-    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/log4j.properties")
-    val actual = try source.mkString finally source.close()
-    val expected = "default.config=default value" + "\n" + "log4j.rootLogger=ERROR, stdout" + "\n" +
-      "log4j.logger.kafka=INFO" + "\n" +
-      "log4j.logger.kafka.network.RequestChannel$=WARN" + "\n" +
-      "log4j.logger.kafka.producer.async.DefaultEventHandler=DEBUG"
+    KafkaDockerWrapper.prepareLog4j2Configs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
+
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/log4j2.yaml")
+    val actual = try source.mkString.trim finally source.close()
+
+    val expected =
+      """Configuration:
+        |  Appenders:
+        |    Console:
+        |      name: "Console"
+        |      target: "SYSTEM_OUT"
+        |      PatternLayout:
+        |        pattern: "123"
+        |  Loggers:
+        |    Root:
+        |      level: "ERROR"
+        |    Logger:
+        |    - name: "kafka.network.RequestChannel$"
+        |      level: "WARN"
+        |    - name: "kafka.producer.async.DefaultEventHandler"
+        |      level: "DEBUG"
+        |    - name: "kafka"
+        |      level: "INFO"""".stripMargin
 
     assertEquals(expected, actual)
   }
@@ -234,41 +276,69 @@ class KafkaDockerWrapperTest {
 
     val envVars = Map.empty[String, String]
 
-    Files.write(defaultConfigsPath.resolve("log4j.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(mountedConfigsPath.resolve("log4j.properties"), "mounted.config=mounted value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(finalConfigsPath.resolve("log4j.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    val default =
+      """
+        |Configuration:
+        |  Appenders:
+        |    Console:
+        |      name: "Console"
+        |      target: "SYSTEM_OUT"
+        |      PatternLayout:
+        |        pattern: "123"
+        |  Loggers:
+        |    Root:
+        |      level: "123"
+        |    Logger:
+        |    - name: kafka
+        |      level: 123""".stripMargin
 
-    KafkaDockerWrapper.prepareLog4jConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
+    val mounted =
+      """Configuration:
+        |  Appenders:
+        |    Console:
+        |      name: "Console"
+        |      target: "SYSTEM_OUT"
+        |      PatternLayout:
+        |        pattern: "[%d] %p %m (%c)%n"
+        |  Loggers:
+        |    Root:
+        |      level: "ERROR"
+        |    Logger:
+        |    - name: "kafka"
+        |      level: "DEBUG"""".stripMargin
 
-    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/log4j.properties")
-    val actual = try source.mkString finally source.close()
-    val expected = "mounted.config=mounted value"
+    Files.write(defaultConfigsPath.resolve("log4j2.yaml"), default.getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(mountedConfigsPath.resolve("log4j2.yaml"), mounted.getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("log4j2.yaml"), "".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
 
-    assertEquals(expected, actual)
+    KafkaDockerWrapper.prepareLog4j2Configs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
+
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/log4j2.yaml")
+    val actual = try source.mkString.trim finally source.close()
+
+    assertEquals(mounted, actual)
   }
 
   @Test
   def testGetToolsLog4jConfigsFromEnv(): Unit = {
     val envVars = Map("KAFKA_TOOLS_LOG4J_LOGLEVEL" -> "TRACE", "SOME_VARIABLE" -> "Some Value")
-    val expected = "\n" + "log4j.rootLogger=TRACE, stderr"
-    val actual = KafkaDockerWrapper.getToolsLog4jConfigsFromEnv(envVars)
-    assertEquals(expected, actual)
+    val actual = KafkaDockerWrapper.getToolsLog4j2ConfigsFromEnv(envVars)
+    assertTrue(actual.isDefined)
+    assertEquals(actual.get.getLevel, "TRACE")
   }
 
   @Test
   def testGetToolsLog4jConfigsFromEnvInvalidEnvVariable(): Unit = {
     val envVars = Map("SOME_VARIABLE" -> "Some Value")
-    val expected = ""
-    val actual = KafkaDockerWrapper.getToolsLog4jConfigsFromEnv(envVars)
-    assertEquals(expected, actual)
+    val actual = KafkaDockerWrapper.getToolsLog4j2ConfigsFromEnv(envVars)
+    assertTrue(actual.isEmpty)
   }
 
   @Test
   def testGetToolsLog4jConfigsFromEnvWithEmptyEnvVariable(): Unit = {
     val envVars = Map("SOME_VARIABLE" -> "Some Value", "KAFKA_TOOLS_LOG4J_LOGLEVEL" -> "")
-    val expected = ""
-    val actual = KafkaDockerWrapper.getToolsLog4jConfigsFromEnv(envVars)
-    assertEquals(expected, actual)
+    val actual = KafkaDockerWrapper.getToolsLog4j2ConfigsFromEnv(envVars)
+    assertTrue(actual.isEmpty)
   }
 
   @Test
@@ -276,16 +346,59 @@ class KafkaDockerWrapperTest {
     val (defaultConfigsPath, mountedConfigsPath, finalConfigsPath) = createDirs()
 
     val envVars = Map("KAFKA_TOOLS_LOG4J_LOGLEVEL" -> "TRACE")
+    val default =
+      """
+        |Configuration:
+        |  Appenders:
+        |    Console:
+        |      name: "Console"
+        |      target: "SYSTEM_OUT"
+        |      PatternLayout:
+        |        pattern: "123"
+        |  Loggers:
+        |    Root:
+        |      level: "123"
+        |    Logger:
+        |    - name: kafka
+        |      level: 123""".stripMargin
 
-    Files.write(defaultConfigsPath.resolve("tools-log4j.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(mountedConfigsPath.resolve("tools-log4j.properties"), "mounted.config=mounted value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(finalConfigsPath.resolve("tools-log4j.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    val mounted =
+      """Configuration:
+        |  Appenders:
+        |    Console:
+        |      name: "Console"
+        |      target: "SYSTEM_OUT"
+        |      PatternLayout:
+        |        pattern: "[%d] %p %m (%c)%n"
+        |  Loggers:
+        |    Root:
+        |      level: "ERROR"
+        |    Logger:
+        |    - name: "kafka"
+        |      level: "DEBUG"""".stripMargin
 
-    KafkaDockerWrapper.prepareToolsLog4jConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
+    Files.write(defaultConfigsPath.resolve("tools-log4j2.yaml"), default.getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(mountedConfigsPath.resolve("tools-log4j2.yaml"), mounted.getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("tools-log4j2.yaml"), "".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
 
-    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/tools-log4j.properties")
-    val actual = try source.mkString finally source.close()
-    val expected = "mounted.config=mounted value" + "\n" + "log4j.rootLogger=TRACE, stderr"
+    KafkaDockerWrapper.prepareToolsLog4j2Configs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
+
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/tools-log4j2.yaml")
+    val actual = try source.mkString.trim finally source.close()
+    val expected =
+      """Configuration:
+        |  Appenders:
+        |    Console:
+        |      name: "Console"
+        |      target: "SYSTEM_OUT"
+        |      PatternLayout:
+        |        pattern: "[%d] %p %m (%c)%n"
+        |  Loggers:
+        |    Root:
+        |      level: "TRACE"
+        |    Logger:
+        |    - name: "kafka"
+        |      level: "DEBUG"""".stripMargin
 
     assertEquals(expected, actual)
   }
@@ -296,14 +409,18 @@ class KafkaDockerWrapperTest {
 
     val envVars = Map("KAFKA_TOOLS_LOG4J_LOGLEVEL" -> "TRACE")
 
-    Files.write(defaultConfigsPath.resolve("tools-log4j.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(finalConfigsPath.resolve("tools-log4j.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(defaultConfigsPath.resolve("tools-log4j2.yaml"), "".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("tools-log4j2.yaml"), "".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
 
-    KafkaDockerWrapper.prepareToolsLog4jConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
+    KafkaDockerWrapper.prepareToolsLog4j2Configs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
 
-    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/tools-log4j.properties")
-    val actual = try source.mkString finally source.close()
-    val expected = "default.config=default value" + "\n" + "log4j.rootLogger=TRACE, stderr"
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/tools-log4j2.yaml")
+    val actual = try source.mkString.trim finally source.close()
+    val expected =
+      """Configuration:
+        |  Loggers:
+        |    Root:
+        |      level: "TRACE"""".stripMargin
 
     assertEquals(expected, actual)
   }
@@ -313,18 +430,47 @@ class KafkaDockerWrapperTest {
     val (defaultConfigsPath, mountedConfigsPath, finalConfigsPath) = createDirs()
 
     val envVars = Map.empty[String, String]
+    val default =
+      """
+        |Configuration:
+        |  Appenders:
+        |    Console:
+        |      name: "Console"
+        |      target: "SYSTEM_OUT"
+        |      PatternLayout:
+        |        pattern: "123"
+        |  Loggers:
+        |    Root:
+        |      level: "123"
+        |    Logger:
+        |    - name: kafka
+        |      level: 123""".stripMargin
 
-    Files.write(defaultConfigsPath.resolve("tools-log4j.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(mountedConfigsPath.resolve("tools-log4j.properties"), "mounted.config=mounted value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(finalConfigsPath.resolve("tools-log4j.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    val mounted =
+      """Configuration:
+        |  Appenders:
+        |    Console:
+        |      name: "Console"
+        |      target: "SYSTEM_OUT"
+        |      PatternLayout:
+        |        pattern: "[%d] %p %m (%c)%n"
+        |  Loggers:
+        |    Root:
+        |      level: "ERROR"
+        |    Logger:
+        |    - name: "kafka"
+        |      level: "DEBUG"""".stripMargin
 
-    KafkaDockerWrapper.prepareToolsLog4jConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
+    Files.write(defaultConfigsPath.resolve("tools-log4j2.yaml"), default.getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(mountedConfigsPath.resolve("tools-log4j2.yaml"), mounted.getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("tools-log4j2.yaml"), "".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
 
-    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/tools-log4j.properties")
-    val actual = try source.mkString finally source.close()
-    val expected = "mounted.config=mounted value"
+    KafkaDockerWrapper.prepareToolsLog4j2Configs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
 
-    assertEquals(expected, actual)
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/tools-log4j2.yaml")
+    val actual = try source.mkString.trim finally source.close()
+
+    assertEquals(mounted, actual)
   }
 
   private def createDirs(): (Path, Path, Path) = {

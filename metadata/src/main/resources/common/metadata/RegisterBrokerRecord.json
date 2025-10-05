@@ -57,7 +57,7 @@
       "about": "True if the broker is fenced." },
     { "name": "InControlledShutdown", "type": "bool", "versions": "1+", "default": "false",
       "about": "True if the broker is in controlled shutdown." },
-    { "name": "LogDirs", "type":  "[]uuid", "versions":  "3+", "taggedVersions": "3+", "tag": "0",
+    { "name": "LogDirs", "type":  "[]uuid", "versions":  "3+", "taggedVersions": "3+", "tag": 0,
       "about": "Log directories configured in this broker which are available." }
   ]
 }

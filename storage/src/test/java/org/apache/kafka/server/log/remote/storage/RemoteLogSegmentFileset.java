@@ -219,7 +219,7 @@ public final class RemoteLogSegmentFileset {
     public List<Record> getRecords() throws IOException {
         return StreamSupport
                 .stream(FileRecords.open(files.get(SEGMENT)).records().spliterator(), false)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public void copy(final Transferer transferer, final LogSegmentData data) throws IOException {
@@ -245,7 +245,7 @@ public final class RemoteLogSegmentFileset {
         final Optional<File> notAFile = files.stream().filter(f -> f.exists() && !f.isFile()).findAny();
 
         if (notAFile.isPresent()) {
-            LOGGER.warn(format("Found unexpected directory %s. Will not delete.", notAFile.get().getAbsolutePath()));
+            LOGGER.warn("Found unexpected directory {}. Will not delete.", notAFile.get().getAbsolutePath());
             return false;
         }
 
@@ -254,13 +254,13 @@ public final class RemoteLogSegmentFileset {
 
     public static boolean deleteQuietly(final File file) {
         try {
-            LOGGER.trace("Deleting " + file.getAbsolutePath());
+            LOGGER.trace("Deleting {}", file.getAbsolutePath());
             if (!file.exists()) {
                 return true;
             }
             return file.delete();
         } catch (final Exception e) {
-            LOGGER.error(format("Encountered error while deleting %s", file.getAbsolutePath()));
+            LOGGER.error("Encountered error while deleting {}", file.getAbsolutePath(), e);
         }
 
         return false;

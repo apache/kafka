@@ -27,7 +27,6 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 
 import java.time.Duration;
@@ -49,11 +48,8 @@ public class ShutdownDeadlockTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> source = builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()));
 
-        source.foreach(new ForeachAction<String, String>() {
-            @Override
-            public void apply(final String key, final String value) {
-                throw new RuntimeException("KABOOM!");
-            }
+        source.foreach((key, value) -> {
+            throw new RuntimeException("KABOOM!");
         });
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         streams.setUncaughtExceptionHandler(e -> {

@@ -20,7 +20,6 @@ package kafka.security.authorizer
 import java.net.InetAddress
 import java.util.UUID
 import kafka.server.KafkaConfig
-import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.common.acl.AclOperation.{ALL, READ, WRITE}
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation}
@@ -50,7 +49,6 @@ trait BaseAuthorizerTest {
   val requestContext: RequestContext = newRequestContext(principal, InetAddress.getByName("192.168.0.1"))
   val superUserName = "superuser1"
   var config: KafkaConfig = _
-  var zooKeeperClient: ZooKeeperClient = _
   var resource: ResourcePattern = _
 
   @Test

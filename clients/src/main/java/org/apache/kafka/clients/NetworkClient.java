@@ -1047,14 +1047,13 @@ public class NetworkClient implements KafkaClient {
         NodeApiVersions nodeVersionInfo = new NodeApiVersions(
             apiVersionsResponse.data().apiKeys(),
             apiVersionsResponse.data().supportedFeatures(),
-            apiVersionsResponse.data().zkMigrationReady(),
             apiVersionsResponse.data().finalizedFeatures(),
             apiVersionsResponse.data().finalizedFeaturesEpoch());
         apiVersions.update(node, nodeVersionInfo);
         this.connectionStates.ready(node);
-        log.debug("Node {} has finalized features epoch: {}, finalized features: {}, supported features: {}, ZK migration ready: {}, API versions: {}.",
+        log.debug("Node {} has finalized features epoch: {}, finalized features: {}, supported features: {}, API versions: {}.",
                 node, apiVersionsResponse.data().finalizedFeaturesEpoch(), apiVersionsResponse.data().finalizedFeatures(),
-                apiVersionsResponse.data().supportedFeatures(), apiVersionsResponse.data().zkMigrationReady(), nodeVersionInfo);
+                apiVersionsResponse.data().supportedFeatures(), nodeVersionInfo);
     }
 
     /**
@@ -1219,7 +1218,7 @@ public class NetworkClient implements KafkaClient {
                 return metadataTimeout;
             }
 
-            if (!metadataAttemptStartMs.isPresent())
+            if (metadataAttemptStartMs.isEmpty())
                 metadataAttemptStartMs = Optional.of(now);
 
             // Beware that the behavior of this method and the computation of timeouts for poll() are
@@ -1412,7 +1411,7 @@ public class NetworkClient implements KafkaClient {
             if (canSendRequest(nodeConnectionId, now)) {
                 Optional<AbstractRequest.Builder<?>> requestOpt = clientTelemetrySender.createRequest();
 
-                if (!requestOpt.isPresent())
+                if (requestOpt.isEmpty())
                     return Long.MAX_VALUE;
 
                 AbstractRequest.Builder<?> request = requestOpt.get();

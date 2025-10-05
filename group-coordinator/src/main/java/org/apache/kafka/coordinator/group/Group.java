@@ -37,6 +37,7 @@ public interface Group {
         CONSUMER("consumer"),
         CLASSIC("classic"),
         SHARE("share"),
+        STREAMS("streams"),
         UNKNOWN("unknown");
 
         private final String name;
@@ -116,7 +117,7 @@ public interface Group {
         String groupInstanceId,
         int generationIdOrMemberEpoch,
         boolean isTransactional,
-        short apiVersion
+        int apiVersion
 
     ) throws KafkaException;
 
@@ -194,4 +195,18 @@ public interface Group {
      * @return The number of members.
      */
     int numMembers();
+
+    /**
+     * Requests a metadata refresh.
+     */
+    void requestMetadataRefresh();
+
+    /**
+     * Returns whether this group should be expired or not.
+     *
+     * @return whether the group should be expired.
+     */
+    default boolean shouldExpire() {
+        return true;
+    }
 }

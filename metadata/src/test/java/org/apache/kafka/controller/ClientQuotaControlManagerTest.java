@@ -68,7 +68,7 @@ public class ClientQuotaControlManagerTest {
         assertInvalidEntity(manager, entity(ClientQuotaEntity.CLIENT_ID, "user-1", ClientQuotaEntity.IP, "1.2.3.4"));
 
         // Empty
-        assertInvalidEntity(manager, new ClientQuotaEntity(Collections.emptyMap()));
+        assertInvalidEntity(manager, new ClientQuotaEntity(Map.of()));
     }
 
     private void assertInvalidEntity(ClientQuotaControlManager manager, ClientQuotaEntity entity) {
@@ -323,8 +323,8 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEntityTypeWithUser() {
-        testConfigKeysForEntityType(Collections.singletonList(ClientQuotaEntity.USER),
-            Arrays.asList(
+        testConfigKeysForEntityType(List.of(ClientQuotaEntity.USER),
+            List.of(
                 "producer_byte_rate",
                 "consumer_byte_rate",
                 "controller_mutation_rate",
@@ -334,8 +334,8 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEntityTypeWithClientId() {
-        testConfigKeysForEntityType(Collections.singletonList(ClientQuotaEntity.CLIENT_ID),
-            Arrays.asList(
+        testConfigKeysForEntityType(List.of(ClientQuotaEntity.CLIENT_ID),
+            List.of(
                 "producer_byte_rate",
                 "consumer_byte_rate",
                 "controller_mutation_rate",
@@ -345,8 +345,8 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEntityTypeWithUserAndClientId() {
-        testConfigKeysForEntityType(Arrays.asList(ClientQuotaEntity.CLIENT_ID, ClientQuotaEntity.USER),
-            Arrays.asList(
+        testConfigKeysForEntityType(List.of(ClientQuotaEntity.CLIENT_ID, ClientQuotaEntity.USER),
+            List.of(
                 "producer_byte_rate",
                 "consumer_byte_rate",
                 "controller_mutation_rate",
@@ -356,8 +356,8 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEntityTypeWithIp() {
-        testConfigKeysForEntityType(Collections.singletonList(ClientQuotaEntity.IP),
-            Collections.singletonList(
+        testConfigKeysForEntityType(List.of(ClientQuotaEntity.IP),
+            List.of(
                 "connection_creation_rate"
             ));
     }
@@ -386,20 +386,20 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEmptyEntity() {
-        testConfigKeysError(Collections.emptyList(),
+        testConfigKeysError(List.of(),
             new ApiError(Errors.INVALID_REQUEST, "Invalid empty client quota entity"));
     }
 
     @Test
     public void testConfigKeysForEntityTypeWithIpAndUser() {
-        testConfigKeysError(Arrays.asList(ClientQuotaEntity.IP, ClientQuotaEntity.USER),
+        testConfigKeysError(List.of(ClientQuotaEntity.IP, ClientQuotaEntity.USER),
             new ApiError(Errors.INVALID_REQUEST, "Invalid quota entity combination, IP entity should" +
                 "not be combined with User or ClientId"));
     }
 
     @Test
     public void testConfigKeysForEntityTypeWithIpAndClientId() {
-        testConfigKeysError(Arrays.asList(ClientQuotaEntity.IP, ClientQuotaEntity.CLIENT_ID),
+        testConfigKeysError(List.of(ClientQuotaEntity.IP, ClientQuotaEntity.CLIENT_ID),
             new ApiError(Errors.INVALID_REQUEST, "Invalid quota entity combination, IP entity should" +
                 "not be combined with User or ClientId"));
     }
@@ -410,7 +410,7 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForUnresolvableIpEntity() {
-        testConfigKeysError(Collections.singletonMap(ClientQuotaEntity.IP, "example.invalid"),
+        testConfigKeysError(Map.of(ClientQuotaEntity.IP, "example.invalid"),
             new ApiError(Errors.INVALID_REQUEST, "example.invalid is not a valid IP or resolvable host."));
     }
 
@@ -427,7 +427,7 @@ public class ClientQuotaControlManagerTest {
     static {
         VALID_CLIENT_ID_QUOTA_KEYS = new HashMap<>();
         assertEquals(ApiError.NONE, ClientQuotaControlManager.configKeysForEntityType(
-                keysToEntity(Collections.singletonList(ClientQuotaEntity.CLIENT_ID)), VALID_CLIENT_ID_QUOTA_KEYS));
+                keysToEntity(List.of(ClientQuotaEntity.CLIENT_ID)), VALID_CLIENT_ID_QUOTA_KEYS));
     }
 
     @Test

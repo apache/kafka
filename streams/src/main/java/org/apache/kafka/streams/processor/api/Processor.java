@@ -30,6 +30,7 @@ import java.time.Duration;
  * @param <KOut> the type of output keys
  * @param <VOut> the type of output values
  */
+@FunctionalInterface
 public interface Processor<KIn, VIn, KOut, VOut> {
 
     /**

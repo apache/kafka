@@ -27,7 +27,6 @@ import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -44,15 +43,13 @@ public class ListOffsetsTest extends TieredStorageTestHarness {
 
     /**
      * We are running this test only for the Kraft mode, since ZK mode is deprecated now. Note that:
-     * 1. In ZK mode, the leader-epoch gets bumped during reassignment (0 -> 1 -> 2) and leader-election (2 -> 3).
-     * 2. In Kraft mode, the leader-epoch gets bumped only for leader-election (0 -> 1) and not for reassignment.
-     * @param quorum The quorum to use for the test.
+     * 1. In Kraft mode, the leader-epoch gets bumped only for leader-election (0 -> 1) and not for reassignment.
      */
-    @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
-    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    @ParameterizedTest(name = "{displayName}.groupProtocol={0}")
+    @MethodSource("getTestGroupProtocolParametersAll")
     @Override
-    public void executeTieredStorageTest(String quorum, String groupProtocol) {
-        super.executeTieredStorageTest(quorum, groupProtocol);
+    public void executeTieredStorageTest(String groupProtocol) {
+        super.executeTieredStorageTest(groupProtocol);
     }
 
     @Override
@@ -63,7 +60,7 @@ public class ListOffsetsTest extends TieredStorageTestHarness {
         final int p0 = 0;
         final Time time = new MockTime();
         final long timestamp = time.milliseconds();
-        final Map<Integer, List<Integer>> assignment = mkMap(mkEntry(p0, Arrays.asList(broker0, broker1)));
+        final Map<Integer, List<Integer>> assignment = mkMap(mkEntry(p0, List.of(broker0, broker1)));
 
         builder
                 .createTopic(topicA, 1, 2, 2, assignment, true)
@@ -78,7 +75,7 @@ public class ListOffsetsTest extends TieredStorageTestHarness {
                         new KeyValueSpec("k2", "v2", timestamp + 2))
 
                 // switch leader and send more records to partition 0 and expect the second segment to be offloaded.
-                .reassignReplica(topicA, p0, Arrays.asList(broker1, broker0))
+                .reassignReplica(topicA, p0, List.of(broker1, broker0))
                 // After leader election, the partition's leader-epoch gets bumped from 0 -> 1
                 .expectLeader(topicA, p0, broker1, true)
                 .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 4L)

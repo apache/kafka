@@ -18,6 +18,7 @@
 package org.apache.kafka.common.message;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Schema;
 
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,8 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -58,22 +61,28 @@ public class ApiMessageTypeTest {
         Set<Short> ids = new HashSet<>();
         Set<String> requestNames = new HashSet<>();
         Set<String> responseNames = new HashSet<>();
+        int apiKeysWithNoValidVersionCount = 0;
         for (ApiMessageType type : ApiMessageType.values()) {
             assertFalse(ids.contains(type.apiKey()),
                 "found two ApiMessageType objects with id " + type.apiKey());
             ids.add(type.apiKey());
-            String requestName = type.newRequest().getClass().getSimpleName();
-            assertFalse(requestNames.contains(requestName),
-                "found two ApiMessageType objects with requestName " + requestName);
-            requestNames.add(requestName);
-            String responseName = type.newResponse().getClass().getSimpleName();
-            assertFalse(responseNames.contains(responseName),
-                "found two ApiMessageType objects with responseName " + responseName);
-            responseNames.add(responseName);
+            ApiKeys apiKey = ApiKeys.forId(type.apiKey());
+            if (apiKey.hasValidVersion()) {
+                String requestName = type.newRequest().getClass().getSimpleName();
+                assertFalse(requestNames.contains(requestName),
+                        "found two ApiMessageType objects with requestName " + requestName);
+                requestNames.add(requestName);
+                String responseName = type.newResponse().getClass().getSimpleName();
+                assertFalse(responseNames.contains(responseName),
+                        "found two ApiMessageType objects with responseName " + responseName);
+                responseNames.add(responseName);
+            } else
+                ++apiKeysWithNoValidVersionCount;
         }
         assertEquals(ApiMessageType.values().length, ids.size());
-        assertEquals(ApiMessageType.values().length, requestNames.size());
-        assertEquals(ApiMessageType.values().length, responseNames.size());
+        int expectedNamesCount = ApiMessageType.values().length - apiKeysWithNoValidVersionCount;
+        assertEquals(expectedNamesCount, requestNames.size());
+        assertEquals(expectedNamesCount, responseNames.size());
     }
 
     @Test
@@ -84,12 +93,6 @@ public class ApiMessageTypeTest {
         assertEquals((short) 1, ApiMessageType.PRODUCE.requestHeaderVersion((short) 1));
         assertEquals((short) 0, ApiMessageType.PRODUCE.responseHeaderVersion((short) 1));
 
-        assertEquals((short) 0, ApiMessageType.CONTROLLED_SHUTDOWN.requestHeaderVersion((short) 0));
-        assertEquals((short) 0, ApiMessageType.CONTROLLED_SHUTDOWN.responseHeaderVersion((short) 0));
-
-        assertEquals((short) 1, ApiMessageType.CONTROLLED_SHUTDOWN.requestHeaderVersion((short) 1));
-        assertEquals((short) 0, ApiMessageType.CONTROLLED_SHUTDOWN.responseHeaderVersion((short) 1));
-
         assertEquals((short) 1, ApiMessageType.CREATE_TOPICS.requestHeaderVersion((short) 4));
         assertEquals((short) 0, ApiMessageType.CREATE_TOPICS.responseHeaderVersion((short) 4));
 
@@ -97,21 +100,37 @@ public class ApiMessageTypeTest {
         assertEquals((short) 1, ApiMessageType.CREATE_TOPICS.responseHeaderVersion((short) 5));
     }
 
-    /**
-     * Kafka currently supports direct upgrades from 0.8 to the latest version. As such, it has to support all apis
-     * starting from version 0 and we must have schemas from the oldest version to the latest.
-     */
+    @Test
+    public void testHeaderVersionWithNoValidVersion() {
+        for (ApiMessageType messageType : ApiMessageType.values()) {
+            if (messageType.lowestSupportedVersion() > messageType.highestSupportedVersion(true)) {
+                assertThrows(UnsupportedVersionException.class, () -> messageType.requestHeaderVersion((short) 0));
+                assertThrows(UnsupportedVersionException.class, () -> messageType.responseHeaderVersion((short) 0));
+            }
+        }
+    }
+
     @Test
     public void testAllVersionsHaveSchemas() {
         for (ApiMessageType type : ApiMessageType.values()) {
-            assertEquals(0, type.lowestSupportedVersion());
+            assertTrue(type.lowestSupportedVersion() >= 0);
 
             assertEquals(type.requestSchemas().length, type.responseSchemas().length,
                     "request and response schemas must be the same length for " + type.name());
-            for (Schema schema : type.requestSchemas())
-                assertNotNull(schema);
-            for (Schema schema : type.responseSchemas())
-                assertNotNull(schema);
+            for (int i = 0; i < type.requestSchemas().length; ++i) {
+                Schema schema = type.requestSchemas()[i];
+                if (i >= type.lowestSupportedVersion())
+                    assertNotNull(schema);
+                else
+                    assertNull(schema);
+            }
+            for (int i = 0; i < type.responseSchemas().length; ++i) {
+                Schema schema = type.responseSchemas()[i];
+                if (i >= type.lowestSupportedVersion())
+                    assertNotNull(schema);
+                else
+                    assertNull(schema);
+            }
 
             assertEquals(type.highestSupportedVersion(true) + 1, type.requestSchemas().length);
         }

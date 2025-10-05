@@ -18,8 +18,8 @@ package org.apache.kafka.connect.runtime.rest.entities;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -43,7 +43,7 @@ public class ConnectorOffsetsTest {
         offset2.put("offset", new byte[]{0x00, 0x1A});
         ConnectorOffset connectorOffset2 = new ConnectorOffset(partition2, offset2);
 
-        ConnectorOffsets connectorOffsets = new ConnectorOffsets(Arrays.asList(connectorOffset1, connectorOffset2));
+        ConnectorOffsets connectorOffsets = new ConnectorOffsets(List.of(connectorOffset1, connectorOffset2));
         Map<Map<String, ?>, Map<String, ?>> connectorOffsetsMap = connectorOffsets.toMap();
         assertEquals(2, connectorOffsetsMap.size());
         assertEquals(offset1, connectorOffsetsMap.get(partition1));

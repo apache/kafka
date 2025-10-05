@@ -18,6 +18,9 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.common.TopicPartition;
+
+import java.time.Duration;
 
 /**
  * Event to check if all assigned partitions have fetch positions. If there are positions missing, it will fetch
@@ -31,5 +34,16 @@ public class CheckAndUpdatePositionsEvent extends CompletableApplicationEvent<Bo
 
     public CheckAndUpdatePositionsEvent(long deadlineMs) {
         super(Type.CHECK_AND_UPDATE_POSITIONS, deadlineMs);
+    }
+
+    /**
+     * Indicates that this event requires subscription metadata to be present
+     * for its execution. This is used to ensure that metadata errors are
+     * handled correctly during the {@link org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer#poll(Duration) poll} 
+     * or {@link org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer#position(TopicPartition) position} process.
+     */
+    @Override
+    public boolean requireSubscriptionMetadata() {
+        return true;
     }
 }

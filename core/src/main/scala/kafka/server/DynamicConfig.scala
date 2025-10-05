@@ -19,11 +19,9 @@ package kafka.server
 
 import kafka.server.DynamicBrokerConfig.AllDynamicConfigs
 
-import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 import org.apache.kafka.common.config.ConfigDef
-import org.apache.kafka.coordinator.group.GroupConfig
-import org.apache.kafka.server.config.{QuotaConfig, ZooKeeperInternals}
+import org.apache.kafka.server.config.QuotaConfig 
 
 import java.util
 import scala.jdk.CollectionConverters._
@@ -55,58 +53,6 @@ object DynamicConfig {
     def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(brokerConfigs, props, customPropsAllowed = true)
   }
 
-  object Client {
-    private val clientConfigs = QuotaConfig.userAndClientQuotaConfigs()
-
-    def configKeys: util.Map[String, ConfigDef.ConfigKey] = clientConfigs.configKeys
-
-    def names: util.Set[String] = clientConfigs.names
-
-    def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(clientConfigs, props, customPropsAllowed = false)
-  }
-
-  object User {
-    private val userConfigs = QuotaConfig.scramMechanismsPlusUserAndClientQuotaConfigs()
-
-    def configKeys: util.Map[String, ConfigDef.ConfigKey] = userConfigs.configKeys
-
-    def names: util.Set[String] = userConfigs.names
-
-    def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(userConfigs, props, customPropsAllowed = false)
-  }
-
-  object Ip {
-    private val ipConfigs = QuotaConfig.ipConfigs
-
-    def configKeys: util.Map[String, ConfigDef.ConfigKey] = ipConfigs.configKeys
-
-    def names: util.Set[String] = ipConfigs.names
-
-    def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(ipConfigs, props, customPropsAllowed = false)
-
-    def isValidIpEntity(ip: String): Boolean = {
-      if (ip != ZooKeeperInternals.DEFAULT_STRING) {
-        try {
-          InetAddress.getByName(ip)
-        } catch {
-          case _: UnknownHostException => return false
-        }
-      }
-      true
-    }
-  }
-
-  object ClientMetrics {
-    private val clientConfigs = org.apache.kafka.server.metrics.ClientMetricsConfigs.configDef()
-
-    def names: util.Set[String] = clientConfigs.names
-  }
-
-  object Group {
-    private val groupConfigs = GroupConfig.configDef()
-
-    def names: util.Set[String] = groupConfigs.names
-  }
 
   private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean) = {
     // Validate Names

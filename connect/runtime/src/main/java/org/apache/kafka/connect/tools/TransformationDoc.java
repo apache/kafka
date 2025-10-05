@@ -34,25 +34,14 @@ import org.apache.kafka.connect.transforms.TimestampConverter;
 import org.apache.kafka.connect.transforms.TimestampRouter;
 import org.apache.kafka.connect.transforms.ValueToKey;
 
-import java.io.PrintStream;
-import java.util.Arrays;
 import java.util.List;
 
 public class TransformationDoc {
 
-    private static final class DocInfo {
-        final String transformationName;
-        final String overview;
-        final ConfigDef configDef;
-
-        private DocInfo(String transformationName, String overview, ConfigDef configDef) {
-            this.transformationName = transformationName;
-            this.overview = overview;
-            this.configDef = configDef;
-        }
+    private record DocInfo(String transformationName, String overview, ConfigDef configDef) {
     }
 
-    private static final List<DocInfo> TRANSFORMATIONS = Arrays.asList(
+    private static final List<DocInfo> TRANSFORMATIONS = List.of(
             new DocInfo(Cast.class.getName(), Cast.OVERVIEW_DOC, Cast.CONFIG_DEF),
             new DocInfo(DropHeaders.class.getName(), DropHeaders.OVERVIEW_DOC, DropHeaders.CONFIG_DEF),
             new DocInfo(ExtractField.class.getName(), ExtractField.OVERVIEW_DOC, ExtractField.CONFIG_DEF),
@@ -71,30 +60,23 @@ public class TransformationDoc {
             new DocInfo(ValueToKey.class.getName(), ValueToKey.OVERVIEW_DOC, ValueToKey.CONFIG_DEF)
     );
 
-    private static void printTransformationHtml(PrintStream out, DocInfo docInfo) {
-        out.println("<div id=\"" + docInfo.transformationName + "\">");
-
-        out.print("<h5>");
-        out.print("<a href=\"#" + docInfo.transformationName + "\">" + docInfo.transformationName + "</a>");
-        out.println("</h5>");
-
-        out.println(docInfo.overview);
-
-        out.println("<p/>");
-
-        out.println(docInfo.configDef.toHtml(6, key -> docInfo.transformationName + "_"  + key));
-
-        out.println("</div>");
-    }
-
-    private static void printHtml(PrintStream out) {
+    private static String toHtml() {
+        StringBuilder b = new StringBuilder();
         for (final DocInfo docInfo : TRANSFORMATIONS) {
-            printTransformationHtml(out, docInfo);
+            b.append("<div id=\"" + docInfo.transformationName + "\">\n");
+            b.append("<h5>");
+            b.append("<a href=\"#" + docInfo.transformationName + "\">" + docInfo.transformationName + "</a>");
+            b.append("</h5>\n");
+            b.append(docInfo.overview + "\n");
+            b.append("<p/>\n");
+            b.append(docInfo.configDef.toHtml(6, key -> docInfo.transformationName + "_"  + key) + "\n");
+            b.append("</div>\n");
         }
+        return b.toString();
     }
 
     public static void main(String... args) {
-        printHtml(System.out);
+        System.out.println(toHtml());
     }
 
 }

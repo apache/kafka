@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -118,6 +119,28 @@ public class MockConsumerTest {
     }
 
     @Test
+    public void testDurationBasedOffsetReset() {
+        MockConsumer<String, String> consumer = new MockConsumer<>("by_duration:PT1H");
+        consumer.subscribe(Collections.singleton("test"));
+        consumer.rebalance(Arrays.asList(new TopicPartition("test", 0), new TopicPartition("test", 1)));
+        HashMap<TopicPartition, Long> durationBasedOffsets = new HashMap<>();
+        durationBasedOffsets.put(new TopicPartition("test", 0), 10L);
+        durationBasedOffsets.put(new TopicPartition("test", 1), 11L);
+        consumer.updateDurationOffsets(durationBasedOffsets);
+        ConsumerRecord<String, String> rec1 = new ConsumerRecord<>("test", 0, 10L, 0L, TimestampType.CREATE_TIME,
+                0, 0, "key1", "value1", new RecordHeaders(), Optional.empty());
+        ConsumerRecord<String, String> rec2 = new ConsumerRecord<>("test", 0, 11L, 0L, TimestampType.CREATE_TIME,
+                0, 0, "key2", "value2", new RecordHeaders(), Optional.empty());
+        consumer.addRecord(rec1);
+        consumer.addRecord(rec2);
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
+        Iterator<ConsumerRecord<String, String>> iter = records.iterator();
+        assertEquals(rec1, iter.next());
+        assertEquals(rec2, iter.next());
+        assertFalse(iter.hasNext());
+    }
+
+    @Test
     public void testRebalanceListener() {
         final List<TopicPartition> revoked = new ArrayList<>();
         final List<TopicPartition> assigned = new ArrayList<>();
@@ -178,6 +201,33 @@ public class MockConsumerTest {
         // Check that the subscription to pattern was successfully applied in the mock consumer (using a different
         // subscription type should fail)
         assertThrows(IllegalStateException.class, () -> consumer.subscribe(List.of("topic1")));
+    }
+
+    @Test
+    public void shouldReturnMaxPollRecords() {
+        TopicPartition partition = new TopicPartition("test", 0);
+        consumer.assign(Collections.singleton(partition));
+        consumer.updateBeginningOffsets(Collections.singletonMap(partition, 0L));
+
+        IntStream.range(0, 10).forEach(offset -> consumer.addRecord(new ConsumerRecord<>("test", 0, offset, null, null)));
+
+        consumer.setMaxPollRecords(2L);
+
+        ConsumerRecords<String, String> records;
+
+        records = consumer.poll(Duration.ofMillis(1));
+        assertEquals(2, records.count());
+
+        records = consumer.poll(Duration.ofMillis(1));
+        assertEquals(2, records.count());
+
+        consumer.setMaxPollRecords(Long.MAX_VALUE);
+
+        records = consumer.poll(Duration.ofMillis(1));
+        assertEquals(6, records.count());
+
+        records = consumer.poll(Duration.ofMillis(1));
+        assertTrue(records.isEmpty());
     }
 
 }

@@ -29,11 +29,15 @@ import org.apache.kafka.connect.transforms.ReplaceField;
 import org.apache.kafka.connect.transforms.SetSchemaMetadata;
 import org.apache.kafka.connect.transforms.TimestampConverter;
 import org.apache.kafka.connect.transforms.TimestampRouter;
+import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.ValueToKey;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests that transformations' configs can be composed with ConnectorConfig during its construction, ensuring no
@@ -42,7 +46,18 @@ import java.util.HashMap;
  * This test appears here simply because it requires both connect-runtime and connect-transforms and connect-runtime
  * already depends on connect-transforms.
  */
+@SuppressWarnings("rawtypes")
 public class TransformationConfigTest {
+
+    private Plugins setupMockPlugins(Transformation transformation) {
+        Plugins plugins = mock(Plugins.class);
+        try {
+            when(plugins.newPlugin(transformation.getClass().getName(), null, (ClassLoader) null)).thenReturn(transformation);
+        } catch (ClassNotFoundException e) {
+            // Shouldn't happen since we're mocking the plugins
+        }
+        return plugins;
+    }
 
     @Test
     public void testEmbeddedConfigCast() {
@@ -54,7 +69,7 @@ public class TransformationConfigTest {
         connProps.put("transforms.example.type", Cast.Value.class.getName());
         connProps.put("transforms.example.spec", "int8");
 
-        Plugins plugins = null; // Safe when we're only constructing the config
+        Plugins plugins = setupMockPlugins(new Cast.Value());
         new ConnectorConfig(plugins, connProps);
     }
 
@@ -68,7 +83,7 @@ public class TransformationConfigTest {
         connProps.put("transforms.example.type", ExtractField.Value.class.getName());
         connProps.put("transforms.example.field", "field");
 
-        Plugins plugins = null; // Safe when we're only constructing the config
+        Plugins plugins = setupMockPlugins(new ExtractField.Value());
         new ConnectorConfig(plugins, connProps);
     }
 
@@ -81,7 +96,7 @@ public class TransformationConfigTest {
         connProps.put("transforms", "example");
         connProps.put("transforms.example.type", Flatten.Value.class.getName());
 
-        Plugins plugins = null; // Safe when we're only constructing the config
+        Plugins plugins = setupMockPlugins(new Flatten.Value());
         new ConnectorConfig(plugins, connProps);
     }
 
@@ -95,7 +110,7 @@ public class TransformationConfigTest {
         connProps.put("transforms.example.type", HoistField.Value.class.getName());
         connProps.put("transforms.example.field", "field");
 
-        Plugins plugins = null; // Safe when we're only constructing the config
+        Plugins plugins = setupMockPlugins(new HoistField.Value());
         new ConnectorConfig(plugins, connProps);
     }
 
@@ -108,7 +123,7 @@ public class TransformationConfigTest {
         connProps.put("transforms", "example");
         connProps.put("transforms.example.type", InsertField.Value.class.getName());
 
-        Plugins plugins = null; // Safe when we're only constructing the config
+        Plugins plugins = setupMockPlugins(new InsertField.Value());
         new ConnectorConfig(plugins, connProps);
     }
 
@@ -123,7 +138,7 @@ public class TransformationConfigTest {
         connProps.put("transforms.example.fields", "field");
         connProps.put("transforms.example.replacement", "nothing");
 
-        Plugins plugins = null; // Safe when we're only constructing the config
+        Plugins plugins = setupMockPlugins(new MaskField.Value());
         new ConnectorConfig(plugins, connProps);
     }
 
@@ -138,7 +153,7 @@ public class TransformationConfigTest {
         connProps.put("transforms.example.regex", "(.*)");
         connProps.put("transforms.example.replacement", "prefix-$1");
 
-        Plugins plugins = null; // Safe when we're only constructing the config
+        Plugins plugins = setupMockPlugins(new RegexRouter());
         new ConnectorConfig(plugins, connProps);
     }
 
@@ -151,7 +166,7 @@ public class TransformationConfigTest {
         connProps.put("transforms", "example");
         connProps.put("transforms.example.type", ReplaceField.Value.class.getName());
 
-        Plugins plugins = null; // Safe when we're only constructing the config
+        Plugins plugins = setupMockPlugins(new ReplaceField.Value());
         new ConnectorConfig(plugins, connProps);
     }
 
@@ -164,7 +179,7 @@ public class TransformationConfigTest {
         connProps.put("transforms", "example");
         connProps.put("transforms.example.type", SetSchemaMetadata.Value.class.getName());
 
-        Plugins plugins = null; // Safe when we're only constructing the config
+        Plugins plugins = setupMockPlugins(new SetSchemaMetadata.Value());
         new ConnectorConfig(plugins, connProps);
     }
 
@@ -178,7 +193,7 @@ public class TransformationConfigTest {
         connProps.put("transforms.example.type", TimestampConverter.Value.class.getName());
         connProps.put("transforms.example.target.type", "unix");
 
-        Plugins plugins = null; // Safe when we're only constructing the config
+        Plugins plugins = setupMockPlugins(new TimestampConverter.Value());
         new ConnectorConfig(plugins, connProps);
     }
 
@@ -191,7 +206,7 @@ public class TransformationConfigTest {
         connProps.put("transforms", "example");
         connProps.put("transforms.example.type", TimestampRouter.class.getName());
 
-        Plugins plugins = null; // Safe when we're only constructing the config
+        Plugins plugins = setupMockPlugins(new TimestampRouter());
         new ConnectorConfig(plugins, connProps);
     }
 
@@ -205,7 +220,7 @@ public class TransformationConfigTest {
         connProps.put("transforms.example.type", ValueToKey.class.getName());
         connProps.put("transforms.example.fields", "field");
 
-        Plugins plugins = null; // Safe when we're only constructing the config
+        Plugins plugins = setupMockPlugins(new ValueToKey());
         new ConnectorConfig(plugins, connProps);
     }
 

@@ -22,7 +22,6 @@ import org.apache.kafka.common.Uuid;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,18 +34,18 @@ public class PartitionAssignmentTest {
 
     @Test
     public void testPartitionAssignmentReplicas() {
-        List<Integer> replicas = Arrays.asList(0, 1, 2);
+        List<Integer> replicas = List.of(0, 1, 2);
         assertEquals(replicas, partitionAssignment(replicas).replicas());
     }
 
     @Test
     public void testConsistentEqualsAndHashCode() {
-        List<PartitionAssignment> partitionAssignments = Arrays.asList(
+        List<PartitionAssignment> partitionAssignments = List.of(
             partitionAssignment(
-                Arrays.asList(0, 1, 2)
+                List.of(0, 1, 2)
             ),
             partitionAssignment(
-                Arrays.asList(1, 2, 0)
+                List.of(1, 2, 0)
             )
         );
 
@@ -66,8 +65,8 @@ public class PartitionAssignmentTest {
 
     @Test
     public void testToString() {
-        List<Integer> replicas = Arrays.asList(0, 1, 2);
-        List<Uuid> directories = Arrays.asList(
+        List<Integer> replicas = List.of(0, 1, 2);
+        List<Uuid> directories = List.of(
                 Uuid.fromString("65WMNfybQpCDVulYOxMCTw"),
                 Uuid.fromString("VkZ5AkuESPGkMc2OxpKUjw"),
                 Uuid.fromString("wFtTi4FxTlOhhHytfxv7fQ")

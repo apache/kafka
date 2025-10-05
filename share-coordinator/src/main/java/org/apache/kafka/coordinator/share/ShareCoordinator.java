@@ -17,26 +17,32 @@
 
 package org.apache.kafka.coordinator.share;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
+import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
+import org.apache.kafka.common.message.InitializeShareGroupStateRequestData;
+import org.apache.kafka.common.message.InitializeShareGroupStateResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
+import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
+import org.apache.kafka.common.message.ReadShareGroupStateSummaryResponseData;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.requests.RequestContext;
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.image.FeaturesImage;
 import org.apache.kafka.server.share.SharePartitionKey;
 
 import java.util.OptionalInt;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.function.IntSupplier;
 
 public interface ShareCoordinator {
-    short SHARE_SNAPSHOT_RECORD_KEY_VERSION = 0;
-    short SHARE_SNAPSHOT_RECORD_VALUE_VERSION = 0;
-    short SHARE_UPDATE_RECORD_KEY_VERSION = 1;
-    short SHARE_UPDATE_RECORD_VALUE_VERSION = 1;
-
     /**
      * Return the partition index for the given key.
      *
@@ -82,6 +88,30 @@ public interface ShareCoordinator {
     CompletableFuture<ReadShareGroupStateResponseData> readState(RequestContext context, ReadShareGroupStateRequestData request);
 
     /**
+     * Handle read share state summary call
+     * @param context - represents the incoming read summary request context
+     * @param request - actual RPC request object
+     * @return completable future comprising ReadShareGroupStateSummaryRequestData
+     */
+    CompletableFuture<ReadShareGroupStateSummaryResponseData> readStateSummary(RequestContext context, ReadShareGroupStateSummaryRequestData request);
+
+    /**
+     * Handle delete share group state call
+     * @param context - represents the incoming delete share group request context
+     * @param request - actual RPC request object
+     * @return completable future representing delete share group RPC response data
+     */
+    CompletableFuture<DeleteShareGroupStateResponseData> deleteState(RequestContext context, DeleteShareGroupStateRequestData request);
+
+    /**
+     * Handle initialize share group state call
+     * @param context - represents the incoming initialize share group request context
+     * @param request - actual RPC request object
+     * @return completable future representing initialize share group RPC response data
+     */
+    CompletableFuture<InitializeShareGroupStateResponseData> initializeState(RequestContext context, InitializeShareGroupStateRequestData request);
+
+    /**
      * Called when new coordinator is elected
      * @param partitionIndex - The partition index (internal topic)
      * @param partitionLeaderEpoch - Leader epoch of the partition (internal topic)
@@ -96,13 +126,22 @@ public interface ShareCoordinator {
     void onResignation(int partitionIndex, OptionalInt partitionLeaderEpoch);
 
     /**
+     * Remove share group state related to deleted topic ids.
+     *
+     * @param topicPartitions   The deleted topic ids.
+     * @param bufferSupplier    The buffer supplier tight to the request thread.
+     */
+    void onTopicsDeleted(Set<Uuid> topicPartitions, BufferSupplier bufferSupplier) throws ExecutionException, InterruptedException;
+
+    /**
      * A new metadata image is available.
      *
-     * @param newImage  The new metadata image.
-     * @param delta     The metadata delta.
+     * @param newImage         The new metadata image.
+     * @param newFeaturesImage The features image.
+     * @param delta            The metadata delta.
      */
     void onNewMetadataImage(
-        MetadataImage newImage,
-        MetadataDelta delta
+        CoordinatorMetadataImage newImage,
+        FeaturesImage newFeaturesImage, CoordinatorMetadataDelta delta
     );
 }

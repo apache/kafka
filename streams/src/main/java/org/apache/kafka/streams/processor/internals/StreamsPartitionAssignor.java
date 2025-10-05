@@ -92,6 +92,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static java.util.Collections.singletonList;
 import static java.util.Collections.unmodifiableSet;
 import static java.util.Map.Entry.comparingByKey;
 import static org.apache.kafka.common.utils.Utils.filterMap;
@@ -216,11 +217,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private Queue<StreamsException> nonFatalExceptionsToHandle;
     private Time time;
 
+    // since live upgrades from 2.3 (or earlier) to 4.0 or above are no longer supported, we can always
+    // start with the latest supported metadata version since version probing will take
+    // care of downgrading it if/when necessary
     protected int usedSubscriptionMetadataVersion = LATEST_SUPPORTED_VERSION;
 
     private InternalTopicManager internalTopicManager;
     private CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
-    private RebalanceProtocol rebalanceProtocol;
     private AssignmentListener assignmentListener;
 
     private Supplier<Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor>>
@@ -242,7 +245,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         logPrefix = assignorConfiguration.logPrefix();
         log = new LogContext(logPrefix).logger(getClass());
-        usedSubscriptionMetadataVersion = assignorConfiguration.configuredMetadataVersion(usedSubscriptionMetadataVersion);
 
         final ReferenceContainer referenceContainer = assignorConfiguration.referenceContainer();
         mainConsumerSupplier = () -> Objects.requireNonNull(referenceContainer.mainConsumer, "Main consumer was not specified");
@@ -258,7 +260,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         userEndPoint = assignorConfiguration.userEndPoint();
         internalTopicManager = assignorConfiguration.internalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.copartitionedTopicsEnforcer();
-        rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
         customTaskAssignorSupplier = assignorConfiguration::customTaskAssignor;
         legacyTaskAssignorSupplier = assignorConfiguration::taskAssignor;
         assignmentListener = assignorConfiguration.assignmentListener();
@@ -273,12 +274,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     @Override
     public List<RebalanceProtocol> supportedProtocols() {
-        final List<RebalanceProtocol> supportedProtocols = new ArrayList<>();
-        supportedProtocols.add(RebalanceProtocol.EAGER);
-        if (rebalanceProtocol == RebalanceProtocol.COOPERATIVE) {
-            supportedProtocols.add(rebalanceProtocol);
-        }
-        return supportedProtocols;
+        return singletonList(RebalanceProtocol.COOPERATIVE);
     }
 
     @Override
@@ -1667,10 +1663,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     // following functions are for test only
     void setInternalTopicManager(final InternalTopicManager internalTopicManager) {
         this.internalTopicManager = internalTopicManager;
-    }
-
-    RebalanceProtocol rebalanceProtocol() {
-        return rebalanceProtocol;
     }
 
     protected String userEndPoint() {

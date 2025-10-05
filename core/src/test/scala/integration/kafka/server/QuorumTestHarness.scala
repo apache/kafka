@@ -17,16 +17,13 @@
 
 package kafka.server
 
-import kafka.controller.ControllerEventManager
-
 import java.io.File
 import java.net.InetSocketAddress
 import java.util
-import java.util.{Collections, Locale, Optional, OptionalInt, Properties, stream}
+import java.util.{Locale, Optional, OptionalInt, Properties, stream}
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import javax.security.auth.login.Configuration
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
-import kafka.zk.{AdminZkClient, EmbeddedZookeeper, KafkaZkClient}
 import org.apache.kafka.clients.admin.AdminClientUnitTestEnv
 import org.apache.kafka.clients.consumer.GroupProtocol
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
@@ -34,21 +31,19 @@ import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.{Exit, Time, Utils}
+import org.apache.kafka.common.utils.{Exit, Time}
 import org.apache.kafka.common.{DirectoryId, Uuid}
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion}
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.queue.KafkaEventQueue
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.{ClientMetricsManager, ServerSocketFactory}
-import org.apache.kafka.server.common.{EligibleLeaderReplicasVersion, MetadataVersion, TransactionVersion}
+import org.apache.kafka.server.common.{MetadataVersion, TransactionVersion}
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
 import org.apache.kafka.server.util.timer.SystemTimer
-import org.apache.zookeeper.client.ZKClientConfig
-import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, TestInfo}
 import org.junit.jupiter.params.provider.Arguments
@@ -69,30 +64,6 @@ trait QuorumImplementation {
   def shutdown(): Unit
 }
 
-class ZooKeeperQuorumImplementation(
-  val zookeeper: EmbeddedZookeeper,
-  val zkConnect: String,
-  val zkClient: KafkaZkClient,
-  val adminZkClient: AdminZkClient,
-  val log: Logging
-) extends QuorumImplementation {
-  override def createBroker(
-    config: KafkaConfig,
-    time: Time,
-    startup: Boolean,
-    threadNamePrefix: Option[String],
-  ): KafkaBroker = {
-    val server = new KafkaServer(config, time, threadNamePrefix, false)
-    if (startup) server.startup()
-    server
-  }
-
-  override def shutdown(): Unit = {
-    Utils.closeQuietly(zkClient, "zk client")
-    CoreUtils.swallow(zookeeper.shutdown(), log)
-  }
-}
-
 class KRaftQuorumImplementation(
   val controllerServer: ControllerServer,
   val faultHandlerFactory: FaultHandlerFactory,
@@ -110,7 +81,7 @@ class KRaftQuorumImplementation(
   ): KafkaBroker = {
     val metaPropertiesEnsemble = {
       val loader = new MetaPropertiesEnsemble.Loader()
-      loader.addLogDirs(config.logDirs.asJava)
+      loader.addLogDirs(config.logDirs)
       loader.addMetadataLogDir(config.metadataLogDir)
       val ensemble = loader.load()
       val copier = new MetaPropertiesEnsemble.Copier(ensemble)
@@ -172,11 +143,6 @@ class QuorumTestHarnessFaultHandlerFactory(
 
 @Tag("integration")
 abstract class QuorumTestHarness extends Logging {
-  val zkConnectionTimeout = 10000
-  val zkSessionTimeout = 15000 // Allows us to avoid ZK session expiration due to GC up to 2/3 * 15000ms = 10 secs
-  val zkMaxInFlightRequests = Int.MaxValue
-
-  protected def zkAclsEnabled: Option[Boolean] = None
 
   /**
    * When in KRaft mode, the security protocol to use for the controller listener.
@@ -193,14 +159,6 @@ abstract class QuorumTestHarness extends Logging {
   private var testInfo: TestInfo = _
   protected var implementation: QuorumImplementation = _
 
-  def isKRaftTest(): Boolean = {
-    TestInfoUtils.isKRaft(testInfo)
-  }
-
-  def isShareGroupTest(): Boolean = {
-    TestInfoUtils.isShareGroupTest(testInfo)
-  }
-
   def maybeGroupProtocolSpecified(): Option[GroupProtocol] = {
     TestInfoUtils.maybeGroupProtocolSpecified(testInfo)
   }
@@ -214,53 +172,11 @@ abstract class QuorumTestHarness extends Logging {
     gp.get
   }
 
-  def checkIsZKTest(): Unit = {
-    if (isKRaftTest()) {
-      throw new RuntimeException("This function can't be accessed when running the test " +
-        "in KRaft mode. ZooKeeper mode is required.")
-    }
-  }
-
-  def checkIsKRaftTest(): Unit = {
-    if (!isKRaftTest()) {
-      throw new RuntimeException("This function can't be accessed when running the test " +
-        "in ZooKeeper mode. KRaft mode is required.")
-    }
-  }
-
-  private def asZk(): ZooKeeperQuorumImplementation = {
-    checkIsZKTest()
-    implementation.asInstanceOf[ZooKeeperQuorumImplementation]
-  }
-
-  private def asKRaft(): KRaftQuorumImplementation = {
-    checkIsKRaftTest()
-    implementation.asInstanceOf[KRaftQuorumImplementation]
-  }
-
-  def zookeeper: EmbeddedZookeeper = asZk().zookeeper
-
-  def zkClient: KafkaZkClient = asZk().zkClient
-
-  def zkClientOrNull: KafkaZkClient = if (isKRaftTest()) null else asZk().zkClient
-
-  def adminZkClient: AdminZkClient = asZk().adminZkClient
-
-  def zkPort: Int = asZk().zookeeper.port
-
-  def zkConnect: String = s"127.0.0.1:$zkPort"
-
-  def zkConnectOrNull: String = if (isKRaftTest()) null else zkConnect
+  private def asKRaft(): KRaftQuorumImplementation = implementation.asInstanceOf[KRaftQuorumImplementation]
 
   def controllerServer: ControllerServer = asKRaft().controllerServer
 
-  def controllerServers: Seq[ControllerServer] = {
-    if (isKRaftTest()) {
-      Seq(asKRaft().controllerServer)
-    } else {
-      Seq()
-    }
-  }
+  def controllerServers: Seq[ControllerServer] = Seq(asKRaft().controllerServer)
 
   val faultHandlerFactory = new QuorumTestHarnessFaultHandlerFactory(new MockFaultHandler("quorumTestHarnessFaultHandler"))
 
@@ -297,13 +213,8 @@ abstract class QuorumTestHarness extends Logging {
     val name = testInfo.getTestMethod.toScala
       .map(_.toString)
       .getOrElse("[unspecified]")
-    if (TestInfoUtils.isKRaft(testInfo)) {
-      info(s"Running KRAFT test $name")
-      implementation = newKRaftQuorum(testInfo)
-    } else {
-      info(s"Running ZK test $name")
-      implementation = newZooKeeperQuorum()
-    }
+    info(s"Running KRAFT test $name")
+    implementation = newKRaftQuorum(testInfo)
   }
 
   def createBroker(
@@ -314,8 +225,6 @@ abstract class QuorumTestHarness extends Logging {
   ): KafkaBroker = {
     implementation.createBroker(config, time, startup, threadNamePrefix)
   }
-
-  def shutdownZooKeeper(): Unit = asZk().shutdown()
 
   def shutdownKRaftController(): Unit = {
     // Note that the RaftManager instance is left running; it will be shut down in tearDown()
@@ -348,16 +257,17 @@ abstract class QuorumTestHarness extends Logging {
     }
     val nodeId = Integer.parseInt(props.getProperty(KRaftConfigs.NODE_ID_CONFIG))
     val metadataDir = TestUtils.tempDir()
-    props.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, metadataDir.getAbsolutePath)
+    props.setProperty(MetadataLogConfig.METADATA_LOG_DIR_CONFIG, metadataDir.getAbsolutePath)
     val proto = controllerListenerSecurityProtocol.toString
     val securityProtocolMaps = extraControllerSecurityProtocols().map(sc => sc + ":" + sc).mkString(",")
     val listeners = extraControllerSecurityProtocols().map(sc => sc + "://localhost:0").mkString(",")
     val listenerNames = extraControllerSecurityProtocols().mkString(",")
     props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, s"CONTROLLER:$proto,$securityProtocolMaps")
-    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, s"CONTROLLER://localhost:0,$listeners")
-    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, s"CONTROLLER,$listenerNames")
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG,
+      if (listeners.isEmpty) "CONTROLLER://localhost:0" else s"CONTROLLER://localhost:0,$listeners")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG,
+      if (listeners.isEmpty) "CONTROLLER" else s"CONTROLLER,$listenerNames")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:0")
-    // Setting the configuration to the same value set on the brokers via TestUtils to keep KRaft based and Zk based controller configs are consistent.
     props.setProperty(ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG, "1000")
     val config = new KafkaConfig(props)
 
@@ -367,7 +277,7 @@ abstract class QuorumTestHarness extends Logging {
     formatter.addDirectory(metadataDir.getAbsolutePath)
     formatter.setReleaseVersion(metadataVersion)
     formatter.setUnstableFeatureVersionsEnabled(true)
-    formatter.setControllerListenerName(config.controllerListenerNames.head)
+    formatter.setControllerListenerName(config.controllerListenerNames.get(0))
     formatter.setMetadataLogDirectory(config.metadataLogDir)
 
     val transactionVersion =
@@ -375,12 +285,6 @@ abstract class QuorumTestHarness extends Logging {
         TransactionVersion.TV_2.featureLevel()
       } else TransactionVersion.TV_1.featureLevel()
     formatter.setFeatureLevel(TransactionVersion.FEATURE_NAME, transactionVersion)
-
-    val elrVersion =
-      if (TestInfoUtils.isEligibleLeaderReplicasV1Enabled(testInfo)) {
-        EligibleLeaderReplicasVersion.ELRV_1.featureLevel()
-      } else EligibleLeaderReplicasVersion.ELRV_0.featureLevel()
-    formatter.setFeatureLevel(EligibleLeaderReplicasVersion.FEATURE_NAME, elrVersion)
 
     addFormatterSettings(formatter)
     formatter.run()
@@ -399,7 +303,7 @@ abstract class QuorumTestHarness extends Logging {
       Time.SYSTEM,
       new Metrics(),
       controllerQuorumVotersFuture,
-      Collections.emptyList(),
+      util.List.of,
       faultHandlerFactory,
       ServerSocketFactory.INSTANCE,
     )
@@ -416,7 +320,7 @@ abstract class QuorumTestHarness extends Logging {
           controllerQuorumVotersFuture.completeExceptionally(e)
         } else {
           controllerQuorumVotersFuture.complete(
-            Collections.singletonMap(nodeId, new InetSocketAddress("localhost", port))
+            util.Map.of(nodeId, new InetSocketAddress("localhost", port))
           )
         }
       })
@@ -438,38 +342,6 @@ abstract class QuorumTestHarness extends Logging {
     )
   }
 
-  private def newZooKeeperQuorum(): ZooKeeperQuorumImplementation = {
-    val zookeeper = new EmbeddedZookeeper()
-    var zkClient: KafkaZkClient = null
-    var adminZkClient: AdminZkClient = null
-    val zkConnect = s"127.0.0.1:${zookeeper.port}"
-    try {
-      zkClient = KafkaZkClient(
-        zkConnect,
-        zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled),
-        zkSessionTimeout,
-        zkConnectionTimeout,
-        zkMaxInFlightRequests,
-        Time.SYSTEM,
-        name = "ZooKeeperTestHarness",
-        new ZKClientConfig,
-        enableEntityConfigControllerCheck = false)
-      adminZkClient = new AdminZkClient(zkClient)
-    } catch {
-      case t: Throwable =>
-        CoreUtils.swallow(zookeeper.shutdown(), this)
-        Utils.closeQuietly(zkClient, "zk client")
-        throw t
-    }
-    new ZooKeeperQuorumImplementation(
-      zookeeper,
-      zkConnect,
-      zkClient,
-      adminZkClient,
-      this
-    )
-  }
-
   @AfterEach
   def tearDown(): Unit = {
     if (implementation != null) {
@@ -482,26 +354,13 @@ abstract class QuorumTestHarness extends Logging {
     Configuration.setConfiguration(null)
     faultHandler.maybeRethrowFirstException()
   }
-
-  // Trigger session expiry by reusing the session id in another client
-  def createZooKeeperClientToTriggerSessionExpiry(zooKeeper: ZooKeeper): ZooKeeper = {
-    val dummyWatcher = new Watcher {
-      override def process(event: WatchedEvent): Unit = {}
-    }
-    val anotherZkClient = new ZooKeeper(zkConnect, 1000, dummyWatcher,
-      zooKeeper.getSessionId,
-      zooKeeper.getSessionPasswd)
-    assertNull(anotherZkClient.exists("/nonexistent", false)) // Make sure new client works
-    anotherZkClient
-  }
 }
 
 object QuorumTestHarness {
-  val ZkClientEventThreadSuffix = "-EventThread"
 
   /**
    * Verify that a previous test that doesn't use QuorumTestHarness hasn't left behind an unexpected thread.
-   * This assumes that brokers, ZooKeeper clients, producers and consumers are not created in another @BeforeClass,
+   * This assumes that brokers, admin clients, producers and consumers are not created in another @BeforeClass,
    * which is true for core tests where this harness is used.
    */
   @BeforeAll
@@ -523,11 +382,10 @@ object QuorumTestHarness {
     // when broker ports are reused (e.g. auto-create topics) as well as threads
     // which reset static JAAS configuration.
     val unexpectedThreadNames = Set(
-      ControllerEventManager.ControllerEventThreadName,
+      "controller-event-thread",
       KafkaProducer.NETWORK_THREAD_PREFIX,
       AdminClientUnitTestEnv.kafkaAdminClientNetworkThreadPrefix(),
       AbstractCoordinator.HEARTBEAT_THREAD_PREFIX,
-      QuorumTestHarness.ZkClientEventThreadSuffix,
       KafkaEventQueue.EVENT_HANDLER_THREAD_SUFFIX,
       ClientMetricsManager.CLIENT_METRICS_REAPER_THREAD_NAME,
       SystemTimer.SYSTEM_TIMER_THREAD_PREFIX,
@@ -544,40 +402,24 @@ object QuorumTestHarness {
         s"${unexpected.mkString("`", ",", "`")}")
   }
 
-  // We want to test the following combinations:
-  // * KRaft and the classic group protocol
-  // * KRaft and the consumer group protocol
-  def getTestQuorumAndGroupProtocolParametersAll: java.util.stream.Stream[Arguments] = {
+  def getTestGroupProtocolParametersAll: java.util.stream.Stream[Arguments] = {
     stream.Stream.of(
-      Arguments.of("kraft", GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT)),
-      Arguments.of("kraft", GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT))
+      Arguments.of(GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT)),
+      Arguments.of(GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT))
     )
   }
 
-  // For tests that only work with the classic group protocol, we want to test the following combinations:
-  // * KRaft and the classic group protocol
-  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly: java.util.stream.Stream[Arguments] = {
+  // For tests that only work with the classic group protocol
+  def getTestGroupProtocolParametersClassicGroupProtocolOnly: java.util.stream.Stream[Arguments] = {
     stream.Stream.of(
-      Arguments.of("kraft", GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT))
+      Arguments.of(GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT))
     )
   }
 
-  // For tests that only work with the consumer group protocol, we want to test the following combination:
-  // * KRaft and the consumer group protocol
-  def getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly: stream.Stream[Arguments] = {
+  // For tests that only work with the consumer group protocol
+  def getTestGroupProtocolParametersConsumerGroupProtocolOnly: java.util.stream.Stream[Arguments] = {
     stream.Stream.of(
-      Arguments.of("kraft", GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT))
+      Arguments.of(GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT))
     )
   }
-
-  // The following is for tests that only work with the classic group protocol because of relying on Zookeeper
-  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit: java.util.stream.Stream[Arguments] = stream.Stream.of(Arguments.of("zk", GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT)))
-
-  // The following parameter groups are to *temporarily* avoid bugs with the CONSUMER group protocol Consumer
-  // implementation that would otherwise cause tests to fail.
-  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_KAFKA_16176: stream.Stream[Arguments] = getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly
-  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_KAFKA_17696: stream.Stream[Arguments] = getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly
-  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_KAFKA_17960: stream.Stream[Arguments] = getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly
-  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_KAFKA_17961: stream.Stream[Arguments] = getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly
-  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_KAFKA_17964: stream.Stream[Arguments] = getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly
 }

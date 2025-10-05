@@ -101,7 +101,7 @@ public class MeteredVersionedKeyValueStore<K, V>
         private final Serde<V> plainValueSerde;
         private StateSerdes<K, V> plainValueSerdes;
 
-        private final Map<Class, QueryHandler> queryHandlers =
+        private final Map<Class<?>, QueryHandler> queryHandlers =
             mkMap(
                 mkEntry(
                     RangeQuery.class,
@@ -201,6 +201,7 @@ public class MeteredVersionedKeyValueStore<K, V>
             return result;
         }
 
+        @SuppressWarnings("unused")
         private <R> QueryResult<R> runRangeQuery(final Query<R> query,
                                                  final PositionBound positionBound,
                                                  final QueryConfig config) {
@@ -209,6 +210,7 @@ public class MeteredVersionedKeyValueStore<K, V>
             throw new UnsupportedOperationException("Versioned stores do not support RangeQuery queries at this time.");
         }
 
+        @SuppressWarnings("unused")
         private <R> QueryResult<R> runKeyQuery(final Query<R> query,
                                                final PositionBound positionBound,
                                                final QueryConfig config) {
@@ -262,12 +264,11 @@ public class MeteredVersionedKeyValueStore<K, V>
             final QueryResult<VersionedRecordIterator<byte[]>> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
             if (rawResult.isSuccess()) {
                 final MeteredMultiVersionedKeyQueryIterator<V> typedResult =
-                        new MeteredMultiVersionedKeyQueryIterator<V>(
+                        new MeteredMultiVersionedKeyQueryIterator<>(
                             rawResult.getResult(),
                             iteratorDurationSensor,
                             time,
                             StoreQueryUtils.deserializeValue(plainValueSerdes),
-                            numOpenIterators,
                             openIterators
                         );
                 final QueryResult<MeteredMultiVersionedKeyQueryIterator<V>> typedQueryResult =
@@ -340,8 +341,8 @@ public class MeteredVersionedKeyValueStore<K, V>
     }
 
     @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        internal.init(context, root);
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        internal.init(stateStoreContext, root);
     }
 
     @Override

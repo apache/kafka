@@ -56,7 +56,7 @@ public class LogLoader {
     private final LogSegments segments;
     private final long logStartOffsetCheckpoint;
     private final long recoveryPointCheckpoint;
-    private final Optional<LeaderEpochFileCache> leaderEpochCache;
+    private final LeaderEpochFileCache leaderEpochCache;
     private final ProducerStateManager producerStateManager;
     private final ConcurrentMap<String, Integer> numRemainingSegments;
     private final boolean isRemoteLogEnabled;
@@ -74,7 +74,7 @@ public class LogLoader {
      * @param segments The {@link LogSegments} instance into which segments recovered from disk will be populated
      * @param logStartOffsetCheckpoint The checkpoint of the log start offset
      * @param recoveryPointCheckpoint The checkpoint of the offset at which to begin the recovery
-     * @param leaderEpochCache An optional {@link LeaderEpochFileCache} instance to be updated during recovery
+     * @param leaderEpochCache A {@link LeaderEpochFileCache} instance to be updated during recovery
      * @param producerStateManager The {@link ProducerStateManager} instance to be updated during recovery
      * @param numRemainingSegments The remaining segments to be recovered in this log keyed by recovery thread name
      * @param isRemoteLogEnabled Boolean flag to indicate whether the remote storage is enabled or not
@@ -90,7 +90,7 @@ public class LogLoader {
             LogSegments segments,
             long logStartOffsetCheckpoint,
             long recoveryPointCheckpoint,
-            Optional<LeaderEpochFileCache> leaderEpochCache,
+            LeaderEpochFileCache leaderEpochCache,
             ProducerStateManager producerStateManager,
             ConcurrentMap<String, Integer> numRemainingSegments,
             boolean isRemoteLogEnabled) {
@@ -169,6 +169,7 @@ public class LogLoader {
                     long offset = LogFileUtils.offsetFromFile(file);
                     if (offset >= minSwapFileOffset && offset < maxSwapFileOffset) {
                         logger.info("Deleting segment files {} that is compacted but has not been deleted yet.", file.getName());
+                        @SuppressWarnings("UnusedLocalVariable")
                         boolean ignore = file.delete();
                     }
                 }
@@ -186,6 +187,7 @@ public class LogLoader {
             }
             if (file.getName().endsWith(LogFileUtils.SWAP_FILE_SUFFIX)) {
                 logger.info("Recovering file {} by renaming from {} files.", file.getName(), LogFileUtils.SWAP_FILE_SUFFIX);
+                @SuppressWarnings("UnusedLocalVariable")
                 boolean ignore = file.renameTo(new File(Utils.replaceSuffix(file.getPath(), LogFileUtils.SWAP_FILE_SUFFIX, "")));
             }
         }
@@ -215,13 +217,13 @@ public class LogLoader {
             recoveryOffsets = new RecoveryOffsets(0L, 0L);
         }
 
-        leaderEpochCache.ifPresent(lec -> lec.truncateFromEndAsyncFlush(recoveryOffsets.nextOffset));
+        leaderEpochCache.truncateFromEndAsyncFlush(recoveryOffsets.nextOffset);
         long newLogStartOffset = isRemoteLogEnabled
             ? logStartOffsetCheckpoint
             : Math.max(logStartOffsetCheckpoint, segments.firstSegment().get().baseOffset());
 
         // The earliest leader epoch may not be flushed during a hard failure. Recover it here.
-        leaderEpochCache.ifPresent(lec -> lec.truncateFromStartAsyncFlush(logStartOffsetCheckpoint));
+        leaderEpochCache.truncateFromStartAsyncFlush(logStartOffsetCheckpoint);
 
         // Any segment loading or recovery code must not use producerStateManager, so that we can build the full state here
         // from scratch.
@@ -238,7 +240,6 @@ public class LogLoader {
                 segments,
                 newLogStartOffset,
                 recoveryOffsets.nextOffset,
-                config.recordVersion(),
                 time,
                 hadCleanShutdown,
                 logPrefix);
@@ -337,7 +338,7 @@ public class LogLoader {
                         scheduler,
                         logDirFailureChannel,
                         logPrefix);
-                deleteProducerSnapshotsAsync(result.deletedSegments);
+                deleteProducerSnapshotsAsync(result.deletedSegments());
             }
         }
     }
@@ -358,7 +359,7 @@ public class LogLoader {
         // segments that come before it
         File[] files = dir.listFiles();
         if (files == null) files = new File[0];
-        List<File> sortedFiles = Arrays.stream(files).filter(File::isFile).sorted().collect(Collectors.toList());
+        List<File> sortedFiles = Arrays.stream(files).filter(File::isFile).sorted().toList();
         for (File file : sortedFiles) {
             if (LogFileUtils.isIndexFile(file)) {
                 // if it is an index file, make sure it has a corresponding .log file
@@ -408,7 +409,6 @@ public class LogLoader {
                 segments,
                 logStartOffsetCheckpoint,
                 segment.baseOffset(),
-                config.recordVersion(),
                 time,
                 false,
                 logPrefix);
@@ -430,7 +430,7 @@ public class LogLoader {
                         "is smaller than logStartOffset {}. " +
                         "This could happen if segment files were deleted from the file system.", logEndOffset, logStartOffsetCheckpoint);
                 removeAndDeleteSegmentsAsync(segments.values());
-                leaderEpochCache.ifPresent(LeaderEpochFileCache::clearAndFlush);
+                leaderEpochCache.clearAndFlush();
                 producerStateManager.truncateFullyAndStartAt(logStartOffsetCheckpoint);
                 return Optional.empty();
             }
@@ -438,15 +438,7 @@ public class LogLoader {
         return Optional.empty();
     }
 
-    static class RecoveryOffsets {
-
-        final long newRecoveryPoint;
-        final long nextOffset;
-
-        RecoveryOffsets(long newRecoveryPoint, long nextOffset) {
-            this.newRecoveryPoint = newRecoveryPoint;
-            this.nextOffset = nextOffset;
-        }
+    record RecoveryOffsets(long newRecoveryPoint, long nextOffset) {
     }
 
     /**

@@ -21,11 +21,11 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    {"name": "Type", "type": "string", "versions": "0+",
-      "about": "The principal type"},
-    {"name": "Name", "type": "string", "versions": "0+",
-      "about": "The principal name"},
-    {"name": "TokenAuthenticated", "type": "bool", "versions": "0+",
+    { "name": "Type", "type": "string", "versions": "0+",
+      "about": "The principal type."},
+    { "name": "Name", "type": "string", "versions": "0+",
+      "about": "The principal name."},
+    { "name": "TokenAuthenticated", "type": "bool", "versions": "0+",
       "about": "Whether the principal was authenticated by a delegation token on the forwarding broker."}
   ]
 }

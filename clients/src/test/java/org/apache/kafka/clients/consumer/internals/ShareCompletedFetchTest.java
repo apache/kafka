@@ -246,8 +246,8 @@ public class ShareCompletedFetchTest {
 
                 // Record 1 then results in an empty batch
                 batch = completedFetch.fetchRecords(deserializers, 10, false);
-                assertEquals(RecordDeserializationException.class, batch.getException().getClass());
-                RecordDeserializationException thrown = (RecordDeserializationException) batch.getException();
+                assertEquals(RecordDeserializationException.class, batch.getException().cause().getClass());
+                RecordDeserializationException thrown = (RecordDeserializationException) batch.getException().cause();
                 assertEquals(RecordDeserializationException.DeserializationExceptionOrigin.KEY, thrown.origin());
                 assertEquals(1, thrown.offset());
                 assertEquals(TOPIC_NAME, thrown.topicPartition().topic());
@@ -264,8 +264,8 @@ public class ShareCompletedFetchTest {
 
                 // Record 2 then results in an empty batch, because record 1 has now been skipped
                 batch = completedFetch.fetchRecords(deserializers, 10, false);
-                assertEquals(RecordDeserializationException.class, batch.getException().getClass());
-                thrown = (RecordDeserializationException) batch.getException();
+                assertEquals(RecordDeserializationException.class, batch.getException().cause().getClass());
+                thrown = (RecordDeserializationException) batch.getException().cause();
                 assertEquals(RecordDeserializationException.DeserializationExceptionOrigin.VALUE, thrown.origin());
                 assertEquals(2L, thrown.offset());
                 assertEquals(TOPIC_NAME, thrown.topicPartition().topic());
@@ -367,6 +367,7 @@ public class ShareCompletedFetchTest {
         return new ShareCompletedFetch(
                 logContext,
                 BufferSupplier.create(),
+                0,
                 TIP,
                 partitionData,
                 shareFetchMetricsAggregator,
@@ -374,11 +375,11 @@ public class ShareCompletedFetchTest {
     }
 
     private static Deserializers<UUID, UUID> newUuidDeserializers() {
-        return new Deserializers<>(new UUIDDeserializer(), new UUIDDeserializer());
+        return new Deserializers<>(new UUIDDeserializer(), new UUIDDeserializer(), null);
     }
 
     private static Deserializers<String, String> newStringDeserializers() {
-        return new Deserializers<>(new StringDeserializer(), new StringDeserializer());
+        return new Deserializers<>(new StringDeserializer(), new StringDeserializer(), null);
     }
 
     private Records newRecords(long baseOffset, int count) {

@@ -1,0 +1,90 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Pull Request Linter
+
+on:
+  workflow_run:
+    workflows: [ Pull Request Reviewed ]
+    types:
+      - completed
+
+jobs:
+  lint-pr:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Env
+        run: printenv
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Load PR Number
+        id: load-pr-number
+        uses: actions/download-artifact@v5
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+          name: PR_NUMBER.txt
+      - name: Handle missing artifact
+        if: ${{ steps.load-pr-number.outcome == 'failure' }}
+        uses: ./.github/actions/gh-api-update-status
+        with:
+          gh-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          commit_sha: ${{ github.event.workflow_run.head_sha }}
+          url: 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+          description: 'Could not load PR number'
+          context: 'PR Linter'
+          state: 'error'
+      - name: Lint PR
+        id: lint-pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          echo "Restored PR_NUMBER.txt:"
+          cat PR_NUMBER.txt
+          PR_NUMBER=$(cat PR_NUMBER.txt)
+          PR_NUMBER=$PR_NUMBER python .github/scripts/pr-format.py 2>> "$GITHUB_STEP_SUMMARY" 1>> pr-format-output.txt
+          exitcode="$?"
+          message=$(cat pr-format-output.txt)
+          echo "message=$message" >> "$GITHUB_OUTPUT"
+          exit $exitcode
+      - name: Handle lint failure
+        if: ${{ failure() && steps.lint-pr.outcome == 'failure' }}
+        uses: ./.github/actions/gh-api-update-status
+        with:
+          gh-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          commit_sha: ${{ github.event.workflow_run.head_sha }}
+          url: 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+          description: ${{ steps.lint-pr.outputs.message }}
+          context: 'PR Linter'
+          state: 'failure'
+      - name: Handle lint success
+        if: ${{ steps.lint-pr.outcome == 'success' }}
+        uses: ./.github/actions/gh-api-update-status
+        with:
+          gh-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          commit_sha: ${{ github.event.workflow_run.head_sha }}
+          url: 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+          description: ${{ steps.lint-pr.outputs.message }}
+          context: 'PR Linter'
+          state: 'success'

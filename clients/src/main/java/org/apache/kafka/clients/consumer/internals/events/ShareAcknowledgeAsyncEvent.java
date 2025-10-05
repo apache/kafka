@@ -16,21 +16,33 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.Acknowledgements;
+import org.apache.kafka.clients.consumer.internals.NodeAcknowledgements;
 import org.apache.kafka.common.TopicIdPartition;
 
 import java.util.Map;
 
 public class ShareAcknowledgeAsyncEvent extends ApplicationEvent {
 
-    private final Map<TopicIdPartition, Acknowledgements> acknowledgementsMap;
+    private final Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap;
+    private final long deadlineMs;
 
-    public ShareAcknowledgeAsyncEvent(final Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
+    public ShareAcknowledgeAsyncEvent(final Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap,
+                                      final long deadlineMs) {
         super(Type.SHARE_ACKNOWLEDGE_ASYNC);
         this.acknowledgementsMap = acknowledgementsMap;
+        this.deadlineMs = deadlineMs;
     }
 
-    public Map<TopicIdPartition, Acknowledgements> acknowledgementsMap() {
+    public Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap() {
         return acknowledgementsMap;
+    }
+
+    public long deadlineMs() {
+        return deadlineMs;
+    }
+
+    @Override
+    protected String toStringBase() {
+        return super.toStringBase() + ", acknowledgementsMap=" + acknowledgementsMap + ", deadlineMs=" + deadlineMs;
     }
 }

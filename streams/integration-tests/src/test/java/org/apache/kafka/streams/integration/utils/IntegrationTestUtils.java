@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -29,6 +30,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Time;
@@ -1002,7 +1004,9 @@ public class IntegrationTestUtils {
                             .get(applicationId)
                             .get();
             return groupDescription.members().isEmpty();
-        } catch (final ExecutionException | InterruptedException e) {
+        } catch (final ExecutionException e) {
+            return e.getCause() instanceof GroupIdNotFoundException;
+        } catch (final InterruptedException e) {
             return false;
         }
     }
@@ -1186,7 +1190,8 @@ public class IntegrationTestUtils {
     /**
      * Sets up a {@link KafkaConsumer} from a copy of the given configuration that has
      * {@link ConsumerConfig#AUTO_OFFSET_RESET_CONFIG} set to "earliest" and {@link ConsumerConfig#ENABLE_AUTO_COMMIT_CONFIG}
-     * set to "true" to prevent missing events as well as repeat consumption.
+     * set to "true" to prevent missing events as well as repeat consumption. This also sets
+     * {@link ConsumerConfig#GROUP_PROTOCOL_CONFIG} to "classic".
      * @param consumerConfig Consumer configuration
      * @return Consumer
      */
@@ -1195,6 +1200,7 @@ public class IntegrationTestUtils {
         filtered.putAll(consumerConfig);
         filtered.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         filtered.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
+        filtered.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name);
         return new KafkaConsumer<>(filtered);
     }
 
@@ -1331,6 +1337,8 @@ public class IntegrationTestUtils {
         public final Map<TopicPartition, AtomicLong> changelogToStartOffset = new ConcurrentHashMap<>();
         public final Map<TopicPartition, AtomicLong> changelogToEndOffset = new ConcurrentHashMap<>();
         public final Map<TopicPartition, AtomicLong> changelogToTotalNumRestored = new ConcurrentHashMap<>();
+        private final Map<TopicPartition, AtomicLong> changelogToRestoreStartTime = new ConcurrentHashMap<>();
+        private final Map<TopicPartition, AtomicLong> changelogToRestoreEndTime = new ConcurrentHashMap<>();
         private final AtomicLong restored;
 
         public TrackingStateRestoreListener() {
@@ -1349,6 +1357,7 @@ public class IntegrationTestUtils {
             changelogToStartOffset.put(topicPartition, new AtomicLong(startingOffset));
             changelogToEndOffset.put(topicPartition, new AtomicLong(endingOffset));
             changelogToTotalNumRestored.put(topicPartition, new AtomicLong(0L));
+            changelogToRestoreStartTime.put(topicPartition, new AtomicLong(System.nanoTime()));
         }
 
         @Override
@@ -1366,6 +1375,7 @@ public class IntegrationTestUtils {
             if (restored != null) {
                 restored.addAndGet(totalRestored);
             }
+            changelogToRestoreEndTime.put(topicPartition, new AtomicLong(System.nanoTime()));
         }
 
         public long totalNumRestored() {
@@ -1374,6 +1384,11 @@ public class IntegrationTestUtils {
                 totalNumRestored += numRestored.get();
             }
             return totalNumRestored;
+        }
+
+        public Map<TopicPartition, Long> changelogToRestoreTime() {
+            return changelogToRestoreStartTime.entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> changelogToRestoreEndTime.get(e.getKey()).get() - e.getValue().get()));
         }
     }
 

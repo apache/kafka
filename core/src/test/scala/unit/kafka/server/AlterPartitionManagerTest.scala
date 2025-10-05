@@ -18,12 +18,9 @@
 package kafka.server
 
 import java.util.Collections
-import java.util.stream.{Stream => JStream}
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
-import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.errors.{AuthenticationException, InvalidUpdateVersionException, OperationNotAttemptedException, UnknownServerException, UnsupportedVersionException}
+import org.apache.kafka.common.errors.{AuthenticationException, OperationNotAttemptedException, UnknownServerException, UnsupportedVersionException}
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState
 import org.apache.kafka.common.message.{AlterPartitionRequestData, AlterPartitionResponseData}
 import org.apache.kafka.common.metrics.Metrics
@@ -32,18 +29,16 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.requests.{AbstractRequest, AlterPartitionRequest, AlterPartitionResponse}
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
-import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, MetadataVersion, NodeToControllerChannelManager}
-import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV2, IBP_3_2_IV0, IBP_3_5_IV1}
+import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager, TopicIdPartition}
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.Arguments
-import org.junit.jupiter.params.provider.MethodSource
+import org.junit.jupiter.params.provider.EnumSource
 import org.mockito.ArgumentMatcher
-import org.mockito.ArgumentMatchers.{any, anyString}
+import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{mock, reset, times, verify}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
@@ -52,8 +47,6 @@ import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 
 class AlterPartitionManagerTest {
-
-  val topic = "test-topic"
   val topicId = Uuid.randomUuid()
   val time = new MockTime
   val metrics = new Metrics
@@ -61,62 +54,51 @@ class AlterPartitionManagerTest {
 
   var brokerToController: NodeToControllerChannelManager = _
 
-  val tp0 = new TopicIdPartition(topicId, 0, topic)
-  val tp1 = new TopicIdPartition(topicId, 1, topic)
-  val tp2 = new TopicIdPartition(topicId, 2, topic)
+  val tp0 = new TopicIdPartition(topicId, 0)
+  val tp1 = new TopicIdPartition(topicId, 1)
+  val tp2 = new TopicIdPartition(topicId, 2)
 
   @BeforeEach
   def setup(): Unit = {
     brokerToController = mock(classOf[NodeToControllerChannelManager])
   }
 
-  @ParameterizedTest
-  @MethodSource(Array("provideMetadataVersions"))
-  def testBasic(metadataVersion: MetadataVersion): Unit = {
+  @Test
+  def testBasic(): Unit = {
     val scheduler = new MockScheduler(time)
-    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => metadataVersion)
+    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterPartitionManager.start()
-    alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10), 0)
+    alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10))
     verify(brokerToController).start()
     verify(brokerToController).sendRequest(any(), any())
   }
 
-  @ParameterizedTest
-  @MethodSource(Array("provideMetadataVersions"))
-  def testBasicWithBrokerEpoch(metadataVersion: MetadataVersion): Unit = {
+  @Test
+  def testBasicWithBrokerEpoch(): Unit = {
     val scheduler = new MockScheduler(time)
-    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 101, () => metadataVersion)
+    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 101)
     alterPartitionManager.start()
     val isrWithBrokerEpoch = ListBuffer[BrokerState]()
     for (ii <- 1 to 3) {
       isrWithBrokerEpoch += new BrokerState().setBrokerId(ii).setBrokerEpoch(100 + ii)
     }
-    alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, LeaderRecoveryState.RECOVERED, isrWithBrokerEpoch.toList.asJava, 10), 0)
+    alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, LeaderRecoveryState.RECOVERED, isrWithBrokerEpoch.toList.asJava, 10))
 
     val expectedAlterPartitionData = new AlterPartitionRequestData()
       .setBrokerId(brokerId)
       .setBrokerEpoch(101)
     val topicData = new AlterPartitionRequestData.TopicData()
-      .setTopicName(topic)
       .setTopicId(topicId)
 
-    if (metadataVersion.isTopicIdsSupported) {
-      val newIsrWithBrokerEpoch = new ListBuffer[BrokerState]()
-      newIsrWithBrokerEpoch.append(new BrokerState().setBrokerId(1).setBrokerEpoch(101))
-      newIsrWithBrokerEpoch.append(new BrokerState().setBrokerId(2).setBrokerEpoch(102))
-      newIsrWithBrokerEpoch.append(new BrokerState().setBrokerId(3).setBrokerEpoch(103))
-      topicData.partitions.add(new AlterPartitionRequestData.PartitionData()
-        .setPartitionIndex(0)
-        .setLeaderEpoch(1)
-        .setPartitionEpoch(10)
-        .setNewIsrWithEpochs(newIsrWithBrokerEpoch.toList.asJava))
-    } else {
-      topicData.partitions.add(new AlterPartitionRequestData.PartitionData()
-        .setPartitionIndex(0)
-        .setLeaderEpoch(1)
-        .setPartitionEpoch(10)
-        .setNewIsr(List(1, 2, 3).map(Integer.valueOf).asJava))
-    }
+    val newIsrWithBrokerEpoch = new ListBuffer[BrokerState]()
+    newIsrWithBrokerEpoch.append(new BrokerState().setBrokerId(1).setBrokerEpoch(101))
+    newIsrWithBrokerEpoch.append(new BrokerState().setBrokerId(2).setBrokerEpoch(102))
+    newIsrWithBrokerEpoch.append(new BrokerState().setBrokerId(3).setBrokerEpoch(103))
+    topicData.partitions.add(new AlterPartitionRequestData.PartitionData()
+      .setPartitionIndex(0)
+      .setLeaderEpoch(1)
+      .setPartitionEpoch(10)
+      .setNewIsrWithEpochs(newIsrWithBrokerEpoch.toList.asJava))
 
     expectedAlterPartitionData.topics.add(topicData)
 
@@ -127,55 +109,49 @@ class AlterPartitionManagerTest {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("provideLeaderRecoveryState"))
-  def testBasicSentLeaderRecoveryState(
-    metadataVersion: MetadataVersion,
-    leaderRecoveryState: LeaderRecoveryState
-  ): Unit = {
+  @EnumSource(classOf[LeaderRecoveryState])
+  def testBasicSentLeaderRecoveryState(leaderRecoveryState: LeaderRecoveryState): Unit = {
     val requestCapture = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[AlterPartitionRequest]])
 
     val scheduler = new MockScheduler(time)
-    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => metadataVersion)
+    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterPartitionManager.start()
-    alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1).map(Int.box).asJava, leaderRecoveryState, 10), 0)
+    alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1).map(Int.box).asJava, leaderRecoveryState, 10))
     verify(brokerToController).start()
     verify(brokerToController).sendRequest(requestCapture.capture(), any())
 
     val request = requestCapture.getValue.build()
-    val expectedLeaderRecoveryState = if (metadataVersion.isAtLeast(IBP_3_2_IV0)) leaderRecoveryState else LeaderRecoveryState.RECOVERED
-    assertEquals(expectedLeaderRecoveryState.value, request.data.topics.get(0).partitions.get(0).leaderRecoveryState())
+    assertEquals(leaderRecoveryState.value, request.data.topics.get(0).partitions.get(0).leaderRecoveryState())
   }
 
-  @ParameterizedTest
-  @MethodSource(Array("provideMetadataVersions"))
-  def testOverwriteWithinBatch(metadataVersion: MetadataVersion): Unit = {
-    val canUseTopicIds = metadataVersion.isAtLeast(MetadataVersion.IBP_2_8_IV0)
+  @Test
+  def testOverwriteWithinBatch(): Unit = {
     val capture: ArgumentCaptor[AbstractRequest.Builder[AlterPartitionRequest]] = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[AlterPartitionRequest]])
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
     val scheduler = new MockScheduler(time)
-    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => metadataVersion)
+    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterPartitionManager.start()
 
     // Only send one ISR update for a given topic+partition
-    val firstSubmitFuture = alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10), 0)
+    val firstSubmitFuture = alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10))
     assertFalse(firstSubmitFuture.isDone)
 
-    val failedSubmitFuture = alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10), 0)
+    val failedSubmitFuture = alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10))
     assertTrue(failedSubmitFuture.isCompletedExceptionally)
-    assertFutureThrows(failedSubmitFuture, classOf[OperationNotAttemptedException])
+    assertFutureThrows(classOf[OperationNotAttemptedException], failedSubmitFuture)
 
     // Simulate response
     val alterPartitionResp = partitionResponse()
     val resp = makeClientResponse(
       response = alterPartitionResp,
-      version = if (canUseTopicIds) ApiKeys.ALTER_PARTITION.latestVersion else 1
+      version = ApiKeys.ALTER_PARTITION.latestVersion
     )
     verify(brokerToController).sendRequest(capture.capture(), callbackCapture.capture())
     callbackCapture.getValue.onComplete(resp)
 
     // Now we can submit this partition again
-    val newSubmitFuture = alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10), 0)
+    val newSubmitFuture = alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10))
     assertFalse(newSubmitFuture.isDone)
 
     verify(brokerToController).start()
@@ -191,24 +167,23 @@ class AlterPartitionManagerTest {
     }
   }
 
-  @ParameterizedTest
-  @MethodSource(Array("provideMetadataVersions"))
-  def testSingleBatch(metadataVersion: MetadataVersion): Unit = {
+  @Test
+  def testSingleBatch(): Unit = {
     val capture: ArgumentCaptor[AbstractRequest.Builder[AlterPartitionRequest]] = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[AlterPartitionRequest]])
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
     val scheduler = new MockScheduler(time)
-    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => metadataVersion)
+    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterPartitionManager.start()
 
     // First request will send batch of one
-    alterPartitionManager.submit(new TopicIdPartition(topicId, 0, topic),
-      new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10), 0)
+    alterPartitionManager.submit(new TopicIdPartition(topicId, 0),
+      new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10))
 
     // Other submissions will queue up until a response
     for (i <- 1 to 9) {
-      alterPartitionManager.submit(new TopicIdPartition(topicId, i, topic),
-        new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10), 0)
+      alterPartitionManager.submit(new TopicIdPartition(topicId, i),
+        new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10))
     }
 
     // Simulate response, omitting partition 0 will allow it to stay in unsent queue
@@ -243,14 +218,14 @@ class AlterPartitionManagerTest {
     val callbackCapture = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
     val scheduler = new MockScheduler(time)
-    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => IBP_3_2_IV0)
+    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterPartitionManager.start()
-    val future = alterPartitionManager.submit(tp0, leaderAndIsr, 0)
+    val future = alterPartitionManager.submit(tp0, leaderAndIsr)
     val finalFuture = new CompletableFuture[LeaderAndIsr]()
     future.whenComplete { (_, e) =>
       if (e != null) {
         // Retry when error.
-        alterPartitionManager.submit(tp0, leaderAndIsr, 0).whenComplete { (result, e) =>
+        alterPartitionManager.submit(tp0, leaderAndIsr).whenComplete { (result, e) =>
           if (e != null) {
             finalFuture.completeExceptionally(e)
           } else {
@@ -276,7 +251,7 @@ class AlterPartitionManagerTest {
 
     assertEquals(leaderAndIsr, finalFuture.get(200, TimeUnit.MILLISECONDS))
     // No more items in unsentIsrUpdates
-    assertFalse(alterPartitionManager.unsentIsrUpdates.containsKey(tp0.topicPartition))
+    assertFalse(alterPartitionManager.unsentIsrUpdates.containsKey(tp0))
   }
 
   @Test
@@ -317,16 +292,16 @@ class AlterPartitionManagerTest {
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
     val scheduler = new MockScheduler(time)
-    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => IBP_3_2_IV0)
+    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterPartitionManager.start()
-    alterPartitionManager.submit(tp0, leaderAndIsr, 0)
+    alterPartitionManager.submit(tp0, leaderAndIsr)
 
     verify(brokerToController).start()
     verify(brokerToController).sendRequest(any(), callbackCapture.capture())
     callbackCapture.getValue.onComplete(response)
 
     // Any top-level error, we want to retry, so we don't clear items from the pending map
-    assertTrue(alterPartitionManager.unsentIsrUpdates.containsKey(tp0.topicPartition))
+    assertTrue(alterPartitionManager.unsentIsrUpdates.containsKey(tp0))
 
     reset(brokerToController)
 
@@ -341,7 +316,7 @@ class AlterPartitionManagerTest {
     verify(brokerToController).sendRequest(any(), callbackCapture.capture())
     callbackCapture.getValue.onComplete(retryResponse)
 
-    assertFalse(alterPartitionManager.unsentIsrUpdates.containsKey(tp0.topicPartition))
+    assertFalse(alterPartitionManager.unsentIsrUpdates.containsKey(tp0))
   }
 
   @Test
@@ -367,7 +342,7 @@ class AlterPartitionManagerTest {
   private def checkPartitionError(error: Errors): Unit = {
     val alterPartitionManager = testPartitionError(tp0, error)
     // Any partition-level error should clear the item from the pending queue allowing for future updates
-    val future = alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10), 0)
+    val future = alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10))
     assertFalse(future.isDone)
   }
 
@@ -376,10 +351,10 @@ class AlterPartitionManagerTest {
     reset(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => IBP_3_2_IV0)
+    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterPartitionManager.start()
 
-    val future = alterPartitionManager.submit(tp, new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10), 0)
+    val future = alterPartitionManager.submit(tp, new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10))
 
     verify(brokerToController).start()
     verify(brokerToController).sendRequest(any(), callbackCapture.capture())
@@ -389,25 +364,24 @@ class AlterPartitionManagerTest {
     val resp = makeClientResponse(alterPartitionResp, ApiKeys.ALTER_PARTITION.latestVersion)
     callbackCapture.getValue.onComplete(resp)
     assertTrue(future.isCompletedExceptionally)
-    assertFutureThrows(future, error.exception.getClass)
+    assertFutureThrows(error.exception.getClass, future)
     alterPartitionManager
   }
 
-  @ParameterizedTest
-  @MethodSource(Array("provideMetadataVersions"))
-  def testOneInFlight(metadataVersion: MetadataVersion): Unit = {
+  @Test
+  def testOneInFlight(): Unit = {
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
     val scheduler = new MockScheduler(time)
-    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => metadataVersion)
+    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterPartitionManager.start()
 
     // First submit will send the request
-    alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10), 0)
+    alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10))
 
     // These will become pending unsent items
-    alterPartitionManager.submit(tp1, new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10), 0)
-    alterPartitionManager.submit(tp2, new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10), 0)
+    alterPartitionManager.submit(tp1, new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10))
+    alterPartitionManager.submit(tp2, new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10))
 
     verify(brokerToController).start()
     verify(brokerToController).sendRequest(any(), callbackCapture.capture())
@@ -420,16 +394,10 @@ class AlterPartitionManagerTest {
     callbackCapture.getValue.onComplete(resp)
   }
 
-  @ParameterizedTest
-  @MethodSource(Array("provideMetadataVersions"))
-  def testPartitionMissingInResponse(metadataVersion: MetadataVersion): Unit = {
-    val expectedVersion = if (metadataVersion.isTopicIdsSupported) {
-      ApiKeys.ALTER_PARTITION.latestVersion
-    } else {
-      1.toShort
-    }
+  @Test
+  def testPartitionMissingInResponse(): Unit = {
+    val expectedVersion = ApiKeys.ALTER_PARTITION.latestVersion
     val leaderAndIsr = new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10)
-    val controlledEpoch = 0
     val brokerEpoch = 2
     val scheduler = new MockScheduler(time)
     val brokerToController = Mockito.mock(classOf[NodeToControllerChannelManager])
@@ -438,28 +406,27 @@ class AlterPartitionManagerTest {
       scheduler,
       time,
       brokerId,
-      () => brokerEpoch,
-      () => metadataVersion
+      () => brokerEpoch
     )
     alterPartitionManager.start()
 
     // The first `submit` will send the `AlterIsr` request
-    val future1 = alterPartitionManager.submit(tp0, leaderAndIsr, controlledEpoch)
+    val future1 = alterPartitionManager.submit(tp0, leaderAndIsr)
     val callback1 = verifySendRequest(brokerToController, alterPartitionRequestMatcher(
       expectedTopicPartitions = Set(tp0),
       expectedVersion = expectedVersion
     ))
 
     // Additional calls while the `AlterIsr` request is inflight will be queued
-    val future2 = alterPartitionManager.submit(tp1, leaderAndIsr, controlledEpoch)
-    val future3 = alterPartitionManager.submit(tp2, leaderAndIsr, controlledEpoch)
+    val future2 = alterPartitionManager.submit(tp1, leaderAndIsr)
+    val future3 = alterPartitionManager.submit(tp2, leaderAndIsr)
 
     // Respond to the first request, which will also allow the next request to get sent
     callback1.onComplete(makeClientResponse(
       response = partitionResponse(tp0, Errors.UNKNOWN_SERVER_ERROR),
       version = expectedVersion
     ))
-    assertFutureThrows(future1, classOf[UnknownServerException])
+    assertFutureThrows(classOf[UnknownServerException], future1)
     assertFalse(future2.isDone)
     assertFalse(future3.isDone)
 
@@ -472,7 +439,7 @@ class AlterPartitionManagerTest {
       response = partitionResponse(tp2, Errors.UNKNOWN_SERVER_ERROR),
       version = expectedVersion
     ))
-    assertFutureThrows(future3, classOf[UnknownServerException])
+    assertFutureThrows(classOf[UnknownServerException], future3)
     assertFalse(future2.isDone)
 
     // The missing partition should be retried
@@ -484,75 +451,7 @@ class AlterPartitionManagerTest {
       response = partitionResponse(tp1, Errors.UNKNOWN_SERVER_ERROR),
       version = expectedVersion
     ))
-    assertFutureThrows(future2, classOf[UnknownServerException])
-  }
-
-  @ParameterizedTest
-  @MethodSource(Array("provideMetadataVersions"))
-  def testPartialTopicIds(metadataVersion: MetadataVersion): Unit = {
-    val canUseTopicIds = metadataVersion.isAtLeast(MetadataVersion.IBP_2_8_IV0)
-    val foo = new TopicIdPartition(Uuid.ZERO_UUID, 0, "foo")
-    val bar = new TopicIdPartition(Uuid.randomUuid(), 0, "bar")
-    val zar = new TopicIdPartition(Uuid.randomUuid(), 0, "zar")
-
-    val leaderAndIsr = new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10)
-    val controlledEpoch = 0
-    val brokerEpoch = 2
-    val scheduler = new MockScheduler(time)
-    val brokerToController = Mockito.mock(classOf[NodeToControllerChannelManager])
-    val alterPartitionManager = new DefaultAlterPartitionManager(
-      brokerToController,
-      scheduler,
-      time,
-      brokerId,
-      () => brokerEpoch,
-      () => metadataVersion
-    )
-    alterPartitionManager.start()
-
-    // Submits an alter isr update with zar, which has a topic id.
-    val future1 = alterPartitionManager.submit(zar, leaderAndIsr, controlledEpoch)
-
-    // The latest version is expected if all the submitted partitions
-    // have topic ids and IBP >= 2.8; version 1 should be used otherwise.
-    val callback1 = verifySendRequest(brokerToController, alterPartitionRequestMatcher(
-      expectedTopicPartitions = Set(zar),
-      expectedVersion = if (canUseTopicIds) ApiKeys.ALTER_PARTITION.latestVersion else 1
-    ))
-
-    // Submits two additional alter isr changes with foo and bar while the previous one
-    // is still inflight. foo has no topic id, bar has one.
-    val future2 = alterPartitionManager.submit(foo, leaderAndIsr, controlledEpoch)
-    val future3 = alterPartitionManager.submit(bar, leaderAndIsr, controlledEpoch)
-
-    // Completes the first request. That triggers the next one.
-    callback1.onComplete(makeClientResponse(
-      response = makeAlterPartition(Seq(makeAlterPartitionTopicData(zar, Errors.NONE))),
-      version = if (canUseTopicIds) ApiKeys.ALTER_PARTITION.latestVersion else 1
-    ))
-
-    assertTrue(future1.isDone)
-    assertFalse(future2.isDone)
-    assertFalse(future3.isDone)
-
-    // Version 1 is expected because foo does not have a topic id.
-    val callback2 = verifySendRequest(brokerToController, alterPartitionRequestMatcher(
-      expectedTopicPartitions = Set(foo, bar),
-      expectedVersion = 1
-    ))
-
-    // Completes the second request.
-    callback2.onComplete(makeClientResponse(
-      response = makeAlterPartition(Seq(
-        makeAlterPartitionTopicData(foo, Errors.NONE),
-        makeAlterPartitionTopicData(bar, Errors.NONE),
-      )),
-      version = 1
-    ))
-
-    assertTrue(future1.isDone)
-    assertTrue(future2.isDone)
-    assertTrue(future3.isDone)
+    assertFutureThrows(classOf[UnknownServerException], future2)
   }
 
   private def verifySendRequest(
@@ -581,13 +480,13 @@ class AlterPartitionManagerTest {
       val alterPartitionRequest = request.asInstanceOf[AlterPartitionRequest.Builder].build()
       assertEquals(expectedVersion, alterPartitionRequest.version)
 
-      val requestTopicPartitions = alterPartitionRequest.data.topics.asScala.flatMap { topicData =>
+      val requestTopicIdPartitions = alterPartitionRequest.data.topics.asScala.flatMap { topicData =>
         topicData.partitions.asScala.map { partitionData =>
-          new TopicIdPartition(topicData.topicId, partitionData.partitionIndex, topicData.topicName)
+          (topicData.topicId, partitionData.partitionIndex)
         }
       }.toSet
 
-      expectedTopicPartitions == requestTopicPartitions
+      expectedTopicPartitions.map(tp => (tp.topicId, tp.partitionId)) == requestTopicIdPartitions
     }
   }
 
@@ -606,54 +505,8 @@ class AlterPartitionManagerTest {
       null,
       // Response is serialized and deserialized to ensure that its does
       // not contain ignorable fields used by other versions.
-      AlterPartitionResponse.parse(MessageUtil.toByteBuffer(response.data, version), version)
+      AlterPartitionResponse.parse(MessageUtil.toByteBufferAccessor(response.data, version), version)
     )
-  }
-
-  private def makeAlterPartition(
-    topics: Seq[AlterPartitionResponseData.TopicData]
-  ): AlterPartitionResponse = {
-    new AlterPartitionResponse(new AlterPartitionResponseData().setTopics(topics.asJava))
-  }
-
-  private def makeAlterPartitionTopicData(
-    topicIdPartition: TopicIdPartition,
-    error: Errors
-  ): AlterPartitionResponseData.TopicData = {
-    new AlterPartitionResponseData.TopicData()
-      .setTopicName(topicIdPartition.topic)
-      .setTopicId(topicIdPartition.topicId)
-      .setPartitions(Collections.singletonList(
-        new AlterPartitionResponseData.PartitionData()
-          .setPartitionIndex(topicIdPartition.partition)
-          .setErrorCode(error.code)))
-  }
-
-  @Test
-  def testZkBasic(): Unit = {
-    val scheduler = new MockScheduler(time)
-    scheduler.startup()
-
-    val kafkaZkClient = Mockito.mock(classOf[KafkaZkClient])
-    Mockito.doAnswer(_ => (true, 2))
-      .when(kafkaZkClient)
-      .conditionalUpdatePath(anyString(), any(), ArgumentMatchers.eq(1), any())
-    Mockito.doAnswer(_ => (false, 2))
-      .when(kafkaZkClient)
-      .conditionalUpdatePath(anyString(), any(), ArgumentMatchers.eq(3), any())
-
-    val zkIsrManager = new ZkAlterPartitionManager(scheduler, time, kafkaZkClient)
-    zkIsrManager.start()
-
-    // Correct ZK version
-    val future1 = zkIsrManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 1), 0)
-    assertTrue(future1.isDone)
-    assertEquals(new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 2), future1.get)
-
-    // Wrong ZK version
-    val future2 = zkIsrManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 3), 0)
-    assertTrue(future2.isCompletedExceptionally)
-    assertFutureThrows(future2, classOf[InvalidUpdateVersionException])
   }
 
   private def partitionResponse(
@@ -667,38 +520,14 @@ class AlterPartitionManagerTest {
     new AlterPartitionResponse(new AlterPartitionResponseData()
       .setTopics(Collections.singletonList(
         new AlterPartitionResponseData.TopicData()
-          .setTopicName(tp.topic)
           .setTopicId(tp.topicId)
           .setPartitions(Collections.singletonList(
             new AlterPartitionResponseData.PartitionData()
-              .setPartitionIndex(tp.partition)
+              .setPartitionIndex(tp.partitionId)
               .setPartitionEpoch(partitionEpoch)
               .setLeaderEpoch(leaderEpoch)
               .setLeaderId(leaderId)
               .setIsr(isr.map(Integer.valueOf).asJava)
               .setErrorCode(error.code))))))
-  }
-}
-
-object AlterPartitionManagerTest {
-  def provideMetadataVersions(): JStream[MetadataVersion] = {
-    JStream.of(
-      // Supports KIP-903: include broker epoch in AlterPartition request
-      IBP_3_5_IV1,
-      // Supports KIP-704: unclean leader recovery
-      IBP_3_2_IV0,
-      // Supports KIP-497: alter partition
-      IBP_2_7_IV2
-    )
-  }
-
-  def provideLeaderRecoveryState(): JStream[Arguments] = {
-    // Multiply metadataVersions by leaderRecoveryState
-    provideMetadataVersions().flatMap { metadataVersion =>
-      JStream.of(
-        Arguments.of(metadataVersion, LeaderRecoveryState.RECOVERED),
-        Arguments.of(metadataVersion, LeaderRecoveryState.RECOVERING)
-      )
-    }
   }
 }

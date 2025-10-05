@@ -23,10 +23,10 @@
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
-      "about": "The top level response error code" },
+      "about": "The top level response error code." },
     { "name": "ProducerIdStart", "type": "int64", "versions": "0+", "entityType": "producerId",
-      "about": "The first producer ID in this range, inclusive"},
+      "about": "The first producer ID in this range, inclusive."},
     { "name": "ProducerIdLen", "type": "int32", "versions": "0+",
-      "about": "The number of producer IDs in this range"}
+      "about": "The number of producer IDs in this range."}
   ]
 }

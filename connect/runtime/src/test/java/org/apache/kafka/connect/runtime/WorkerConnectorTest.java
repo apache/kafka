@@ -596,17 +596,11 @@ public class WorkerConnectorTest {
     }
 
     protected void assertInitializedMetric(WorkerConnector workerConnector) {
-        String expectedType;
-        switch (connectorType) {
-            case SINK:
-                expectedType = "sink";
-                break;
-            case SOURCE:
-                expectedType = "source";
-                break;
-            default:
-                throw new IllegalStateException("Unexpected connector type: " + connectorType);
-        }
+        String expectedType = switch (connectorType) {
+            case SINK -> "sink";
+            case SOURCE -> "source";
+            default -> throw new IllegalStateException("Unexpected connector type: " + connectorType);
+        };
         assertInitializedMetric(workerConnector, expectedType);
     }
 
@@ -621,6 +615,7 @@ public class WorkerConnectorTest {
         String type = metrics.currentMetricValueAsString(metricGroup, "connector-type");
         String clazz = metrics.currentMetricValueAsString(metricGroup, "connector-class");
         String version = metrics.currentMetricValueAsString(metricGroup, "connector-version");
+        assertEquals("unassigned", status);
         assertEquals(expectedType, type);
         assertNotNull(clazz);
         assertEquals(VERSION, version);

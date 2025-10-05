@@ -47,16 +47,22 @@ class StreamsStandbyTask(BaseStreamsTest):
                                                  })
 
     @cluster(num_nodes=10)
-    @matrix(metadata_quorum=[quorum.isolated_kraft], use_new_coordinator=[True, False])
-    def test_standby_tasks_rebalance(self, metadata_quorum, use_new_coordinator=False):
+    @matrix(metadata_quorum=[quorum.combined_kraft],
+            group_protocol=["classic", "streams"])
+    def test_standby_tasks_rebalance(self, metadata_quorum, group_protocol):
         # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
         configs = self.get_configs(
-            ",sourceTopic=%s,sinkTopic1=%s,sinkTopic2=%s,internal.task.assignor.class=org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor" % (
+            group_protocol=group_protocol,
+            extra_configs=
+            ",application.id=test_standby_tasks_rebalance,sourceTopic=%s,sinkTopic1=%s,sinkTopic2=%s,internal.task.assignor.class=org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor" % (
             self.streams_source_topic,
             self.streams_sink_topic_1,
             self.streams_sink_topic_2
             )
         )
+
+        if group_protocol == "streams":
+            self.configure_standby_replicas("test_standby_tasks_rebalance", 1)
 
         producer = self.get_producer(self.streams_source_topic, self.num_messages, throughput=15000, repeating_keys=6)
         producer.start()

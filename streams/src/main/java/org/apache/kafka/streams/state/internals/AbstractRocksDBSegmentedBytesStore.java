@@ -53,11 +53,10 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     private final String name;
     private final AbstractSegments<S> segments;
-    private final String metricScope;
     private final long retentionPeriod;
     private final KeySchema keySchema;
 
-    private InternalProcessorContext internalProcessorContext;
+    private InternalProcessorContext<?, ?> internalProcessorContext;
     private Sensor expiredRecordSensor;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     private boolean consistencyEnabled = false;
@@ -66,12 +65,10 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     private volatile boolean open;
 
     AbstractRocksDBSegmentedBytesStore(final String name,
-                                       final String metricScope,
                                        final long retentionPeriod,
                                        final KeySchema keySchema,
                                        final AbstractSegments<S> segments) {
         this.name = name;
-        this.metricScope = metricScope;
         this.retentionPeriod = retentionPeriod;
         this.keySchema = keySchema;
         this.segments = segments;

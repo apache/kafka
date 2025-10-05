@@ -66,7 +66,7 @@ public class FakeLocalMetadataStore {
      */
     public static void updateTopicConfig(String topic, Config newConfig) {
         ConcurrentHashMap<String, String> topicConfigs = FakeLocalMetadataStore.ALL_TOPICS.getOrDefault(topic, new ConcurrentHashMap<>());
-        newConfig.entries().stream().forEach(configEntry -> {
+        newConfig.entries().forEach(configEntry -> {
             if (configEntry.name() != null) {
                 if (configEntry.value() != null) {
                     log.debug("Topic '{}' update config '{}' to '{}'", topic, configEntry.name(), configEntry.value());

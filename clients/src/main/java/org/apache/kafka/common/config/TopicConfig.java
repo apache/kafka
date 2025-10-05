@@ -21,7 +21,7 @@ package org.apache.kafka.common.config;
  * <p>Keys that can be used to configure a topic. These keys are useful when creating or reconfiguring a
  * topic using the AdminClient.
  *
- * <p>The intended pattern is for broker configs to include a <code>`log.`</code> prefix. For example, to set the default broker
+ * <p>The intended pattern is for broker configs to include a <code>log.</code> prefix. For example, to set the default broker
  * cleanup policy, one would set <code>log.cleanup.policy</code> instead of <code>cleanup.policy</code>. Unfortunately, there are many cases
  * where this pattern is not followed.
  */
@@ -58,9 +58,10 @@ public class TopicConfig {
     public static final String FLUSH_MS_CONFIG = "flush.ms";
     public static final String FLUSH_MS_DOC = "This setting allows specifying a time interval at which we will " +
         "force an fsync of data written to the log. For example if this was set to 1000 " +
-        "we would fsync after 1000 ms had passed. In general we recommend you not set " +
-        "this and use replication for durability and allow the operating system's background " +
-        "flush capabilities as it is more efficient.";
+        "we would fsync after 1000 ms had passed. Note that this setting depends on the broker-level " +
+        "configuration <code>log.flush.scheduler.interval.ms</code>, which controls how frequently the flush check occurs. " +
+        "In general we recommend you not set this and use replication for durability and allow the operating system's " +
+        "background flush capabilities as it is more efficient.";
 
     public static final String RETENTION_BYTES_CONFIG = "retention.bytes";
     public static final String RETENTION_BYTES_DOC = "This configuration controls the maximum size a partition " +
@@ -80,18 +81,19 @@ public class TopicConfig {
         "Moreover, it triggers the rolling of new segment if the retention.ms condition is satisfied.";
 
     public static final String REMOTE_LOG_STORAGE_ENABLE_CONFIG = "remote.storage.enable";
-    public static final String REMOTE_LOG_STORAGE_ENABLE_DOC = "To enable tiered storage for a topic, set this configuration as true. " +
-            "You can not disable this config once it is enabled. It will be provided in future versions.";
+    public static final String REMOTE_LOG_STORAGE_ENABLE_DOC = "To enable tiered storage for a topic, set this configuration to true. " +
+            "To disable tiered storage for a topic that has it enabled, set this configuration to false. " +
+            "When disabling, you must also set <code>remote.log.delete.on.disable</code> to true.";
 
     public static final String LOCAL_LOG_RETENTION_MS_CONFIG = "local.retention.ms";
     public static final String LOCAL_LOG_RETENTION_MS_DOC = "The number of milliseconds to keep the local log segment before it gets deleted. " +
-            "Default value is -2, it represents `retention.ms` value is to be used. The effective value should always be less than or equal " +
-            "to `retention.ms` value.";
+            "Default value is -2, it represents <code>retention.ms</code> value is to be used. The effective value should always be less than or equal " +
+            "to <code>retention.ms</code> value.";
 
     public static final String LOCAL_LOG_RETENTION_BYTES_CONFIG = "local.retention.bytes";
     public static final String LOCAL_LOG_RETENTION_BYTES_DOC = "The maximum size of local log segments that can grow for a partition before it " +
-            "deletes the old segments. Default value is -2, it represents `retention.bytes` value to be used. The effective value should always be " +
-            "less than or equal to `retention.bytes` value.";
+            "deletes the old segments. Default value is -2, it represents <code>retention.bytes</code> value to be used. The effective value should always be " +
+            "less than or equal to <code>retention.bytes</code> value.";
 
     public static final String REMOTE_LOG_COPY_DISABLE_CONFIG = "remote.log.copy.disable";
     public static final String REMOTE_LOG_COPY_DISABLE_DOC = "Determines whether tiered data for a topic should become read only," +
@@ -102,22 +104,19 @@ public class TopicConfig {
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_DOC = "Determines whether tiered data for a topic should be " +
             "deleted after tiered storage is disabled on a topic. This configuration should be enabled when trying to " +
-            "set `remote.storage.enable` from true to false";
+            "set <code>remote.storage.enable</code> from true to false";
 
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
     public static final String MAX_MESSAGE_BYTES_DOC =
-        "The largest record batch size allowed by Kafka (after compression if compression is enabled). " +
-        "If this is increased and there are consumers older than 0.10.2, the consumers' fetch " +
-        "size must also be increased so that they can fetch record batches this large. " +
-        "In the latest message format version, records are always grouped into batches for efficiency. " +
-        "In previous message format versions, uncompressed records are not grouped into batches and this " +
-        "limit only applies to a single record in that case.";
+        "The largest record batch size allowed by Kafka (after compression if compression is enabled).";
 
     public static final String INDEX_INTERVAL_BYTES_CONFIG = "index.interval.bytes";
-    public static final String INDEX_INTERVAL_BYTES_DOC = "This setting controls how frequently " +
-        "Kafka adds an index entry to its offset index. The default setting ensures that we index a " +
-        "message roughly every 4096 bytes. More indexing allows reads to jump closer to the exact " +
-        "position in the log but makes the index larger. You probably don't need to change this.";
+    public static final String INDEX_INTERVAL_BYTES_DOC = "This setting controls how frequently Kafka " +
+            "adds entries to its offset index and, conditionally, to its time index. " +
+            "The default setting ensures that we index a message roughly every 4096 bytes. " +
+            "More frequent indexing allows reads to jump closer to the exact position in the log " +
+            "but results in larger index files. You probably don't need to change this." +
+            "<p> Note: the time index will be inserted only when the timestamp is greater than the last indexed timestamp.</p>";
 
     public static final String FILE_DELETE_DELAY_MS_CONFIG = "file.delete.delay.ms";
     public static final String FILE_DELETE_DELAY_MS_DOC = "The time to wait before deleting a file from the " +
@@ -160,25 +159,33 @@ public class TopicConfig {
         "<a href=\"#compaction\">log compaction</a>, which retains the latest value for each key. " +
         "It is also possible to specify both policies in a comma-separated list (e.g. \"delete,compact\"). " +
         "In this case, old segments will be discarded per the retention time and size configuration, " +
-        "while retained segments will be compacted.";
+        "while retained segments will be compacted. " +
+        "An empty list means infinite retention - no cleanup policies will be applied and log segments " +
+        "will be retained indefinitely. Note that with remote storage enabled, local retention limits " +
+        "(log.local.retention.ms and log.local.retention.bytes) are still applied to local segments.";
 
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = "unclean.leader.election.enable";
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_DOC = "Indicates whether to enable replicas " +
         "not in the ISR set to be elected as leader as a last resort, even though doing so may result in data " +
         "loss.<p>Note: In KRaft mode, when enabling this config dynamically, it needs to wait for the unclean leader election" +
-        "thread to trigger election periodically (default is 5 minutes). Please run `kafka-leader-election.sh` with `unclean` option " +
+        "thread to trigger election periodically (default is 5 minutes). Please run <code>kafka-leader-election.sh</code> with <code>unclean</code> option " +
          "to trigger the unclean leader election immediately if needed.</p>";
 
     public static final String MIN_IN_SYNC_REPLICAS_CONFIG = "min.insync.replicas";
-    public static final String MIN_IN_SYNC_REPLICAS_DOC = "When a producer sets acks to \"all\" (or \"-1\"), " +
-        "this configuration specifies the minimum number of replicas that must acknowledge " +
-        "a write for the write to be considered successful. If this minimum cannot be met, " +
-        "then the producer will raise an exception (either NotEnoughReplicas or " +
-        "NotEnoughReplicasAfterAppend).<br>When used together, <code>min.insync.replicas</code> and <code>acks</code> " +
-        "allow you to enforce greater durability guarantees. A typical scenario would be to " +
-        "create a topic with a replication factor of 3, set <code>min.insync.replicas</code> to 2, and " +
-        "produce with <code>acks</code> of \"all\". This will ensure that the producer raises an exception " +
-        "if a majority of replicas do not receive a write.";
+    public static final String MIN_IN_SYNC_REPLICAS_DOC = "Specifies the <i>minimum</i> number of in-sync replicas (including the leader) " +
+        "required for a write to succeed when a producer sets <code>acks</code> to \"all\" (or \"-1\"). In the <code>acks=all</code> " +
+        "case, every in-sync replica must acknowledge a write for it to be considered successful. E.g., if a topic has " +
+        "<code>replication.factor</code> of 3 and the ISR set includes all three replicas, then all three replicas must acknowledge an " +
+        "<code>acks=all</code> write for it to succeed, even if <code>min.insync.replicas</code> happens to be less than 3. " +
+        "If <code>acks=all</code> and the current ISR set contains fewer than <code>min.insync.replicas</code> members, then the producer " +
+        "will raise an exception (either <code>NotEnoughReplicas</code> or <code>NotEnoughReplicasAfterAppend</code>).<br> " +
+        "Regardless of the <code>acks</code> setting, the messages will not be visible to the consumers until " +
+        "they are replicated to all in-sync replicas and the <code>min.insync.replicas</code> condition is met.<br> " +
+        "When used together, <code>min.insync.replicas</code> and <code>acks</code> allow you to enforce greater durability guarantees. " +
+        "A typical scenario would be to create a topic with a replication factor of 3, " +
+        "set <code>min.insync.replicas</code> to 2, and produce with <code>acks</code> of \"all\". " +
+        "This ensures that a majority of replicas must persist a write before it's considered successful by the producer and it's visible to consumers." +
+        "<p>Note that when the Eligible Leader Replicas feature is enabled, the semantics of this config changes. Please refer to <a href=\"#eligible_leader_replicas\">the ELR section</a> for more info.</p>";
 
     public static final String COMPRESSION_TYPE_CONFIG = "compression.type";
     public static final String COMPRESSION_TYPE_DOC = "Specify the final compression type for a given topic. " +
@@ -198,46 +205,9 @@ public class TopicConfig {
     public static final String PREALLOCATE_DOC = "True if we should preallocate the file on disk when " +
         "creating a new log segment.";
 
-    /**
-     * @deprecated since 3.0, removal planned in 4.0. The default value for this config is appropriate
-     * for most situations.
-     */
-    @Deprecated
-    public static final String MESSAGE_FORMAT_VERSION_CONFIG = "message.format.version";
-
-    /**
-     * @deprecated since 3.0, removal planned in 4.0. The default value for this config is appropriate
-     * for most situations.
-     */
-    @Deprecated
-    public static final String MESSAGE_FORMAT_VERSION_DOC = "[DEPRECATED] Specify the message format version the broker " +
-        "will use to append messages to the logs. The value of this config is always assumed to be `3.0` if " +
-        "`inter.broker.protocol.version` is 3.0 or higher (the actual config value is ignored). Otherwise, the value should " +
-        "be a valid ApiVersion. Some examples are: 0.10.0, 1.1, 2.8, 3.0. By setting a particular message format version, the " +
-        "user is certifying that all the existing messages on disk are smaller or equal than the specified version. Setting " +
-        "this value incorrectly will cause consumers with older versions to break as they will receive messages with a format " +
-        "that they don't understand.";
-
     public static final String MESSAGE_TIMESTAMP_TYPE_CONFIG = "message.timestamp.type";
     public static final String MESSAGE_TIMESTAMP_TYPE_DOC = "Define whether the timestamp in the message is " +
         "message create time or log append time.";
-
-    /**
-     * @deprecated since 3.6, removal planned in 4.0.
-     * Use message.timestamp.before.max.ms and message.timestamp.after.max.ms instead
-     */
-    @Deprecated
-    public static final String MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG = "message.timestamp.difference.max.ms";
-
-    /**
-     * @deprecated since 3.6, removal planned in 4.0.
-     * Use message.timestamp.before.max.ms and message.timestamp.after.max.ms instead
-     */
-    @Deprecated
-    public static final String MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC = "[DEPRECATED] The maximum difference allowed between " +
-        "the timestamp when a broker receives a message and the timestamp specified in the message. If " +
-        "message.timestamp.type=CreateTime, a message will be rejected if the difference in timestamp " +
-        "exceeds this threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
 
     public static final String MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG = "message.timestamp.before.max.ms";
     public static final String MESSAGE_TIMESTAMP_BEFORE_MAX_MS_DOC = "This configuration sets the allowable timestamp " +
@@ -251,10 +221,18 @@ public class TopicConfig {
         "or equal to the broker's timestamp, with the maximum allowable difference determined by the value set in this " +
         "configuration. If message.timestamp.type=CreateTime, the message will be rejected if the difference in " +
         "timestamps exceeds this specified threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
+
+    /**
+     * @deprecated down-conversion is not possible in Apache Kafka 4.0 and newer, hence this configuration is a no-op,
+     *             and it is deprecated for removal in Apache Kafka 5.0.
+     */
+    @Deprecated
     public static final String MESSAGE_DOWNCONVERSION_ENABLE_CONFIG = "message.downconversion.enable";
-    public static final String MESSAGE_DOWNCONVERSION_ENABLE_DOC = "This configuration controls whether " +
-        "down-conversion of message formats is enabled to satisfy consume requests. When set to <code>false</code>, " +
-        "broker will not perform down-conversion for consumers expecting an older message format. The broker responds " +
-        "with <code>UNSUPPORTED_VERSION</code> error for consume requests from such older clients. This configuration" +
-        "does not apply to any message format conversion that might be required for replication to followers.";
+
+    /**
+     * @deprecated see {@link #MESSAGE_DOWNCONVERSION_ENABLE_CONFIG}.
+     */
+    @Deprecated
+    public static final String MESSAGE_DOWNCONVERSION_ENABLE_DOC = "Down-conversion is not possible in Apache Kafka 4.0 and newer, " +
+        "hence this configuration is no-op and it is deprecated for removal in Apache Kafka 5.0.";
 }

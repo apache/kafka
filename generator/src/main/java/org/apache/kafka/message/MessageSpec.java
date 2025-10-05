@@ -20,7 +20,6 @@ package org.apache.kafka.message;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -42,6 +41,7 @@ public final class MessageSpec {
     private final boolean latestVersionUnstable;
 
     @JsonCreator
+    @SuppressWarnings({"NPathComplexity", "CyclomaticComplexity"})
     public MessageSpec(@JsonProperty("name") String name,
                        @JsonProperty("validVersions") String validVersions,
                        @JsonProperty("deprecatedVersions") String deprecatedVersions,
@@ -57,30 +57,57 @@ public final class MessageSpec {
         this.apiKey = apiKey == null ? Optional.empty() : Optional.of(apiKey);
         this.type = Objects.requireNonNull(type);
         this.commonStructs = commonStructs == null ? Collections.emptyList() :
-                Collections.unmodifiableList(new ArrayList<>(commonStructs));
-        if (flexibleVersions == null) {
-            throw new RuntimeException("You must specify a value for flexibleVersions. " +
-                    "Please use 0+ for all new messages.");
-        }
-        this.flexibleVersions = Versions.parse(flexibleVersions, Versions.NONE);
-        if ((!this.flexibleVersions().empty()) &&
-                (this.flexibleVersions.highest() < Short.MAX_VALUE)) {
-            throw new RuntimeException("Field " + name + " specifies flexibleVersions " +
-                this.flexibleVersions + ", which is not open-ended.  flexibleVersions must " +
-                "be either none, or an open-ended range (that ends with a plus sign).");
-        }
+                List.copyOf(commonStructs);
+        // If the struct has no valid versions (the typical use case is to completely remove support for
+        // an existing protocol api while ensuring the api key id is not reused), we configure the spec
+        // to effectively be empty
+        if (struct.versions().empty()) {
+            this.flexibleVersions = Versions.NONE;
+            this.listeners = Collections.emptyList();
+            this.latestVersionUnstable = false;
+        } else {
+            if (flexibleVersions == null) {
+                throw new RuntimeException("You must specify a value for flexibleVersions. " +
+                        "Please use 0+ for all new messages.");
+            }
+            this.flexibleVersions = Versions.parse(flexibleVersions, Versions.NONE);
+            if ((!this.flexibleVersions().empty()) &&
+                    (this.flexibleVersions.highest() < Short.MAX_VALUE)) {
+                throw new RuntimeException("Field " + name + " specifies flexibleVersions " +
+                        this.flexibleVersions + ", which is not open-ended.  flexibleVersions must " +
+                        "be either none, or an open-ended range (that ends with a plus sign).");
+            }
 
-        if (listeners != null && !listeners.isEmpty() && type != MessageSpecType.REQUEST) {
-            throw new RuntimeException("The `requestScope` property is only valid for " +
-                "messages with type `request`");
-        }
-        this.listeners = listeners;
+            if (listeners != null && !listeners.isEmpty() && type != MessageSpecType.REQUEST) {
+                throw new RuntimeException("The `requestScope` property is only valid for " +
+                        "messages with type `request`");
+            }
+            this.listeners = listeners;
 
-        if (latestVersionUnstable && type != MessageSpecType.REQUEST) {
-            throw new RuntimeException("The `latestVersionUnstable` property is only valid for " +
-                "messages with type `request`");
+            if (latestVersionUnstable && type != MessageSpecType.REQUEST) {
+                throw new RuntimeException("The `latestVersionUnstable` property is only valid for " +
+                        "messages with type `request`");
+            }
+            this.latestVersionUnstable = latestVersionUnstable;
+
+            if (type == MessageSpecType.COORDINATOR_KEY) {
+                if (this.apiKey.isEmpty()) {
+                    throw new RuntimeException("The ApiKey must be set for messages " + name + " with type `coordinator-key`");
+                }
+                if (!this.validVersions().equals(new Versions((short) 0, ((short) 0)))) {
+                    throw new RuntimeException("The Versions must be set to `0` for messages " + name + " with type `coordinator-key`");
+                }
+                if (!this.flexibleVersions.empty()) {
+                    throw new RuntimeException("The FlexibleVersions are not supported for messages " + name + "  with type `coordinator-key`");
+                }
+            }
+
+            if (type == MessageSpecType.COORDINATOR_VALUE) {
+                if (this.apiKey.isEmpty()) {
+                    throw new RuntimeException("The ApiKey must be set for messages with type `coordinator-value`");
+                }
+            }
         }
-        this.latestVersionUnstable = latestVersionUnstable;
     }
 
     public StructSpec struct() {
@@ -90,6 +117,10 @@ public final class MessageSpec {
     @JsonProperty("name")
     public String name() {
         return struct.name();
+    }
+
+    public boolean hasValidVersion() {
+        return !struct.versions().empty();
     }
 
     public Versions validVersions() {

@@ -28,12 +28,15 @@
   "flexibleVersions": "none",
   "fields": [
     { "name": "AssignedPartitions", "type": "[]TopicPartition", "versions": "0+",
-      "fields": [
-        { "name": "Topic", "type": "string", "mapKey": true, "versions": "0+", "entityType": "topicName" },
-        { "name": "Partitions", "type": "[]int32", "versions": "0+" }
+      "about": "The list of topics and partitions assigned to this consumer.", "fields": [
+        { "name": "Topic", "type": "string", "mapKey": true, "versions": "0+", "entityType": "topicName",
+          "about": "The topic name."},
+        { "name": "Partitions", "type": "[]int32", "versions": "0+",
+          "about": "The list of partitions assigned to this consumer."}
       ]
     },
     { "name": "UserData", "type": "bytes", "versions": "0+", "nullableVersions": "0+",
-      "default": "null", "zeroCopy": true }
+      "default": "null", "zeroCopy": true,
+      "about": "User data."}
   ]
 }

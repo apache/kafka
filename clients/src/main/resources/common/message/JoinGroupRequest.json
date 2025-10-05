@@ -16,11 +16,9 @@
 {
   "apiKey": 11,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["broker"],
   "name": "JoinGroupRequest",
-  // Version 1 adds RebalanceTimeoutMs.
-  //
-  // Version 2 and 3 are the same as version 1.
+  // Version 1 adds RebalanceTimeoutMs. Version 2 and 3 are the same as version 1.
   //
   // Starting from version 4, the client needs to issue a second request to join group
   //
@@ -35,7 +33,6 @@
   //
   // Version 9 is the same as version 8.
   "validVersions": "0-9",
-  "deprecatedVersions": "0-1",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",

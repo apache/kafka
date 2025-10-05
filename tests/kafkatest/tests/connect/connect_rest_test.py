@@ -37,12 +37,14 @@ class ConnectRestApiTest(KafkaTest):
                            'topic', 'file', 'transforms', 'config.action.reload', 'errors.retry.timeout', 'errors.retry.delay.max.ms',
                            'errors.tolerance', 'errors.log.enable', 'errors.log.include.messages', 'predicates', 'topic.creation.groups',
                            'exactly.once.support', 'transaction.boundary', 'transaction.boundary.interval.ms', 'offsets.storage.topic',
-                           'tasks.max.enforce'}
+                           'tasks.max.enforce', 'connector.plugin.version', 'key.converter.plugin.version', 'value.converter.plugin.version', 
+                           'header.converter.plugin.version'}
     FILE_SINK_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'header.converter', 'topics',
                          'file', 'transforms', 'topics.regex', 'config.action.reload', 'errors.retry.timeout', 'errors.retry.delay.max.ms',
                          'errors.tolerance', 'errors.log.enable', 'errors.log.include.messages', 'errors.deadletterqueue.topic.name',
                          'errors.deadletterqueue.topic.replication.factor', 'errors.deadletterqueue.context.headers.enable', 'predicates',
-                         'tasks.max.enforce'}
+                         'tasks.max.enforce', 'connector.plugin.version', 'key.converter.plugin.version', 'value.converter.plugin.version', 
+                           'header.converter.plugin.version'}
 
     INPUT_FILE = "/mnt/connect.input"
     INPUT_FILE2 = "/mnt/connect.input2"

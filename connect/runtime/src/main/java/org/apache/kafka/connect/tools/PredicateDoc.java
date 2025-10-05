@@ -20,11 +20,9 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 
-import java.io.PrintStream;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Map;
 
 public class PredicateDoc {
 
@@ -40,7 +38,7 @@ public class PredicateDoc {
         }
     }
 
-    private static final List<DocInfo> PREDICATES = new Plugins(Collections.emptyMap()).predicates().stream()
+    private static final List<DocInfo> PREDICATES = new Plugins(Map.of()).predicates().stream()
         .map(p -> {
             try {
                 String overviewDoc = (String) p.pluginClass().getDeclaredField("OVERVIEW_DOC").get(null);
@@ -51,31 +49,24 @@ public class PredicateDoc {
             }
         })
         .sorted(Comparator.comparing(docInfo -> docInfo.predicateName))
-        .collect(Collectors.toList());
+        .toList();
 
-    private static void printPredicateHtml(PrintStream out, DocInfo docInfo) {
-        out.println("<div id=\"" + docInfo.predicateName + "\">");
-
-        out.print("<h5>");
-        out.print("<a href=\"#" + docInfo.predicateName + "\">" + docInfo.predicateName + "</a>");
-        out.println("</h5>");
-
-        out.println(docInfo.overview);
-
-        out.println("<p/>");
-
-        out.println(docInfo.configDef.toHtml(6, key -> docInfo.predicateName + "_" + key));
-
-        out.println("</div>");
-    }
-
-    private static void printHtml(PrintStream out) {
+    private static String toHtml() {
+        StringBuilder b = new StringBuilder();
         for (final DocInfo docInfo : PREDICATES) {
-            printPredicateHtml(out, docInfo);
+            b.append("<div id=\"" + docInfo.predicateName + "\">\n");
+            b.append("<h5>");
+            b.append("<a href=\"#" + docInfo.predicateName + "\">" + docInfo.predicateName + "</a>");
+            b.append("</h5>\n");
+            b.append(docInfo.overview + "\n");
+            b.append("<p/>\n");
+            b.append(docInfo.configDef.toHtml(6, key -> docInfo.predicateName + "_" + key) + "\n");
+            b.append("</div>\n");
         }
+        return b.toString();
     }
 
     public static void main(String... args) {
-        printHtml(System.out);
+        System.out.println(toHtml());
     }
 }

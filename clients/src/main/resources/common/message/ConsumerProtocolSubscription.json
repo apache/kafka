@@ -28,16 +28,22 @@
   "validVersions": "0-3",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "Topics", "type": "[]string", "versions": "0+" },
+    { "name": "Topics", "type": "[]string", "versions": "0+",
+      "about": "The topics that the member wants to consume."},
     { "name": "UserData", "type": "bytes", "versions": "0+", "nullableVersions": "0+",
-      "default": "null", "zeroCopy": true },
+      "default": "null", "zeroCopy": true,
+      "about": "User data that will be passed back to the consumer."},
     { "name": "OwnedPartitions", "type": "[]TopicPartition", "versions": "1+", "ignorable": true,
-      "fields": [
-        { "name": "Topic", "type": "string", "mapKey": true, "versions": "1+", "entityType": "topicName" },
-        { "name": "Partitions", "type": "[]int32", "versions": "1+"}
+      "about": "The partitions that the member owns.", "fields": [
+        { "name": "Topic", "type": "string", "mapKey": true, "versions": "1+", "entityType": "topicName",
+          "about": "The topic name."},
+        { "name": "Partitions", "type": "[]int32", "versions": "1+",
+          "about": "The partition ids."}
       ]
     },
-    { "name": "GenerationId", "type": "int32", "versions": "2+", "default": "-1", "ignorable": true },
-    { "name": "RackId", "type": "string", "versions": "3+", "nullableVersions": "3+", "default": "null", "ignorable": true }
+    { "name": "GenerationId", "type": "int32", "versions": "2+", "default": "-1", "ignorable": true,
+      "about": "The generation id of the member."},
+    { "name": "RackId", "type": "string", "versions": "3+", "nullableVersions": "3+", "default": "null", "ignorable": true,
+      "about": "The rack id of the member."}
   ]
 }

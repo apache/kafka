@@ -26,14 +26,9 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.LegacyRecord;
-import org.apache.kafka.common.record.RecordVersion;
-import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.server.common.MetadataVersionValidator;
 import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms;
@@ -51,7 +46,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
@@ -65,48 +59,8 @@ import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1;
 
 public class LogConfig extends AbstractConfig {
-
-    public static class MessageFormatVersion {
-        private final String messageFormatVersionString;
-        private final String interBrokerProtocolVersionString;
-        private final MetadataVersion messageFormatVersion;
-        private final MetadataVersion interBrokerProtocolVersion;
-
-        public MessageFormatVersion(String messageFormatVersionString, String interBrokerProtocolVersionString) {
-            this.messageFormatVersionString = messageFormatVersionString;
-            this.interBrokerProtocolVersionString = interBrokerProtocolVersionString;
-            this.messageFormatVersion = MetadataVersion.fromVersionString(messageFormatVersionString);
-            this.interBrokerProtocolVersion = MetadataVersion.fromVersionString(interBrokerProtocolVersionString);
-        }
-
-        public MetadataVersion messageFormatVersion() {
-            return messageFormatVersion;
-        }
-
-        public MetadataVersion interBrokerProtocolVersion() {
-            return interBrokerProtocolVersion;
-        }
-
-        public boolean shouldIgnore() {
-            return shouldIgnoreMessageFormatVersion(interBrokerProtocolVersion);
-        }
-
-        public boolean shouldWarn() {
-            return interBrokerProtocolVersion.isAtLeast(IBP_3_0_IV1)
-                    && messageFormatVersion.highestSupportedRecordVersion().precedes(RecordVersion.V2);
-        }
-
-        @SuppressWarnings("deprecation")
-        public String topicWarningMessage(String topicName) {
-            return "Topic configuration " + TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG + " with value `"
-                    + messageFormatVersionString + "` is ignored for `" + topicName + "` because the "
-                    + "inter-broker protocol version `" + interBrokerProtocolVersionString + "` is greater or "
-                    + "equal than 3.0. This configuration is deprecated and it will be removed in Apache Kafka 4.0.";
-        }
-    }
 
     private static class RemoteLogConfig {
 
@@ -148,7 +102,7 @@ public class LogConfig extends AbstractConfig {
 
         @Override
         public List<String> headers() {
-            return asList("Name", "Description", "Type", "Default", "Valid Values", SERVER_DEFAULT_HEADER_NAME, "Importance");
+            return List.of("Name", "Description", "Type", "Default", "Valid Values", SERVER_DEFAULT_HEADER_NAME, "Importance");
         }
 
         // Visible for testing
@@ -168,7 +122,6 @@ public class LogConfig extends AbstractConfig {
     // Visible for testing
     public static final String SERVER_DEFAULT_HEADER_NAME = "Server Default Property";
 
-    public static final int DEFAULT_MAX_MESSAGE_BYTES = 1024 * 1024 + Records.LOG_OVERHEAD;
     public static final int DEFAULT_SEGMENT_BYTES = 1024 * 1024 * 1024;
     public static final long DEFAULT_SEGMENT_MS = 24 * 7 * 60 * 60 * 1000L;
     public static final long DEFAULT_SEGMENT_JITTER_MS = 0;
@@ -178,10 +131,7 @@ public class LogConfig extends AbstractConfig {
     public static final long DEFAULT_MAX_COMPACTION_LAG_MS = Long.MAX_VALUE;
     public static final double DEFAULT_MIN_CLEANABLE_DIRTY_RATIO = 0.5;
     public static final boolean DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE = false;
-    public static final String DEFAULT_COMPRESSION_TYPE = BrokerCompressionType.PRODUCER.name;
     public static final boolean DEFAULT_PREALLOCATE = false;
-    @Deprecated
-    public static final long DEFAULT_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS = ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DEFAULT;
 
     public static final boolean DEFAULT_REMOTE_STORAGE_ENABLE = false;
     public static final boolean DEFAULT_REMOTE_LOG_COPY_DISABLE_CONFIG = false;
@@ -189,39 +139,14 @@ public class LogConfig extends AbstractConfig {
     public static final long DEFAULT_LOCAL_RETENTION_BYTES = -2; // It indicates the value to be derived from RetentionBytes
     public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
 
-    /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details
-     * Keep DEFAULT_MESSAGE_FORMAT_VERSION as a way to handle the deprecated value */
-    @Deprecated
-    public static final String DEFAULT_MESSAGE_FORMAT_VERSION = ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_DEFAULT;
+    public static final String INTERNAL_SEGMENT_BYTES_CONFIG = "internal.segment.bytes";
+    public static final String INTERNAL_SEGMENT_BYTES_DOC = "The maximum size of a single log file. This should be used for testing only.";
 
-    /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
-    @SuppressWarnings("deprecation")
-    private static final String MESSAGE_FORMAT_VERSION_CONFIG = TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG;
-
-    @SuppressWarnings("deprecation")
-    private static final String MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG = TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG;
-
-    @SuppressWarnings("deprecation")
-    private static final String MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC = TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC;
-
-    // Visible for testing
-    public static final Set<String> CONFIGS_WITH_NO_SERVER_DEFAULTS = Set.of(
-            TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG,
-            TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG,
-            TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG,
-            QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
-            QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
-    );
-
-    @SuppressWarnings("deprecation")
-    private static final String MESSAGE_FORMAT_VERSION_DOC = TopicConfig.MESSAGE_FORMAT_VERSION_DOC;
-
-    @SuppressWarnings("deprecation")
     public static final ConfigDef SERVER_CONFIG_DEF = new ConfigDef()
             .define(ServerLogConfigs.NUM_PARTITIONS_CONFIG, INT, ServerLogConfigs.NUM_PARTITIONS_DEFAULT, atLeast(1), MEDIUM, ServerLogConfigs.NUM_PARTITIONS_DOC)
-            .define(ServerLogConfigs.LOG_DIR_CONFIG, STRING, ServerLogConfigs.LOG_DIR_DEFAULT, HIGH, ServerLogConfigs.LOG_DIR_DOC)
-            .define(ServerLogConfigs.LOG_DIRS_CONFIG, STRING, null, HIGH, ServerLogConfigs.LOG_DIRS_DOC)
-            .define(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), HIGH, ServerLogConfigs.LOG_SEGMENT_BYTES_DOC)
+            .define(ServerLogConfigs.LOG_DIR_CONFIG, LIST, ServerLogConfigs.LOG_DIR_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(false, false), HIGH, ServerLogConfigs.LOG_DIR_DOC)
+            .define(ServerLogConfigs.LOG_DIRS_CONFIG, LIST, null, ConfigDef.ValidList.anyNonDuplicateValues(false, true), HIGH, ServerLogConfigs.LOG_DIRS_DOC)
+            .define(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(1024 * 1024), HIGH, ServerLogConfigs.LOG_SEGMENT_BYTES_DOC)
 
             .define(ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG, LONG, null, HIGH, ServerLogConfigs.LOG_ROLL_TIME_MILLIS_DOC)
             .define(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG, INT, (int) TimeUnit.MILLISECONDS.toHours(DEFAULT_SEGMENT_MS), atLeast(1), HIGH, ServerLogConfigs.LOG_ROLL_TIME_HOURS_DOC)
@@ -248,21 +173,18 @@ public class LogConfig extends AbstractConfig {
             .define(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG, INT, ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_DEFAULT, atLeast(1), HIGH, ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_DOC)
             .define(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, BOOLEAN, ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_DEFAULT, HIGH, ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_DOC)
             .define(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, INT, ServerLogConfigs.MIN_IN_SYNC_REPLICAS_DEFAULT, atLeast(1), HIGH, ServerLogConfigs.MIN_IN_SYNC_REPLICAS_DOC)
-            .define(ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG, STRING, ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_DEFAULT, new MetadataVersionValidator(), MEDIUM, ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_DOC)
             .define(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG, STRING, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_DEFAULT, ConfigDef.ValidString.in("CreateTime", "LogAppendTime"), MEDIUM, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_DOC)
-            .define(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, LONG, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DEFAULT, atLeast(0), MEDIUM, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC)
             .define(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, LONG, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_DEFAULT, atLeast(0), MEDIUM, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_DOC)
             .define(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, LONG, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DEFAULT, atLeast(0), MEDIUM, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DOC)
             .define(ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_DOC)
             .define(ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_DOC)
-            .define(ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, BOOLEAN, ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_DEFAULT, LOW, ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_DOC)
             .define(ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_CONFIG, LONG, ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_DEFAULT, atLeast(1), LOW, ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_DOC)
             .defineInternal(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, LONG, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT, atLeast(0), LOW, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DOC);
 
     private static final LogConfigDef CONFIG = new LogConfigDef();
     static {
         CONFIG.
-                define(TopicConfig.SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), MEDIUM,
+                define(TopicConfig.SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(1024 * 1024), MEDIUM,
                         TopicConfig.SEGMENT_BYTES_DOC)
                 .define(TopicConfig.SEGMENT_MS_CONFIG, LONG, DEFAULT_SEGMENT_MS, atLeast(1), MEDIUM, TopicConfig.SEGMENT_MS_DOC)
                 .define(TopicConfig.SEGMENT_JITTER_MS_CONFIG, LONG, DEFAULT_SEGMENT_JITTER_MS, atLeast(0), MEDIUM,
@@ -278,7 +200,7 @@ public class LogConfig extends AbstractConfig {
                 // can be negative. See kafka.log.LogManager.cleanupExpiredSegments
                 .define(TopicConfig.RETENTION_MS_CONFIG, LONG, DEFAULT_RETENTION_MS, atLeast(-1), MEDIUM,
                         TopicConfig.RETENTION_MS_DOC)
-                .define(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, INT, DEFAULT_MAX_MESSAGE_BYTES, atLeast(0), MEDIUM,
+                .define(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, INT, ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT, atLeast(0), MEDIUM,
                         TopicConfig.MAX_MESSAGE_BYTES_DOC)
                 .define(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, INT, ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_DEFAULT, atLeast(0), MEDIUM,
                         TopicConfig.INDEX_INTERVAL_BYTES_DOC)
@@ -298,7 +220,7 @@ public class LogConfig extends AbstractConfig {
                         MEDIUM, TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_DOC)
                 .define(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, INT, ServerLogConfigs.MIN_IN_SYNC_REPLICAS_DEFAULT, atLeast(1), MEDIUM,
                         TopicConfig.MIN_IN_SYNC_REPLICAS_DOC)
-                .define(TopicConfig.COMPRESSION_TYPE_CONFIG, STRING, DEFAULT_COMPRESSION_TYPE, in(BrokerCompressionType.names().toArray(new String[0])),
+                .define(TopicConfig.COMPRESSION_TYPE_CONFIG, STRING, ServerLogConfigs.COMPRESSION_TYPE_DEFAULT, in(BrokerCompressionType.names().toArray(new String[0])),
                         MEDIUM, TopicConfig.COMPRESSION_TYPE_DOC)
                 .define(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, INT, CompressionType.GZIP.defaultLevel(),
                         CompressionType.GZIP.levelValidator(), MEDIUM, TopicConfig.COMPRESSION_GZIP_LEVEL_DOC)
@@ -307,12 +229,8 @@ public class LogConfig extends AbstractConfig {
                 .define(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, INT, CompressionType.ZSTD.defaultLevel(),
                         CompressionType.ZSTD.levelValidator(), MEDIUM, TopicConfig.COMPRESSION_ZSTD_LEVEL_DOC)
                 .define(TopicConfig.PREALLOCATE_CONFIG, BOOLEAN, DEFAULT_PREALLOCATE, MEDIUM, TopicConfig.PREALLOCATE_DOC)
-                .define(MESSAGE_FORMAT_VERSION_CONFIG, STRING, DEFAULT_MESSAGE_FORMAT_VERSION, new MetadataVersionValidator(), MEDIUM,
-                        MESSAGE_FORMAT_VERSION_DOC)
                 .define(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, STRING, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_DEFAULT,
                         in("CreateTime", "LogAppendTime"), MEDIUM, TopicConfig.MESSAGE_TIMESTAMP_TYPE_DOC)
-                .define(MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, LONG, DEFAULT_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS,
-                        atLeast(0), MEDIUM, MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC)
                 .define(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, LONG, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_DEFAULT,
                         atLeast(0), MEDIUM, TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_DOC)
                 .define(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, LONG, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DEFAULT,
@@ -321,8 +239,6 @@ public class LogConfig extends AbstractConfig {
                         ThrottledReplicaListValidator.INSTANCE, MEDIUM, QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_DOC)
                 .define(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, LIST, QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DEFAULT,
                         ThrottledReplicaListValidator.INSTANCE, MEDIUM, QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DOC)
-                .define(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, BOOLEAN, ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_DEFAULT, LOW,
-                        TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DOC)
                 .define(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, BOOLEAN, DEFAULT_REMOTE_STORAGE_ENABLE, null,
                         MEDIUM, TopicConfig.REMOTE_LOG_STORAGE_ENABLE_DOC)
                 .define(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_MS, atLeast(-2), MEDIUM,
@@ -330,7 +246,8 @@ public class LogConfig extends AbstractConfig {
                 .define(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
                         TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_COPY_DISABLE_DOC)
-                .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC);
+                .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC)
+                .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, MEDIUM, INTERNAL_SEGMENT_BYTES_DOC);
     }
 
     public final Set<String> overriddenConfigs;
@@ -339,7 +256,8 @@ public class LogConfig extends AbstractConfig {
      * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
      * should also be in `KafkaConfig#extractLogConfigMap`.
      */
-    public final int segmentSize;
+    private final int segmentSize;
+    private final Integer internalSegmentSize;
     public final long segmentMs;
     public final long segmentJitterMs;
     public final int maxIndexSize;
@@ -361,36 +279,29 @@ public class LogConfig extends AbstractConfig {
     public final Optional<Compression> compression;
     public final boolean preallocate;
 
-    /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details regarding the deprecation */
-    @Deprecated
-    public final MetadataVersion messageFormatVersion;
-
     public final TimestampType messageTimestampType;
 
-    /* See `TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG` for details regarding the deprecation */
-    @Deprecated
-    public final long messageTimestampDifferenceMaxMs;
     public final long messageTimestampBeforeMaxMs;
     public final long messageTimestampAfterMaxMs;
     public final List<String> leaderReplicationThrottledReplicas;
     public final List<String> followerReplicationThrottledReplicas;
-    public final boolean messageDownConversionEnable;
 
     private final RemoteLogConfig remoteLogConfig;
     private final int maxMessageSize;
     private final Map<?, ?> props;
 
     public LogConfig(Map<?, ?> props) {
-        this(props, Collections.emptySet());
+        this(props, Set.of());
     }
 
-    @SuppressWarnings({"deprecation", "this-escape"})
+    @SuppressWarnings({"this-escape"})
     public LogConfig(Map<?, ?> props, Set<String> overriddenConfigs) {
         super(CONFIG, props, false);
         this.props = Collections.unmodifiableMap(props);
         this.overriddenConfigs = Collections.unmodifiableSet(overriddenConfigs);
 
         this.segmentSize = getInt(TopicConfig.SEGMENT_BYTES_CONFIG);
+        this.internalSegmentSize = getInt(INTERNAL_SEGMENT_BYTES_CONFIG);
         this.segmentMs = getLong(TopicConfig.SEGMENT_MS_CONFIG);
         this.segmentJitterMs = getLong(TopicConfig.SEGMENT_JITTER_MS_CONFIG);
         this.maxIndexSize = getInt(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG);
@@ -407,78 +318,46 @@ public class LogConfig extends AbstractConfig {
         this.minCleanableRatio = getDouble(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG);
         this.compact = getList(TopicConfig.CLEANUP_POLICY_CONFIG).stream()
                 .map(c -> c.toLowerCase(Locale.ROOT))
-                .collect(Collectors.toList())
+                .toList()
                 .contains(TopicConfig.CLEANUP_POLICY_COMPACT);
         this.delete = getList(TopicConfig.CLEANUP_POLICY_CONFIG).stream()
                 .map(c -> c.toLowerCase(Locale.ROOT))
-                .collect(Collectors.toList())
+                .toList()
                 .contains(TopicConfig.CLEANUP_POLICY_DELETE);
         this.uncleanLeaderElectionEnable = getBoolean(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
         this.minInSyncReplicas = getInt(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
         this.compressionType = BrokerCompressionType.forName(getString(TopicConfig.COMPRESSION_TYPE_CONFIG));
         this.compression = getCompression();
         this.preallocate = getBoolean(TopicConfig.PREALLOCATE_CONFIG);
-        this.messageFormatVersion = MetadataVersion.fromVersionString(getString(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG));
         this.messageTimestampType = TimestampType.forName(getString(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG));
-        this.messageTimestampDifferenceMaxMs = getLong(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG);
-        this.messageTimestampBeforeMaxMs = getMessageTimestampBeforeMaxMs();
-        this.messageTimestampAfterMaxMs = getMessageTimestampAfterMaxMs();
+        this.messageTimestampBeforeMaxMs = getLong(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG);
+        this.messageTimestampAfterMaxMs = getLong(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG);
         this.leaderReplicationThrottledReplicas = Collections.unmodifiableList(getList(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
         this.followerReplicationThrottledReplicas = Collections.unmodifiableList(getList(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
-        this.messageDownConversionEnable = getBoolean(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG);
 
         remoteLogConfig = new RemoteLogConfig(this);
     }
 
     private Optional<Compression> getCompression() {
-        switch (compressionType) {
-            case GZIP:
-                return Optional.of(Compression.gzip()
-                        .level(getInt(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
-                        .build());
-            case LZ4:
-                return Optional.of(Compression.lz4()
-                        .level(getInt(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG))
-                        .build());
-            case ZSTD:
-                return Optional.of(Compression.zstd()
-                        .level(getInt(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG))
-                        .build());
-            case SNAPPY:
-                return Optional.of(Compression.snappy().build());
-            case UNCOMPRESSED:
-                return Optional.of(Compression.NONE);
-            case PRODUCER:
-                return Optional.empty();
-            default:
-                throw new IllegalArgumentException("Invalid value for " + TopicConfig.COMPRESSION_TYPE_CONFIG);
-        }
+        return switch (compressionType) {
+            case GZIP -> Optional.of(Compression.gzip()
+                    .level(getInt(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
+                    .build());
+            case LZ4 -> Optional.of(Compression.lz4()
+                    .level(getInt(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG))
+                    .build());
+            case ZSTD -> Optional.of(Compression.zstd()
+                    .level(getInt(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG))
+                    .build());
+            case SNAPPY -> Optional.of(Compression.snappy().build());
+            case UNCOMPRESSED -> Optional.of(Compression.NONE);
+            case PRODUCER -> Optional.empty();
+        };
     }
 
-    //In the transition period before messageTimestampDifferenceMaxMs is removed, to maintain backward compatibility,
-    // we are using its value if messageTimestampBeforeMaxMs default value hasn't changed.
-    private long getMessageTimestampBeforeMaxMs() {
-        final Long messageTimestampBeforeMaxMs = getLong(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG);
-        if (!messageTimestampBeforeMaxMs.equals(Long.MAX_VALUE)) {
-            return messageTimestampBeforeMaxMs;
-        } else {
-            return messageTimestampDifferenceMaxMs;
-        }
-    }
-
-    //In the transition period before messageTimestampDifferenceMaxMs is removed, to maintain backward compatibility,
-    // we are using its value if messageTimestampAfterMaxMs default value hasn't changed.
-    private long getMessageTimestampAfterMaxMs() {
-        final Long messageTimestampAfterMaxMs = getLong(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG);
-        if (!messageTimestampAfterMaxMs.equals(Long.MAX_VALUE)) {
-            return messageTimestampAfterMaxMs;
-        } else {
-            return messageTimestampDifferenceMaxMs;
-        }
-    }
-
-    public RecordVersion recordVersion() {
-        return messageFormatVersion.highestSupportedRecordVersion();
+    public int segmentSize() {
+        if (internalSegmentSize == null) return segmentSize;
+        return internalSegmentSize;
     }
 
     // Exposed as a method so it can be mocked
@@ -502,7 +381,7 @@ public class LogConfig extends AbstractConfig {
 
     public int initFileSize() {
         if (preallocate)
-            return segmentSize;
+            return segmentSize();
         else
             return 0;
     }
@@ -552,20 +431,20 @@ public class LogConfig extends AbstractConfig {
         return new LogConfigDef(CONFIG);
     }
 
-    public static boolean shouldIgnoreMessageFormatVersion(MetadataVersion interBrokerProtocolVersion) {
-        return interBrokerProtocolVersion.isAtLeast(IBP_3_0_IV1);
-    }
-
     public static Optional<Type> configType(String configName) {
         return Optional.ofNullable(CONFIG.configKeys().get(configName)).map(c -> c.type);
     }
 
     public static List<String> configNames() {
-        return CONFIG.names().stream().sorted().collect(Collectors.toList());
+        return CONFIG.names().stream().sorted().toList();
     }
 
-    public static Optional<String> serverConfigName(String configName) {
-        return CONFIG.serverConfigName(configName);
+    public static List<String> nonInternalConfigNames() {
+        return CONFIG.configKeys().entrySet()
+                .stream()
+                .filter(entry -> !entry.getValue().internalConfig)
+                .map(Map.Entry::getKey)
+                .sorted().toList();
     }
 
     public static Map<String, ConfigKey> configKeys() {
@@ -620,21 +499,16 @@ public class LogConfig extends AbstractConfig {
      * @param existingConfigs                   The existing properties
      * @param newConfigs                        The new properties to be validated
      * @param isRemoteLogStorageSystemEnabled   true if system wise remote log storage is enabled
-     * @param fromZK                            true if this is a ZK cluster
      */
     private static void validateTopicLogConfigValues(Map<String, String> existingConfigs,
                                                      Map<?, ?> newConfigs,
-                                                     boolean isRemoteLogStorageSystemEnabled,
-                                                     boolean fromZK) {
+                                                     boolean isRemoteLogStorageSystemEnabled) {
         validateValues(newConfigs);
 
-        if (fromZK) {
-            validateNoInvalidRemoteStorageConfigsInZK(newConfigs);
-        }
         boolean isRemoteLogStorageEnabled = (Boolean) newConfigs.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
         if (isRemoteLogStorageEnabled) {
             validateRemoteStorageOnlyIfSystemEnabled(newConfigs, isRemoteLogStorageSystemEnabled, false);
-            validateNoRemoteStorageForCompactedTopic(newConfigs);
+            validateRemoteStorageRequiresDeleteCleanupPolicy(newConfigs);
             validateRemoteStorageRetentionSize(newConfigs);
             validateRemoteStorageRetentionTime(newConfigs);
             validateRetentionConfigsWhenRemoteCopyDisabled(newConfigs, isRemoteLogStorageEnabled);
@@ -672,15 +546,6 @@ public class LogConfig extends AbstractConfig {
         }
     }
 
-    public static void validateNoInvalidRemoteStorageConfigsInZK(Map<?, ?> newConfigs) {
-        boolean isRemoteLogDeleteOnDisable = (Boolean) Utils.castToStringObjectMap(newConfigs).getOrDefault(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, false);
-        boolean isRemoteLogCopyDisabled = (Boolean) Utils.castToStringObjectMap(newConfigs).getOrDefault(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, false);
-        if (isRemoteLogDeleteOnDisable || isRemoteLogCopyDisabled) {
-            throw new InvalidConfigurationException("It is invalid to set `remote.log.delete.on.disable` or " +
-                    "`remote.log.copy.disable` under Zookeeper's mode.");
-        }
-    }
-
     public static void validateRemoteStorageOnlyIfSystemEnabled(Map<?, ?> props, boolean isRemoteLogStorageSystemEnabled, boolean isReceivingConfigFromStore) {
         boolean isRemoteLogStorageEnabled = (Boolean) props.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
         if (isRemoteLogStorageEnabled && !isRemoteLogStorageSystemEnabled) {
@@ -693,10 +558,11 @@ public class LogConfig extends AbstractConfig {
         }
     }
 
-    private static void validateNoRemoteStorageForCompactedTopic(Map<?, ?> props) {
-        String cleanupPolicy = props.get(TopicConfig.CLEANUP_POLICY_CONFIG).toString().toLowerCase(Locale.getDefault());
-        if (cleanupPolicy.contains(TopicConfig.CLEANUP_POLICY_COMPACT)) {
-            throw new ConfigException("Remote log storage is unsupported for the compacted topics");
+    @SuppressWarnings("unchecked")
+    private static void validateRemoteStorageRequiresDeleteCleanupPolicy(Map<?, ?> props) {
+        List<String> cleanupPolicy = (List<String>) props.get(TopicConfig.CLEANUP_POLICY_CONFIG);
+        if (!cleanupPolicy.isEmpty() && (cleanupPolicy.size() != 1 || !TopicConfig.CLEANUP_POLICY_DELETE.equals(cleanupPolicy.get(0)))) {
+            throw new ConfigException("Remote log storage only supports topics with cleanup.policy=delete or cleanup.policy being an empty list.");
         }
     }
 
@@ -738,14 +604,13 @@ public class LogConfig extends AbstractConfig {
      * Check that the given properties contain only valid log config names and that all values can be parsed and are valid
      */
     public static void validate(Properties props) {
-        validate(Collections.emptyMap(), props, Collections.emptyMap(), false, false);
+        validate(Map.of(), props, Map.of(), false);
     }
 
     public static void validate(Map<String, String> existingConfigs,
                                 Properties props,
                                 Map<?, ?> configuredProps,
-                                boolean isRemoteLogStorageSystemEnabled,
-                                boolean fromZK) {
+                                boolean isRemoteLogStorageSystemEnabled) {
         validateNames(props);
         if (configuredProps == null || configuredProps.isEmpty()) {
             Map<?, ?> valueMaps = CONFIG.parse(props);
@@ -754,14 +619,14 @@ public class LogConfig extends AbstractConfig {
             Map<Object, Object> combinedConfigs = new HashMap<>(configuredProps);
             combinedConfigs.putAll(props);
             Map<?, ?> valueMaps = CONFIG.parse(combinedConfigs);
-            validateTopicLogConfigValues(existingConfigs, valueMaps, isRemoteLogStorageSystemEnabled, fromZK);
+            validateTopicLogConfigValues(existingConfigs, valueMaps, isRemoteLogStorageSystemEnabled);
         }
     }
 
     @Override
     public String toString() {
         return "LogConfig{" +
-                "segmentSize=" + segmentSize +
+                "segmentSize=" + segmentSize() +
                 ", segmentMs=" + segmentMs +
                 ", segmentJitterMs=" + segmentJitterMs +
                 ", maxIndexSize=" + maxIndexSize +
@@ -781,12 +646,9 @@ public class LogConfig extends AbstractConfig {
                 ", minInSyncReplicas=" + minInSyncReplicas +
                 ", compressionType='" + compressionType + '\'' +
                 ", preallocate=" + preallocate +
-                ", messageFormatVersion=" + messageFormatVersion +
                 ", messageTimestampType=" + messageTimestampType +
-                ", messageTimestampDifferenceMaxMs=" + messageTimestampDifferenceMaxMs +
                 ", leaderReplicationThrottledReplicas=" + leaderReplicationThrottledReplicas +
                 ", followerReplicationThrottledReplicas=" + followerReplicationThrottledReplicas +
-                ", messageDownConversionEnable=" + messageDownConversionEnable +
                 ", remoteLogConfig=" + remoteLogConfig +
                 ", maxMessageSize=" + maxMessageSize +
                 '}';

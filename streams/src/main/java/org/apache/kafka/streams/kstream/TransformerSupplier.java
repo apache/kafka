@@ -38,6 +38,7 @@ import java.util.function.Supplier;
  * @deprecated Since 4.0. Use {@link org.apache.kafka.streams.processor.api.ProcessorSupplier api.ProcessorSupplier} instead.
  */
 @Deprecated
+@FunctionalInterface
 public interface TransformerSupplier<K, V, R> extends ConnectedStoreProvider, Supplier<Transformer<K, V, R>> {
 
     /**

@@ -19,9 +19,6 @@ package org.apache.kafka.streams;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
-import org.apache.kafka.clients.admin.MemberToRemove;
-import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
-import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupResult;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.KafkaFuture;
@@ -60,6 +57,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
+import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
@@ -67,7 +65,6 @@ import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
 import org.apache.kafka.streams.query.FailureReason;
@@ -109,6 +106,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
@@ -235,7 +233,7 @@ public class KafkaStreams implements AutoCloseable {
      *   </li>
      *   <li>
      *     REBALANCING state will transit to RUNNING if all of its threads are in RUNNING state
-     *     (Note: a thread transits to RUNNING state, if all active tasks got restored are are ready for processing.
+     *     (Note: a thread transits to RUNNING state, if all active tasks got restored are ready for processing.
      *     Standby tasks are not considered.)
      *   </li>
      *   <li>
@@ -293,13 +291,14 @@ public class KafkaStreams implements AutoCloseable {
     private final Object stateLock = new Object();
     protected volatile State state = State.CREATED;
 
-    private boolean waitOnState(final State targetState, final long waitMs) {
+    private boolean waitOnStates(final long waitMs, final State... targetStates) {
+        final Set<State> targetStateSet = Set.of(targetStates);
         final long begin = time.milliseconds();
         synchronized (stateLock) {
             boolean interrupted = false;
             long elapsedMs = 0L;
             try {
-                while (state != targetState) {
+                while (!targetStateSet.contains(state)) {
                     if (waitMs > elapsedMs) {
                         final long remainingMs = waitMs - elapsedMs;
                         try {
@@ -308,7 +307,11 @@ public class KafkaStreams implements AutoCloseable {
                             interrupted = true;
                         }
                     } else {
-                        log.debug("Cannot transit to {} within {}ms", targetState, waitMs);
+                        log.debug(
+                            "Cannot transit to {} within {}ms",
+                            Arrays.stream(targetStates).map(State::toString).collect(Collectors.joining(" or ")),
+                            waitMs
+                        );
                         return false;
                     }
                     elapsedMs = time.milliseconds() - begin;
@@ -347,8 +350,9 @@ public class KafkaStreams implements AutoCloseable {
             } else if (state == State.REBALANCING && newState == State.REBALANCING) {
                 // when the state is already in REBALANCING, it should not transit to REBALANCING again
                 return false;
-            } else if (state == State.ERROR && (newState == State.PENDING_ERROR || newState == State.ERROR)) {
-                // when the state is already in ERROR, its transition to PENDING_ERROR or ERROR (due to consecutive close calls)
+            } else if (state == State.ERROR && (newState == State.PENDING_ERROR || newState == State.ERROR || newState == State.PENDING_SHUTDOWN)) {
+                // when the state is already in ERROR, its transition attempts to PENDING_SHUTDOWN, PENDING_ERROR or ERROR will
+                // not throw an exception.
                 return false;
             } else if (state == State.PENDING_ERROR && newState != State.ERROR) {
                 // when the state is already in PENDING_ERROR, all other transitions than ERROR (due to thread dying) will be
@@ -484,7 +488,7 @@ public class KafkaStreams implements AutoCloseable {
             closeToError();
         }
         final StreamThread deadThread = (StreamThread) Thread.currentThread();
-        deadThread.shutdown();
+        deadThread.shutdown(false);
         addStreamThread();
         if (throwable instanceof RuntimeException) {
             throw (RuntimeException) throwable;
@@ -511,7 +515,7 @@ public class KafkaStreams implements AutoCloseable {
                 break;
             case SHUTDOWN_CLIENT:
                 log.error(
-                    "Encountered the following exception during processing and the registered exception handler" +
+                    "Encountered the following exception during processing and the registered exception handler " +
                         "opted to {}. The streams client is going to shut down now.",
                     action,
                     throwable
@@ -535,7 +539,7 @@ public class KafkaStreams implements AutoCloseable {
                     closeToError();
                     break;
                 }
-                processStreamThread(thread -> thread.sendShutdownRequest(AssignorError.SHUTDOWN_REQUESTED));
+                processStreamThread(StreamThread::sendShutdownRequest);
                 log.error("Encountered the following exception during processing " +
                         "and sent shutdown request for the entire application.", throwable);
                 break;
@@ -965,12 +969,15 @@ public class KafkaStreams implements AutoCloseable {
         this.log = logContext.logger(getClass());
         topologyMetadata.setLog(logContext);
 
-        // use client id instead of thread client id since this admin client may be shared among threads
         this.clientSupplier = clientSupplier;
-        adminClient = clientSupplier.getAdmin(applicationConfigs.getAdminConfigs(ClientUtils.adminClientId(clientId)));
 
         log.info("Kafka Streams version: {}", ClientMetrics.version());
         log.info("Kafka Streams commit ID: {}", ClientMetrics.commitId());
+
+        throwIfUnsupportedFeatureIsUsedWithStreamsRebalanceProtocol();
+
+        // use client id instead of thread client id since this admin client may be shared among threads
+        adminClient = clientSupplier.getAdmin(applicationConfigs.getAdminConfigs(ClientUtils.adminClientId(clientId)));
 
         metrics = createMetrics(applicationConfigs, time, clientId);
         final StreamsClientMetricsDelegatingReporter reporter = new StreamsClientMetricsDelegatingReporter(adminClient, clientId);
@@ -987,7 +994,7 @@ public class KafkaStreams implements AutoCloseable {
         ClientMetrics.addCommitIdMetric(streamsMetrics);
         ClientMetrics.addApplicationIdMetric(streamsMetrics, applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG));
         ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, (metricsConfig, now) -> this.topologyMetadata.topologyDescriptionString());
-        ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state);
+        ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state.name());
         ClientMetrics.addClientStateTelemetryMetric(streamsMetrics, (metricsConfig, now) -> state.ordinal());
         ClientMetrics.addClientRecordingLevelMetric(streamsMetrics, calculateMetricsRecordingLevel());
         threads = Collections.synchronizedList(new LinkedList<>());
@@ -1039,6 +1046,22 @@ public class KafkaStreams implements AutoCloseable {
 
         stateDirCleaner = setupStateDirCleaner();
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, applicationConfigs);
+    }
+
+    private void throwIfUnsupportedFeatureIsUsedWithStreamsRebalanceProtocol() {
+        if (applicationConfigs.isStreamsProtocolEnabled()) {
+            log.info("Streams rebalance protocol enabled");
+            if (topologyMetadata.hasNamedTopologies()) {
+                throw new UnsupportedOperationException("Named topologies are not supported with the STREAMS protocol.");
+            }
+            if (topologyMetadata.usesPatternSubscription()) {
+                throw new UnsupportedOperationException("Pattern subscriptions are not supported with the STREAMS protocol.");
+            }
+            if (!(clientSupplier instanceof DefaultKafkaClientSupplier)) {
+                log.warn("A non-default kafka client supplier was supplied. Note that supplying a custom main consumer" +
+                    " is not supported with the STREAMS protocol.");
+            }
+        }
     }
 
     private StreamThread createAndAddStreamThread(final long cacheSizePerThread, final int threadIdx) {
@@ -1113,7 +1136,7 @@ public class KafkaStreams implements AutoCloseable {
                     return Optional.of(streamThread.getName());
                 } else {
                     log.warn("Terminating the new thread because the Kafka Streams client is in state {}", state);
-                    streamThread.shutdown();
+                    streamThread.shutdown(true);
                     threads.remove(streamThread);
                     final long cacheSizePerThread = cacheSizePerThread(numLiveStreamThreads());
                     log.info("Resizing thread cache due to terminating added thread, new cache size per thread is {}", cacheSizePerThread);
@@ -1133,6 +1156,10 @@ public class KafkaStreams implements AutoCloseable {
      * The removed stream thread is gracefully shut down. This method does not specify which stream
      * thread is shut down.
      * <p>
+     * The consumer associated with the stream thread is closed using consumer.close() during the shutdown process.
+     * Note that this method does not guarantee immediate removal of the consumer from the consumer group.
+     * The consumer is only kicked off from the group after the stream thread completes its run function.
+     * <p>
      * Since the number of stream threads decreases, the sizes of the caches in the remaining stream
      * threads are adapted so that the sum of the cache sizes over all stream threads equals the total
      * cache size specified in configuration {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG}.
@@ -1145,17 +1172,15 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * Removes one stream thread out of the running stream threads from this Kafka Streams client.
-     * <p>
-     * The removed stream thread is gracefully shut down. This method does not specify which stream
-     * thread is shut down.
+     * The consumer associated with the stream thread is closed using consumer.close() during the shutdown process.
+     * Note that this method does not guarantee immediate removal of the consumer from the consumer group.
+     * The consumer is only kicked off from the group after the stream thread completes its run function.
      * <p>
      * Since the number of stream threads decreases, the sizes of the caches in the remaining stream
      * threads are adapted so that the sum of the cache sizes over all stream threads equals the total
      * cache size specified in configuration {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG}.
      *
      * @param timeout The length of time to wait for the thread to shut down
-     * @throws org.apache.kafka.common.errors.TimeoutException if the thread does not stop in time
      * @return name of the removed stream thread or empty if a stream thread could not be removed because
      *         no stream threads are alive
      */
@@ -1175,10 +1200,8 @@ public class KafkaStreams implements AutoCloseable {
                     final boolean callingThreadIsNotCurrentStreamThread = !streamThread.getName().equals(Thread.currentThread().getName());
                     if (streamThread.isThreadAlive() && (callingThreadIsNotCurrentStreamThread || numLiveStreamThreads() == 1)) {
                         log.info("Removing StreamThread {}", streamThread.getName());
-                        final Optional<String> groupInstanceID = streamThread.groupInstanceID();
-                        streamThread.requestLeaveGroupDuringShutdown();
-                        streamThread.shutdown();
-                        if (!streamThread.getName().equals(Thread.currentThread().getName())) {
+                        streamThread.shutdown(true);
+                        if (callingThreadIsNotCurrentStreamThread) {
                             final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
                             if (remainingTimeMs <= 0 || !streamThread.waitOnThreadState(StreamThread.State.DEAD, remainingTimeMs)) {
                                 log.warn("{} did not shutdown in the allotted time.", streamThread.getName());
@@ -1198,46 +1221,6 @@ public class KafkaStreams implements AutoCloseable {
                         final long cacheSizePerThread = cacheSizePerThread(numLiveStreamThreads());
                         log.info("Resizing thread cache due to thread removal, new cache size per thread is {}", cacheSizePerThread);
                         resizeThreadCache(cacheSizePerThread);
-                        if (groupInstanceID.isPresent() && callingThreadIsNotCurrentStreamThread) {
-                            final MemberToRemove memberToRemove = new MemberToRemove(groupInstanceID.get());
-                            final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);
-                            final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult = 
-                                adminClient.removeMembersFromConsumerGroup(
-                                    applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG),
-                                    new RemoveMembersFromConsumerGroupOptions(membersToRemove)
-                                );
-                            try {
-                                final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
-                                removeMembersFromConsumerGroupResult.memberResult(memberToRemove).get(remainingTimeMs, TimeUnit.MILLISECONDS);
-                            } catch (final java.util.concurrent.TimeoutException exception) {
-                                log.error(
-                                    String.format(
-                                        "Could not remove static member %s from consumer group %s due to a timeout:",
-                                        groupInstanceID.get(),
-                                        applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG)
-                                    ),
-                                        exception
-                                );
-                                throw new TimeoutException(exception.getMessage(), exception);
-                            } catch (final InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                            } catch (final ExecutionException exception) {
-                                log.error(
-                                    String.format(
-                                        "Could not remove static member %s from consumer group %s due to:",
-                                        groupInstanceID.get(),
-                                        applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG)
-                                    ),
-                                        exception
-                                );
-                                throw new StreamsException(
-                                        "Could not remove static member " + groupInstanceID.get()
-                                            + " from consumer group " + applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG)
-                                            + " for the following reason: ",
-                                        exception.getCause()
-                                );
-                            }
-                        }
                         final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
                         if (remainingTimeMs <= 0) {
                             throw new TimeoutException("Thread " + streamThread.getName() + " did not stop in the allotted time");
@@ -1470,7 +1453,7 @@ public class KafkaStreams implements AutoCloseable {
         return new Thread(() -> {
             // notify all the threads to stop; avoid deadlocks by stopping any
             // further state reports from the thread since we're shutting down
-            int numStreamThreads = processStreamThread(StreamThread::shutdown);
+            int numStreamThreads = processStreamThread(streamThread -> streamThread.shutdown(leaveGroup));
 
             log.info("Shutting down {} stream threads", numStreamThreads);
 
@@ -1489,10 +1472,6 @@ public class KafkaStreams implements AutoCloseable {
                     Thread.currentThread().interrupt();
                 }
             });
-
-            if (leaveGroup) {
-                processStreamThread(streamThreadLeaveConsumerGroup(timeoutMs));
-            }
 
             log.info("Shutdown {} stream threads complete", numStreamThreads);
 
@@ -1543,38 +1522,34 @@ public class KafkaStreams implements AutoCloseable {
             timeoutMs = Long.MAX_VALUE;
         }
 
-        if (state.hasCompletedShutdown()) {
-            log.info("Streams client is already in the terminal {} state, all resources are closed and the client has stopped.", state);
-            return true;
-        }
-        if (state.isShuttingDown()) {
-            log.info("Streams client is in {}, all resources are being closed and the client will be stopped.", state);
-            if (state == State.PENDING_ERROR && waitOnState(State.ERROR, timeoutMs)) {
-                log.info("Streams client stopped to ERROR completely");
-                return true;
-            } else if (state == State.PENDING_SHUTDOWN && waitOnState(State.NOT_RUNNING, timeoutMs)) {
-                log.info("Streams client stopped to NOT_RUNNING completely");
-                return true;
-            } else {
-                log.warn("Streams client cannot transition to {} completely within the timeout",
-                         state == State.PENDING_SHUTDOWN ? State.NOT_RUNNING : State.ERROR);
-                return false;
-            }
-        }
-
         if (!setState(State.PENDING_SHUTDOWN)) {
-            // if we can't transition to PENDING_SHUTDOWN but not because we're already shutting down, then it must be fatal
-            log.error("Failed to transition to PENDING_SHUTDOWN, current state is {}", state);
-            throw new StreamsException("Failed to shut down while in state " + state);
-        } else {
+            // Copy the state so that we can atomically check if we are shut down and act on it (log it)
+            final State immutableStateCopy = state;
+            if (immutableStateCopy.isShuttingDown()) {
+                log.info("Skipping shutdown since Streams client is already in {}, waiting for a terminal state", immutableStateCopy);
+                if (!waitOnStates(timeoutMs, State.ERROR, State.NOT_RUNNING)) {
+                    log.warn("Streams client did transition to a terminal state (ERROR or NOT_RUNNING) within the {}ms timeout", timeoutMs);
+                    return false;
+                }
+                log.info("Streams client stopped completely and transitioned to the terminal {} state", state);
+                return true;
+            }
 
-            final Thread shutdownThread = shutdownHelper(false, timeoutMs, leaveGroup);
+            if (state.hasCompletedShutdown()) {
+                log.info("Skipping shutdown since Streams client is already in the terminal {} state", state);
+                return true;
+            }
 
-            shutdownThread.setDaemon(true);
-            shutdownThread.start();
+            throw new IllegalStateException("If transitioning to PENDING_SHUTDOWN fails, the state should be either in "
+                + "PENDING_SHUTDOWN, PENDING_ERROR, ERROR, or NOT_RUNNING");
         }
 
-        if (waitOnState(State.NOT_RUNNING, timeoutMs)) {
+        final Thread shutdownThread = shutdownHelper(false, timeoutMs, leaveGroup);
+
+        shutdownThread.setDaemon(true);
+        shutdownThread.start();
+
+        if (waitOnStates(timeoutMs, State.NOT_RUNNING)) {
             log.info("Streams client stopped completely");
             return true;
         } else {
@@ -1635,33 +1610,6 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         return close(Optional.of(timeoutMs), options.leaveGroup);
-    }
-
-    private Consumer<StreamThread> streamThreadLeaveConsumerGroup(final long remainingTimeMs) {
-        return thread -> {
-            final Optional<String> groupInstanceId = thread.groupInstanceID();
-            if (groupInstanceId.isPresent()) {
-                log.debug("Sending leave group trigger to removing instance from consumer group: {}.",
-                    groupInstanceId.get());
-                final MemberToRemove memberToRemove = new MemberToRemove(groupInstanceId.get());
-                final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);
-
-                final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult = adminClient
-                    .removeMembersFromConsumerGroup(
-                        applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG),
-                        new RemoveMembersFromConsumerGroupOptions(membersToRemove)
-                    );
-
-                try {
-                    removeMembersFromConsumerGroupResult.memberResult(memberToRemove)
-                        .get(remainingTimeMs, TimeUnit.MILLISECONDS);
-                } catch (final Exception e) {
-                    final String msg = String.format("Could not remove static member %s from consumer group %s.",
-                                                     groupInstanceId.get(), applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG));
-                    log.error(msg, e);
-                }
-            }
-        };
     }
 
     /**

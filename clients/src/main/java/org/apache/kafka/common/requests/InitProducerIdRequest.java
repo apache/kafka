@@ -19,11 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.record.RecordBatch;
-
-import java.nio.ByteBuffer;
 
 public class InitProducerIdRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<InitProducerIdRequest> {
@@ -64,12 +62,12 @@ public class InitProducerIdRequest extends AbstractRequest {
                 .setErrorCode(Errors.forException(e).code())
                 .setProducerId(RecordBatch.NO_PRODUCER_ID)
                 .setProducerEpoch(RecordBatch.NO_PRODUCER_EPOCH)
-                .setThrottleTimeMs(0);
+                .setThrottleTimeMs(throttleTimeMs);
         return new InitProducerIdResponse(response);
     }
 
-    public static InitProducerIdRequest parse(ByteBuffer buffer, short version) {
-        return new InitProducerIdRequest(new InitProducerIdRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static InitProducerIdRequest parse(Readable readable, short version) {
+        return new InitProducerIdRequest(new InitProducerIdRequestData(readable, version), version);
     }
 
     @Override
@@ -77,4 +75,11 @@ public class InitProducerIdRequest extends AbstractRequest {
         return data;
     }
 
+    public boolean enable2Pc() {
+        return data.enable2Pc();
+    }
+
+    public boolean keepPreparedTxn() {
+        return data.keepPreparedTxn();
+    }
 }

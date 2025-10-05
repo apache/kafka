@@ -46,7 +46,6 @@ import com.yammer.metrics.core.MetricsRegistry;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -72,11 +71,15 @@ public final class AssignmentsManager {
      */
     static final long MIN_NOISY_FAILURE_INTERVAL_NS = TimeUnit.MINUTES.toNanos(2);
 
+    @Deprecated(since = "4.2")
+    static final MetricName DEPRECATED_QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC =
+            KafkaYammerMetrics.getMetricName("org.apache.kafka.server", "AssignmentsManager", "QueuedReplicaToDirAssignments");
+
     /**
      * The metric reflecting the number of pending assignments.
      */
     static final MetricName QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC =
-            metricName("QueuedReplicaToDirAssignments");
+            KafkaYammerMetrics.getMetricName("kafka.server", "AssignmentsManager", "QueuedReplicaToDirAssignments");
 
     /**
      * The event at which we send assignments, if appropriate.
@@ -143,10 +146,6 @@ public final class AssignmentsManager {
      */
     private final KafkaEventQueue eventQueue;
 
-    static MetricName metricName(String name) {
-        return KafkaYammerMetrics.getMetricName("org.apache.kafka.server", "AssignmentsManager", name);
-    }
-
     public AssignmentsManager(
         Time time,
         NodeToControllerChannelManager channelManager,
@@ -181,14 +180,20 @@ public final class AssignmentsManager {
         this.directoryIdToDescription = directoryIdToDescription;
         this.metadataImageSupplier = metadataImageSupplier;
         this.ready = new ConcurrentHashMap<>();
-        this.inflight = Collections.emptyMap();
+        this.inflight = Map.of();
         this.metricsRegistry = metricsRegistry;
+        this.metricsRegistry.newGauge(DEPRECATED_QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return numPending();
+            }
+        });
         this.metricsRegistry.newGauge(QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC, new Gauge<Integer>() {
-                @Override
-                public Integer value() {
-                    return numPending();
-                }
-            });
+            @Override
+            public Integer value() {
+                return numPending();
+            }
+        });
         this.previousGlobalFailures = 0;
         this.eventQueue = new KafkaEventQueue(time,
             new LogContext("[AssignmentsManager id=" + nodeId + "]"),
@@ -249,6 +254,7 @@ public final class AssignmentsManager {
                 log.error("Unexpected exception shutting down NodeToControllerChannelManager", e);
             }
             try {
+                metricsRegistry.removeMetric(DEPRECATED_QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC);
                 metricsRegistry.removeMetric(QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC);
             } catch (Exception e) {
                 log.error("Unexpected exception removing metrics.", e);
@@ -363,13 +369,13 @@ public final class AssignmentsManager {
         Map<TopicIdPartition, Assignment> sent,
         Optional<ClientResponse> assignmentResponse
     ) {
-        inflight = Collections.emptyMap();
+        inflight = Map.of();
         Optional<String> globalResponseError = globalResponseError(assignmentResponse);
         if (globalResponseError.isPresent()) {
             previousGlobalFailures++;
             log.error("handleResponse: {} assignments failed; global error: {}. Retrying.",
                 sent.size(), globalResponseError.get());
-            sent.entrySet().forEach(e -> ready.putIfAbsent(e.getKey(), e.getValue()));
+            sent.forEach(ready::putIfAbsent);
             return;
         }
         previousGlobalFailures = 0;
@@ -429,14 +435,14 @@ public final class AssignmentsManager {
     }
 
     static Optional<String> globalResponseError(Optional<ClientResponse> response) {
-        if (!response.isPresent()) {
+        if (response.isEmpty()) {
             return Optional.of("Timeout");
         }
         if (response.get().authenticationException() != null) {
             return Optional.of("AuthenticationException");
         }
         if (response.get().wasTimedOut()) {
-            return Optional.of("Disonnected[Timeout]");
+            return Optional.of("Disconnected[Timeout]");
         }
         if (response.get().wasDisconnected()) {
             return Optional.of("Disconnected");

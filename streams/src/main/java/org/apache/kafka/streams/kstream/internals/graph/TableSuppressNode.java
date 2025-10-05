@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.processor.internals.StoreFactory;
-
-public class TableSuppressNode<K, V> extends StatefulProcessorNode<K, V> {
+/**
+ * Marker interface to identify suppression nodes since they have some special requirements
+ */
+public class TableSuppressNode<K, V> extends ProcessorGraphNode<K, V> {
     public TableSuppressNode(final String nodeName,
-                             final ProcessorParameters<K, V, ?, ?> processorParameters,
-                             final StoreFactory materializedKTableStoreBuilder) {
-        super(nodeName, processorParameters, materializedKTableStoreBuilder);
+                             final ProcessorParameters<K, V, ?, ?> processorParameters) {
+        super(nodeName, processorParameters);
     }
 }

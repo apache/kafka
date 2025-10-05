@@ -24,8 +24,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.raft.Batch;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -75,7 +75,7 @@ class OffsetControlManager {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
             if (metrics == null) {
-                metrics = new QuorumControllerMetrics(Optional.empty(), time);
+                metrics = new QuorumControllerMetrics(Optional.empty(), time, 0);
             }
             return new OffsetControlManager(logContext,
                     snapshotRegistry,
@@ -417,10 +417,5 @@ class OffsetControlManager {
         transactionStartOffset = -1L;
         log.info("Replayed {} at offset {}. Reverted to offset {}.",
                 message, offset, preTransactionOffset);
-    }
-
-    // VisibleForTesting
-    void setNextWriteOffset(long newNextWriteOffset) {
-        this.nextWriteOffset = newNextWriteOffset;
     }
 }

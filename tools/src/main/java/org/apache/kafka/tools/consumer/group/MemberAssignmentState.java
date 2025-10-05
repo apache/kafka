@@ -19,24 +19,10 @@ package org.apache.kafka.tools.consumer.group;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.List;
+import java.util.Optional;
 
-class MemberAssignmentState {
-    final String group;
-    final String consumerId;
-    final String host;
-    final String clientId;
-    final String groupInstanceId;
-    final int numPartitions;
-    final List<TopicPartition> assignment;
-
-    MemberAssignmentState(String group, String consumerId, String host, String clientId, String groupInstanceId,
-                                 int numPartitions, List<TopicPartition> assignment) {
-        this.group = group;
-        this.consumerId = consumerId;
-        this.host = host;
-        this.clientId = clientId;
-        this.groupInstanceId = groupInstanceId;
-        this.numPartitions = numPartitions;
-        this.assignment = assignment;
-    }
+record MemberAssignmentState(String group, String consumerId, String host, String clientId, String groupInstanceId,
+                             int numPartitions, List<TopicPartition> assignment, List<TopicPartition> targetAssignment,
+                             Optional<Integer> currentEpoch, Optional<Integer> targetEpoch,
+                             Optional<Boolean> upgraded) {
 }

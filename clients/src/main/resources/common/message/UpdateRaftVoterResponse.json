@@ -23,15 +23,15 @@
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
-      "about": "The error code, or 0 if there was no error" },
+      "about": "The error code, or 0 if there was no error." },
     { "name": "CurrentLeader", "type": "CurrentLeader", "versions": "0+",
-      "taggedVersions": "0+", "tag": 0, "fields": [
+      "taggedVersions": "0+", "tag": 0, "about": "Details of the current Raft cluster leader.", "fields": [
         { "name": "LeaderId", "type": "int32", "versions": "0+", "default": "-1", "entityType" : "brokerId",
-          "about": "The replica id of the current leader or -1 if the leader is unknown" },
+          "about": "The replica id of the current leader or -1 if the leader is unknown." },
         { "name": "LeaderEpoch", "type": "int32", "versions": "0+", "default": "-1",
-          "about": "The latest known leader epoch" },
-        { "name": "Host", "type": "string", "versions": "0+", "about": "The node's hostname" },
-        { "name": "Port", "type": "int32", "versions": "0+", "about": "The node's port" }
+          "about": "The latest known leader epoch." },
+        { "name": "Host", "type": "string", "versions": "0+", "about": "The node's hostname." },
+        { "name": "Port", "type": "int32", "versions": "0+", "about": "The node's port." }
       ]
     }
   ]

@@ -28,6 +28,7 @@ import java.util.List;
 /**
  * Provides a wrapper over multiple underlying {@link StateStoreProvider}s
  */
+@SuppressWarnings("rawtypes")
 public class WrappingStoreProvider implements StateStoreProvider {
 
     private final Collection<StreamThreadStateStoreProvider> storeProviders;
@@ -44,6 +45,7 @@ public class WrappingStoreProvider implements StateStoreProvider {
         this.storeQueryParameters = storeQueryParameters;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <T> List<T> stores(final String storeName,
                               final QueryableStoreType<T> queryableStoreType) {

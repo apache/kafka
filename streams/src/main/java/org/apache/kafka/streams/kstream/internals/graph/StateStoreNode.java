@@ -25,7 +25,7 @@ public class StateStoreNode<S extends StateStore> extends GraphNode {
     protected final StoreFactory storeBuilder;
 
     public StateStoreNode(final StoreFactory storeBuilder) {
-        super(storeBuilder.name());
+        super(storeBuilder.storeName());
 
         this.storeBuilder = storeBuilder;
     }
@@ -38,7 +38,7 @@ public class StateStoreNode<S extends StateStore> extends GraphNode {
     @Override
     public String toString() {
         return "StateStoreNode{" +
-               " name='" + storeBuilder.name() +  '\'' +
+               " name='" + storeBuilder.storeName() +  '\'' +
                ", logConfig=" + storeBuilder.logConfig() +
                ", loggingEnabled='" + storeBuilder.loggingEnabled() + '\'' +
                "} ";

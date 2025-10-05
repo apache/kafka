@@ -42,14 +42,18 @@ import org.apache.kafka.streams.processor.internals.NoOpProcessorWrapper;
 import org.apache.kafka.streams.processor.internals.RecordCollectorTest;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
-import org.apache.kafka.streams.utils.TestUtils.CountingProcessorWrapper;
+import org.apache.kafka.streams.utils.TestUtils.RecordingProcessorWrapper;
 
-import org.apache.log4j.Level;
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -65,10 +69,11 @@ import static java.util.Collections.nCopies;
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.ENABLE_METRICS_PUSH_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
+import static org.apache.kafka.streams.StreamsConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG;
@@ -113,6 +118,53 @@ public class StreamsConfigTest {
         props.put("key.deserializer.encoding", StandardCharsets.UTF_8.name());
         props.put("value.deserializer.encoding", StandardCharsets.UTF_16.name());
         streamsConfig = new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldNotLeakInternalDocMembers() {
+        final Class<StreamsConfig> clazz = StreamsConfig.class;
+
+        for (final Field f : clazz.getDeclaredFields()) {
+            final String name = f.getName();
+
+            if (name.endsWith("_DOC")) {
+                switch (name) {
+                    // package private for `TopologyConfig` -- ok
+                    case "DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC":
+                    case "DSL_STORE_SUPPLIERS_CLASS_DOC":
+                    case "PROCESSOR_WRAPPER_CLASS_DOC":
+                    case "ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_DOC":
+                        continue;
+
+                    // check for leaking, but already deprecated members
+                    // if we make any of them private in the future, this test will fail, and we should remove them
+                    // from this exception list
+                    // (this part of the test is only added to clean up the test in the future)
+                    case "BUFFERED_RECORDS_PER_PARTITION_DOC":
+                    case "CACHE_MAX_BYTES_BUFFERING_DOC":
+                    case "DEFAULT_CLIENT_SUPPLIER_DOC":
+                    case "DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC":
+                    case "DEFAULT_DSL_STORE_DOC":
+                    case "DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC":
+                    case "ENABLE_METRICS_PUSH_DOC":
+                    case "MAX_TASK_IDLE_MS_DOC":
+                    case "PROCESSING_EXCEPTION_HANDLER_CLASS_DOC":
+                    case "RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_DOC":
+                    case "RACK_AWARE_ASSIGNMENT_STRATEGY_DOC":
+                    case "RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_DOC":
+                    case "STATESTORE_CACHE_MAX_BYTES_DOC":
+                    case "TASK_TIMEOUT_MS_DOC":
+                        if (Modifier.isPrivate(f.getModifiers())) {
+                            fail(name + " was public, but is private now and should be remove from the exception list above");
+                        }
+                        continue;
+                }
+
+                if (!Modifier.isPrivate(f.getModifiers())) {
+                    fail("StreamsConfig should not contain any public documentation strings as members. Found: " + f.getName());
+                }
+            }
+        }
     }
 
     @Test
@@ -198,7 +250,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, 99_999L);
         props.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, 7L);
         props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "dummy:host");
-        props.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG), 100);
+        props.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG), 1024 * 1024);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> returnedProps = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
 
@@ -213,7 +265,7 @@ public class StreamsConfigTest {
         );
         assertEquals(7L, returnedProps.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
         assertEquals("dummy:host", returnedProps.get(StreamsConfig.APPLICATION_SERVER_CONFIG));
-        assertEquals(100, returnedProps.get(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG)));
+        assertEquals(1024 * 1024, returnedProps.get(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG)));
     }
 
     @Test
@@ -234,6 +286,7 @@ public class StreamsConfigTest {
         assertNull(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void defaultSerdeShouldBeConfigured() {
         final Map<String, Object> serializerConfigs = new HashMap<>();
@@ -545,13 +598,6 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldSetInternalLeaveGroupOnCloseConfigToFalseInConsumer() {
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
-        assertThat(consumerConfigs.get("internal.leave.group.on.close"), is(false));
-    }
-
-    @Test
     public void shouldNotSetInternalThrowOnFetchStableOffsetUnsupportedConfigToFalseInConsumerForEosDisabled() {
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(consumerConfigs.get("internal.throw.on.fetch.stable.offset.unsupported"), is(nullValue()));
@@ -738,6 +784,7 @@ public class StreamsConfigTest {
         assertThrows(ConfigException.class, config::defaultValueSerde);
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldSpecifyCorrectKeySerdeClassOnError() {
         final Properties props = getStreamsConfig();
@@ -754,6 +801,7 @@ public class StreamsConfigTest {
         }
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldSpecifyCorrectValueSerdeClassOnError() {
         final Properties props = getStreamsConfig();
@@ -802,7 +850,7 @@ public class StreamsConfigTest {
 
         try {
             new StreamsConfig(props).getProducerConfigs(clientId);
-            fail("Should throw ConfigException when EOS is enabled and maxInFlight cannot be paresed into an integer");
+            fail("Should throw ConfigException when EOS is enabled and maxInFlight cannot be parsed into an integer");
         } catch (final ConfigException e) {
             assertEquals(
                 "Invalid value not-a-number for configuration max.in.flight.requests.per.connection:" +
@@ -822,8 +870,8 @@ public class StreamsConfigTest {
     @Test
     public void shouldSpecifyNoOptimizationWhenNotExplicitlyAddedToConfigs() {
         final String expectedOptimizeConfig = "none";
-        final String actualOptimizedConifig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
-        assertEquals(expectedOptimizeConfig, actualOptimizedConifig, "Optimization should be \"none\"");
+        final String actualOptimizedConfig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
+        assertEquals(expectedOptimizeConfig, actualOptimizedConfig, "Optimization should be \"none\"");
     }
 
     @Test
@@ -831,8 +879,8 @@ public class StreamsConfigTest {
         final String expectedOptimizeConfig = "all";
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "all");
         final StreamsConfig config = new StreamsConfig(props);
-        final String actualOptimizedConifig = config.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
-        assertEquals(expectedOptimizeConfig, actualOptimizedConifig, "Optimization should be \"all\"");
+        final String actualOptimizedConfig = config.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
+        assertEquals(expectedOptimizeConfig, actualOptimizedConfig, "Optimization should be \"all\"");
     }
 
     @Test
@@ -841,28 +889,28 @@ public class StreamsConfigTest {
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
-    @SuppressWarnings("deprecation")
+    @Deprecated
     @Test
     public void shouldSpecifyRocksdbWhenNotExplicitlyAddedToConfigs() {
         final String expectedDefaultStoreType = StreamsConfig.ROCKS_DB;
-        final String actualDefaultStoreType = streamsConfig.getString(DEFAULT_DSL_STORE_CONFIG);
+        final String actualDefaultStoreType = streamsConfig.getString(org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG);
         assertEquals(expectedDefaultStoreType, actualDefaultStoreType, "default.dsl.store should be \"rocksDB\"");
     }
 
-    @SuppressWarnings("deprecation")
+    @Deprecated
     @Test
     public void shouldSpecifyInMemoryWhenExplicitlyAddedToConfigs() {
         final String expectedDefaultStoreType = StreamsConfig.IN_MEMORY;
-        props.put(DEFAULT_DSL_STORE_CONFIG, expectedDefaultStoreType);
+        props.put(org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG, expectedDefaultStoreType);
         final StreamsConfig config = new StreamsConfig(props);
-        final String actualDefaultStoreType = config.getString(DEFAULT_DSL_STORE_CONFIG);
+        final String actualDefaultStoreType = config.getString(org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG);
         assertEquals(expectedDefaultStoreType, actualDefaultStoreType, "default.dsl.store should be \"in_memory\"");
     }
 
-    @SuppressWarnings("deprecation")
+    @Deprecated
     @Test
     public void shouldThrowConfigExceptionWhenStoreTypeConfigNotValueInRange() {
-        props.put(DEFAULT_DSL_STORE_CONFIG, "bad_config");
+        props.put(org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG, "bad_config");
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
@@ -1002,9 +1050,9 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.clientTagPrefix("cluster"), "cluster-1");
         final StreamsConfig config = new StreamsConfig(props);
         final Map<String, String> clientTags = config.getClientTags();
-        assertEquals(clientTags.size(), 2);
-        assertEquals(clientTags.get("zone"), "eu-central-1a");
-        assertEquals(clientTags.get("cluster"), "cluster-1");
+        assertEquals(2, clientTags.size());
+        assertEquals("eu-central-1a", clientTags.get("zone"));
+        assertEquals("cluster-1", clientTags.get("cluster"));
     }
 
     @Test
@@ -1037,34 +1085,34 @@ public class StreamsConfigTest {
         );
     }
 
-    @Test
     @SuppressWarnings("deprecation")
+    @Test
     public void shouldUseStateStoreCacheMaxBytesWhenBothOldAndNewConfigsAreSet() {
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 100);
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(totalCacheSize(config), 100);
+        assertEquals(100, totalCacheSize(config));
     }
 
+    @Deprecated
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldUseCacheMaxBytesBufferingConfigWhenOnlyDeprecatedConfigIsSet() {
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(totalCacheSize(config), 10);
+        assertEquals(10, totalCacheSize(config));
     }
 
     @Test
     public void shouldUseStateStoreCacheMaxBytesWhenNewConfigIsSet() {
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 10);
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(totalCacheSize(config), 10);
+        assertEquals(10, totalCacheSize(config));
     }
 
     @Test
     public void shouldUseDefaultStateStoreCacheMaxBytesConfigWhenNoConfigIsSet() {
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(totalCacheSize(config), 10 * 1024 * 1024);
+        assertEquals(10 * 1024 * 1024, totalCacheSize(config));
     }
 
     @Test
@@ -1123,7 +1171,7 @@ public class StreamsConfigTest {
         final String value = StreamsConfig.SINGLE_STORE_SELF_JOIN;
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(config.getString(TOPOLOGY_OPTIMIZATION_CONFIG), StreamsConfig.SINGLE_STORE_SELF_JOIN);
+        assertEquals(StreamsConfig.SINGLE_STORE_SELF_JOIN, config.getString(TOPOLOGY_OPTIMIZATION_CONFIG));
     }
 
     @Test
@@ -1163,13 +1211,13 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldtSetMinTrafficRackAwareAssignmentConfig() {
+    public void shouldSetMinTrafficRackAwareAssignmentConfig() {
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC);
         assertEquals("min_traffic", new StreamsConfig(props).getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
     }
 
     @Test
-    public void shouldtSetBalanceSubtopologyRackAwareAssignmentConfig() {
+    public void shouldSetBalanceSubtopologyRackAwareAssignmentConfig() {
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY);
         assertEquals("balance_subtopology", new StreamsConfig(props).getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
     }
@@ -1230,13 +1278,13 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldAllowConfiguringProcessorWrapperWithClass() {
-        props.put(StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG, CountingProcessorWrapper.class);
+        props.put(StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
         new StreamsConfig(props);
     }
 
     @Test
     public void shouldAllowConfiguringProcessorWrapperWithClassName() {
-        props.put(StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG, CountingProcessorWrapper.class.getName());
+        props.put(StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class.getName());
         new StreamsConfig(props);
     }
 
@@ -1530,6 +1578,107 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, RecordCollectorTest.ProductionExceptionHandlerMock.class);
         streamsConfig = new StreamsConfig(props);
         assertEquals(RecordCollectorTest.ProductionExceptionHandlerMock.class, streamsConfig.productionExceptionHandler().getClass());
+    }
+
+    @Test
+    public void shouldGetDefaultEnsureExplicitInternalResourceNaming() {
+        assertFalse(streamsConfig.getBoolean(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG));
+    }
+
+    @Test
+    public void shouldEnsureExplicitInternalResourceNaming() {
+        props.put(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
+        streamsConfig = new StreamsConfig(props);
+        assertTrue(streamsConfig.getBoolean(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG));
+    }
+
+    @Test
+    public void shouldSetGroupProtocolToClassicByDefault() {
+        assertTrue(GroupProtocol.CLASSIC.name().equalsIgnoreCase(streamsConfig.getString(GROUP_PROTOCOL_CONFIG)));
+        assertFalse(streamsConfig.isStreamsProtocolEnabled());
+    }
+
+    @Test
+    public void shouldSetGroupProtocolToClassic() {
+        props.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+        streamsConfig = new StreamsConfig(props);
+        assertTrue(GroupProtocol.CLASSIC.name().equalsIgnoreCase(streamsConfig.getString(GROUP_PROTOCOL_CONFIG)));
+        assertFalse(streamsConfig.isStreamsProtocolEnabled());
+    }
+
+    @Test
+    public void shouldSetGroupProtocolToStreams() {
+        props.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        streamsConfig = new StreamsConfig(props);
+        assertTrue(GroupProtocol.STREAMS.name().equalsIgnoreCase(streamsConfig.getString(GROUP_PROTOCOL_CONFIG)));
+        assertTrue(streamsConfig.isStreamsProtocolEnabled());
+    }
+
+    @Test
+    public void shouldLogWarningWhenStreamsProtocolIsUsed() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+
+            new StreamsConfig(props);
+
+            assertTrue(appender.getMessages().stream()
+                .anyMatch(msg -> msg.contains("The streams rebalance protocol is still in development and should " +
+                    "not be used in production. Please set group.protocol=classic (default) in all production use cases.")));
+        }
+    }
+
+    @Test
+    public void shouldLogWarningWhenWarmupReplicasSetWithStreamsProtocol() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+            props.put(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, 1);
+
+            new StreamsConfig(props);
+
+            assertTrue(appender.getMessages().stream()
+                .anyMatch(msg -> msg.contains("Warmup replicas are not supported yet with the streams protocol and " +
+                    "will be ignored. If you want to use warmup replicas, please set group.protocol=classic.")));
+        }
+    }
+
+    @Test
+    public void shouldLogWarningWhenStandbyReplicasSetWithStreamsProtocol() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+            props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+
+            new StreamsConfig(props);
+
+            assertTrue(appender.getMessages().stream()
+                .anyMatch(msg -> msg.contains("Standby replicas are configured broker-side in the streams group " +
+                    "protocol and will be ignored. Please use the admin client or kafka-configs.sh to set the streams " +
+                    "groups's standby replicas.")));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", StreamsConfig.CONSUMER_PREFIX, StreamsConfig.MAIN_CONSUMER_PREFIX})
+    public void shouldThrowConfigExceptionWhenStreamsProtocolUsedWithStaticMembership(final String prefix) {
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:9092");
+        props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        props.put(prefix + ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "static-member-1");
+
+        final ConfigException exception = assertThrows(
+            ConfigException.class,
+            () -> new StreamsConfig(props)
+        );
+        assertTrue(exception.getMessage().contains("Streams rebalance protocol does not support static membership. " +
+            "Please set group.protocol=classic or remove group.instance.id from the configuration."));
+    }
+
+    public void shouldSetDefaultDeadLetterQueue() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertNull(config.getString(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG));
     }
 
     static class MisconfiguredSerde implements Serde<Object> {

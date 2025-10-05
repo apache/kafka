@@ -71,7 +71,7 @@ public interface CoordinatorRuntimeMetrics extends AutoCloseable {
      * Record the thread idle time.
      * @param idleTimeMs The idle time in milliseconds.
      */
-    void recordThreadIdleTime(long idleTimeMs);
+    void recordThreadIdleTime(double idleTimeMs);
 
     /**
      * Register the event queue size gauge.

@@ -31,16 +31,15 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.core.Response;
 
-import static javax.ws.rs.core.Response.Status.BAD_REQUEST;
+import static jakarta.ws.rs.core.Response.Status.BAD_REQUEST;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.NAME_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -92,7 +91,7 @@ public class RestExtensionIntegrationTest {
         try {
             // setup up props for the connector
             Map<String, String> connectorProps = new HashMap<>();
-            connectorProps.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+            connectorProps.put(CONNECTOR_CLASS_CONFIG, TestableSinkConnector.class.getSimpleName());
             connectorProps.put(TASKS_MAX_CONFIG, String.valueOf(1));
             connectorProps.put(TOPICS_CONFIG, "test-topic");
 
@@ -112,7 +111,7 @@ public class RestExtensionIntegrationTest {
                     workerId,
                     null
                 ),
-                Collections.singletonMap(
+                Map.of(
                     0,
                     new TaskState(0, "RUNNING", workerId, null)
                 ),

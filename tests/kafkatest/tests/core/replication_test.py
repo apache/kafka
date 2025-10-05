@@ -128,6 +128,11 @@ class ReplicationTest(EndToEndTest):
             broker_type=["leader"],
             security_protocol=["PLAINTEXT", "SASL_SSL"],
             metadata_quorum=quorum.all_non_upgrade)
+    @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
+            broker_type=["leader"],
+            security_protocol=["PLAINTEXT", "SASL_SSL"],
+            metadata_quorum=[quorum.combined_kraft],
+            num_controllers=[3])
     @matrix(failure_mode=["hard_bounce"],
             broker_type=["leader"],
             security_protocol=["SASL_SSL"], client_sasl_mechanism=["PLAIN"], interbroker_sasl_mechanism=["PLAIN", "GSSAPI"],
@@ -138,7 +143,7 @@ class ReplicationTest(EndToEndTest):
     def test_replication_with_broker_failure(self, failure_mode, security_protocol, broker_type,
                                              client_sasl_mechanism="GSSAPI", interbroker_sasl_mechanism="GSSAPI",
                                              compression_type=None, enable_idempotence=False, tls_version=None,
-                                             metadata_quorum=quorum.zk):
+                                             metadata_quorum=quorum.zk, num_controllers=1):
         """Replication tests.
         These tests verify that replication provides simple durability guarantees by checking that data acked by
         brokers is still available for consumption in the face of various failure scenarios.
@@ -161,7 +166,7 @@ class ReplicationTest(EndToEndTest):
                           client_sasl_mechanism=client_sasl_mechanism,
                           interbroker_sasl_mechanism=interbroker_sasl_mechanism,
                           tls_version=tls_version,
-                          controller_num_nodes_override = 1)
+                          controller_num_nodes_override = num_controllers)
         self.kafka.start()
 
         compression_types = None if not compression_type else [compression_type]

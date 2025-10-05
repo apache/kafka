@@ -16,17 +16,17 @@
  */
 package kafka.coordinator.group
 
-import kafka.server.ReplicaManager
-import org.apache.kafka.common.TopicPartition
+import kafka.server.{LogAppendResult, ReplicaManager}
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
+import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, SimpleRecord}
-import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, RecordValidationStats, SimpleRecord}
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogAppendInfo, LogConfig, VerificationGuard}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
@@ -34,9 +34,9 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{mock, verify, when}
 
 import java.nio.charset.Charset
-import java.util.Collections
+import java.util
+import java.util.Optional
 import scala.collection.Map
-import scala.jdk.CollectionConverters._
 
 class CoordinatorPartitionWriterTest {
   @Test
@@ -75,8 +75,8 @@ class CoordinatorPartitionWriterTest {
       replicaManager
     )
 
-    when(replicaManager.getLogConfig(tp)).thenReturn(Some(new LogConfig(Map.empty.asJava)))
-    assertEquals(new LogConfig(Map.empty.asJava), partitionRecordWriter.config(tp))
+    when(replicaManager.getLogConfig(tp)).thenReturn(Some(new LogConfig(util.Map.of)))
+    assertEquals(new LogConfig(util.Map.of), partitionRecordWriter.config(tp))
 
     when(replicaManager.getLogConfig(tp)).thenReturn(None)
     assertThrows(classOf[NotLeaderOrFollowerException], () => partitionRecordWriter.config(tp))
@@ -86,41 +86,41 @@ class CoordinatorPartitionWriterTest {
   @Test
   def testWriteRecords(): Unit = {
     val tp = new TopicPartition("foo", 0)
+    val topicId = Uuid.fromString("TbEp6-A4s3VPT1TwiI5COw")
     val replicaManager = mock(classOf[ReplicaManager])
+    when(replicaManager.topicIdPartition(tp)).thenReturn(new TopicIdPartition(topicId, tp))
+
     val partitionRecordWriter = new CoordinatorPartitionWriter(
-      replicaManager
+        replicaManager
     )
 
-    val recordsCapture: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] =
-      ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
-    val callbackCapture: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] =
-      ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
+    val recordsCapture: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, MemoryRecords]])
 
-    when(replicaManager.appendRecords(
-      ArgumentMatchers.eq(0L),
+    when(replicaManager.appendRecordsToLeader(
       ArgumentMatchers.eq(1.toShort),
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       recordsCapture.capture(),
-      callbackCapture.capture(),
-      ArgumentMatchers.any(),
-      ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
-    )).thenAnswer( _ => {
-      callbackCapture.getValue.apply(Map(
-        tp -> new PartitionResponse(
-          Errors.NONE,
-          5,
-          10,
-          RecordBatch.NO_TIMESTAMP,
-          -1,
-          Collections.emptyList(),
-          ""
-        )
-      ))
-    })
+    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> LogAppendResult(
+      new LogAppendInfo(
+        5L,
+        10L,
+        Optional.empty,
+        RecordBatch.NO_TIMESTAMP,
+        0L,
+        0L,
+        RecordValidationStats.EMPTY,
+        CompressionType.NONE,
+        100,
+        10L
+      ),
+      Option.empty,
+      hasCustomErrorMessage = false
+    )))
 
     val batch = MemoryRecords.withRecords(
       Compression.NONE,
@@ -136,11 +136,9 @@ class CoordinatorPartitionWriterTest {
       VerificationGuard.SENTINEL,
       batch
     ))
-
     assertEquals(
       batch,
-      recordsCapture.getValue.getOrElse(tp,
-        throw new AssertionError(s"No records for $tp"))
+      recordsCapture.getValue.getOrElse(new TopicIdPartition(topicId, tp), throw new AssertionError(s"No records for $tp"))
     )
   }
 
@@ -162,7 +160,7 @@ class CoordinatorPartitionWriterTest {
     val callbackCapture: ArgumentCaptor[((Errors, VerificationGuard)) => Unit] =
       ArgumentCaptor.forClass(classOf[((Errors, VerificationGuard)) => Unit])
 
-    when(replicaManager.maybeStartTransactionVerificationForPartition(
+    when(replicaManager.maybeSendPartitionToTransactionCoordinator(
       ArgumentMatchers.eq(tp),
       ArgumentMatchers.eq("transactional-id"),
       ArgumentMatchers.eq(10L),
@@ -182,46 +180,43 @@ class CoordinatorPartitionWriterTest {
       "transactional-id",
       10L,
       5.toShort,
-      ApiKeys.TXN_OFFSET_COMMIT.latestVersion()
+      ApiKeys.TXN_OFFSET_COMMIT.latestVersion().toInt
     )
 
     if (error == Errors.NONE) {
       assertEquals(verificationGuard, future.get)
     } else {
-      assertFutureThrows(future, error.exception.getClass)
+      assertFutureThrows(error.exception.getClass, future)
     }
   }
 
   @Test
   def testWriteRecordsWithFailure(): Unit = {
     val tp = new TopicPartition("foo", 0)
+    val topicId = Uuid.fromString("TbEp6-A4s3VPT1TwiI5COw")
     val replicaManager = mock(classOf[ReplicaManager])
+    when(replicaManager.topicIdPartition(tp)).thenReturn(new TopicIdPartition(topicId, tp))
+
     val partitionRecordWriter = new CoordinatorPartitionWriter(
       replicaManager
     )
 
-    val recordsCapture: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] =
-      ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
-    val callbackCapture: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] =
-      ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
+    val recordsCapture: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, MemoryRecords]])
 
-    when(replicaManager.appendRecords(
-      ArgumentMatchers.eq(0L),
+    when(replicaManager.appendRecordsToLeader(
       ArgumentMatchers.eq(1.toShort),
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       recordsCapture.capture(),
-      callbackCapture.capture(),
-      ArgumentMatchers.any(),
-      ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
-    )).thenAnswer(_ => {
-      callbackCapture.getValue.apply(Map(
-        tp -> new PartitionResponse(Errors.NOT_LEADER_OR_FOLLOWER)
-      ))
-    })
+    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> LogAppendResult(
+      LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
+      Some(Errors.NOT_LEADER_OR_FOLLOWER.exception),
+      hasCustomErrorMessage = false
+    )))
 
     val batch = MemoryRecords.withRecords(
       Compression.NONE,
@@ -237,5 +232,84 @@ class CoordinatorPartitionWriterTest {
       VerificationGuard.SENTINEL,
       batch
     ))
+  }
+
+  @Test
+  def testDeleteRecordsResponseContainsError(): Unit = {
+    val replicaManager = mock(classOf[ReplicaManager])
+    val partitionRecordWriter = new CoordinatorPartitionWriter(
+      replicaManager
+    )
+
+    val callbackCapture: ArgumentCaptor[Map[TopicPartition, DeleteRecordsPartitionResult] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicPartition, DeleteRecordsPartitionResult] => Unit])
+
+    // Response contains error.
+    when(replicaManager.deleteRecords(
+      ArgumentMatchers.anyLong(),
+      ArgumentMatchers.any(),
+      callbackCapture.capture(),
+      ArgumentMatchers.eq(true)
+    )).thenAnswer { _ =>
+      callbackCapture.getValue.apply(Map(
+        new TopicPartition("random-topic", 0) -> new DeleteRecordsPartitionResult()
+          .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code
+          )))
+    }
+
+    partitionRecordWriter.deleteRecords(
+      new TopicPartition("random-topic", 0),
+      10L
+    ).whenComplete { (_, exp) =>
+      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.exception, exp)
+    }
+
+    // Empty response
+    when(replicaManager.deleteRecords(
+      ArgumentMatchers.anyLong(),
+      ArgumentMatchers.any(),
+      callbackCapture.capture(),
+      ArgumentMatchers.eq(true)
+    )).thenAnswer { _ =>
+      callbackCapture.getValue.apply(Map[TopicPartition, DeleteRecordsPartitionResult]())
+    }
+
+    partitionRecordWriter.deleteRecords(
+      new TopicPartition("random-topic", 0),
+      10L
+    ).whenComplete { (_, exp) =>
+      assertTrue(exp.isInstanceOf[IllegalStateException])
+    }
+  }
+
+  @Test
+  def testDeleteRecordsSuccess(): Unit = {
+    val replicaManager = mock(classOf[ReplicaManager])
+    val partitionRecordWriter = new CoordinatorPartitionWriter(
+      replicaManager
+    )
+
+    val callbackCapture: ArgumentCaptor[Map[TopicPartition, DeleteRecordsPartitionResult] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicPartition, DeleteRecordsPartitionResult] => Unit])
+
+    // response contains error
+    when(replicaManager.deleteRecords(
+      ArgumentMatchers.anyLong(),
+      ArgumentMatchers.any(),
+      callbackCapture.capture(),
+      ArgumentMatchers.eq(true)
+    )).thenAnswer { _ =>
+      callbackCapture.getValue.apply(Map(
+        new TopicPartition("random-topic", 0) -> new DeleteRecordsPartitionResult()
+          .setErrorCode(Errors.NONE.code)
+      ))
+    }
+
+    partitionRecordWriter.deleteRecords(
+      new TopicPartition("random-topic", 0),
+      10L
+    ).whenComplete { (_, exp) =>
+      assertNull(exp)
+    }
   }
 }

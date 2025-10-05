@@ -31,8 +31,6 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -71,12 +69,6 @@ public class JaasTestUtils {
     }
 
     private static final boolean IS_IBM_SECURITY = Java.isIbmJdk() && !Java.isIbmJdkSemeru();
-
-    private static final String ZK_SERVER_CONTEXT_NAME = "Server";
-    private static final String ZK_CLIENT_CONTEXT_NAME = "Client";
-    private static final String ZK_USER_SUPER_PASSWD = "adminpasswd";
-    private static final String ZK_USER = "fpj";
-    private static final String ZK_USER_PASSWORD = "fpjsecret";
 
     public static final String KAFKA_SERVER_CONTEXT_NAME = "KafkaServer";
     public static final String KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME = "kafka";
@@ -172,20 +164,6 @@ public class JaasTestUtils {
         return JaasModule.scramLoginModule(tokenId, password, false, tokenProps).toString();
     }
 
-    public static List<JaasSection> zkSections() {
-        Map<String, String> zkServerEntries = new HashMap<>();
-        zkServerEntries.put("user_super", ZK_USER_SUPER_PASSWD);
-        zkServerEntries.put("user_" + ZK_USER, ZK_USER_PASSWORD);
-        JaasSection zkServerSection = new JaasSection(ZK_SERVER_CONTEXT_NAME, Collections.singletonList(JaasModule.zkDigestModule(false, zkServerEntries)));
-
-        Map<String, String> zkClientEntries = new HashMap<>();
-        zkClientEntries.put("username", ZK_USER);
-        zkClientEntries.put("password", ZK_USER_PASSWORD);
-        JaasSection zkClientSection = new JaasSection(ZK_CLIENT_CONTEXT_NAME, Collections.singletonList(JaasModule.zkDigestModule(false, zkClientEntries)));
-
-        return Arrays.asList(zkServerSection, zkClientSection);
-    }
-
     public static JaasSection kafkaServerSection(String contextName, List<String> mechanisms, Optional<File> keytabLocation) {
         List<JaasModule> modules = new ArrayList<>();
         for (String mechanism : mechanisms) {
@@ -267,7 +245,7 @@ public class JaasTestUtils {
                         KAFKA_SCRAM_PASSWORD_2,
                         KAFKA_OAUTH_BEARER_USER_2,
                         SERVICE_NAME)
-                ).map(Collections::singletonList).orElse(Collections.emptyList()));
+                ).map(List::of).orElse(List.of()));
     }
 
     private static void writeToFile(File file, List<JaasSection> jaasSections) throws IOException {
@@ -277,23 +255,17 @@ public class JaasTestUtils {
     }
 
     public static boolean usesSslTransportLayer(SecurityProtocol securityProtocol) {
-        switch (securityProtocol) {
-            case SSL:
-            case SASL_SSL:
-                return true;
-            default:
-                return false;
-        }
+        return switch (securityProtocol) {
+            case SSL, SASL_SSL -> true;
+            default -> false;
+        };
     }
 
     public static boolean usesSaslAuthentication(SecurityProtocol securityProtocol) {
-        switch (securityProtocol) {
-            case SASL_PLAINTEXT:
-            case SASL_SSL:
-                return true;
-            default:
-                return false;
-        }
+        return switch (securityProtocol) {
+            case SASL_PLAINTEXT, SASL_SSL -> true;
+            default -> false;
+        };
     }
 
     public static Properties sslConfigs(ConnectionMode mode,

@@ -20,11 +20,10 @@ import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.utils.AppInfoParser;
 
-import java.nio.ByteBuffer;
 import java.util.regex.Pattern;
 
 public class ApiVersionsRequest extends AbstractRequest {
@@ -128,8 +127,8 @@ public class ApiVersionsRequest extends AbstractRequest {
         return new ApiVersionsResponse(data);
     }
 
-    public static ApiVersionsRequest parse(ByteBuffer buffer, short version) {
-        return new ApiVersionsRequest(new ApiVersionsRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static ApiVersionsRequest parse(Readable readable, short version) {
+        return new ApiVersionsRequest(new ApiVersionsRequestData(readable, version), version);
     }
 
 }

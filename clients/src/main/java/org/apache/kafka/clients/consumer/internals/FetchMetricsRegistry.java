@@ -26,6 +26,9 @@ import java.util.Set;
 
 public class FetchMetricsRegistry {
 
+    private static final String DEPRECATED_TOPIC_METRICS_MESSAGE = "Note: For topic names with periods (.), an additional "
+        + "metric with underscores is emitted. However, the periods replaced metric is deprecated. Please use the metric with actual topic name instead.";
+
     public MetricNameTemplate fetchSizeAvg;
     public MetricNameTemplate fetchSizeMax;
     public MetricNameTemplate bytesConsumedRate;
@@ -110,39 +113,39 @@ public class FetchMetricsRegistry {
         topicTags.add("topic");
 
         this.topicFetchSizeAvg = new MetricNameTemplate("fetch-size-avg", groupName,
-                "The average number of bytes fetched per request for a topic", topicTags);
+                "The average number of bytes fetched per request for a topic. " + DEPRECATED_TOPIC_METRICS_MESSAGE, topicTags);
         this.topicFetchSizeMax = new MetricNameTemplate("fetch-size-max", groupName,
-                "The maximum number of bytes fetched per request for a topic", topicTags);
+                "The maximum number of bytes fetched per request for a topic. " + DEPRECATED_TOPIC_METRICS_MESSAGE, topicTags);
         this.topicBytesConsumedRate = new MetricNameTemplate("bytes-consumed-rate", groupName,
-                "The average number of bytes consumed per second for a topic", topicTags);
+                "The average number of bytes consumed per second for a topic. " + DEPRECATED_TOPIC_METRICS_MESSAGE, topicTags);
         this.topicBytesConsumedTotal = new MetricNameTemplate("bytes-consumed-total", groupName,
-                "The total number of bytes consumed for a topic", topicTags);
+                "The total number of bytes consumed for a topic. " + DEPRECATED_TOPIC_METRICS_MESSAGE, topicTags);
 
         this.topicRecordsPerRequestAvg = new MetricNameTemplate("records-per-request-avg", groupName,
-                "The average number of records in each request for a topic", topicTags);
+                "The average number of records in each request for a topic. " + DEPRECATED_TOPIC_METRICS_MESSAGE, topicTags);
         this.topicRecordsConsumedRate = new MetricNameTemplate("records-consumed-rate", groupName,
-                "The average number of records consumed per second for a topic", topicTags);
+                "The average number of records consumed per second for a topic. " + DEPRECATED_TOPIC_METRICS_MESSAGE, topicTags);
         this.topicRecordsConsumedTotal = new MetricNameTemplate("records-consumed-total", groupName,
-                "The total number of records consumed for a topic", topicTags);
+                "The total number of records consumed for a topic. " + DEPRECATED_TOPIC_METRICS_MESSAGE, topicTags);
 
         /* Partition level */
         Set<String> partitionTags = new HashSet<>(topicTags);
         partitionTags.add("partition");
         this.partitionRecordsLag = new MetricNameTemplate("records-lag", groupName,
-                "The latest lag of the partition", partitionTags);
+                "The latest lag of the partition. " + DEPRECATED_TOPIC_METRICS_MESSAGE, partitionTags);
         this.partitionRecordsLagMax = new MetricNameTemplate("records-lag-max", groupName,
-                "The max lag of the partition", partitionTags);
+                "The max lag of the partition. " + DEPRECATED_TOPIC_METRICS_MESSAGE, partitionTags);
         this.partitionRecordsLagAvg = new MetricNameTemplate("records-lag-avg", groupName,
-                "The average lag of the partition", partitionTags);
+                "The average lag of the partition. " + DEPRECATED_TOPIC_METRICS_MESSAGE, partitionTags);
         this.partitionRecordsLead = new MetricNameTemplate("records-lead", groupName,
-                "The latest lead of the partition", partitionTags);
+                "The latest lead of the partition. " + DEPRECATED_TOPIC_METRICS_MESSAGE, partitionTags);
         this.partitionRecordsLeadMin = new MetricNameTemplate("records-lead-min", groupName,
-                "The min lead of the partition", partitionTags);
+                "The min lead of the partition. " + DEPRECATED_TOPIC_METRICS_MESSAGE, partitionTags);
         this.partitionRecordsLeadAvg = new MetricNameTemplate("records-lead-avg", groupName,
-                "The average lead of the partition", partitionTags);
+                "The average lead of the partition. " + DEPRECATED_TOPIC_METRICS_MESSAGE, partitionTags);
         this.partitionPreferredReadReplica = new MetricNameTemplate(
                 "preferred-read-replica", groupName,
-                "The current read replica for the partition, or -1 if reading from leader", partitionTags);
+                "The current read replica for the partition, or -1 if reading from leader. " + DEPRECATED_TOPIC_METRICS_MESSAGE, partitionTags);
     }
 
     public List<MetricNameTemplate> getAllTemplates() {

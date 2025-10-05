@@ -38,11 +38,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.OptionalInt;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -65,7 +62,7 @@ public class MetadataBatchLoaderTest {
 
     static {
         {
-            TOPIC_TXN_BATCH_1 = Arrays.asList(
+            TOPIC_TXN_BATCH_1 = List.of(
                 new ApiMessageAndVersion(new BeginTransactionRecord().setName("txn-1"), (short) 0),
                 new ApiMessageAndVersion(new TopicRecord()
                     .setName("foo")
@@ -75,7 +72,7 @@ public class MetadataBatchLoaderTest {
                     .setTopicId(TOPIC_FOO), (short) 0)
             );
 
-            TOPIC_TXN_BATCH_2 = Arrays.asList(
+            TOPIC_TXN_BATCH_2 = List.of(
                 new ApiMessageAndVersion(new PartitionRecord()
                     .setPartitionId(1)
                     .setTopicId(TOPIC_FOO), (short) 0),
@@ -85,7 +82,7 @@ public class MetadataBatchLoaderTest {
                 new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0)
             );
 
-            TOPIC_NO_TXN_BATCH = Arrays.asList(
+            TOPIC_NO_TXN_BATCH = List.of(
                 new ApiMessageAndVersion(new TopicRecord()
                     .setName("bar")
                     .setTopicId(TOPIC_BAR), (short) 0),
@@ -97,13 +94,13 @@ public class MetadataBatchLoaderTest {
                     .setTopicId(TOPIC_BAR), (short) 0)
             );
 
-            TXN_BEGIN_SINGLETON = Collections.singletonList(
+            TXN_BEGIN_SINGLETON = List.of(
                 new ApiMessageAndVersion(new BeginTransactionRecord().setName("txn-1"), (short) 0));
 
-            TXN_END_SINGLETON = Collections.singletonList(
+            TXN_END_SINGLETON = List.of(
                 new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0));
 
-            TXN_ABORT_SINGLETON = Collections.singletonList(
+            TXN_ABORT_SINGLETON = List.of(
                 new ApiMessageAndVersion(new AbortTransactionRecord(), (short) 0));
         }
     }
@@ -111,7 +108,7 @@ public class MetadataBatchLoaderTest {
     static List<ApiMessageAndVersion> noOpRecords(int n) {
         return IntStream.range(0, n)
                 .mapToObj(__ -> new ApiMessageAndVersion(new NoOpRecord(), (short) 0))
-                .collect(Collectors.toList());
+                .toList();
     }
 
 

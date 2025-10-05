@@ -20,7 +20,6 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -29,10 +28,10 @@ import java.util.stream.Collectors;
 
 /**
  * Options for {@link Admin#listConsumerGroups()}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
+ * @deprecated Since 4.1. Use {@link Admin#listGroups(ListGroupsOptions)} instead.
  */
-@InterfaceStability.Evolving
+@Deprecated(since = "4.1")
+@SuppressWarnings("removal")
 public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroupsOptions> {
 
     private Set<GroupState> groupStates = Collections.emptySet();
@@ -52,13 +51,13 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
      * If states is set, only groups in these states will be returned by listConsumerGroups().
      * Otherwise, all groups are returned.
      * This operation is supported by brokers with version 2.6.0 or later.
-     * @deprecated Since 4.0. Use {@link #inGroupStates(Set)}.
+     * @deprecated Since 4.0. Use {@link #inGroupStates(Set)} instead.
      */
     @Deprecated
     public ListConsumerGroupsOptions inStates(Set<ConsumerGroupState> states) {
         this.groupStates = (states == null || states.isEmpty())
             ? Collections.emptySet()
-            : states.stream().map(state -> GroupState.parse(state.name())).collect(Collectors.toSet());
+            : states.stream().map(state -> GroupState.parse(state.toString())).collect(Collectors.toSet());
         return this;
     }
 
@@ -80,11 +79,11 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
 
     /**
      * Returns the list of States that are requested or empty if no states have been specified.
-     * @deprecated Since 4.0. Use {@link #inGroupStates(Set)}.
+     * @deprecated Since 4.0. Use {@link #inGroupStates(Set)} instead.
      */
     @Deprecated
     public Set<ConsumerGroupState> states() {
-        return groupStates.stream().map(groupState -> ConsumerGroupState.parse(groupState.name())).collect(Collectors.toSet());
+        return groupStates.stream().map(groupState -> ConsumerGroupState.parse(groupState.toString())).collect(Collectors.toSet());
     }
 
     /**

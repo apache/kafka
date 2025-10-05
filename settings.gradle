@@ -14,34 +14,40 @@
 // limitations under the License.
 
 plugins {
-    id 'com.gradle.develocity' version '3.17.6'
+    id 'com.gradle.develocity' version '3.19'
     id 'com.gradle.common-custom-user-data-gradle-plugin' version '2.0.2'
 }
 
 def isGithubActions = System.getenv('GITHUB_ACTIONS') != null
-def isJenkins = System.getenv('JENKINS_URL') != null
-def isCI = isGithubActions || isJenkins
+
+def runNew = ext.find("kafka.test.run.new") == "true"
+def runFlaky = ext.find("kafka.test.run.flaky") == "true"
 def currentJvm = JavaVersion.current()
 
 develocity {
-    server = "https://ge.apache.org"
+    server = "https://develocity.apache.org"
     projectId = "kafka"
     buildScan {
-        uploadInBackground = !isCI
+        uploadInBackground = !isGithubActions
         publishing.onlyIf { it.authenticated }
         obfuscation {
             // This obfuscates the IP addresses of the build machine in the build scan.
             // Alternatively, the build scan will provide the hostname for troubleshooting host-specific issues.
             ipAddresses { addresses -> addresses.collect { address -> "0.0.0.0"} }
         }
-        if (isJenkins) {
-            tag "jenkins"
-        } else if (isGithubActions) {
+        if (isGithubActions) {
             tag "github"
         } else {
             tag "local"
         }
         tag "JDK$currentJvm"
+        if (runFlaky) {
+            tag "flaky"
+        }
+        if (runNew) {
+            tag "new"
+        }
+
     }
 }
 
@@ -49,7 +55,7 @@ buildCache {
     local {
         // This allows the build cache to be used locally or on GitHub Actions.
         // Using the cache on GH should be safe since each job is run on a new VM
-        enabled = !isJenkins
+        enabled = true
     }
 
     remote(develocity.buildCache) {
@@ -58,6 +64,7 @@ buildCache {
 }
 
 include 'clients',
+    'clients:clients-integration-tests',
     'connect:api',
     'connect:basic-auth-extension',
     'connect:file',
@@ -78,7 +85,6 @@ include 'clients',
     'raft',
     'server',
     'server-common',
-    'share',
     'share-coordinator',
     'shell',
     'storage',
@@ -88,9 +94,6 @@ include 'clients',
     'streams:integration-tests',
     'streams:streams-scala',
     'streams:test-utils',
-    'streams:upgrade-system-tests-0100',
-    'streams:upgrade-system-tests-0101',
-    'streams:upgrade-system-tests-0102',
     'streams:upgrade-system-tests-0110',
     'streams:upgrade-system-tests-10',
     'streams:upgrade-system-tests-11',
@@ -113,12 +116,14 @@ include 'clients',
     'streams:upgrade-system-tests-37',
     'streams:upgrade-system-tests-38',
     'streams:upgrade-system-tests-39',
+    'streams:upgrade-system-tests-40',
+    'streams:upgrade-system-tests-41',
     'tools',
     'tools:tools-api',
     'transaction-coordinator',
     'trogdor',
-    'test-common',
-    'test-common:test-common-api',
+    'test-common:test-common-internal-api',
+    'test-common:test-common-util',
     'test-common:test-common-runtime'
 
 project(":storage:api").name = "storage-api"

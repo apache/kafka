@@ -20,7 +20,6 @@ import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Type;
-import org.apache.kafka.common.record.RecordBatch;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -67,11 +66,11 @@ public enum ApiKeys {
     DELETE_RECORDS(ApiMessageType.DELETE_RECORDS),
     INIT_PRODUCER_ID(ApiMessageType.INIT_PRODUCER_ID),
     OFFSET_FOR_LEADER_EPOCH(ApiMessageType.OFFSET_FOR_LEADER_EPOCH),
-    ADD_PARTITIONS_TO_TXN(ApiMessageType.ADD_PARTITIONS_TO_TXN, false, RecordBatch.MAGIC_VALUE_V2, false),
-    ADD_OFFSETS_TO_TXN(ApiMessageType.ADD_OFFSETS_TO_TXN, false, RecordBatch.MAGIC_VALUE_V2, false),
-    END_TXN(ApiMessageType.END_TXN, false, RecordBatch.MAGIC_VALUE_V2, false),
-    WRITE_TXN_MARKERS(ApiMessageType.WRITE_TXN_MARKERS, true, RecordBatch.MAGIC_VALUE_V2, false),
-    TXN_OFFSET_COMMIT(ApiMessageType.TXN_OFFSET_COMMIT, false, RecordBatch.MAGIC_VALUE_V2, false),
+    ADD_PARTITIONS_TO_TXN(ApiMessageType.ADD_PARTITIONS_TO_TXN, false, false),
+    ADD_OFFSETS_TO_TXN(ApiMessageType.ADD_OFFSETS_TO_TXN, false, false),
+    END_TXN(ApiMessageType.END_TXN, false, false),
+    WRITE_TXN_MARKERS(ApiMessageType.WRITE_TXN_MARKERS, true, false),
+    TXN_OFFSET_COMMIT(ApiMessageType.TXN_OFFSET_COMMIT, false, false),
     DESCRIBE_ACLS(ApiMessageType.DESCRIBE_ACLS),
     CREATE_ACLS(ApiMessageType.CREATE_ACLS, false, true),
     DELETE_ACLS(ApiMessageType.DELETE_ACLS, false, true),
@@ -95,19 +94,19 @@ public enum ApiKeys {
     ALTER_CLIENT_QUOTAS(ApiMessageType.ALTER_CLIENT_QUOTAS, false, true),
     DESCRIBE_USER_SCRAM_CREDENTIALS(ApiMessageType.DESCRIBE_USER_SCRAM_CREDENTIALS),
     ALTER_USER_SCRAM_CREDENTIALS(ApiMessageType.ALTER_USER_SCRAM_CREDENTIALS, false, true),
-    VOTE(ApiMessageType.VOTE, true, RecordBatch.MAGIC_VALUE_V0, false),
-    BEGIN_QUORUM_EPOCH(ApiMessageType.BEGIN_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false),
-    END_QUORUM_EPOCH(ApiMessageType.END_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false),
-    DESCRIBE_QUORUM(ApiMessageType.DESCRIBE_QUORUM, true, RecordBatch.MAGIC_VALUE_V0, true),
+    VOTE(ApiMessageType.VOTE, true, false),
+    BEGIN_QUORUM_EPOCH(ApiMessageType.BEGIN_QUORUM_EPOCH, true, false),
+    END_QUORUM_EPOCH(ApiMessageType.END_QUORUM_EPOCH, true, false),
+    DESCRIBE_QUORUM(ApiMessageType.DESCRIBE_QUORUM, true, true),
     ALTER_PARTITION(ApiMessageType.ALTER_PARTITION, true),
     UPDATE_FEATURES(ApiMessageType.UPDATE_FEATURES, true, true),
-    ENVELOPE(ApiMessageType.ENVELOPE, true, RecordBatch.MAGIC_VALUE_V0, false),
-    FETCH_SNAPSHOT(ApiMessageType.FETCH_SNAPSHOT, false, RecordBatch.MAGIC_VALUE_V0, false),
+    ENVELOPE(ApiMessageType.ENVELOPE, true, false),
+    FETCH_SNAPSHOT(ApiMessageType.FETCH_SNAPSHOT, false, false),
     DESCRIBE_CLUSTER(ApiMessageType.DESCRIBE_CLUSTER),
     DESCRIBE_PRODUCERS(ApiMessageType.DESCRIBE_PRODUCERS),
-    BROKER_REGISTRATION(ApiMessageType.BROKER_REGISTRATION, true, RecordBatch.MAGIC_VALUE_V0, false),
-    BROKER_HEARTBEAT(ApiMessageType.BROKER_HEARTBEAT, true, RecordBatch.MAGIC_VALUE_V0, false),
-    UNREGISTER_BROKER(ApiMessageType.UNREGISTER_BROKER, false, RecordBatch.MAGIC_VALUE_V0, true),
+    BROKER_REGISTRATION(ApiMessageType.BROKER_REGISTRATION, true, false),
+    BROKER_HEARTBEAT(ApiMessageType.BROKER_HEARTBEAT, true, false),
+    UNREGISTER_BROKER(ApiMessageType.UNREGISTER_BROKER, false, true),
     DESCRIBE_TRANSACTIONS(ApiMessageType.DESCRIBE_TRANSACTIONS),
     LIST_TRANSACTIONS(ApiMessageType.LIST_TRANSACTIONS),
     ALLOCATE_PRODUCER_IDS(ApiMessageType.ALLOCATE_PRODUCER_IDS, true, true),
@@ -117,20 +116,26 @@ public enum ApiKeys {
     GET_TELEMETRY_SUBSCRIPTIONS(ApiMessageType.GET_TELEMETRY_SUBSCRIPTIONS),
     PUSH_TELEMETRY(ApiMessageType.PUSH_TELEMETRY),
     ASSIGN_REPLICAS_TO_DIRS(ApiMessageType.ASSIGN_REPLICAS_TO_DIRS),
-    LIST_CLIENT_METRICS_RESOURCES(ApiMessageType.LIST_CLIENT_METRICS_RESOURCES),
+    LIST_CONFIG_RESOURCES(ApiMessageType.LIST_CONFIG_RESOURCES),
     DESCRIBE_TOPIC_PARTITIONS(ApiMessageType.DESCRIBE_TOPIC_PARTITIONS),
     SHARE_GROUP_HEARTBEAT(ApiMessageType.SHARE_GROUP_HEARTBEAT),
     SHARE_GROUP_DESCRIBE(ApiMessageType.SHARE_GROUP_DESCRIBE),
     SHARE_FETCH(ApiMessageType.SHARE_FETCH),
     SHARE_ACKNOWLEDGE(ApiMessageType.SHARE_ACKNOWLEDGE),
-    ADD_RAFT_VOTER(ApiMessageType.ADD_RAFT_VOTER, false, RecordBatch.MAGIC_VALUE_V0, true),
-    REMOVE_RAFT_VOTER(ApiMessageType.REMOVE_RAFT_VOTER, false, RecordBatch.MAGIC_VALUE_V0, true),
+    ADD_RAFT_VOTER(ApiMessageType.ADD_RAFT_VOTER, false, true),
+    REMOVE_RAFT_VOTER(ApiMessageType.REMOVE_RAFT_VOTER, false, true),
     UPDATE_RAFT_VOTER(ApiMessageType.UPDATE_RAFT_VOTER),
     INITIALIZE_SHARE_GROUP_STATE(ApiMessageType.INITIALIZE_SHARE_GROUP_STATE, true),
     READ_SHARE_GROUP_STATE(ApiMessageType.READ_SHARE_GROUP_STATE, true),
     WRITE_SHARE_GROUP_STATE(ApiMessageType.WRITE_SHARE_GROUP_STATE, true),
     DELETE_SHARE_GROUP_STATE(ApiMessageType.DELETE_SHARE_GROUP_STATE, true),
-    READ_SHARE_GROUP_STATE_SUMMARY(ApiMessageType.READ_SHARE_GROUP_STATE_SUMMARY, true);
+    READ_SHARE_GROUP_STATE_SUMMARY(ApiMessageType.READ_SHARE_GROUP_STATE_SUMMARY, true),
+    STREAMS_GROUP_HEARTBEAT(ApiMessageType.STREAMS_GROUP_HEARTBEAT),
+    STREAMS_GROUP_DESCRIBE(ApiMessageType.STREAMS_GROUP_DESCRIBE),
+    DESCRIBE_SHARE_GROUP_OFFSETS(ApiMessageType.DESCRIBE_SHARE_GROUP_OFFSETS),
+    ALTER_SHARE_GROUP_OFFSETS(ApiMessageType.ALTER_SHARE_GROUP_OFFSETS),
+    DELETE_SHARE_GROUP_OFFSETS(ApiMessageType.DELETE_SHARE_GROUP_OFFSETS);
+    
 
     private static final Map<ApiMessageType.ListenerType, EnumSet<ApiKeys>> APIS_BY_LISTENER =
         new EnumMap<>(ApiMessageType.ListenerType.class);
@@ -145,6 +150,11 @@ public enum ApiKeys {
     private static final Map<Integer, ApiKeys> ID_TO_TYPE = Arrays.stream(ApiKeys.values())
         .collect(Collectors.toMap(key -> (int) key.id, Function.identity()));
 
+    // Versions 0-2 were removed in Apache Kafka 4.0, version 3 is the new baseline. Due to a bug in librdkafka,
+    // version `0` has to be included in the api versions response (see KAFKA-18659). In order to achieve that,
+    // we adjust `toApiVersion` to return `0` for the min version of `produce` in the broker listener.
+    public static final short PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION = 0;
+
     /** the permanent and immutable id of an API - this can't change ever */
     public final short id;
 
@@ -153,9 +163,6 @@ public enum ApiKeys {
 
     /** indicates if this is a ClusterAction request used only by brokers */
     public final boolean clusterAction;
-
-    /** indicates the minimum required inter broker magic required to support the API */
-    public final byte minRequiredInterBrokerMagic;
 
     /** indicates whether the API is enabled for forwarding */
     public final boolean forwardable;
@@ -169,24 +176,18 @@ public enum ApiKeys {
     }
 
     ApiKeys(ApiMessageType messageType, boolean clusterAction) {
-        this(messageType, clusterAction, RecordBatch.MAGIC_VALUE_V0, false);
-    }
-
-    ApiKeys(ApiMessageType messageType, boolean clusterAction, boolean forwardable) {
-        this(messageType, clusterAction, RecordBatch.MAGIC_VALUE_V0, forwardable);
+        this(messageType, clusterAction, false);
     }
 
     ApiKeys(
         ApiMessageType messageType,
         boolean clusterAction,
-        byte minRequiredInterBrokerMagic,
         boolean forwardable
     ) {
         this.messageType = messageType;
         this.id = messageType.apiKey();
         this.name = messageType.name;
         this.clusterAction = clusterAction;
-        this.minRequiredInterBrokerMagic = minRequiredInterBrokerMagic;
         this.requiresDelayedAllocation = forwardable || shouldRetainsBufferReference(messageType.requestSchemas());
         this.forwardable = forwardable;
     }
@@ -194,7 +195,7 @@ public enum ApiKeys {
     private static boolean shouldRetainsBufferReference(Schema[] requestSchemas) {
         boolean requestRetainsBufferReference = false;
         for (Schema requestVersionSchema : requestSchemas) {
-            if (retainsBufferReference(requestVersionSchema)) {
+            if (requestVersionSchema != null && retainsBufferReference(requestVersionSchema)) {
                 requestRetainsBufferReference = true;
                 break;
             }
@@ -251,8 +252,39 @@ public enum ApiKeys {
         return apiVersion >= messageType.lowestDeprecatedVersion() && apiVersion <= messageType.highestDeprecatedVersion();
     }
 
+    /**
+     * Returns `true` if there is at least one valid version, `false` otherwise. When `false` is returned, it typically
+     * means that the protocol api is no longer supported, but the api key remains assigned to the removed api so we
+     * do not accidentally reuse it for a different api.
+     */
+    public boolean hasValidVersion() {
+        return oldestVersion() <= latestVersion();
+    }
+
+    /**
+     * To workaround a critical bug in librdkafka, the api versions response is inconsistent with the actual versions
+     * supported by `produce` - this method handles that. It should be called in the context of the api response protocol
+     * handling.
+     *
+     * It should not be used by code generating protocol documentation - we keep that consistent with the actual versions
+     * supported by `produce`.
+     *
+     * See `PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION` for details.
+     */
+    public Optional<ApiVersionsResponseData.ApiVersion> toApiVersionForApiResponse(boolean enableUnstableLastVersion,
+                                                                                   ApiMessageType.ListenerType listenerType) {
+        return toApiVersion(enableUnstableLastVersion, Optional.of(listenerType));
+    }
+
     public Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion) {
-        short oldestVersion = oldestVersion();
+        return toApiVersion(enableUnstableLastVersion, Optional.empty());
+    }
+
+    private Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion,
+                                                                     Optional<ApiMessageType.ListenerType> listenerType) {
+        // see `PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION` for details on why we do this
+        short oldestVersion = (this == PRODUCE && listenerType.map(l -> l == ApiMessageType.ListenerType.BROKER).orElse(false)) ?
+            PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION : oldestVersion();
         short latestVersion = latestVersion(enableUnstableLastVersion);
 
         // API is entirely disabled if latestStableVersion is smaller than oldestVersion.
@@ -286,7 +318,7 @@ public enum ApiKeys {
         b.append("<th>Key</th>\n");
         b.append("</tr>");
         clientApis().stream()
-            .filter(apiKey -> apiKey.toApiVersion(false).isPresent())
+            .filter(apiKey -> apiKey.toApiVersion(false, Optional.empty()).isPresent())
             .forEach(apiKey -> {
                 b.append("<tr>\n");
                 b.append("<td>");
@@ -319,11 +351,7 @@ public enum ApiKeys {
         return hasBuffer.get();
     }
 
-    public static EnumSet<ApiKeys> zkBrokerApis() {
-        return apisForListener(ApiMessageType.ListenerType.ZK_BROKER);
-    }
-
-    public static EnumSet<ApiKeys> kraftBrokerApis() {
+    public static EnumSet<ApiKeys> brokerApis() {
         return apisForListener(ApiMessageType.ListenerType.BROKER);
     }
 
@@ -332,10 +360,7 @@ public enum ApiKeys {
     }
 
     public static EnumSet<ApiKeys> clientApis() {
-        List<ApiKeys> apis = Arrays.stream(ApiKeys.values())
-            .filter(apiKey -> apiKey.inScope(ApiMessageType.ListenerType.ZK_BROKER) || apiKey.inScope(ApiMessageType.ListenerType.BROKER))
-            .collect(Collectors.toList());
-        return EnumSet.copyOf(apis);
+        return brokerApis();
     }
 
     public static EnumSet<ApiKeys> apisForListener(ApiMessageType.ListenerType listener) {

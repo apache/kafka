@@ -16,7 +16,11 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -33,6 +37,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.mockito.ArgumentCaptor;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -137,6 +144,59 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
 
     @Test
+    public void shouldDefaultToClassicGroupProtocol(final TestInfo testInfo) {
+        final String appID = safeUniqueTestName(testInfo);
+        final String[] parameters = new String[] {
+            "--application-id", appID,
+            "--bootstrap-server", cluster.bootstrapServers(),
+            "--input-topics", INPUT_TOPIC
+        };
+        final Properties cleanUpConfig = new Properties();
+
+        // Set properties that are only allowed under the CLASSIC group protocol.
+        cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
+        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
+        final int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
+        assertEquals(0, exitCode, "Resetter should use the CLASSIC group protocol");
+    }
+
+    @Test
+    public void shouldAllowGroupProtocolClassic(final TestInfo testInfo) {
+        final String appID = safeUniqueTestName(testInfo);
+        final String[] parameters = new String[] {
+            "--application-id", appID,
+            "--bootstrap-server", cluster.bootstrapServers(),
+            "--input-topics", INPUT_TOPIC
+        };
+        final Properties cleanUpConfig = new Properties();
+
+        // Protocol config CLASSIC not needed but allowed.
+        cleanUpConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+        cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
+        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
+        int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
+        assertEquals(0, exitCode, "Resetter should allow setting group protocol to CLASSIC");
+    }
+
+    @Test
+    public void shouldOverwriteGroupProtocolOtherThanClassic(final TestInfo testInfo) {
+        final String appID = safeUniqueTestName(testInfo);
+        final String[] parameters = new String[] {
+            "--application-id", appID,
+            "--bootstrap-server", cluster.bootstrapServers(),
+            "--input-topics", INPUT_TOPIC
+        };
+        final Properties cleanUpConfig = new Properties();
+
+        // Protocol config other than CLASSIC allowed but overwritten to CLASSIC.
+        cleanUpConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
+        cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
+        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
+        int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
+        assertEquals(0, exitCode, "Resetter should overwrite the group protocol to CLASSIC");
+    }
+
+    @Test
     public void shouldNotAllowToResetWhenIntermediateTopicAbsent(final TestInfo testInfo) {
         final String appID = safeUniqueTestName(testInfo);
         final String[] parameters = new String[] {
@@ -182,6 +242,81 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
         final int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
         assertEquals(1, exitCode);
+    }
+
+    @Test
+    public void testDeprecatedConfig(final TestInfo testInfo) throws IOException {
+        File configFile = TestUtils.tempFile("client.id=my-client");
+
+        final String appID = safeUniqueTestName(testInfo);
+        final String[] parameters = new String[] {
+            "--application-id", appID,
+            "--bootstrap-server", cluster.bootstrapServers(),
+            "--internal-topics", INPUT_TOPIC,
+            "--config-file", configFile.getAbsolutePath()
+        };
+
+        try (final MockedStatic<Admin> mockedAdmin = Mockito.mockStatic(Admin.class, Mockito.CALLS_REAL_METHODS)) {
+            String output = ToolsTestUtils.captureStandardOut(() -> {
+                new StreamsResetter().execute(parameters);
+            });
+            assertTrue(output.contains("Option --config-file has been deprecated and will be removed in a future version. Use --command-config instead."));
+
+            ArgumentCaptor<Properties> argumentCaptor = ArgumentCaptor.forClass(Properties.class);
+            mockedAdmin.verify(() -> Admin.create(argumentCaptor.capture()));
+            final Properties actualProps = argumentCaptor.getValue();
+            assertEquals("my-client", actualProps.get(AdminClientConfig.CLIENT_ID_CONFIG));
+        }
+    }
+
+    @Test
+    public void testCommandConfig(final TestInfo testInfo) throws IOException {
+        File configFile = TestUtils.tempFile("client.id=my-client");
+
+        final String appID = safeUniqueTestName(testInfo);
+        final String[] parameters = new String[] {
+            "--application-id", appID,
+            "--bootstrap-server", cluster.bootstrapServers(),
+            "--internal-topics", INPUT_TOPIC,
+            "--command-config", configFile.getAbsolutePath()
+        };
+
+        try (final MockedStatic<Admin> mockedAdmin = Mockito.mockStatic(Admin.class, Mockito.CALLS_REAL_METHODS)) {
+            new StreamsResetter().execute(parameters);
+
+            ArgumentCaptor<Properties> argumentCaptor = ArgumentCaptor.forClass(Properties.class);
+            mockedAdmin.verify(() -> Admin.create(argumentCaptor.capture()));
+            final Properties actualProps = argumentCaptor.getValue();
+            assertEquals("my-client", actualProps.get(AdminClientConfig.CLIENT_ID_CONFIG));
+        }
+    }
+
+    @Test
+    public void testCommandConfigAndDeprecatedConfigPresent(final TestInfo testInfo) throws IOException {
+        File configFile = TestUtils.tempFile("client.id=my-client");
+
+        final String appID = safeUniqueTestName(testInfo);
+        final String[] parameters = new String[] {
+            "--application-id", appID,
+            "--bootstrap-server", cluster.bootstrapServers(),
+            "--internal-topics", INPUT_TOPIC,
+            "--config-file", configFile.getAbsolutePath(),
+            "--command-config", configFile.getAbsolutePath()
+        };
+
+        try (final MockedStatic<Admin> mockedAdmin = Mockito.mockStatic(Admin.class, Mockito.CALLS_REAL_METHODS)) {
+            // Mock Exit because CommandLineUtils.checkInvalidArgs calls exit
+            Exit.setExitProcedure(new ToolsTestUtils.MockExitProcedure());
+
+            String output = ToolsTestUtils.captureStandardErr(() -> {
+                new StreamsResetter().execute(parameters);
+            });
+
+            assertTrue(output.contains(String.format("Option \"%s\" can't be used with option \"%s\"",
+                "[config-file]", "[command-config]")));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     @Test

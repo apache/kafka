@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.metrics.KafkaMetricsReporter
-import kafka.raft.KafkaRaftManager
+import kafka.raft.{DefaultExternalKRaftMetrics, KafkaRaftManager}
 import kafka.server.Server.MetricsPrefix
 import kafka.utils.{CoreUtils, Logging, VerifiableProperties}
 import org.apache.kafka.common.metrics.Metrics
@@ -37,7 +37,7 @@ import org.apache.kafka.raft.Endpoints
 import org.apache.kafka.server.{ProcessRole, ServerSocketFactory}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
-import org.apache.kafka.server.metrics.{BrokerServerMetrics, KafkaYammerMetrics}
+import org.apache.kafka.server.metrics.{BrokerServerMetrics, KafkaYammerMetrics, NodeMetrics}
 
 import java.net.InetSocketAddress
 import java.util.Arrays
@@ -116,6 +116,7 @@ class SharedServer(
   @volatile var raftManager: KafkaRaftManager[ApiMessageAndVersion] = _
   @volatile var brokerMetrics: BrokerServerMetrics = _
   @volatile var controllerServerMetrics: ControllerMetadataMetrics = _
+  @volatile var nodeMetrics: NodeMetrics = _
   @volatile var loader: MetadataLoader = _
   private val snapshotsDisabledReason = new AtomicReference[String](null)
   @volatile var snapshotEmitter: SnapshotEmitter = _
@@ -268,7 +269,7 @@ class SharedServer(
           // This is only done in tests.
           metrics = new Metrics()
         }
-        sharedServerConfig.dynamicConfig.initialize(zkClientOpt = None, clientMetricsReceiverPluginOpt = None)
+        sharedServerConfig.dynamicConfig.initialize(clientMetricsReceiverPluginOpt = None)
 
         if (sharedServerConfig.processRoles.contains(ProcessRole.BrokerRole)) {
           brokerMetrics = new BrokerServerMetrics(metrics)
@@ -276,6 +277,8 @@ class SharedServer(
         if (sharedServerConfig.processRoles.contains(ProcessRole.ControllerRole)) {
           controllerServerMetrics = new ControllerMetadataMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()))
         }
+
+        val externalKRaftMetrics = new DefaultExternalKRaftMetrics(Option(brokerMetrics), Option(controllerServerMetrics))
 
         val _raftManager = new KafkaRaftManager[ApiMessageAndVersion](
           clusterId,
@@ -286,6 +289,7 @@ class SharedServer(
           KafkaRaftServer.MetadataTopicId,
           time,
           metrics,
+          externalKRaftMetrics,
           Some(s"kafka-${sharedServerConfig.nodeId}-raft"), // No dash expected at the end
           controllerQuorumVotersFuture,
           bootstrapServers,
@@ -295,6 +299,7 @@ class SharedServer(
         raftManager = _raftManager
         _raftManager.startup()
 
+        nodeMetrics = new NodeMetrics(metrics, controllerConfig.unstableFeatureVersionsEnabled)
         metadataLoaderMetrics = if (brokerMetrics != null) {
           new MetadataLoaderMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()),
             elapsedNs => brokerMetrics.updateBatchProcessingTime(elapsedNs),
@@ -337,7 +342,7 @@ class SharedServer(
             throw new RuntimeException("Unable to install metadata publishers.", t)
           }
         }
-        _raftManager.register(loader)
+        _raftManager.client.register(loader)
         debug("Completed SharedServer startup.")
         started = true
       } catch {
@@ -384,6 +389,8 @@ class SharedServer(
       controllerServerMetrics = null
       Utils.closeQuietly(brokerMetrics, "broker metrics")
       brokerMetrics = null
+      Utils.closeQuietly(nodeMetrics, "node metrics")
+      nodeMetrics = null
       Utils.closeQuietly(metrics, "metrics")
       metrics = null
       CoreUtils.swallow(AppInfoParser.unregisterAppInfo(MetricsPrefix, sharedServerConfig.nodeId.toString, metrics), this)

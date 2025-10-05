@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.Collections;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -36,7 +36,7 @@ public class DecimalTest {
     public void testBuilder() {
         Schema plain = Decimal.builder(2).build();
         assertEquals(Decimal.LOGICAL_NAME, plain.name());
-        assertEquals(Collections.singletonMap(Decimal.SCALE_FIELD, "2"), plain.parameters());
+        assertEquals(Map.of(Decimal.SCALE_FIELD, "2"), plain.parameters());
         assertEquals(1, (Object) plain.version());
     }
 

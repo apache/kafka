@@ -145,7 +145,7 @@ public class Features<VersionRangeType extends BaseVersionRange> {
             return false;
         }
 
-        final Features that = (Features) other;
+        final Features<?> that = (Features<?>) other;
         return Objects.equals(this.features, that.features);
     }
 

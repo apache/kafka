@@ -21,7 +21,6 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
-import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
@@ -44,6 +43,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.TopologyWrapper;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
@@ -158,7 +158,6 @@ import static org.hamcrest.Matchers.anEmptyMap;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -370,23 +369,11 @@ public class StreamsPartitionAssignorTest {
 
     @ParameterizedTest
     @MethodSource("parameter")
-    public void shouldUseEagerRebalancingProtocol(final Map<String, Object> parameterizedConfig) {
-        setUp(parameterizedConfig, false);
-        createDefaultMockTaskManager();
-        configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_23), parameterizedConfig);
-
-        assertEquals(1, partitionAssignor.supportedProtocols().size());
-        assertTrue(partitionAssignor.supportedProtocols().contains(RebalanceProtocol.EAGER));
-        assertFalse(partitionAssignor.supportedProtocols().contains(RebalanceProtocol.COOPERATIVE));
-    }
-
-    @ParameterizedTest
-    @MethodSource("parameter")
-    public void shouldUseCooperativeRebalancingProtocol(final Map<String, Object> parameterizedConfig) {
+    public void shouldSupportOnlyCooperativeRebalancingProtocol(final Map<String, Object> parameterizedConfig) {
         setUp(parameterizedConfig, false);
         configureDefault(parameterizedConfig);
 
-        assertEquals(2, partitionAssignor.supportedProtocols().size());
+        assertEquals(1, partitionAssignor.supportedProtocols().size());
         assertTrue(partitionAssignor.supportedProtocols().contains(RebalanceProtocol.COOPERATIVE));
     }
 
@@ -581,35 +568,6 @@ public class StreamsPartitionAssignorTest {
             );
 
         assertThat(interleavedTaskIds, equalTo(assignment));
-    }
-
-    @ParameterizedTest
-    @MethodSource("parameter")
-    public void testEagerSubscription(final Map<String, Object> parameterizedConfig) {
-        setUp(parameterizedConfig, false);
-        builder.addSource(null, "source1", null, null, null, "topic1");
-        builder.addSource(null, "source2", null, null, null, "topic2");
-        builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source1", "source2");
-
-        final Set<TaskId> prevTasks = Set.of(
-            new TaskId(0, 1), new TaskId(1, 1), new TaskId(2, 1)
-        );
-        final Set<TaskId> standbyTasks = Set.of(
-            new TaskId(0, 2), new TaskId(1, 2), new TaskId(2, 2)
-        );
-
-        createMockTaskManager(prevTasks, standbyTasks);
-        configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_23), parameterizedConfig);
-        assertThat(partitionAssignor.rebalanceProtocol(), equalTo(RebalanceProtocol.EAGER));
-
-        final Set<String> topics = Set.of("topic1", "topic2");
-        final Subscription subscription = new Subscription(new ArrayList<>(topics), partitionAssignor.subscriptionUserData(topics));
-
-        Collections.sort(subscription.topics());
-        assertEquals(asList("topic1", "topic2"), subscription.topics());
-
-        final SubscriptionInfo info = getInfo(PID_1, prevTasks, standbyTasks, uniqueField);
-        assertEquals(info, SubscriptionInfo.decode(subscription.userData()));
     }
 
     @ParameterizedTest
@@ -913,8 +871,8 @@ public class StreamsPartitionAssignorTest {
         // then metadata gets populated
         assignments = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
         // check assigned partitions
-        assertEquals(Set.of(new HashSet<>(List.of(t1p0, t2p0, t1p0, t2p0, t1p1, t2p1, t1p2, t2p2))),
-                     Set.of(new HashSet<>(assignments.get("consumer10").partitions())));
+        assertEquals(Set.of(t1p0, t2p0, t1p1, t2p1, t1p2, t2p2),
+                     new HashSet<>(assignments.get("consumer10").partitions()));
 
         // the first consumer
         info10 = checkAssignment(allTopics, assignments.get("consumer10"));
@@ -2136,64 +2094,6 @@ public class StreamsPartitionAssignorTest {
 
     @ParameterizedTest
     @MethodSource("parameter")
-    public void shouldDownGradeSubscriptionToVersion1(final Map<String, Object> parameterizedConfig) {
-        setUp(parameterizedConfig, false);
-        createDefaultMockTaskManager();
-        configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_0100), parameterizedConfig);
-
-        final Set<String> topics = Set.of("topic1");
-        final Subscription subscription = new Subscription(new ArrayList<>(topics), partitionAssignor.subscriptionUserData(topics));
-
-        assertThat(SubscriptionInfo.decode(subscription.userData()).version(), equalTo(1));
-    }
-
-    @ParameterizedTest
-    @MethodSource("parameter")
-    public void shouldDownGradeSubscriptionToVersion2For0101(final Map<String, Object> parameterizedConfig) {
-        setUp(parameterizedConfig, false);
-        shouldDownGradeSubscriptionToVersion2(StreamsConfig.UPGRADE_FROM_0101, parameterizedConfig);
-    }
-
-    @ParameterizedTest
-    @MethodSource("parameter")
-    public void shouldDownGradeSubscriptionToVersion2For0102(final Map<String, Object> parameterizedConfig) {
-        setUp(parameterizedConfig, false);
-        shouldDownGradeSubscriptionToVersion2(StreamsConfig.UPGRADE_FROM_0102, parameterizedConfig);
-    }
-
-    @ParameterizedTest
-    @MethodSource("parameter")
-    public void shouldDownGradeSubscriptionToVersion2For0110(final Map<String, Object> parameterizedConfig) {
-        setUp(parameterizedConfig, false);
-        shouldDownGradeSubscriptionToVersion2(StreamsConfig.UPGRADE_FROM_0110, parameterizedConfig);
-    }
-
-    @ParameterizedTest
-    @MethodSource("parameter")
-    public void shouldDownGradeSubscriptionToVersion2For10(final Map<String, Object> parameterizedConfig) {
-        setUp(parameterizedConfig, false);
-        shouldDownGradeSubscriptionToVersion2(StreamsConfig.UPGRADE_FROM_10, parameterizedConfig);
-    }
-
-    @ParameterizedTest
-    @MethodSource("parameter")
-    public void shouldDownGradeSubscriptionToVersion2For11(final Map<String, Object> parameterizedConfig) {
-        setUp(parameterizedConfig, false);
-        shouldDownGradeSubscriptionToVersion2(StreamsConfig.UPGRADE_FROM_11, parameterizedConfig);
-    }
-
-    private void shouldDownGradeSubscriptionToVersion2(final Object upgradeFromValue, final Map<String, Object> parameterizedConfig) {
-        createDefaultMockTaskManager();
-        configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFromValue), parameterizedConfig);
-
-        final Set<String> topics = Set.of("topic1");
-        final Subscription subscription = new Subscription(new ArrayList<>(topics), partitionAssignor.subscriptionUserData(topics));
-
-        assertThat(SubscriptionInfo.decode(subscription.userData()).version(), equalTo(2));
-    }
-
-    @ParameterizedTest
-    @MethodSource("parameter")
     public void shouldReturnInterleavedAssignmentWithUnrevokedPartitionsRemovedWhenNewConsumerJoins(final Map<String, Object> parameterizedConfig) {
         setUp(parameterizedConfig, true);
         builder.addSource(null, "source1", null, null, null, "topic1");
@@ -2700,10 +2600,10 @@ public class StreamsPartitionAssignorTest {
         builder = new CorruptedInternalTopologyBuilder();
         topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configProps(parameterizedConfig)));
 
-        final InternalStreamsBuilder streamsBuilder = new InternalStreamsBuilder(builder);
+        final InternalStreamsBuilder streamsBuilder = new InternalStreamsBuilder(builder, false);
 
-        final KStream<String, String> inputTopic = streamsBuilder.stream(singleton("topic1"), new ConsumedInternal<>());
-        final KTable<String, String> inputTable = streamsBuilder.table("topic2", new ConsumedInternal<>(), new MaterializedInternal<>(Materialized.as("store")));
+        final KStream<String, String> inputTopic = streamsBuilder.stream(singleton("topic1"), new ConsumedInternal<>(Consumed.with(null, null)));
+        final KTable<String, String> inputTable = streamsBuilder.table("topic2", new ConsumedInternal<>(Consumed.with(null, null)), new MaterializedInternal<>(Materialized.as("store")));
         inputTopic
             .groupBy(
                 (k, v) -> k,
@@ -2895,23 +2795,6 @@ public class StreamsPartitionAssignorTest {
         }
         return changelogEndOffsets;
     }
-
-    private static Map<String, TopicDescription> getTopicDescriptionMap(final List<String> changelogTopics,
-                                                                        final List<List<TopicPartitionInfo>> topicPartitionInfos) {
-        if (changelogTopics.size() != topicPartitionInfos.size()) {
-            throw new IllegalStateException("Passed in " + changelogTopics.size() + " changelog topic names, but " +
-                topicPartitionInfos.size() + " different topicPartitionInfo for the topics");
-        }
-        final Map<String, TopicDescription> changeLogTopicDescriptions = new HashMap<>();
-        for (int i = 0; i < changelogTopics.size(); i++) {
-            final String topic = changelogTopics.get(i);
-            final List<TopicPartitionInfo> topicPartitionInfo = topicPartitionInfos.get(i);
-            changeLogTopicDescriptions.put(topic, new TopicDescription(topic, false, topicPartitionInfo));
-        }
-
-        return changeLogTopicDescriptions;
-    }
-
 
     private static SubscriptionInfo getInfoForOlderVersion(final int version,
                                                            final ProcessId processId,

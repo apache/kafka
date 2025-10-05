@@ -45,6 +45,9 @@ public class ControllerMetricsTestUtils {
             bld.append(name.getGroup());
             bld.append(":type=").append(name.getType());
             bld.append(",name=").append(name.getName());
+            if (name.hasScope()) {
+                bld.append(",").append(name.getScope().replaceAll("\\.", "="));
+            }
             if (bld.toString().startsWith(expectedPrefix)) {
                 actual.add(bld.toString());
             }
@@ -59,20 +62,13 @@ public class ControllerMetricsTestUtils {
     }
 
     public static PartitionRegistration fakePartitionRegistration(
-        FakePartitionRegistrationType  type
+        FakePartitionRegistrationType type
     ) {
-        int leader = 0;
-        switch (type) {
-            case NORMAL:
-                leader = 0;
-                break;
-            case NON_PREFERRED_LEADER:
-                leader = 1;
-                break;
-            case OFFLINE:
-                leader = -1;
-                break;
-        }
+        int leader = switch (type) {
+            case NORMAL -> 0;
+            case NON_PREFERRED_LEADER -> 1;
+            case OFFLINE -> -1;
+        };
         return new PartitionRegistration.Builder().
             setReplicas(new int[] {0, 1, 2}).
             setDirectories(DirectoryId.migratingArray(3)).

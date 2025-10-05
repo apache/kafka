@@ -21,17 +21,18 @@ import java.io.{ByteArrayOutputStream, File, PrintStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.util
-import java.util.{Optional, Properties}
+import java.util.Properties
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import net.sourceforge.argparse4j.inf.ArgumentParserException
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}
 import org.apache.kafka.metadata.storage.FormatterException
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
@@ -50,11 +51,12 @@ class StorageToolTest {
     properties.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     properties.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
     properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"2@localhost:9092")
-    properties.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "PLAINTEXT")
+    properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    properties.put(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://:9092")
     properties
   }
 
-  val testingFeatures = Features.FEATURES.toList.asJava
+  val testingFeatures = Feature.FEATURES.toList.asJava
 
   @Test
   def testConfigToLogDirectories(): Unit = {
@@ -65,7 +67,7 @@ class StorageToolTest {
   @Test
   def testConfigToLogDirectoriesWithMetaLogDir(): Unit = {
     val properties = newSelfManagedProperties()
-    properties.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, "/tmp/baz")
+    properties.setProperty(MetadataLogConfig.METADATA_LOG_DIR_CONFIG, "/tmp/baz")
     val config = new KafkaConfig(properties)
     assertEquals(Seq("/tmp/bar", "/tmp/baz", "/tmp/foo"),
       StorageTool.configToLogDirectories(config))
@@ -77,7 +79,7 @@ class StorageToolTest {
     val tempDir = TestUtils.tempDir()
     try {
       assertEquals(1, StorageTool.
-        infoCommand(new PrintStream(stream), true, Seq(tempDir.toString)))
+        infoCommand(new PrintStream(stream), kraftMode = true, Seq(tempDir.toString)))
       assertEquals(s"""Found log directory:
   ${tempDir.toString}
 
@@ -95,7 +97,7 @@ Found problem:
     tempDir.delete()
     try {
       assertEquals(1, StorageTool.
-        infoCommand(new PrintStream(stream), true, Seq(tempDir.toString)))
+        infoCommand(new PrintStream(stream), kraftMode = true, Seq(tempDir.toString)))
       assertEquals(s"""Found problem:
   ${tempDir.toString} does not exist
 
@@ -109,7 +111,7 @@ Found problem:
     val tempFile = TestUtils.tempFile()
     try {
       assertEquals(1, StorageTool.
-        infoCommand(new PrintStream(stream), true, Seq(tempFile.toString)))
+        infoCommand(new PrintStream(stream), kraftMode = true, Seq(tempFile.toString)))
       assertEquals(s"""Found problem:
   ${tempFile.toString} is not a directory
 
@@ -123,13 +125,13 @@ Found problem:
     val tempDir = TestUtils.tempDir()
     try {
       Files.write(tempDir.toPath.resolve(MetaPropertiesEnsemble.META_PROPERTIES_NAME),
-        String.join("\n", util.Arrays.asList(
+        String.join("\n", util.List.of(
           "version=1",
           "node.id=1",
           "cluster.id=XcZZOzUqS4yHOjhMQB6JLQ")).
             getBytes(StandardCharsets.UTF_8))
       assertEquals(1, StorageTool.
-        infoCommand(new PrintStream(stream), false, Seq(tempDir.toString)))
+        infoCommand(new PrintStream(stream), kraftMode = false, Seq(tempDir.toString)))
       assertEquals(s"""Found log directory:
   ${tempDir.toString}
 
@@ -148,13 +150,13 @@ Found problem:
     val tempDir = TestUtils.tempDir()
     try {
       Files.write(tempDir.toPath.resolve(MetaPropertiesEnsemble.META_PROPERTIES_NAME),
-        String.join("\n", util.Arrays.asList(
+        String.join("\n", util.List.of(
           "version=0",
           "broker.id=1",
           "cluster.id=26c36907-4158-4a35-919d-6534229f5241")).
           getBytes(StandardCharsets.UTF_8))
       assertEquals(1, StorageTool.
-        infoCommand(new PrintStream(stream), true, Seq(tempDir.toString)))
+        infoCommand(new PrintStream(stream), kraftMode = true, Seq(tempDir.toString)))
       assertEquals(s"""Found log directory:
   ${tempDir.toString}
 
@@ -191,7 +193,7 @@ Found problem:
    ): Int = {
     val tempDir = TestUtils.tempDir()
     try {
-      val configPathString = new File(tempDir.getAbsolutePath(), "format.props").toString
+      val configPathString = new File(tempDir.getAbsolutePath, "format.props").toString
       PropertiesUtils.writePropertiesFile(properties, configPathString, true)
       val arguments = ListBuffer[String]("format",
         "--cluster-id", "XcZZOzUqS4yHOjhMQB6JLQ")
@@ -232,7 +234,7 @@ Found problem:
     val unavailableDir1 = TestUtils.tempFile()
     val properties = new Properties()
     properties.putAll(defaultStaticQuorumProperties)
-    properties.setProperty("log.dirs", s"${availableDir1},${unavailableDir1}")
+    properties.setProperty("log.dirs", s"$availableDir1,$unavailableDir1")
     val stream = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream, properties))
 
@@ -271,7 +273,7 @@ Found problem:
     assertEquals(0, runFormatCommand(stream, properties))
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream2 = new ByteArrayOutputStream()
-    assertEquals(0, runFormatCommand(stream2, properties, Seq(), true))
+    assertEquals(0, runFormatCommand(stream2, properties, Seq(), ignoreFormatted = true))
   }
 
   @Test
@@ -280,7 +282,7 @@ Found problem:
     val unavailableDir2 = TestUtils.tempFile()
     val properties = new Properties()
     properties.putAll(defaultStaticQuorumProperties)
-    properties.setProperty("log.dirs", s"${unavailableDir1},${unavailableDir2}")
+    properties.setProperty("log.dirs", s"$unavailableDir1,$unavailableDir2")
     val stream = new ByteArrayOutputStream()
     assertEquals("No available log directories to format.", assertThrows(classOf[FormatterException],
       () => runFormatCommand(stream, properties)).getMessage)
@@ -293,19 +295,6 @@ Found problem:
   }
 
   @Test
-  def testFormatFailsInZkMode(): Unit = {
-    val availableDirs = Seq(TestUtils.tempDir())
-    val properties = new Properties()
-    properties.setProperty("log.dirs", availableDirs.mkString(","))
-    properties.setProperty("zookeeper.connect", "localhost:2181")
-    val stream = new ByteArrayOutputStream()
-    assertEquals("The kafka configuration file appears to be for a legacy cluster. " +
-      "Formatting is only supported for clusters in KRaft mode.",
-        assertThrows(classOf[TerseFailure],
-          () => runFormatCommand(stream, properties)).getMessage)
-  }
-
-  @Test
   def testFormatWithReleaseVersion(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
@@ -315,6 +304,20 @@ Found problem:
     assertEquals(0, runFormatCommand(stream, properties, Seq("--release-version", "3.8-IV0")))
     assertTrue(stream.toString().contains("3.8-IV0"),
       "Failed to find content in output: " + stream.toString())
+  }
+
+  @Test
+  def testFormatWithUnsupportedReleaseVersion(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val failure = assertThrows(classOf[TerseFailure], () =>
+      runFormatCommand(stream, properties, Seq("--release-version", "3.3-IV1"))).getMessage
+    assertTrue(failure.contains("Unknown metadata.version '3.3-IV1'"))
+    assertTrue(failure.contains(MetadataVersion.MINIMUM_VERSION.version))
+    assertTrue(failure.contains(MetadataVersion.latestProduction().version))
   }
 
   @Test
@@ -336,7 +339,7 @@ Found problem:
     properties.putAll(defaultStaticQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     assertEquals("Unsupported feature: non.existent.feature. Supported features are: " +
-      "eligible.leader.replicas.version, group.version, kraft.version, transaction.version",
+      "eligible.leader.replicas.version, group.version, kraft.version, share.version, streams.version, transaction.version",
         assertThrows(classOf[FormatterException], () =>
           runFormatCommand(new ByteArrayOutputStream(), properties,
             Seq("--feature", "non.existent.feature=20"))).getMessage)
@@ -369,25 +372,11 @@ Found problem:
   }
 
   @Test
-  def testFormatWithReleaseVersionDefault(): Unit = {
-    val availableDirs = Seq(TestUtils.tempDir())
-    val properties = new Properties()
-    properties.putAll(defaultStaticQuorumProperties)
-    properties.setProperty("log.dirs", availableDirs.mkString(","))
-    properties.setProperty("inter.broker.protocol.version", "3.7")
-    val stream = new ByteArrayOutputStream()
-    assertEquals(0, runFormatCommand(stream, properties))
-    assertTrue(stream.toString().contains("3.7-IV4"),
-      "Failed to find content in output: " + stream.toString())
-  }
-
-  @Test
   def testFormatWithReleaseVersionDefaultAndReleaseVersion(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
     properties.putAll(defaultStaticQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
-    properties.setProperty("inter.broker.protocol.version", "3.7")
     val stream = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream, properties, Seq(
       "--release-version", "3.6-IV0",
@@ -397,16 +386,149 @@ Found problem:
   }
 
   @Test
-  def testFormatWithStandaloneFlagOnBrokerFails(): Unit = {
+  def testFormatWithReleaseVersionAndFeatureOverride(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
     properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    assertEquals(0, runFormatCommand(stream, properties, Seq(
+      "--release-version", "3.7-IV0",
+      "--feature", "share.version=1")))
+
+    // Verify that the feature override is applied by checking the bootstrap metadata
+    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString).read
+
+    // Verify that the share.version feature is set to 1 as specified
+    assertEquals(1.toShort, bootstrapMetadata.featureLevel("share.version"),
+      "share.version should be set to 1")
+
+    // Verify the command output contains the expected release version
+    assertTrue(stream.toString().contains("3.7-IV0"),
+      "Failed to find release version in output: " + stream.toString())
+
+    // Verify that the format command completed successfully with features
+    assertTrue(stream.toString().contains("Formatting metadata directory"),
+      "Failed to find formatting message in output: " + stream.toString())
+  }
+
+  @Test
+  def testFormatWithMultipleFeatures(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    assertEquals(0, runFormatCommand(stream, properties, Seq(
+      "--release-version", "3.8-IV0",
+      "--feature", "share.version=1",
+      "--feature", "transaction.version=2",
+      "--feature", "group.version=1")))
+
+    // Verify that all features are properly bootstrapped by checking the bootstrap metadata
+    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString).read
+
+    // Verify that all specified features are set correctly
+    assertEquals(1.toShort, bootstrapMetadata.featureLevel("share.version"),
+      "share.version should be set to 1")
+    assertEquals(2.toShort, bootstrapMetadata.featureLevel("transaction.version"),
+      "transaction.version should be set to 2")
+    assertEquals(1.toShort, bootstrapMetadata.featureLevel("group.version"),
+      "group.version should be set to 1")
+
+    // Verify the command output contains the expected release version
+    assertTrue(stream.toString().contains("3.8-IV0"),
+      "Failed to find release version in output: " + stream.toString())
+
+    // Verify that the format command completed successfully with multiple features
+    assertTrue(stream.toString().contains("Formatting metadata directory"),
+      "Failed to find formatting message in output: " + stream.toString())
+  }
+  
+  @Test
+  def testFormatWithInvalidFeatureThrowsError(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+
+    // Test with an invalid feature that doesn't exist
+    val exception = assertThrows(classOf[FormatterException], () => {
+      runFormatCommand(stream, properties, Seq(
+        "--release-version", "3.7-IV0",
+        "--feature", "stream.version=1"))
+    })
+
+    assertTrue(exception.getMessage.contains("Unsupported feature: stream.version."))
+  }
+
+  @Test
+  def testFormatWithStandaloneFlagOnBrokerFails(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.setProperty("process.roles", "broker")
+    properties.setProperty("node.id", "0")
+    properties.setProperty("controller.listener.names", "CONTROLLER")
+    properties.setProperty("controller.quorum.bootstrap.servers", "localhost:9093")
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--standalone")
     assertEquals("You can only use --standalone on a controller.",
       assertThrows(classOf[TerseFailure],
         () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage)
+  }
+
+  @Test
+  def testFormatWithStandaloneFailsWithStaticVotersConfig(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "0@localhost:8020")
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--standalone")
+    assertEquals("You cannot specify controller.quorum.voters and " +
+      "format the node with --initial-controllers or --standalone. If you " +
+      "want to use dynamic quorum, please remove controller.quorum.voters and " +
+      "specify controller.quorum.bootstrap.servers instead.",
+      assertThrows(classOf[TerseFailure],
+        () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage
+    )
+  }
+
+  @Test
+  def testFormatWithInitialControllersFailsWithStaticVotersConfig(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "0@localhost:8020")
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val arguments = ListBuffer[String](
+      "--release-version", "3.9-IV0",
+      "--initial-controllers",
+      "0@localhost:8020:K90IZ-0DRNazJ49kCZ1EMQ,"
+    )
+    assertEquals("You cannot specify controller.quorum.voters and " +
+      "format the node with --initial-controllers or --standalone. If you " +
+      "want to use dynamic quorum, please remove controller.quorum.voters and " +
+      "specify controller.quorum.bootstrap.servers instead.",
+      assertThrows(classOf[TerseFailure],
+        () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage
+    )
+  }
+
+  @Test
+  def testFormatWithNoInitialControllersPassesWithVotersConfig(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "0@localhost:8020")
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--no-initial-controllers")
+    assertEquals(0, runFormatCommand(stream, properties, arguments.toSeq))
   }
 
   @ParameterizedTest
@@ -483,19 +605,14 @@ Found problem:
               Seq("--release-version", "3.9-IV0"))).getMessage)
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = Array(false, true))
-  def testFormatWithNoInitialControllersSucceedsOnController(setKraftVersionFeature: Boolean): Unit = {
+  @Test
+  def testFormatWithNoInitialControllersSucceedsOnController(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
     properties.putAll(defaultDynamicQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--no-initial-controllers")
-    if (setKraftVersionFeature) {
-      arguments += "--feature"
-      arguments += "kraft.version=1"
-    }
     assertEquals(0, runFormatCommand(stream, properties, arguments.toSeq))
     assertTrue(stream.toString().
       contains("Formatting metadata directory %s".format(availableDirs.head)),
@@ -562,17 +679,17 @@ Found problem:
   def testVersionMappingWithValidReleaseVersion(): Unit = {
     val stream = new ByteArrayOutputStream()
     // Test with a valid release version
-    assertEquals(0, runVersionMappingCommand(stream, "3.3-IV3"))
+    assertEquals(0, runVersionMappingCommand(stream, MetadataVersion.MINIMUM_VERSION.toString))
 
     val output = stream.toString()
-    val metadataVersion = MetadataVersion.IBP_3_3_IV3
+    val metadataVersion = MetadataVersion.MINIMUM_VERSION
     // Check that the metadata version is correctly included in the output
     assertTrue(output.contains(s"metadata.version=${metadataVersion.featureLevel()} (${metadataVersion.version()})"),
       s"Output did not contain expected Metadata Version: $output"
     )
 
-    for (feature <- Features.PRODUCTION_FEATURES.asScala) {
-      val featureLevel = feature.defaultValue(metadataVersion)
+    for (feature <- Feature.PRODUCTION_FEATURES.asScala) {
+      val featureLevel = feature.defaultLevel(metadataVersion)
       assertTrue(output.contains(s"${feature.featureName()}=$featureLevel"),
         s"Output did not contain expected feature mapping: $output"
       )
@@ -594,8 +711,8 @@ Found problem:
       s"Output did not contain expected Metadata Version: $output"
     )
 
-    for (feature <- Features.PRODUCTION_FEATURES.asScala) {
-      val featureLevel = feature.defaultValue(metadataVersion)
+    for (feature <- Feature.PRODUCTION_FEATURES.asScala) {
+      val featureLevel = feature.defaultLevel(metadataVersion)
       assertTrue(output.contains(s"${feature.featureName()}=$featureLevel"),
         s"Output did not contain expected feature mapping: $output"
       )
@@ -613,18 +730,18 @@ Found problem:
       runVersionMappingCommand(stream, "2.9-IV2")
     })
 
-    assertEquals("Unknown release version '2.9-IV2'." +
-      " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version +
-      " to " + MetadataVersion.LATEST_PRODUCTION.version, exception.getMessage
+    assertEquals("Unknown metadata.version '2.9-IV2'. Supported metadata.version are: " +
+      MetadataVersion.metadataVersionsToString(MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestTesting()),
+      exception.getMessage
     )
 
     val exception2 = assertThrows(classOf[TerseFailure], () => {
       runVersionMappingCommand(stream, "invalid")
     })
 
-    assertEquals("Unknown release version 'invalid'." +
-      " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version +
-      " to " + MetadataVersion.LATEST_PRODUCTION.version, exception2.getMessage
+    assertEquals("Unknown metadata.version 'invalid'. Supported metadata.version are: " +
+      MetadataVersion.metadataVersionsToString(MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestTesting()),
+      exception2.getMessage
     )
   }
 
@@ -737,7 +854,7 @@ Found problem:
 
     // Not doing full SCRAM record validation since that's covered elsewhere.
     // Just checking that we generate the correct number of records
-    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString, Optional.empty).read
+    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString).read
     val scramRecords = bootstrapMetadata.records().asScala
       .filter(apiMessageAndVersion => apiMessageAndVersion.message().isInstanceOf[UserScramCredentialRecord])
       .map(apiMessageAndVersion => apiMessageAndVersion.message().asInstanceOf[UserScramCredentialRecord])

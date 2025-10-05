@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class WordCountProcessorTest {
     @Test
     public void test() {
-        final MockProcessorContext<String, String> context = new MockProcessorContext<String, String>();
+        final MockProcessorContext<String, String> context = new MockProcessorContext<>();
 
         // Create, initialize, and register the state store.
         final KeyValueStore<String, Integer> store =

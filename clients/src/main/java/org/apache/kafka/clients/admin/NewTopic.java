@@ -66,6 +66,7 @@ public class NewTopic {
      * @param name the topic name.
      * @param replicasAssignments a map from partition id to replica ids (i.e. broker ids). Although not enforced, it is
      *                            generally a good idea for all partitions to have the same number of replicas.
+     *                            The first replica will be treated as the preferred leader.
      */
     public NewTopic(String name, Map<Integer, List<Integer>> replicasAssignments) {
         this.name = name;

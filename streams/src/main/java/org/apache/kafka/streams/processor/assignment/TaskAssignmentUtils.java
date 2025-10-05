@@ -657,12 +657,12 @@ public final class TaskAssignmentUtils {
             return false;
         }
 
-        if (!assignmentConfigs.rackAwareTrafficCost().isPresent()) {
+        if (assignmentConfigs.rackAwareTrafficCost().isEmpty()) {
             LOG.warn("Rack aware task assignment optimization unavailable: must configure {}", StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG);
             return false;
         }
 
-        if (!assignmentConfigs.rackAwareNonOverlapCost().isPresent()) {
+        if (assignmentConfigs.rackAwareNonOverlapCost().isEmpty()) {
             LOG.warn("Rack aware task assignment optimization unavailable: must configure {}", StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG);
             return false;
         }
@@ -695,7 +695,7 @@ public final class TaskAssignmentUtils {
     }
 
     private static boolean hasValidRackInformation(final KafkaStreamsState state) {
-        if (!state.rackId().isPresent()) {
+        if (state.rackId().isEmpty()) {
             LOG.error("KafkaStreams client {} doesn't have a rack id configured.", state.processId().id());
             return false;
         }
@@ -710,7 +710,7 @@ public final class TaskAssignmentUtils {
 
         for (final TaskTopicPartition topicPartition : topicPartitions) {
             final Optional<Set<String>> racks = topicPartition.rackIds();
-            if (!racks.isPresent() || racks.get().isEmpty()) {
+            if (racks.isEmpty() || racks.get().isEmpty()) {
                 LOG.error("Topic partition {} for task {} does not have racks configured.", topicPartition, task.id());
                 return false;
             }

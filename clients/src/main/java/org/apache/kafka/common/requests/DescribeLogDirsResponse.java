@@ -17,14 +17,12 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 
 
@@ -57,7 +55,7 @@ public class DescribeLogDirsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
+        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
         errorCounts.put(Errors.forCode(data.errorCode()), 1);
         data.results().forEach(result ->
             updateErrorCounts(errorCounts, Errors.forCode(result.errorCode()))
@@ -65,73 +63,8 @@ public class DescribeLogDirsResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    public static DescribeLogDirsResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeLogDirsResponse(new DescribeLogDirsResponseData(new ByteBufferAccessor(buffer), version));
-    }
-
-    // Note this class is part of the public API, reachable from Admin.describeLogDirs()
-    /**
-     * Possible error code:
-     *
-     * KAFKA_STORAGE_ERROR (56)
-     * UNKNOWN (-1)
-     *
-     * @deprecated Deprecated Since Kafka 2.7.
-     * Use {@link org.apache.kafka.clients.admin.DescribeLogDirsResult#descriptions()}
-     * and {@link org.apache.kafka.clients.admin.DescribeLogDirsResult#allDescriptions()} to access the replacement
-     * class {@link org.apache.kafka.clients.admin.LogDirDescription}.
-     */
-    @Deprecated
-    public static class LogDirInfo {
-        public final Errors error;
-        public final Map<TopicPartition, ReplicaInfo> replicaInfos;
-
-        public LogDirInfo(Errors error, Map<TopicPartition, ReplicaInfo> replicaInfos) {
-            this.error = error;
-            this.replicaInfos = replicaInfos;
-        }
-
-        @Override
-        public String toString() {
-            return "(error=" +
-                    error +
-                    ", replicas=" +
-                    replicaInfos +
-                    ")";
-        }
-    }
-
-    // Note this class is part of the public API, reachable from Admin.describeLogDirs()
-
-    /**
-     * @deprecated Deprecated Since Kafka 2.7.
-     * Use {@link org.apache.kafka.clients.admin.DescribeLogDirsResult#descriptions()}
-     * and {@link org.apache.kafka.clients.admin.DescribeLogDirsResult#allDescriptions()} to access the replacement
-     * class {@link org.apache.kafka.clients.admin.ReplicaInfo}.
-     */
-    @Deprecated
-    public static class ReplicaInfo {
-
-        public final long size;
-        public final long offsetLag;
-        public final boolean isFuture;
-
-        public ReplicaInfo(long size, long offsetLag, boolean isFuture) {
-            this.size = size;
-            this.offsetLag = offsetLag;
-            this.isFuture = isFuture;
-        }
-
-        @Override
-        public String toString() {
-            return "(size=" +
-                    size +
-                    ", offsetLag=" +
-                    offsetLag +
-                    ", isFuture=" +
-                    isFuture +
-                    ")";
-        }
+    public static DescribeLogDirsResponse parse(Readable readable, short version) {
+        return new DescribeLogDirsResponse(new DescribeLogDirsResponseData(readable, version));
     }
 
     @Override

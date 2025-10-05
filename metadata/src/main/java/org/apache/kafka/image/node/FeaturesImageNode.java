@@ -35,11 +35,6 @@ public class FeaturesImageNode implements MetadataNode {
     public static final String METADATA_VERSION = "metadataVersion";
 
     /**
-     * The name of the zk migration state child node.
-     */
-    public static final String ZK_MIGRATION_STATE = "zkMigrationState";
-
-    /**
      * The prefix to put before finalized feature children.
      */
     public static final String FINALIZED_PREFIX = "finalized_";
@@ -57,7 +52,6 @@ public class FeaturesImageNode implements MetadataNode {
     public Collection<String> childNames() {
         ArrayList<String> childNames = new ArrayList<>();
         childNames.add(METADATA_VERSION);
-        childNames.add(ZK_MIGRATION_STATE);
         for (String featureName : image.finalizedVersions().keySet()) {
             childNames.add(FINALIZED_PREFIX + featureName);
         }
@@ -68,8 +62,6 @@ public class FeaturesImageNode implements MetadataNode {
     public MetadataNode child(String name) {
         if (name.equals(METADATA_VERSION)) {
             return new MetadataLeafNode(image.metadataVersion().toString());
-        } else if (name.equals(ZK_MIGRATION_STATE)) {
-            return new MetadataLeafNode(image.zkMigrationState().toString());
         } else if (name.startsWith(FINALIZED_PREFIX)) {
             String key = name.substring(FINALIZED_PREFIX.length());
             return new MetadataLeafNode(

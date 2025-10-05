@@ -38,9 +38,6 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.concurrent.ThreadLocalRandom;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -51,7 +48,6 @@ import static net.sourceforge.argparse4j.impl.Arguments.store;
  * The coordinator manages the agent processes in the cluster. 
  */
 public final class Coordinator {
-    private static final Logger log = LoggerFactory.getLogger(Coordinator.class);
 
     public static final int DEFAULT_PORT = 8889;
 
@@ -169,17 +165,17 @@ public final class Coordinator {
         JsonRestServer restServer = new JsonRestServer(
             Node.Util.getTrogdorCoordinatorPort(platform.curNode()));
         CoordinatorRestResource resource = new CoordinatorRestResource();
-        log.info("Starting coordinator process.");
+        System.out.println("Starting coordinator process.");
         final Coordinator coordinator = new Coordinator(platform, Scheduler.SYSTEM,
             restServer, resource, ThreadLocalRandom.current().nextLong(0, Long.MAX_VALUE / 2));
         restServer.start(resource);
         Exit.addShutdownHook("coordinator-shutdown-hook", () -> {
-            log.warn("Running coordinator shutdown hook.");
+            System.out.println("Running coordinator shutdown hook.");
             try {
                 coordinator.beginShutdown(false);
                 coordinator.waitForShutdown();
             } catch (Exception e) {
-                log.error("Got exception while running coordinator shutdown hook.", e);
+                System.out.println("Got exception while running coordinator shutdown hook. " + e);
             }
         });
         coordinator.waitForShutdown();

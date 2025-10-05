@@ -25,9 +25,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.HttpClient;
-import org.eclipse.jetty.client.api.ContentResponse;
-import org.eclipse.jetty.client.api.Request;
+import org.eclipse.jetty.client.Request;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -39,13 +39,13 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
 import javax.crypto.SecretKey;
-import javax.ws.rs.core.Response;
+
+import jakarta.ws.rs.core.Response;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -118,7 +118,7 @@ public class RestClientTest {
 
     private static Request buildThrowingMockRequest(Throwable t) throws ExecutionException, InterruptedException, TimeoutException {
         Request req = mock(Request.class);
-        when(req.header(anyString(), anyString())).thenReturn(req);
+        when(req.headers(any())).thenReturn(req);
         when(req.send()).thenThrow(t);
         return req;
     }
@@ -310,7 +310,7 @@ public class RestClientTest {
     public void testHttpRequestInterrupted() throws ExecutionException, InterruptedException, TimeoutException {
         Request req = mock(Request.class);
         doThrow(new InterruptedException()).when(req).send();
-        doReturn(req).when(req).header(anyString(), anyString());
+        doReturn(req).when(req).headers(any());
         doReturn(req).when(httpClient).newRequest(anyString());
         ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(
                 httpClient, MOCK_URL, TEST_METHOD, TEST_TYPE, TEST_SIGNATURE_ALGORITHM
@@ -323,7 +323,7 @@ public class RestClientTest {
     private void setupHttpClient(int responseCode, Request req, ContentResponse resp) throws Exception {
         when(resp.getStatus()).thenReturn(responseCode);
         when(req.send()).thenReturn(resp);
-        when(req.header(anyString(), anyString())).thenReturn(req);
+        when(req.headers(any())).thenReturn(req);
         when(httpClient.newRequest(anyString())).thenReturn(req);
     }
 
@@ -331,29 +331,11 @@ public class RestClientTest {
         return assertDoesNotThrow(() -> OBJECT_MAPPER.writeValueAsString(obj));
     }
 
-    private static class TestDTO {
-        private final String content;
-
+    private record TestDTO(String content) {
         @JsonCreator
         private TestDTO(@JsonProperty(value = "content") String content) {
             this.content = content;
         }
 
-        public String getContent() {
-            return content;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            TestDTO testDTO = (TestDTO) o;
-            return content.equals(testDTO.content);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(content);
-        }
     }
 }

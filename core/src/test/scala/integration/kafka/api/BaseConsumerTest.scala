@@ -17,13 +17,11 @@
 package kafka.api
 
 import kafka.utils.TestInfoUtils
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, GroupProtocol}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
-import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, PartitionInfo}
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
-import org.apache.kafka.common.test.api.Flaky
+import org.apache.kafka.common.serialization.{Deserializer, Serializer}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
@@ -38,9 +36,9 @@ import scala.collection.Seq
  */
 abstract class BaseConsumerTest extends AbstractConsumerTest {
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testSimpleConsumption(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testSimpleConsumption(groupProtocol: String): Unit = {
     val numRecords = 10000
     val producer = createProducer()
     val startingTimestamp = System.currentTimeMillis()
@@ -48,7 +46,7 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
 
     val consumer = createConsumer()
     assertEquals(0, consumer.assignment.size)
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     assertEquals(1, consumer.assignment.size)
 
     consumer.seek(tp, 0)
@@ -58,9 +56,9 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     sendAndAwaitAsyncCommit(consumer)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testClusterResourceListener(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testClusterResourceListener(groupProtocol: String): Unit = {
     val numRecords = 100
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[BaseConsumerTest.TestClusterResourceListenerSerializer])
@@ -74,24 +72,25 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[BaseConsumerTest.TestClusterResourceListenerDeserializer])
     consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[BaseConsumerTest.TestClusterResourceListenerDeserializer])
     val consumer: Consumer[Array[Byte], Array[Byte]] = createConsumer(keyDeserializer = null, valueDeserializer = null, consumerProps)
-    consumer.subscribe(List(tp.topic()).asJava)
+    consumer.subscribe(java.util.List.of(tp.topic()))
     consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, startingOffset = 0, startingTimestamp = startingTimestamp)
     assertNotEquals(0, BaseConsumerTest.updateProducerCount.get())
     assertNotEquals(0, BaseConsumerTest.updateConsumerCount.get())
   }
 
-  @Flaky("KAFKA-15920")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testCoordinatorFailover(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testCoordinatorFailover(groupProtocol: String): Unit = {
     val listener = new TestConsumerReassignmentListener()
-    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5001")
-    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
+    if (groupProtocol.equalsIgnoreCase(GroupProtocol.CLASSIC.name)) {
+      this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5001")
+      this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
+    }
     // Use higher poll timeout to avoid consumer leaving the group due to timeout
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "15000")
     val consumer = createConsumer()
 
-    consumer.subscribe(List(topic).asJava, listener)
+    consumer.subscribe(java.util.List.of(topic), listener)
 
     // the initial subscription should cause a callback execution
     awaitRebalance(consumer, listener)
@@ -129,42 +128,5 @@ object BaseConsumerTest {
 
     override def onUpdate(clusterResource: ClusterResource): Unit = updateConsumerCount.incrementAndGet()
     override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = data
-  }
-
-  class SerializerImpl extends Serializer[Array[Byte]] {
-    var serializer = new ByteArraySerializer()
-
-    override def serialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
-      headers.add("content-type", "application/octet-stream".getBytes)
-      serializer.serialize(topic, data)
-    }
-
-    override def configure(configs: java.util.Map[String, _], isKey: Boolean): Unit = serializer.configure(configs, isKey)
-
-    override def close(): Unit = serializer.close()
-
-    override def serialize(topic: String, data: Array[Byte]): Array[Byte] = {
-      fail("method should not be invoked")
-      null
-    }
-  }
-
-  class DeserializerImpl extends Deserializer[Array[Byte]] {
-    var deserializer = new ByteArrayDeserializer()
-
-    override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
-      val header = headers.lastHeader("content-type")
-      assertEquals("application/octet-stream", if (header == null) null else new String(header.value()))
-      deserializer.deserialize(topic, data)
-    }
-
-    override def configure(configs: java.util.Map[String, _], isKey: Boolean): Unit = deserializer.configure(configs, isKey)
-
-    override def close(): Unit = deserializer.close()
-
-    override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = {
-      fail("method should not be invoked")
-      null
-    }
   }
 }

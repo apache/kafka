@@ -39,13 +39,13 @@ import org.mockito.stubbing.Stubber;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import javax.crypto.Mac;
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.UriInfo;
+
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.UriInfo;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -65,8 +65,8 @@ public class InternalConnectResourceTest {
     private static final HttpHeaders NULL_HEADERS = null;
     private static final List<Map<String, String>> TASK_CONFIGS = new ArrayList<>();
     static {
-        TASK_CONFIGS.add(Collections.singletonMap("config", "value"));
-        TASK_CONFIGS.add(Collections.singletonMap("config", "other_value"));
+        TASK_CONFIGS.add(Map.of("config", "value"));
+        TASK_CONFIGS.add(Map.of("config", "other_value"));
     }
     private static final String FENCE_PATH = "/connectors/" + CONNECTOR_NAME + "/fence";
     private static final String TASK_CONFIGS_PATH = "/connectors/" + CONNECTOR_NAME + "/tasks";

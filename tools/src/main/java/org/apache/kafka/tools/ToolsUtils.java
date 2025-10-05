@@ -148,7 +148,7 @@ public class ToolsUtils {
      * @param <T> Element type.
      */
     @SuppressWarnings("unchecked")
-    public static <T> Set<T> minus(Set<T> set, T...toRemove) {
+    public static <T> Set<T> minus(Set<T> set, T... toRemove) {
         Set<T> res = new HashSet<>(set);
         for (T t : toRemove)
             res.remove(t);

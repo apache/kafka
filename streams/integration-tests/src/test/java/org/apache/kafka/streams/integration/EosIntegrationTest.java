@@ -22,10 +22,13 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -47,9 +50,11 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
@@ -67,9 +72,10 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,6 +85,7 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -122,7 +129,10 @@ public class EosIntegrationTest {
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
         NUM_BROKERS,
-        Utils.mkProperties(Collections.singletonMap("auto.create.topics.enable", "true"))
+        Utils.mkProperties(mkMap(
+            mkEntry("auto.create.topics.enable", "true"),
+            mkEntry("transaction.max.timeout.ms", "" + Integer.MAX_VALUE)
+        ))
     );
 
     @BeforeAll
@@ -160,6 +170,15 @@ public class EosIntegrationTest {
 
     private String stateTmpDir;
 
+    private static java.util.stream.Stream<Arguments> groupProtocolAndProcessingThreadsParameters() {
+        return java.util.stream.Stream.of(
+            Arguments.of("classic", true),
+            Arguments.of("classic", false),
+            Arguments.of("streams", true),
+            Arguments.of("streams", false)
+        );
+    }
+
     @BeforeEach
     public void createTopics() throws Exception {
         applicationId = "appId-" + TEST_NUMBER.getAndIncrement();
@@ -172,16 +191,19 @@ public class EosIntegrationTest {
         CLUSTER.createTopic(MULTI_PARTITION_INPUT_TOPIC, NUM_TOPIC_PARTITIONS, 1);
         CLUSTER.createTopic(MULTI_PARTITION_THROUGH_TOPIC, NUM_TOPIC_PARTITIONS, 1);
         CLUSTER.createTopic(MULTI_PARTITION_OUTPUT_TOPIC, NUM_TOPIC_PARTITIONS, 1);
+        CLUSTER.setGroupStandbyReplicas(applicationId, 1);
     }
 
-    @Test
-    public void shouldBeAbleToRunWithEosEnabled() throws Exception {
-        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false);
+    @ParameterizedTest
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldBeAbleToRunWithEosEnabled(final String groupProtocol) throws Exception {
+        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, groupProtocol);
     }
 
-    @Test
-    public void shouldCommitCorrectOffsetIfInputTopicIsTransactional() throws Exception {
-        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, true);
+    @ParameterizedTest
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldCommitCorrectOffsetIfInputTopicIsTransactional(final String groupProtocol) throws Exception {
+        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, true, groupProtocol);
 
         try (final Admin adminClient = Admin.create(mkMap(mkEntry(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())));
              final Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(mkMap(
@@ -206,36 +228,42 @@ public class EosIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldBeAbleToRestartAfterClose() throws Exception {
-        runSimpleCopyTest(2, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false);
+    @ParameterizedTest
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldBeAbleToRestartAfterClose(final String groupProtocol) throws Exception {
+        runSimpleCopyTest(2, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, groupProtocol);
     }
 
-    @Test
-    public void shouldBeAbleToCommitToMultiplePartitions() throws Exception {
-        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, MULTI_PARTITION_OUTPUT_TOPIC, false);
+    @ParameterizedTest
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldBeAbleToCommitToMultiplePartitions(final String groupProtocol) throws Exception {
+        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, MULTI_PARTITION_OUTPUT_TOPIC, false, groupProtocol);
     }
 
-    @Test
-    public void shouldBeAbleToCommitMultiplePartitionOffsets() throws Exception {
-        runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false);
+    @ParameterizedTest
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldBeAbleToCommitMultiplePartitionOffsets(final String groupProtocol) throws Exception {
+        runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, groupProtocol);
     }
 
-    @Test
-    public void shouldBeAbleToRunWithTwoSubtopologies() throws Exception {
-        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_THROUGH_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC, false);
+    @ParameterizedTest
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldBeAbleToRunWithTwoSubtopologies(final String groupProtocol) throws Exception {
+        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_THROUGH_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC, false, groupProtocol);
     }
 
-    @Test
-    public void shouldBeAbleToRunWithTwoSubtopologiesAndMultiplePartitions() throws Exception {
-        runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, MULTI_PARTITION_THROUGH_TOPIC, MULTI_PARTITION_OUTPUT_TOPIC, false);
+    @ParameterizedTest
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldBeAbleToRunWithTwoSubtopologiesAndMultiplePartitions(final String groupProtocol) throws Exception {
+        runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, MULTI_PARTITION_THROUGH_TOPIC, MULTI_PARTITION_OUTPUT_TOPIC, false, groupProtocol);
     }
 
     private void runSimpleCopyTest(final int numberOfRestarts,
                                    final String inputTopic,
                                    final String throughTopic,
                                    final String outputTopic,
-                                   final boolean inputTopicTransactional) throws Exception {
+                                   final boolean inputTopicTransactional,
+                                   final String groupProtocol) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, Long> input = builder.stream(inputTopic);
         KStream<Long, Long> output = input;
@@ -254,6 +282,7 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), MAX_POLL_INTERVAL_MS - 1);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), MAX_POLL_INTERVAL_MS);
+        properties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
 
         for (int i = 0; i < numberOfRestarts; ++i) {
             final Properties config = StreamsTestUtils.getStreamsConfig(
@@ -317,8 +346,9 @@ public class EosIntegrationTest {
         return recordsPerKey;
     }
 
-    @Test
-    public void shouldBeAbleToPerformMultipleTransactions() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldBeAbleToPerformMultipleTransactions(final String groupProtocol) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(SINGLE_PARTITION_INPUT_TOPIC).to(SINGLE_PARTITION_OUTPUT_TOPIC);
 
@@ -328,6 +358,7 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         properties.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
         properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        properties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,
@@ -365,8 +396,8 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldNotViolateEosIfOneTaskFails(final boolean processingThreadsEnabled) throws Exception {
+    @MethodSource("groupProtocolAndProcessingThreadsParameters")
+    public void shouldNotViolateEosIfOneTaskFails(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
 
         // this test writes 10 + 5 + 5 records per partition (running with 2 partitions)
         // the app is supposed to copy all 40 records into the output topic
@@ -377,7 +408,7 @@ public class EosIntegrationTest {
         // -> the failure only kills one thread
         // after fail over, we should read 40 committed records (even if 50 record got written)
 
-        try (final KafkaStreams streams = getKafkaStreams("dummy", false, "appDir", 2, processingThreadsEnabled)) {
+        try (final KafkaStreams streams = getKafkaStreams("dummy", false, "appDir", 2, groupProtocol, processingThreadsEnabled)) {
             startApplicationAndWaitUntilRunning(streams);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
@@ -467,8 +498,8 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldNotViolateEosIfOneTaskFailsWithState(final boolean processingThreadsEnabled) throws Exception {
+    @MethodSource("groupProtocolAndProcessingThreadsParameters")
+    public void shouldNotViolateEosIfOneTaskFailsWithState(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
 
         // this test updates a store with 10 + 5 + 5 records per partition (running with 2 partitions)
         // the app is supposed to emit all 40 update records into the output topic
@@ -484,7 +515,7 @@ public class EosIntegrationTest {
 
         // We need more processing time under "with state" situation, so increasing the max.poll.interval.ms
         // to avoid unexpected rebalance during test, which will cause unexpected fail over triggered
-        try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, processingThreadsEnabled)) {
+        try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, groupProtocol, processingThreadsEnabled)) {
             startApplicationAndWaitUntilRunning(streams);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
@@ -585,8 +616,8 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldNotViolateEosIfOneTaskGetsFencedUsingIsolatedAppInstances(final boolean processingThreadsEnabled) throws Exception {
+    @MethodSource("groupProtocolAndProcessingThreadsParameters")
+    public void shouldNotViolateEosIfOneTaskGetsFencedUsingIsolatedAppInstances(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
         // this test writes 10 + 5 + 5 + 10 records per partition (running with 2 partitions)
         // the app is supposed to copy all 60 records into the output topic
         //
@@ -598,10 +629,9 @@ public class EosIntegrationTest {
         //
         // afterward, the "stalling" thread resumes, and another rebalance should get triggered
         // we write the remaining 20 records and verify to read 60 result records
-
         try (
-            final KafkaStreams streams1 = getKafkaStreams("streams1", false, "appDir1", 1, processingThreadsEnabled);
-            final KafkaStreams streams2 = getKafkaStreams("streams2", false, "appDir2", 1, processingThreadsEnabled)
+            final KafkaStreams streams1 = getKafkaStreams("streams1", false, "appDir1", 1, groupProtocol, processingThreadsEnabled);
+            final KafkaStreams streams2 = getKafkaStreams("streams2", false, "appDir2", 1, groupProtocol, processingThreadsEnabled)
         ) {
             startApplicationAndWaitUntilRunning(streams1);
             startApplicationAndWaitUntilRunning(streams2);
@@ -658,13 +688,10 @@ public class EosIntegrationTest {
                 "Expected a host to start stalling"
             );
             final String observedStallingHost = stallingHost.get();
-            final KafkaStreams stallingInstance;
             final KafkaStreams remainingInstance;
             if ("streams1".equals(observedStallingHost)) {
-                stallingInstance = streams1;
                 remainingInstance = streams2;
             } else if ("streams2".equals(observedStallingHost)) {
-                stallingInstance = streams2;
                 remainingInstance = streams1;
             } else {
                 throw new IllegalArgumentException("unexpected host name: " + observedStallingHost);
@@ -674,8 +701,7 @@ public class EosIntegrationTest {
             // the assignment is. We only really care that the remaining instance only sees one host
             // that owns both partitions.
             waitForCondition(
-                () -> stallingInstance.metadataForAllStreamsClients().size() == 2
-                    && remainingInstance.metadataForAllStreamsClients().size() == 1
+                () -> remainingInstance.metadataForAllStreamsClients().size() == 1
                     && remainingInstance.metadataForAllStreamsClients().iterator().next().topicPartitions().size() == 2,
                 MAX_WAIT_TIME_MS,
                 () -> "Should have rebalanced.\n" +
@@ -746,12 +772,12 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldWriteLatestOffsetsToCheckpointOnShutdown(final boolean processingThreadsEnabled) throws Exception {
+    @MethodSource("groupProtocolAndProcessingThreadsParameters")
+    public void shouldWriteLatestOffsetsToCheckpointOnShutdown(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
         final List<KeyValue<Long, Long>> writtenData = prepareData(0L, 10, 0L, 1L);
         final List<KeyValue<Long, Long>> expectedResult = computeExpectedResult(writtenData);
 
-        try (final KafkaStreams streams = getKafkaStreams("streams", true, "appDir", 1, processingThreadsEnabled)) {
+        try (final KafkaStreams streams = getKafkaStreams("streams", true, "appDir", 1, groupProtocol, processingThreadsEnabled)) {
             writeInputData(writtenData);
 
             startApplicationAndWaitUntilRunning(streams);
@@ -778,20 +804,9 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoringStateUpdaterEnabled(
-            final boolean processingThreadsEnabled) throws Exception {
-        shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(processingThreadsEnabled, true);
-    }
-
-    @Test
-    public void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoringStateUpdaterDisabled() throws Exception {
-        shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(false, false);
-    }
-
-    private void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(
-            final boolean processingThreadsEnabled,
-            final boolean stateUpdaterEnabled) throws Exception {
+    @MethodSource("groupProtocolAndProcessingThreadsParameters")
+    public void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(
+            final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
 
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
@@ -803,7 +818,7 @@ public class EosIntegrationTest {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(applicationId).getPath());
         streamsConfiguration.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
-        streamsConfiguration.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
+        streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
         streamsConfiguration.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 100);
         final String stateStoreName = "stateStore";
 
@@ -871,6 +886,7 @@ public class EosIntegrationTest {
                                        final String storeName,
                                        final long startingOffset,
                                        final long endingOffset) {}
+
             @Override
             public void onBatchRestored(final TopicPartition topicPartition,
                                         final String storeName,
@@ -883,6 +899,7 @@ public class EosIntegrationTest {
                     }
                 }
             }
+
             @Override
             public void onRestoreEnd(final TopicPartition topicPartition,
                                      final String storeName,
@@ -892,9 +909,7 @@ public class EosIntegrationTest {
         ensureCommittedRecordsInTopicPartition(
             applicationId + "-" + stateStoreName + "-changelog",
             partitionToVerify,
-            2000,
-            IntegerDeserializer.class,
-            IntegerDeserializer.class
+            2000
         );
         throwException.set(true);
         final List<KeyValue<Integer, Integer>> recordBatch2 = IntStream.range(endKey - 1000, endKey).mapToObj(i -> KeyValue.pair(i, 0)).collect(Collectors.toList());
@@ -922,6 +937,135 @@ public class EosIntegrationTest {
         );
     }
 
+
+    private final AtomicReference<String> transactionalProducerId = new AtomicReference<>();
+
+    private class TestClientSupplier extends DefaultKafkaClientSupplier {
+        @Override
+        public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
+            transactionalProducerId.compareAndSet(null, (String) config.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG));
+
+            return new KafkaProducer<>(config, new ByteArraySerializer(), new ByteArraySerializer());
+        }
+    }
+
+    static final AtomicReference<TaskId> TASK_WITH_DATA = new AtomicReference<>();
+    static final AtomicBoolean DID_REVOKE_IDLE_TASK = new AtomicBoolean(false);
+
+    @ParameterizedTest
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldNotCommitActiveTasksWithPendingInputIfRevokedTaskDidNotMakeProgress(final String groupProtocol) throws Exception {
+        // Reset static variables to ensure test isolation
+        TASK_WITH_DATA.set(null);
+        DID_REVOKE_IDLE_TASK.set(false);
+
+        final AtomicBoolean requestCommit = new AtomicBoolean(false);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.<Long, Long>stream(MULTI_PARTITION_INPUT_TOPIC)
+            .process(() -> new ContextualProcessor<Long, Long, Long, Long>() {
+                @Override
+                public void process(final Record<Long, Long> record) {
+                    if (!requestCommit.get()) {
+                        if (TASK_WITH_DATA.get() != null) {
+                            throw new IllegalStateException("Should only process single record using single task");
+                        }
+                        TASK_WITH_DATA.set(context().taskId());
+                    }
+
+                    context().forward(record.withValue(context().recordMetadata().get().offset()));
+
+                    if (requestCommit.get()) {
+                        context().commit();
+                    }
+                }
+            })
+            .to(SINGLE_PARTITION_OUTPUT_TOPIC);
+
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Integer.MAX_VALUE);
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1);
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), MAX_POLL_INTERVAL_MS - 1);
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), MAX_POLL_INTERVAL_MS);
+        properties.put(StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), Integer.MAX_VALUE);
+        properties.put(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG, TestTaskAssignor.class.getName());
+        properties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
+
+        final Properties config = StreamsTestUtils.getStreamsConfig(
+            applicationId,
+            CLUSTER.bootstrapServers(),
+            Serdes.LongSerde.class.getName(),
+            Serdes.LongSerde.class.getName(),
+            properties
+        );
+
+
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), config, new TestClientSupplier())) {
+            startApplicationAndWaitUntilRunning(streams);
+
+            // PHASE 1:
+            // write single input record, and wait for it to get into output topic (uncommitted)
+            // StreamThread-1 now has a task with progress, and one task w/o progress
+            final List<KeyValue<Long, Long>> inputDataTask0 = Collections.singletonList(KeyValue.pair(1L, -1L));
+
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                MULTI_PARTITION_INPUT_TOPIC,
+                inputDataTask0,
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
+                CLUSTER.time
+            );
+
+            final List<KeyValue<Long, Long>> expectedUncommittedResultTask0 = Collections.singletonList(KeyValue.pair(1L, 0L));
+            final List<KeyValue<Long, Long>> uncommittedRecordsBeforeRebalance = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, expectedUncommittedResultTask0.size(), null);
+            checkResultPerKey(uncommittedRecordsBeforeRebalance, expectedUncommittedResultTask0, "The uncommitted records do not match what expected");
+
+            // PHASE 2:
+            // add second thread, to trigger rebalance
+            // expect idle task to get revoked -- this should not trigger a TX commit
+            streams.addStreamThread();
+            if (groupProtocol.equals("classic")) {
+                waitForCondition(DID_REVOKE_IDLE_TASK::get, "Idle Task was not revoked as expected.");
+            }
+            // best-effort sanity check (might pass and not detect issue in slow environments)
+            try {
+                readResult(SINGLE_PARTITION_OUTPUT_TOPIC, 1, "consumer", 10_000L);
+                throw new Exception("Should not be able to read records, as they should have not been committed.");
+            } catch (final AssertionError expected) {
+                // swallow -- we expect to not be able to read uncommitted data, but time-out
+            }
+
+            // PHASE 3:
+            // fence producer to abort pending TX of first input record
+            // expect rebalancing and recovery until both input record are processed
+            requestCommit.set(true);
+
+            // produce into input topic to fence KS producer
+            final List<KeyValue<Long, Long>> inputDataTask0Fencing = Collections.singletonList(KeyValue.pair(4L, -3L));
+
+            final Properties producerConfigs = new Properties();
+            producerConfigs.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalProducerId.get());
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                MULTI_PARTITION_INPUT_TOPIC,
+                inputDataTask0Fencing,
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class, producerConfigs),
+                CLUSTER.time,
+                true
+            );
+
+            final List<KeyValue<Long, Long>> expectedUncommittedResultAfterError = Arrays.asList(KeyValue.pair(1L, 0L), KeyValue.pair(1L, 0L), KeyValue.pair(4L, 1L));
+            final List<KeyValue<Long, Long>> uncommittedRecordsAfterError = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, expectedUncommittedResultAfterError.size(), null);
+            checkResultPerKey(uncommittedRecordsAfterError, expectedUncommittedResultAfterError, "The committed records do not match what expected");
+        }
+
+        final List<KeyValue<Long, Long>> expectedFinalResult = Arrays.asList(KeyValue.pair(1L, 0L), KeyValue.pair(4L, 1L));
+        final List<KeyValue<Long, Long>> finalResult = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, 2, "committed-only-consumer");
+        checkResultPerKey(finalResult, expectedFinalResult, "The committed records do not match what expected");
+    }
+
     private void verifyOffsetsAreInCheckpoint(final int partition) throws IOException {
         final String stateStoreDir = stateTmpDir + File.separator + "appDir" + File.separator + applicationId + File.separator + "0_" + partition + File.separator;
 
@@ -936,8 +1080,8 @@ public class EosIntegrationTest {
             KafkaConsumer<String, String> consumer = new KafkaConsumer<>(
                 consumerConfig(
                     CLUSTER.bootstrapServers(),
-                    Serdes.ByteArray().deserializer().getClass(),
-                    Serdes.ByteArray().deserializer().getClass()
+                    ByteArrayDeserializer.class,
+                    ByteArrayDeserializer.class
                 )
             )
         ) {
@@ -979,12 +1123,12 @@ public class EosIntegrationTest {
         return data;
     }
 
-    @SuppressWarnings("deprecation")
     // the threads should no longer fail one thread one at a time
     private KafkaStreams getKafkaStreams(final String dummyHostName,
                                          final boolean withState,
                                          final String appDir,
                                          final int numberOfStreamsThreads,
+                                         final String groupProtocol,
                                          final boolean processingThreadsEnabled) {
         commitRequested = new AtomicInteger(0);
         errorInjected = new AtomicBoolean(false);
@@ -1092,8 +1236,8 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         properties.put(StreamsConfig.STATE_DIR_CONFIG, stateTmpDir + appDir);
         properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, dummyHostName + ":2142");
-        properties.put(InternalConfig.STATE_UPDATER_ENABLED, processingThreadsEnabled);
         properties.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
+        properties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,
@@ -1129,14 +1273,22 @@ public class EosIntegrationTest {
     private List<KeyValue<Long, Long>> readResult(final String topic,
                                                   final int numberOfRecords,
                                                   final String groupId) throws Exception {
-        return readResult(topic, numberOfRecords, LongDeserializer.class, LongDeserializer.class, groupId);
+        return readResult(topic, numberOfRecords, LongDeserializer.class, LongDeserializer.class, groupId, DEFAULT_TIMEOUT);
+    }
+
+    private List<KeyValue<Long, Long>> readResult(final String topic,
+                                                  final int numberOfRecords,
+                                                  final String groupId,
+                                                  final long timeout) throws Exception {
+        return readResult(topic, numberOfRecords, LongDeserializer.class, LongDeserializer.class, groupId, timeout);
     }
 
     private <K, V> List<KeyValue<K, V>> readResult(final String topic,
                                                    final int numberOfRecords,
                                                    final Class<? extends Deserializer<K>> keyDeserializer,
                                                    final Class<? extends Deserializer<V>> valueDeserializer,
-                                                   final String groupId) throws Exception {
+                                                   final String groupId,
+                                                   final long timeout) throws Exception {
         if (groupId != null) {
             return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
                 TestUtils.consumerConfig(
@@ -1148,7 +1300,8 @@ public class EosIntegrationTest {
                         ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                         IsolationLevel.READ_COMMITTED.toString()))),
                 topic,
-                numberOfRecords
+                numberOfRecords,
+                timeout
             );
         }
 
@@ -1156,15 +1309,14 @@ public class EosIntegrationTest {
         return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             TestUtils.consumerConfig(CLUSTER.bootstrapServers(), keyDeserializer, valueDeserializer),
             topic,
-            numberOfRecords
+            numberOfRecords,
+            timeout
         );
     }
 
     private <K, V> void ensureCommittedRecordsInTopicPartition(final String topic,
                                                                final int partition,
-                                                               final int numberOfRecords,
-                                                               final Class<? extends Deserializer<K>> keyDeserializer,
-                                                               final Class<? extends Deserializer<V>> valueDeserializer) throws Exception {
+                                                               final int numberOfRecords) throws Exception {
         final long timeoutMs = 2 * DEFAULT_TIMEOUT;
         final int maxTries = 10;
         final long deadline = System.currentTimeMillis() + timeoutMs;
@@ -1174,8 +1326,8 @@ public class EosIntegrationTest {
                 TestUtils.consumerConfig(
                     CLUSTER.bootstrapServers(),
                     CONSUMER_GROUP_ID,
-                    keyDeserializer,
-                    valueDeserializer,
+                    IntegerDeserializer.class,
+                    IntegerDeserializer.class,
                     Utils.mkProperties(Collections.singletonMap(
                         ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                         IsolationLevel.READ_COMMITTED.toString())

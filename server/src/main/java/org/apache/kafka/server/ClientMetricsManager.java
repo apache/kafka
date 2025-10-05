@@ -62,7 +62,6 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -85,8 +84,8 @@ public class ClientMetricsManager implements AutoCloseable {
     public static final String CLIENT_METRICS_REAPER_THREAD_NAME = "client-metrics-reaper";
 
     private static final Logger log = LoggerFactory.getLogger(ClientMetricsManager.class);
-    private static final List<Byte> SUPPORTED_COMPRESSION_TYPES = Collections.unmodifiableList(
-        Arrays.asList(CompressionType.ZSTD.id, CompressionType.LZ4.id, CompressionType.GZIP.id, CompressionType.SNAPPY.id));
+    private static final List<Byte> SUPPORTED_COMPRESSION_TYPES = List.of(CompressionType.ZSTD.id, CompressionType.LZ4.id,
+        CompressionType.GZIP.id, CompressionType.SNAPPY.id);
     // Max cache size (16k active client connections per broker)
     private static final int CACHE_MAX_SIZE = 16384;
     private static final int DEFAULT_CACHE_EXPIRY_MS = 60 * 1000;
@@ -217,7 +216,7 @@ public class ClientMetricsManager implements AutoCloseable {
                 long exportTimeStartMs = time.hiResClockMs();
                 receiverPlugin.exportMetrics(requestContext, request);
                 clientMetricsStats.recordPluginExport(clientInstanceId, time.hiResClockMs() - exportTimeStartMs);
-            } catch (Exception exception) {
+            } catch (Throwable exception) {
                 clientMetricsStats.recordPluginErrorCount(clientInstanceId);
                 clientInstance.lastKnownError(Errors.INVALID_RECORD);
                 log.error("Error exporting client metrics to the plugin for client instance id: {}", clientInstanceId, exception);
@@ -245,9 +244,9 @@ public class ClientMetricsManager implements AutoCloseable {
     }
 
     private void updateClientSubscription(String subscriptionName, ClientMetricsConfigs configs) {
-        List<String> metrics = configs.getList(ClientMetricsConfigs.SUBSCRIPTION_METRICS);
-        int pushInterval = configs.getInt(ClientMetricsConfigs.PUSH_INTERVAL_MS);
-        List<String> clientMatchPattern = configs.getList(ClientMetricsConfigs.CLIENT_MATCH_PATTERN);
+        List<String> metrics = configs.getList(ClientMetricsConfigs.METRICS_CONFIG);
+        int pushInterval = configs.getInt(ClientMetricsConfigs.INTERVAL_MS_CONFIG);
+        List<String> clientMatchPattern = configs.getList(ClientMetricsConfigs.MATCH_CONFIG);
 
         SubscriptionInfo newSubscription =
             new SubscriptionInfo(subscriptionName, metrics, pushInterval,
@@ -330,7 +329,7 @@ public class ClientMetricsManager implements AutoCloseable {
 
     private ClientMetricsInstance createClientInstance(Uuid clientInstanceId, ClientMetricsInstanceMetadata instanceMetadata) {
 
-        int pushIntervalMs = ClientMetricsConfigs.DEFAULT_INTERVAL_MS;
+        int pushIntervalMs = ClientMetricsConfigs.INTERVAL_MS_DEFAULT;
         // Keep a set of metrics to avoid duplicates in case of overlapping subscriptions.
         Set<String> subscribedMetrics = new HashSet<>();
         boolean allMetricsSubscribed = false;
@@ -339,7 +338,7 @@ public class ClientMetricsManager implements AutoCloseable {
         for (SubscriptionInfo info : subscriptionMap.values()) {
             if (instanceMetadata.isMatch(info.matchPattern())) {
                 allMetricsSubscribed = allMetricsSubscribed || info.metrics().contains(
-                    ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS_CONFIG);
+                    ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS);
                 subscribedMetrics.addAll(info.metrics());
                 pushIntervalMs = Math.min(pushIntervalMs, info.intervalMs());
             }
@@ -352,7 +351,7 @@ public class ClientMetricsManager implements AutoCloseable {
         if (allMetricsSubscribed) {
             // Only add an * to indicate that all metrics are subscribed.
             subscribedMetrics.clear();
-            subscribedMetrics.add(ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS_CONFIG);
+            subscribedMetrics.add(ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS);
         }
 
         int subscriptionId = computeSubscriptionId(subscribedMetrics, pushIntervalMs, clientInstanceId);
@@ -392,7 +391,7 @@ public class ClientMetricsManager implements AutoCloseable {
         ClientMetricsInstance clientInstance, long timestamp) {
 
         if (!clientInstance.maybeUpdateGetRequestTimestamp(timestamp) && (clientInstance.lastKnownError() != Errors.UNKNOWN_SUBSCRIPTION_ID
-            || clientInstance.lastKnownError() != Errors.UNSUPPORTED_COMPRESSION_TYPE)) {
+            && clientInstance.lastKnownError() != Errors.UNSUPPORTED_COMPRESSION_TYPE)) {
             clientMetricsStats.recordThrottleCount(clientInstance.clientInstanceId());
             String msg = String.format("Request from the client [%s] arrived before the next push interval time",
                 request.data().clientInstanceId());
@@ -597,7 +596,7 @@ public class ClientMetricsManager implements AutoCloseable {
             Sensor unknownSubscriptionRequestCountSensor = metrics.sensor(
                 ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST);
             unknownSubscriptionRequestCountSensor.add(createMeter(metrics, new WindowedCount(),
-                ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST, Collections.emptyMap()));
+                ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST, Map.of()));
             sensorsName.add(unknownSubscriptionRequestCountSensor.name());
         }
 
@@ -608,7 +607,7 @@ public class ClientMetricsManager implements AutoCloseable {
                 return;
             }
 
-            Map<String, String> tags = Collections.singletonMap(ClientMetricsConfigs.CLIENT_INSTANCE_ID, clientInstanceId.toString());
+            Map<String, String> tags = Map.of(ClientMetricsConfigs.CLIENT_INSTANCE_ID, clientInstanceId.toString());
 
             Sensor throttleCount = metrics.sensor(ClientMetricsStats.THROTTLE + "-" + clientInstanceId);
             throttleCount.add(createMeter(metrics, new WindowedCount(), ClientMetricsStats.THROTTLE, tags));

@@ -49,7 +49,7 @@ public class CompletableEventReaperTest {
 
         // Without any time passing, we check the reaper and verify that the event is not done amd is still
         // being tracked.
-        reaper.reap(time.milliseconds());
+        assertEquals(0, reaper.reap(time.milliseconds()));
         assertFalse(event.future().isDone());
         assertEquals(1, reaper.size());
 
@@ -62,7 +62,7 @@ public class CompletableEventReaperTest {
 
         // Call the reaper and validate that the event is now "done" (expired), the correct exception type is
         // thrown, and the event is no longer tracked.
-        reaper.reap(time.milliseconds());
+        assertEquals(1, reaper.reap(time.milliseconds()));
         assertTrue(event.future().isDone());
         assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event.future()));
         assertEquals(0, reaper.size());
@@ -77,7 +77,7 @@ public class CompletableEventReaperTest {
 
         // Without any time passing, we check the reaper and verify that the event is not done amd is still
         // being tracked.
-        reaper.reap(time.milliseconds());
+        assertEquals(0, reaper.reap(time.milliseconds()));
         assertFalse(event.future().isDone());
         assertEquals(1, reaper.size());
 
@@ -91,7 +91,7 @@ public class CompletableEventReaperTest {
         time.sleep(timeoutMs + 1);
 
         // Call the reaper and validate that the event is not considered expired, but is still no longer tracked.
-        reaper.reap(time.milliseconds());
+        assertEquals(0, reaper.reap(time.milliseconds()));
         assertTrue(event.future().isDone());
         assertNull(ConsumerUtils.getResult(event.future()));
         assertEquals(0, reaper.size());
@@ -108,7 +108,7 @@ public class CompletableEventReaperTest {
 
         // Without any time passing, we check the reaper and verify that the event is not done amd is still
         // being tracked.
-        reaper.reap(time.milliseconds());
+        assertEquals(0, reaper.reap(time.milliseconds()));
         assertFalse(event1.future().isDone());
         assertFalse(event2.future().isDone());
         assertEquals(2, reaper.size());
@@ -124,7 +124,7 @@ public class CompletableEventReaperTest {
 
         // Validate that the first (completed) event is not expired, but the second one is expired. In either case,
         // both should be completed and neither should be tracked anymore.
-        reaper.reap(time.milliseconds());
+        assertEquals(1, reaper.reap(time.milliseconds()));
         assertTrue(event1.future().isDone());
         assertTrue(event2.future().isDone());
         assertNull(ConsumerUtils.getResult(event1.future()));
@@ -150,7 +150,7 @@ public class CompletableEventReaperTest {
         assertEquals(2, queue.size());
 
         // Go ahead and reap the incomplete from the queue.
-        reaper.reap(queue);
+        assertEquals(1, reaper.reap(queue));
 
         // The first event was completed, so we didn't expire it in the reaper.
         assertTrue(event1.future().isDone());
@@ -186,7 +186,7 @@ public class CompletableEventReaperTest {
         assertEquals(2, reaper.size());
 
         // Go ahead and reap the incomplete events. Both sets should be zero after that.
-        reaper.reap(queue);
+        assertEquals(1, reaper.reap(queue));
         assertEquals(0, reaper.size());
         assertEquals(0, queue.size());
 

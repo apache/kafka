@@ -263,7 +263,7 @@ public class KeyValueStoreMaterializerTest {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized) {
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
         materializer.configure(streamsConfig);
-        return (TimestampedKeyValueStore<String, String>) ((StoreFactory) materializer).build();
+        return (TimestampedKeyValueStore<String, String>) materializer.builder().build();
     }
 
     @SuppressWarnings("unchecked")
@@ -271,6 +271,6 @@ public class KeyValueStoreMaterializerTest {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized) {
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
         materializer.configure(streamsConfig);
-        return (VersionedKeyValueStore<String, String>) ((StoreFactory) materializer).build();
+        return (VersionedKeyValueStore<String, String>) materializer.builder().build();
     }
 }

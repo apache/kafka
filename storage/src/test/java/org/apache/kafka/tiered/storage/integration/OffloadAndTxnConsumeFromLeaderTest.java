@@ -18,10 +18,10 @@ package org.apache.kafka.tiered.storage.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.IsolationLevel;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
 import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
+import org.apache.kafka.tiered.storage.specs.FetchCountAndOp;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 import org.apache.kafka.tiered.storage.specs.RemoteFetchCount;
 
@@ -29,15 +29,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.kafka.tiered.storage.specs.RemoteFetchCount.FetchCountAndOp;
-import static org.apache.kafka.tiered.storage.specs.RemoteFetchCount.OperationType.EQUALS_TO;
 import static org.apache.kafka.tiered.storage.specs.RemoteFetchCount.OperationType.LESS_THAN_OR_EQUALS_TO;
 
 /**
  * Test Cases:
  *    Elementary offloads and fetches from tiered storage using consumer with read_committed isolation level.
  */
-@Flaky("KAFKA-17998")
 public final class OffloadAndTxnConsumeFromLeaderTest extends TieredStorageTestHarness {
 
     /**
@@ -64,12 +61,12 @@ public final class OffloadAndTxnConsumeFromLeaderTest extends TieredStorageTestH
 
     @Override
     protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
-        final Integer broker = 0;
+        final int broker = 0;
         final String topicA = "topicA";
-        final Integer p0 = 0;
-        final Integer partitionCount = 1;
-        final Integer replicationFactor = 1;
-        final Integer oneBatchPerSegment = 1;
+        final int p0 = 0;
+        final int partitionCount = 1;
+        final int replicationFactor = 1;
+        final int oneBatchPerSegment = 1;
         final Map<Integer, List<Integer>> replicaAssignment = null;
         final boolean enableRemoteLogStorage = true;
 
@@ -97,7 +94,10 @@ public final class OffloadAndTxnConsumeFromLeaderTest extends TieredStorageTestH
     }
 
     private static RemoteFetchCount getRemoteFetchCount() {
-        FetchCountAndOp segmentFetchCountAndOp = new FetchCountAndOp(6, EQUALS_TO);
+        // Ideally, each remote-log segment should be fetched only once. For 6 segments, we would have 6 fetch-counts.
+        // But, the client can retry the FETCH request, to make the test deterministic, increasing the fetch-count
+        // to be at-max of 12 (2 times of fetch-count).
+        FetchCountAndOp segmentFetchCountAndOp = new FetchCountAndOp(12, LESS_THAN_OR_EQUALS_TO);
         // RemoteIndexCache might evict the entries much before reaching the maximum size.
         // To make the test deterministic, we are using the operation type as LESS_THAN_OR_EQUALS_TO which equals to the
         // number of times the RemoteIndexCache gets accessed. The RemoteIndexCache gets accessed twice for each read.

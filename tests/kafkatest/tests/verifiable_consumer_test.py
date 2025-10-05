@@ -24,13 +24,12 @@ class VerifiableConsumerTest(KafkaTest):
     PRODUCER_REQUEST_TIMEOUT_SEC = 30
 
     def __init__(self, test_context, num_consumers=1, num_producers=0,
-                 group_id="test_group_id", session_timeout_sec=10, **kwargs):
+                 group_id="test_group_id", **kwargs):
         super(VerifiableConsumerTest, self).__init__(test_context, **kwargs)
         self.num_consumers = num_consumers
         self.num_producers = num_producers
         self.group_id = group_id
-        self.session_timeout_sec = session_timeout_sec
-        self.consumption_timeout_sec = max(self.PRODUCER_REQUEST_TIMEOUT_SEC + 5, 2 * session_timeout_sec)
+        self.consumption_timeout_sec = self.PRODUCER_REQUEST_TIMEOUT_SEC + 5
 
     def _all_partitions(self, topic, num_partitions):
         partitions = set()
@@ -56,7 +55,7 @@ class VerifiableConsumerTest(KafkaTest):
     def setup_consumer(self, topic, static_membership=False, enable_autocommit=False,
                        assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor", group_remote_assignor="range", **kwargs):
         return VerifiableConsumer(self.test_context, self.num_consumers, self.kafka,
-                                  topic, self.group_id, static_membership=static_membership, session_timeout_sec=self.session_timeout_sec,
+                                  topic, self.group_id, static_membership=static_membership,
                                   assignment_strategy=assignment_strategy, enable_autocommit=enable_autocommit,
                                   group_remote_assignor=group_remote_assignor,
                                   log_level="TRACE", **kwargs)
@@ -81,9 +80,9 @@ class VerifiableConsumerTest(KafkaTest):
     def await_members(self, consumer, num_consumers):
         # Wait until all members have joined the group
         wait_until(lambda: len(consumer.joined_nodes()) == num_consumers,
-                   timeout_sec=self.session_timeout_sec*2,
+                   timeout_sec=60,
                    err_msg="Consumers failed to join in a reasonable amount of time")
-        
+
     def await_all_members(self, consumer):
         self.await_members(consumer, self.num_consumers)
 

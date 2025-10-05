@@ -21,10 +21,9 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -67,8 +66,8 @@ public class EndQuorumEpochRequest extends AbstractRequest {
             .setErrorCode(Errors.forException(e).code()));
     }
 
-    public static EndQuorumEpochRequest parse(ByteBuffer buffer, short version) {
-        return new EndQuorumEpochRequest(new EndQuorumEpochRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static EndQuorumEpochRequest parse(Readable readable, short version) {
+        return new EndQuorumEpochRequest(new EndQuorumEpochRequestData(readable, version), version);
     }
 
     public static EndQuorumEpochRequestData singletonRequest(TopicPartition topicPartition,

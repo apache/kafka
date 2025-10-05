@@ -20,10 +20,10 @@ package kafka.server
 
 import java.net.InetSocketAddress
 import java.time.Duration
-import java.util.{Collections, Properties}
+import java.util.Properties
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import javax.security.auth.login.LoginContext
-import kafka.api.{Both, IntegrationTestHarness, SaslSetup}
+import kafka.api.{IntegrationTestHarness, SaslSetup}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.TopicPartition
@@ -38,11 +38,9 @@ import org.apache.kafka.common.security.kerberos.KerberosLogin
 import org.apache.kafka.common.utils.{LogContext, MockTime}
 import org.apache.kafka.network.SocketServerConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
-
-import scala.jdk.CollectionConverters._
+import org.junit.jupiter.params.provider.MethodSource
 
 class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   override val brokerCount = 1
@@ -64,7 +62,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     TestableKerberosLogin.reset()
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both))
+    startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism)))
     serverConfig.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required")
     serverConfig.put(SocketServerConfigs.FAILED_AUTHENTICATION_DELAY_MS_CONFIG, failedAuthenticationDelayMs.toString)
     super.setUp(testInfo)
@@ -92,9 +90,8 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
    * Tests that Kerberos replay error `Request is a replay (34)` is not handled as an authentication exception
    * since replay detection used to detect DoS attacks may occasionally reject valid concurrent requests.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testRequestIsAReplay(quorum: String): Unit = {
+  @Test
+  def testRequestIsAReplay(): Unit = {
     val successfulAuthsPerThread = 10
     val futures = (0 until numThreads).map(_ => executor.submit(new Runnable {
       override def run(): Unit = verifyRetriableFailuresDuringAuthentication(successfulAuthsPerThread)
@@ -110,9 +107,8 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
    * are able to connect after the second re-login. Verifies that logout is performed only once
    * since duplicate logouts without successful login results in NPE from Java 9 onwards.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testLoginFailure(quorum: String): Unit = {
+  @Test
+  def testLoginFailure(): Unit = {
     val selector = createSelectorWithRelogin()
     try {
       val login = TestableKerberosLogin.instance
@@ -134,9 +130,8 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
    * is performed when credentials are unavailable between logout and login, we handle it as a
    * transient error and not an authentication failure so that clients may retry.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testReLogin(quorum: String): Unit = {
+  @Test
+  def testReLogin(): Unit = {
     val selector = createSelectorWithRelogin()
     try {
       val login = TestableKerberosLogin.instance
@@ -166,9 +161,8 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
    * Tests that Kerberos error `Server not found in Kerberos database (7)` is handled
    * as a fatal authentication failure.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testServerNotFoundInKerberosDatabase(quorum: String): Unit = {
+  @Test
+  def testServerNotFoundInKerberosDatabase(): Unit = {
     val jaasConfig = clientConfig.getProperty(SaslConfigs.SASL_JAAS_CONFIG)
     val invalidServiceConfig = jaasConfig.replace("serviceName=\"kafka\"", "serviceName=\"invalid-service\"")
     clientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, invalidServiceConfig)
@@ -180,15 +174,15 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
    * Test that when client fails to verify authenticity of the server, the resulting failed authentication exception
    * is thrown immediately, and is not affected by <code>connection.failed.authentication.delay.ms</code>.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit"))
-  def testServerAuthenticationFailure(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testServerAuthenticationFailure(groupProtocol: String): Unit = {
     // Setup client with a non-existent service principal, so that server authentication fails on the client
     val clientLoginContext = jaasClientLoginModule(kafkaClientSaslMechanism, Some("another-kafka-service"))
     val configOverrides = new Properties()
     configOverrides.setProperty(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
     val consumer = createConsumer(configOverrides = configOverrides)
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
 
     val startMs = System.currentTimeMillis()
     assertThrows(classOf[SaslAuthenticationException], () => consumer.poll(Duration.ofMillis(50)))
@@ -260,18 +254,17 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
 
   private def createSelector(): Selector = {
     val channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol,
-      JaasContext.Type.CLIENT, new TestSecurityConfig(clientConfig), null, kafkaClientSaslMechanism,
-      time, true, new LogContext())
+      JaasContext.Type.CLIENT, new TestSecurityConfig(clientConfig), null, kafkaClientSaslMechanism, time, new LogContext())
     NetworkTestUtils.createSelector(channelBuilder, time)
   }
 
   private def createSelectorWithRelogin(): Selector = {
     clientConfig.setProperty(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN, "0")
     val config = new TestSecurityConfig(clientConfig)
-    val jaasContexts = Collections.singletonMap("GSSAPI", JaasContext.loadClientContext(config.values()))
+    val jaasContexts = java.util.Map.of("GSSAPI", JaasContext.loadClientContext(config.values()))
     val channelBuilder = new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts, securityProtocol,
-      null, false, kafkaClientSaslMechanism, true, null, null, null, time, new LogContext(),
-      _ => org.apache.kafka.test.TestUtils.defaultApiVersionsResponse(ListenerType.ZK_BROKER)) {
+      null, false, kafkaClientSaslMechanism, null, null, null, time, new LogContext(),
+      _ => org.apache.kafka.test.TestUtils.defaultApiVersionsResponse(ListenerType.BROKER)) {
       override protected def defaultLoginClass(): Class[_ <: Login] = classOf[TestableKerberosLogin]
     }
     channelBuilder.configure(config.values())
