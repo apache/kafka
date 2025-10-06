@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 
 /**
@@ -24,5 +26,31 @@ import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
  */
 public interface MetadataErrorNotifiable {
 
+    /**
+     * The background thread detects metadata errors on every call to {@link NetworkClientDelegate#poll(long, long)}.
+     * {@link NetworkClientDelegate} calls {@link Metadata#maybeThrowAnyException()} and stores the result.
+     * The presence of a metadata error is checked in the {@link ConsumerNetworkThread}'s loop by calling
+     * {@link NetworkClientDelegate#getAndClearMetadataError()}. There are two places in the loop in which the
+     * metadata error is checked:
+     *
+     * <ul>
+     *     <li>
+     *         At the very top of the {@link ConsumerNetworkThread}'s loop, the {@link ApplicationEventHandler}'s
+     *         queue is drained. Before processing each event via
+     *         {@link ApplicationEventProcessor#process(ApplicationEvent)}, if a metadata error occurred, this method
+     *         will be invoked on the event if it implements this interface.
+     *         <p/>
+     *         <em>Note</em>: for an event on which this method is invoked, it will <em>not</em> be passed to the
+     *         {@link ApplicationEventProcessor#process(ApplicationEvent)} method.
+     *     </li>
+     *     <li>
+     *         At the very bottom of the {@link ConsumerNetworkThread}'s loop, the {@link CompletableEventReaper}
+     *         is executed and any outstanding event is returned. If a metadata error occurred, this method
+     *         will be invoked on all unexpired events if it implements this interface.
+     *     </li>
+     * </ul>
+     *
+     * @param metadataException Error that originally came from {@link Metadata#maybeThrowAnyException()}
+     */
     void metadataError(Exception metadataException);
 }
