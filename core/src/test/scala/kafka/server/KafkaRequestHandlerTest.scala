@@ -701,7 +701,7 @@ class KafkaRequestHandlerTest {
   }
 
   @Test
-  def testGlobalSharedThreadCounter(): Unit = {
+  def testRequestThreadMetrics(): Unit = {
     val time = Time.SYSTEM
     val metricsBroker = new RequestChannelMetrics(java.util.Set.of[ApiKeys])
     val metricsController = new RequestChannelMetrics(java.util.Set.of[ApiKeys])
