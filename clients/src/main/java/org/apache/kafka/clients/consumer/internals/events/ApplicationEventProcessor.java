@@ -43,7 +43,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -63,35 +62,17 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final RequestManagers requestManagers;
-    private final Optional<CompletableEventReaper> applicationEventReaper;
     private int metadataVersionSnapshot;
 
     public ApplicationEventProcessor(final LogContext logContext,
                                      final RequestManagers requestManagers,
                                      final ConsumerMetadata metadata,
-                                     final SubscriptionState subscriptions,
-                                     final Optional<CompletableEventReaper> applicationEventReaper) {
+                                     final SubscriptionState subscriptions) {
         this.log = logContext.logger(ApplicationEventProcessor.class);
         this.requestManagers = requestManagers;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
-        this.applicationEventReaper = applicationEventReaper;
         this.metadataVersionSnapshot = metadata.updateVersion();
-    }
-
-    public ApplicationEventProcessor(final LogContext logContext,
-                                     final RequestManagers requestManagers,
-                                     final ConsumerMetadata metadata,
-                                     final SubscriptionState subscriptions) {
-        this(logContext, requestManagers, metadata, subscriptions, Optional.empty());
-    }
-
-    public ApplicationEventProcessor(final LogContext logContext,
-                                     final RequestManagers requestManagers,
-                                     final ConsumerMetadata metadata,
-                                     final SubscriptionState subscriptions,
-                                     final CompletableEventReaper applicationEventReaper) {
-        this(logContext, requestManagers, metadata, subscriptions, Optional.of(applicationEventReaper));
     }
 
     @SuppressWarnings({"CyclomaticComplexity", "JavaNCSSCheck"})
@@ -755,30 +736,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         log.trace("Processing check and update positions logic for {}", event);
         CompletableFuture<Boolean> updatePositionsFuture = requestManagers.offsetsRequestManager.updateFetchPositions(event.deadlineMs());
 
-        // To maintain the flow from ClassicKafkaConsumer, the check-and-update-positions logic should be allowed
-        // to time out before moving on to the logic for sending fetch requests. This is achieved by using the event
-        // reaper and allowing it to expire the check-and-update-positions future.
-        applicationEventReaper.ifPresent(reaper -> {
-            CompletableEvent<Boolean> pseudoEvent = new CompletableEvent<>() {
-                @Override
-                public CompletableFuture<Boolean> future() {
-                    return updatePositionsFuture;
-                }
-
-                @Override
-                public long deadlineMs() {
-                    return event.deadlineMs();
-                }
-
-                @Override
-                public String toString() {
-                    return getClass().getSimpleName() + "{updatePositionsFuture=" + updatePositionsFuture + ", deadlineMs=" + event.deadlineMs() + '}';
-                }
-            };
-
-            reaper.add(pseudoEvent);
-        });
-
         updatePositionsFuture.whenComplete((__, updatePositionsError) -> {
             if (maybeCompleteAsyncPollEventExceptionally(event, updatePositionsError))
                 return;
@@ -845,30 +802,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                         requestManagers,
                         metadata,
                         subscriptions
-                );
-            }
-        };
-    }
-
-    /**
-     * Creates a {@link Supplier} for deferred creation during invocation by
-     * {@link ConsumerNetworkThread}.
-     */
-    public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
-                                                               final ConsumerMetadata metadata,
-                                                               final SubscriptionState subscriptions,
-                                                               final Supplier<RequestManagers> requestManagersSupplier,
-                                                               final CompletableEventReaper applicationEventReaper) {
-        return new CachedSupplier<>() {
-            @Override
-            protected ApplicationEventProcessor create() {
-                RequestManagers requestManagers = requestManagersSupplier.get();
-                return new ApplicationEventProcessor(
-                        logContext,
-                        requestManagers,
-                        metadata,
-                        subscriptions,
-                        applicationEventReaper
                 );
             }
         };

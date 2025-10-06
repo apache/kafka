@@ -460,18 +460,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     memberStateListener,
                     streamsRebalanceData
             );
-            final CompletableEventReaper applicationEventReaper = new CompletableEventReaper(logContext);
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
                     subscriptions,
-                    requestManagersSupplier,
-                    applicationEventReaper
+                    requestManagersSupplier
             );
             this.applicationEventHandler = applicationEventHandlerFactory.build(
                     logContext,
                     time,
                     applicationEventQueue,
-                    applicationEventReaper,
+                    new CompletableEventReaper(logContext),
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
                     requestManagersSupplier,
@@ -654,18 +652,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             memberStateListener,
             Optional.empty()
         );
-        final CompletableEventReaper applicationEventReaper = new CompletableEventReaper(logContext);
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
                 metadata,
                 subscriptions,
-                requestManagersSupplier,
-                applicationEventReaper
+                requestManagersSupplier
         );
         this.applicationEventHandler = new ApplicationEventHandler(logContext,
                 time,
                 applicationEventQueue,
-                applicationEventReaper,
+                new CompletableEventReaper(logContext),
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier,
@@ -843,7 +839,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 // returning the records in the fetches. Thus, we trigger a possible wake-up before we poll fetches.
                 wakeupTrigger.maybeTriggerWakeup();
 
-                checkInflightPollResult(timer);
+                checkInflightPoll(timer);
                 final Fetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
                     // before returning the fetched records, we can send off the next round of fetches
@@ -872,25 +868,29 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     /**
-     * {@code checkInflightPollResult()} manages the lifetime of the {@link AsyncPollEvent} processing. If it is
+     * {@code checkInflightPoll()} manages the lifetime of the {@link AsyncPollEvent} processing. If it is
      * called when no event is currently processing, it will start a new event processing asynchronously. A check
-     * is made during each invocation to see if the <em>inflight</em> event has completed. If it has, the result
-     * will be processed accordingly.
+     * is made during each invocation to see if the <em>inflight</em> event has completed. If it has, it will be
+     * processed accordingly.
      */
-    public void checkInflightPollResult(Timer timer) {
+    public void checkInflightPoll(Timer timer) {
+        boolean newlySubmittedEvent = false;
+
         if (inflightPoll == null) {
-            long deadlineMs = calculateDeadlineMs(timer);
             long pollTimeMs = time.milliseconds();
+            long deadlineMs = calculateDeadlineMs(time, pollTimeMs);
             inflightPoll = new AsyncPollEvent(deadlineMs, pollTimeMs);
-            applicationEventHandler.add(inflightPoll);
+            newlySubmittedEvent = true;
 
             if (log.isTraceEnabled()) {
                 log.trace(
-                    "No existing inflight async poll event, submitted new {} with {} remaining on timer",
+                    "Submitting new inflight event {} with {} remaining on timer",
                     inflightPoll,
                     timer.remainingMs()
                 );
             }
+
+            applicationEventHandler.add(inflightPoll);
         }
 
         try {
@@ -899,34 +899,36 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             offsetCommitCallbackInvoker.executeCallbacks();
             processBackgroundEvents();
 
-            if (log.isTraceEnabled()) {
-                log.trace(
-                    "Attempting to retrieve result from previously submitted {} with {} remaining on timer",
-                    inflightPoll,
-                    timer.remainingMs()
-                );
-            }
-
-            // Result should be non-null and starts off as State.STARTED.
-            Optional<AsyncPollEvent.Result> resultOpt = inflightPoll.result();
-
-            if (resultOpt.isPresent()) {
-                AsyncPollEvent.Result result = resultOpt.get();
+            if (inflightPoll.isComplete()) {
+                Optional<KafkaException> errorOpt = inflightPoll.error();
 
                 // The async poll event has completed, either successfully or not. In either case, clear out the
                 // inflight request.
-                log.trace("Event {} completed with result {}, clearing inflight", inflightPoll, result);
+                log.trace("Inflight event {} completed, clearing", inflightPoll);
                 inflightPoll = null;
-                Optional<KafkaException> errorOpt = result.error();
 
                 if (errorOpt.isPresent()) {
                     throw errorOpt.get();
+                }
+            } else if (!newlySubmittedEvent) {
+                if (timer.isExpired()) {
+                    // The inflight event is expired...
+                    log.trace("Inflight event {} expired without completing, clearing", inflightPoll);
+                    inflightPoll = null;
+                } else {
+                    if (log.isTraceEnabled()) {
+                        log.trace(
+                            "Inflight event {} is incomplete with {} remaining on timer",
+                            inflightPoll,
+                            timer.remainingMs()
+                        );
+                    }
                 }
             }
         } catch (Throwable t) {
             // If an exception is hit, bubble it up to the user but make sure to clear out the inflight request
             // because the error effectively renders it complete.
-            log.debug("Event {} failed due to {}, clearing inflight", inflightPoll, String.valueOf(t));
+            log.debug("Inflight event {} failed due to {}, clearing", inflightPoll, String.valueOf(t));
             inflightPoll = null;
             throw ConsumerUtils.maybeWrapAsKafkaException(t);
         }
@@ -1827,7 +1829,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return fetch;
         }
 
-        log.trace("Polling for fetches with timeout {}", pollTimeout);
+        log.trace("Polling for fetches with timeout {} and {}", pollTimeout, timer.remainingMs());
 
         Timer pollTimer = time.timer(pollTimeout);
         wakeupTrigger.setFetchAction(fetchBuffer);

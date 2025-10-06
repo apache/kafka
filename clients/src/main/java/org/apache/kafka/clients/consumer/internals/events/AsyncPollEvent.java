@@ -43,39 +43,10 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNotifiableEvent {
 
-    public static class Result {
-
-        private final Optional<KafkaException> error;
-
-        public Result(Optional<KafkaException> error) {
-            this.error = error;
-        }
-
-        public Optional<KafkaException> error() {
-            return error;
-        }
-
-        @Override
-        public String toString() {
-            return "Result{error=" + error + '}';
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (o == null || getClass() != o.getClass()) return false;
-            Result result = (Result) o;
-            return Objects.equals(error, result.error);
-        }
-
-        @Override
-        public int hashCode() {
-            return error.hashCode();
-        }
-    }
-
     private final long deadlineMs;
     private final long pollTimeMs;
-    private final AtomicReference<Result> result;
+    private volatile KafkaException error;
+    private volatile boolean isComplete;
 
     /**
      * Creates a new event to signify a multi-stage processing of {@link Consumer#poll(Duration)} logic.
@@ -88,7 +59,6 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
         super(Type.ASYNC_POLL);
         this.deadlineMs = deadlineMs;
         this.pollTimeMs = pollTimeMs;
-        this.result = new AtomicReference<>();
     }
 
     public long deadlineMs() {
@@ -99,18 +69,21 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
         return pollTimeMs;
     }
 
-    public Optional<Result> result() {
-        return Optional.ofNullable(result.get());
+    public Optional<KafkaException> error() {
+        return Optional.ofNullable(error);
+    }
+
+    public boolean isComplete() {
+        return isComplete;
     }
 
     public void completeSuccessfully() {
-        Result r = new Result(Optional.empty());
-        result.compareAndSet(null, r);
+        isComplete = true;
     }
 
     public void completeExceptionally(KafkaException e) {
-        Result r = new Result(Optional.of(e));
-        result.compareAndSet(null, r);
+        isComplete = true;
+        this.error = e;
     }
 
     @Override
@@ -123,6 +96,7 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
         return super.toStringBase() +
             ", deadlineMs=" + deadlineMs +
             ", pollTimeMs=" + pollTimeMs +
-            ", result=" + result.get();
+            ", error=" + error +
+            ", isComplete=" + isComplete;
     }
 }
