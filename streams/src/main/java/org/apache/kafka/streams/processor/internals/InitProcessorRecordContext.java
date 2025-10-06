@@ -18,23 +18,22 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.utils.Time;
 
 
 public class InitProcessorRecordContext extends ProcessorRecordContext {
 
-    private final Time time;
+    private final long initTime;
     private static final long NO_OFFSET = -1;
     private static final int NO_PARTITION = -1;
 
-    public InitProcessorRecordContext(final Time time) {
+    public InitProcessorRecordContext(final long currentTimestamp) {
         super(ConsumerRecord.NO_TIMESTAMP, NO_OFFSET, NO_PARTITION, null, new RecordHeaders());
-        this.time = time;
+        this.initTime = currentTimestamp;
     }
 
     @Override
     public long timestamp() {
-        return time.milliseconds();
+        return initTime;
     }
 
     @Override
