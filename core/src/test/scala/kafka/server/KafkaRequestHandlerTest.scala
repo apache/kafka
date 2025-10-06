@@ -778,6 +778,7 @@ class KafkaRequestHandlerTest {
       assertEquals(2, brokerPool.threadPoolSize.get)
       assertEquals(6, controllerPool.threadPoolSize.get)
       assertEquals(8, KafkaRequestHandlerPool.aggregateThreads.get)
+      Thread.sleep(1000)
 
     } finally {
       controllerPool.shutdown()
