@@ -62,7 +62,7 @@ public class OpenIterators {
 
     public void remove(final MeteredIterator iterator) {
         if (openIterators.size() == 1) {
-            streamsMetrics.removeMetric(metricName);
+            streamsMetrics.removeStoreLevelMetric(metricName);
         }
         openIterators.remove(iterator);
         updateOldestStartTimestamp();
