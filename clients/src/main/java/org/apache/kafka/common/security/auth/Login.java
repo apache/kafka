@@ -25,14 +25,37 @@ import javax.security.auth.login.LoginException;
 
 /**
  * Login interface for authentication.
- * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the callback to register metrics. 
- * The following tags are automatically added to all metrics registered: 
+ * <p>
+ * Implements {@link org.apache.kafka.common.metrics.Monitorable} to allow the callback to register metrics.
+ * Metrics are registered with different tags depending on the component type and connection mode:
+ * </p>
  * <ul>
- *     <li><code>config</code> set to <code>sasl.login.class</code></li>
- *     <li><code>class</code> set to the Login class name</li>
- *     <li><code>mechanism</code> set to SASL mechanism</li>
+ *   <li>Server component, ConnectionMode = Server
+ *     <ul>
+ *       <li><code>config</code> set to value of <code>sasl.login.class</code></li>
+ *       <li><code>class</code> set to Login class name</li>
+ *       <li><code>mechanism</code> set to SASL mechanism</li>
+ *       <li><code>listener</code> set to listener name</li>
+ *       <li><code>networkProcessor</code> set to network processor id</li>
+ *     </ul>
+ *   </li>
+ *
+ *   <li>Server component, ConnectionMode = Client
+ *     <ul>
+ *       <li><code>config</code> set to value of <code>sasl.login.class</code></li>
+ *       <li><code>class</code> set to Login class name</li>
+ *       <li><code>component</code> set to metricGroupPrefix from the selector component</li>
+ *       <li><code>node-id</code> set to node id</li>
+ *     </ul>
+ *   </li>
+ *
+ *   <li>Client component, ConnectionMode = Client
+ *     <ul>
+ *       <li><code>config</code> set to value of <code>sasl.login.class</code></li>
+ *       <li><code>class</code> set to Login class name</li>
+ *     </ul>
+ *   </li>
  * </ul>
- * Note: the <code>mechanism</code> tag is only set if the login module is used by servers.
  */
 public interface Login {
 
