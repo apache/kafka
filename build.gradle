@@ -193,8 +193,6 @@ allprojects {
           // ensure we have a single version in the classpath despite transitive dependencies
           libs.scalaLibrary,
           libs.scalaReflect,
-          // Workaround before `commons-validator` has new release. See KAFKA-19359.
-          libs.commonsBeanutils,
           libs.jacksonAnnotations,
           libs.commonsLang
         )
@@ -1041,6 +1039,8 @@ project(':core') {
     implementation project(':transaction-coordinator')
     implementation project(':metadata')
     implementation project(':storage:storage-api')
+    // tools-api is automatically included in releaseTarGz via core's runtimeClasspath.
+    // If removed from here, remember to explicitly add it back in the releaseTarGz task.
     implementation project(':tools:tools-api')
     implementation project(':raft')
     implementation project(':storage')
@@ -1263,8 +1263,6 @@ project(':core') {
     from(project(':streams:test-utils').configurations.runtimeClasspath) { into("libs/") }
     from(project(':streams:examples').jar) { into("libs/") }
     from(project(':streams:examples').configurations.runtimeClasspath) { into("libs/") }
-    from(project(':tools:tools-api').jar) { into("libs/") }
-    from(project(':tools:tools-api').configurations.runtimeClasspath) { into("libs/") }
     duplicatesStrategy 'exclude'
   }
 
