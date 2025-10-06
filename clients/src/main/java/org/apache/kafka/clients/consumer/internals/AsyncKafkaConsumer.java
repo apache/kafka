@@ -874,13 +874,23 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     /**
      * {@code checkInflightPollResult()} manages the lifetime of the {@link AsyncPollEvent} processing. If it is
      * called when no event is currently processing, it will start a new event processing asynchronously. A check
-     * is made during each invocation to see if the <em>inflight</em> event has reached a
-     * {@link AsyncPollEvent.State terminal state}. If it has, the result will be processed accordingly.
+     * is made during each invocation to see if the <em>inflight</em> event has completed. If it has, the result
+     * will be processed accordingly.
      */
     public void checkInflightPollResult(Timer timer) {
         if (inflightPoll == null) {
-            log.trace("No existing inflight async poll event, submitting a new event");
-            submitEvent(timer);
+            long deadlineMs = calculateDeadlineMs(timer);
+            long pollTimeMs = time.milliseconds();
+            inflightPoll = new AsyncPollEvent(deadlineMs, pollTimeMs);
+            applicationEventHandler.add(inflightPoll);
+
+            if (log.isTraceEnabled()) {
+                log.trace(
+                    "No existing inflight async poll event, submitted new {} with {} remaining on timer",
+                    inflightPoll,
+                    timer.remainingMs()
+                );
+            }
         }
 
         try {
@@ -898,21 +908,20 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
 
             // Result should be non-null and starts off as State.STARTED.
-            AsyncPollEvent.Result result = inflightPoll.result();
-            AsyncPollEvent.State state = result.state();
+            Optional<AsyncPollEvent.Result> resultOpt = inflightPoll.result();
 
-            if (state == AsyncPollEvent.State.SUCCEEDED) {
-                // The async poll event has completed all the requisite stages, though it does not imply that
-                // there is data in the FetchBuffer yet. Make sure to clear out the inflight request.
-                log.trace("Event {} completed, clearing inflight", inflightPoll);
-                inflightPoll = null;
-            } else if (state == AsyncPollEvent.State.FAILED) {
-                // The async poll failed at one of the stages. Make sure to clear out the inflight request
-                // before the underlying error is surfaced to the user.
-                log.trace("Event {} failed, clearing inflight", inflightPoll);
-                inflightPoll = null;
+            if (resultOpt.isPresent()) {
+                AsyncPollEvent.Result result = resultOpt.get();
 
-                throw result.error();
+                // The async poll event has completed, either successfully or not. In either case, clear out the
+                // inflight request.
+                log.trace("Event {} completed with result {}, clearing inflight", inflightPoll, result);
+                inflightPoll = null;
+                Optional<KafkaException> errorOpt = result.error();
+
+                if (errorOpt.isPresent()) {
+                    throw errorOpt.get();
+                }
             }
         } catch (Throwable t) {
             // If an exception is hit, bubble it up to the user but make sure to clear out the inflight request
@@ -921,16 +930,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             inflightPoll = null;
             throw ConsumerUtils.maybeWrapAsKafkaException(t);
         }
-    }
-
-    private void submitEvent(Timer timer) {
-        long deadlineMs = calculateDeadlineMs(timer);
-        long pollTimeMs = time.milliseconds();
-        inflightPoll = new AsyncPollEvent(deadlineMs, pollTimeMs);
-        applicationEventHandler.add(inflightPoll);
-
-        if (log.isTraceEnabled())
-            log.trace("Submitted new {} with {} remaining on timer", inflightPoll, timer.remainingMs());
     }
 
     /**

@@ -24,6 +24,7 @@ import org.apache.kafka.common.KafkaException;
 
 import java.time.Duration;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -39,59 +40,36 @@ import java.util.concurrent.atomic.AtomicReference;
  * at the same level as {@link ClassicKafkaConsumer#poll(Duration)}. The event is submitted in {@code poll()}, but
  * there are no blocking waits for the "result" of the event. Checks are made for the result at certain points, but
  * they do not block. The logic for the previously-mentioned events is executed sequentially on the background thread.
- *
- * <p/>
- *
- * When the {@code AsyncPollEvent} is created, it exists in the {@link State#STARTED} state. The background
- * thread will execute the {@code AsyncPollEvent} until it completes successfully ({@link State#SUCCEEDED})
- * or hits an error ({@link State#FAILED}).
  */
 public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNotifiableEvent {
 
-    public enum State {
-
-        STARTED,
-        SUCCEEDED,
-        FAILED
-    }
-
     public static class Result {
 
-        /**
-         * Used as the initial state/result until the terminal state is achieved.
-         */
-        private static final Result STARTED = new Result(State.STARTED, null);
-        private final State state;
-        private final KafkaException error;
+        private final Optional<KafkaException> error;
 
-        public Result(State state, KafkaException error) {
-            this.state = state;
+        public Result(Optional<KafkaException> error) {
             this.error = error;
         }
 
-        public State state() {
-            return state;
-        }
-
-        public KafkaException error() {
+        public Optional<KafkaException> error() {
             return error;
         }
 
         @Override
         public String toString() {
-            return "Result{" + "state=" + state + ", error=" + error + '}';
+            return "Result{error=" + error + '}';
         }
 
         @Override
         public boolean equals(Object o) {
             if (o == null || getClass() != o.getClass()) return false;
             Result result = (Result) o;
-            return state == result.state && Objects.equals(error, result.error);
+            return Objects.equals(error, result.error);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(state, error);
+            return error.hashCode();
         }
     }
 
@@ -110,7 +88,7 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
         super(Type.ASYNC_POLL);
         this.deadlineMs = deadlineMs;
         this.pollTimeMs = pollTimeMs;
-        this.result = new AtomicReference<>(Result.STARTED);
+        this.result = new AtomicReference<>();
     }
 
     public long deadlineMs() {
@@ -121,18 +99,18 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
         return pollTimeMs;
     }
 
-    public Result result() {
-        return result.get();
+    public Optional<Result> result() {
+        return Optional.ofNullable(result.get());
     }
 
     public void completeSuccessfully() {
-        Result r = new Result(State.SUCCEEDED, null);
-        result.compareAndSet(Result.STARTED, r);
+        Result r = new Result(Optional.empty());
+        result.compareAndSet(null, r);
     }
 
     public void completeExceptionally(KafkaException e) {
-        Result r = new Result(State.FAILED, Objects.requireNonNull(e));
-        result.compareAndSet(Result.STARTED, r);
+        Result r = new Result(Optional.of(e));
+        result.compareAndSet(null, r);
     }
 
     @Override
