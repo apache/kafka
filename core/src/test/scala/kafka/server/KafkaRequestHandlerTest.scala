@@ -747,19 +747,15 @@ class KafkaRequestHandlerTest {
       perPoolIdleMeterField.setAccessible(true)
       val brokerPerPoolIdleMeter = perPoolIdleMeterField.get(brokerPool).asInstanceOf[Meter]
       val controllerPerPoolIdleMeter = perPoolIdleMeterField.get(controllerPool).asInstanceOf[Meter]
-      
-      // Wait for idle measurements to accumulate
-      val deadline = System.currentTimeMillis() + 8000
+
       var aggregateValue = 0.0
       var brokerPerPoolValue = 0.0
       var controllerPerPoolValue = 0.0
-      while (System.currentTimeMillis() < deadline && (aggregateValue == 0.0 || brokerPerPoolValue == 0.0 || controllerPerPoolValue == 0.0)) {
-        Thread.sleep(2000)
-        aggregateValue = aggregateMeter.oneMinuteRate()
-        brokerPerPoolValue = brokerPerPoolIdleMeter.oneMinuteRate()
-        controllerPerPoolValue = controllerPerPoolIdleMeter.oneMinuteRate()
-      }
-      print(s"Aggregate: $aggregateValue, Broker PerPool: $brokerPerPoolValue, Controller PerPool: $controllerPerPoolValue")
+
+      Thread.sleep(2000)
+      aggregateValue = aggregateMeter.oneMinuteRate()
+      brokerPerPoolValue = brokerPerPoolIdleMeter.oneMinuteRate()
+      controllerPerPoolValue = controllerPerPoolIdleMeter.oneMinuteRate()
       
       // Verify that the meter shows reasonable idle percentage
       assertTrue(aggregateValue >= 0.0 && aggregateValue <= 1.00, s"aggregate idle percent should be within [0,1], got $aggregateValue")
