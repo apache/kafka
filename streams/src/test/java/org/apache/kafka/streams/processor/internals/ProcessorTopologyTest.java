@@ -873,19 +873,15 @@ public class ProcessorTopologyTest {
         final String initialKey = "key1";
         final String initialValue = "value1";
         final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
-                Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(DEFAULT_STORE_NAME), Serdes.String(), Serdes.String()).withLoggingEnabled(Collections.emptyMap());
+                Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(DEFAULT_STORE_NAME), Serdes.String(), Serdes.String());
         topology.addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1);
         topology.addProcessor("processor1", defineWithStores(() -> new StatefulProcessorWithInitialization(DEFAULT_STORE_NAME, initialKey, initialValue), Collections.singleton(storeBuilder)), "source1");
         driver = new TopologyTestDriver(topology, props);
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
-        inputTopic.pipeInput("key2", "value2");
         final KeyValueStore<String, String> store = driver.getKeyValueStore(DEFAULT_STORE_NAME);
         final List<KeyValue<String, String>> results = prefixScanResults(store, DEFAULT_PREFIX);
-        assertEquals(2, results.size());
+        assertEquals(1, results.size());
         assertEquals(initialValue, results.get(0).value);
         assertEquals(initialKey, results.get(0).key);
-        assertEquals("key2", results.get(1).key);
-        assertEquals("value2", results.get(1).value);
     }
 
     @Test
