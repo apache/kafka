@@ -19,9 +19,11 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.Acknowledgements;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
+import org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager;
@@ -46,6 +48,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -61,19 +64,19 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final RequestManagers requestManagers;
-    private final Optional<AsyncPollEventProcessorContext> asyncPollContext;
+    private final Optional<CompletableEventReaper> applicationEventReaper;
     private int metadataVersionSnapshot;
 
     public ApplicationEventProcessor(final LogContext logContext,
                                      final RequestManagers requestManagers,
                                      final ConsumerMetadata metadata,
                                      final SubscriptionState subscriptions,
-                                     final Optional<AsyncPollEventProcessorContext> asyncPollContext) {
+                                     final Optional<CompletableEventReaper> applicationEventReaper) {
         this.log = logContext.logger(ApplicationEventProcessor.class);
         this.requestManagers = requestManagers;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
-        this.asyncPollContext = asyncPollContext;
+        this.applicationEventReaper = applicationEventReaper;
         this.metadataVersionSnapshot = metadata.updateVersion();
     }
 
@@ -88,8 +91,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                                      final RequestManagers requestManagers,
                                      final ConsumerMetadata metadata,
                                      final SubscriptionState subscriptions,
-                                     final AsyncPollEventProcessorContext asyncPollContext) {
-        this(logContext, requestManagers, metadata, subscriptions, Optional.of(asyncPollContext));
+                                     final CompletableEventReaper applicationEventReaper) {
+        this(logContext, requestManagers, metadata, subscriptions, Optional.of(applicationEventReaper));
     }
 
     @SuppressWarnings({"CyclomaticComplexity", "JavaNCSSCheck"})
@@ -729,64 +732,99 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final AsyncPollEvent event) {
-        AsyncPollEventProcessorContext context = asyncPollContext.orElseThrow(IllegalArgumentException::new);
-        ApplicationEvent.Type nextEventType = event.startingEventType();
+        log.trace("Processing poll logic for {}", event);
 
-        if (context.maybeCompleteWithCallbackRequired(event, nextEventType))
-            return;
+        // Trigger a reconciliation that can safely commit offsets if needed to rebalance,
+        // as we're processing before any new fetching starts
+        requestManagers.consumerMembershipManager.ifPresent(consumerMembershipManager ->
+            consumerMembershipManager.maybeReconcile(true));
 
-        if (nextEventType == ApplicationEvent.Type.ASYNC_POLL) {
-            log.trace("Processing {} logic for {}", nextEventType, event);
+        if (requestManagers.commitRequestManager.isPresent()) {
+            CommitRequestManager commitRequestManager = requestManagers.commitRequestManager.get();
+            commitRequestManager.updateTimerAndMaybeCommit(event.pollTimeMs());
 
-            // Trigger a reconciliation that can safely commit offsets if needed to rebalance,
-            // as we're processing before any new fetching starts
-            requestManagers.consumerMembershipManager.ifPresent(consumerMembershipManager ->
-                consumerMembershipManager.maybeReconcile(true));
-
-            if (requestManagers.commitRequestManager.isPresent()) {
-                CommitRequestManager commitRequestManager = requestManagers.commitRequestManager.get();
-                commitRequestManager.updateTimerAndMaybeCommit(event.pollTimeMs());
-
-                requestManagers.consumerHeartbeatRequestManager.ifPresent(hrm -> {
-                    hrm.membershipManager().onConsumerPoll();
-                    hrm.resetPollTimer(event.pollTimeMs());
-                });
-                requestManagers.streamsGroupHeartbeatRequestManager.ifPresent(hrm -> {
-                    hrm.membershipManager().onConsumerPoll();
-                    hrm.resetPollTimer(event.pollTimeMs());
-                });
-            }
-
-            nextEventType = ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS;
-
-            if (context.maybeCompleteWithCallbackRequired(event, nextEventType))
-                return;
+            requestManagers.consumerHeartbeatRequestManager.ifPresent(hrm -> {
+                hrm.membershipManager().onConsumerPoll();
+                hrm.resetPollTimer(event.pollTimeMs());
+            });
+            requestManagers.streamsGroupHeartbeatRequestManager.ifPresent(hrm -> {
+                hrm.membershipManager().onConsumerPoll();
+                hrm.resetPollTimer(event.pollTimeMs());
+            });
         }
 
-        if (nextEventType == ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS) {
-            log.trace("Processing {} logic for {}", nextEventType, event);
-            CompletableFuture<Boolean> updatePositionsFuture = requestManagers.offsetsRequestManager.updateFetchPositions(event.deadlineMs());
-            context.trackCheckAndUpdatePositionsForTimeout(updatePositionsFuture, event.deadlineMs());
+        log.trace("Processing check and update positions logic for {}", event);
+        CompletableFuture<Boolean> updatePositionsFuture = requestManagers.offsetsRequestManager.updateFetchPositions(event.deadlineMs());
+        trackCheckAndUpdatePositionsForTimeout(updatePositionsFuture, event.deadlineMs());
 
-            updatePositionsFuture.whenComplete((__, updatePositionsError) -> {
-                if (context.maybeCompleteExceptionally(event, updatePositionsError))
+        updatePositionsFuture.whenComplete((__, updatePositionsError) -> {
+            if (maybeCompleteAsyncPollEventExceptionally(event, updatePositionsError))
+                return;
+
+            log.trace("Processing create fetch requests logic for {}", event);
+
+            // Create a fetch request if there's no data in the FetchBuffer.
+            requestManagers.fetchRequestManager.createFetchRequests().whenComplete((___, fetchError) -> {
+                if (maybeCompleteAsyncPollEventExceptionally(event, fetchError))
                     return;
 
-                log.trace("Processing {} logic for {}", ApplicationEvent.Type.CREATE_FETCH_REQUESTS, event);
-
-                // Create a fetch request if there's no data in the FetchBuffer.
-                requestManagers.fetchRequestManager.createFetchRequests().whenComplete((___, fetchError) -> {
-                    if (context.maybeCompleteExceptionally(event, fetchError))
-                        return;
-
-                    context.complete(event);
-                });
+                event.completeSuccessfully();
+                log.trace("Completed event processing for {}", event);
             });
+        });
+    }
 
-            return;
+    /**
+     * To maintain the flow from {@link ClassicKafkaConsumer}, the logic to check and update positions should be
+     * allowed to time out before moving on to the logic for sending fetch requests. This achieves that by reusing
+     * the {@link CompletableEventReaper} and allowing it to expire the {@link CompletableFuture} for the check and
+     * update positions stage.
+     */
+    public void trackCheckAndUpdatePositionsForTimeout(CompletableFuture<Boolean> updatePositionsFuture, long deadlineMs) {
+        applicationEventReaper.ifPresent(reaper -> {
+            CompletableEvent<Boolean> event = new CompletableEvent<>() {
+                @Override
+                public CompletableFuture<Boolean> future() {
+                    return updatePositionsFuture;
+                }
+
+                @Override
+                public long deadlineMs() {
+                    return deadlineMs;
+                }
+
+                @Override
+                public String toString() {
+                    return getClass().getSimpleName() + "{updatePositionsFuture=" + updatePositionsFuture + ", deadlineMs=" + deadlineMs + '}';
+                }
+            };
+
+            reaper.add(event);
+        });
+    }
+
+    /**
+     * If there's an error to report to the user, the current event will be completed with
+     * {@link AsyncPollEvent.State#FAILED} and this method will return {@code true}. Otherwise, it will
+     * return {@code false}.
+     */
+    private boolean maybeCompleteAsyncPollEventExceptionally(AsyncPollEvent event, Throwable t) {
+        if (t == null)
+            return false;
+
+        if (t instanceof org.apache.kafka.common.errors.TimeoutException || t instanceof java.util.concurrent.TimeoutException) {
+            log.trace("Ignoring timeout for {}: {}", event, t.getMessage());
+            return false;
         }
 
-        context.completeExceptionally(event, new KafkaException("Unknown next step for async poll: " + nextEventType));
+        if (t instanceof CompletionException) {
+            t = t.getCause();
+        }
+
+        KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(t);
+        event.completeExceptionally(e);
+        log.trace("Failing event processing for {}", event, e);
+        return true;
     }
 
     private <T> BiConsumer<? super T, ? super Throwable> complete(final CompletableFuture<T> b) {
@@ -828,18 +866,17 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                                                                final ConsumerMetadata metadata,
                                                                final SubscriptionState subscriptions,
                                                                final Supplier<RequestManagers> requestManagersSupplier,
-                                                               final Supplier<AsyncPollEventProcessorContext> asyncPollContextSupplier) {
+                                                               final CompletableEventReaper applicationEventReaper) {
         return new CachedSupplier<>() {
             @Override
             protected ApplicationEventProcessor create() {
                 RequestManagers requestManagers = requestManagersSupplier.get();
-                AsyncPollEventProcessorContext asyncPollContext = asyncPollContextSupplier.get();
                 return new ApplicationEventProcessor(
                         logContext,
                         requestManagers,
                         metadata,
                         subscriptions,
-                        asyncPollContext
+                        applicationEventReaper
                 );
             }
         };

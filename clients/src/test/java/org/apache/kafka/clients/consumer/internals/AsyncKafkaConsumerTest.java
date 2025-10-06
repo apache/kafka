@@ -2219,7 +2219,7 @@ public class AsyncKafkaConsumerTest {
     private void completeAsyncPollEventSuccessfully() {
         doAnswer(invocation -> {
             AsyncPollEvent event = invocation.getArgument(0);
-            event.completeWithCallbackRequired(ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS);
+            event.completeSuccessfully();
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(AsyncPollEvent.class));
     }

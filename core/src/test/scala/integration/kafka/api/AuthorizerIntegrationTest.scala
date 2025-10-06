@@ -1358,7 +1358,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
     val consumer = createConsumer()
     consumer.assign(java.util.List.of(tp))
-    assertThrows(classOf[TopicAuthorizationException], () => consumeRecords(consumer))
+    assertThrows(classOf[AuthorizationException], () => consumeRecords(consumer))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)

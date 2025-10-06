@@ -111,8 +111,7 @@ public class ApplicationEventProcessorTest {
                 new LogContext(),
                 requestManagers,
                 metadata,
-                subscriptionState,
-                Optional.of(mock(AsyncPollEventProcessorContext.class))
+                subscriptionState
         );
     }
 

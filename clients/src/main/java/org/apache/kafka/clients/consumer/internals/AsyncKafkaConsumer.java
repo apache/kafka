@@ -42,7 +42,6 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncPollEvent;
-import org.apache.kafka.clients.consumer.internals.events.AsyncPollEventProcessorContext;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.CheckAndUpdatePositionsEvent;
@@ -462,19 +461,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     streamsRebalanceData
             );
             final CompletableEventReaper applicationEventReaper = new CompletableEventReaper(logContext);
-            final Supplier<AsyncPollEventProcessorContext> asyncPollContextSupplier = AsyncPollEventProcessorContext.supplier(
-                    logContext,
-                    networkClientDelegateSupplier,
-                    backgroundEventHandler,
-                    offsetCommitCallbackInvoker,
-                    applicationEventReaper,
-                    fetchBuffer
-            );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
                     subscriptions,
                     requestManagersSupplier,
-                    asyncPollContextSupplier
+                    applicationEventReaper
             );
             this.applicationEventHandler = applicationEventHandlerFactory.build(
                     logContext,
@@ -664,20 +655,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             Optional.empty()
         );
         final CompletableEventReaper applicationEventReaper = new CompletableEventReaper(logContext);
-        final Supplier<AsyncPollEventProcessorContext> asyncPollContextSupplier = AsyncPollEventProcessorContext.supplier(
-            logContext,
-            networkClientDelegateSupplier,
-            backgroundEventHandler,
-            offsetCommitCallbackInvoker,
-            applicationEventReaper,
-            fetchBuffer
-        );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
                 metadata,
                 subscriptions,
                 requestManagersSupplier,
-                asyncPollContextSupplier
+                applicationEventReaper
         );
         this.applicationEventHandler = new ApplicationEventHandler(logContext,
                 time,
@@ -897,10 +880,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public void checkInflightPollResult(Timer timer) {
         if (inflightPoll == null) {
             log.trace("No existing inflight async poll event, submitting a new event");
-            submitEvent(ApplicationEvent.Type.ASYNC_POLL, timer);
+            submitEvent(timer);
         }
 
         try {
+            // Note: this is calling user-supplied code, so make sure to handle possible errors.
+            offsetCommitCallbackInvoker.executeCallbacks();
+            processBackgroundEvents();
+
             if (log.isTraceEnabled()) {
                 log.trace(
                     "Attempting to retrieve result from previously submitted {} with {} remaining on timer",
@@ -924,21 +911,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 log.trace("Event {} failed, clearing inflight", inflightPoll);
                 inflightPoll = null;
 
-                throw result.asKafkaException();
-            } else if (state == AsyncPollEvent.State.CALLBACKS_REQUIRED) {
-                // The background thread detected that it needed to yield to the application thread to invoke
-                // callbacks. Even though the inflight reference _should_ be overwritten when the next stage of
-                // the event is submitted, go ahead and clear out the inflight request just to be sure.
-                log.trace("Event {} paused for callbacks, clearing inflight", inflightPoll);
-                inflightPoll = null;
-
-                // Note: this is calling user-supplied code, so make sure to handle possible errors.
-                offsetCommitCallbackInvoker.executeCallbacks();
-                processBackgroundEvents();
-
-                // The application thread callbacks are complete. Create another event to resume the polling at
-                // the next stage.
-                submitEvent(result.asNextEventType(), timer);
+                throw result.error();
             }
         } catch (Throwable t) {
             // If an exception is hit, bubble it up to the user but make sure to clear out the inflight request
@@ -949,10 +922,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    private void submitEvent(ApplicationEvent.Type type, Timer timer) {
+    private void submitEvent(Timer timer) {
         long deadlineMs = calculateDeadlineMs(timer);
         long pollTimeMs = time.milliseconds();
-        inflightPoll = new AsyncPollEvent(deadlineMs, pollTimeMs, type);
+        inflightPoll = new AsyncPollEvent(deadlineMs, pollTimeMs);
         applicationEventHandler.add(inflightPoll);
 
         if (log.isTraceEnabled())
