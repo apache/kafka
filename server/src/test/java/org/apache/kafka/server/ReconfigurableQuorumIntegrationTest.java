@@ -17,12 +17,12 @@
 
 package org.apache.kafka.server;
 
+import org.apache.kafka.clients.admin.AddRaftVoterOptions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.FeatureMetadata;
 import org.apache.kafka.clients.admin.QuorumInfo;
 import org.apache.kafka.clients.admin.RaftVoterEndpoint;
 import org.apache.kafka.clients.admin.RemoveRaftVoterOptions;
-import org.apache.kafka.clients.admin.AddRaftVoterOptions;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
