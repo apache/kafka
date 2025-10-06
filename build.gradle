@@ -327,9 +327,15 @@ subprojects {
     tasks.register('uploadArchives').configure { dependsOn(publish) }
   }
 
-    tasks.withType(AbstractTestTask).configureEach {
-      failOnNoDiscoveredTests = false
-    }
+  tasks.withType(AbstractArchiveTask).configureEach {
+    reproducibleFileOrder = false
+    preserveFileTimestamps = true
+    useFileSystemPermissions()
+  }
+
+  tasks.withType(AbstractTestTask).configureEach {
+    failOnNoDiscoveredTests = false
+  }
 
   // apply the eclipse plugin only to subprojects that hold code. 'connect' is just a folder.
   if (!project.name.equals('connect')) {
@@ -1222,7 +1228,6 @@ project(':core') {
     from project.file("$rootDir/docs")
     into 'site-docs'
     duplicatesStrategy 'exclude'
-    preserveFileTimestamps = true
   }
 
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
@@ -1268,27 +1273,6 @@ project(':core') {
     from(project(':streams:examples').jar) { into("libs/") }
     from(project(':streams:examples').configurations.runtimeClasspath) { into("libs/") }
     duplicatesStrategy 'exclude'
-    preserveFileTimestamps = true
-    filePermissions {
-        user {
-            read = true
-            write = true
-        }
-        group.read = true
-        other.read = true
-    }    
-    dirPermissions {
-        unix('rwxr-xr-x')
-    }
-    eachFile {
-        if (name.endsWith( ".sh")) {
-            permissions {
-                user.execute = true
-                group.execute = true
-                other.execute = true
-            }
-        }
-    }
   }
 
   jar {
