@@ -797,9 +797,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     /**
-     * If there's an error to report to the user, the current event will be completed with
-     * {@link AsyncPollEvent.State#FAILED} and this method will return {@code true}. Otherwise, it will
-     * return {@code false}.
+     * If there's an error to report to the user, the current event will be completed and this method will
+     * return {@code true}. Otherwise, it will return {@code false}.
      */
     private boolean maybeCompleteAsyncPollEventExceptionally(AsyncPollEvent event, Throwable t) {
         if (t == null)
