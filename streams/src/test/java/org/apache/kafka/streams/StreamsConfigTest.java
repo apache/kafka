@@ -598,13 +598,6 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldSetInternalLeaveGroupOnCloseConfigToFalseInConsumer() {
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
-        assertThat(consumerConfigs.get("internal.leave.group.on.close"), is(false));
-    }
-
-    @Test
     public void shouldNotSetInternalThrowOnFetchStableOffsetUnsupportedConfigToFalseInConsumerForEosDisabled() {
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(consumerConfigs.get("internal.throw.on.fetch.stable.offset.unsupported"), is(nullValue()));

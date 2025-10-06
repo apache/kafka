@@ -331,17 +331,6 @@ public class ConsumerConfig extends AbstractConfig {
     public static final boolean DEFAULT_EXCLUDE_INTERNAL_TOPICS = true;
 
     /**
-     * <code>internal.leave.group.on.close</code>
-     * Whether or not the consumer should leave the group on close. If set to <code>false</code> then a rebalance
-     * won't occur until <code>session.timeout.ms</code> expires.
-     *
-     * <p>
-     * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
-     *
-     */
-    static final String LEAVE_GROUP_ON_CLOSE_CONFIG = "internal.leave.group.on.close";
-
-    /**
      * <code>internal.throw.on.fetch.stable.offset.unsupported</code>
      * Whether or not the consumer should throw when the new stable offset feature is supported.
      * If set to <code>true</code> then the client shall crash upon hitting it.
@@ -634,10 +623,6 @@ public class ConsumerConfig extends AbstractConfig {
                                         DEFAULT_EXCLUDE_INTERNAL_TOPICS,
                                         Importance.MEDIUM,
                                         EXCLUDE_INTERNAL_TOPICS_DOC)
-                                .defineInternal(LEAVE_GROUP_ON_CLOSE_CONFIG,
-                                        Type.BOOLEAN,
-                                        true,
-                                        Importance.LOW)
                                 .defineInternal(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED,
                                         Type.BOOLEAN,
                                         false,
