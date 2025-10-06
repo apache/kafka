@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.Acknowledgements;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
-import org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
@@ -755,7 +754,30 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
         log.trace("Processing check and update positions logic for {}", event);
         CompletableFuture<Boolean> updatePositionsFuture = requestManagers.offsetsRequestManager.updateFetchPositions(event.deadlineMs());
-        trackCheckAndUpdatePositionsForTimeout(updatePositionsFuture, event.deadlineMs());
+
+        // To maintain the flow from ClassicKafkaConsumer, the check-and-update-positions logic should be allowed
+        // to time out before moving on to the logic for sending fetch requests. This is achieved by using the event
+        // reaper and allowing it to expire the check-and-update-positions future.
+        applicationEventReaper.ifPresent(reaper -> {
+            CompletableEvent<Boolean> pseudoEvent = new CompletableEvent<>() {
+                @Override
+                public CompletableFuture<Boolean> future() {
+                    return updatePositionsFuture;
+                }
+
+                @Override
+                public long deadlineMs() {
+                    return event.deadlineMs();
+                }
+
+                @Override
+                public String toString() {
+                    return getClass().getSimpleName() + "{updatePositionsFuture=" + updatePositionsFuture + ", deadlineMs=" + event.deadlineMs() + '}';
+                }
+            };
+
+            reaper.add(pseudoEvent);
+        });
 
         updatePositionsFuture.whenComplete((__, updatePositionsError) -> {
             if (maybeCompleteAsyncPollEventExceptionally(event, updatePositionsError))
@@ -771,35 +793,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 event.completeSuccessfully();
                 log.trace("Completed event processing for {}", event);
             });
-        });
-    }
-
-    /**
-     * To maintain the flow from {@link ClassicKafkaConsumer}, the logic to check and update positions should be
-     * allowed to time out before moving on to the logic for sending fetch requests. This achieves that by reusing
-     * the {@link CompletableEventReaper} and allowing it to expire the {@link CompletableFuture} for the check and
-     * update positions stage.
-     */
-    public void trackCheckAndUpdatePositionsForTimeout(CompletableFuture<Boolean> updatePositionsFuture, long deadlineMs) {
-        applicationEventReaper.ifPresent(reaper -> {
-            CompletableEvent<Boolean> event = new CompletableEvent<>() {
-                @Override
-                public CompletableFuture<Boolean> future() {
-                    return updatePositionsFuture;
-                }
-
-                @Override
-                public long deadlineMs() {
-                    return deadlineMs;
-                }
-
-                @Override
-                public String toString() {
-                    return getClass().getSimpleName() + "{updatePositionsFuture=" + updatePositionsFuture + ", deadlineMs=" + deadlineMs + '}';
-                }
-            };
-
-            reaper.add(event);
         });
     }
 
