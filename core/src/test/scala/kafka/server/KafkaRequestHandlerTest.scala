@@ -778,6 +778,7 @@ class KafkaRequestHandlerTest {
 
     } finally {
       controllerPool.shutdown()
+      assertEquals(2, KafkaRequestHandlerPool.aggregateThreads.get)
       brokerPool.shutdown()
       metricsBroker.close()
       metricsController.close()
