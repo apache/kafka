@@ -742,19 +742,36 @@ class KafkaRequestHandlerTest {
       // Get the aggregate meter from broker pool using reflection
       val aggregateMeterField = classOf[KafkaRequestHandlerPool].getDeclaredField("aggregateIdleMeter")
       aggregateMeterField.setAccessible(true)
-      val brokerAggregateMeter = aggregateMeterField.get(brokerPool).asInstanceOf[Meter]
+      val aggregateMeter = aggregateMeterField.get(brokerPool).asInstanceOf[Meter]
+
+      // Get the per-pool idle meters from both pools using reflection
+      val perPoolIdleMeterField = classOf[KafkaRequestHandlerPool].getDeclaredField("perPoolIdleMeter")
+      perPoolIdleMeterField.setAccessible(true)
+      val brokerPerPoolIdleMeter = perPoolIdleMeterField.get(brokerPool).asInstanceOf[Meter]
+      val controllerPerPoolIdleMeter = perPoolIdleMeterField.get(controllerPool).asInstanceOf[Meter]
       
       // Wait for idle measurements to accumulate
-      val deadline = System.currentTimeMillis() + 8000
-      var value = 0.0
-      while (System.currentTimeMillis() < deadline && value == 0.0) {
-        Thread.sleep(200)
-        value = brokerAggregateMeter.oneMinuteRate()
+      val deadline = System.currentTimeMillis() + 10000
+      var aggregateValue = 0.0
+      var brokerPerPoolValue = 0.0
+      var controllerPerPoolValue = 0.0
+      while (System.currentTimeMillis() < deadline && (aggregateValue == 0.0 || brokerPerPoolValue == 0.0 || controllerPerPoolValue == 0.0)) {
+        Thread.sleep(2000)
+        aggregateValue = aggregateMeter.oneMinuteRate()
+        brokerPerPoolValue = brokerPerPoolIdleMeter.oneMinuteRate()
+        controllerPerPoolValue = controllerPerPoolIdleMeter.oneMinuteRate()
       }
+      print(s"Aggregate: $aggregateValue, Broker PerPool: $brokerPerPoolValue, Controller PerPool: $controllerPerPoolValue")
+      
       // Verify that the aggregate meter shows reasonable idle percentage
       // Since both pools are hitting the same global counter (8 threads), the rate should be normalized
-      assertTrue(value >= 0.0 && value <= 1.05, s"aggregate idle percent should be within [0,1], got $value")
+      assertTrue(aggregateValue >= 0.0 && aggregateValue <= 1.00, s"aggregate idle percent should be within [0,1], got $aggregateValue")
       
+      // Verify that per-pool idle meters show reasonable values
+      // Each pool has 4 threads, so per-pool idle should be normalized by the pool size (4)
+      assertTrue(brokerPerPoolValue >= 0.0 && brokerPerPoolValue <= 1.00, s"broker per-pool idle percent should be within [0,1], got $brokerPerPoolValue")
+      assertTrue(controllerPerPoolValue >= 0.0 && controllerPerPoolValue <= 1.00, s"controller per-pool idle percent should be within [0,1], got $controllerPerPoolValue")
+
     } finally {
       controllerPool.shutdown()
       brokerPool.shutdown()
