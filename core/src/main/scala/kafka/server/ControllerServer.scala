@@ -22,7 +22,7 @@ import kafka.raft.KafkaRaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 
 import scala.collection.immutable
-import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, DynamicTopicClusterQuotaPublisher, KRaftMetadataCache, KRaftMetadataCachePublisher}
+import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicConfigPublisher, DynamicTopicClusterQuotaPublisher, KRaftMetadataCache, KRaftMetadataCachePublisher}
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -336,8 +336,8 @@ class ControllerServer(
 
       // Set up the client quotas publisher. This will enable controller mutation quotas and any
       // other quotas which are applicable.
-      metadataPublishers.add(new DynamicClientQuotaPublisher(
-        config,
+      metadataPublishers.add(new org.apache.kafka.metadata.publisher.DynamicClientQuotaPublisher(
+        config.nodeId,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
         clientQuotaMetadataManager
