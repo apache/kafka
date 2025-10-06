@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.metadata.publisher;
 
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.image.ClientQuotasDelta;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;

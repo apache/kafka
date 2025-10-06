@@ -38,7 +38,7 @@ import org.apache.kafka.image.publisher.{ControllerRegistrationsPublisher, Metad
 import org.apache.kafka.metadata.{KafkaConfigSchema, ListenerInfo}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
-import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, FeaturesPublisher, ScramPublisher}
+import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, FeaturesPublisher, ScramPublisher}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
 import org.apache.kafka.server.{ProcessRole, SimpleApiVersionManager}
@@ -336,7 +336,7 @@ class ControllerServer(
 
       // Set up the client quotas publisher. This will enable controller mutation quotas and any
       // other quotas which are applicable.
-      metadataPublishers.add(new org.apache.kafka.metadata.publisher.DynamicClientQuotaPublisher(
+      metadataPublishers.add(new DynamicClientQuotaPublisher(
         config.nodeId,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
