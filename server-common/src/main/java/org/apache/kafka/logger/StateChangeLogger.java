@@ -19,36 +19,36 @@ package org.apache.kafka.logger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Simple class that sets logIdent appropriately depending on whether the state change logger is being used in the
+ * context of the broker (e.g. ReplicaManager and Partition).
+ */
 public class StateChangeLogger {
-    private static final Logger log = LoggerFactory.getLogger("state.change.logger");
+    private static final Logger LOGGER = LoggerFactory.getLogger("state.change.logger");
 
     private final String logIdent;
 
-    /**
-     * Simple class that sets logIdent appropriately depending on whether the state change logger is being used in the
-     * context of the broker (e.g. ReplicaManager and Partition).
-     */
     public StateChangeLogger(int brokerId) {
         this.logIdent = String.format("[Broker id=%d] ", brokerId);
     }
 
     public void trace(String message) {
-        log.info("{}{}", logIdent, message);
+        LOGGER.info("{}{}", logIdent, message);
     }
 
     public void info(String message) {
-        log.info("{}{}", logIdent, message);
+        LOGGER.info("{}{}", logIdent, message);
     }
 
     public void warn(String message) {
-        log.warn("{}{}", logIdent, message);
+        LOGGER.warn("{}{}", logIdent, message);
     }
 
     public void error(String message) {
-        log.error("{}{}", logIdent, message);
+        LOGGER.error("{}{}", logIdent, message);
     }
 
     public void error(String message, Throwable e) {
-        log.error("{}{}", logIdent, message, e);
+        LOGGER.error("{}{}", logIdent, message, e);
     }
 }
