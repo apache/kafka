@@ -266,10 +266,11 @@ public class ConsumerIntegrationTest {
             consumer1.subscribe(List.of(topic));
             consumer2.subscribe(List.of(topic));
 
+            Duration pollTimeout = Duration.ofMillis(100);
             TestUtils.waitForCondition(() -> {
-                consumer0.poll(Duration.ofMillis(1000));
-                consumer1.poll(Duration.ofMillis(1000));
-                consumer2.poll(Duration.ofMillis(1000));
+                consumer0.poll(pollTimeout);
+                consumer1.poll(pollTimeout);
+                consumer2.poll(pollTimeout);
                 return consumer0.assignment().equals(Set.of(new TopicPartition(topic, 0))) &&
                     consumer1.assignment().isEmpty() &&
                     consumer2.assignment().isEmpty();
@@ -284,9 +285,9 @@ public class ConsumerIntegrationTest {
             );
             clusterInstance.waitTopicCreation(topic, 3);
             TestUtils.waitForCondition(() -> {
-                consumer0.poll(Duration.ofMillis(1000));
-                consumer1.poll(Duration.ofMillis(1000));
-                consumer2.poll(Duration.ofMillis(1000));
+                consumer0.poll(pollTimeout);
+                consumer1.poll(pollTimeout);
+                consumer2.poll(pollTimeout);
                 return consumer0.assignment().equals(Set.of(new TopicPartition(topic, 0))) &&
                     consumer1.assignment().equals(Set.of(new TopicPartition(topic, 1), new TopicPartition(topic, 2))) &&
                     consumer2.assignment().isEmpty();
@@ -301,9 +302,9 @@ public class ConsumerIntegrationTest {
             );
             clusterInstance.waitTopicCreation(topic, 6);
             TestUtils.waitForCondition(() -> {
-                consumer0.poll(Duration.ofMillis(1000));
-                consumer1.poll(Duration.ofMillis(1000));
-                consumer2.poll(Duration.ofMillis(1000));
+                consumer0.poll(pollTimeout);
+                consumer1.poll(pollTimeout);
+                consumer2.poll(pollTimeout);
                 return consumer0.assignment().equals(Set.of(new TopicPartition(topic, 0))) &&
                     consumer1.assignment().equals(Set.of(new TopicPartition(topic, 1), new TopicPartition(topic, 2))) &&
                     consumer2.assignment().equals(Set.of(new TopicPartition(topic, 3), new TopicPartition(topic, 4), new TopicPartition(topic, 5)));
@@ -325,9 +326,9 @@ public class ConsumerIntegrationTest {
                 new TopicPartition(topic, 5), Optional.of(new NewPartitionReassignment(List.of(0)))
             )).all().get();
             TestUtils.waitForCondition(() -> {
-                consumer0.poll(Duration.ofMillis(1000));
-                consumer1.poll(Duration.ofMillis(1000));
-                consumer2.poll(Duration.ofMillis(1000));
+                consumer0.poll(pollTimeout);
+                consumer1.poll(pollTimeout);
+                consumer2.poll(pollTimeout);
                 return consumer0.assignment().equals(Set.of(new TopicPartition(topic, 5))) &&
                     consumer1.assignment().equals(Set.of(new TopicPartition(topic, 3), new TopicPartition(topic, 4))) &&
                     consumer2.assignment().equals(Set.of(new TopicPartition(topic, 0), new TopicPartition(topic, 1), new TopicPartition(topic, 2)));
