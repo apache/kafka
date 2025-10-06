@@ -238,12 +238,12 @@ public class TestLinearWriteSpeed {
         MemoryRecords messages;
         UnifiedLog log;
         Compression compression;
-        List<SimpleRecord> recordsList;
+        SimpleRecord[] records;
 
         public LogWritable(File dir, LogConfig config, Scheduler scheduler, MemoryRecords messages, Compression compression, List<SimpleRecord> recordsList) throws IOException {
             this.messages = messages;
             this.compression = compression;
-            this.recordsList = recordsList;
+            this.records = recordsList.toArray(new SimpleRecord[0]);
             Utils.delete(dir);
             this.log = UnifiedLog.create(
                 dir,
@@ -266,7 +266,7 @@ public class TestLinearWriteSpeed {
         }
 
         public int write() {
-            this.messages = MemoryRecords.withRecords(compression, recordsList.toArray(new SimpleRecord[0]));
+            this.messages = MemoryRecords.withRecords(compression, records);
             log.appendAsLeader(
                 messages,
                 0,
