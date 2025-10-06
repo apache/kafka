@@ -412,7 +412,7 @@ public class FormatterTest {
             formatter1.formatter.setHasDynamicQuorum(true);
             formatter1.formatter.run();
             assertEquals((short) 1, formatter1.formatter.featureLevels.get(KRaftVersion.FEATURE_NAME));
-            assertEquals(List.of(
+            assertEquals(Arrays.asList(
                 String.format("Formatting data directory %s with %s %s.",
                     testEnv.directory(1),
                     MetadataVersion.FEATURE_NAME,
@@ -509,7 +509,7 @@ public class FormatterTest {
             assertFalse(formatter1.formatter.hasDynamicQuorum());
             formatter1.formatter.run();
             assertEquals((short) 0, formatter1.formatter.featureLevels.get(KRaftVersion.FEATURE_NAME));
-            assertEquals(List.of(
+            assertEquals(Arrays.asList(
                     String.format("Formatting data directory %s with %s %s.",
                         testEnv.directory(1),
                         MetadataVersion.FEATURE_NAME,

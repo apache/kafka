@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server.common;
 
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.Map;
 
 public enum KRaftVersion implements FeatureVersion {
@@ -71,7 +71,7 @@ public enum KRaftVersion implements FeatureVersion {
 
     @Override
     public Map<String, Short> dependencies() {
-        return new HashMap<>();
+        return Collections.emptyMap();
     }
 
     public short quorumStateVersion() {
