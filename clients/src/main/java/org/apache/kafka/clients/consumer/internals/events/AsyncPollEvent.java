@@ -46,7 +46,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * thread will execute the {@code AsyncPollEvent} until it completes successfully ({@link State#SUCCEEDED})
  * or hits an error ({@link State#FAILED}).
  */
-public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNotifiable {
+public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNotifiableEvent {
 
     public enum State {
 
@@ -136,7 +136,7 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
     }
 
     @Override
-    public void metadataError(Exception metadataException) {
+    public void completeExceptionallyWithMetadataError(Exception metadataException) {
         completeExceptionally(ConsumerUtils.maybeWrapAsKafkaException(metadataException));
     }
 

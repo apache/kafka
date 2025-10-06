@@ -884,7 +884,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
 
         try {
-            // Note: this is calling user-supplied code, so make sure to handle possible errors.
+            // Note: this is calling user-supplied code, so make sure that any errors thrown here are caught and
+            // the inflight event is cleared.
             offsetCommitCallbackInvoker.executeCallbacks();
             processBackgroundEvents();
 

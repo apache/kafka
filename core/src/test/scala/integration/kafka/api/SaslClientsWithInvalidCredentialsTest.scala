@@ -15,6 +15,7 @@ package kafka.api
 import kafka.security.JaasTestUtils
 import kafka.utils.TestUtils.waitUntilTrue
 
+import java.time.Duration
 import java.util.Properties
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
@@ -33,7 +34,6 @@ import org.apache.kafka.metadata.storage.Formatter
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
 
-import java.time.Duration
 import scala.jdk.javaapi.OptionConverters
 import scala.util.Using
 

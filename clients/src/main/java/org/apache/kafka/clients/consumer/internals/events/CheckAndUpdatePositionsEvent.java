@@ -31,7 +31,7 @@ import java.time.Duration;
  * The event completes with a boolean indicating if all assigned partitions have valid fetch positions
  * (based on {@link SubscriptionState#hasAllFetchPositions()}).
  */
-public class CheckAndUpdatePositionsEvent extends CompletableApplicationEvent<Boolean> implements MetadataErrorNotifiable {
+public class CheckAndUpdatePositionsEvent extends CompletableApplicationEvent<Boolean> implements MetadataErrorNotifiableEvent {
 
     public CheckAndUpdatePositionsEvent(long deadlineMs) {
         super(Type.CHECK_AND_UPDATE_POSITIONS, deadlineMs);
@@ -44,7 +44,7 @@ public class CheckAndUpdatePositionsEvent extends CompletableApplicationEvent<Bo
      * or {@link Consumer#position(TopicPartition) position} process.
      */
     @Override
-    public void metadataError(Exception metadataException) {
+    public void completeExceptionallyWithMetadataError(Exception metadataException) {
         future().completeExceptionally(metadataException);
     }
 }

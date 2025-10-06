@@ -1483,7 +1483,6 @@ public class AsyncKafkaConsumerTest {
         }
 
         completeAsyncPollEventSuccessfully();
-
         // This will trigger the background event queue to process our background event message.
         // If any error is happening inside the rebalance callbacks, we expect the first exception to be thrown from poll.
         if (expectedExceptionOpt.isPresent()) {
@@ -2216,14 +2215,6 @@ public class AsyncKafkaConsumerTest {
         }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(SeekUnvalidatedEvent.class));
     }
 
-    private void completeAsyncPollEventSuccessfully() {
-        doAnswer(invocation -> {
-            AsyncPollEvent event = invocation.getArgument(0);
-            event.completeSuccessfully();
-            return null;
-        }).when(applicationEventHandler).add(ArgumentMatchers.isA(AsyncPollEvent.class));
-    }
-
     private void forceCommitCallbackInvocation() {
         // Invokes callback
         consumer.commitAsync();
@@ -2300,5 +2291,13 @@ public class AsyncKafkaConsumerTest {
             assertTrue(thrownException.getCause().getMessage().contains("Test streams listener exception"));
             verify(mockStreamsListener).onTasksRevoked(any());
         }
+    }
+
+    private void completeAsyncPollEventSuccessfully() {
+        doAnswer(invocation -> {
+            AsyncPollEvent event = invocation.getArgument(0);
+            event.completeSuccessfully();
+            return null;
+        }).when(applicationEventHandler).add(ArgumentMatchers.isA(AsyncPollEvent.class));
     }
 }

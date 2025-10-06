@@ -24,7 +24,7 @@ import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
  * This interface is used for events that need to be notified when the
  * {@link NetworkClientDelegate#getAndClearMetadataError()} has an error.
  */
-public interface MetadataErrorNotifiable {
+public interface MetadataErrorNotifiableEvent {
 
     /**
      * The background thread detects metadata errors on every call to {@link NetworkClientDelegate#poll(long, long)}.
@@ -52,5 +52,5 @@ public interface MetadataErrorNotifiable {
      *
      * @param metadataException Error that originally came from {@link Metadata#maybeThrowAnyException()}
      */
-    void metadataError(Exception metadataException);
+    void completeExceptionallyWithMetadataError(Exception metadataException);
 }

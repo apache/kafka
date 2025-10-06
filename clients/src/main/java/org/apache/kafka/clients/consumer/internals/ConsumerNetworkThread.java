@@ -22,7 +22,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
-import org.apache.kafka.clients.consumer.internals.events.MetadataErrorNotifiable;
+import org.apache.kafka.clients.consumer.internals.events.MetadataErrorNotifiableEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -192,17 +192,16 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         for (ApplicationEvent event : events) {
             asyncConsumerMetrics.recordApplicationEventQueueTime(time.milliseconds() - event.enqueuedMs());
             try {
-                if (event instanceof CompletableEvent)
+                if (event instanceof CompletableEvent) {
                     applicationEventReaper.add((CompletableEvent<?>) event);
-
+                }
                 // Check if there are any metadata errors and fail the CompletableEvent if an error is present.
                 // This call is meant to handle "immediately completed events" which may not enter the awaiting state,
                 // so metadata errors need to be checked and handled right away.
-                if (event instanceof MetadataErrorNotifiable) {
-                    if (maybeFailOnMetadataError((MetadataErrorNotifiable) event))
+                if (event instanceof MetadataErrorNotifiableEvent) {
+                    if (maybeFailOnMetadataError((MetadataErrorNotifiableEvent) event))
                         continue;
                 }
-
                 applicationEventProcessor.process(event);
             } catch (Throwable t) {
                 log.warn("Error processing event {}", t.getMessage(), t);
@@ -374,11 +373,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * If there is a metadata error, complete all uncompleted events that require subscription metadata.
      */
     private void maybeFailOnMetadataError(List<CompletableEvent<?>> events) {
-        List<MetadataErrorNotifiable> notifiables = new ArrayList<>();
+        List<MetadataErrorNotifiableEvent> notifiables = new ArrayList<>();
 
         for (CompletableEvent<?> ce : events) {
-            if (ce instanceof MetadataErrorNotifiable) {
-                notifiables.add((MetadataErrorNotifiable) ce);
+            if (ce instanceof MetadataErrorNotifiableEvent) {
+                notifiables.add((MetadataErrorNotifiableEvent) ce);
             }
         }
 
@@ -391,20 +390,20 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             return;
 
         Exception metadataError = metadataErrorOpt.get();
-        notifiables.forEach(n -> n.metadataError(metadataError));
+        notifiables.forEach(n -> n.completeExceptionallyWithMetadataError(metadataError));
     }
 
     /**
-     * If there is a metadata error, complete all uncompleted events that require subscription metadata.
+     * If there is a metadata error, complete this event exceptionally.
      */
-    private boolean maybeFailOnMetadataError(MetadataErrorNotifiable notifiable) {
+    private boolean maybeFailOnMetadataError(MetadataErrorNotifiableEvent notifiable) {
         Optional<Exception> metadataErrorOpt = networkClientDelegate.getAndClearMetadataError();
 
         if (metadataErrorOpt.isEmpty())
             return false;
 
         Exception metadataError = metadataErrorOpt.get();
-        notifiable.metadataError(metadataError);
+        notifiable.completeExceptionallyWithMetadataError(metadataError);
         return true;
     }
 }

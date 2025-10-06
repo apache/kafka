@@ -21,14 +21,14 @@ import org.apache.kafka.common.PartitionInfo;
 import java.util.List;
 import java.util.Map;
 
-public abstract class AbstractTopicMetadataEvent extends CompletableApplicationEvent<Map<String, List<PartitionInfo>>> implements MetadataErrorNotifiable {
+public abstract class AbstractTopicMetadataEvent extends CompletableApplicationEvent<Map<String, List<PartitionInfo>>> implements MetadataErrorNotifiableEvent {
 
     protected AbstractTopicMetadataEvent(final Type type, final long deadlineMs) {
         super(type, deadlineMs);
     }
 
     @Override
-    public void metadataError(Exception metadataException) {
+    public void completeExceptionallyWithMetadataError(Exception metadataException) {
         future().completeExceptionally(metadataException);
     }
 }
