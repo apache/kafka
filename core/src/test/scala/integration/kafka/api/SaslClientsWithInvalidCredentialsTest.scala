@@ -13,7 +13,6 @@
 package kafka.api
 
 import kafka.security.JaasTestUtils
-import kafka.utils.TestUtils.waitUntilTrue
 
 import java.time.Duration
 import java.util.Properties
@@ -160,7 +159,7 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     createClientCredential()
     val producer = createProducer()
     verifyWithRetry(sendOneRecord(producer))()
-    waitUntilTrue(() => {
+    TestUtils.waitUntilTrue(() => {
       try {
         consumer.poll(Duration.ofMillis(1000)).count() == 1
       } catch {
