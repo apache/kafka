@@ -23,9 +23,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.common.KafkaException;
 
 import java.time.Duration;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * This class represents the non-blocking event that executes logic functionally equivalent to the following:
