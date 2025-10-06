@@ -774,6 +774,8 @@ class KafkaRequestHandlerTest {
       assertEquals(2, brokerPool.threadPoolSize.get)
       assertEquals(6, controllerPool.threadPoolSize.get)
       assertEquals(8, KafkaRequestHandlerPool.aggregateThreads.get)
+
+      // Wait for removed threads to fully exit before shutdown to avoid deadlock.
       Thread.sleep(1000)
 
     } finally {
