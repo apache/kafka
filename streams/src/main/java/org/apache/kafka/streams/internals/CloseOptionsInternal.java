@@ -16,35 +16,22 @@
  */
 package org.apache.kafka.streams.internals;
 
-public enum UpgradeFromValues {
-    UPGRADE_FROM_24("2.4"),
-    UPGRADE_FROM_25("2.5"),
-    UPGRADE_FROM_26("2.6"),
-    UPGRADE_FROM_27("2.7"),
-    UPGRADE_FROM_28("2.8"),
-    UPGRADE_FROM_30("3.0"),
-    UPGRADE_FROM_31("3.1"),
-    UPGRADE_FROM_32("3.2"),
-    UPGRADE_FROM_33("3.3"),
-    UPGRADE_FROM_34("3.4"),
-    UPGRADE_FROM_35("3.5"),
-    UPGRADE_FROM_36("3.6"),
-    UPGRADE_FROM_37("3.7"),
-    UPGRADE_FROM_38("3.8"),
-    UPGRADE_FROM_39("3.9"),
-    UPGRADE_FROM_40("4.0"),
-    UPGRADE_FROM_41("4.1");
+import org.apache.kafka.streams.CloseOptions;
 
-    private final String value;
+import java.time.Duration;
+import java.util.Optional;
 
-    UpgradeFromValues(final String value) {
-        this.value = value;
+public class CloseOptionsInternal extends CloseOptions {
+
+    public CloseOptionsInternal(final CloseOptions options) {
+        super(options);
     }
 
-    public static UpgradeFromValues fromString(final String upgradeFrom) {
-        return UpgradeFromValues.valueOf("UPGRADE_FROM_" + upgradeFrom.replace(".", ""));
+    public GroupMembershipOperation operation() {
+        return operation;
     }
-    public String toString() {
-        return value;
+
+    public Optional<Duration> timeout() {
+        return timeout;
     }
 }
