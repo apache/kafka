@@ -81,11 +81,7 @@ public class CloseOptions {
      * @return this {@code CloseOptions} instance.
      */
     public CloseOptions withTimeout(final Duration timeout) {
-        if (timeout == null) {
-            this.timeout = Optional.of(Duration.ofMillis(Long.MAX_VALUE));
-        } else {
-            this.timeout = Optional.of(timeout);
-        }
+        this.timeout = Optional.ofNullable(timeout);
         return this;
     }
 
