@@ -183,7 +183,7 @@ public class AtLeastOnceDeliveryMessageLossIntegrationTest {
         streamsConfiguration.put(ProducerConfig.BATCH_SIZE_CONFIG, 33554432);
     }
 
-    private void produceInputData(final int recordCount) throws Exception {
+    private void produceInputData(final int recordCount) {
         final List<KeyValue<String, String>> inputRecords = new ArrayList<>();
         for (int i = 1; i <= recordCount; i++) {
             inputRecords.add(new KeyValue<>(String.valueOf(i), "item-" + i));
