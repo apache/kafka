@@ -43,7 +43,6 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 
 import static java.util.Collections.unmodifiableList;
 
@@ -488,16 +487,6 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * active call to {@link org.apache.kafka.clients.consumer.KafkaConsumer#poll(Duration)}"
      */
     public void onConsumerPoll() {
-        if (subscriptions.hasPatternSubscription()) {
-            final Set<String> topicsToSubscribe = metadata.fetch().topics().stream()
-                .filter(subscriptions::matchesSubscribedPattern)
-                .collect(Collectors.toSet());
-            if (subscriptions.subscribeFromPattern(topicsToSubscribe)) {
-                metadata.requestUpdateForNewTopics();
-            }
-            subscriptionUpdated.compareAndSet(false, true);
-        }
-
         if (subscriptionUpdated.compareAndSet(true, false) && state == MemberState.UNSUBSCRIBED) {
             transitionToJoining();
         }

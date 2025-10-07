@@ -20,12 +20,15 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.Acknowledgements;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
+import org.apache.kafka.clients.consumer.internals.ConsumerMembershipManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager;
+import org.apache.kafka.clients.consumer.internals.ShareMembershipManager;
+import org.apache.kafka.clients.consumer.internals.StreamsMembershipManager;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
@@ -228,7 +231,9 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         requestManagers.consumerMembershipManager.ifPresent(consumerMembershipManager ->
             consumerMembershipManager.maybeReconcile(true));
         requestManagers.shareHeartbeatRequestManager.ifPresent(hrm -> {
-            hrm.membershipManager().onConsumerPoll();
+            ShareMembershipManager membershipManager = hrm.membershipManager();
+            maybeUpdatePatternSubscription(membershipManager::onSubscriptionUpdated);
+            membershipManager.onConsumerPoll();
             hrm.resetPollTimer(event.pollTimeMs());
         });
     }
@@ -337,7 +342,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 if (subscriptions.subscribe(event.topics(), event.listener())) {
                     this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
                 }
-                requestManagers.streamsMembershipManager.get().onSubscriptionUpdated();
+                requestManagers.streamsGroupHeartbeatRequestManager.get().membershipManager().onSubscriptionUpdated();
                 event.future().complete(null);
             } catch (Exception e) {
                 event.future().completeExceptionally(e);
@@ -360,7 +365,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         try {
             subscriptions.subscribe(event.pattern(), event.listener());
             metadata.requestUpdateForNewTopics();
-            updatePatternSubscription(metadata.fetch());
+            requestManagers.consumerHeartbeatRequestManager.ifPresent(hrm -> {
+                ConsumerMembershipManager membershipManager = hrm.membershipManager();
+                updatePatternSubscription(membershipManager::onSubscriptionUpdated, metadata.fetch());
+            });
             event.future().complete(null);
         } catch (Exception e) {
             event.future().completeExceptionally(e);
@@ -394,13 +402,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * This will make the consumer send the updated subscription on the next poll.
      */
     private void process(final UpdatePatternSubscriptionEvent event) {
-        if (!subscriptions.hasPatternSubscription()) {
-            return;
-        }
-        if (this.metadataVersionSnapshot < metadata.updateVersion()) {
-            this.metadataVersionSnapshot = metadata.updateVersion();
-            updatePatternSubscription(metadata.fetch());
-        }
+        requestManagers.consumerMembershipManager.ifPresent(mm -> maybeUpdatePatternSubscription(mm::onSubscriptionUpdated));
         event.future().complete(null);
     }
 
@@ -724,11 +726,15 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             commitRequestManager.updateTimerAndMaybeCommit(event.pollTimeMs());
 
             requestManagers.consumerHeartbeatRequestManager.ifPresent(hrm -> {
-                hrm.membershipManager().onConsumerPoll();
+                ConsumerMembershipManager membershipManager = hrm.membershipManager();
+                maybeUpdatePatternSubscription(membershipManager::onSubscriptionUpdated);
+                membershipManager.onConsumerPoll();
                 hrm.resetPollTimer(event.pollTimeMs());
             });
             requestManagers.streamsGroupHeartbeatRequestManager.ifPresent(hrm -> {
-                hrm.membershipManager().onConsumerPoll();
+                StreamsMembershipManager membershipManager = hrm.membershipManager();
+                maybeUpdatePatternSubscription(membershipManager::onSubscriptionUpdated);
+                membershipManager.onConsumerPoll();
                 hrm.resetPollTimer(event.pollTimeMs());
             });
         }
@@ -807,6 +813,16 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         };
     }
 
+    private void maybeUpdatePatternSubscription(OnSubscriptionUpdatedCallback callback) {
+        if (!subscriptions.hasPatternSubscription()) {
+            return;
+        }
+        if (this.metadataVersionSnapshot < metadata.updateVersion()) {
+            this.metadataVersionSnapshot = metadata.updateVersion();
+            updatePatternSubscription(callback, metadata.fetch());
+        }
+    }
+
     /**
      * This function evaluates the regex that the consumer subscribed to
      * against the list of topic names from metadata, and updates
@@ -814,26 +830,26 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      *
      * @param cluster Cluster from which we get the topics
      */
-    private void updatePatternSubscription(Cluster cluster) {
-        if (requestManagers.consumerHeartbeatRequestManager.isEmpty()) {
-            log.warn("Group membership manager not present when processing a subscribe event");
-            return;
-        }
+    private void updatePatternSubscription(OnSubscriptionUpdatedCallback callback, Cluster cluster) {
         final Set<String> topicsToSubscribe = cluster.topics().stream()
             .filter(subscriptions::matchesSubscribedPattern)
             .collect(Collectors.toSet());
         if (subscriptions.subscribeFromPattern(topicsToSubscribe)) {
             this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
-
         }
         // Join the group if not already part of it, or just send the updated subscription
         // to the broker on the next poll. Note that this is done even if no topics matched
         // the regex, to ensure the member joins the group if needed (with empty subscription).
-        requestManagers.consumerHeartbeatRequestManager.get().membershipManager().onSubscriptionUpdated();
+        callback.onSubscriptionUpdated();
     }
 
     // Visible for testing
     int metadataVersionSnapshot() {
         return metadataVersionSnapshot;
+    }
+
+    private interface OnSubscriptionUpdatedCallback {
+
+        void onSubscriptionUpdated();
     }
 }
