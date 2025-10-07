@@ -1827,8 +1827,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return fetch;
         }
 
-        log.trace("Polling for fetches with timeout {} and {}", pollTimeout, timer.remainingMs());
+        // We do not want to be stuck blocking in poll if we are missing some positions
+        // since the offset lookup may be backing off after a failure
 
+        // NOTE: the use of cachedSubscriptionHasAllFetchPositions means we MUST call
+        // updateAssignmentMetadataIfNeeded before this method.
+        if (pollTimeout > retryBackoffMs) {
+            pollTimeout = retryBackoffMs;
+        }
+
+        log.trace("Polling for fetches with timeout {}", pollTimeout);
         Timer pollTimer = time.timer(pollTimeout);
         wakeupTrigger.setFetchAction(fetchBuffer);
 
