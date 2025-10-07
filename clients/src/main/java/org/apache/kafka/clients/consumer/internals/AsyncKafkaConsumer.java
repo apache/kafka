@@ -1837,6 +1837,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
 
         log.trace("Polling for fetches with timeout {}", pollTimeout);
+
         Timer pollTimer = time.timer(pollTimeout);
         wakeupTrigger.setFetchAction(fetchBuffer);
 
