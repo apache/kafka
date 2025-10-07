@@ -368,7 +368,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicReference<org.apache.kafka.streams.CloseOptions.GroupMembershipOperation> leaveGroupRequested =
-        new AtomicReference<>(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
+        new AtomicReference<>(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
     private final AtomicLong lastShutdownWarningTimestamp = new AtomicLong(0L);
     private final boolean eosEnabled;
     private final boolean stateUpdaterEnabled;
