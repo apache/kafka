@@ -877,9 +877,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         boolean newlySubmittedEvent = false;
 
         if (inflightPoll == null) {
-            long pollTimeMs = time.milliseconds();
-            long deadlineMs = calculateDeadlineMs(time, pollTimeMs);
-            inflightPoll = new AsyncPollEvent(deadlineMs, pollTimeMs);
+            inflightPoll = new AsyncPollEvent(calculateDeadlineMs(timer), time.milliseconds());
             newlySubmittedEvent = true;
 
             if (log.isTraceEnabled()) {
