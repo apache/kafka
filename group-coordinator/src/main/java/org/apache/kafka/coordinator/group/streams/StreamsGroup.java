@@ -851,7 +851,7 @@ public class StreamsGroup implements Group {
         if (members.isEmpty()) {
             newState = EMPTY;
             clearShutdownRequestMemberId();
-        } else if (topology().filter(x -> x.topologyEpoch() == validatedTopologyEpoch.get()).isEmpty()) {
+        } else if (topology().filter(t -> t.topologyEpoch() == validatedTopologyEpoch.get()).isEmpty()) {
             newState = NOT_READY;
         } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
             newState = ASSIGNING;
