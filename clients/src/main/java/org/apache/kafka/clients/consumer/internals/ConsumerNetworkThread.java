@@ -199,7 +199,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 // This call is meant to handle "immediately completed events" which may not enter the awaiting state,
                 // so metadata errors need to be checked and handled right away.
                 if (event instanceof MetadataErrorNotifiableEvent) {
-                    if (maybeFailOnMetadataError((MetadataErrorNotifiableEvent) event))
+                    if (maybeFailOnMetadataError(List.of(event)))
                         continue;
                 }
                 applicationEventProcessor.process(event);
@@ -372,38 +372,27 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     /**
      * If there is a metadata error, complete all uncompleted events that require subscription metadata.
      */
-    private void maybeFailOnMetadataError(List<CompletableEvent<?>> events) {
-        List<MetadataErrorNotifiableEvent> notifiables = new ArrayList<>();
+    private boolean maybeFailOnMetadataError(List<?> events) {
+        List<MetadataErrorNotifiableEvent> filteredEvents = new ArrayList<>();
 
-        for (CompletableEvent<?> ce : events) {
-            if (ce instanceof MetadataErrorNotifiableEvent) {
-                notifiables.add((MetadataErrorNotifiableEvent) ce);
+        for (Object obj : events) {
+            if (obj instanceof MetadataErrorNotifiableEvent) {
+                filteredEvents.add((MetadataErrorNotifiableEvent) obj);
             }
         }
 
-        if (notifiables.isEmpty())
-            return;
-
-        Optional<Exception> metadataErrorOpt = networkClientDelegate.getAndClearMetadataError();
-
-        if (metadataErrorOpt.isEmpty())
-            return;
-
-        Exception metadataError = metadataErrorOpt.get();
-        notifiables.forEach(n -> n.completeExceptionallyWithMetadataError(metadataError));
-    }
-
-    /**
-     * If there is a metadata error, complete this event exceptionally.
-     */
-    private boolean maybeFailOnMetadataError(MetadataErrorNotifiableEvent notifiable) {
-        Optional<Exception> metadataErrorOpt = networkClientDelegate.getAndClearMetadataError();
-
-        if (metadataErrorOpt.isEmpty())
+        // Don't get-and-clear the metadata error if there are no events that will be notified.
+        if (filteredEvents.isEmpty())
             return false;
 
-        Exception metadataError = metadataErrorOpt.get();
-        notifiable.completeExceptionallyWithMetadataError(metadataError);
-        return true;
+        Optional<Exception> andClearMetadataError = networkClientDelegate.getAndClearMetadataError();
+
+        if (andClearMetadataError.isPresent()) {
+            Exception metadataError = andClearMetadataError.get();
+            filteredEvents.forEach(e -> e.onMetadataError(metadataError));
+            return true;
+        } else {
+            return false;
+        }
     }
 }

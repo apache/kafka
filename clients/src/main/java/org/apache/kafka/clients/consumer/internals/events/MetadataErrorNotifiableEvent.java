@@ -50,7 +50,7 @@ public interface MetadataErrorNotifiableEvent {
      *     </li>
      * </ul>
      *
-     * @param metadataException Error that originally came from {@link Metadata#maybeThrowAnyException()}
+     * @param metadataError Error that originally came from {@link Metadata#maybeThrowAnyException()}
      */
-    void completeExceptionallyWithMetadataError(Exception metadataException);
+    void onMetadataError(Exception metadataError);
 }

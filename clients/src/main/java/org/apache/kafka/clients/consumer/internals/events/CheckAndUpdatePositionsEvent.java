@@ -44,7 +44,7 @@ public class CheckAndUpdatePositionsEvent extends CompletableApplicationEvent<Bo
      * or {@link Consumer#position(TopicPartition) position} process.
      */
     @Override
-    public void completeExceptionallyWithMetadataError(Exception metadataException) {
-        future().completeExceptionally(metadataException);
+    public void onMetadataError(Exception metadataError) {
+        future().completeExceptionally(metadataError);
     }
 }
