@@ -31,6 +31,10 @@ import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 
+import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Collection;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,6 +50,8 @@ import java.util.stream.Collectors;
 public class MirrorSourceTask extends SourceTask {
 
     private static final Logger log = LoggerFactory.getLogger(MirrorSourceTask.class);
+
+    private final Map<TopicPartition, Long> lastReplicatedOffsets = new ConcurrentHashMap<>();
 
     private KafkaConsumer<byte[], byte[]> consumer;
     private String sourceClusterAlias;
@@ -123,6 +129,24 @@ public class MirrorSourceTask extends SourceTask {
         return new MirrorSourceConnector().version();
     }
 
+    private void detectTruncation(Collection<TopicPartition> partitions) {
+        if (partitions == null || partitions.isEmpty()) return;
+        try {
+            Map<TopicPartition, Long> earliestOffsets = consumer.beginningOffsets(partitions);
+            for (TopicPartition tp : partitions) {
+                long expectedNext = lastReplicatedOffsets.getOrDefault(tp, -1L) + 1;
+                long earliest = earliestOffsets.get(tp);
+                if (expectedNext >= 0 && expectedNext < earliest) {
+                    log.error("DATA TRUNCATION DETECTED for {}: expectedNext={} earliest={}",
+                            tp, expectedNext, earliest);
+                    throw new RuntimeException("Truncation detected for " + tp);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to check truncation: {}", e.getMessage());
+        }
+    }
+
     @Override
     public List<SourceRecord> poll() {
         if (!consumerAccess.tryAcquire()) {
@@ -132,14 +156,18 @@ public class MirrorSourceTask extends SourceTask {
             return null;
         }
         try {
+            detectTruncation(consumer.assignment());
+
             ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
             for (ConsumerRecord<byte[], byte[]> record : records) {
                 SourceRecord converted = convertRecord(record);
                 sourceRecords.add(converted);
-                TopicPartition topicPartition = new TopicPartition(converted.topic(), converted.kafkaPartition());
-                metrics.recordAge(topicPartition, System.currentTimeMillis() - record.timestamp());
-                metrics.recordBytes(topicPartition, byteSize(record.value()));
+
+                TopicPartition tp = new TopicPartition(record.topic(), record.partition());
+                lastReplicatedOffsets.put(tp, record.offset());   // track latest
+                metrics.recordAge(tp, System.currentTimeMillis() - record.timestamp());
+                metrics.recordBytes(tp, byteSize(record.value()));
             }
             if (sourceRecords.isEmpty()) {
                 // WorkerSourceTasks expects non-zero batch size
