@@ -23,7 +23,7 @@
 // and not the version installed on the machine running the task.
 // Read more about the wrapper here: https://docs.gradle.org/current/userguide/gradle_wrapper.html
 wrapper {
-    gradleVersion = project.gradleVersion
+    gradleVersion = versions.gradle
 }
 
 // Custom task to inject support for downloading the gradle wrapper jar if it doesn't exist.
@@ -35,14 +35,12 @@ task bootstrapWrapper() {
         def wrapperBasePath = "\$APP_HOME/gradle/wrapper"
         def wrapperJarPath = wrapperBasePath + "/gradle-wrapper.jar"
 
-        // Add a trailing zero to the version if needed.
-        def fullVersion = project.gradleVersion.count(".") == 1 ? "${project.gradleVersion}.0" : versions.gradle
         // Leverages the wrapper jar checked into the gradle project on github because the jar isn't
         // available elsewhere. Using raw.githubusercontent.com instead of github.com because
         // github.com servers deprecated TLSv1/TLSv1.1 support some time ago, so older versions
         // of curl (built against OpenSSL library that doesn't support TLSv1.2) would fail to
         // fetch the jar.
-        def wrapperBaseUrl = "https://raw.githubusercontent.com/gradle/gradle/v$fullVersion/gradle/wrapper"
+        def wrapperBaseUrl = "https://raw.githubusercontent.com/gradle/gradle/v$versions.gradle/gradle/wrapper"
         def wrapperJarUrl = wrapperBaseUrl + "/gradle-wrapper.jar"
 
         def bootstrapString = """
@@ -59,13 +57,15 @@ task bootstrapWrapper() {
       done
       """.stripIndent()
 
+        String putBootstrapStringAbove = "# Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script."
+
         def wrapperScript = wrapper.scriptFile
         def wrapperLines = wrapperScript.readLines()
         wrapperScript.withPrintWriter { out ->
             def bootstrapWritten = false
             wrapperLines.each { line ->
                 // Print the wrapper bootstrap before the first usage of the wrapper jar.
-                if (!bootstrapWritten && line.contains("gradle-wrapper.jar")) {
+                if (!bootstrapWritten && line.contains(putBootstrapStringAbove)) {
                     out.println(bootstrapString)
                     bootstrapWritten = true
                 }
