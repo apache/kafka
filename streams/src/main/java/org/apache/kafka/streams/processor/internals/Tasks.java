@@ -258,6 +258,7 @@ class Tasks implements TasksRegistry {
 
     @Override
     public synchronized void clear() {
+        pendingTasksToInit.clear();
         activeTasksPerId.clear();
         standbyTasksPerId.clear();
         activeTasksPerPartition.clear();

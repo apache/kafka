@@ -207,4 +207,15 @@ public class TasksTest {
         tasks.addTask(activeTask1);
         assertTrue(tasks.allNonFailedTasks().contains(activeTask1));
     }
+
+    @Test
+    public void shouldClearPendingToInitTasks() {
+        final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_B_0))
+            .inState(State.CREATED).build();
+        tasks.addPendingTasksToInit(Collections.singleton(task));
+
+        assertTrue(tasks.pendingTasksToInit().contains(task));
+        tasks.clear();
+        assertFalse(tasks.pendingTasksToInit().contains(task));
+    }
 }
