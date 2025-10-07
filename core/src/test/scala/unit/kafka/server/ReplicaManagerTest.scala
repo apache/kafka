@@ -3615,7 +3615,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(leaderDelta0, leaderMetadataImage0)
       replicaManager.applyDelta(leaderDelta1, leaderMetadataImage1)
 
-      val params = new FetchParams(replicaId, 1, 1000, 10, 100, FetchIsolation.LOG_END, Optional.empty)
+      val params = new FetchParams(replicaId, 1, 1000, 10, 200000, FetchIsolation.LOG_END, Optional.empty)
       val fetchOffsetTp0 = 1
       val fetchOffsetTp1 = 2
 
