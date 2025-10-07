@@ -9752,7 +9752,7 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(streamsGroupId, memberBuilder2.build()));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(streamsGroupId, memberId2, assignment));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(streamsGroupId, memberBuilder2.build()));
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(streamsGroupId, epoch + 2, 0, -1));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(streamsGroupId, epoch + 2, 0, 0));
 
         List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.groupMetadataManager.streamsGroupDescribe(List.of(streamsGroupId), context.lastCommittedOffset);
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
@@ -9783,7 +9783,7 @@ public class GroupMetadataManagerTest {
                         )
                     )
             )
-            .setGroupState(StreamsGroup.StreamsGroupState.NOT_READY.toString())
+            .setGroupState(StreamsGroup.StreamsGroupState.ASSIGNING.toString())
             .setGroupEpoch(epoch + 2);
         assertEquals(1, actual.size());
         assertEquals(describedGroup, actual.get(0));

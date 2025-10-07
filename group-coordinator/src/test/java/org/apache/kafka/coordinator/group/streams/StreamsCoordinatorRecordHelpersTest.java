@@ -257,13 +257,13 @@ class StreamsCoordinatorRecordHelpersTest {
             new ApiMessageAndVersion(
                 new StreamsGroupMetadataValue()
                     .setEpoch(42)
-                    .setMetadataHash(42)
-                    .setValidatedTopologyEpoch(43),
+                    .setMetadataHash(43)
+                    .setValidatedTopologyEpoch(44),
                 (short) 0
             )
         );
 
-        assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(GROUP_ID, 42, 42, 43));
+        assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(GROUP_ID, 42, 43, 44));
     }
 
     @Test

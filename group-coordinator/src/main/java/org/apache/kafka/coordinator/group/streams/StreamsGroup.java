@@ -149,7 +149,7 @@ public class StreamsGroup implements Group {
     /**
      * The topology epoch for which the subscribed topics identified by metadataHash are validated.
      */
-    protected final TimelineInteger validatedTopologyEpoch;
+    private final TimelineInteger validatedTopologyEpoch;
 
     /**
      * The metadata hash which is computed based on the all subscribed topics.
