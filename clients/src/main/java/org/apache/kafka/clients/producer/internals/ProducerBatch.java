@@ -241,8 +241,8 @@ public final class ProducerBatch {
     /**
      * Get all record futures for this batch.
      * This is used by flush() to wait on individual records rather than the batch-level future.
-     * When batches are split, individual futures are chained to the new batches,
-     * ensuring flush() waits for all split batches to complete.
+     * When batches are split, individual record futures are chained to the new batches,
+     * ensuring that flush() waits for all split batches to complete.
      *
      * @return List of FutureRecordMetadata for all records in this batch
      */

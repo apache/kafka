@@ -1078,7 +1078,7 @@ public class RecordAccumulator {
             // by waiting on record futures, we ensure flush() blocks until all split
             // batches complete.
             //
-            // We first collect all futures into a list first to avoid holding references to
+            // We first collect all futures into a list to avoid holding references to
             // ProducerBatch objects, allowing them to be garbage collected after completion.
             List<FutureRecordMetadata> futures = new ArrayList<>();
             for (ProducerBatch batch : this.incomplete.copyAll()) {
