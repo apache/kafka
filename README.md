@@ -232,7 +232,7 @@ Alternatively, use the `allDeps` or `allDepInsight` tasks for recursively iterat
 These take the same arguments as the builtin variants.
 
 ### Determining if any dependencies could be updated ###
-    ./gradlew dependencyUpdates
+    ./gradlew dependencyUpdates --no-parallel
 
 ### Common build options ###
 
