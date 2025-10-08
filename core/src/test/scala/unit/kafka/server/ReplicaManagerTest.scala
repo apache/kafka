@@ -3800,11 +3800,6 @@ class ReplicaManagerTest {
     }
   }
 
-  @Test
-  def testMultipleRemoteFetchesInOneFetchRequestThatReadsRemoteAndLocalLog(): Unit = {
-    // TODO: simulate mockLog that it reads from remote log for 2 partitions and local-log for one partition
-  }
-
   private def buildRemoteReadResult(error: Errors): RemoteLogReadResult = {
     new RemoteLogReadResult(
       Optional.of(new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY)),
