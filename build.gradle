@@ -37,7 +37,7 @@ plugins {
   id 'org.nosphere.apache.rat' version "0.8.1"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
-  id "com.github.spotbugs" version '6.2.5' apply false
+  id "com.github.spotbugs" version '6.4.4' apply false
   id 'org.scoverage' version '8.1' apply false
   id 'com.gradleup.shadow' version '8.3.9' apply false
   id 'com.diffplug.spotless' version "8.0.0"
@@ -70,13 +70,6 @@ ext {
       "--add-opens=java.base/java.time=ALL-UNNAMED",
       "--add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED"
     )
-
-  if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_25)) {
-    // Spotbugs is not compatible with Java 25+ so Gradle related tasks are disabled
-    // until version can be upgraded: https://github.com/spotbugs/spotbugs/issues/3564
-    project.gradle.startParameter.excludedTaskNames.add("spotbugsMain")
-    project.gradle.startParameter.excludedTaskNames.add("spotbugsTest")
-  }    
 
   maxTestForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : Runtime.runtime.availableProcessors()
   maxScalacThreads = project.hasProperty('maxScalacThreads') ? maxScalacThreads.toInteger() :
