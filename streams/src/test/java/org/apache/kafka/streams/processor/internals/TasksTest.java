@@ -209,13 +209,25 @@ public class TasksTest {
     }
 
     @Test
-    public void shouldClearPendingToInitTasks() {
+    public void shouldClearAllPendingTasks() {
         final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_B_0))
             .inState(State.CREATED).build();
         tasks.addPendingTasksToInit(Collections.singleton(task));
+        final TaskId taskId1 = new TaskId(0, 0, "A");
+        tasks.addPendingActiveTasksToCreate(mkMap(
+            mkEntry(taskId1, Set.of(TOPIC_PARTITION_A_0))
+        ));
+        final TaskId taskId2 = new TaskId(0, 1, "A");
+        tasks.addPendingStandbyTasksToCreate(mkMap(
+            mkEntry(taskId2, Set.of(TOPIC_PARTITION_A_0))
+        ));
 
         assertTrue(tasks.pendingTasksToInit().contains(task));
+        assertTrue(tasks.pendingActiveTasksToCreate().containsKey(taskId1));
+        assertTrue(tasks.pendingStandbyTasksToCreate().containsKey(taskId2));
         tasks.clear();
-        assertFalse(tasks.pendingTasksToInit().contains(task));
+        assertTrue(tasks.pendingTasksToInit().isEmpty());
+        assertTrue(tasks.pendingActiveTasksToCreate().isEmpty());
+        assertTrue(tasks.pendingStandbyTasksToCreate().isEmpty());
     }
 }
