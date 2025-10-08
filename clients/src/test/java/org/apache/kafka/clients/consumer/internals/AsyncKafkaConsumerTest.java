@@ -1480,7 +1480,8 @@ public class AsyncKafkaConsumerTest {
         if (expectedException.isPresent()) {
             Exception exception = assertThrows(expectedException.get().getClass(), () -> consumer.poll(Duration.ZERO));
             assertEquals(expectedException.get().getMessage(), exception.getMessage());
-            assertEquals(expectedException.get().getCause(), exception.getCause());        } else {
+            assertEquals(expectedException.get().getCause(), exception.getCause());
+        } else {
             when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
             assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
         }
