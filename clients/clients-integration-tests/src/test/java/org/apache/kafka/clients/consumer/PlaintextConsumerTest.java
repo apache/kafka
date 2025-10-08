@@ -1224,7 +1224,8 @@ public class PlaintextConsumerTest {
 
             assertEquals(3, numRecords1, "Expected consumer1 to consume from earliest offset");
             assertEquals(0, numRecords2, "Expected consumer2 to consume from latest offset");
-            assertEquals(2, numRecords3, "Expected consumer3 to consume from offset 1");        }
+            assertEquals(2, numRecords3, "Expected consumer3 to consume from offset 1");
+        }
     }
 
     @ClusterTest
