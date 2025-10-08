@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.producer.Callback;
@@ -1073,25 +1072,12 @@ public class RecordAccumulator {
      */
     public void awaitFlushCompletion() throws InterruptedException {
         try {
-            // Obtain a snapshot of all record futures at the time of the flush.
-            // We wait on individual record futures rather than batch-level futures because
-            // by waiting on record futures, we ensure flush() blocks until all split
-            // batches complete.
-            //
-            // We first collect all futures into a list to avoid holding references to
-            // ProducerBatch objects, allowing them to be garbage collected after completion.
-            List<FutureRecordMetadata> futures = new ArrayList<>();
-            for (ProducerBatch batch : this.incomplete.copyAll()) {
-                futures.addAll(batch.recordFutures());
-            }
-
-            for (FutureRecordMetadata future : futures) {
-                try {
-                    future.get();
-                } catch (ExecutionException e) {
-                    log.trace("Completed future with exception during flush", e);
-                }
-            }
+            // Obtain a copy of all of the incomplete ProduceRequestResult(s) at the time of the flush.
+            // We must be careful not to hold a reference to the ProduceBatch(s) so that garbage
+            // collection can occur on the contents.
+            // The sender will remove ProducerBatch(s) from the original incomplete collection.
+            for (ProduceRequestResult result : this.incomplete.requestResults())
+                result.await();
         } finally {
             this.flushesInProgress.decrementAndGet();
         }

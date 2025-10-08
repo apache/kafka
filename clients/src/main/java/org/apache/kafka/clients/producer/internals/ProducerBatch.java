@@ -239,20 +239,6 @@ public final class ProducerBatch {
     }
 
     /**
-     * Get all record futures for this batch.
-     * This is used by flush() to wait on individual records rather than the batch-level future.
-     * When batches are split, individual record futures are chained to the new batches,
-     * ensuring that flush() waits for all split batches to complete.
-     *
-     * @return List of FutureRecordMetadata for all records in this batch
-     */
-    public List<FutureRecordMetadata> recordFutures() {
-        return thunks.stream()
-            .map(thunk -> thunk.future)
-            .collect(Collectors.toList());
-    }
-
-    /**
      * Finalize the state of a batch. Final state, once set, is immutable. This function may be called
      * once or twice on a batch. It may be called twice if
      * 1. An inflight batch expires before a response from the broker is received. The batch's final
