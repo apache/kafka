@@ -714,8 +714,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final AsyncPollEvent event) {
-        log.trace("Processing poll logic for {}", event);
-
         // Trigger a reconciliation that can safely commit offsets if needed to rebalance,
         // as we're processing before any new fetching starts
         requestManagers.consumerMembershipManager.ifPresent(consumerMembershipManager ->
@@ -739,14 +737,11 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             });
         }
 
-        log.trace("Processing check and update positions logic for {}", event);
         CompletableFuture<Boolean> updatePositionsFuture = requestManagers.offsetsRequestManager.updateFetchPositions(event.deadlineMs());
 
         updatePositionsFuture.whenComplete((__, updatePositionsError) -> {
             if (maybeCompleteAsyncPollEventExceptionally(event, updatePositionsError))
                 return;
-
-            log.trace("Processing create fetch requests logic for {}", event);
 
             // Create a fetch request if there's no data in the FetchBuffer.
             requestManagers.fetchRequestManager.createFetchRequests().whenComplete((___, fetchError) -> {
@@ -754,7 +749,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                     return;
 
                 event.completeSuccessfully();
-                log.trace("Completed event processing for {}", event);
             });
         });
     }
