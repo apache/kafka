@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.internals.AbstractMembershipManager;
 import org.apache.kafka.clients.consumer.internals.Acknowledgements;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
@@ -830,6 +831,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             .collect(Collectors.toSet());
         if (subscriptions.subscribeFromPattern(topicsToSubscribe)) {
             this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
+
         }
         // Join the group if not already part of it, or just send the updated subscription
         // to the broker on the next poll. Note that this is done even if no topics matched
@@ -842,6 +844,11 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         return metadataVersionSnapshot;
     }
 
+    /**
+     * This is only needed because the {@link StreamsMembershipManager} doesn't extend from
+     * {@link AbstractMembershipManager}, so {@link AbstractMembershipManager#onSubscriptionUpdated()} is not
+     * available, and this functional interface acts as a shim to support all three membership managers.
+     */
     private interface OnSubscriptionUpdatedCallback {
 
         void onSubscriptionUpdated();
