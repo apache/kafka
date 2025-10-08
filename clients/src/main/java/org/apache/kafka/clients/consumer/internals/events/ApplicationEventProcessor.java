@@ -744,7 +744,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             if (maybeCompleteAsyncPollEventExceptionally(event, updatePositionsError))
                 return;
 
-            // Create a fetch request if there's no data in the FetchBuffer.
             requestManagers.fetchRequestManager.createFetchRequests().whenComplete((___, fetchError) -> {
                 if (maybeCompleteAsyncPollEventExceptionally(event, fetchError))
                     return;
