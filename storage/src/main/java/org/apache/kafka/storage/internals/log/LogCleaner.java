@@ -472,7 +472,6 @@ public class LogCleaner implements BrokerReconfigurable {
         private volatile CleanerStats lastStats = new CleanerStats(Time.SYSTEM);
         private volatile PreCleanStats lastPreCleanStats = new PreCleanStats();
 
-        @SuppressWarnings("this-escape")
         public CleanerThread(int threadId) throws NoSuchAlgorithmException {
             super("kafka-log-cleaner-thread-" + threadId, false);
 
