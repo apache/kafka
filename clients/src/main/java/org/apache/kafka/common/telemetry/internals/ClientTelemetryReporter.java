@@ -525,30 +525,6 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 lock.writeLock().unlock();
             }
         }
-        
-        private boolean isRetryable(final KafkaException maybeFatalException) {
-            if (maybeFatalException == null) {
-                return true;
-            }
-
-            Throwable cause;
-            if (maybeFatalException.getClass() == KafkaException.class) {
-                if (maybeFatalException.getCause() == null) {
-                    return false;
-                } else {
-                    cause = maybeFatalException.getCause();
-                }
-            } else {
-                cause = maybeFatalException;
-            }
-            while (cause != null) {
-                if (!(cause instanceof RetriableException)) {
-                    return false;
-                }
-                cause = cause.getCause();
-            }
-            return true;
-        }
 
         @Override
         public void handleFailedGetTelemetrySubscriptionsRequest(KafkaException maybeFatalException) {
@@ -651,6 +627,30 @@ public class ClientTelemetryReporter implements MetricsReporter {
             } finally {
                 lock.writeLock().unlock();
             }
+        }
+
+        private boolean isRetryable(final KafkaException maybeFatalException) {
+            if (maybeFatalException == null) {
+                return true;
+            }
+
+            Throwable cause;
+            if (maybeFatalException.getClass() == KafkaException.class) {
+                if (maybeFatalException.getCause() == null) {
+                    return false;
+                } else {
+                    cause = maybeFatalException.getCause();
+                }
+            } else {
+                cause = maybeFatalException;
+            }
+            while (cause != null) {
+                if (!(cause instanceof RetriableException)) {
+                    return false;
+                }
+                cause = cause.getCause();
+            }
+            return true;
         }
 
         private Optional<Builder<?>> createSubscriptionRequest(ClientTelemetrySubscription localSubscription) {
