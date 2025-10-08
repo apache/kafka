@@ -257,7 +257,7 @@ public class RegexSourceIntegrationTest {
     }
 
     @Test
-    public void test() throws Exception {
+    public void shouldNotCrashIfPatternMatchesTopicHasNoData() throws Exception {
         final String topic1 = "TEST-TOPIC-1";
         final String topic2 = "TEST-TOPIC-2";
 
