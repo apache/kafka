@@ -173,8 +173,25 @@ class DefaultAutoTopicCreationManager(
     requestContext: RequestContext,
     timeoutMs: Long
   ): Unit = {
-    if (topics.nonEmpty) {
-      sendCreateTopicRequestWithErrorCaching(topics, Some(requestContext), timeoutMs)
+    if (topics.isEmpty) {
+      return
+    }
+
+    val currentTimeMs = time.milliseconds()
+
+    // Filter out topics that are in back-off (have cached errors)
+    val cachedErrors = topicCreationErrorCache.getErrorsForTopics(topics.keySet, currentTimeMs)
+
+    // Filter out topics that are:
+    // 1. Already in error cache (back-off period)
+    // 2. Already in-flight (concurrent request)
+    val topicsToCreate = topics.filter { case (topicName, _) =>
+      !cachedErrors.contains(topicName) &&  // Not in back-off
+      inflightTopics.add(topicName)          // Not in-flight
+    }
+
+    if (topicsToCreate.nonEmpty) {
+      sendCreateTopicRequestWithErrorCaching(topicsToCreate, Some(requestContext), timeoutMs)
     }
   }
 
