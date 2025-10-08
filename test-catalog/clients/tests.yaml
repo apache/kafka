@@ -2676,6 +2676,13 @@ org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetricsTest:
 - shouldRecordUnsentRequestsQueueTime
 org.apache.kafka.clients.consumer.internals.metrics.ConsumerRebalanceMetricsManagerTest:
 - testAssignedPartitionCountMetric
+- testFailedRebalanceMetrics
+- testLastRebalanceSecondsAgoMetric
+- testMixedSuccessAndFailureScenarios
+- testMultipleConsecutiveFailures
+- testRebalanceRateMetric
+- testRebalanceStartedFlag
+- testRebalanceTimingMetrics
 org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManagerTest:
 - testHeartbeatMetrics
 org.apache.kafka.clients.consumer.internals.metrics.OffsetCommitMetricsManagerTest:

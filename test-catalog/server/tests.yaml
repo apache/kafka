@@ -124,6 +124,15 @@ org.apache.kafka.server.LogManagerIntegrationTest:
 - testRestartBrokerNoErrorIfMissingPartitionMetadata
 org.apache.kafka.server.MonitorablePluginsIntegrationTest:
 - testMonitorableServerPlugins
+org.apache.kafka.server.ReconfigurableQuorumIntegrationTest:
+- testControllersAutoJoinStandaloneVoter
+- testCreateAndDestroyNonReconfigurableCluster
+- testCreateAndDestroyReconfigurableCluster
+- testNewVoterAutoRemovesAndAdds
+- testRemoveAndAddSameController
+- testRemoveAndAddVoterWithInconsistentClusterId
+- testRemoveAndAddVoterWithValidClusterId
+- testRemoveController
 org.apache.kafka.server.config.DelegationTokenManagerConfigsTest:
 - testDefaults
 - testInvalidProperty

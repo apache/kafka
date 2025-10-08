@@ -508,6 +508,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testShouldThrowUnknownMemberIdExceptionWhenUnknownStaticMemberLeaves
 - testShouldThrownUnknownMemberIdExceptionWhenUnknownStaticMemberJoins
 - testShouldThrownUnreleasedInstanceIdExceptionWhenNewMemberJoinsWithInUseInstanceId
+- testStaticConsumerGroupMemberJoinsWithUpdatedRegex
 - testStaticMemberFenceDuplicateRejoinedFollower
 - testStaticMemberFenceDuplicateRejoiningFollowerAfterMemberIdChanged
 - testStaticMemberFenceDuplicateSyncingFollowerAfterMemberIdChanged
@@ -940,16 +941,22 @@ org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupTest:
 - testWaitingOnUnreleasedPartition
 org.apache.kafka.coordinator.group.modern.consumer.CurrentAssignmentBuilderTest:
 - testRemainsInUnrevokedPartitions
+- testRemainsInUnrevokedPartitionsWithAssignmentTopicsNoLongerInSubscription
 - testStableToStable
+- testStableToStableWithAssignmentTopicsNoLongerInSubscription
 - testStableToStableWithNewPartitions
 - testStableToUnreleasedPartitions
 - testStableToUnreleasedPartitionsWithOwnedPartitionsNotHavingRevokedPartitions
 - testStableToUnrevokedPartitions
+- testStableToUnrevokedPartitionsWithAssignmentTopicsNoLongerInSubscription
+- testSubscribedTopicNameAndResolvedRegularExpression
+- testSubscribedTopicNameAndUnresolvedRegularExpression
 - testUnknownState
 - testUnreleasedPartitionsToStable
 - testUnreleasedPartitionsToStableWithNewPartitions
 - testUnreleasedPartitionsToUnreleasedPartitions
 - testUnreleasedPartitionsToUnrevokedPartitions
+- testUnresolvedRegularExpression
 - testUnrevokedPartitionsToStable
 - testUnrevokedPartitionsToUnreleasedPartitions
 - testUnrevokedPartitionsToUnrevokedPartitions
@@ -958,6 +965,7 @@ org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpressionTest
 - testEquals
 org.apache.kafka.coordinator.group.modern.share.ShareGroupAssignmentBuilderTest:
 - testStableToStable
+- testStableToStableWithAssignmentTopicsNoLongerInSubscription
 - testStableToStableWithNewPartitions
 org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigTest:
 - testConfigs

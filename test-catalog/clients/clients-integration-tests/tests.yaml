@@ -63,9 +63,6 @@ org.apache.kafka.clients.admin.ListOffsetsIntegrationTest:
 - testThreeRecordsInSeparateBatchHavingDifferentCompressionTypeWithServer
 org.apache.kafka.clients.admin.RackAwareAutoTopicCreationTest:
 - testAutoCreateTopic
-org.apache.kafka.clients.admin.ReconfigurableQuorumIntegrationTest:
-- testRemoveAndAddVoterWithInconsistentClusterId
-- testRemoveAndAddVoterWithValidClusterId
 org.apache.kafka.clients.admin.StaticBrokerConfigTest:
 - testInternalConfigsDoNotReturnForCreateTopics
 - testInternalConfigsDoNotReturnForDescribeConfigs
