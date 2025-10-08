@@ -385,11 +385,10 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         if (filteredEvents.isEmpty())
             return false;
 
-        Optional<Exception> andClearMetadataError = networkClientDelegate.getAndClearMetadataError();
+        Optional<Exception> metadataError = networkClientDelegate.getAndClearMetadataError();
 
-        if (andClearMetadataError.isPresent()) {
-            Exception metadataError = andClearMetadataError.get();
-            filteredEvents.forEach(e -> e.onMetadataError(metadataError));
+        if (metadataError.isPresent()) {
+            filteredEvents.forEach(e -> e.onMetadataError(metadataError.get()));
             return true;
         } else {
             return false;
