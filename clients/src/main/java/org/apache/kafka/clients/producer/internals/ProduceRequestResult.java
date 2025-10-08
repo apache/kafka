@@ -20,6 +20,8 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.RecordBatch;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -33,6 +35,7 @@ public class ProduceRequestResult {
 
     private final CountDownLatch latch = new CountDownLatch(1);
     private final TopicPartition topicPartition;
+    private final List<ProduceRequestResult> dependentResults = new ArrayList<>();
 
     private volatile Long baseOffset = null;
     private volatile long logAppendTime = RecordBatch.NO_TIMESTAMP;
@@ -70,7 +73,23 @@ public class ProduceRequestResult {
     }
 
     /**
-     * Await the completion of this request
+     * Add a dependent ProduceRequestResult that must complete before this result is considered complete.
+     * This is used when a batch is split into multiple batches - the original batch's result
+     * should not complete until all split batches have completed.
+     *
+     * @param dependentResult The dependent result to wait for
+     */
+    public void addDependentResult(ProduceRequestResult dependentResult) {
+        synchronized (dependentResults) {
+            dependentResults.add(dependentResult);
+        }
+    }
+
+    /**
+     * Await the completion of this request.
+     * Note: This only waits for the local latch and not dependent results.
+     * The dependent results are tracked for completion status via completed() method,
+     * but individual record futures handle chaining via FutureRecordMetadata.chain().
      */
     public void await() throws InterruptedException {
         latch.await();
@@ -129,6 +148,17 @@ public class ProduceRequestResult {
      * Has the request completed?
      */
     public boolean completed() {
-        return this.latch.getCount() == 0L;
+        if (this.latch.getCount() != 0L) {
+            return false;
+        }
+        // are all the dependent results completed?
+        synchronized (dependentResults) {
+            for (ProduceRequestResult dependentResult : dependentResults) {
+                if (!dependentResult.completed()) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 }
