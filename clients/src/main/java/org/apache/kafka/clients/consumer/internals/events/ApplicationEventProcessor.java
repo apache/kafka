@@ -28,7 +28,6 @@ import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager;
-import org.apache.kafka.clients.consumer.internals.ShareMembershipManager;
 import org.apache.kafka.clients.consumer.internals.StreamsMembershipManager;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
@@ -232,9 +231,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         requestManagers.consumerMembershipManager.ifPresent(consumerMembershipManager ->
             consumerMembershipManager.maybeReconcile(true));
         requestManagers.shareHeartbeatRequestManager.ifPresent(hrm -> {
-            ShareMembershipManager membershipManager = hrm.membershipManager();
-            maybeUpdatePatternSubscription(membershipManager::onSubscriptionUpdated);
-            membershipManager.onConsumerPoll();
+            hrm.membershipManager().onConsumerPoll();
             hrm.resetPollTimer(event.pollTimeMs());
         });
     }
@@ -844,10 +841,9 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     /**
-     * Ideally the {@link AbstractMembershipManager#onSubscriptionUpdated()} API could be invoked directly for the
-     * three membership managers, but unfortunately {@link StreamsMembershipManager} doesn't extend from
-     * {@link AbstractMembershipManager}, so that method is not directly available. This functional interface acts
-     * as a shim to support all three membership managers.
+     * Ideally the {@link AbstractMembershipManager#onSubscriptionUpdated()} API could be invoked directly, but
+     * unfortunately {@link StreamsMembershipManager} doesn't extend from {@link AbstractMembershipManager}, so
+     * that method is not directly available. This functional interface acts as a shim to support both.
      */
     private interface MembershipManagerShim {
 
