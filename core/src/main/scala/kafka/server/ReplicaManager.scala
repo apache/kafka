@@ -253,7 +253,7 @@ class ReplicaManager(val config: KafkaConfig,
       config.deleteRecordsPurgatoryPurgeIntervalRequests))
   val delayedRemoteFetchPurgatory = delayedRemoteFetchPurgatoryParam.getOrElse(
     new DelayedOperationPurgatory[DelayedRemoteFetch](
-      "RemoteFetch", config.brokerId))
+      "RemoteFetch", config.brokerId, 10))
   val delayedRemoteListOffsetsPurgatory = delayedRemoteListOffsetsPurgatoryParam.getOrElse(
     new DelayedOperationPurgatory[DelayedRemoteListOffsets](
       "RemoteListOffsets", config.brokerId))
@@ -1874,13 +1874,13 @@ class ReplicaManager(val config: KafkaConfig,
     readPartitionInfo.foreach { case (tp, fetchInfo) =>
       val readResult = read(tp, fetchInfo, limitBytes, minOneMessage)
       val recordBatchSize = readResult.info.records.sizeInBytes
-      // Once we read from a non-empty partition, we stop ignoring request and partition level size limits
-      if (recordBatchSize > 0)
-        minOneMessage = false
       // Because we don't know how much data will be retrieved in remote fetch yet, and we don't want to block the API call
       // to query remoteLogMetadata, assume it will fetch the max bytes size of data to avoid to exceed the "fetch.max.bytes" setting.
       val estimatedRecordBatchSize = if (recordBatchSize == 0 && readResult.info.delayedRemoteStorageFetch.isPresent)
         readResult.info.delayedRemoteStorageFetch.get.fetchMaxBytes else recordBatchSize
+      // Once we read from a non-empty partition, we stop ignoring request and partition level size limits
+      if (estimatedRecordBatchSize > 0)
+        minOneMessage = false
       limitBytes = math.max(0, limitBytes - estimatedRecordBatchSize)
       result += (tp -> readResult)
     }

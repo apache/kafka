@@ -3662,8 +3662,10 @@ class ReplicaManagerTest {
         assertEquals(leaderEpoch, fetchInfo.fetchInfo.currentLeaderEpoch.get())
         if (fetchInfo.topicIdPartition.topicPartition == tp0) {
           assertEquals(fetchOffsetTp0, fetchInfo.fetchInfo.fetchOffset)
+          assertTrue(fetchInfo.minOneMessage())
         } else {
           assertEquals(fetchOffsetTp1, fetchInfo.fetchInfo.fetchOffset)
+          assertFalse(fetchInfo.minOneMessage())
         }
       }
 
@@ -3684,6 +3686,8 @@ class ReplicaManagerTest {
       responseData.foreach { case (_, fetchPartitionData) =>
         assertEquals(Errors.NONE, fetchPartitionData.error)
       }
+      // Verify that remote fetch purgatory size reduce by 1
+      assertEquals(1, replicaManager.delayedRemoteFetchPurgatory.watched)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -3733,8 +3737,8 @@ class ReplicaManagerTest {
         mock(classOf[Future[Void]])
       })
 
-      // Start the fetch request for both partitions - this should trigger remote fetches since
-      // the default mocked log behavior throws OffsetOutOfRangeException
+      // Start the fetch request for 3 partitions - this should trigger remote fetches since the default mocked log
+      // behavior throws OffsetOutOfRangeException
       replicaManager.fetchMessages(params, Seq(
         tidp0 -> new PartitionData(topicId, fetchOffsetTp0, startOffset, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch)),
         tidp1 -> new PartitionData(topicId, fetchOffsetTp1, startOffset, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch)),
@@ -3764,8 +3768,10 @@ class ReplicaManagerTest {
         assertEquals(leaderEpoch, fetchInfo.fetchInfo.currentLeaderEpoch.get())
         if (fetchInfo.topicIdPartition.topicPartition == tp0) {
           assertEquals(fetchOffsetTp0, fetchInfo.fetchInfo.fetchOffset)
+          assertTrue(fetchInfo.minOneMessage())
         } else {
           assertEquals(fetchOffsetTp1, fetchInfo.fetchInfo.fetchOffset)
+          assertFalse(fetchInfo.minOneMessage())
         }
       }
 
@@ -3787,9 +3793,16 @@ class ReplicaManagerTest {
       responseData.foreach { case (_, fetchPartitionData) =>
         assertEquals(Errors.NONE, fetchPartitionData.error)
       }
+      // Verify that remote fetch purgatory size reduce by 1
+      assertEquals(1, replicaManager.delayedRemoteFetchPurgatory.watched)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
+  }
+
+  @Test
+  def testMultipleRemoteFetchesInOneFetchRequestThatReadsRemoteAndLocalLog(): Unit = {
+    // TODO: simulate mockLog that it reads from remote log for 2 partitions and local-log for one partition
   }
 
   private def buildRemoteReadResult(error: Errors): RemoteLogReadResult = {
