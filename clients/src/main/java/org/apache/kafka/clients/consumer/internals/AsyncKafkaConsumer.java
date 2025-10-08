@@ -1827,10 +1827,18 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return fetch;
         }
 
-        // We do not want to be stuck blocking in poll if we are missing some positions
-        // since the offset lookup may be backing off after a failure
+        // With the non-blocking poll design, it's possible that at this point the background thread is
+        // concurrently working to update positions. Therefore, a _copy_ of the current assignment is retrieved
+        // and iterated looking for any partitions with invalid positions. This is done to avoid being stuck
+        // in poll for an unnecessarily long amount of time if we are missing some positions since the offset
+        // lookup may be backing off after a failure.
         if (pollTimeout > retryBackoffMs) {
-            pollTimeout = retryBackoffMs;
+            for (TopicPartition tp : subscriptions.assignedPartitions()) {
+                if (!subscriptions.hasValidPosition(tp)) {
+                    pollTimeout = retryBackoffMs;
+                    break;
+                }
+            }
         }
 
         log.trace("Polling for fetches with timeout {}", pollTimeout);
