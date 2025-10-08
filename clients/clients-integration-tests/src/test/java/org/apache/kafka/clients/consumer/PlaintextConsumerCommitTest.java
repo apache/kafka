@@ -288,6 +288,7 @@ public class PlaintextConsumerCommitTest {
             }
 
             assertTrue(MockConsumerInterceptor.ON_COMMIT_COUNT.intValue() > commitCountBeforeRebalance);
+
             // verify commits are intercepted on close
             var commitCountBeforeClose = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue();
             consumer.close();
