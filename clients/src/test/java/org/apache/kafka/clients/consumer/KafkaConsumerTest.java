@@ -1001,7 +1001,6 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class)
-    @SuppressWarnings("unchecked")
     public void testFetchProgressWithMissingPartitionPosition(GroupProtocol groupProtocol) {
         // Verifies that we can make progress on one partition while we are awaiting
         // a reset on another partition.
@@ -1046,6 +1045,7 @@ public class KafkaConsumerTest {
 
             }, fetchResponse(tp0, 50L, 5));
 
+        @SuppressWarnings("unchecked")
         ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1));
         assertEquals(5, records.count());
         assertEquals(Set.of(tp0), records.partitions());
@@ -1788,7 +1788,6 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    @SuppressWarnings("unchecked")
     public void testManualAssignmentChangeWithAutoCommitDisabled(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -1825,6 +1824,7 @@ public class KafkaConsumerTest {
         client.prepareResponse(listOffsetsResponse(Map.of(tp0, 10L)));
         client.prepareResponse(fetchResponse(tp0, 10L, 1));
 
+        @SuppressWarnings("unchecked")
         ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1));
         assertEquals(1, records.count());
         assertEquals(11L, consumer.position(tp0));
