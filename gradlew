@@ -224,7 +224,7 @@ DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
 #   * For example: A user cannot expect ${Hostname} to be expanded, as it is an environment variable and will be
 #     treated as '${Hostname}' itself on the command line.
 #
-# Before gradle 8.14 were not support using an executable JAR for the wrapper.
+# Before gradle 8.14 didn't support using an executable JAR for the wrapper.
 # It causes a no main manifest attribute error if developers use the old wrapper.
 set -- \
         "-Dorg.gradle.appname=$APP_BASE_NAME" \
