@@ -283,14 +283,11 @@ public class PlaintextConsumerCommitTest {
             // In both CLASSIC and CONSUMER protocols, interceptors are executed in poll and close.
             // However, in the CONSUMER protocol, the assignment may be changed outside a poll, so
             // we need to poll once to ensure the interceptor is called.
-            TestUtils.waitForCondition(
-                () -> {
-                    consumer.poll(Duration.ZERO);
-                    return MockConsumerInterceptor.ON_COMMIT_COUNT.intValue() > commitCountBeforeRebalance;
-                },
-                "Consumer.poll() did not invoke onCommit() before timeout elapse"
-            );
+            if (groupProtocol == GroupProtocol.CONSUMER) {
+                consumer.poll(Duration.ZERO);
+            }
 
+            assertTrue(MockConsumerInterceptor.ON_COMMIT_COUNT.intValue() > commitCountBeforeRebalance);
             // verify commits are intercepted on close
             var commitCountBeforeClose = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue();
             consumer.close();
