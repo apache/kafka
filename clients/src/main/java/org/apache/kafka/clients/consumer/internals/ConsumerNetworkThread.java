@@ -195,9 +195,9 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 if (event instanceof CompletableEvent) {
                     applicationEventReaper.add((CompletableEvent<?>) event);
                 }
-                // Check if there are any metadata errors and fail the CompletableEvent if an error is present.
-                // This call is meant to handle "immediately completed events" which may not enter the awaiting state,
-                // so metadata errors need to be checked and handled right away.
+                // Check if there are any metadata errors and fail the event if an error is present.
+                // This call is meant to handle "immediately completed events" which may not enter the
+                // awaiting state, so metadata errors need to be checked and handled right away.
                 if (event instanceof MetadataErrorNotifiableEvent) {
                     if (maybeFailOnMetadataError(List.of(event)))
                         continue;
