@@ -808,13 +808,13 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         };
     }
 
-    private void maybeUpdatePatternSubscription(OnSubscriptionUpdatedCallback callback) {
+    private void maybeUpdatePatternSubscription(MembershipManagerShim membershipManager) {
         if (!subscriptions.hasPatternSubscription()) {
             return;
         }
         if (this.metadataVersionSnapshot < metadata.updateVersion()) {
             this.metadataVersionSnapshot = metadata.updateVersion();
-            updatePatternSubscription(callback, metadata.fetch());
+            updatePatternSubscription(membershipManager, metadata.fetch());
         }
     }
 
@@ -825,7 +825,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      *
      * @param cluster Cluster from which we get the topics
      */
-    private void updatePatternSubscription(OnSubscriptionUpdatedCallback callback, Cluster cluster) {
+    private void updatePatternSubscription(MembershipManagerShim membershipManager, Cluster cluster) {
         final Set<String> topicsToSubscribe = cluster.topics().stream()
             .filter(subscriptions::matchesSubscribedPattern)
             .collect(Collectors.toSet());
@@ -836,7 +836,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         // Join the group if not already part of it, or just send the updated subscription
         // to the broker on the next poll. Note that this is done even if no topics matched
         // the regex, to ensure the member joins the group if needed (with empty subscription).
-        callback.onSubscriptionUpdated();
+        membershipManager.onSubscriptionUpdated();
     }
 
     // Visible for testing
@@ -845,11 +845,12 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     /**
-     * This is only needed because the {@link StreamsMembershipManager} doesn't extend from
-     * {@link AbstractMembershipManager}, so {@link AbstractMembershipManager#onSubscriptionUpdated()} is not
-     * available, and this functional interface acts as a shim to support all three membership managers.
+     * Ideally the {@link AbstractMembershipManager#onSubscriptionUpdated()} API could be invoked directly for the
+     * three membership managers, but unfortunately {@link StreamsMembershipManager} doesn't extend from
+     * {@link AbstractMembershipManager}, so that method is not directly available. This functional interface acts
+     * as a shim to support all three membership managers.
      */
-    private interface OnSubscriptionUpdatedCallback {
+    private interface MembershipManagerShim {
 
         void onSubscriptionUpdated();
     }
