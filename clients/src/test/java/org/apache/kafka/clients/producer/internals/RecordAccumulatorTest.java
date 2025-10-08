@@ -1825,4 +1825,49 @@ public class RecordAccumulatorTest {
         // Verify all original records are accounted for (no data loss)
         assertEquals(100, keyFoundMap.size(), "All original 100 records should be present after splitting");
     }
+
+    @Test
+    public void testSplitBatchProduceFutureWaitsForAllSplits() throws Exception {
+        long now = time.milliseconds();
+        // small batch size to force splitting
+        RecordAccumulator accum = createTestRecordAccumulator(1024, 10 * 1024, Compression.gzip().build(), 10);
+
+        // create a big batch manually
+        ByteBuffer buffer = ByteBuffer.allocate(4096);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE, TimestampType.CREATE_TIME, 0L);
+        ProducerBatch originalBatch = new ProducerBatch(tp1, builder, now, true);
+
+        byte[] value = new byte[1024];
+        final AtomicInteger acked = new AtomicInteger(0);
+        Callback cb = (metadata, exception) -> acked.incrementAndGet();
+
+        // append two messages so the batch is too big
+        Future<RecordMetadata> future1 = originalBatch.tryAppend(now, null, value, Record.EMPTY_HEADERS, cb, now);
+        Future<RecordMetadata> future2 = originalBatch.tryAppend(now, null, value, Record.EMPTY_HEADERS, cb, now);
+        assertNotNull(future1);
+        assertNotNull(future2);
+        originalBatch.close();
+
+        // reenqueue
+        accum.reenqueue(originalBatch, now);
+        time.sleep(121L);
+
+        // drain
+        RecordAccumulator.ReadyCheckResult result = accum.ready(metadataCache, time.milliseconds());
+        assertFalse(result.readyNodes.isEmpty(), "The batch should be ready");
+        Map<Integer, List<ProducerBatch>> drained = accum.drain(metadataCache, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertEquals(1, drained.size(), "Only node1 should be drained");
+        assertEquals(1, drained.get(node1.id()).size(), "Only one batch should be drained");
+
+        ProducerBatch drainedBatch = drained.get(node1.id()).get(0);
+
+        // split and reenqueue
+        int numSplitBatches = accum.splitAndReenqueue(drainedBatch);
+        assertTrue(numSplitBatches > 0, "Should have split into multiple batches");
+
+        // original batch's produceFuture should NOT be completed yet
+        // because the split batches haven't been completed
+        assertFalse(originalBatch.produceFuture.completed(),
+            "Original batch produceFuture should not be completed until all split batches are completed");
+    }
 }
