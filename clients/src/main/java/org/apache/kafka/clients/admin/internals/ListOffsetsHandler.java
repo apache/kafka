@@ -220,7 +220,8 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
             }
         }
 
-        // If we have try max number of times and there are no partitions with support specs
+        // We must check up to the maximum number of attempts; otherwise, all partitions will be prematurely marked
+        // as having an unsupported version early, and if there are no partitions with support specs
         // the UnsupportedVersionException cannot be handled and all partitions should be failed here.
         // Otherwise, just the partitions with support specs should be failed here and the fulfillment stage
         // will later be retried for the potentially empty set of partitions with non-support specs.
