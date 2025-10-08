@@ -289,7 +289,7 @@ public class AdminApiDriver<K, V> {
                     // help us to remove lookup and fulfillmentMap, and the downgraded
                     // offsetStamp still in fulfillmentMap so it will generate next request.
                     ListOffsetsHandler listOffsetsHandler = (ListOffsetsHandler) handler;
-                    if (!listOffsetsHandler.isOldestTimstamp()) {
+                    if (!listOffsetsHandler.isOldestTimestamp()) {
                         listOffsetsHandler.downgradeOffsetTimestampVersion();
                     } else {
                         listOffsetsHandler.reset();
