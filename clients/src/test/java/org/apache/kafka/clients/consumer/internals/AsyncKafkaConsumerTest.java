@@ -112,7 +112,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -508,11 +507,8 @@ public class AsyncKafkaConsumerTest {
         completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(Collections.singletonList(topicName), listener);
         completeAsyncPollEventSuccessfully();
-        ConsumerPollTestUtils.waitForCondition(
-            consumer,
-            callbackExecuted::get,
-            "Consumer.poll() did not execute callback within timeout"
-        );
+        consumer.poll(Duration.ZERO);
+        assertTrue(callbackExecuted.get());
     }
 
     @Test
@@ -679,11 +675,7 @@ public class AsyncKafkaConsumerTest {
         consumer.assign(Collections.singleton(new TopicPartition("foo", 0)));
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
         completeAsyncPollEventSuccessfully();
-        ConsumerPollTestUtils.waitForCondition(
-            consumer,
-            () -> callback.invoked == 1 && callback.exception == null,
-            "Consumer.poll() did not execute the callback once (without error) in allottec timeout"
-        );
+        assertMockCommitCallbackInvoked(() -> consumer.poll(Duration.ZERO), callback);
     }
 
     @Test
@@ -1464,7 +1456,7 @@ public class AsyncKafkaConsumerTest {
                                             int expectedRevokedCount,
                                             int expectedAssignedCount,
                                             int expectedLostCount,
-                                            Optional<RuntimeException> expectedExceptionOpt
+                                            Optional<RuntimeException> expectedException
                                             ) {
         consumer = newConsumer();
         CounterConsumerRebalanceListener consumerRebalanceListener = new CounterConsumerRebalanceListener(
@@ -1485,16 +1477,10 @@ public class AsyncKafkaConsumerTest {
         completeAsyncPollEventSuccessfully();
         // This will trigger the background event queue to process our background event message.
         // If any error is happening inside the rebalance callbacks, we expect the first exception to be thrown from poll.
-        if (expectedExceptionOpt.isPresent()) {
-            Exception expectedException = expectedExceptionOpt.get();
-            ConsumerPollTestUtils.waitForException(
-                consumer,
-                t -> Objects.equals(t.getClass(), expectedException.getClass()) &&
-                    Objects.equals(t.getMessage(), expectedException.getMessage()) &&
-                    Objects.equals(t.getCause(), expectedException.getCause()),
-                "Consumer.poll() did not throw the expected exception " + expectedException
-            );
-        } else {
+        if (expectedException.isPresent()) {
+            Exception exception = assertThrows(expectedException.get().getClass(), () -> consumer.poll(Duration.ZERO));
+            assertEquals(expectedException.get().getMessage(), exception.getMessage());
+            assertEquals(expectedException.get().getCause(), exception.getCause());        } else {
             when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
             assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
         }
