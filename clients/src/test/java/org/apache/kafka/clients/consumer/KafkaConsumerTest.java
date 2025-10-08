@@ -935,6 +935,7 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
+    @SuppressWarnings("unchecked")
     public void verifyNoCoordinatorLookupForManualAssignmentWithSeek(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -950,7 +951,7 @@ public class KafkaConsumerTest {
         client.prepareResponse(listOffsetsResponse(Map.of(tp0, 50L)));
         client.prepareResponse(fetchResponse(tp0, 50L, 5));
 
-        ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer);
+        ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1));
         assertEquals(5, records.count());
         assertEquals(55L, consumer.position(tp0));
         assertEquals(1, records.nextOffsets().size());
@@ -1000,6 +1001,7 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class)
+    @SuppressWarnings("unchecked")
     public void testFetchProgressWithMissingPartitionPosition(GroupProtocol groupProtocol) {
         // Verifies that we can make progress on one partition while we are awaiting
         // a reset on another partition.
@@ -1044,7 +1046,7 @@ public class KafkaConsumerTest {
 
             }, fetchResponse(tp0, 50L, 5));
 
-        ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer);
+        ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1));
         assertEquals(5, records.count());
         assertEquals(Set.of(tp0), records.partitions());
         assertEquals(1, records.nextOffsets().size());
@@ -1728,6 +1730,7 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
+    @SuppressWarnings("unchecked")
     public void testManualAssignmentChangeWithAutoCommitEnabled(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -1762,7 +1765,7 @@ public class KafkaConsumerTest {
         client.prepareResponse(listOffsetsResponse(Map.of(tp0, 10L)));
         client.prepareResponse(fetchResponse(tp0, 10L, 1));
 
-        ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer);
+        ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(100));
 
         assertEquals(1, records.count());
         assertEquals(11L, consumer.position(tp0));
@@ -1785,6 +1788,7 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
+    @SuppressWarnings("unchecked")
     public void testManualAssignmentChangeWithAutoCommitDisabled(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -1821,7 +1825,7 @@ public class KafkaConsumerTest {
         client.prepareResponse(listOffsetsResponse(Map.of(tp0, 10L)));
         client.prepareResponse(fetchResponse(tp0, 10L, 1));
 
-        ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer);
+        ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1));
         assertEquals(1, records.count());
         assertEquals(11L, consumer.position(tp0));
         assertEquals(1, records.nextOffsets().size());
@@ -2116,7 +2120,7 @@ public class KafkaConsumerTest {
         time.sleep(heartbeatIntervalMs);
         Thread.sleep(heartbeatIntervalMs);
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
-        final ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer);
+        final ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ZERO);
         assertFalse(records.isEmpty());
         assertFalse(records.nextOffsets().isEmpty());
     }
@@ -2649,6 +2653,7 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
+    @SuppressWarnings("unchecked")
     public void testCurrentLag(GroupProtocol groupProtocol) throws InterruptedException {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
@@ -2714,7 +2719,7 @@ public class KafkaConsumerTest {
         final FetchInfo fetchInfo = new FetchInfo(1L, 99L, 50L, 5);
         client.respondToRequest(fetchRequest, fetchResponse(Map.of(tp0, fetchInfo)));
 
-        final ConsumerRecords<String, String> records = ConsumerPollTestUtils.waitForRecords(consumer);
+        final ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1));
         assertEquals(5, records.count());
         assertEquals(55L, consumer.position(tp0));
         assertEquals(1, records.nextOffsets().size());
@@ -3172,7 +3177,7 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    public void testSubscriptionOnInvalidTopic(GroupProtocol groupProtocol) throws InterruptedException {
+    public void testSubscriptionOnInvalidTopic(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
