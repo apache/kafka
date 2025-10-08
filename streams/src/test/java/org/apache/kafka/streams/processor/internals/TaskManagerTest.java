@@ -4787,6 +4787,13 @@ public class TaskManagerTest {
         assertEquals(Collections.singletonMap(taskId00, startupTask), taskManager.standbyTaskMap());
     }
 
+    @Test
+    public void shouldStartStateUpdaterOnInit() {
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, null);
+        taskManager.init();
+        verify(stateUpdater).start();
+    }
+
     private static KafkaFutureImpl<DeletedRecords> completedFuture() {
         final KafkaFutureImpl<DeletedRecords> futureDeletedRecords = new KafkaFutureImpl<>();
         futureDeletedRecords.complete(null);
