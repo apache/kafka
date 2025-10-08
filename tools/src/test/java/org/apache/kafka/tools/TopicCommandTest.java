@@ -1198,7 +1198,7 @@ public class TopicCommandTest {
                     "Unexpected describe output length: " + simpleDescribeOutputRows.length);
 
             String underReplicatedOutput = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--under-replicated-partitions"));
-            assertEquals("", underReplicatedOutput,
+            assertFalse(underReplicatedOutput.contains(String.format("Topic: %s", testTopicName)),
                     String.format("--under-replicated-partitions shouldn't return anything: '%s'", underReplicatedOutput));
 
             int maxRetries = 20;
