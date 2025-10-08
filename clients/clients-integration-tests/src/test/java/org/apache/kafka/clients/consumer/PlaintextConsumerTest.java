@@ -66,6 +66,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.clients.ClientsTestUtils.BaseConsumerTestcase.BROKER_COUNT;
@@ -809,7 +810,7 @@ public class PlaintextConsumerTest {
             // Create a consumer and consumer some messages.
             var listener = new TestConsumerReassignmentListener();
             consumer.subscribe(List.of(TOPIC, topic2), listener);
-            var records = ConsumerPollTestUtils.waitForRecords(consumer);
+            var records = awaitNonEmptyRecords(consumer, TP);
             assertEquals(1, listener.callsToAssigned, "should be assigned once");
 
             // Verify the metric exist.
@@ -876,7 +877,7 @@ public class PlaintextConsumerTest {
             // Create a consumer and consumer some messages.
             var listener = new TestConsumerReassignmentListener();
             consumer.subscribe(List.of(TOPIC, topic2), listener);
-            var records = ConsumerPollTestUtils.waitForRecords(consumer);
+            var records = awaitNonEmptyRecords(consumer, TP);
             assertEquals(1, listener.callsToAssigned, "should be assigned once");
 
             // Verify the metric exist.
@@ -943,7 +944,7 @@ public class PlaintextConsumerTest {
             sendRecords(producer, tp2, numMessages, System.currentTimeMillis());
             
             consumer.assign(List.of(TP));
-            var records = ConsumerPollTestUtils.waitForRecords(consumer);
+            var records = awaitNonEmptyRecords(consumer, TP);
 
             // Verify the metric exist.
             Map<String, String> tags = Map.of(
@@ -957,7 +958,7 @@ public class PlaintextConsumerTest {
             assertEquals((double) records.count(), fetchLead.metricValue(), "The lead should be " + records.count());
 
             consumer.assign(List.of(tp2));
-            ConsumerPollTestUtils.waitForRecords(consumer);
+            awaitNonEmptyRecords(consumer, tp2);
             assertNull(consumer.metrics().get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags)));
         }
     }
@@ -998,7 +999,7 @@ public class PlaintextConsumerTest {
             sendRecords(producer, tp2, numMessages, System.currentTimeMillis());
 
             consumer.assign(List.of(TP));
-            var records = ConsumerPollTestUtils.waitForRecords(consumer);
+            var records = awaitNonEmptyRecords(consumer, TP);
 
             // Verify the metric exist.
             Map<String, String> tags = Map.of(
@@ -1013,7 +1014,7 @@ public class PlaintextConsumerTest {
             var expectedLag = numMessages - records.count();
             assertEquals(expectedLag, (double) fetchLag.metricValue(), EPSILON, "The lag should be " + expectedLag);
             consumer.assign(List.of(tp2));
-            ConsumerPollTestUtils.waitForRecords(consumer);
+            awaitNonEmptyRecords(consumer, tp2);
             assertNull(consumer.metrics().get(new MetricName(TP + ".records-lag", "consumer-fetch-manager-metrics", "", tags)));
             assertNull(consumer.metrics().get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags)));
         }
@@ -1057,7 +1058,7 @@ public class PlaintextConsumerTest {
             sendRecords(producer, tp2, numMessages, System.currentTimeMillis());
 
             consumer.assign(List.of(TP));
-            ConsumerPollTestUtils.waitForRecords(consumer);
+            awaitNonEmptyRecords(consumer, TP);
 
             // Verify the metric exist.
             Map<String, String> tags = Map.of(
@@ -1202,21 +1203,12 @@ public class PlaintextConsumerTest {
             consumer3.assign(List.of(TP));
             consumer3.seek(TP, 1);
 
-            TestUtils.waitForCondition(
-                () -> consumer1.poll(Duration.ofMillis(5000)).count() == 3,
-                "consumer1 did not consume from earliest offset"
-            );
+            var numRecords1 = consumer1.poll(Duration.ofMillis(5000)).count();
             assertThrows(InvalidGroupIdException.class, consumer1::commitSync);
             assertThrows(InvalidGroupIdException.class, () -> consumer2.committed(Set.of(TP)));
 
-            TestUtils.waitForCondition(
-                () -> consumer2.poll(Duration.ofMillis(5000)).count() == 0,
-                "Expected consumer2 to consume from latest offset"
-            );
-            TestUtils.waitForCondition(
-                () -> consumer3.poll(Duration.ofMillis(5000)).count() == 2,
-                "Expected consumer3 to consume from offset 1"
-            );
+            var numRecords2 = consumer2.poll(Duration.ofMillis(5000)).count();
+            var numRecords3 = consumer3.poll(Duration.ofMillis(5000)).count();
 
             consumer1.unsubscribe();
             consumer2.unsubscribe();
@@ -1225,7 +1217,14 @@ public class PlaintextConsumerTest {
             assertTrue(consumer1.assignment().isEmpty());
             assertTrue(consumer2.assignment().isEmpty());
             assertTrue(consumer3.assignment().isEmpty());
-        }
+
+            consumer1.close();
+            consumer2.close();
+            consumer3.close();
+
+            assertEquals(3, numRecords1, "Expected consumer1 to consume from earliest offset");
+            assertEquals(0, numRecords2, "Expected consumer2 to consume from latest offset");
+            assertEquals(2, numRecords3, "Expected consumer3 to consume from offset 1");        }
     }
 
     @ClusterTest
@@ -1654,7 +1653,7 @@ public class PlaintextConsumerTest {
                 consumer.subscribe(List.of(testTopic));
 
                 // This is here to allow the consumer time to settle the group membership/assignment.
-                ConsumerPollTestUtils.waitForRecords(consumer);
+                awaitNonEmptyRecords(consumer, new TopicPartition(testTopic, 0));
 
                 // Keep track of the last time the poll is invoked to ensure the deltas between invocations don't
                 // exceed the delay threshold defined above.
@@ -1672,6 +1671,24 @@ public class PlaintextConsumerTest {
                 assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS), "Executor did not terminate");
             }
         }
+    }
+
+    private ConsumerRecords<byte[], byte[]> awaitNonEmptyRecords(
+        Consumer<byte[], byte[]> consumer,
+        TopicPartition tp
+    ) throws Exception {
+        AtomicReference<ConsumerRecords<byte[], byte[]>> result = new AtomicReference<>();
+
+        TestUtils.waitForCondition(() -> {
+            var polledRecords = consumer.poll(Duration.ofSeconds(1));
+            boolean hasRecords = !polledRecords.isEmpty();
+            if (hasRecords) {
+                result.set(polledRecords);
+            }
+            return hasRecords;
+        }, "Timed out waiting for non-empty records from topic " + tp.topic() + " partition " + tp.partition());
+
+        return result.get();
     }
 
     public static class SerializerImpl implements Serializer<byte[]> {
