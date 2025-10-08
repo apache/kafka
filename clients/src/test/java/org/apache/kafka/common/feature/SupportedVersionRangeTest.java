@@ -130,7 +130,7 @@ public class SupportedVersionRangeTest {
     public void testEquals() {
         SupportedVersionRange tested = new SupportedVersionRange((short) 1, (short) 1);
         assertEquals(tested, tested);
-        assertNotEquals(tested, new SupportedVersionRange((short) 1, (short) 2));
+        assertNotEquals(new SupportedVersionRange((short) 1, (short) 2), tested);
         assertNotEquals(null, tested);
     }
 
