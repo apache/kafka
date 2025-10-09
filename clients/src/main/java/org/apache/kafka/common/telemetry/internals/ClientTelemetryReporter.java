@@ -630,27 +630,9 @@ public class ClientTelemetryReporter implements MetricsReporter {
         }
 
         private boolean isRetryable(final KafkaException maybeFatalException) {
-            if (maybeFatalException == null) {
-                return true;
-            }
-
-            Throwable cause;
-            if (maybeFatalException.getClass() == KafkaException.class) {
-                if (maybeFatalException.getCause() == null) {
-                    return false;
-                } else {
-                    cause = maybeFatalException.getCause();
-                }
-            } else {
-                cause = maybeFatalException;
-            }
-            while (cause != null) {
-                if (!(cause instanceof RetriableException)) {
-                    return false;
-                }
-                cause = cause.getCause();
-            }
-            return true;
+            return maybeFatalException == null ||
+                (maybeFatalException instanceof RetriableException) ||
+                (maybeFatalException.getCause() != null && maybeFatalException.getCause() instanceof RetriableException);
         }
 
         private Optional<Builder<?>> createSubscriptionRequest(ClientTelemetrySubscription localSubscription) {

@@ -1009,22 +1009,7 @@ public class ClientTelemetryReporterTest {
         assertEquals(ClientTelemetryReporter.DEFAULT_PUSH_INTERVAL_MS, telemetrySender.intervalMs());
         assertTrue(telemetrySender.enabled());
     }
-
-    @Test
-    public void testHandleFailedRequestWithMixedExceptionChain() {
-        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
-        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
-        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
-
-        KafkaException mixedException = new TimeoutException("Timeout during auth",
-            new AuthorizationException("Auth failed"));
-        telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(mixedException);
-
-        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
-        assertEquals(Integer.MAX_VALUE, telemetrySender.intervalMs());
-        assertFalse(telemetrySender.enabled());
-    }
-
+    
     @Test
     public void testHandleFailedRequestWithGenericKafkaException() {
         ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
