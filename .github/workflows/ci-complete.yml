@@ -43,8 +43,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Make sure these match build.yml
-        java: [ 24, 17 ]
+        # Make sure these match build.yml and also keep in mind that GitHub Actions build will always use this file from the trunk branch.
+        java: [ 25, 17 ]
         run-flaky: [ true, false ]
         run-new: [ true, false ]
         exclude:

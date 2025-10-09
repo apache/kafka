@@ -116,7 +116,10 @@ class DelayedOperations(topicId: Option[Uuid],
 }
 
 object Partition {
-  private val metricsGroup = new KafkaMetricsGroup(classOf[Partition])
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+  private val metricsPackage = "kafka.cluster"
+  private val metricsClassName = "Partition"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   def apply(topicIdPartition: TopicIdPartition,
             time: Time,
