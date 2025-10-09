@@ -32,8 +32,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -84,11 +85,9 @@ public class DefaultStreamsRebalanceListenerTest {
         ));
         when(streamThread.state()).thenReturn(state);
 
-        final Optional<Exception> result = defaultStreamsRebalanceListener.onTasksRevoked(
+        assertDoesNotThrow(() -> defaultStreamsRebalanceListener.onTasksRevoked(
             Set.of(new StreamsRebalanceData.TaskId("1", 0))
-        );
-
-        assertTrue(result.isEmpty());
+        ));
 
         final InOrder inOrder = inOrder(taskManager, streamThread);
         inOrder.verify(taskManager).handleRevocation(
@@ -109,9 +108,9 @@ public class DefaultStreamsRebalanceListenerTest {
 
         createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of()));
 
-        final Optional<Exception> result = defaultStreamsRebalanceListener.onTasksRevoked(Set.of());
+        final Exception actualException = assertThrows(RuntimeException.class, () -> defaultStreamsRebalanceListener.onTasksRevoked(Set.of()));
 
-        assertTrue(result.isPresent());
+        assertEquals(actualException, exception);
         verify(taskManager).handleRevocation(any());
         verify(streamThread, never()).setState(any());
     }
@@ -153,9 +152,7 @@ public class DefaultStreamsRebalanceListenerTest {
             Set.of(new StreamsRebalanceData.TaskId("3", 0))
         );
 
-        final Optional<Exception> result = defaultStreamsRebalanceListener.onTasksAssigned(assignment);
-
-        assertTrue(result.isEmpty());
+        assertDoesNotThrow(() -> defaultStreamsRebalanceListener.onTasksAssigned(assignment));
 
         final InOrder inOrder = inOrder(taskManager, streamThread, streamsRebalanceData);
         inOrder.verify(taskManager).handleAssignment(
@@ -179,11 +176,11 @@ public class DefaultStreamsRebalanceListenerTest {
         when(streamsRebalanceData.subtopologies()).thenReturn(Map.of());
         createRebalanceListenerWithRebalanceData(streamsRebalanceData);
 
-        final Optional<Exception> result = defaultStreamsRebalanceListener.onTasksAssigned(
+        final Exception actualException = assertThrows(RuntimeException.class, () -> defaultStreamsRebalanceListener.onTasksAssigned(
             new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of())
-        );
-        assertTrue(result.isPresent());
-        assertEquals(exception, result.get());
+        ));
+
+        assertEquals(exception, actualException);
         verify(taskManager).handleAssignment(any(), any());
         verify(streamThread, never()).setState(StreamThread.State.PARTITIONS_ASSIGNED);
         verify(taskManager, never()).handleRebalanceComplete();
@@ -196,7 +193,7 @@ public class DefaultStreamsRebalanceListenerTest {
         when(streamsRebalanceData.subtopologies()).thenReturn(Map.of());
         createRebalanceListenerWithRebalanceData(streamsRebalanceData);
         
-        assertTrue(defaultStreamsRebalanceListener.onAllTasksLost().isEmpty());
+        assertDoesNotThrow(() -> defaultStreamsRebalanceListener.onAllTasksLost());
         
         final InOrder inOrder = inOrder(taskManager, streamsRebalanceData);
         inOrder.verify(taskManager).handleLostAll();
@@ -211,9 +208,10 @@ public class DefaultStreamsRebalanceListenerTest {
         final StreamsRebalanceData streamsRebalanceData = mock(StreamsRebalanceData.class);
         when(streamsRebalanceData.subtopologies()).thenReturn(Map.of());
         createRebalanceListenerWithRebalanceData(streamsRebalanceData);
-        final Optional<Exception> result = defaultStreamsRebalanceListener.onAllTasksLost();
-        assertTrue(result.isPresent());
-        assertEquals(exception, result.get());
+
+        final Exception actualException = assertThrows(RuntimeException.class, () -> defaultStreamsRebalanceListener.onAllTasksLost());
+
+        assertEquals(exception, actualException);
         verify(taskManager).handleLostAll();
         verify(streamsRebalanceData, never()).setReconciledAssignment(any());
     }
