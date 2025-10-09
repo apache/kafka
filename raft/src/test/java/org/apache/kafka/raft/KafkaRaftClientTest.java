@@ -665,14 +665,16 @@ class KafkaRaftClientTest {
 
         context.time.sleep(context.beginQuorumEpochTimeoutMs - partialDelay);
         context.client.poll();
-        // don't send BeginQuorumEpochRequest again for replicaKey1 since fetchRequest is sent.
+        // leader will not send BeginQuorumEpochRequest again for replica 1 since fetchRequest was received
+        // before beginQuorumEpochTimeoutMs time has elapsed
         context.assertSentBeginQuorumEpochRequest(epoch, Set.of(remoteId2));
 
         context.deliverRequest(context.fetchRequest(epoch, replicaKey1, 0, 0, 0));
         context.pollUntilResponse();
         context.time.sleep(context.beginQuorumEpochTimeoutMs);
         context.client.poll();
-        // should send BeginQuorumEpochRequest if sleep time equals beginQuorumEpochTimeoutMs
+        // leader should send BeginQuorumEpochRequest to a node if beginQuorumEpochTimeoutMs time has elapsed
+        // without receiving a fetch request from that node
         context.assertSentBeginQuorumEpochRequest(epoch, Set.of(remoteId1, remoteId2));
     }
 
