@@ -41,12 +41,14 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 public class StreamsMetricsImpl implements StreamsMetrics {
 
@@ -337,6 +339,30 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public void removeMetric(final MetricName metricName) {
         metrics.removeMetric(metricName);
+    }
+
+    public void removeStoreLevelMetric(final MetricName metricName) {
+        metrics.removeMetric(metricName);
+
+        final List<String> metricsScopeCandidates = metricName.tags().keySet().stream()
+            .filter(tag -> !tag.equals(THREAD_ID_TAG) && !tag.equals(TASK_ID_TAG))
+            .collect(Collectors.toList());
+        if (metricsScopeCandidates.size() != 1) {
+            // should never happen
+            throw new IllegalStateException("Expected exactly one metric scope tag, but found " + metricsScopeCandidates);
+        }
+
+        final Deque<MetricName> metricsForStore = storeLevelMetrics.get(
+            storeSensorPrefix(
+                metricName.tags().get(THREAD_ID_TAG),
+                metricName.tags().get(TASK_ID_TAG),
+                metricName.tags().get(metricsScopeCandidates.get(0))
+            )
+        );
+
+        if (metricsForStore != null) {
+            metricsForStore.remove(metricName);
+        }
     }
 
     public Map<String, String> taskLevelTagMap(final String threadId, final String taskId) {
