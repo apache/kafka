@@ -22,7 +22,6 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
-import org.apache.kafka.clients.consumer.ConsumerPollTestUtils;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -1545,11 +1544,9 @@ public class AsyncKafkaConsumerTest {
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(singletonList(new TopicPartition("topic", 0)));
         completeAsyncPollEventSuccessfully();
-        ConsumerPollTestUtils.waitForException(
-            consumer,
-            t -> t.getMessage().equals(expectedException.getMessage()),
-            "Consumer.poll() did not fail with expected exception " + expectedException + " within timeout"
-        );
+        final KafkaException exception = assertThrows(KafkaException.class, () -> consumer.poll(Duration.ZERO));
+
+        assertEquals(expectedException.getMessage(), exception.getMessage());
     }
 
     @Test
@@ -1566,11 +1563,9 @@ public class AsyncKafkaConsumerTest {
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(singletonList(new TopicPartition("topic", 0)));
         completeAsyncPollEventSuccessfully();
-        ConsumerPollTestUtils.waitForException(
-            consumer,
-            t -> t.getMessage().equals(expectedException1.getMessage()),
-            "Consumer.poll() did not fail with expected exception " + expectedException1 + " within timeout"
-        );
+        final KafkaException exception = assertThrows(KafkaException.class, () -> consumer.poll(Duration.ZERO));
+
+        assertEquals(expectedException1.getMessage(), exception.getMessage());
         assertTrue(backgroundEventQueue.isEmpty());
     }
 
@@ -1839,12 +1834,7 @@ public class AsyncKafkaConsumerTest {
         consumer.subscribe(Collections.singletonList("topic"));
         when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
         completeAsyncPollEventSuccessfully();
-
-        ConsumerPollTestUtils.waitForCondition(
-            consumer,
-            () -> backgroundEventReaper.size() == 0,
-            "Consumer.poll() did not reap background events within timeout"
-        );
+        consumer.poll(Duration.ZERO);
         verify(backgroundEventReaper).reap(time.milliseconds());
     }
 

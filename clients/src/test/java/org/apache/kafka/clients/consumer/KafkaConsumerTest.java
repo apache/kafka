@@ -1065,7 +1065,7 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class)
-    public void testMissingOffsetNoResetPolicy(GroupProtocol groupProtocol) {
+    public void testMissingOffsetNoResetPolicy(GroupProtocol groupProtocol) throws InterruptedException {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -1081,14 +1081,15 @@ public class KafkaConsumerTest {
                 true, groupId, groupInstanceId, false);
         consumer.assign(List.of(tp0));
 
-        // Consumer.poll(0) needs to wait for the offset fetch event added by a call to poll, to be processed
-        // by the background thread, so it can realize there are no committed offsets and then
-        // throw the NoOffsetForPartitionException.
-        ConsumerPollTestUtils.waitForException(
-            consumer,
-            NoOffsetForPartitionException.class::isInstance,
-            "Consumer was not able to update fetch positions on continuous calls with 0 timeout"
-        );
+        if (groupProtocol == GroupProtocol.CONSUMER) {
+            // New consumer poll(ZERO) needs to wait for the offset fetch event added by a call to poll, to be processed
+            // by the background thread, so it can realize there are no committed offsets and then
+            // throw the NoOffsetForPartitionException
+            assertPollEventuallyThrows(consumer, NoOffsetForPartitionException.class,
+                "Consumer was not able to update fetch positions on continuous calls with 0 timeout");
+        } else {
+            assertThrows(NoOffsetForPartitionException.class, () -> consumer.poll(Duration.ZERO));
+        }
     }
 
     @ParameterizedTest
@@ -2270,18 +2271,19 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    public void testPollAuthenticationFailure(GroupProtocol groupProtocol) {
+    public void testPollAuthenticationFailure(GroupProtocol groupProtocol) throws InterruptedException {
         final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol);
         consumer.subscribe(Set.of(topic));
 
-        // Consumer.poll(0) needs to wait for the event added by a call to poll, to be processed
-        // by the background thread, so it can realize there is authentication fail and then
-        // throw the AuthenticationException.
-        ConsumerPollTestUtils.waitForException(
-            consumer,
-            AuthenticationException.class::isInstance,
-            "this consumer was not able to discover metadata errors during continuous polling."
-        );
+        if (groupProtocol == GroupProtocol.CONSUMER) {
+            // New consumer poll(ZERO) needs to wait for the event added by a call to poll, to be processed
+            // by the background thread, so it can realize there is authentication fail  and then
+            // throw the AuthenticationException
+            assertPollEventuallyThrows(consumer, AuthenticationException.class,
+                "this consumer was not able to discover metadata errors during continuous polling.");
+        } else {
+            assertThrows(AuthenticationException.class, () -> consumer.poll(Duration.ZERO));
+        }
     }
 
     // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
@@ -2668,11 +2670,9 @@ public class KafkaConsumerTest {
         consumer.assign(Set.of(tp0));
 
         // poll once to update with the current metadata
-        ConsumerPollTestUtils.waitForCondition(
-            consumer,
-            () -> requestGenerated(client, ApiKeys.FIND_COORDINATOR),
-            "No metadata requests sent"
-        );
+        consumer.poll(Duration.ofMillis(0));
+        TestUtils.waitForCondition(() -> requestGenerated(client, ApiKeys.FIND_COORDINATOR),
+            "No metadata requests sent");
         client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, metadata.fetch().nodes().get(0)));
 
         // no error for no current position
@@ -2685,11 +2685,11 @@ public class KafkaConsumerTest {
         }
         // poll once again, which should send the list-offset request
         consumer.seek(tp0, 50L);
+        consumer.poll(Duration.ofMillis(0));
         // requests: list-offset
-        ConsumerPollTestUtils.waitForCondition(
-            consumer,
+        TestUtils.waitForCondition(
             () -> requestGenerated(client, ApiKeys.LIST_OFFSETS),
-            "No list-offset sent"
+            "No list-offset request sent"
         );
 
         // no error for no end offset (so unknown lag)
@@ -2699,11 +2699,11 @@ public class KafkaConsumerTest {
         // and hence next call would return correct lag result
         ClientRequest listOffsetRequest = findRequest(client, ApiKeys.LIST_OFFSETS);
         client.respondToRequest(listOffsetRequest, listOffsetsResponse(Map.of(tp0, 90L)));
+        consumer.poll(Duration.ofMillis(0));
         // requests: fetch
-        ConsumerPollTestUtils.waitForCondition(
-            consumer,
+        TestUtils.waitForCondition(
             () -> requestGenerated(client, ApiKeys.FETCH),
-            "No fetch sent"
+            "No fetch request sent"
         );
 
         // For AsyncKafkaConsumer, subscription state is updated in background, so the result will eventually be updated.
@@ -3177,7 +3177,7 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    public void testSubscriptionOnInvalidTopic(GroupProtocol groupProtocol) {
+    public void testSubscriptionOnInvalidTopic(GroupProtocol groupProtocol) throws InterruptedException {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -3198,14 +3198,27 @@ public class KafkaConsumerTest {
         KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.subscribe(Set.of(invalidTopicName), getConsumerRebalanceListener(consumer));
 
-        // Consumer.poll(0) needs to wait for the event added by a call to poll, to be processed
-        // by the background thread, so it can realize there is invalid topics and then
-        // throw the InvalidTopicException.
-        ConsumerPollTestUtils.waitForException(
-            consumer,
-            InvalidTopicException.class::isInstance,
-            "Consumer was not able to update fetch positions on continuous calls with 0 timeout"
-        );
+        if (groupProtocol == GroupProtocol.CONSUMER) {
+            // New consumer poll(ZERO) needs to wait for the event added by a call to poll, to be processed
+            // by the background thread, so it can realize there is invalid topics and then
+            // throw the InvalidTopicException
+            assertPollEventuallyThrows(consumer, InvalidTopicException.class,
+                "Consumer was not able to update fetch positions on continuous calls with 0 timeout");
+        } else {
+            assertThrows(InvalidTopicException.class, () -> consumer.poll(Duration.ZERO));
+        }
+    }
+
+    private static <T extends Throwable> void assertPollEventuallyThrows(KafkaConsumer<?, ?> consumer,
+                                                                         Class<T> expectedException, String errMsg) throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            try {
+                consumer.poll(Duration.ZERO);
+                return false;
+            } catch (Throwable exception) {
+                return expectedException.isInstance(exception);
+            }
+        }, errMsg);
     }
 
     @ParameterizedTest
@@ -3645,11 +3658,7 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         service.execute(() -> consumer.poll(Duration.ofSeconds(5)));
         try {
             TimeUnit.SECONDS.sleep(1);
-            ConsumerPollTestUtils.waitForException(
-                consumer,
-                t -> t instanceof ConcurrentModificationException,
-                "Consumer did not throw ConcurrentModificationException within timeout"
-            );
+            assertThrows(ConcurrentModificationException.class, () -> consumer.poll(Duration.ZERO));
             client.wakeup();
             consumer.wakeup();
         } finally {

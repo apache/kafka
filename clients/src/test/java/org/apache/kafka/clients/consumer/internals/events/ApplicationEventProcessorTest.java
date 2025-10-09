@@ -88,6 +88,7 @@ public class ApplicationEventProcessorTest {
     private final ConsumerHeartbeatRequestManager heartbeatRequestManager = mock(ConsumerHeartbeatRequestManager.class);
     private final ConsumerMembershipManager membershipManager = mock(ConsumerMembershipManager.class);
     private final OffsetsRequestManager offsetsRequestManager = mock(OffsetsRequestManager.class);
+    private final FetchRequestManager fetchRequestManager = mock(FetchRequestManager.class);
     private SubscriptionState subscriptionState = mock(SubscriptionState.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private final StreamsGroupHeartbeatRequestManager streamsGroupHeartbeatRequestManager = mock(StreamsGroupHeartbeatRequestManager.class);
@@ -99,7 +100,7 @@ public class ApplicationEventProcessorTest {
                 new LogContext(),
                 offsetsRequestManager,
                 mock(TopicMetadataRequestManager.class),
-                mock(FetchRequestManager.class),
+                fetchRequestManager,
                 withGroupId ? Optional.of(mock(CoordinatorRequestManager.class)) : Optional.empty(),
                 withGroupId ? Optional.of(commitRequestManager) : Optional.empty(),
                 withGroupId ? Optional.of(heartbeatRequestManager) : Optional.empty(),
@@ -264,16 +265,20 @@ public class ApplicationEventProcessorTest {
     }
 
     @Test
-    public void testPollEvent() {
+    public void testAsyncPollEvent() {
         AsyncPollEvent event = new AsyncPollEvent(12346, 12345);
 
         setupProcessor(true);
         when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
-        when(offsetsRequestManager.updateFetchPositions(anyLong())).thenReturn(new CompletableFuture<>());
+        when(offsetsRequestManager.updateFetchPositions(event.deadlineMs())).thenReturn(CompletableFuture.completedFuture(true));
+        when(fetchRequestManager.createFetchRequests()).thenReturn(CompletableFuture.completedFuture(null));
         processor.process(event);
-        verify(commitRequestManager).updateTimerAndMaybeCommit(12345);
+        assertTrue(event.isComplete());
+        verify(commitRequestManager).updateTimerAndMaybeCommit(event.pollTimeMs());
         verify(membershipManager).onConsumerPoll();
-        verify(heartbeatRequestManager).resetPollTimer(12345);
+        verify(heartbeatRequestManager).resetPollTimer(event.pollTimeMs());
+        verify(offsetsRequestManager).updateFetchPositions(event.deadlineMs());
+        verify(fetchRequestManager).createFetchRequests();
     }
 
     @Test
