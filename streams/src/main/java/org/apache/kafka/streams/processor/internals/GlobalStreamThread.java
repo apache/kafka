@@ -239,7 +239,7 @@ public class GlobalStreamThread extends Thread {
         }
 
         /**
-         * @throws IllegalStateException If store gets registered after initialized is already finished
+         * @throws IllegalStateException If a store gets registered after initialized is already finished
          * @throws StreamsException      if the store's change log does not contain the partition
          */
         void initialize() {
@@ -431,9 +431,9 @@ public class GlobalStreamThread extends Thread {
         } catch (final StreamsException fatalException) {
             closeStateConsumer(stateConsumer, false);
             startupException = fatalException;
-        } catch (final Exception fatalException) {
+        } catch (final Throwable throwable) {
             closeStateConsumer(stateConsumer, false);
-            startupException = new StreamsException("Exception caught during initialization of GlobalStreamThread", fatalException);
+            startupException = new StreamsException("Exception caught during initialization of GlobalStreamThread", throwable);
         } finally {
             initializationLatch.countDown();
         }
