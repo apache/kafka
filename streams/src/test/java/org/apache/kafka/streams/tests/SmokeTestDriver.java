@@ -457,7 +457,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         boolean success = inputs.equals(received);
 
         if (success) {
-            System.out.println("ALL-RECORDS-DELIVERED");
+            System.out.println("ALL-NULLABLE_RECORDS-DELIVERED");
         } else {
             int missedCount = 0;
             for (final Map.Entry<String, Set<Integer>> entry : inputs.entrySet()) {

@@ -297,9 +297,9 @@ final class SchemaGenerator {
         } else if (type.isRecords()) {
             headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
             if (fieldFlexibleVersions.contains(version)) {
-                return "Type.COMPACT_RECORDS";
+                return nullable ? "Type.COMPACT_NULLABLE_RECORDS" : "Type.COMPACT_RECORDS";
             } else {
-                return "Type.RECORDS";
+                return nullable ? "Type.NULLABLE_RECORDS" : "Type.RECORDS";
             }
         } else if (type.isArray()) {
             if (fieldFlexibleVersions.contains(version)) {

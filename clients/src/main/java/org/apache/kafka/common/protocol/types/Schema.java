@@ -26,9 +26,9 @@ import java.util.Objects;
 /**
  * The schema for a compound record definition
  */
-public final class Schema extends DocumentedType {
+public class Schema extends DocumentedType {
 
-    private static final String STRUCT_TYPE_NAME = "NULLABLE_STRUCT";
+    private static final String STRUCT_TYPE_NAME = "STRUCT";
 
     private static final Object[] NO_VALUES = new Object[0];
 
@@ -218,10 +218,8 @@ public final class Schema extends DocumentedType {
 
     @Override
     public String documentation() {
-        return "Represents a composite object or null. " +
-                "For non-null values, the first byte is an INT8 with value 1, " +
-                "followed by the serialization of each field in the order they are defined. " +
-                "A null value is encoded as an INT8 with value -1 and there are no following bytes.";
+        return "A struct is named by a string with a capitalized first letter and consists of one or more fields. " +
+                "It represents a composite object encoded as the serialization of each field in the order they are defined.";
     }
 
     public void walk(Visitor visitor) {
