@@ -1635,7 +1635,7 @@ public class KafkaStreams implements AutoCloseable {
     public synchronized boolean close(final org.apache.kafka.streams.CloseOptions options) throws IllegalArgumentException {
         Objects.requireNonNull(options, "options cannot be null");
         final CloseOptionsInternal optionsInternal = new CloseOptionsInternal(options);
-        final Duration timeout = optionsInternal.timeout().orElse(Duration.ofMillis(Long.MAX_VALUE));
+        final Duration timeout = optionsInternal.timeout().orElseGet(() -> Duration.ofMillis(Long.MAX_VALUE));
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeout, "timeout");
         final long timeoutMs = validateMillisecondDuration(timeout, msgPrefix);
         if (timeoutMs < 0) {
