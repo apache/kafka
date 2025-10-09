@@ -3175,6 +3175,7 @@ org.apache.kafka.streams.processor.internals.TaskMetadataImplTest:
 org.apache.kafka.streams.processor.internals.TasksTest:
 - shouldAddFailedTask
 - shouldCheckStateWhenRemoveTask
+- shouldClearAllPendingTasks
 - shouldClearFailedTask
 - shouldDrainPendingTasksToCreate
 - shouldKeepAddedTasks

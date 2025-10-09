@@ -1499,6 +1499,7 @@ kafka.server.AbstractFetcherManagerTest:
 - testExpandThreadPool
 - testMaybeUpdateTopicIds
 - testMetricFailedPartitionCount
+- testMetricsClassName
 - testShrinkThreadPool
 kafka.server.AbstractFetcherThreadTest:
 - testConsumerLagRemovedWithPartition
