@@ -292,7 +292,7 @@ public class SaslServerAuthenticatorTest {
             when(saslServer.isComplete()).thenReturn(false).thenReturn(true);
             mockRequest(saslAuthenticateRequest(), transportLayer);
 
-            Throwable t = assertThrows(IllegalArgumentException.class, () -> authenticator.authenticate());
+            Throwable t = assertThrows(IllegalArgumentException.class, authenticator::authenticate);
             assertEquals(ArithmeticException.class, t.getCause().getClass());
             assertEquals("Cannot convert " + Long.MAX_VALUE + " millisecond to nanosecond due to arithmetic overflow",
                 t.getMessage());
