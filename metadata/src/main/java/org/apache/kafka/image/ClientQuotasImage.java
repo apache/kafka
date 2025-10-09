@@ -67,9 +67,10 @@ public final class ClientQuotasImage {
         for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
             ClientQuotaEntity entity = entry.getKey();
             for (Entry<String, String> entityEntry : entity.entries().entrySet()) {
-                entitiesByType.putIfAbsent(entityEntry.getKey(), new HashMap<>());
-                entitiesByType.get(entityEntry.getKey()).putIfAbsent(entityEntry.getValue(), new HashSet<>());
-                entitiesByType.get(entityEntry.getKey()).get(entityEntry.getValue()).add(entry);
+                entitiesByType
+                    .computeIfAbsent(entityEntry.getKey(), k -> new HashMap<>())
+                    .computeIfAbsent(entityEntry.getValue(), k -> new HashSet<>())
+                    .add(entry);
             }
         }
         this.entitiesByType = Collections.unmodifiableMap(entitiesByType);
@@ -145,42 +146,41 @@ public final class ClientQuotasImage {
 
         Set<ClientQuotaEntity> addedEntities = new HashSet<>();
         for (Entry<String, String> exactMatchEntry : exactMatch.entrySet()) {
-            if (entitiesByType.containsKey(exactMatchEntry.getKey()) &&
-                entitiesByType.get(exactMatchEntry.getKey()).containsKey(exactMatchEntry.getValue())) {
-                for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entitiesByType.get(exactMatchEntry.getKey()).get(exactMatchEntry.getValue())) {
-                    if (request.strict() && !entry.getKey().entries().equals(exactMatch)) {
-                        continue;
-                    }
-                    if (!addedEntities.contains(entry.getKey())) {
-                        addedEntities.add(entry.getKey());
-                        response.entries().add(toDescribeEntry(entry.getKey(), entry.getValue()));
-                    }
-                }
+            String entityType = exactMatchEntry.getKey();
+            String entityName = exactMatchEntry.getValue();
+            for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entitiesByType.getOrDefault(entityType, Map.of()).getOrDefault(entityName, Set.of())) {
+                addEntryToResponse(response, addedEntities, entry, exactMatch.size(), typeMatch.size(), request.strict());
             }
         }
 
         for (String type : typeMatch) {
-            if (entitiesByType.containsKey(type)) {
-                for (Set<Entry<ClientQuotaEntity, ClientQuotaImage>> entrySet : entitiesByType.get(type).values()) {
-                    for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entrySet) {
-                        if (request.strict() && entry.getKey().entries().size() != typeMatch.size()) {
-                            continue;
-                        }
-                        if (!addedEntities.contains(entry.getKey())) {
-                            addedEntities.add(entry.getKey());
-                            response.entries().add(toDescribeEntry(entry.getKey(), entry.getValue()));
-                        }
-                    }
+            for (Set<Entry<ClientQuotaEntity, ClientQuotaImage>> entrySet : entitiesByType.getOrDefault(type, Map.of()).values()) {
+                for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entrySet) {
+                    addEntryToResponse(response, addedEntities, entry, typeMatch.size(), exactMatch.size(), request.strict());
                 }
             }
         }
 
-        if (!request.strict() && exactMatch.isEmpty() && typeMatch.isEmpty()) {
-            for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
-                response.entries().add(toDescribeEntry(entry.getKey(), entry.getValue()));
-            }
-        }
         return response;
+    }
+
+    private void addEntryToResponse(
+        DescribeClientQuotasResponseData response,
+        Set<ClientQuotaEntity> addedEntities,
+        Entry<ClientQuotaEntity, ClientQuotaImage> entry,
+        int exactMatchSize,
+        int typeMatchSize,
+        boolean strict
+    ) {
+        ClientQuotaEntity entity = entry.getKey();
+        ClientQuotaImage clientQuotaImage = entry.getValue();
+        if (strict && entity.entries().size() != exactMatchSize + typeMatchSize) {
+            return;
+        }
+        if (!addedEntities.contains(entity)) {
+            addedEntities.add(entity);
+            response.entries().add(toDescribeEntry(entity, clientQuotaImage));
+        }
     }
 
     private static EntryData toDescribeEntry(ClientQuotaEntity entity,
