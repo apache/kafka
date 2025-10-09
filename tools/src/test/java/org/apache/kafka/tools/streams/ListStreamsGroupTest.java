@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
@@ -57,6 +56,7 @@ import java.util.stream.Collectors;
 import joptsimple.OptionException;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(600)
 @Tag("integration")
@@ -223,28 +223,22 @@ public class ListStreamsGroupTest {
         Set<List<String>> expectedRows
     ) throws InterruptedException {
         final AtomicReference<String> out = new AtomicReference<>("");
-        ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
-        Exit.setExitProcedure(exitProcedure);
-        try {
-            TestUtils.waitForCondition(() -> {
-                String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
-                out.set(output);
-                String[] lines = output.split("\n");
-                if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
+        TestUtils.waitForCondition(() -> {
+            String output = ToolsTestUtils.grabConsoleOutput(() -> assertEquals(0, StreamsGroupCommand.execute(args.toArray(new String[0]))));
+            out.set(output);
 
-                if (!expectedHeader.isEmpty() && lines.length > 0) {
-                    List<String> header = List.of(lines[0].split("\\s+"));
-                    if (!expectedHeader.equals(header)) return false;
-                }
+            String[] lines = output.split("\n");
+            if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
 
-                Set<List<String>> groups = Arrays.stream(lines, expectedHeader.isEmpty() ? 0 : 1, lines.length)
-                    .map(line -> List.of(line.split("\\s+")))
-                    .collect(Collectors.toSet());
-                return expectedRows.equals(groups);
-            }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
-        } finally {
-            Exit.resetExitProcedure();
-        }
+            if (!expectedHeader.isEmpty() && lines.length > 0) {
+                List<String> header = List.of(lines[0].split("\\s+"));
+                if (!expectedHeader.equals(header)) return false;
+            }
 
+            Set<List<String>> groups = Arrays.stream(lines, expectedHeader.isEmpty() ? 0 : 1, lines.length)
+                .map(line -> List.of(line.split("\\s+")))
+                .collect(Collectors.toSet());
+            return expectedRows.equals(groups);
+        }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
     }
 }

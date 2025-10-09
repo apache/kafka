@@ -291,14 +291,8 @@ public class DescribeStreamsGroupTest {
     }
 
     private static void validateDescribeOutput(List<String> args, String errorMessage) {
-        ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
-        Exit.setExitProcedure(exitProcedure);
-        try {
-            String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
-            assertEquals(errorMessage, output.trim());
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        String output = ToolsTestUtils.grabConsoleOutput(() -> assertEquals(1, StreamsGroupCommand.execute(args.toArray(new String[0]))));
+        assertEquals(errorMessage, output.trim());
     }
 
     private static void validateDescribeOutput(
@@ -308,38 +302,32 @@ public class DescribeStreamsGroupTest {
         List<Integer> dontCareIndices
     ) throws InterruptedException {
         final AtomicReference<String> out = new AtomicReference<>("");
-        ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
-        Exit.setExitProcedure(exitProcedure);
-        try {
-            TestUtils.waitForCondition(() -> {
-                String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
-                out.set(output);
+        TestUtils.waitForCondition(() -> {
+            String output = ToolsTestUtils.grabConsoleOutput(() -> assertEquals(0, StreamsGroupCommand.execute(args.toArray(new String[0]))));
+            out.set(output);
 
-                String[] lines = output.split("\n");
-                if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
+            String[] lines = output.split("\n");
+            if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
 
-                if (lines.length == 0) return false;
-                List<String> header = List.of(lines[0].split("\\s+"));
-                if (!expectedHeader.equals(header)) return false;
+            if (lines.length == 0) return false;
+            List<String> header = List.of(lines[0].split("\\s+"));
+            if (!expectedHeader.equals(header)) return false;
 
-                Set<List<String>> groupDesc = Arrays.stream(Arrays.copyOfRange(lines, 1, lines.length))
-                    .map(line -> List.of(line.split("\\s+")))
-                    .collect(Collectors.toSet());
-                if (groupDesc.size() != expectedRows.size()) return false;
-                // clear the dontCare fields and then compare two sets
-                return expectedRows
-                    .equals(
-                        groupDesc.stream()
-                            .map(list -> {
-                                List<String> listCloned = new ArrayList<>(list);
-                                dontCareIndices.forEach(index -> listCloned.set(index, ""));
-                                return listCloned;
-                            }).collect(Collectors.toSet())
-                    );
-            }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
-        } finally {
-            Exit.resetExitProcedure();
-        }
+            Set<List<String>> groupDesc = Arrays.stream(Arrays.copyOfRange(lines, 1, lines.length))
+                .map(line -> List.of(line.split("\\s+")))
+                .collect(Collectors.toSet());
+            if (groupDesc.size() != expectedRows.size()) return false;
+            // clear the dontCare fields and then compare two sets
+            return expectedRows
+                .equals(
+                    groupDesc.stream()
+                        .map(list -> {
+                            List<String> listCloned = new ArrayList<>(list);
+                            dontCareIndices.forEach(index -> listCloned.set(index, ""));
+                            return listCloned;
+                        }).collect(Collectors.toSet())
+                );
+        }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
     }
 
     private static void validateDescribeOutput(
@@ -349,47 +337,41 @@ public class DescribeStreamsGroupTest {
         List<Integer> dontCareIndices
     ) throws InterruptedException {
         final AtomicReference<String> out = new AtomicReference<>("");
-        ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
-        Exit.setExitProcedure(exitProcedure);
-        try {
-            TestUtils.waitForCondition(() -> {
-                String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
-                out.set(output);
+        TestUtils.waitForCondition(() -> {
+            String output = ToolsTestUtils.grabConsoleOutput(() -> assertEquals(0, StreamsGroupCommand.execute(args.toArray(new String[0]))));
+            out.set(output);
 
-                String[] lines = output.split("\n");
-                if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
+            String[] lines = output.split("\n");
+            if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
 
-                if (lines.length == 0) return false;
-                List<String> header = List.of(lines[0].split("\\s+"));
-                if (!expectedHeader.equals(header)) return false;
+            if (lines.length == 0) return false;
+            List<String> header = List.of(lines[0].split("\\s+"));
+            if (!expectedHeader.equals(header)) return false;
 
-                Map<String, Set<List<String>>> groupdescMap = splitOutputByGroup(lines);
+            Map<String, Set<List<String>>> groupdescMap = splitOutputByGroup(lines);
 
-                if (groupdescMap.size() != expectedRows.size()) return false;
+            if (groupdescMap.size() != expectedRows.size()) return false;
 
-                // clear the dontCare fields and then compare two sets
-                boolean compareResult = true;
-                for (Map.Entry<String, Set<List<String>>> entry : groupdescMap.entrySet()) {
-                    String group = entry.getKey();
-                    Set<List<String>> groupDesc = entry.getValue();
-                    if (!expectedRows.containsKey(group)) return false;
-                    Set<List<String>> expectedGroupDesc = expectedRows.get(group);
-                    if (expectedGroupDesc.size() != groupDesc.size())
+            // clear the dontCare fields and then compare two sets
+            boolean compareResult = true;
+            for (Map.Entry<String, Set<List<String>>> entry : groupdescMap.entrySet()) {
+                String group = entry.getKey();
+                Set<List<String>> groupDesc = entry.getValue();
+                if (!expectedRows.containsKey(group)) return false;
+                Set<List<String>> expectedGroupDesc = expectedRows.get(group);
+                if (expectedGroupDesc.size() != groupDesc.size())
+                    compareResult = false;
+                for (List<String> list : groupDesc) {
+                    List<String> listCloned = new ArrayList<>(list);
+                    dontCareIndices.forEach(index -> listCloned.set(index, ""));
+                    if (!expectedGroupDesc.contains(listCloned)) {
                         compareResult = false;
-                    for (List<String> list : groupDesc) {
-                        List<String> listCloned = new ArrayList<>(list);
-                        dontCareIndices.forEach(index -> listCloned.set(index, ""));
-                        if (!expectedGroupDesc.contains(listCloned)) {
-                            compareResult = false;
-                        }
                     }
                 }
+            }
 
-                return compareResult;
-            }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
-        } finally {
-            Exit.resetExitProcedure();
-        }
+            return compareResult;
+        }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
     }
 
     private static Map<String, Set<List<String>>> splitOutputByGroup(String[] lines) {
