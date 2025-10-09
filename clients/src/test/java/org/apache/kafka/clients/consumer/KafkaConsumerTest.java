@@ -1086,7 +1086,7 @@ public class KafkaConsumerTest {
             // by the background thread, so it can realize there are no committed offsets and then
             // throw the NoOffsetForPartitionException
             assertPollEventuallyThrows(consumer, NoOffsetForPartitionException.class,
-                "Consumer was not able to update fetch positions on continuous calls with 0 timeout");
+                    "Consumer was not able to update fetch positions on continuous calls with 0 timeout");
         } else {
             assertThrows(NoOffsetForPartitionException.class, () -> consumer.poll(Duration.ZERO));
         }
@@ -2280,7 +2280,7 @@ public class KafkaConsumerTest {
             // by the background thread, so it can realize there is authentication fail  and then
             // throw the AuthenticationException
             assertPollEventuallyThrows(consumer, AuthenticationException.class,
-                "this consumer was not able to discover metadata errors during continuous polling.");
+                    "this consumer was not able to discover metadata errors during continuous polling.");
         } else {
             assertThrows(AuthenticationException.class, () -> consumer.poll(Duration.ZERO));
         }
@@ -2672,7 +2672,7 @@ public class KafkaConsumerTest {
         // poll once to update with the current metadata
         consumer.poll(Duration.ofMillis(0));
         TestUtils.waitForCondition(() -> requestGenerated(client, ApiKeys.FIND_COORDINATOR),
-            "No metadata requests sent");
+                "No metadata requests sent");
         client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, metadata.fetch().nodes().get(0)));
 
         // no error for no current position
@@ -3203,14 +3203,14 @@ public class KafkaConsumerTest {
             // by the background thread, so it can realize there is invalid topics and then
             // throw the InvalidTopicException
             assertPollEventuallyThrows(consumer, InvalidTopicException.class,
-                "Consumer was not able to update fetch positions on continuous calls with 0 timeout");
+                    "Consumer was not able to update fetch positions on continuous calls with 0 timeout");
         } else {
             assertThrows(InvalidTopicException.class, () -> consumer.poll(Duration.ZERO));
         }
     }
 
     private static <T extends Throwable> void assertPollEventuallyThrows(KafkaConsumer<?, ?> consumer,
-                                                                         Class<T> expectedException, String errMsg) throws InterruptedException {
+            Class<T> expectedException, String errMsg) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
             try {
                 consumer.poll(Duration.ZERO);
