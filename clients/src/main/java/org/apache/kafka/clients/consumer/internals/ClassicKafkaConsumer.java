@@ -153,7 +153,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
     // cache of committed offset
-    private CommittedOffsetCache committedOffsetCache;
+    private final CommittedOffsetCache committedOffsetCache;
 
     ClassicKafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
         try {
