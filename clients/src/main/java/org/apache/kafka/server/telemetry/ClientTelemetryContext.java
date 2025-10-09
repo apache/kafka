@@ -17,25 +17,27 @@
 
 package org.apache.kafka.server.telemetry;
 
-import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
 /**
- * A {@link MetricsReporter} may implement this interface to indicate support for collecting client
- * telemetry on the server side.
- *
- * @deprecated Since 4.1.0, use {@link ClientTelemetryExporterProvider} instead. This interface will be
- *             removed in Kafka 5.0.0. The new interface provides a {@link ClientTelemetryExporter}
- *             which includes additional context such as the push interval.
+ * {@code ClientTelemetryContext} provides context information for client telemetry requests,
+ * including the push interval and authorization details.
  */
-@Deprecated
-public interface ClientTelemetry {
+public interface ClientTelemetryContext {
 
     /**
-     * Called by the broker to fetch instance of {@link ClientTelemetryReceiver}.
-     * <p>
-     * This instance may be cached by the broker.
+     * Returns the interval at which the client pushes telemetry metrics to the broker.
+     * This value can be used by metrics exporters to determine when metrics should be
+     * considered stale or expired.
      *
-     * @return broker side instance of {@link ClientTelemetryReceiver}.
+     * @return the push interval in milliseconds
      */
-    ClientTelemetryReceiver clientReceiver();
+    int pushIntervalMs();
+
+    /**
+     * Returns the authorization context for the client request.
+     *
+     * @return the client request context for the corresponding {@code PushTelemetryRequest} API call
+     */
+    AuthorizableRequestContext authorizableRequestContext();
 }

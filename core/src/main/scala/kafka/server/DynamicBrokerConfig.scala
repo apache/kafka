@@ -44,8 +44,8 @@ import org.apache.kafka.server.{DynamicThreadPool, ProcessRole}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.config.{DynamicProducerStateManagerConfig, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
-import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, MetricConfigs}
-import org.apache.kafka.server.telemetry.ClientTelemetry
+import org.apache.kafka.server.metrics.{ClientTelemetryPlugin, MetricConfigs}
+import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryExporterProvider}
 import org.apache.kafka.snapshot.RecordsSnapshotReader
 import org.apache.kafka.storage.internals.log.{LogCleaner, LogConfig}
 
@@ -259,10 +259,10 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private[server] val reconfigurables = new CopyOnWriteArrayList[Reconfigurable]()
   private val brokerReconfigurables = new CopyOnWriteArrayList[BrokerReconfigurable]()
   private val lock = new ReentrantReadWriteLock
-  private var metricsReceiverPluginOpt: Option[ClientMetricsReceiverPlugin] = _
+  private var metricsReceiverPluginOpt: Option[ClientTelemetryPlugin] = _
   private var currentConfig: KafkaConfig = _
 
-  private[server] def initialize(clientMetricsReceiverPluginOpt: Option[ClientMetricsReceiverPlugin]): Unit = {
+  private[server] def initialize(clientMetricsReceiverPluginOpt: Option[ClientTelemetryPlugin]): Unit = {
     currentConfig = new KafkaConfig(kafkaConfig.props, false)
     metricsReceiverPluginOpt = clientMetricsReceiverPluginOpt
   }
@@ -374,7 +374,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     dynamicDefaultConfigs.clone()
   }
 
-  private[server] def clientMetricsReceiverPlugin: Option[ClientMetricsReceiverPlugin] = CoreUtils.inReadLock(lock) {
+  private[server] def clientMetricsReceiverPlugin: Option[ClientTelemetryPlugin] = CoreUtils.inReadLock(lock) {
     metricsReceiverPluginOpt
   }
 
@@ -841,18 +841,22 @@ class DynamicMetricReporterState(brokerId: Int, config: KafkaConfig, metrics: Me
     reporters.forEach { reporter =>
       metrics.addReporter(reporter)
       currentReporters += reporter.getClass.getName -> reporter
-      val clientTelemetryReceiver = reporter match {
-        case telemetry: ClientTelemetry => telemetry.clientReceiver()
-        case _ => null
-      }
 
-      if (clientTelemetryReceiver != null) {
-        dynamicConfig.clientMetricsReceiverPlugin match {
-          case Some(receiverPlugin) =>
-            receiverPlugin.add(clientTelemetryReceiver)
-          case None =>
-            // Do nothing
-        }
+      // Support both deprecated ClientTelemetry and new ClientTelemetryExporterProvider interfaces
+      // If a class implements both, only use the new (i.e., ClientTelemetryExporterProvider interface)
+      dynamicConfig.clientMetricsReceiverPlugin match {
+        case Some(receiverPlugin) =>
+          reporter match {
+            case exporterProvider: ClientTelemetryExporterProvider =>
+              // Use new interface (i.e., takes precedence even if class also implements deprecated interface)
+              receiverPlugin.add(exporterProvider.clientExporter())
+            case telemetry: ClientTelemetry =>
+              receiverPlugin.add(telemetry.clientReceiver())
+            case _ =>
+              // Reporter doesn't support client telemetry
+          }
+        case None =>
+          // Do nothing
       }
     }
     KafkaBroker.notifyClusterListeners(clusterId, reporters.asScala)
