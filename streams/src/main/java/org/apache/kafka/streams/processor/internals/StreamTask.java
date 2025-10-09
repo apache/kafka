@@ -470,14 +470,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         Optional<Integer> leaderEpoch = partitionGroup.headRecordLeaderEpoch(partition);
         final long partitionTime = partitionGroup.partitionTimestamp(partition);
         if (offset == null) {
-            if (nextOffsetsAndMetadataToBeConsumed.containsKey(partition)) {
-                final OffsetAndMetadata offsetAndMetadata = nextOffsetsAndMetadataToBeConsumed.get(partition);
-                offset = offsetAndMetadata.offset();
-                leaderEpoch = offsetAndMetadata.leaderEpoch();
-            } else {
+            final OffsetAndMetadata offsetAndMetadata = nextOffsetsAndMetadataToBeConsumed.get(partition);
+            if (offsetAndMetadata == null) {
                 // it may be that we have not yet consumed any record from this partition, hence nothing to commit
                 return Optional.empty();
             }
+            offset = offsetAndMetadata.offset();
+            leaderEpoch = offsetAndMetadata.leaderEpoch();
         }
         return Optional.of(new OffsetAndMetadata(offset,
                 leaderEpoch,
@@ -499,9 +498,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     inputPartitions() : consumedOffsets.keySet();
 
                 return partitionsNeedCommit.stream()
-                        .flatMap(partition -> findOffsetAndMetadata(partition)
-                                .map(offsetAndMetadata -> Map.entry(partition, offsetAndMetadata))
-                                .stream())
+                        .map(partition -> findOffsetAndMetadata(partition)
+                                .map(offsetAndMetadata -> Map.entry(partition, offsetAndMetadata)))
+                        .filter(Optional::isPresent)
+                        .map(Optional::get)
                         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
             case CLOSED:
