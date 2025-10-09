@@ -57,7 +57,7 @@ public class MultiVersionTest {
             String pluginLocation = entry.getKey().toAbsolutePath().toString();
 
             for (VersionedPluginBuilder.BuildInfo buildInfo : entry.getValue()) {
-                ClassLoader pluginLoader = plugins.pluginLoader(buildInfo.plugin().className(), PluginUtils.connectorVersionRequirement(buildInfo.version()));
+                ClassLoader pluginLoader = plugins.pluginLoader(buildInfo.plugin().className(), PluginUtils.connectorVersionRequirement(buildInfo.version()), null);
                 Assertions.assertInstanceOf(PluginClassLoader.class, pluginLoader);
                 Assertions.assertTrue(((PluginClassLoader) pluginLoader).location().contains(pluginLocation));
                 Object p = plugins.newPlugin(buildInfo.plugin().className(), PluginUtils.connectorVersionRequirement(buildInfo.version()));
@@ -166,7 +166,8 @@ public class MultiVersionTest {
         // get the connector loader of the combined artifact which includes all plugin types
         ClassLoader connectorLoader = plugins.pluginLoader(
             VersionedPluginBuilder.VersionedTestPlugin.SINK_CONNECTOR.className(),
-            PluginUtils.connectorVersionRequirement("0.1.0")
+            PluginUtils.connectorVersionRequirement("0.1.0"),
+            null
         );
         Assertions.assertInstanceOf(PluginClassLoader.class, connectorLoader);
 

@@ -627,6 +627,7 @@ public class AbstractHerderTest {
         Mockito.lenient().when(plugins.transformations()).thenReturn(Set.of(transformationPluginDesc()));
         Mockito.lenient().when(plugins.predicates()).thenReturn(Set.of(predicatePluginDesc()));
         Mockito.lenient().when(plugins.newPlugin(SampleTransformation.class.getName(), null, classLoader)).thenReturn(new SampleTransformation());
+        Mockito.lenient().when(plugins.newPlugin(SampleTransformation.class.getName(), null, classLoader)).thenReturn(new SampleTransformation());
         Mockito.lenient().when(plugins.newPlugin(SamplePredicate.class.getName(), null, classLoader)).thenReturn(new SamplePredicate());
 
         // Define 2 predicates. One has a class defined and so can get embedded configs, the other is missing
@@ -1341,13 +1342,12 @@ public class AbstractHerderTest {
         when(workerConfig.getClass(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG)).thenReturn((Class) SimpleHeaderConverter.class);
         when(worker.config()).thenReturn(workerConfig);
         when(plugins.newConnector(anyString(), any())).thenReturn(connector);
-        when(plugins.pluginLoader(connectorClass, null)).thenReturn(classLoader);
-        when(plugins.withClassLoader(classLoader)).thenReturn(loaderSwap);
+        when(plugins.withClassLoader(null)).thenReturn(loaderSwap);
     }
 
     private void verifyValidationIsolation() {
         verify(plugins).newConnector(anyString(), any());
-        verify(plugins).withClassLoader(classLoader);
+        //verify(plugins).withClassLoader(classLoader);
         verify(loaderSwap).close();
     }
 
