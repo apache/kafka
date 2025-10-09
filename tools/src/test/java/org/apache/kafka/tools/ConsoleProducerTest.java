@@ -51,10 +51,10 @@ public class ConsoleProducerTest {
         "--property", "key.separator=#"
     };
     private static final String[] BOOTSTRAP_SERVER_VALID_ARGS = new String[]{
-            "--bootstrap-server", "localhost:1003,localhost:1004",
-            "--topic", "t3",
-            "--reader-property", "parse.key=true",
-            "--reader-property", "key.separator=#"
+        "--bootstrap-server", "localhost:1003,localhost:1004",
+        "--topic", "t3",
+        "--reader-property", "parse.key=true",
+        "--reader-property", "key.separator=#"
     };
     private static final String[] INVALID_ARGS = new String[]{
         "--t", // not a valid argument
