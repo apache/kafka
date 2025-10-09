@@ -1199,7 +1199,7 @@ public class TopicCommandTest {
 
             String underReplicatedOutput = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--under-replicated-partitions"));
             assertFalse(underReplicatedOutput.contains(String.format("Topic: %s", testTopicName)),
-                    String.format("--under-replicated-partitions shouldn't return anything: '%s'", underReplicatedOutput));
+                    String.format("--under-replicated-partitions shouldn't contain '%s': '%s'", String.format("Topic: %s", testTopicName), underReplicatedOutput));
 
             int maxRetries = 20;
             long pause = 100L;
