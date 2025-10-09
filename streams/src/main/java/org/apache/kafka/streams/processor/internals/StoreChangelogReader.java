@@ -41,6 +41,7 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
+import org.apache.kafka.streams.state.internals.MeteredStateStore;
 
 import org.slf4j.Logger;
 
@@ -138,6 +139,8 @@ public class StoreChangelogReader implements ChangelogReader {
         // either due to limit offset (standby) or committed end offset (active)
         private int bufferedLimitIndex;
 
+        private long restoreStartTimeNs;
+
         private ChangelogMetadata(final StateStoreMetadata storeMetadata, final ProcessorStateManager stateManager) {
             this.changelogState = ChangelogState.REGISTERED;
             this.storeMetadata = storeMetadata;
@@ -187,6 +190,10 @@ public class StoreChangelogReader implements ChangelogReader {
 
         int bufferedLimitIndex() {
             return bufferedLimitIndex;
+        }
+
+        long calculateRestoreTime(final long restoreEndTimeNs) {
+            return restoreEndTimeNs - restoreStartTimeNs;
         }
     }
 
@@ -695,6 +702,9 @@ public class StoreChangelogReader implements ChangelogReader {
 
             changelogMetadata.transitTo(ChangelogState.COMPLETED);
             pauseChangelogsFromRestoreConsumer(Collections.singleton(partition));
+            if (storeMetadata.store() instanceof MeteredStateStore) {
+                ((MeteredStateStore) storeMetadata.store()).recordRestoreTime(changelogMetadata.calculateRestoreTime(time.nanoseconds()));
+            }
 
             try {
                 stateRestoreListener.onRestoreEnd(partition, storeName, changelogMetadata.totalRestored);
@@ -1026,6 +1036,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 // no records to restore; in this case we just initialize the sensor to zero
                 final long recordsToRestore = Math.max(changelogMetadata.restoreEndOffset - startOffset, 0L);
                 task.recordRestoration(time, recordsToRestore, true);
+                changelogMetadata.restoreStartTimeNs = time.nanoseconds();
             }  else if (changelogMetadata.stateManager.taskType() == TaskType.STANDBY) {
                 try {
                     standbyUpdateListener.onUpdateStart(partition, storeName, startOffset);

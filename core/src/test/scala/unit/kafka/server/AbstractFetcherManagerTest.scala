@@ -1,7 +1,7 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
+ * this work for additional information registryarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -21,10 +21,11 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochRequestData}
 import org.apache.kafka.common.message.FetchResponseData.PartitionData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.requests.FetchRequest
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.server.common.OffsetAndEpoch
+import org.apache.kafka.server.common.{DirectoryEventHandler, MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.ReplicaFetch
@@ -355,4 +356,24 @@ class AbstractFetcherManagerTest {
     override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Optional[OffsetAndEpoch] = Optional.of(new OffsetAndEpoch(1, 0))
   }
 
+  @Test
+  def testMetricsClassName(): Unit = {
+    val registry = KafkaYammerMetrics.defaultRegistry()
+    val config = mock(classOf[KafkaConfig])
+    val replicaManager = mock(classOf[ReplicaManager])
+    val quotaManager = mock(classOf[ReplicationQuotaManager])
+    val brokerTopicStats   = new BrokerTopicStats()
+    val directoryEventHandler = DirectoryEventHandler.NOOP
+    val metrics = new Metrics()
+    val time = new MockTime()
+    val metadataVersionSupplier = () => MetadataVersion.LATEST_PRODUCTION
+    val brokerEpochSupplier = () => 1L
+
+    val _ = new ReplicaAlterLogDirsManager(config, replicaManager, quotaManager, brokerTopicStats, directoryEventHandler)
+    val _ = new ReplicaFetcherManager(config, replicaManager, metrics, time, quotaManager, metadataVersionSupplier, brokerEpochSupplier)
+    val existReplicaAlterLogDirsManager = registry.allMetrics.entrySet().stream().filter(metric => metric.getKey.getType == "ReplicaAlterLogDirsManager").findFirst()
+    val existReplicaFetcherManager = registry.allMetrics.entrySet().stream().filter(metric => metric.getKey.getType == "ReplicaFetcherManager").findFirst()
+    assertTrue(existReplicaAlterLogDirsManager.isPresent)
+    assertTrue(existReplicaFetcherManager.isPresent)
+  }
 }

@@ -99,8 +99,8 @@ class KafkaConsumerMetricsTest {
 
     private void assertMetricValue(final String name) {
         assertEquals(
-            metrics.metric(metrics.metricName(name, CONSUMER_METRIC_GROUP)).metricValue(),
-            (double) METRIC_VALUE
+            (double) METRIC_VALUE,
+            metrics.metric(metrics.metricName(name, CONSUMER_METRIC_GROUP)).metricValue()
         );
     }
 }
