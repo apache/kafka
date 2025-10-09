@@ -60,6 +60,9 @@ public class CommittedOffsetCacheTest {
         assertFalse(committedOffsetCache.isHitCache(Map.of(topicPartition, offsetAndMetadata)));
         assertFalse(committedOffsetCache.isHitCache(Map.of(topicPartition2, offsetAndMetadata2)));
         assertFalse(committedOffsetCache.isHitCache(Map.of(topicPartition, offsetAndMetadata, topicPartition2, offsetAndMetadata2)));
+
+        committedOffsetCache.tryAddToCache(Map.of(topicPartition, offsetAndMetadata));
+        assertFalse(committedOffsetCache.isHitCache(Map.of(topicPartition, offsetAndMetadata, topicPartition2, offsetAndMetadata2)));
     }
 
     private SubscriptionState getMockSubscriptionState() {
