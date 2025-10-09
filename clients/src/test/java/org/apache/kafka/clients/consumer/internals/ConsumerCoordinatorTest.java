@@ -3697,7 +3697,8 @@ public abstract class ConsumerCoordinatorTest {
             autoCommitIntervalMs,
             null,
             true,
-            Optional.empty());
+            Optional.empty(),
+            new CommittedOffsetCache(subscriptions));
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         client.setNodeApiVersions(NodeApiVersions.create(ApiKeys.OFFSET_FETCH.id, (short) 0, upperVersion));
@@ -3865,7 +3866,8 @@ public abstract class ConsumerCoordinatorTest {
                 autoCommitIntervalMs,
                 null,
                 false,
-                Optional.empty());
+                Optional.empty(),
+                new CommittedOffsetCache(subscriptions));
     }
 
     private Collection<TopicPartition> getRevoked(final List<TopicPartition> owned,
@@ -4111,7 +4113,8 @@ public abstract class ConsumerCoordinatorTest {
         rebalanceConfig = buildRebalanceConfig(rebalanceConfig.groupInstanceId, rackId);
         coordinator = new ConsumerCoordinator(rebalanceConfig, new LogContext(), consumerClient,
                 Collections.singletonList(assignor), metadata, subscriptions,
-                metrics, consumerId + groupId, time, false, autoCommitIntervalMs, null, false, Optional.empty());
+                metrics, consumerId + groupId, time, false, autoCommitIntervalMs,
+                null, false, Optional.empty(), new CommittedOffsetCache(subscriptions));
     }
 
     private static MetadataResponse rackAwareMetadata(int numNodes,
@@ -4191,6 +4194,7 @@ public abstract class ConsumerCoordinatorTest {
             null,
             false,
             Optional.empty(),
-            Optional.of(() -> Mockito.mock(BaseHeartbeatThread.class)));
+            Optional.of(() -> Mockito.mock(BaseHeartbeatThread.class)),
+            new CommittedOffsetCache(subscriptions));
     }
 }

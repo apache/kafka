@@ -167,7 +167,8 @@ public class RequestManagers implements Closeable {
                                                      final Metrics metrics,
                                                      final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
                                                      final MemberStateListener applicationThreadMemberStateListener,
-                                                     final Optional<StreamsRebalanceData> streamsRebalanceData
+                                                     final Optional<StreamsRebalanceData> streamsRebalanceData,
+                                                     final CommittedOffsetCache committedOffsetCache
     ) {
         return new CachedSupplier<>() {
             @Override
@@ -216,7 +217,8 @@ public class RequestManagers implements Closeable {
                         groupRebalanceConfig.groupId,
                         groupRebalanceConfig.groupInstanceId,
                         metrics,
-                        metadata);
+                        metadata,
+                        committedOffsetCache);
                     if (streamsRebalanceData.isPresent()) {
                         streamsMembershipManager = new StreamsMembershipManager(
                             groupRebalanceConfig.groupId,

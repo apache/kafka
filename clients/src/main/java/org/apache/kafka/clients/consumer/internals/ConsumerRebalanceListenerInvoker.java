@@ -42,6 +42,7 @@ public class ConsumerRebalanceListenerInvoker {
     private final SubscriptionState subscriptions;
     private final Time time;
     private final RebalanceCallbackMetricsManager metricsManager;
+    private final CommittedOffsetCache committedOffsetCache;
 
     ConsumerRebalanceListenerInvoker(LogContext logContext,
                                      SubscriptionState subscriptions,
@@ -51,6 +52,19 @@ public class ConsumerRebalanceListenerInvoker {
         this.subscriptions = subscriptions;
         this.time = time;
         this.metricsManager = metricsManager;
+        this.committedOffsetCache = null;
+    }
+
+    ConsumerRebalanceListenerInvoker(LogContext logContext,
+                                     SubscriptionState subscriptions,
+                                     Time time,
+                                     RebalanceCallbackMetricsManager metricsManager,
+                                     CommittedOffsetCache committedOffsetCache) {
+        this.log = logContext.logger(getClass());
+        this.subscriptions = subscriptions;
+        this.time = time;
+        this.metricsManager = metricsManager;
+        this.committedOffsetCache = committedOffsetCache;
     }
 
     public Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
@@ -86,6 +100,9 @@ public class ConsumerRebalanceListenerInvoker {
         if (!revokePausedPartitions.isEmpty())
             log.info("The pause flag in partitions {} will be removed due to revocation.", revokePausedPartitions);
 
+        // clear the offset cache
+        committedOffsetCache.clear(revokedPartitions);
+
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
 
         if (listener.isPresent()) {
@@ -115,6 +132,9 @@ public class ConsumerRebalanceListenerInvoker {
         lostPausedPartitions.retainAll(lostPartitions);
         if (!lostPausedPartitions.isEmpty())
             log.info("The pause flag in partitions {} will be removed due to partition lost.", lostPartitions);
+
+        // clear the offset cache
+        committedOffsetCache.clear(lostPartitions);
 
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
 

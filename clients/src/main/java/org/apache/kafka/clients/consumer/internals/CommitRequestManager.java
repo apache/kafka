@@ -104,6 +104,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      *  the latest memberEpoch received from the broker.
      */
     private final MemberInfo memberInfo;
+    private final CommittedOffsetCache committedOffsetCache;
 
     public CommitRequestManager(
         final Time time,
@@ -115,7 +116,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         final String groupId,
         final Optional<String> groupInstanceId,
         final Metrics metrics,
-        final ConsumerMetadata metadata) {
+        final ConsumerMetadata metadata,
+        final CommittedOffsetCache committedOffsetCache) {
         this(time,
             logContext,
             subscriptions,
@@ -128,10 +130,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG),
             OptionalDouble.empty(),
             metrics,
-            metadata);
+            metadata,
+            committedOffsetCache);
     }
 
     // Visible for testing
+    @SuppressWarnings({"checkstyle:ParameterNumber"})
     CommitRequestManager(
         final Time time,
         final LogContext logContext,
@@ -145,7 +149,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         final long retryBackoffMaxMs,
         final OptionalDouble jitter,
         final Metrics metrics,
-        final ConsumerMetadata metadata) {
+        final ConsumerMetadata metadata,
+        final CommittedOffsetCache committedOffsetCache) {
+
         Objects.requireNonNull(coordinatorRequestManager, "Coordinator is needed upon committing offsets");
         this.time = time;
         this.logContext = logContext;
@@ -171,6 +177,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         this.metricsManager = new OffsetCommitMetricsManager(metrics);
         this.offsetCommitCallbackInvoker = offsetCommitCallbackInvoker;
         this.lastEpochSentOnCommit = Optional.empty();
+        this.committedOffsetCache = committedOffsetCache;
     }
 
     /**
@@ -243,6 +250,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result;
         if (requestState.offsets.isEmpty()) {
             result = CompletableFuture.completedFuture(Collections.emptyMap());
+        } else if (committedOffsetCache.isHitCache(requestState.offsets)) {
+            result = CompletableFuture.completedFuture(requestState.offsets);
         } else {
             autocommit.setInflightCommitStatus(true);
             OffsetCommitRequestState request = pendingRequests.addOffsetCommitRequest(requestState);
@@ -369,6 +378,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             autoCommitState.ifPresent(autoCommitState -> autoCommitState.setInflightCommitStatus(false));
             if (throwable == null) {
                 offsetCommitCallbackInvoker.enqueueInterceptorInvocation(allConsumedOffsets);
+                committedOffsetCache.tryAddToCache(allConsumedOffsets);
                 log.debug("Completed auto-commit of offsets {}", allConsumedOffsets);
             } else if (throwable instanceof RetriableCommitFailedException) {
                 log.debug("Auto-commit of offsets {} failed due to retriable error: {}",
@@ -403,6 +413,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             if (error != null) {
                 asyncCommitResult.completeExceptionally(commitAsyncExceptionForError(error));
             } else {
+                committedOffsetCache.tryAddToCache(committedOffsets);
                 asyncCommitResult.complete(offsets);
             }
         });
@@ -459,6 +470,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         // timeout hasn't expired.
         requestAttempt.future.whenComplete((res, error) -> {
             if (error == null) {
+                committedOffsetCache.tryAddToCache(res);
                 result.complete(requestAttempt.offsets);
             } else {
                 if (error instanceof RetriableException) {
