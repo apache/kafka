@@ -104,6 +104,11 @@ private[server] class ExpiringErrorCache(maxSize: Int, time: Time) {
     }
   }
 
+  def hasError(topicName: String, currentTimeMs: Long): Boolean = {
+    val entry = byTopic.get(topicName)
+    entry != null && entry.expirationTimeMs > currentTimeMs
+  }
+
   def getErrorsForTopics(topicNames: Set[String], currentTimeMs: Long): Map[String, String] = {
     val result = mutable.Map.empty[String, String]
     topicNames.foreach { topicName =>
@@ -179,15 +184,12 @@ class DefaultAutoTopicCreationManager(
 
     val currentTimeMs = time.milliseconds()
 
-    // Filter out topics that are in back-off (have cached errors)
-    val cachedErrors = topicCreationErrorCache.getErrorsForTopics(topics.keySet, currentTimeMs)
-
     // Filter out topics that are:
     // 1. Already in error cache (back-off period)
     // 2. Already in-flight (concurrent request)
     val topicsToCreate = topics.filter { case (topicName, _) =>
-      !cachedErrors.contains(topicName) &&  // Not in back-off
-      inflightTopics.add(topicName)          // Not in-flight
+      !topicCreationErrorCache.hasError(topicName, currentTimeMs) &&
+      inflightTopics.add(topicName)
     }
 
     if (topicsToCreate.nonEmpty) {
