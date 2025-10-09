@@ -272,7 +272,7 @@ class SocketServerTest {
     val address = plainSocket.getLocalAddress
     val clientId = "clientId"
 
-    // Send ApiVersionsRequest - unknown expected
+    // Send ApiVersionsRequest - if version < 3, unknown expected. Otherwise, client info expected.
     sendRequest(plainSocket, apiVersionRequestBytes(clientId, version))
     var receivedReq = receiveRequest(server.dataPlaneRequestChannel)
 
