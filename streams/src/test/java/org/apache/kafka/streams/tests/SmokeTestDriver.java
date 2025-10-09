@@ -48,11 +48,13 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -512,21 +514,34 @@ public class SmokeTestDriver extends SmokeTestUtil {
                                                 final boolean printResults,
                                                 final boolean eosEnabled) {
         final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        final BiPredicate<Number, Number> validationPredicate;
+        if (eosEnabled) {
+            validationPredicate = Objects::equals;
+        } else {
+            validationPredicate = SmokeTestDriver::lessEquals;
+        }
         boolean pass;
         try (final PrintStream resultStream = new PrintStream(byteArrayOutputStream)) {
-            pass = verifyTAgg(resultStream, inputs, events.get("tagg"), printResults);
+            pass = true;
+            if (eosEnabled) {
+                // TAGG is computing "Count-by-count", which may produce keys that are not in the input data in ALOS, so we skip validation in this case.
+                pass = verifyTAgg(resultStream, inputs, events.get("tagg"), printResults);
+            }
             pass &= verifySuppressed(resultStream, "min-suppressed", events, printResults);
             pass &= verify(resultStream, "min-suppressed", inputs, events, windowedKey -> {
                 final String unwindowedKey = windowedKey.substring(1, windowedKey.length() - 1).replaceAll("@.*", "");
                 return getMin(unwindowedKey);
-            }, printResults, eosEnabled);
+            }, Object::equals, printResults, eosEnabled);
             pass &= verifySuppressed(resultStream, "sws-suppressed", events, printResults);
-            pass &= verify(resultStream, "min", inputs, events, SmokeTestDriver::getMin, printResults, eosEnabled);
-            pass &= verify(resultStream, "max", inputs, events, SmokeTestDriver::getMax, printResults, eosEnabled);
-            pass &= verify(resultStream, "dif", inputs, events, key -> getMax(key).intValue() - getMin(key).intValue(), printResults, eosEnabled);
-            pass &= verify(resultStream, "sum", inputs, events, SmokeTestDriver::getSum, printResults, eosEnabled);
-            pass &= verify(resultStream, "cnt", inputs, events, key1 -> getMax(key1).intValue() - getMin(key1).intValue() + 1L, printResults, eosEnabled);
-            pass &= verify(resultStream, "avg", inputs, events, SmokeTestDriver::getAvg, printResults, eosEnabled);
+            pass &= verify(resultStream, "min", inputs, events, SmokeTestDriver::getMin, Object::equals, printResults, eosEnabled);
+            pass &= verify(resultStream, "max", inputs, events, SmokeTestDriver::getMax, Object::equals, printResults, eosEnabled);
+            pass &= verify(resultStream, "dif", inputs, events, key -> getMax(key).intValue() - getMin(key).intValue(), Object::equals, printResults, eosEnabled);
+            pass &= verify(resultStream, "sum", inputs, events, SmokeTestDriver::getSum, validationPredicate, printResults, eosEnabled);
+            pass &= verify(resultStream, "cnt", inputs, events, key1 -> getMax(key1).intValue() - getMin(key1).intValue() + 1L, validationPredicate, printResults, eosEnabled);
+            if (eosEnabled) {
+                // Average can overcount and undercount in ALOS, so we skip validation in that case.
+                pass &= verify(resultStream, "avg", inputs, events, SmokeTestDriver::getAvg, Object::equals, printResults, eosEnabled);
+            }
         }
         return new VerificationResult(pass, new String(byteArrayOutputStream.toByteArray(), StandardCharsets.UTF_8));
     }
@@ -536,6 +551,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
                                   final Map<String, Set<Integer>> inputData,
                                   final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
                                   final Function<String, Number> keyToExpectation,
+                                  final BiPredicate<Number, Number> validationPredicate,
                                   final boolean printResults,
                                   final boolean eosEnabled) {
         resultStream.printf("verifying topic '%s'%n", topic);
@@ -561,18 +577,17 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 }
             }
 
-
             for (final Map.Entry<String, LinkedList<ConsumerRecord<String, Number>>> entry : outputEvents.entrySet()) {
                 final String key = entry.getKey();
                 final Number expected = keyToExpectation.apply(key);
                 final Number actual = entry.getValue().getLast().value();
-                if (!expected.equals(actual)) {
+                if (!validationPredicate.test(expected, actual)) {
                     resultStream.printf("%s fail: key=%s actual=%s expected=%s%n", topic, key, actual, expected);
 
                     if (printResults) {
                         resultStream.printf("\t inputEvents=%n%s%n\t" +
                                 "echoEvents=%n%s%n\tmaxEvents=%n%s%n\tminEvents=%n%s%n\tdifEvents=%n%s%n\tcntEvents=%n%s%n\ttaggEvents=%n%s%n",
-                            indent("\t\t", observedInputEvents.get(key)),
+                            indent("\t\t", observedInputEvents.getOrDefault(key, new LinkedList<>())),
                             indent("\t\t", events.getOrDefault("echo", emptyMap()).getOrDefault(key, new LinkedList<>())),
                             indent("\t\t", events.getOrDefault("max", emptyMap()).getOrDefault(key, new LinkedList<>())),
                             indent("\t\t", events.getOrDefault("min", emptyMap()).getOrDefault(key, new LinkedList<>())),
@@ -588,6 +603,18 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 }
             }
             return true;
+        }
+    }
+
+    private static boolean lessEquals(final Number expected, final Number actual) {
+        if (actual instanceof Integer && expected instanceof Integer) {
+            return actual.intValue() >= expected.intValue();
+        } else if (actual instanceof Long && expected instanceof Long) {
+            return actual.longValue() >= expected.longValue();
+        } else if (actual instanceof Double && expected instanceof Double) {
+            return actual.doubleValue() >= expected.doubleValue();
+        } else {
+            throw new IllegalArgumentException("Unexpected type: " + actual.getClass());
         }
     }
 

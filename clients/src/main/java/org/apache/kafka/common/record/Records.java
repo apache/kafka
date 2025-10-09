@@ -90,4 +90,19 @@ public interface Records extends TransferableRecords {
      * @return The record iterator
      */
     Iterable<Record> records();
+
+    /**
+     * Return a slice of records from this instance, which is a view into this set starting from the given position
+     * and with the given size limit.
+     *
+     * If the size is beyond the end of the records, the end will be based on the size of the records at the time of the read.
+     *
+     * If this records set is already sliced, the position will be taken relative to that slicing.
+     *
+     * @param position The start position to begin the read from. The position should be aligned to
+     *                 the batch boundary, else the returned records can't be iterated.
+     * @param size The number of bytes after the start position to include
+     * @return A sliced wrapper on this message set limited based on the given position and size
+     */
+    Records slice(int position, int size);
 }

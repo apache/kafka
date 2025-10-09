@@ -22,7 +22,6 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 
 import java.time.Duration;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -76,7 +75,7 @@ public class MirrorHeartbeatTask extends SourceTask {
             Schema.BYTES_SCHEMA, heartbeat.recordKey(),
             Schema.BYTES_SCHEMA, heartbeat.recordValue(),
             timestamp);
-        return Collections.singletonList(record);
+        return List.of(record);
     }
 
     @Override

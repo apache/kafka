@@ -21,7 +21,6 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 
 import com.yammer.metrics.core.Meter;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -71,7 +70,7 @@ public final class BrokerTopicMetrics {
     }
 
     private BrokerTopicMetrics(Optional<String> name, boolean remoteStorageEnabled) {
-        this.tags = name.map(s -> Collections.singletonMap("topic", s)).orElse(Collections.emptyMap());
+        this.tags = name.map(s -> Map.of("topic", s)).orElse(Map.of());
 
         metricTypeMap.put(MESSAGE_IN_PER_SEC, new MeterWrapper(MESSAGE_IN_PER_SEC, "messages"));
         metricTypeMap.put(BYTES_IN_PER_SEC, new MeterWrapper(BYTES_IN_PER_SEC, "bytes"));

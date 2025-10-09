@@ -63,7 +63,7 @@ public final class ElectionState {
     /**
      * Return if the replica has voted for the given candidate.
      *
-     * A replica has voted for a candidate if all of the following are true:
+     * A replica has voted for a candidate if all the following are true:
      * 1. the node's id and voted id match and
      * 2. if the voted directory id is set, it matches the node's directory id
      *

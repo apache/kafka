@@ -19,10 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DeleteGroupsRequestData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.List;
 
 public class DeleteGroupsRequest extends AbstractRequest {
@@ -60,8 +59,8 @@ public class DeleteGroupsRequest extends AbstractRequest {
         );
     }
 
-    public static DeleteGroupsRequest parse(ByteBuffer buffer, short version) {
-        return new DeleteGroupsRequest(new DeleteGroupsRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static DeleteGroupsRequest parse(Readable readable, short version) {
+        return new DeleteGroupsRequest(new DeleteGroupsRequestData(readable, version), version);
     }
 
     @Override

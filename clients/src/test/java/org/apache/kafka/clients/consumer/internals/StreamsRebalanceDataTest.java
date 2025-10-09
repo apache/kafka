@@ -62,7 +62,7 @@ public class StreamsRebalanceDataTest {
     public void testTaskIdCompareTo() {
         final StreamsRebalanceData.TaskId task = new StreamsRebalanceData.TaskId("subtopologyId1", 1);
 
-        assertTrue(task.compareTo(new StreamsRebalanceData.TaskId(task.subtopologyId(), task.partitionId())) == 0);
+        assertEquals(0, task.compareTo(new StreamsRebalanceData.TaskId(task.subtopologyId(), task.partitionId())));
         assertTrue(task.compareTo(new StreamsRebalanceData.TaskId(task.subtopologyId() + "1", task.partitionId())) < 0);
         assertTrue(task.compareTo(new StreamsRebalanceData.TaskId(task.subtopologyId(), task.partitionId() + 1)) < 0);
         assertTrue(new StreamsRebalanceData.TaskId(task.subtopologyId() + "1", task.partitionId()).compareTo(task) > 0);
@@ -90,9 +90,9 @@ public class StreamsRebalanceDataTest {
     @Test
     public void assignmentShouldNotBeModifiable() {
         final StreamsRebalanceData.Assignment assignment = new StreamsRebalanceData.Assignment(
-            new HashSet<>(Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 1))),
-            new HashSet<>(Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 2))),
-            new HashSet<>(Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 3)))
+            Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 1)),
+            Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 2)),
+            Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 3))
         );
 
         assertThrows(
@@ -220,8 +220,8 @@ public class StreamsRebalanceDataTest {
     @Test
     public void subtopologyShouldNotBeModifiable() {
         final StreamsRebalanceData.Subtopology subtopology = new StreamsRebalanceData.Subtopology(
-            new HashSet<>(Set.of("sourceTopic1")),
-            new HashSet<>(Set.of("repartitionSinkTopic1")),
+            Set.of("sourceTopic1"),
+            Set.of("repartitionSinkTopic1"),
             Map.of("repartitionSourceTopic1", new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.of((short) 1), Map.of()))
                 .entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)),
@@ -420,4 +420,21 @@ public class StreamsRebalanceDataTest {
 
         assertFalse(streamsRebalanceData.shutdownRequested());
     }
+
+    @Test
+    public void streamsRebalanceDataShouldBeConstructedWithEmptyStatuses() {
+        final UUID processId = UUID.randomUUID();
+        final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090));
+        final Map<String, StreamsRebalanceData.Subtopology> subtopologies = Map.of();
+        final Map<String, String> clientTags = Map.of("clientTag1", "clientTagValue1");
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+            processId,
+            endpoint,
+            subtopologies,
+            clientTags
+        );
+
+        assertTrue(streamsRebalanceData.statuses().isEmpty());
+    }
+
 }

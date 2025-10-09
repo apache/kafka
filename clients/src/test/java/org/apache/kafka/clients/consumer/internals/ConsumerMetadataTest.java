@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.Node;
@@ -98,6 +99,78 @@ public class ConsumerMetadataTest {
             assertEquals(Set.of("__matching_topic", "__consumer_offsets"), metadata.fetch().topics());
         else
             assertEquals(Collections.singleton("__matching_topic"), metadata.fetch().topics());
+    }
+
+    @Test
+    public void testSubscriptionToBrokerRegexDoesNotRequestAllTopicsMetadata() {
+        // Subscribe to broker-side regex
+        subscription.subscribe(new SubscriptionPattern("__.*"), Optional.empty());
+
+        // Receive assignment from coordinator with topic IDs only
+        Uuid assignedTopicId = Uuid.randomUuid();
+        subscription.setAssignedTopicIds(Set.of(assignedTopicId));
+
+        // Metadata request should only include the assigned topic IDs
+        try (ConsumerMetadata metadata = newConsumerMetadata(false)) {
+            MetadataRequest.Builder builder = metadata.newMetadataRequestBuilder();
+            assertFalse(builder.isAllTopics(), "Should not request all topics when using broker-side regex");
+            assertEquals(List.of(assignedTopicId), builder.topicIds(), "Should only request assigned topic IDs when using broker-side regex");
+        }
+    }
+
+    @Test
+    public void testSubscriptionToBrokerRegexRetainsAssignedTopics() {
+        // Subscribe to broker-side regex
+        subscription.subscribe(new SubscriptionPattern("__.*"), Optional.empty());
+
+        // Receive assignment from coordinator with topic IDs only
+        Uuid assignedTopicId = Uuid.randomUuid();
+        subscription.setAssignedTopicIds(Set.of(assignedTopicId));
+
+        // Metadata request for assigned topic IDs
+        try (ConsumerMetadata metadata = newConsumerMetadata(false)) {
+            MetadataRequest.Builder builder = metadata.newMetadataRequestBuilder();
+            assertEquals(List.of(assignedTopicId), builder.topicIds());
+
+            // Metadata response with the assigned topic ID and name
+            Map<String, Uuid> topicIds = Map.of("__matching_topic", assignedTopicId);
+            MetadataResponse response = RequestTestUtils.metadataUpdateWithIds(1, singletonMap("__matching_topic", 1), topicIds);
+            metadata.updateWithCurrentRequestVersion(response, false, time.milliseconds());
+
+            assertEquals(Set.of("__matching_topic"), new HashSet<>(metadata.fetch().topics()));
+            assertEquals(Set.of("__matching_topic"), metadata.fetch().topics());
+        }
+    }
+
+    @Test
+    public void testSubscriptionToBrokerRegexAllowsTransientTopics() {
+        // Subscribe to broker-side regex
+        subscription.subscribe(new SubscriptionPattern("__.*"), Optional.empty());
+
+        // Receive assignment from coordinator with topic IDs only
+        Uuid assignedTopicId = Uuid.randomUuid();
+        subscription.setAssignedTopicIds(Set.of(assignedTopicId));
+
+        // Metadata request should only include the assigned topic IDs
+        try (ConsumerMetadata metadata = newConsumerMetadata(false)) {
+            MetadataRequest.Builder builder = metadata.newMetadataRequestBuilder();
+            assertFalse(builder.isAllTopics());
+            assertEquals(List.of(assignedTopicId), builder.topicIds());
+
+            // Call to offsets-related APIs starts. Metadata requests should move to requesting topic names temporarily.
+            String transientTopic = "__transient_topic";
+            metadata.addTransientTopics(Set.of(transientTopic));
+            builder = metadata.newMetadataRequestBuilder();
+            assertFalse(builder.isAllTopics());
+            // assertTrue(builder.topicIds().isEmpty());
+            assertEquals(List.of(transientTopic), builder.topics());
+
+            // Call to offsets-related APIs ends. Metadata requests should move back to requesting topic IDs for RE2J.
+            metadata.clearTransientTopics();
+            builder = metadata.newMetadataRequestBuilder();
+            assertFalse(builder.isAllTopics());
+            assertEquals(List.of(assignedTopicId), builder.topicIds());
+        }
     }
 
     @Test

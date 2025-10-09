@@ -23,10 +23,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -42,11 +39,11 @@ public class KafkaClusterTestKitTest {
     @ValueSource(ints = {0, -1})
     public void testCreateClusterWithBadNumDisksThrows(int disks) {
         IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
-                new TestKitNodes.Builder()
-                        .setNumBrokerNodes(1)
-                        .setNumDisksPerBroker(disks)
-                        .setNumControllerNodes(1)
-                        .build())
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumDisksPerBroker(disks)
+                .setNumControllerNodes(1)
+                .build())
         );
         assertEquals("Invalid value for numDisksPerBroker", e.getMessage());
     }
@@ -76,15 +73,15 @@ public class KafkaClusterTestKitTest {
     @Test
     public void testCreateClusterWithBadPerServerProperties() {
         Map<Integer, Map<String, String>> perServerProperties = new HashMap<>();
-        perServerProperties.put(100, Collections.singletonMap("foo", "foo1"));
-        perServerProperties.put(200, Collections.singletonMap("bar", "bar1"));
+        perServerProperties.put(100, Map.of("foo", "foo1"));
+        perServerProperties.put(200, Map.of("bar", "bar1"));
 
         IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
-                new TestKitNodes.Builder()
-                        .setNumBrokerNodes(1)
-                        .setNumControllerNodes(1)
-                        .setPerServerProperties(perServerProperties)
-                        .build())
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .setPerServerProperties(perServerProperties)
+                .build())
         );
         assertEquals("Unknown server id 100, 200 in perServerProperties, the existent server ids are 0, 3000", e.getMessage());
     }
@@ -93,11 +90,11 @@ public class KafkaClusterTestKitTest {
     @ValueSource(booleans = {true, false})
     public void testCreateClusterAndCloseWithMultipleLogDirs(boolean combined) throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-                new TestKitNodes.Builder().
-                        setNumBrokerNodes(5).
-                        setNumDisksPerBroker(2).
-                        setCombined(combined).
-                        setNumControllerNodes(3).build()).build()) {
+            new TestKitNodes.Builder().
+                setNumBrokerNodes(5).
+                setNumDisksPerBroker(2).
+                setCombined(combined).
+                setNumControllerNodes(3).build()).build()) {
 
             TestKitNodes nodes = cluster.nodes();
             assertEquals(5, nodes.brokerNodes().size());
@@ -105,15 +102,15 @@ public class KafkaClusterTestKitTest {
 
             nodes.brokerNodes().forEach((brokerId, node) -> {
                 assertEquals(2, node.logDataDirectories().size());
-                Set<String> expected = new HashSet<>(Arrays.asList(String.format("broker_%d_data0", brokerId), String.format("broker_%d_data1", brokerId)));
+                Set<String> expected = Set.of(String.format("broker_%d_data0", brokerId), String.format("broker_%d_data1", brokerId));
                 if (nodes.isCombined(node.id())) {
-                    expected = new HashSet<>(Arrays.asList(String.format("combined_%d_0", brokerId), String.format("combined_%d_1", brokerId)));
+                    expected = Set.of(String.format("combined_%d_0", brokerId), String.format("combined_%d_1", brokerId));
                 }
                 assertEquals(
-                        expected,
-                        node.logDataDirectories().stream()
-                                .map(p -> Paths.get(p).getFileName().toString())
-                                .collect(Collectors.toSet())
+                    expected,
+                    node.logDataDirectories().stream()
+                        .map(p -> Paths.get(p).getFileName().toString())
+                        .collect(Collectors.toSet())
                 );
             });
 
@@ -128,11 +125,11 @@ public class KafkaClusterTestKitTest {
     public void testCreateClusterWithSpecificBaseDir() throws Exception {
         Path baseDirectory = TestUtils.tempDirectory().toPath();
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-                new TestKitNodes.Builder().
-                        setBaseDirectory(baseDirectory).
-                        setNumBrokerNodes(1).
-                        setCombined(true).
-                        setNumControllerNodes(1).build()).build()) {
+            new TestKitNodes.Builder().
+                setBaseDirectory(baseDirectory).
+                setNumBrokerNodes(1).
+                setCombined(true).
+                setNumControllerNodes(1).build()).build()) {
             assertEquals(cluster.nodes().baseDirectory(), baseDirectory.toFile().getAbsolutePath());
             cluster.nodes().controllerNodes().values().forEach(controller ->
                 assertTrue(Paths.get(controller.metadataDirectory()).startsWith(baseDirectory)));
@@ -140,6 +137,7 @@ public class KafkaClusterTestKitTest {
                 assertTrue(Paths.get(broker.metadataDirectory()).startsWith(baseDirectory)));
         }
     }
+
     @Test
     public void testExposedFaultHandlers() {
         TestKitNodes nodes = new TestKitNodes.Builder()

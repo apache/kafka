@@ -26,7 +26,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -56,7 +55,7 @@ public class CatalogTestFilterTest {
     @Test
     public void testEmptyCatalog(@TempDir Path tempDir) throws IOException {
         Path catalog = tempDir.resolve("catalog.txt");
-        Files.write(catalog, Collections.emptyList());
+        Files.write(catalog, List.of());
 
         Filter<TestDescriptor> filter = CatalogTestFilter.create(catalog.toString());
         assertTrue(filter.apply(descriptor("o.a.k.Foo", "testBar1")).excluded());

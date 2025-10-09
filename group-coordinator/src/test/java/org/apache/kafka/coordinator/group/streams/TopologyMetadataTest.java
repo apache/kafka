@@ -16,17 +16,19 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredInternalTopic;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
@@ -40,20 +42,23 @@ import static org.mockito.Mockito.when;
 
 class TopologyMetadataTest {
 
-    private Map<String, TopicMetadata> topicMetadata;
+    private CoordinatorMetadataImage metadataImage;
     private SortedMap<String, ConfiguredSubtopology> subtopologyMap;
     private TopologyMetadata topologyMetadata;
 
     @BeforeEach
     void setUp() {
-        topicMetadata = new HashMap<>();
+        metadataImage = new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), "source_topic", 3)
+            .addTopic(Uuid.randomUuid(), "repartition_source_topic", 4)
+            .build());
         subtopologyMap = new TreeMap<>();
-        topologyMetadata = new TopologyMetadata(topicMetadata, subtopologyMap);
+        topologyMetadata = new TopologyMetadata(metadataImage, subtopologyMap);
     }
 
     @Test
-    void testTopicMetadata() {
-        assertEquals(topicMetadata, topologyMetadata.topicMetadata());
+    void testMetadataImage() {
+        assertEquals(metadataImage, topologyMetadata.metadataImage());
     }
 
     @Test
@@ -77,18 +82,9 @@ class TopologyMetadataTest {
 
     @Test
     void testMaxNumInputPartitions() {
-        ConfiguredInternalTopic internalTopic = mock(ConfiguredInternalTopic.class);
         ConfiguredSubtopology subtopology = mock(ConfiguredSubtopology.class);
         subtopologyMap.put("subtopology1", subtopology);
-        when(subtopology.sourceTopics()).thenReturn(Set.of("source_topic"));
-        when(subtopology.repartitionSourceTopics()).thenReturn(Map.of("repartition_source_topic", internalTopic));
-
-        TopicMetadata topicMeta1 = mock(TopicMetadata.class);
-        TopicMetadata topicMeta2 = mock(TopicMetadata.class);
-        topicMetadata.put("source_topic", topicMeta1);
-        topicMetadata.put("repartition_source_topic", topicMeta2);
-        when(topicMeta1.numPartitions()).thenReturn(3);
-        when(topicMeta2.numPartitions()).thenReturn(4);
+        when(subtopology.numberOfTasks()).thenReturn(4);
 
         assertEquals(4, topologyMetadata.maxNumInputPartitions("subtopology1"));
     }
@@ -112,15 +108,5 @@ class TopologyMetadataTest {
     @Test
     void testMaxNumInputPartitionsThrowsExceptionWhenSubtopologyIdDoesNotExist() {
         assertThrows(NoSuchElementException.class, () -> topologyMetadata.maxNumInputPartitions("non_existent_subtopology"));
-    }
-
-    @Test
-    void testMaxNumInputPartitionsThrowsExceptionWhenSubtopologyContainsNoSourceTopics() {
-        ConfiguredSubtopology subtopology = mock(ConfiguredSubtopology.class);
-        when(subtopology.sourceTopics()).thenReturn(Set.of());
-        when(subtopology.repartitionSourceTopics()).thenReturn(Map.of());
-        subtopologyMap.put("subtopology1", subtopology);
-
-        assertThrows(IllegalStateException.class, () -> topologyMetadata.maxNumInputPartitions("subtopology1"));
     }
 }

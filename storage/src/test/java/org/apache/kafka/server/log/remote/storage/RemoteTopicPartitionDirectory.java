@@ -29,10 +29,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import static java.lang.String.format;
-import static java.util.Arrays.asList;
 import static java.util.Objects.requireNonNull;
 import static java.util.regex.Pattern.compile;
 import static java.util.stream.Collectors.toSet;
@@ -91,7 +89,7 @@ public final class RemoteTopicPartitionDirectory {
     }
 
     boolean delete() {
-        return deleteFilesOnly(asList(directory.listFiles())) && deleteQuietly(directory);
+        return deleteFilesOnly(List.of(directory.listFiles())) && deleteQuietly(directory);
     }
 
     void traverse(final LocalTieredStorageTraverser traverser) {
@@ -106,7 +104,7 @@ public final class RemoteTopicPartitionDirectory {
 
         return uuids.stream()
                 .map(uuid -> RemoteLogSegmentFileset.openExistingFileset(this, uuid))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**
@@ -121,7 +119,7 @@ public final class RemoteTopicPartitionDirectory {
         final boolean existed = directory.exists();
 
         if (!existed) {
-            LOGGER.info("Creating directory: " + directory.getAbsolutePath());
+            LOGGER.info("Creating directory: {}", directory.getAbsolutePath());
             directory.mkdirs();
         }
 

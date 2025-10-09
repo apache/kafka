@@ -18,10 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.AssignReplicasToDirsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Map;
 
@@ -54,8 +53,8 @@ public class AssignReplicasToDirsResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    public static AssignReplicasToDirsResponse parse(ByteBuffer buffer, short version) {
+    public static AssignReplicasToDirsResponse parse(Readable readable, short version) {
         return new AssignReplicasToDirsResponse(new AssignReplicasToDirsResponseData(
-                new ByteBufferAccessor(buffer), version));
+                readable, version));
     }
 }

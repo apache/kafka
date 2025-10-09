@@ -30,18 +30,16 @@ import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.test.api.Flaky
-import org.apache.kafka.common.{KafkaException, requests}
+import org.apache.kafka.common.{KafkaException, Uuid, requests}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.QuotaConfig
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import java.io.IOException
 import java.net.{InetAddress, Socket}
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
-import java.util.{Collections, Properties}
+import java.util.Properties
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 
@@ -56,7 +54,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   val plaintextListenerDefaultQuota = 30
   var executor: ExecutorService = _
   var admin: Admin = _
-
+  var topicId: Uuid = _
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(QuotaConfig.NUM_QUOTA_SAMPLES_CONFIG, "2")
     properties.put("listener.name.plaintext.max.connection.creation.rate", plaintextListenerDefaultQuota.toString)
@@ -67,6 +65,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     super.setUp(testInfo)
     admin = createAdminClient(listener)
     TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers)
+    topicId = TestUtils.describeTopic(admin, topic).topicId()
   }
 
   @AfterEach
@@ -83,9 +82,8 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
   @Flaky("KAFKA-17999")
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDynamicConnectionQuota(quorum: String): Unit = {
+  @Test
+  def testDynamicConnectionQuota(): Unit = {
     val maxConnectionsPerIP = 5
 
     def connectAndVerify(): Unit = {
@@ -111,9 +109,8 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     verifyMaxConnections(maxConnectionsPerIPOverride, connectAndVerify)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDynamicListenerConnectionQuota(quorum: String): Unit = {
+  @Test
+  def testDynamicListenerConnectionQuota(): Unit = {
     val initialConnectionCount = connectionCount
 
     def connectAndVerify(): Unit = {
@@ -184,9 +181,8 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDynamicListenerConnectionCreationRateQuota(quorum: String): Unit = {
+  @Test
+  def testDynamicListenerConnectionCreationRateQuota(): Unit = {
     // Create another listener. PLAINTEXT is an inter-broker listener
     // keep default limits
     val newListenerNames = Seq("PLAINTEXT", "EXTERNAL")
@@ -246,9 +242,8 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     waitForConnectionCount(initialConnectionCount)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDynamicIpConnectionRateQuota(quorum: String): Unit = {
+  @Test
+  def testDynamicIpConnectionRateQuota(): Unit = {
     val connRateLimit = 10
     val initialConnectionCount = connectionCount
     // before setting connection rate to 10, verify we can do at least double that by default (no limit)
@@ -307,9 +302,9 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   private def produceRequest: ProduceRequest =
     requests.ProduceRequest.builder(new ProduceRequestData()
       .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
-        Collections.singletonList(new ProduceRequestData.TopicProduceData()
-          .setName(topic)
-          .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
+        java.util.List.of(new ProduceRequestData.TopicProduceData()
+          .setTopicId(topicId)
+          .setPartitionData(java.util.List.of(new ProduceRequestData.PartitionProduceData()
             .setIndex(0)
             .setRecords(MemoryRecords.withRecords(Compression.NONE,
               new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes))))))

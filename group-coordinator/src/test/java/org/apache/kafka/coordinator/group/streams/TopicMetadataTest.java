@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataValue;
 
 import org.junit.jupiter.api.Test;
 
@@ -71,19 +70,5 @@ public class TopicMetadataTest {
         Exception exception = assertThrows(IllegalArgumentException.class, () ->
             new TopicMetadata(Uuid.randomUuid(), "valid-topic", -1));
         assertEquals("Number of partitions must be positive.", exception.getMessage());
-    }
-
-    @Test
-    public void testFromRecord() {
-        StreamsGroupPartitionMetadataValue.TopicMetadata record = new StreamsGroupPartitionMetadataValue.TopicMetadata()
-            .setTopicId(Uuid.randomUuid())
-            .setTopicName("test-topic")
-            .setNumPartitions(3);
-
-        TopicMetadata topicMetadata = TopicMetadata.fromRecord(record);
-
-        assertEquals(record.topicId(), topicMetadata.id());
-        assertEquals(record.topicName(), topicMetadata.name());
-        assertEquals(record.numPartitions(), topicMetadata.numPartitions());
     }
 }

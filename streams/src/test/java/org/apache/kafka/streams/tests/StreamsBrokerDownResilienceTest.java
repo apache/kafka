@@ -93,7 +93,7 @@ public class StreamsBrokerDownResilienceTest {
         final Serde<String> stringSerde = Serdes.String();
 
         builder.stream(Collections.singletonList(SOURCE_TOPIC_1), Consumed.with(stringSerde, stringSerde))
-            .peek(new ForeachAction<String, String>() {
+            .peek(new ForeachAction<>() {
                 int messagesProcessed = 0;
                 @Override
                 public void apply(final String key, final String value) {

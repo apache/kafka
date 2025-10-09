@@ -63,8 +63,9 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
     protected final Logger logger;
 
     /**
-     * Time that the group coordinator will wait on member to revoke its partitions. This is provided by the group
-     * coordinator in the heartbeat
+     * Max time allowed between invocations of poll, defined in the {@link ConsumerConfig#MAX_POLL_INTERVAL_MS_CONFIG} config.
+     * This is sent to the coordinator in the first heartbeat to join a group, to be used as rebalance timeout.
+     * Also, the consumer will proactively rejoin the group on a call to poll if this time has expired.
      */
     protected final int maxPollIntervalMs;
 
@@ -181,8 +182,9 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(leaveHeartbeat));
         }
 
-        // Case 1: The member is leaving
-        boolean heartbeatNow = membershipManager().state() == MemberState.LEAVING ||
+        // Case 1: The member state is LEAVING - if the member is a share consumer, we should immediately send leave;
+        // if the member is an async consumer, this will also depend on leavingGroupOperation.
+        boolean heartbeatNow = shouldSendLeaveHeartbeatNow() ||
             // Case 2: The member state indicates it should send a heartbeat without waiting for the interval,
             // and there is no heartbeat request currently in-flight
             (membershipManager().shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight());
@@ -200,6 +202,11 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
      * This is provided so that the {@link ApplicationEventProcessor} can access the state for querying or updating.
      */
     public abstract AbstractMembershipManager<R> membershipManager();
+
+    /**
+     * @return the member should send leave heartbeat immediately or not
+     */
+    protected abstract boolean shouldSendLeaveHeartbeatNow();
 
     /**
      * Generate a heartbeat request to leave the group if the state is still LEAVING when this is

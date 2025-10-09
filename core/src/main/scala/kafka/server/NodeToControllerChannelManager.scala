@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.raft.RaftManager
 import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.common.metrics.Metrics
@@ -28,6 +27,7 @@ import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, Reconfigurable}
+import org.apache.kafka.raft.RaftManager
 import org.apache.kafka.server.common.{ApiMessageAndVersion, ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
@@ -37,7 +37,7 @@ import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.atomic.AtomicReference
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.{RichOption, RichOptionalInt}
+import scala.jdk.OptionConverters.{RichOption, RichOptional, RichOptionalInt}
 
 case class ControllerInformation(
   node: Option[Node],
@@ -55,8 +55,9 @@ object RaftControllerNodeProvider {
     raftManager: RaftManager[ApiMessageAndVersion],
     config: KafkaConfig,
   ): RaftControllerNodeProvider = {
-    val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
-    val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
+    val controllerListenerName = new ListenerName(config.controllerListenerNames.get(0))
+    val controllerSecurityProtocol = Option(config.effectiveListenerSecurityProtocolMap.get(controllerListenerName))
+      .getOrElse(SecurityProtocol.forName(controllerListenerName.value()))
     val controllerSaslMechanism = config.saslMechanismControllerProtocol
     new RaftControllerNodeProvider(
       raftManager,
@@ -78,10 +79,10 @@ class RaftControllerNodeProvider(
   val saslMechanism: String
 ) extends ControllerNodeProvider with Logging {
 
-  private def idToNode(id: Int): Option[Node] = raftManager.voterNode(id, listenerName)
+  private def idToNode(id: Int): Option[Node] = raftManager.client.voterNode(id, listenerName).toScala
 
   override def getControllerInfo(): ControllerInformation =
-    ControllerInformation(raftManager.leaderAndEpoch.leaderId.toScala.flatMap(idToNode),
+    ControllerInformation(raftManager.client.leaderAndEpoch.leaderId.toScala.flatMap(idToNode),
       listenerName, securityProtocol, saslMechanism)
 }
 

@@ -23,13 +23,13 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * The assignment specification for a Streams group member.
+ * The assignment specification for a streams group member.
  *
  * @param instanceId   The instance ID if provided.
  * @param rackId       The rack ID if provided.
- * @param activeTasks  Reconciled active tasks
- * @param standbyTasks Reconciled standby tasks
- * @param warmupTasks  Reconciled warm-up tasks
+ * @param activeTasks  Current target active tasks
+ * @param standbyTasks Current target standby tasks
+ * @param warmupTasks  Current target warm-up tasks
  * @param processId    The process ID.
  * @param clientTags   The client tags for a rack-aware assignment.
  * @param taskOffsets  The last received cumulative task offsets of assigned tasks or dormant tasks.

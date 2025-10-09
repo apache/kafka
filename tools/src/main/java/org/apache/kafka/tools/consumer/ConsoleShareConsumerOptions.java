@@ -37,7 +37,9 @@ import joptsimple.OptionSpec;
 public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
     private final OptionSpec<String> messageFormatterOpt;
     private final OptionSpec<String> messageFormatterConfigOpt;
-    private final OptionSpec<String> messageFormatterArgOpt;
+    @Deprecated(since = "4.2", forRemoval = true)
+    private final OptionSpec<String> messageFormatterArgOptDeprecated;
+    private OptionSpec<String> messageFormatterArgOpt;
     private final OptionSpec<String> keyDeserializerOpt;
     private final OptionSpec<String> valueDeserializerOpt;
     private final OptionSpec<Integer> maxMessagesOpt;
@@ -50,18 +52,32 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
     private final OptionSpec<String> groupIdOpt;
     private final Properties consumerProps;
     private final MessageFormatter formatter;
+    private final OptionSpec<?> enableSystestEventsLoggingOpt;
 
+    @SuppressWarnings("deprecation")
     public ConsoleShareConsumerOptions(String[] args) throws IOException {
         super(args);
         topicOpt = parser.accepts("topic", "The topic to consume from.")
                 .withRequiredArg()
                 .describedAs("topic")
                 .ofType(String.class);
-        OptionSpec<String> consumerPropertyOpt = parser.accepts("consumer-property", "A mechanism to pass user-defined properties in the form key=value to the consumer.")
+        @Deprecated(since = "4.2", forRemoval = true)
+        OptionSpec<String> consumerPropertyOpt = parser.accepts("consumer-property", "(DEPRECATED) Consumer config properties in the form key=value. " +
+                        "This option will be removed in a future version. Use --command-property instead.")
                 .withRequiredArg()
                 .describedAs("consumer_prop")
                 .ofType(String.class);
-        OptionSpec<String> consumerConfigOpt = parser.accepts("consumer-config", "Consumer config properties file. Note that " + consumerPropertyOpt + " takes precedence over this config.")
+        OptionSpec<String> commandPropertyOpt = parser.accepts("command-property", "Consumer config properties in the form key=value.")
+                .withRequiredArg()
+                .describedAs("consumer_prop")
+                .ofType(String.class);
+        @Deprecated(since = "4.2", forRemoval = true)
+        OptionSpec<String> consumerConfigOpt = parser.accepts("consumer-config", "(DEPRECATED) Consumer config properties file. Note that " + commandPropertyOpt + " takes precedence over this config. " +
+                        "This option will be removed in a future version. Use --command-config instead.")
+                .withRequiredArg()
+                .describedAs("config file")
+                .ofType(String.class);
+        OptionSpec<String> commandConfigOpt = parser.accepts("command-config", "Consumer config properties file. Note that " + commandPropertyOpt + " takes precedence over this config.")
                 .withRequiredArg()
                 .describedAs("config file")
                 .ofType(String.class);
@@ -70,7 +86,29 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
                 .describedAs("class")
                 .ofType(String.class)
                 .defaultsTo(DefaultMessageFormatter.class.getName());
-        messageFormatterArgOpt = parser.accepts("property",
+        messageFormatterArgOptDeprecated = parser.accepts("property",
+                        "(DEPRECATED) The properties to initialize the message formatter. Default properties include: \n" +
+                                " print.timestamp=true|false\n" +
+                                " print.key=true|false\n" +
+                                " print.offset=true|false\n" +
+                                " print.delivery=true|false\n" +
+                                " print.epoch=true|false\n" +
+                                " print.partition=true|false\n" +
+                                " print.headers=true|false\n" +
+                                " print.value=true|false\n" +
+                                " key.separator=<key.separator>\n" +
+                                " line.separator=<line.separator>\n" +
+                                " headers.separator=<headers.separator>\n" +
+                                " null.literal=<null.literal>\n" +
+                                " key.deserializer=<key.deserializer>\n" +
+                                " value.deserializer=<value.deserializer>\n" +
+                                " header.deserializer=<header.deserializer>\n" +
+                                "\nUsers can also pass in customized properties for their formatter; more specifically, users can pass in properties keyed with 'key.deserializer.', 'value.deserializer.' and 'headers.deserializer.' prefixes to configure their deserializers. " +
+                                "\nThis option will be removed in a future version. Use --formatter-property instead.")
+                .withRequiredArg()
+                .describedAs("prop")
+                .ofType(String.class);
+        messageFormatterArgOpt = parser.accepts("formatter-property",
                         "The properties to initialize the message formatter. Default properties include: \n" +
                                 " print.timestamp=true|false\n" +
                                 " print.key=true|false\n" +
@@ -82,7 +120,7 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
                                 " print.value=true|false\n" +
                                 " key.separator=<key.separator>\n" +
                                 " line.separator=<line.separator>\n" +
-                                " headers.separator=<line.separator>\n" +
+                                " headers.separator=<headers.separator>\n" +
                                 " null.literal=<null.literal>\n" +
                                 " key.deserializer=<key.deserializer>\n" +
                                 " value.deserializer=<value.deserializer>\n" +
@@ -113,7 +151,7 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
                 .ofType(String.class);
         keyDeserializerOpt = parser.accepts("key-deserializer", "The name of the class to use for deserializing keys.")
                 .withRequiredArg()
-                .describedAs("deserializer for key")
+                .describedAs("deserializer for keys")
                 .ofType(String.class);
         valueDeserializerOpt = parser.accepts("value-deserializer", "The name of the class to use for deserializing values.")
                 .withRequiredArg()
@@ -123,6 +161,8 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
                 .withRequiredArg()
                 .describedAs("share group id")
                 .ofType(String.class);
+        enableSystestEventsLoggingOpt = parser.accepts("enable-systest-events",
+            "Log lifecycle events of the share consumer in addition to logging consumed messages. (This is specific for system tests.)");
 
         try {
             options = parser.parse(args);
@@ -138,10 +178,26 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
             CommandLineUtils.printUsageAndExit(parser, "At most one of --reject and --release may be specified.");
         }
 
-        Properties consumerPropsFromFile = options.has(consumerConfigOpt)
-                ? Utils.loadProps(options.valueOf(consumerConfigOpt))
+        if (options.has(consumerPropertyOpt) && options.has(commandPropertyOpt)) {
+            CommandLineUtils.printUsageAndExit(parser, "Options --consumer-property and --command-property cannot be specified together.");
+        }
+        if (options.has(consumerConfigOpt) && options.has(commandConfigOpt)) {
+            CommandLineUtils.printUsageAndExit(parser, "Options --consumer-config and --command-config cannot be specified together.");
+        }
+
+        if (options.has(consumerPropertyOpt)) {
+            System.out.println("Option --consumer-property is deprecated and will be removed in a future version. Use --command-property instead.");
+            commandPropertyOpt = consumerPropertyOpt;
+        }
+        if (options.has(consumerConfigOpt)) {
+            System.out.println("Option --consumer-config is deprecated and will be removed in a future version. Use --command-config instead.");
+            commandConfigOpt = consumerConfigOpt;
+        }
+
+        Properties consumerPropsFromFile = options.has(commandConfigOpt)
+                ? Utils.loadProps(options.valueOf(commandConfigOpt))
                 : new Properties();
-        Properties extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt));
+        Properties extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(commandPropertyOpt));
 
         Set<String> groupIdsProvided = checkShareGroup(consumerPropsFromFile, extraConsumerProps);
         consumerProps = buildConsumerProps(consumerPropsFromFile, extraConsumerProps, groupIdsProvided);
@@ -200,6 +256,13 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
             Class<?> messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt));
             formatter = (MessageFormatter) messageFormatterClass.getDeclaredConstructor().newInstance();
 
+            if (options.has(messageFormatterArgOpt) && options.has(messageFormatterArgOptDeprecated)) {
+                CommandLineUtils.printUsageAndExit(parser, "Options --property and --formatter-property cannot be specified together.");
+            }
+            if (options.has(messageFormatterArgOptDeprecated)) {
+                System.out.println("Option --property is deprecated and will be removed in a future version. Use --formatter-property instead.");
+                messageFormatterArgOpt = messageFormatterArgOptDeprecated;
+            }
             Properties formatterArgs = formatterArgs();
             Map<String, String> formatterConfigs = new HashMap<>();
             for (final String name : formatterArgs.stringPropertyNames()) {
@@ -267,5 +330,9 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
 
     MessageFormatter formatter() {
         return formatter;
+    }
+
+    boolean enableSystestEventsLogging() {
+        return options.has(enableSystestEventsLoggingOpt);
     }
 }

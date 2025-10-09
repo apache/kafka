@@ -34,14 +34,14 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
 import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile;
 import org.apache.kafka.test.TestUtils;
 
+import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -59,13 +59,77 @@ public class LogManagerIntegrationTest {
         this.cluster = cluster;
     }
 
+    @ClusterTest(types = {Type.KRAFT})
+    public void testIOExceptionOnLogSegmentCloseResultsInRecovery() throws IOException, InterruptedException, ExecutionException {
+        try (Admin admin = cluster.admin()) {
+            admin.createTopics(List.of(new NewTopic("foo", 1, (short) 1))).all().get();
+        }
+        cluster.waitTopicCreation("foo", 1);
+
+        // Produce some data into the topic
+        Map<String, Object> producerConfigs = Map.of(
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers(),
+                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()
+        );
+
+        try (Producer<String, String> producer = new KafkaProducer<>(producerConfigs)) {
+            producer.send(new ProducerRecord<>("foo", 0, null, "bar")).get();
+            producer.flush();
+        }
+
+        var broker = cluster.brokers().get(0);
+
+        File timeIndexFile = broker.logManager()
+                .getLog(new TopicPartition("foo", 0), false).get()
+                .activeSegment()
+                .timeIndexFile();
+
+        // Set read only so that we throw an IOException on shutdown
+        assertTrue(timeIndexFile.exists());
+        assertTrue(timeIndexFile.setReadOnly());
+
+        broker.shutdown();
+
+        assertEquals(1, broker.config().logDirs().size());
+        String logDir = broker.config().logDirs().get(0);
+        CleanShutdownFileHandler cleanShutdownFileHandler = new CleanShutdownFileHandler(logDir);
+        assertFalse(cleanShutdownFileHandler.exists(), "Did not expect the clean shutdown file to exist");
+
+        // Ensure we have a corrupt index on broker shutdown
+        long maxIndexSize = broker.config().logIndexSizeMaxBytes();
+        long expectedIndexSize = 12 * (maxIndexSize / 12);
+        assertEquals(expectedIndexSize, timeIndexFile.length());
+
+        // Allow write permissions before startup
+        assertTrue(timeIndexFile.setWritable(true));
+
+        broker.startup();
+        // make sure there is no error during load logs
+        assertTrue(cluster.firstFatalException().isEmpty());
+        try (Admin admin = cluster.admin()) {
+            TestUtils.waitForCondition(() -> {
+                List<TopicPartitionInfo> partitionInfos = admin.describeTopics(List.of("foo"))
+                        .topicNameValues().get("foo").get().partitions();
+                return partitionInfos.get(0).leader().id() == 0;
+            }, "Partition does not have a leader assigned");
+        }
+
+        // Ensure that sanity check does not fail
+        broker.logManager()
+                .getLog(new TopicPartition("foo", 0), false).get()
+                .activeSegment()
+                .timeIndex()
+                .sanityCheck();
+    }
+
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 3)
     public void testRestartBrokerNoErrorIfMissingPartitionMetadata() throws IOException, ExecutionException, InterruptedException {
 
         try (Admin admin = cluster.admin()) {
-            admin.createTopics(Collections.singletonList(new NewTopic("foo", 1, (short) 3))).all().get();
+            admin.createTopics(List.of(new NewTopic("foo", 1, (short) 3))).all().get();
         }
-        cluster.waitForTopic("foo", 1);
+        cluster.waitTopicCreation("foo", 1);
 
         Optional<PartitionMetadataFile> partitionMetadataFile = cluster.brokers().get(0).logManager()
                 .getLog(new TopicPartition("foo", 0), false).get()
@@ -75,7 +139,7 @@ public class LogManagerIntegrationTest {
         cluster.brokers().get(0).shutdown();
         try (Admin admin = cluster.admin()) {
             TestUtils.waitForCondition(() -> {
-                List<TopicPartitionInfo> partitionInfos = admin.describeTopics(Collections.singletonList("foo"))
+                List<TopicPartitionInfo> partitionInfos = admin.describeTopics(List.of("foo"))
                         .topicNameValues().get("foo").get().partitions();
                 return partitionInfos.get(0).isr().size() == 2;
             }, "isr size is not shrink to 2");
@@ -89,32 +153,34 @@ public class LogManagerIntegrationTest {
         assertTrue(cluster.firstFatalException().isEmpty());
         try (Admin admin = cluster.admin()) {
             TestUtils.waitForCondition(() -> {
-                List<TopicPartitionInfo> partitionInfos = admin.describeTopics(Collections.singletonList("foo"))
+                List<TopicPartitionInfo> partitionInfos = admin.describeTopics(List.of("foo"))
                         .topicNameValues().get("foo").get().partitions();
                 return partitionInfos.get(0).isr().size() == 3;
             }, "isr size is not expand to 3");
         }
 
         // make sure topic still work fine
-        Map<String, Object> producerConfigs = new HashMap<>();
-        producerConfigs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-        producerConfigs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        producerConfigs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        Map<String, Object> producerConfigs = Map.of(
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers(),
+                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()
+        );
 
         try (Producer<String, String> producer = new KafkaProducer<>(producerConfigs)) {
             producer.send(new ProducerRecord<>("foo", 0, null, "bar")).get();
             producer.flush();
         }
 
-        Map<String, Object> consumerConfigs = new HashMap<>();
-        consumerConfigs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-        consumerConfigs.put(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString());
-        consumerConfigs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        consumerConfigs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        Map<String, Object> consumerConfigs = Map.of(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers(),
+                ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString(),
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()
+        );
 
         try (Consumer<String, String> consumer = new KafkaConsumer<>(consumerConfigs)) {
-            consumer.assign(Collections.singletonList(new TopicPartition("foo", 0)));
-            consumer.seekToBeginning(Collections.singletonList(new TopicPartition("foo", 0)));
+            consumer.assign(List.of(new TopicPartition("foo", 0)));
+            consumer.seekToBeginning(List.of(new TopicPartition("foo", 0)));
             List<String> values = new ArrayList<>();
             ConsumerRecords<String, String> records = consumer.poll(Duration.ofMinutes(1));
             for (ConsumerRecord<String, String> record : records) {

@@ -19,25 +19,33 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeOnCloseEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackRegistrationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
+import org.apache.kafka.clients.consumer.internals.events.StopFindCoordinatorOnCloseEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -46,13 +54,18 @@ import org.apache.kafka.test.MockConsumerInterceptor;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentMatchers;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -65,8 +78,10 @@ import java.util.function.Predicate;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -75,6 +90,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -139,16 +155,19 @@ public class ShareConsumerImplTest {
                 mock(ShareFetchBuffer.class),
                 subscriptions,
                 "group-id",
-                "client-id");
+                "client-id",
+                "implicit");
     }
 
     private ShareConsumerImpl<String, String> newConsumer(
             ShareFetchBuffer fetchBuffer,
             SubscriptionState subscriptions,
             String groupId,
-            String clientId
+            String clientId,
+            String acknowledgementMode
     ) {
         final int defaultApiTimeoutMs = 1000;
+        final int requestTimeoutMs = 30000;
 
         return new ShareConsumerImpl<>(
                 new LogContext(),
@@ -164,8 +183,10 @@ public class ShareConsumerImplTest {
                 new Metrics(),
                 subscriptions,
                 metadata,
+                requestTimeoutMs,
                 defaultApiTimeoutMs,
-                groupId
+                groupId,
+                acknowledgementMode
         );
     }
 
@@ -191,11 +212,20 @@ public class ShareConsumerImplTest {
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-id");
         props.put(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "an.invalid.class");
         final ConsumerConfig config = new ConsumerConfig(props);
-        KafkaException ce = assertThrows(
+
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            KafkaException ce = assertThrows(
                 KafkaException.class,
                 () -> newConsumer(config));
-        assertTrue(ce.getMessage().contains("Failed to construct Kafka share consumer"), "Unexpected exception message: " + ce.getMessage());
-        assertTrue(ce.getCause().getMessage().contains("Class an.invalid.class cannot be found"), "Unexpected cause: " + ce.getCause());
+            assertTrue(ce.getMessage().contains("Failed to construct Kafka share consumer"), "Unexpected exception message: " + ce.getMessage());
+            assertTrue(ce.getCause().getMessage().contains("Class an.invalid.class cannot be found"), "Unexpected cause: " + ce.getCause());
+
+            boolean npeLogged = appender.getEvents().stream()
+                .flatMap(event -> event.getThrowableInfo().stream())
+                .anyMatch(str -> str.contains("NullPointerException"));
+
+            assertFalse(npeLogged, "Unexpected NullPointerException during consumer construction");
+        }
     }
 
     @Test
@@ -214,6 +244,48 @@ public class ShareConsumerImplTest {
 
         assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));
         assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
+    }
+
+    @Test
+    public void testControlRecordsOnEmptyFetch() {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        // Setup subscription
+        final String topicName = "foo";
+        final List<String> subscriptionTopic = Collections.singletonList(topicName);
+        completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, subscriptionTopic);
+        consumer.subscribe(subscriptionTopic);
+
+        // Create a fetch with only GAP (no records)
+        final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), 0, topicName);
+        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip);
+        // Add GAP without adding any records
+        batch.addGap(1);
+        
+        final ShareFetch<String, String> fetchWithOnlyGap = ShareFetch.empty();
+        fetchWithOnlyGap.add(tip, batch);
+        doReturn(fetchWithOnlyGap).when(fetchCollector).collect(any(ShareFetchBuffer.class));
+
+        consumer.poll(Duration.ZERO);
+
+        // Verify that next ShareFetchEvent was sent with the acknowledgement GAP for offset 1
+        verify(applicationEventHandler).add(argThat(event -> {
+            if (!(event instanceof ShareFetchEvent)) {
+                return false;
+            }
+            ShareFetchEvent fetchEvent = (ShareFetchEvent) event;
+            
+            // Regular acknowledgements map should be empty
+            if (!fetchEvent.acknowledgementsMap().isEmpty()) {
+                return false;
+            }
+            
+            // Control record acknowledgements map should contain the GAP for offset 1
+            Map<TopicIdPartition, NodeAcknowledgements> controlRecordAcks = fetchEvent.controlRecordAcknowledgements();
+            return controlRecordAcks.containsKey(tip) &&
+                   controlRecordAcks.get(tip).acknowledgements().get(1L) == null; // Null indicates GAP
+        }));
     }
 
     @Test
@@ -286,12 +358,119 @@ public class ShareConsumerImplTest {
     }
 
     @Test
+    public void testCloseWithInvalidTopicException() {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        backgroundEventQueue.add(new ErrorEvent(new InvalidTopicException(Set.of("!test-topic"))));
+        completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
+        assertDoesNotThrow(() -> consumer.close());
+    }
+
+    @Test
+    public void testExplicitModeUnacknowledgedRecords() {
+        // Setup consumer with explicit acknowledgement mode
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(
+                mock(ShareFetchBuffer.class),
+                subscriptions,
+                "group-id",
+                "client-id",
+                "explicit");
+
+        // Setup test data
+        String topic = "test-topic";
+        int partition = 0;
+        TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), partition, topic);
+        ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip);
+        batch.addRecord(new ConsumerRecord<>(topic, partition, 0, "key1", "value1"));
+        batch.addRecord(new ConsumerRecord<>(topic, partition, 1, "key2", "value2"));
+
+        // Setup first fetch to return records
+        ShareFetch<String, String> firstFetch = ShareFetch.empty();
+        firstFetch.add(tip, batch);
+        doReturn(firstFetch)
+            .doReturn(ShareFetch.empty())
+            .when(fetchCollector)
+            .collect(any(ShareFetchBuffer.class));
+
+        // Setup subscription
+        List<String> topics = Collections.singletonList(topic);
+        completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, topics);
+        consumer.subscribe(topics);
+
+        // First poll should succeed and return records
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+        assertEquals(2, records.count(), "Should have received 2 records");
+
+        // Second poll should fail because records weren't acknowledged
+        IllegalStateException exception = assertThrows(
+            IllegalStateException.class,
+            () -> consumer.poll(Duration.ofMillis(100))
+        );
+        assertTrue(
+            exception.getMessage().contains("All records must be acknowledged in explicit acknowledgement mode."),
+            "Unexpected error message: " + exception.getMessage()
+        );
+
+        // Verify that acknowledging one record but not all still throws exception
+        Iterator<ConsumerRecord<String, String>> iterator = records.iterator();
+        consumer.acknowledge(iterator.next());
+        exception = assertThrows(
+            IllegalStateException.class,
+            () -> consumer.poll(Duration.ofMillis(100))
+        );
+        assertTrue(
+            exception.getMessage().contains("All records must be acknowledged in explicit acknowledgement mode."),
+            "Unexpected error message: " + exception.getMessage()
+        );
+
+        // Verify that after acknowledging all records, poll succeeds
+        consumer.acknowledge(iterator.next());
+        
+        // Setup second fetch to return new records
+        ShareFetch<String, String> secondFetch = ShareFetch.empty();
+        ShareInFlightBatch<String, String> newBatch = new ShareInFlightBatch<>(2, tip);
+        newBatch.addRecord(new ConsumerRecord<>(topic, partition, 2, "key3", "value3"));
+        newBatch.addRecord(new ConsumerRecord<>(topic, partition, 3, "key4", "value4"));
+        secondFetch.add(tip, newBatch);
+        
+        // Reset mock to return new records
+        doReturn(secondFetch)
+            .when(fetchCollector)
+            .collect(any(ShareFetchBuffer.class));
+
+        // Verify that poll succeeds and returns new records
+        ConsumerRecords<String, String> newRecords = consumer.poll(Duration.ofMillis(100));
+        assertEquals(2, newRecords.count(), "Should have received 2 new records");
+    }
+
+    @Test
     public void testCloseWithTopicAuthorizationException() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(subscriptions);
 
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
         assertDoesNotThrow(() -> consumer.close());
+    }
+
+    @Test
+    public void testStopFindCoordinatorOnClose() {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        // Setup the expected successful completion of close events
+        completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
+        completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
+
+        // Close the consumer
+        consumer.close();
+
+        // Verify events are sent in correct order using InOrder
+        InOrder inOrder = inOrder(applicationEventHandler);
+        inOrder.verify(applicationEventHandler).addAndGet(any(ShareAcknowledgeOnCloseEvent.class));
+        inOrder.verify(applicationEventHandler).add(any(ShareUnsubscribeEvent.class));
+        inOrder.verify(applicationEventHandler).add(any(StopFindCoordinatorOnCloseEvent.class));
     }
 
     @Test
@@ -510,6 +689,32 @@ public class ShareConsumerImplTest {
         verify(applicationEventHandler).addAndGet(any(ShareAcknowledgeOnCloseEvent.class));
     }
 
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {"TOPIC_AUTHORIZATION_FAILED", "GROUP_AUTHORIZATION_FAILED", "INVALID_TOPIC_EXCEPTION"})
+    public void testCloseWithBackgroundQueueErrorsAfterUnsubscribe(Errors error) {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        // Complete the acknowledge on close event successfully
+        completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
+        
+        // Complete the unsubscribe event successfully
+        completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
+
+        // Mock the applicationEventHandler to add errors to the queue after unsubscribe
+        doAnswer(invocation -> {
+            // Add errors to the queue after unsubscribe event is processed
+            backgroundEventQueue.add(new ErrorEvent(error.exception()));
+            return null;
+        }).when(applicationEventHandler).add(any(StopFindCoordinatorOnCloseEvent.class));
+
+        // Close should complete successfully despite the errors in the background queue
+        assertDoesNotThrow(() -> consumer.close());
+
+        // Verify that the background queue was processed
+        assertTrue(backgroundEventQueue.isEmpty(), "Background queue should be empty after close");
+    }
+
     private Properties requiredConsumerPropertiesAndGroupId(final String groupId) {
         final Properties props = requiredConsumerProperties();
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
@@ -576,6 +781,22 @@ public class ShareConsumerImplTest {
         // Because we didn't need to perform a timed get, we should still have every last millisecond
         // of our initial timeout.
         assertEquals(1000, timer.remainingMs());
+    }
+
+    @Test
+    public void testRecordBackgroundEventQueueSize() {
+        consumer = newConsumer();
+        Metrics metrics = consumer.metricsRegistry();
+        AsyncConsumerMetrics asyncConsumerMetrics = consumer.asyncConsumerMetrics();
+
+        ShareAcknowledgementCommitCallbackEvent event = new ShareAcknowledgementCommitCallbackEvent(Map.of());
+        backgroundEventQueue.add(event);
+        asyncConsumerMetrics.recordBackgroundEventQueueSize(1);
+
+        assertEquals(1, (double) metrics.metric(metrics.metricName("background-event-queue-size", CONSUMER_SHARE_METRIC_GROUP)).metricValue());
+
+        consumer.processBackgroundEvents();
+        assertEquals(0, (double) metrics.metric(metrics.metricName("background-event-queue-size", CONSUMER_SHARE_METRIC_GROUP)).metricValue());
     }
 
     /**

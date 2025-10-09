@@ -79,9 +79,9 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   /**
    * Verifies some of the metrics of producer, consumer as well as server.
    */
-  @ParameterizedTest(name = "testMetrics with systemRemoteStorageEnabled: {1}")
-  @CsvSource(Array("kraft, true", "kraft, false"))
-  def testMetrics(quorum: String, systemRemoteStorageEnabled: Boolean): Unit = {
+  @ParameterizedTest(name = "testMetrics with systemRemoteStorageEnabled: {0}")
+  @CsvSource(Array("true", "false"))
+  def testMetrics(systemRemoteStorageEnabled: Boolean): Unit = {
     val topic = "mytopic"
     createTopic(topic,
       numPartitions = 1,
@@ -98,7 +98,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     sendRecords(producer, numRecords, recordSize, tp)
 
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     consumer.seek(tp, 0)
     TestUtils.consumeRecords(consumer, numRecords)
 

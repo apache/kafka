@@ -25,12 +25,11 @@ import org.slf4j.Logger;
 
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.OptionalInt;
-import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * This class is responsible for setting up the changelog topics for a topology. For a given topology, which does not have the number
@@ -63,32 +62,33 @@ public class ChangelogTopics {
     }
 
     /**
-     * Determines the number of partitions for each non-source changelog topic in the requested topology.
+     * Determines the number of partitions for each changelog topic in the requested topology.
      *
      * @throws IllegalStateException If a source topic does not have a partition count defined through topicPartitionCountProvider.
      *
-     * @return the map of all non-source changelog topics for the requested topology to their required number of partitions.
+     * @return the map of all changelog topics for the requested topology to their required number of partitions.
      */
     public Map<String, Integer> setup() {
         final Map<String, Integer> changelogTopicPartitions = new HashMap<>();
         for (Subtopology subtopology : subtopologies) {
-            final Set<String> sourceTopics = new HashSet<>(subtopology.sourceTopics());
-
             final OptionalInt maxNumPartitions =
-                subtopology.sourceTopics().stream().mapToInt(this::getPartitionCountOrFail).max();
+                Stream.concat(
+                    subtopology.sourceTopics().stream(),
+                    subtopology.repartitionSourceTopics().stream().map(TopicInfo::name)
+                ).mapToInt(this::getPartitionCountOrFail).max();
 
             if (maxNumPartitions.isEmpty()) {
                 throw new StreamsInvalidTopologyException("No source topics found for subtopology " + subtopology.subtopologyId());
             }
             for (final TopicInfo topicInfo : subtopology.stateChangelogTopics()) {
-                if (!sourceTopics.contains(topicInfo.name())) {
-                    changelogTopicPartitions.put(topicInfo.name(), maxNumPartitions.getAsInt());
-                }
+                changelogTopicPartitions.put(topicInfo.name(), maxNumPartitions.getAsInt());
             }
         }
 
-        log.debug("Expecting state changelog topic partitions {} for the requested topology.",
-            changelogTopicPartitions.entrySet().stream().map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", ")));
+        if (!changelogTopicPartitions.isEmpty()) {
+            log.debug("Expecting state changelog topic partitions {} for the requested topology.",
+                changelogTopicPartitions.entrySet().stream().map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", ")));
+        }
 
         return changelogTopicPartitions;
     }

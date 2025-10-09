@@ -22,7 +22,7 @@ import java.util.Optional;
 import java.util.TreeMap;
 
 /**
- * A implementation for {@code LogHistory} which uses a red-black tree to store values sorted by offset.
+ * An implementation for {@code LogHistory} which uses a red-black tree to store values sorted by offset.
  */
 public final class TreeMapLogHistory<T> implements LogHistory<T> {
     private final NavigableMap<Long, T> history = new TreeMap<>();

@@ -32,8 +32,8 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * A concurrent event accumulator which group events per key and ensure that only one
- * event with a given key can't be processed concurrently.
+ * A concurrent event accumulator which groups events per key and ensures that only one
+ * event with a given key can be processed concurrently.
  *
  * This class is threadsafe.
  *
@@ -90,7 +90,7 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
     private int size;
 
     /**
-     * A boolean indicated whether the accumulator is closed.
+     * A boolean indicating whether the accumulator is closed.
      */
     private boolean closed;
 
@@ -174,7 +174,7 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
 
     /**
      * Returns the next {{@link Event}} available. This method blocks for the provided
-     * time and returns null of no event is available.
+     * time and returns null if no event is available.
      *
      * @param timeout   The timeout.
      * @param unit      The timeout unit.

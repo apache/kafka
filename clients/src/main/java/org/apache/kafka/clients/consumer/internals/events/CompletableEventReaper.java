@@ -25,11 +25,10 @@ import org.slf4j.Logger;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 /**
  * {@code CompletableEventReaper} is responsible for tracking {@link CompletableEvent time-bound events} and removing
@@ -85,26 +84,39 @@ public class CompletableEventReaper {
      * @return The number of events that were expired
      */
     public long reap(long currentTimeMs) {
-        Consumer<CompletableEvent<?>> expireEvent = event -> {
-            long pastDueMs = currentTimeMs - event.deadlineMs();
-            TimeoutException error = new TimeoutException(String.format("%s was %s ms past its expiration of %s", event.getClass().getSimpleName(), pastDueMs, event.deadlineMs()));
+        int count = 0;
 
+        Iterator<CompletableEvent<?>> iterator = tracked.iterator();
+
+        while (iterator.hasNext()) {
+            CompletableEvent<?> event = iterator.next();
+
+            if (event.future().isDone()) {
+                // Remove any events that are already complete.
+                iterator.remove();
+                continue;
+            }
+
+            long deadlineMs = event.deadlineMs();
+            long pastDueMs = currentTimeMs - deadlineMs;
+
+            if (pastDueMs < 0)
+                continue;
+
+            TimeoutException error = new TimeoutException(String.format("%s was %s ms past its expiration of %s", event.getClass().getSimpleName(), pastDueMs, deadlineMs));
+
+            // Complete (exceptionally) any events that have passed their deadline AND aren't already complete.
             if (event.future().completeExceptionally(error)) {
-                log.debug("Event {} completed exceptionally since its expiration of {} passed {} ms ago", event, event.deadlineMs(), pastDueMs);
+                log.debug("Event {} completed exceptionally since its expiration of {} passed {} ms ago", event, deadlineMs, pastDueMs);
             } else {
                 log.trace("Event {} not completed exceptionally since it was previously completed", event);
             }
-        };
 
-        // First, complete (exceptionally) any events that have passed their deadline AND aren't already complete.
-        long count = tracked.stream()
-            .filter(e -> !e.future().isDone())
-            .filter(e -> currentTimeMs >= e.deadlineMs())
-            .peek(expireEvent)
-            .count();
-        // Second, remove any events that are already complete, just to make sure we don't hold references. This will
-        // include any events that finished successfully as well as any events we just completed exceptionally above.
-        tracked.removeIf(e -> e.future().isDone());
+            count++;
+
+            // Remove the events so that we don't hold a reference to it.
+            iterator.remove();
+        }
 
         return count;
     }
@@ -131,29 +143,12 @@ public class CompletableEventReaper {
     public long reap(Collection<?> events) {
         Objects.requireNonNull(events, "Event queue to reap must be non-null");
 
-        Consumer<CompletableEvent<?>> expireEvent = event -> {
-            TimeoutException error = new TimeoutException(String.format("%s could not be completed before the consumer closed", event.getClass().getSimpleName()));
-
-            if (event.future().completeExceptionally(error)) {
-                log.debug("Event {} completed exceptionally since the consumer is closing", event);
-            } else {
-                log.trace("Event {} not completed exceptionally since it was completed prior to the consumer closing", event);
-            }
-        };
-
-        long trackedExpiredCount = tracked.stream()
-            .filter(e -> !e.future().isDone())
-            .peek(expireEvent)
-            .count();
+        long trackedExpiredCount = completeEventsExceptionallyOnClose(tracked);
         tracked.clear();
 
-        long eventExpiredCount = events.stream()
-            .filter(e -> e instanceof CompletableEvent<?>)
-            .map(e -> (CompletableEvent<?>) e)
-            .filter(e -> !e.future().isDone())
-            .peek(expireEvent)
-            .count();
+        long eventExpiredCount = completeEventsExceptionallyOnClose(events);
         events.clear();
+
         return trackedExpiredCount + eventExpiredCount;
     }
 
@@ -166,9 +161,51 @@ public class CompletableEventReaper {
     }
 
     public List<CompletableEvent<?>> uncompletedEvents() {
-        return tracked.stream()
-                .filter(e -> !e.future().isDone())
-                .collect(Collectors.toList());
+        // The following code does not use the Java Collections Streams API to reduce overhead in the critical
+        // path of the ConsumerNetworkThread loop.
+        List<CompletableEvent<?>> events = new ArrayList<>();
+
+        for (CompletableEvent<?> event : tracked) {
+            if (!event.future().isDone())
+                events.add(event);
+        }
+
+        return events;
     }
-    
+
+    /**
+     * For all the {@link CompletableEvent}s in the collection, if they're not already complete, invoke
+     * {@link CompletableFuture#completeExceptionally(Throwable)}.
+     *
+     * @param events Collection of objects, assumed to be subclasses of {@link ApplicationEvent} or
+     *               {@link BackgroundEvent}, but will only perform completion for any
+     *               unfinished {@link CompletableEvent}s
+     *
+     * @return Number of events closed
+     */
+    private long completeEventsExceptionallyOnClose(Collection<?> events) {
+        long count = 0;
+
+        for (Object o : events) {
+            if (!(o instanceof CompletableEvent))
+                continue;
+
+            CompletableEvent<?> event = (CompletableEvent<?>) o;
+
+            if (event.future().isDone())
+                continue;
+
+            count++;
+
+            TimeoutException error = new TimeoutException(String.format("%s could not be completed before the consumer closed", event.getClass().getSimpleName()));
+
+            if (event.future().completeExceptionally(error)) {
+                log.debug("Event {} completed exceptionally since the consumer is closing", event);
+            } else {
+                log.trace("Event {} not completed exceptionally since it was completed prior to the consumer closing", event);
+            }
+        }
+
+        return count;
+    }
 }

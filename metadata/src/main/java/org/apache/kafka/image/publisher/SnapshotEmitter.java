@@ -158,7 +158,6 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
             throw e;
         } finally {
             Utils.closeQuietly(writer, "RaftSnapshotWriter");
-            Utils.closeQuietly(snapshotWriter.get(), "SnapshotWriter");
         }
     }
 }

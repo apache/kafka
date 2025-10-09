@@ -29,13 +29,15 @@ import org.apache.kafka.server.common.TopicIdPartition;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AssignmentTest {
+    private static final Uuid TOPIC_ID = Uuid.fromString("rTudty6ITOCcO_ldVyzZYg");
+    private static final Uuid DIRECTORY_ID = Uuid.fromString("rzRT8XZaSbKsP6j238zogg");
     private static final MetadataImage TEST_IMAGE;
 
     static {
@@ -47,18 +49,18 @@ public class AssignmentTest {
             setFeatureLevel(MetadataVersion.IBP_3_8_IV0.featureLevel()));
         delta.replay(new TopicRecord().
             setName("foo").
-            setTopicId(Uuid.fromString("rTudty6ITOCcO_ldVyzZYg")));
+            setTopicId(TOPIC_ID));
         delta.replay(new PartitionRecord().
             setPartitionId(0).
-            setTopicId(Uuid.fromString("rTudty6ITOCcO_ldVyzZYg")).
-            setReplicas(Arrays.asList(0, 1, 2)).
-            setIsr(Arrays.asList(0, 1, 2)).
+            setTopicId(TOPIC_ID).
+            setReplicas(List.of(0, 1, 2)).
+            setIsr(List.of(0, 1, 2)).
             setLeader(1));
         delta.replay(new PartitionRecord().
             setPartitionId(1).
-            setTopicId(Uuid.fromString("rTudty6ITOCcO_ldVyzZYg")).
-            setReplicas(Arrays.asList(1, 2, 3)).
-            setIsr(Arrays.asList(1, 2, 3)).
+            setTopicId(TOPIC_ID).
+            setReplicas(List.of(1, 2, 3)).
+            setIsr(List.of(1, 2, 3)).
             setLeader(1));
         TEST_IMAGE = delta.apply(MetadataProvenance.EMPTY);
     }
@@ -79,8 +81,8 @@ public class AssignmentTest {
     @Test
     public void testValidAssignment() {
         assertTrue(new Assignment(
-            new TopicIdPartition(Uuid.fromString("rTudty6ITOCcO_ldVyzZYg"), 0),
-            Uuid.fromString("rzRT8XZaSbKsP6j238zogg"),
+            new TopicIdPartition(TOPIC_ID, 0),
+            DIRECTORY_ID,
             0,
             NoOpRunnable.INSTANCE).valid(0, TEST_IMAGE));
     }
@@ -89,7 +91,7 @@ public class AssignmentTest {
     public void testAssignmentForNonExistentTopicIsNotValid() {
         assertFalse(new Assignment(
             new TopicIdPartition(Uuid.fromString("uuOi4qGPSsuM0QwnYINvOw"), 0),
-            Uuid.fromString("rzRT8XZaSbKsP6j238zogg"),
+            DIRECTORY_ID,
             0,
             NoOpRunnable.INSTANCE).valid(0, TEST_IMAGE));
     }
@@ -97,8 +99,8 @@ public class AssignmentTest {
     @Test
     public void testAssignmentForNonExistentPartitionIsNotValid() {
         assertFalse(new Assignment(
-            new TopicIdPartition(Uuid.fromString("rTudty6ITOCcO_ldVyzZYg"), 2),
-            Uuid.fromString("rzRT8XZaSbKsP6j238zogg"),
+            new TopicIdPartition(TOPIC_ID, 2),
+            DIRECTORY_ID,
             0,
             NoOpRunnable.INSTANCE).valid(0, TEST_IMAGE));
     }
@@ -106,20 +108,20 @@ public class AssignmentTest {
     @Test
     public void testAssignmentReplicaNotOnBrokerIsNotValid() {
         assertFalse(new Assignment(
-            new TopicIdPartition(Uuid.fromString("rTudty6ITOCcO_ldVyzZYg"), 0),
-            Uuid.fromString("rzRT8XZaSbKsP6j238zogg"),
+            new TopicIdPartition(TOPIC_ID, 0),
+            DIRECTORY_ID,
             0,
             NoOpRunnable.INSTANCE).valid(3, TEST_IMAGE));
     }
 
     @Test
     public void testAssignmentToString() {
-        assertEquals("Assignment(topicIdPartition=rTudty6ITOCcO_ldVyzZYg:1, " +
+        assertEquals("Assignment[topicIdPartition=rTudty6ITOCcO_ldVyzZYg:1, " +
             "directoryId=rzRT8XZaSbKsP6j238zogg, " +
             "submissionTimeNs=123, " +
-            "successCallback=NoOpRunnable)",
-            new Assignment(new TopicIdPartition(Uuid.fromString("rTudty6ITOCcO_ldVyzZYg"), 1),
-                Uuid.fromString("rzRT8XZaSbKsP6j238zogg"),
+            "successCallback=NoOpRunnable]",
+            new Assignment(new TopicIdPartition(TOPIC_ID, 1),
+                DIRECTORY_ID,
                 123,
                 NoOpRunnable.INSTANCE).toString());
     }

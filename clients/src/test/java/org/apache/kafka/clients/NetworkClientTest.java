@@ -748,24 +748,6 @@ public class NetworkClientTest {
         assertEquals(0, client.throttleDelayMs(node, time.milliseconds()));
     }
 
-    // Creates expected ApiVersionsResponse from the specified node, where the max protocol version for the specified
-    // key is set to the specified version.
-    private ApiVersionsResponse createExpectedApiVersionsResponse(ApiKeys key, short maxVersion) {
-        ApiVersionCollection versionList = new ApiVersionCollection();
-        for (ApiKeys apiKey : ApiKeys.values()) {
-            if (apiKey == key) {
-                versionList.add(new ApiVersion()
-                    .setApiKey(apiKey.id)
-                    .setMinVersion((short) 0)
-                    .setMaxVersion(maxVersion));
-            } else versionList.add(ApiVersionsResponse.toApiVersion(apiKey));
-        }
-        return new ApiVersionsResponse(new ApiVersionsResponseData()
-            .setErrorCode(Errors.NONE.code())
-            .setThrottleTimeMs(0)
-            .setApiKeys(versionList));
-    }
-
     private int sendEmptyProduceRequest() {
         return sendEmptyProduceRequest(client, node.idString());
     }

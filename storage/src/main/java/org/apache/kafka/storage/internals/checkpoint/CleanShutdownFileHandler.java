@@ -94,7 +94,7 @@ public class CleanShutdownFileHandler {
             Content content = Json.parseStringAs(text, Content.class);
             return OptionalLong.of(content.brokerEpoch);
         } catch (Exception e) {
-            logger.debug("Fail to read the clean shutdown file in " + cleanShutdownFile.toPath() + ":" + e);
+            logger.debug("Fail to read the clean shutdown file in {}", cleanShutdownFile.toPath(), e);
             return OptionalLong.empty();
         }
     }

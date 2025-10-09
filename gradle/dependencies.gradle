@@ -23,7 +23,7 @@ ext {
 }
 
 // Add Scala version
-def defaultScala213Version = '2.13.15'
+def defaultScala213Version = '2.13.17'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.13') {
     versions["scala"] = defaultScala213Version
@@ -53,33 +53,34 @@ versions += [
   apacheda: "1.0.2",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
-  bcpkix: "1.78.1",
-  caffeine: "3.1.8",
-  bndlib: "7.0.0",
+  bcpkix: "1.80",
+  caffeine: "3.2.0",
+  bndlib: "7.1.0",
   checkstyle: project.hasProperty('checkstyleVersion') ? checkstyleVersion : "10.20.2",
-  commonsValidator: "1.9.0",
-  classgraph: "4.8.173",
-  gradle: "8.10.2",
+  commonsLang: "3.18.0",
+  commonsValidator: "1.10.0",
+  classgraph: "4.8.179",
+  gradle: "9.1.0",
   grgit: "4.1.1",
   httpclient: "4.5.14",
-  jackson: "2.16.2",
-  jacoco: "0.8.10",
-  javassist: "3.29.2-GA",
-  jetty: "12.0.15",
-  jersey: "3.1.9",
-  jline: "3.25.1",
+  jackson: "2.19.0",
+  jacoco: "0.8.13",
+  javassist: "3.30.2-GA",
+  jetty: "12.0.22",
+  jersey: "3.1.10",
+  jline: "3.30.4",
   jmh: "1.37",
-  hamcrest: "2.2",
+  hamcrest: "3.0",
   scalaLogging: "3.9.5",
   jaxAnnotation: "1.3.2",
   jaxb: "2.3.1",
   jakartaRs: "3.1.0",
   jakartaServletApi: "6.1.0",
-  jfreechart: "1.0.0",
+  jfreechart: "1.5.6",
   jopt: "5.0.4",
-  jose4j: "0.9.4",
-  junit: "5.10.2",
-  jqwik: "1.8.3",
+  jose4j: "0.9.6",
+  junit: "5.13.1",
+  jqwik: "1.9.2",
   kafka_0110: "0.11.0.3",
   kafka_10: "1.0.2",
   kafka_11: "1.1.1",
@@ -101,33 +102,36 @@ versions += [
   kafka_36: "3.6.2",
   kafka_37: "3.7.2",
   kafka_38: "3.8.1",
-  kafka_39: "3.9.0",
+  kafka_39: "3.9.1",
   kafka_40: "4.0.0",
-  log4j2: "2.24.3",
+  kafka_41: "4.1.0",
+  log4j2: "2.25.1",
   // When updating lz4 make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
   lz4: "1.8.0",
   mavenArtifact: "3.9.6",
   metrics: "2.2.0",
-  mockito: "5.14.2",
-  opentelemetryProto: "1.0.0-alpha",
+  mockito: "5.20.0",
+  opentelemetryProto: "1.3.2-alpha",
   protobuf: "3.25.5", // a dependency of opentelemetryProto
-  pcollections: "4.0.1",
-  re2j: "1.7",
-  rocksDB: "9.7.3",
+  pcollections: "4.0.2",
+  re2j: "1.8",
+  rocksDB: "10.1.3",
   // When updating the scalafmt version please also update the version field in checkstyle/.scalafmt.conf. scalafmt now
   // has the version field as mandatory in its configuration, see
   // https://github.com/scalameta/scalafmt/releases/tag/v3.1.0.
   scalafmt: "3.7.14",
   scoverage: "2.0.11",
   slf4j: "1.7.36",
-  snappy: "1.1.10.5",
-  spotbugs: "4.8.6",
-  zinc: "1.9.2",
+  snappy: "1.1.10.7",
+  spotbugs: "4.9.4",
+  mockOAuth2Server: "2.2.1",
+  zinc: "1.11.0",
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
   // Also make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
-  zstd: "1.5.6-6",
-  junitPlatform: "1.10.2",
-  hdrHistogram: "2.2.2"
+  zstd: "1.5.6-10",
+  junitPlatform: "1.13.1",
+  hdrHistogram: "2.2.2",
+  hash4j: "0.22.0"
 ]
 
 libs += [
@@ -146,6 +150,7 @@ libs += [
   bndlib:"biz.aQute.bnd:biz.aQute.bndlib:$versions.bndlib",
   caffeine: "com.github.ben-manes.caffeine:caffeine:$versions.caffeine",
   classgraph: "io.github.classgraph:classgraph:$versions.classgraph",
+  commonsLang: "org.apache.commons:commons-lang3:$versions.commonsLang",
   commonsValidator: "commons-validator:commons-validator:$versions.commonsValidator",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
@@ -201,6 +206,7 @@ libs += [
   kafkaStreams_38: "org.apache.kafka:kafka-streams:$versions.kafka_38",
   kafkaStreams_39: "org.apache.kafka:kafka-streams:$versions.kafka_39",
   kafkaStreams_40: "org.apache.kafka:kafka-streams:$versions.kafka_40",
+  kafkaStreams_41: "org.apache.kafka:kafka-streams:$versions.kafka_41",
   log4j1Bridge2Api: "org.apache.logging.log4j:log4j-1.2-api:$versions.log4j2",
   log4j2Api: "org.apache.logging.log4j:log4j-api:$versions.log4j2",
   log4j2Core: "org.apache.logging.log4j:log4j-core:$versions.log4j2",
@@ -221,9 +227,11 @@ libs += [
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
   spotbugs: "com.github.spotbugs:spotbugs-annotations:$versions.spotbugs",
   swaggerAnnotations: "io.swagger.core.v3:swagger-annotations:$swaggerVersion",
-  jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
+  mockOAuth2Server: "no.nav.security:mock-oauth2-server:$versions.mockOAuth2Server",
+  jfreechart: "org.jfree:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
   httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient",
-  hdrHistogram: "org.hdrhistogram:HdrHistogram:$versions.hdrHistogram"
+  hdrHistogram: "org.hdrhistogram:HdrHistogram:$versions.hdrHistogram",
+  hash4j: "com.dynatrace.hash4j:hash4j:$versions.hash4j",
 ]

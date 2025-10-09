@@ -35,10 +35,26 @@ public interface GroupSpec {
     SubscriptionType subscriptionType();
 
     /**
+     * Determine whether a topic id and partition have been assigned to
+     * a member. This method functions the same for all types of groups.
+     *
+     * @param topicId           Uuid corresponding to the partition's topic.
+     * @param partitionId       Partition Id within topic.
      * @return True, if the partition is currently assigned to a member.
      *         False, otherwise.
      */
     boolean isPartitionAssigned(Uuid topicId, int partitionId);
+
+    /**
+     * For share groups, a partition can only be assigned once its initialization is complete.
+     * For other group types, this initialization is not required and all partitions returned
+     * by the SubscribedTopicDescriber are always assignable.
+     *
+     * @param topicId           Uuid corresponding to the partition's topic.
+     * @param partitionId       Partition Id within topic.
+     * @return True, if the partition is assignable.
+     */
+    boolean isPartitionAssignable(Uuid topicId, int partitionId);
 
     /**
      * Gets the member subscription specification for a member.

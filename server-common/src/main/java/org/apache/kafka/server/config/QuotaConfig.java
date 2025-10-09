@@ -20,7 +20,6 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -55,6 +54,7 @@ public class QuotaConfig {
     public static final String CLIENT_QUOTA_CALLBACK_CLASS_CONFIG = "client.quota.callback.class";
     public static final String CLIENT_QUOTA_CALLBACK_CLASS_DOC = "The fully qualified name of a class that implements the ClientQuotaCallback interface, " +
             "which is used to determine quota limits applied to client requests. " +
+            "By default, the &lt;user&gt; and &lt;client-id&gt quotas that are stored and applied. " + 
             "For any given request, the most specific quota that matches the user principal of the session and the client-id of the request is applied.";
 
     public static final String LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG = "leader.replication.throttled.replicas";
@@ -62,14 +62,14 @@ public class QuotaConfig {
             "the leader side. The list should describe a set of replicas in the form " +
             "[PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle " +
             "all replicas for this topic.";
-    public static final List<String> LEADER_REPLICATION_THROTTLED_REPLICAS_DEFAULT = Collections.emptyList();
+    public static final List<String> LEADER_REPLICATION_THROTTLED_REPLICAS_DEFAULT = List.of();
 
     public static final String FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG = "follower.replication.throttled.replicas";
     public static final String FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DOC = "A list of replicas for which log replication should be throttled on " +
             "the follower side. The list should describe a set of " + "replicas in the form " +
             "[PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle " +
             "all replicas for this topic.";
-    public static final List<String> FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DEFAULT = Collections.emptyList();
+    public static final List<String> FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DEFAULT = List.of();
 
 
     public static final String LEADER_REPLICATION_THROTTLED_RATE_CONFIG = "leader.replication.throttled.rate";

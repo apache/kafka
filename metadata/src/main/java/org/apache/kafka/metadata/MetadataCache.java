@@ -97,6 +97,8 @@ public interface MetadataCache extends ConfigRepository {
 
     Map<Uuid, String> topicIdsToNames();
 
+    Map<String, Uuid> topicNamesToIds();
+
     /**
      * Get a partition leader's endpoint
      *

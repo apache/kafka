@@ -115,6 +115,7 @@ import org.apache.kafka.common.errors.ResourceNotFoundException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
+import org.apache.kafka.common.errors.ShareSessionLimitReachedException;
 import org.apache.kafka.common.errors.ShareSessionNotFoundException;
 import org.apache.kafka.common.errors.SnapshotNotFoundException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
@@ -228,7 +229,7 @@ public enum Errors {
             "The group member's supported protocols are incompatible with those of existing members " +
             "or first group member tried to join with empty protocol type or empty protocol list.",
             InconsistentGroupProtocolException::new),
-    INVALID_GROUP_ID(24, "The configured groupId is invalid.",
+    INVALID_GROUP_ID(24, "The group id is invalid.",
             InvalidGroupIdException::new),
     UNKNOWN_MEMBER_ID(25, "The coordinator is not aware of this member.",
             UnknownMemberIdException::new),
@@ -357,7 +358,7 @@ public enum Errors {
             MemberIdRequiredException::new),
     PREFERRED_LEADER_NOT_AVAILABLE(80, "The preferred leader was not available.",
             PreferredLeaderNotAvailableException::new),
-    GROUP_MAX_SIZE_REACHED(81, "The consumer group has reached its max size.", GroupMaxSizeReachedException::new),
+    GROUP_MAX_SIZE_REACHED(81, "The group has reached its maximum size.", GroupMaxSizeReachedException::new),
     FENCED_INSTANCE_ID(82, "The broker rejected this static consumer since " +
             "another consumer with the same group.instance.id has registered with a different member.id.",
             FencedInstanceIdException::new),
@@ -383,10 +384,7 @@ public enum Errors {
     PRINCIPAL_DESERIALIZATION_FAILURE(97, "Request principal deserialization failed during forwarding. " +
          "This indicates an internal error on the broker cluster security setup.", PrincipalDeserializationException::new),
     SNAPSHOT_NOT_FOUND(98, "Requested snapshot was not found.", SnapshotNotFoundException::new),
-    POSITION_OUT_OF_RANGE(
-        99,
-        "Requested position is not greater than or equal to zero, and less than the size of the snapshot.",
-        PositionOutOfRangeException::new),
+    POSITION_OUT_OF_RANGE(99, "Requested position is not greater than or equal to zero, and less than the size of the snapshot.", PositionOutOfRangeException::new),
     UNKNOWN_TOPIC_ID(100, "This server does not host this topic ID.", UnknownTopicIdException::new),
     DUPLICATE_BROKER_REGISTRATION(101, "This broker ID is already in use.", DuplicateBrokerRegistrationException::new),
     BROKER_ID_NOT_REGISTERED(102, "The given broker ID was not registered.", BrokerIdNotRegisteredException::new),
@@ -416,10 +414,11 @@ public enum Errors {
     DUPLICATE_VOTER(126, "The voter is already part of the set of voters.", DuplicateVoterException::new),
     VOTER_NOT_FOUND(127, "The voter is not part of the set of voters.", VoterNotFoundException::new),
     INVALID_REGULAR_EXPRESSION(128, "The regular expression is not valid.", InvalidRegularExpression::new),
-    REBOOTSTRAP_REQUIRED(129, "Client metadata is stale, client should rebootstrap to obtain new metadata.", RebootstrapRequiredException::new),
+    REBOOTSTRAP_REQUIRED(129, "Client metadata is stale. The client should rebootstrap to obtain new metadata.", RebootstrapRequiredException::new),
     STREAMS_INVALID_TOPOLOGY(130, "The supplied topology is invalid.", StreamsInvalidTopologyException::new),
     STREAMS_INVALID_TOPOLOGY_EPOCH(131, "The supplied topology epoch is invalid.", StreamsInvalidTopologyEpochException::new),
-    STREAMS_TOPOLOGY_FENCED(132, "The supplied topology epoch is outdated.", StreamsTopologyFencedException::new);
+    STREAMS_TOPOLOGY_FENCED(132, "The supplied topology epoch is outdated.", StreamsTopologyFencedException::new),
+    SHARE_SESSION_LIMIT_REACHED(133, "The limit of share sessions has been reached.", ShareSessionLimitReachedException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

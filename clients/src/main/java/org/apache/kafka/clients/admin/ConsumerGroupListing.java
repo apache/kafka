@@ -26,7 +26,9 @@ import java.util.Optional;
 
 /**
  * A listing of a consumer group in the cluster.
+ * @deprecated Since 4.1. Use {@link Admin#listGroups(ListGroupsOptions)} and {@link GroupListing} instead.
  */
+@Deprecated(since = "4.1")
 public class ConsumerGroupListing {
     private final String groupId;
     private final boolean isSimpleConsumerGroup;

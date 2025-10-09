@@ -17,17 +17,18 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
-import org.apache.kafka.streams.errors.DeserializationExceptionHandler.DeserializationHandlerResponse;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.internals.DefaultErrorHandlerContext;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 
 import org.slf4j.Logger;
 
+import java.util.List;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
@@ -50,7 +51,7 @@ public class RecordDeserializer {
 
     /**
      * @throws StreamsException if a deserialization error occurs and the deserialization callback returns
-     *                          {@link DeserializationHandlerResponse#FAIL FAIL}
+     *                          {@link DeserializationExceptionHandler.Result#FAIL FAIL}
      *                          or throws an exception itself
      */
     ConsumerRecord<Object, Object> deserialize(final ProcessorContext<?, ?> processorContext,
@@ -95,13 +96,16 @@ public class RecordDeserializer {
             rawRecord.headers(),
             sourceNodeName,
             processorContext.taskId(),
-            rawRecord.timestamp());
+            rawRecord.timestamp(),
+            rawRecord.key(),
+            rawRecord.value()
+        );
 
-        final DeserializationHandlerResponse response;
+        final DeserializationExceptionHandler.Response response;
         try {
             response = Objects.requireNonNull(
-                deserializationExceptionHandler.handle(errorHandlerContext, rawRecord, deserializationException),
-                "Invalid DeserializationExceptionHandler response."
+                deserializationExceptionHandler.handleError(errorHandlerContext, rawRecord, deserializationException),
+                "Invalid DeserializationExceptionResponse response."
             );
         } catch (final Exception fatalUserException) {
             // while Java distinguishes checked vs unchecked exceptions, other languages
@@ -115,7 +119,21 @@ public class RecordDeserializer {
             throw new StreamsException("Fatal user code error in deserialization error callback", fatalUserException);
         }
 
-        if (response == DeserializationHandlerResponse.FAIL) {
+        final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = response.deadLetterQueueRecords();
+        if (!deadLetterQueueRecords.isEmpty()) {
+            final RecordCollector collector = ((RecordCollector.Supplier) processorContext).recordCollector();
+            for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
+                collector.send(
+                        deadLetterQueueRecord.key(),
+                        deadLetterQueueRecord.value(),
+                        sourceNodeName,
+                        (InternalProcessorContext) processorContext,
+                        deadLetterQueueRecord
+                );
+            }
+        }
+
+        if (response.result() == DeserializationExceptionHandler.Result.FAIL) {
             throw new StreamsException("Deserialization exception handler is set to fail upon" +
                 " a deserialization error. If you would rather have the streaming pipeline" +
                 " continue after a deserialization error, please set the " +

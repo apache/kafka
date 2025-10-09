@@ -19,6 +19,10 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.AddRaftVoterRequestData;
+import org.apache.kafka.common.message.AddRaftVoterRequestDataJsonConverter;
+import org.apache.kafka.common.message.AddRaftVoterResponseData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestDataJsonConverter;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
@@ -39,6 +43,7 @@ import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotRequestDataJsonConverter;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.FetchSnapshotResponseDataJsonConverter;
+import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteRequestDataJsonConverter;
 import org.apache.kafka.common.message.VoteResponseData;
@@ -51,6 +56,7 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -61,12 +67,12 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
-import static java.util.Collections.singletonList;
-import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RaftUtilTest {
@@ -90,6 +96,10 @@ public class RaftUtilTest {
                 RaftUtil.errorResponse(ApiKeys.FETCH, Errors.NONE));
         assertEquals(new FetchSnapshotResponseData().setErrorCode(Errors.NONE.code()),
                 RaftUtil.errorResponse(ApiKeys.FETCH_SNAPSHOT, Errors.NONE));
+        assertEquals(new AddRaftVoterResponseData().setErrorCode(Errors.NONE.code()),
+            RaftUtil.errorResponse(ApiKeys.ADD_RAFT_VOTER, Errors.NONE));
+        assertEquals(new RemoveRaftVoterResponseData().setErrorCode(Errors.NONE.code()),
+            RaftUtil.errorResponse(ApiKeys.REMOVE_RAFT_VOTER, Errors.NONE));
         assertThrows(IllegalArgumentException.class, () -> RaftUtil.errorResponse(ApiKeys.PRODUCE, Errors.NONE));
     }
 
@@ -392,7 +402,7 @@ public class RaftUtilTest {
                         .setSnapshotId(new FetchResponseData.SnapshotId())
                         .setErrorCode(Errors.NONE.code())
                         .setCurrentLeader(new FetchResponseData.LeaderIdAndEpoch())
-                        .setAbortedTransactions(singletonList(
+                        .setAbortedTransactions(List.of(
                                 new FetchResponseData.AbortedTransaction()
                                         .setProducerId(producerId)
                                         .setFirstOffset(firstOffset)
@@ -439,7 +449,7 @@ public class RaftUtilTest {
                 leaderEpoch,
                 leaderId,
                 true,
-                Endpoints.fromInetSocketAddresses(singletonMap(listenerName, address))
+                Endpoints.fromInetSocketAddresses(Map.of(listenerName, address))
         );
         JsonNode json = VoteResponseDataJsonConverter.write(voteResponseData, version);
         assertEquals(expectedJson, json.toString());
@@ -506,7 +516,7 @@ public class RaftUtilTest {
                 version,
                 topicPartition,
                 leaderId,
-                Endpoints.fromInetSocketAddresses(singletonMap(listenerName, address)),
+                Endpoints.fromInetSocketAddresses(Map.of(listenerName, address)),
                 responsePartitionSnapshot -> responsePartitionSnapshot
         );
 
@@ -525,7 +535,7 @@ public class RaftUtilTest {
                 clusterId,
                 leaderEpoch,
                 leaderId,
-                Endpoints.fromInetSocketAddresses(singletonMap(listenerName, address)),
+                Endpoints.fromInetSocketAddresses(Map.of(listenerName, address)),
                 ReplicaKey.of(1, Uuid.ONE_UUID)
         );
         JsonNode json = BeginQuorumEpochRequestDataJsonConverter.write(beginQuorumEpochRequestData, version);
@@ -546,7 +556,7 @@ public class RaftUtilTest {
                 Errors.NONE,
                 leaderEpoch,
                 leaderId,
-                Endpoints.fromInetSocketAddresses(singletonMap(listenerName, address))
+                Endpoints.fromInetSocketAddresses(Map.of(listenerName, address))
         );
         JsonNode json = BeginQuorumEpochResponseDataJsonConverter.write(beginQuorumEpochResponseData, version);
         assertEquals(expectedJson, json.toString());
@@ -563,7 +573,7 @@ public class RaftUtilTest {
                 clusterId,
                 leaderEpoch,
                 leaderId,
-                singletonList(ReplicaKey.of(1, Uuid.ONE_UUID))
+                List.of(ReplicaKey.of(1, Uuid.ONE_UUID))
         );
         JsonNode json = EndQuorumEpochRequestDataJsonConverter.write(endQuorumEpochRequestData, version);
         assertEquals(expectedJson, json.toString());
@@ -583,7 +593,7 @@ public class RaftUtilTest {
                 Errors.NONE,
                 leaderEpoch,
                 leaderId,
-                Endpoints.fromInetSocketAddresses(singletonMap(listenerName, address))
+                Endpoints.fromInetSocketAddresses(Map.of(listenerName, address))
         );
         JsonNode json = EndQuorumEpochResponseDataJsonConverter.write(endQuorumEpochResponseData, version);
         assertEquals(expectedJson, json.toString());
@@ -613,12 +623,52 @@ public class RaftUtilTest {
                 leaderId,
                 leaderEpoch,
                 highWatermark,
-                Collections.singletonList(replicaState),
-                Collections.singletonList(replicaState),
+                List.of(replicaState),
+                List.of(replicaState),
                 0
         );
         JsonNode json = DescribeQuorumResponseDataJsonConverter.write(describeQuorumResponseData, version);
         assertEquals(expectedJson, json.toString());
+    }
+
+    @Test
+    public void testAddRaftVoterRequestAckWhenCommittedNotIgnorable() {
+        AddRaftVoterRequestData request = new AddRaftVoterRequestData()
+            .setClusterId("test-cluster")
+            .setTimeoutMs(1000)
+            .setVoterId(1)
+            .setVoterDirectoryId(Uuid.randomUuid())
+            .setAckWhenCommitted(false); // field only exists in v1+
+
+        // Attempt to serialize to version 0, which does not support ackWhenCommitted
+        assertThrows(
+            UnsupportedVersionException.class,
+            () -> AddRaftVoterRequestDataJsonConverter.write(request, (short) 0)
+        );
+    }
+
+    @Test
+    public void testAddVoterResponse() {
+        for (Errors error : Errors.values()) {
+            AddRaftVoterResponseData addRaftVoterResponseData = RaftUtil.addVoterResponse(error, null);
+            assertEquals(error.code(), addRaftVoterResponseData.errorCode());
+            if (Errors.NONE.equals(error))
+                assertNull(addRaftVoterResponseData.errorMessage());
+            else
+                assertEquals(error.message(), addRaftVoterResponseData.errorMessage());
+        }
+    }
+
+    @Test
+    public void testRemoveVoterResponse() {
+        for (Errors error : Errors.values()) {
+            RemoveRaftVoterResponseData removeRaftVoterResponseData = RaftUtil.removeVoterResponse(error, null);
+            assertEquals(error.code(), removeRaftVoterResponseData.errorCode());
+            if (Errors.NONE.equals(error))
+                assertNull(removeRaftVoterResponseData.errorMessage());
+            else
+                assertEquals(error.message(), removeRaftVoterResponseData.errorMessage());
+        }
     }
 
     private Records createRecords() {
@@ -635,32 +685,10 @@ public class RaftUtilTest {
         }
     }
 
-    private static class FetchRequestTestCase {
-        private final Uuid replicaDirectoryId;
-        private final short version;
-        private final short lastFetchedEpoch;
-        private final String expectedJson;
-
-        private FetchRequestTestCase(Uuid replicaDirectoryId, short version,
-                                     short lastFetchedEpoch, String expectedJson) {
-            this.replicaDirectoryId = replicaDirectoryId;
-            this.version = version;
-            this.lastFetchedEpoch = lastFetchedEpoch;
-            this.expectedJson = expectedJson;
-        }
+    private record FetchRequestTestCase(Uuid replicaDirectoryId, short version, short lastFetchedEpoch,
+                                        String expectedJson) {
     }
 
-    private static class FetchResponseTestCase {
-        private final short version;
-        private final int preferredReadReplicaId;
-        private final String expectedJson;
-
-        private FetchResponseTestCase(short version,
-                                      int preferredReadReplicaId,
-                                      String expectedJson) {
-            this.version = version;
-            this.preferredReadReplicaId = preferredReadReplicaId;
-            this.expectedJson = expectedJson;
-        }
+    private record FetchResponseTestCase(short version, int preferredReadReplicaId, String expectedJson) {
     }
 }

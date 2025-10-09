@@ -49,7 +49,7 @@ public class JaasUtils {
     public static File writeJaasContextsToFile(Set<JaasSection> jaasSections) throws IOException {
         File jaasFile = TestUtils.tempFile();
         try (FileOutputStream fileStream = new FileOutputStream(jaasFile);
-             OutputStreamWriter writer = new OutputStreamWriter(fileStream, StandardCharsets.UTF_8);) {
+             OutputStreamWriter writer = new OutputStreamWriter(fileStream, StandardCharsets.UTF_8)) {
             writer.write(String.join("", jaasSections.stream().map(Object::toString).toArray(String[]::new)));
         }
         return jaasFile;

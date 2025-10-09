@@ -17,6 +17,7 @@
 
 package org.apache.kafka.coordinator.share;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
 import org.apache.kafka.common.message.InitializeShareGroupStateRequestData;
@@ -28,13 +29,17 @@ import org.apache.kafka.common.message.ReadShareGroupStateSummaryResponseData;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.requests.RequestContext;
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.image.FeaturesImage;
 import org.apache.kafka.server.share.SharePartitionKey;
 
 import java.util.OptionalInt;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.function.IntSupplier;
 
 public interface ShareCoordinator {
@@ -121,13 +126,22 @@ public interface ShareCoordinator {
     void onResignation(int partitionIndex, OptionalInt partitionLeaderEpoch);
 
     /**
+     * Remove share group state related to deleted topic ids.
+     *
+     * @param topicPartitions   The deleted topic ids.
+     * @param bufferSupplier    The buffer supplier tight to the request thread.
+     */
+    void onTopicsDeleted(Set<Uuid> topicPartitions, BufferSupplier bufferSupplier) throws ExecutionException, InterruptedException;
+
+    /**
      * A new metadata image is available.
      *
-     * @param newImage  The new metadata image.
-     * @param delta     The metadata delta.
+     * @param newImage         The new metadata image.
+     * @param newFeaturesImage The features image.
+     * @param delta            The metadata delta.
      */
     void onNewMetadataImage(
-        MetadataImage newImage,
-        MetadataDelta delta
+        CoordinatorMetadataImage newImage,
+        FeaturesImage newFeaturesImage, CoordinatorMetadataDelta delta
     );
 }

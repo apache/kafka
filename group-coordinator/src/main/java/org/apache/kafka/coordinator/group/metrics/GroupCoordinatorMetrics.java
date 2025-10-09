@@ -297,14 +297,12 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
 
         Sensor shareGroupRebalanceSensor = metrics.sensor(SHARE_GROUP_REBALANCES_SENSOR_NAME);
         shareGroupRebalanceSensor.add(new Meter(
-            metrics.metricName("rebalance-rate",
+            metrics.metricName("share-group-rebalance-rate",
                 METRICS_GROUP,
-                "The rate of share group rebalances",
-                SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString()),
-            metrics.metricName("rebalance-count",
+                "The rate of share group rebalances"),
+            metrics.metricName("share-group-rebalance-count",
                 METRICS_GROUP,
-                "The total number of share group rebalances",
-                SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString())));
+                "The total number of share group rebalances")));
         
         Sensor streamsGroupRebalanceSensor = metrics.sensor(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
         streamsGroupRebalanceSensor.add(new Meter(

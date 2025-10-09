@@ -24,7 +24,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.InetSocketAddress;
-import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -42,7 +43,7 @@ class ResignedStateTest {
     int localId = 0;
     int epoch = 5;
     Endpoints localEndpoints = Endpoints.fromInetSocketAddresses(
-        Collections.singletonMap(
+        Map.of(
             VoterSetTest.DEFAULT_LISTENER_NAME,
             InetSocketAddress.createUnresolved("localhost", 1234)
         )
@@ -55,7 +56,7 @@ class ResignedStateTest {
             epoch,
             voters,
             electionTimeoutMs,
-            Collections.emptyList(),
+            List.of(),
             localEndpoints,
             logContext
         );
@@ -71,9 +72,9 @@ class ResignedStateTest {
         assertEquals(ElectionState.withElectedLeader(epoch, localId, Optional.empty(), voters), state.election());
         assertEquals(epoch, state.epoch());
 
-        assertEquals(Collections.singleton(remoteId), state.unackedVoters());
+        assertEquals(Set.of(remoteId), state.unackedVoters());
         state.acknowledgeResignation(remoteId);
-        assertEquals(Collections.emptySet(), state.unackedVoters());
+        assertEquals(Set.of(), state.unackedVoters());
 
         assertEquals(electionTimeoutMs, state.remainingElectionTimeMs(time.milliseconds()));
         assertFalse(state.hasElectionTimeoutExpired(time.milliseconds()));

@@ -938,7 +938,10 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
                 context.recordContext().offset(),
                 context.recordContext().timestamp(),
                 context.recordContext().partition(),
-                "")
+                "",
+                context.recordContext().sourceRawKey(),
+                context.recordContext().sourceRawValue()
+            )
         );
 
         underlyingStore.put(key, value, 1);

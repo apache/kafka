@@ -20,6 +20,7 @@ package org.apache.kafka.server.share.persister;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -63,5 +64,17 @@ public class DeleteShareGroupStateParameters implements PersisterParameters {
         public DeleteShareGroupStateParameters build() {
             return new DeleteShareGroupStateParameters(groupTopicPartitionData);
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) return false;
+        DeleteShareGroupStateParameters that = (DeleteShareGroupStateParameters) o;
+        return Objects.equals(groupTopicPartitionData, that.groupTopicPartitionData);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(groupTopicPartitionData);
     }
 }

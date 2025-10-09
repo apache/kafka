@@ -28,7 +28,10 @@ import java.util.stream.Collectors;
 
 /**
  * Options for {@link Admin#listConsumerGroups()}.
+ * @deprecated Since 4.1. Use {@link Admin#listGroups(ListGroupsOptions)} instead.
  */
+@Deprecated(since = "4.1")
+@SuppressWarnings("removal")
 public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroupsOptions> {
 
     private Set<GroupState> groupStates = Collections.emptySet();

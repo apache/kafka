@@ -22,14 +22,20 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -39,13 +45,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedConstruction;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -61,6 +70,7 @@ import java.util.stream.Stream;
 import static org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -98,7 +108,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     private static final String REPARTITION_SOURCE_TOPIC_1 = "repartitionSourceTopic1";
     private static final String REPARTITION_SOURCE_TOPIC_2 = "repartitionSourceTopic2";
     private static final Map<String, StreamsRebalanceData.TopicInfo> REPARTITION_SOURCE_TOPICS = Map.of(
-        REPARTITION_SOURCE_TOPIC_1, new StreamsRebalanceData.TopicInfo(Optional.of(2), Optional.of((short) 1), Map.of("config1", "value1")),
+        REPARTITION_SOURCE_TOPIC_1, new StreamsRebalanceData.TopicInfo(Optional.of(2), Optional.of((short) 1), Map.of("config3", "value3", "config1", "value1")),
         REPARTITION_SOURCE_TOPIC_2, new StreamsRebalanceData.TopicInfo(Optional.of(3), Optional.of((short) 3), Collections.emptyMap())
     );
     private static final String CHANGELOG_TOPIC_1 = "changelogTopic1";
@@ -107,7 +117,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     private static final Map<String, StreamsRebalanceData.TopicInfo> CHANGELOG_TOPICS = Map.of(
         CHANGELOG_TOPIC_1, new StreamsRebalanceData.TopicInfo(Optional.empty(), Optional.of((short) 1), Map.of()),
         CHANGELOG_TOPIC_2, new StreamsRebalanceData.TopicInfo(Optional.empty(), Optional.of((short) 2), Map.of()),
-        CHANGELOG_TOPIC_3, new StreamsRebalanceData.TopicInfo(Optional.empty(), Optional.of((short) 3), Map.of("config2", "value2"))
+        CHANGELOG_TOPIC_3, new StreamsRebalanceData.TopicInfo(Optional.empty(), Optional.of((short) 3), Map.of("config4", "value4", "config2", "value2"))
     );
     private static final Collection<Set<String>> COPARTITION_GROUP = Set.of(
         Set.of(SOURCE_TOPIC_1, REPARTITION_SOURCE_TOPIC_2),
@@ -143,7 +153,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         List.of(
             new StreamsGroupHeartbeatResponseData.EndpointToPartitions()
                 .setUserEndpoint(new StreamsGroupHeartbeatResponseData.Endpoint().setHost("localhost").setPort(8080))
-                .setPartitions(List.of(
+                .setActivePartitions(List.of(
                     new StreamsGroupHeartbeatResponseData.TopicPartition().setTopic("topic").setPartitions(List.of(0)))
                 )
         );
@@ -429,14 +439,10 @@ class StreamsGroupHeartbeatRequestManagerTest {
         try (
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.heartbeatIntervalMs()).thenReturn(heartbeatIntervalMs);
-                });
+                (mock, context) -> when(mock.heartbeatIntervalMs()).thenReturn(heartbeatIntervalMs));
             final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(
                 Timer.class,
-                (mock, context) -> {
-                    when(mock.isExpired()).thenReturn(true);
-                });
+                (mock, context) -> when(mock.isExpired()).thenReturn(true));
             final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
                 StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
         ) {
@@ -463,14 +469,10 @@ class StreamsGroupHeartbeatRequestManagerTest {
         try (
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.timeToNextHeartbeatMs(time.milliseconds())).thenReturn(timeToNextHeartbeatMs);
-                });
+                (mock, context) -> when(mock.timeToNextHeartbeatMs(time.milliseconds())).thenReturn(timeToNextHeartbeatMs));
             final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(
                 Timer.class,
-                (mock, context) -> {
-                    when(mock.isExpired()).thenReturn(true);
-                });
+                (mock, context) -> when(mock.isExpired()).thenReturn(true));
             final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
                 StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
         ) {
@@ -498,14 +500,10 @@ class StreamsGroupHeartbeatRequestManagerTest {
         try (
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.canSendRequest(time.milliseconds())).thenReturn(true);
-                });
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
             final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(
                 Timer.class,
-                (mock, context) -> {
-                    when(mock.isExpired()).thenReturn(true);
-                })
+                (mock, context) -> when(mock.isExpired()).thenReturn(true))
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             final HeartbeatRequestState heartbeatRequestState = heartbeatRequestStateMockedConstruction.constructed().get(0);
@@ -529,7 +527,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             verify(heartbeatRequestState).onSendAttempt(time.milliseconds());
             verify(membershipManager).onHeartbeatRequestGenerated();
             final ClientResponse response = buildClientResponse();
-            networkRequest.future().complete(response);
+            networkRequest.handler().onComplete(response);
             verify(heartbeatRequestState, never()).updateHeartbeatIntervalMs(anyLong());
             verify(heartbeatRequestState, never()).onSuccessfulAttempt(anyLong());
             verify(membershipManager, never()).onHeartbeatSuccess(any());
@@ -541,9 +539,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         try (
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.canSendRequest(time.milliseconds())).thenReturn(true);
-                })
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true))
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             final HeartbeatRequestState heartbeatRequestState = heartbeatRequestStateMockedConstruction.constructed().get(0);
@@ -572,7 +568,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 metrics.metric(metrics.metricName("last-heartbeat-seconds-ago", "consumer-coordinator-metrics")).metricValue()
             );
             final ClientResponse response = buildClientResponse();
-            networkRequest.future().complete(response);
+            networkRequest.handler().onComplete(response);
             verify(membershipManager).onHeartbeatSuccess((StreamsGroupHeartbeatResponse) response.responseBody());
             verify(heartbeatRequestState).updateHeartbeatIntervalMs(RECEIVED_HEARTBEAT_INTERVAL_MS);
             verify(heartbeatRequestState).onSuccessfulAttempt(networkRequest.handler().completionTimeMs());
@@ -581,9 +577,9 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 .get(new StreamsRebalanceData.HostInfo(
                     ENDPOINT_TO_PARTITIONS.get(0).userEndpoint().host(),
                     ENDPOINT_TO_PARTITIONS.get(0).userEndpoint().port())
-                );
-            assertEquals(ENDPOINT_TO_PARTITIONS.get(0).partitions().get(0).topic(), topicPartitions.get(0).topic());
-            assertEquals(ENDPOINT_TO_PARTITIONS.get(0).partitions().get(0).partitions().get(0), topicPartitions.get(0).partition());
+                ).activePartitions();
+            assertEquals(ENDPOINT_TO_PARTITIONS.get(0).activePartitions().get(0).topic(), topicPartitions.get(0).topic());
+            assertEquals(ENDPOINT_TO_PARTITIONS.get(0).activePartitions().get(0).partitions().get(0), topicPartitions.get(0).partition());
             assertEquals(
                 1.0,
                 metrics.metric(metrics.metricName("heartbeat-total", "consumer-coordinator-metrics")).metricValue()
@@ -654,6 +650,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             assertEquals(repartitionTopic.numPartitions().get(), topicInfo.partitions());
             assertEquals(repartitionTopic.replicationFactor().get(), topicInfo.replicationFactor());
             assertEquals(repartitionTopic.topicConfigs().size(), topicInfo.topicConfigs().size());
+            assertTrue(isSorted(topicInfo.topicConfigs(), Comparator.comparing(StreamsGroupHeartbeatRequestData.KeyValue::key)));
         });
         assertEquals(CHANGELOG_TOPICS.size(), subtopology1.stateChangelogTopics().size());
         subtopology1.stateChangelogTopics().forEach(topicInfo -> {
@@ -662,6 +659,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             final StreamsRebalanceData.TopicInfo changelogTopic = CHANGELOG_TOPICS.get(topicInfo.name());
             assertEquals(changelogTopic.replicationFactor().get(), topicInfo.replicationFactor());
             assertEquals(changelogTopic.topicConfigs().size(), topicInfo.topicConfigs().size());
+            assertTrue(isSorted(topicInfo.topicConfigs(), Comparator.comparing(StreamsGroupHeartbeatRequestData.KeyValue::key)));
         });
         assertEquals(2, subtopology1.copartitionGroups().size());
         final StreamsGroupHeartbeatRequestData.CopartitionGroup expectedCopartitionGroupData1 =
@@ -689,6 +687,15 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
         StreamsGroupHeartbeatRequestData nonJoiningRequestData = heartbeatState.buildRequestData();
         assertNull(nonJoiningRequestData.topology());
+    }
+
+    private <V> boolean isSorted(List<V> collection, Comparator<V> comparator) {
+        for (int i = 1; i < collection.size(); i++) {
+            if (comparator.compare(collection.get(i - 1), collection.get(i)) > 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @ParameterizedTest
@@ -975,11 +982,537 @@ class StreamsGroupHeartbeatRequestManagerTest {
         assertTrue(requestDataWithShutdownRequest.shutdownApplication());
     }
 
+    @Test
+    public void testCoordinatorDisconnectFailureWhileSending() {
+        try (
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
+            final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
+                StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState = heartbeatStateMockedConstruction.constructed().get(0);
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+
+            assertEquals(1, result.unsentRequests.size());
+            final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+            time.sleep(1234);
+            final long completionTimeMs = time.milliseconds();
+            final DisconnectException disconnectException = DisconnectException.INSTANCE;
+            networkRequest.handler().onFailure(completionTimeMs, disconnectException);
+            final HeartbeatRequestState heartbeatRequestState = heartbeatRequestStateMockedConstruction.constructed().get(0);
+            verify(heartbeatRequestState).onFailedAttempt(completionTimeMs);
+            verify(heartbeatState).reset();
+            verify(coordinatorRequestManager).handleCoordinatorDisconnect(disconnectException, completionTimeMs);
+            verify(membershipManager).onRetriableHeartbeatFailure();
+        }
+    }
+
+    @Test
+    public void testUnsupportedVersionFailureWhileSending() {
+        try (
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
+            final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
+                StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState = heartbeatStateMockedConstruction.constructed().get(0);
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+
+            assertEquals(1, result.unsentRequests.size());
+            final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+            time.sleep(1234);
+            final long completionTimeMs = time.milliseconds();
+            final UnsupportedVersionException unsupportedVersionException = new UnsupportedVersionException("message");
+            networkRequest.handler().onFailure(completionTimeMs, unsupportedVersionException);
+            final HeartbeatRequestState heartbeatRequestState = heartbeatRequestStateMockedConstruction.constructed().get(0);
+            verify(heartbeatRequestState).onFailedAttempt(completionTimeMs);
+            verify(heartbeatState).reset();
+            verify(membershipManager).onFatalHeartbeatFailure();
+            ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
+            verify(backgroundEventHandler).add(errorEvent.capture());
+            assertEquals(
+                "The cluster does not support the STREAMS group " +
+                    "protocol or does not support the versions of the STREAMS group protocol used by this client " +
+                    "(used versions: " + StreamsGroupHeartbeatRequestData.LOWEST_SUPPORTED_VERSION + " to " +
+                    StreamsGroupHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION + ").",
+                errorEvent.getValue().error().getMessage()
+            );
+            assertInstanceOf(UnsupportedVersionException.class, errorEvent.getValue().error());
+            verify(membershipManager).transitionToFatal();
+        }
+    }
+
+    @Test
+    public void testFatalFailureWhileSending() {
+        try (
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
+            final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
+                StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState = heartbeatStateMockedConstruction.constructed().get(0);
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+
+            assertEquals(1, result.unsentRequests.size());
+            final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+            time.sleep(1234);
+            final long completionTimeMs = time.milliseconds();
+            final RuntimeException fatalException = new RuntimeException();
+            networkRequest.handler().onFailure(completionTimeMs, fatalException);
+            final HeartbeatRequestState heartbeatRequestState = heartbeatRequestStateMockedConstruction.constructed().get(0);
+            verify(heartbeatRequestState).onFailedAttempt(completionTimeMs);
+            verify(heartbeatState).reset();
+            verify(membershipManager).onFatalHeartbeatFailure();
+            ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
+            verify(backgroundEventHandler).add(errorEvent.capture());
+            assertEquals(fatalException, errorEvent.getValue().error());
+            verify(membershipManager).transitionToFatal();
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+        value = Errors.class,
+        names = {"NOT_COORDINATOR", "COORDINATOR_NOT_AVAILABLE"}
+    )
+    public void testNotCoordinatorAndCoordinatorNotAvailableErrorResponse(final Errors error) {
+        try (
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
+            final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
+                StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState = heartbeatStateMockedConstruction.constructed().get(0);
+            final HeartbeatRequestState heartbeatRequestState = heartbeatRequestStateMockedConstruction.constructed().get(0);
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+
+            assertEquals(1, result.unsentRequests.size());
+            final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+            time.sleep(1234);
+            final long completionTimeMs = time.milliseconds();
+            final ClientResponse response = buildClientErrorResponse(error, "error message");
+            networkRequest.handler().onComplete(response);
+            verify(coordinatorRequestManager).markCoordinatorUnknown(
+                ((StreamsGroupHeartbeatResponse) response.responseBody()).data().errorMessage(),
+                completionTimeMs
+            );
+            verify(heartbeatState).reset();
+            verify(heartbeatRequestState).reset();
+            verify(membershipManager).onFatalHeartbeatFailure();
+        }
+    }
+
+    @Test
+    public void testCoordinatorLoadInProgressErrorResponse() {
+        try (
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
+            final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
+                StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState = heartbeatStateMockedConstruction.constructed().get(0);
+            final HeartbeatRequestState heartbeatRequestState = heartbeatRequestStateMockedConstruction.constructed().get(0);
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+
+            assertEquals(1, result.unsentRequests.size());
+            final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+            final ClientResponse response = buildClientErrorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, "message");
+            networkRequest.handler().onComplete(response);
+            verify(heartbeatState).reset();
+            verify(membershipManager).onFatalHeartbeatFailure();
+            verify(heartbeatRequestState, never()).reset();
+        }
+    }
+
+    @Test
+    public void testGroupAuthorizationFailedErrorResponse() {
+        try (
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
+            final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
+                StreamsGroupHeartbeatRequestManager.HeartbeatState.class);
+            final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState = heartbeatStateMockedConstruction.constructed().get(0);
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+            when(membershipManager.groupId()).thenReturn(GROUP_ID);
+
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+
+            assertEquals(1, result.unsentRequests.size());
+            final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+            final ClientResponse response = buildClientErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED, "message");
+            networkRequest.handler().onComplete(response);
+            assertTrue(logAppender.getMessages("ERROR").stream()
+                .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed due to group authorization failure: " +
+                    "Not authorized to access group: " + GROUP_ID)));
+            verify(heartbeatState).reset();
+            ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
+            verify(backgroundEventHandler).add(errorEvent.capture());
+            assertEquals(
+                GroupAuthorizationException.forGroupId(GROUP_ID).getMessage(),
+                errorEvent.getValue().error().getMessage()
+            );
+            assertInstanceOf(GroupAuthorizationException.class, errorEvent.getValue().error());
+            verify(membershipManager).transitionToFatal();
+            verify(membershipManager).onFatalHeartbeatFailure();
+        }
+    }
+
+    @Test
+    public void testTopicAuthorizationFailedErrorResponse() {
+        try (
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
+            final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
+                StreamsGroupHeartbeatRequestManager.HeartbeatState.class);
+            final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState = heartbeatStateMockedConstruction.constructed().get(0);
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+            when(membershipManager.state()).thenReturn(MemberState.STABLE);
+            when(membershipManager.memberId()).thenReturn(MEMBER_ID);
+
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+
+            assertEquals(1, result.unsentRequests.size());
+            final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+            final String errorMessage = "message";
+            final ClientResponse response = buildClientErrorResponse(Errors.TOPIC_AUTHORIZATION_FAILED, errorMessage);
+            networkRequest.handler().onComplete(response);
+            assertTrue(logAppender.getMessages("ERROR").stream()
+                .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed for member " + MEMBER_ID +
+                    " with state " + MemberState.STABLE + " due to " + Errors.TOPIC_AUTHORIZATION_FAILED + ": " +
+                    errorMessage)));
+            verify(heartbeatState).reset();
+            ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
+            verify(backgroundEventHandler).add(errorEvent.capture());
+            assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.message(), errorEvent.getValue().error().getMessage());
+            assertInstanceOf(TopicAuthorizationException.class, errorEvent.getValue().error());
+            verify(membershipManager).onFatalHeartbeatFailure();
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+        value = Errors.class,
+        names = {
+            "INVALID_REQUEST",
+            "GROUP_MAX_SIZE_REACHED",
+            "UNSUPPORTED_VERSION",
+            "STREAMS_INVALID_TOPOLOGY",
+            "STREAMS_INVALID_TOPOLOGY_EPOCH",
+            "STREAMS_TOPOLOGY_FENCED"
+        }
+    )
+    public void testKnownFatalErrorResponse(final Errors error) {
+        try (
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
+            final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
+                StreamsGroupHeartbeatRequestManager.HeartbeatState.class);
+            final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState = heartbeatStateMockedConstruction.constructed().get(0);
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+
+            assertEquals(1, result.unsentRequests.size());
+            final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+            final String errorMessageInResponse = "message";
+            final ClientResponse response = buildClientErrorResponse(error, errorMessageInResponse);
+            networkRequest.handler().onComplete(response);
+            verify(heartbeatState).reset();
+            ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
+            verify(backgroundEventHandler).add(errorEvent.capture());
+            if (error == Errors.UNSUPPORTED_VERSION) {
+                final String errorMessage = "The cluster does not support the STREAMS group " +
+                    "protocol or does not support the versions of the STREAMS group protocol used by this client " +
+                    "(used versions: " + StreamsGroupHeartbeatRequestData.LOWEST_SUPPORTED_VERSION + " to " +
+                    StreamsGroupHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION + ").";
+                assertTrue(logAppender.getMessages("ERROR").stream()
+                    .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed due to " +
+                        error + ": " + errorMessage)));
+                assertEquals(errorMessage, errorEvent.getValue().error().getMessage());
+            } else {
+                assertTrue(logAppender.getMessages("ERROR").stream()
+                    .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed due to " +
+                        error + ": " + errorMessageInResponse)));
+                assertEquals(errorMessageInResponse, errorEvent.getValue().error().getMessage());
+            }
+            assertInstanceOf(error.exception().getClass(), errorEvent.getValue().error());
+            verify(membershipManager).transitionToFatal();
+            verify(membershipManager).onFatalHeartbeatFailure();
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+        value = Errors.class,
+        names = {"FENCED_MEMBER_EPOCH", "UNKNOWN_MEMBER_ID"}
+    )
+    public void testFencedMemberOrUnknownMemberIdErrorResponse(final Errors error) {
+        try (
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
+            final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
+                StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState = heartbeatStateMockedConstruction.constructed().get(0);
+            final HeartbeatRequestState heartbeatRequestState = heartbeatRequestStateMockedConstruction.constructed().get(0);
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+
+            assertEquals(1, result.unsentRequests.size());
+            final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+            final String errorMessage = "message";
+            final ClientResponse response = buildClientErrorResponse(error, errorMessage);
+            networkRequest.handler().onComplete(response);
+            verify(heartbeatState).reset();
+            verify(heartbeatRequestState).reset();
+            verify(membershipManager).onFenced();
+            verify(membershipManager).onFatalHeartbeatFailure();
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("provideOtherErrors")
+    public void testOtherErrorResponse(final Errors error) {
+        try (
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
+            final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
+                StreamsGroupHeartbeatRequestManager.HeartbeatState.class);
+            final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState = heartbeatStateMockedConstruction.constructed().get(0);
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+
+            assertEquals(1, result.unsentRequests.size());
+            final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+            final String errorMessage = "message";
+            final ClientResponse response = buildClientErrorResponse(error, errorMessage);
+            networkRequest.handler().onComplete(response);
+            assertTrue(logAppender.getMessages("ERROR").stream()
+                .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed due to unexpected error")));
+            verify(heartbeatState).reset();
+            ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
+            verify(backgroundEventHandler).add(errorEvent.capture());
+            assertEquals(errorMessage, errorEvent.getValue().error().getMessage());
+            assertInstanceOf(error.exception().getClass(), errorEvent.getValue().error());
+            verify(membershipManager).transitionToFatal();
+            verify(membershipManager).onFatalHeartbeatFailure();
+        }
+    }
+
+    private static Stream<Arguments> provideOtherErrors() {
+        final Set<Errors> consideredErrors = Set.of(
+            Errors.NONE,
+            Errors.NOT_COORDINATOR,
+            Errors.COORDINATOR_NOT_AVAILABLE,
+            Errors.COORDINATOR_LOAD_IN_PROGRESS,
+            Errors.GROUP_AUTHORIZATION_FAILED,
+            Errors.TOPIC_AUTHORIZATION_FAILED,
+            Errors.INVALID_REQUEST,
+            Errors.GROUP_MAX_SIZE_REACHED,
+            Errors.FENCED_MEMBER_EPOCH,
+            Errors.UNKNOWN_MEMBER_ID,
+            Errors.UNSUPPORTED_VERSION,
+            Errors.STREAMS_INVALID_TOPOLOGY,
+            Errors.STREAMS_INVALID_TOPOLOGY_EPOCH,
+            Errors.STREAMS_TOPOLOGY_FENCED);
+        return Arrays.stream(Errors.values())
+            .filter(error -> !consideredErrors.contains(error))
+            .map(Arguments::of);
+    }
+
+    @Test
+    public void testPollOnCloseWhenIsNotLeaving() {
+        final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.pollOnClose(time.milliseconds());
+
+        assertEquals(NetworkClientDelegate.PollResult.EMPTY, result);
+    }
+
+    @Test
+    public void testPollOnCloseWhenIsLeaving() {
+        final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+        when(membershipManager.isLeavingGroup()).thenReturn(true);
+        when(membershipManager.groupId()).thenReturn(GROUP_ID);
+        when(membershipManager.memberId()).thenReturn(MEMBER_ID);
+        when(membershipManager.memberEpoch()).thenReturn(LEAVE_GROUP_MEMBER_EPOCH);
+
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.pollOnClose(time.milliseconds());
+
+        assertEquals(1, result.unsentRequests.size());
+        final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+        StreamsGroupHeartbeatRequest streamsRequest = (StreamsGroupHeartbeatRequest) networkRequest.requestBuilder().build();
+        assertEquals(GROUP_ID, streamsRequest.data().groupId());
+        assertEquals(MEMBER_ID, streamsRequest.data().memberId());
+        assertEquals(LEAVE_GROUP_MEMBER_EPOCH, streamsRequest.data().memberEpoch());
+    }
+
+    @Test
+    public void testMaximumTimeToWaitPollTimerExpired() {
+        try (
+            final MockedConstruction<Timer> timerMockedConstruction =
+                mockConstruction(Timer.class, (mock, context) -> when(mock.isExpired()).thenReturn(true));
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.requestInFlight()).thenReturn(false))
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final Timer pollTimer = timerMockedConstruction.constructed().get(0);
+            time.sleep(1234);
+
+            final long maximumTimeToWait = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+
+            assertEquals(0, maximumTimeToWait);
+            verify(pollTimer).update(time.milliseconds());
+        }
+    }
+
+    @Test
+    public void testMaximumTimeToWaitWhenHeartbeatShouldBeSentImmediately() {
+        try (
+            final MockedConstruction<Timer> timerMockedConstruction = mockConstruction(Timer.class);
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.requestInFlight()).thenReturn(false))
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final Timer pollTimer = timerMockedConstruction.constructed().get(0);
+            when(membershipManager.shouldNotWaitForHeartbeatInterval()).thenReturn(true);
+            time.sleep(1234);
+
+            final long maximumTimeToWait = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+
+            assertEquals(0, maximumTimeToWait);
+            verify(pollTimer).update(time.milliseconds());
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"true, false", "false, false", "true, true"})
+    public void testMaximumTimeToWaitWhenHeartbeatShouldBeNotSentImmediately(final boolean isRequestInFlight,
+                                                                             final boolean shouldNotWaitForHeartbeatInterval) {
+        final long remainingMs = 12L;
+        final long timeToNextHeartbeatMs = 6L;
+        try (
+            final MockedConstruction<Timer> timerMockedConstruction =
+                mockConstruction(Timer.class, (mock, context) -> when(mock.remainingMs()).thenReturn(remainingMs));
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> {
+                    when(mock.requestInFlight()).thenReturn(isRequestInFlight);
+                    when(mock.timeToNextHeartbeatMs(anyLong())).thenReturn(timeToNextHeartbeatMs);
+                })
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final Timer pollTimer = timerMockedConstruction.constructed().get(0);
+            when(membershipManager.shouldNotWaitForHeartbeatInterval()).thenReturn(shouldNotWaitForHeartbeatInterval);
+            time.sleep(1234);
+
+            final long maximumTimeToWait = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+
+            assertEquals(timeToNextHeartbeatMs, maximumTimeToWait);
+            verify(pollTimer).update(time.milliseconds());
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"12, 5", "10, 6"})
+    public void testMaximumTimeToWaitSelectingMinimumWaitTime(final long remainingMs,
+                                                              final long timeToNextHeartbeatMs) {
+        try (
+            final MockedConstruction<Timer> timerMockedConstruction =
+                mockConstruction(Timer.class, (mock, context) -> when(mock.remainingMs()).thenReturn(remainingMs));
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.timeToNextHeartbeatMs(anyLong())).thenReturn(timeToNextHeartbeatMs))
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final Timer pollTimer = timerMockedConstruction.constructed().get(0);
+            time.sleep(1234);
+
+            final long maximumTimeToWait = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+
+            assertEquals(5, maximumTimeToWait);
+            verify(pollTimer).update(time.milliseconds());
+        }
+    }
+
+    @Test
+    public void testResetPollTimer() {
+        try (final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(Timer.class)) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final Timer pollTimer = pollTimerMockedConstruction.constructed().get(1);
+
+            heartbeatRequestManager.resetPollTimer(time.milliseconds());
+            verify(pollTimer).update(time.milliseconds());
+            verify(pollTimer).isExpired();
+            verify(pollTimer).reset(DEFAULT_MAX_POLL_INTERVAL_MS);
+        }
+    }
+
+    @Test
+    public void testResetPollTimerWhenExpired() {
+        try (final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(Timer.class)) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final Timer pollTimer = pollTimerMockedConstruction.constructed().get(1);
+
+            when(pollTimer.isExpired()).thenReturn(true);
+            heartbeatRequestManager.resetPollTimer(time.milliseconds());
+            verify(pollTimer).update(time.milliseconds());
+            verify(pollTimer).isExpired();
+            verify(pollTimer).isExpiredBy();
+            verify(membershipManager).memberId();
+            verify(membershipManager).maybeRejoinStaleMember();
+            verify(pollTimer).reset(DEFAULT_MAX_POLL_INTERVAL_MS);
+        }
+    }
+
     private static ConsumerConfig config() {
         Properties prop = new Properties();
         prop.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         prop.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         prop.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(DEFAULT_MAX_POLL_INTERVAL_MS));
+        prop.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         return new ConsumerConfig(prop);
     }
 
@@ -1010,6 +1543,24 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 new StreamsGroupHeartbeatResponseData()
                     .setPartitionsByUserEndpoint(ENDPOINT_TO_PARTITIONS)
                     .setHeartbeatIntervalMs((int) RECEIVED_HEARTBEAT_INTERVAL_MS)
+            )
+        );
+    }
+
+    private ClientResponse buildClientErrorResponse(final Errors error, final String errorMessage) {
+        return new ClientResponse(
+            new RequestHeader(ApiKeys.STREAMS_GROUP_HEARTBEAT, (short) 1, "", 1),
+            null,
+            "-1",
+            time.milliseconds(),
+            time.milliseconds(),
+            false,
+            null,
+            null,
+            new StreamsGroupHeartbeatResponse(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(error.code())
+                    .setErrorMessage(errorMessage)
             )
         );
     }

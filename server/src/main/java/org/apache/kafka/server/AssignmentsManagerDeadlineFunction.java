@@ -20,14 +20,14 @@ package org.apache.kafka.server;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 
 import java.util.OptionalLong;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 import static org.apache.kafka.common.requests.AssignReplicasToDirsRequest.MAX_ASSIGNMENTS_PER_REQUEST;
 
 /**
  * This class calculates when the MaybeSendAssignmentsEvent should run for AssignmentsManager.
  */
-public class AssignmentsManagerDeadlineFunction implements Function<OptionalLong, OptionalLong> {
+public class AssignmentsManagerDeadlineFunction implements UnaryOperator<OptionalLong> {
 
     /**
      * The exponential backoff to use.

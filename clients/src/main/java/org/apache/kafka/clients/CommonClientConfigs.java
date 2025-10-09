@@ -88,8 +88,9 @@ public class CommonClientConfigs {
         "If provided, the backoff per host will increase exponentially for each consecutive connection failure, up to this maximum. After calculating the backoff increase, 20% random jitter is added to avoid connection storms.";
 
     public static final String RETRIES_CONFIG = "retries";
-    public static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any request that fails with a potentially transient error." +
-        " It is recommended to set the value to either zero or `MAX_VALUE` and use corresponding timeout parameters to control how long a client should retry a request.";
+    public static final String RETRIES_DOC = "It is recommended to set the value to either <code>MAX_VALUE</code> or zero, and use corresponding timeout parameters to control how long a client should retry a request." +
+        " Setting a value greater than zero will cause the client to resend any request that fails with a potentially transient error." +
+        " Setting a value of zero will lead to transient errors not being retried, and they will be propagated to the application to be handled.";
 
     public static final String RETRY_BACKOFF_MS_CONFIG = "retry.backoff.ms";
     public static final String RETRY_BACKOFF_MS_DOC = "The amount of time to wait before attempting to retry a failed request to a given topic partition. " +
@@ -125,7 +126,9 @@ public class CommonClientConfigs {
             "\n" +
             "TRACE level records all possible metrics, capturing every detail about the system's performance and operation. It's best for controlled environments where in-depth analysis is required, though it can introduce significant overhead.";
     public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
-    public static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. Implementing the <code>org.apache.kafka.common.metrics.MetricsReporter</code> interface allows plugging in classes that will be notified of new metric creation.";
+    public static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. " +
+            "Implementing the <code>org.apache.kafka.common.metrics.MetricsReporter</code> interface allows plugging in classes that will be notified of new metric creation. " +
+            "When custom reporters are set and <code>org.apache.kafka.common.metrics.JmxReporter</code> is needed, it has to be explicitly added to the list.";
 
     public static final String METRICS_CONTEXT_PREFIX = "metrics.context.";
 
@@ -192,7 +195,8 @@ public class CommonClientConfigs {
                                                           + "is considered failed and the group will rebalance in order to reassign the partitions to another member. "
                                                           + "For consumers using a non-null <code>group.instance.id</code> which reach this timeout, partitions will not be immediately reassigned. "
                                                           + "Instead, the consumer will stop sending heartbeats and partitions will be reassigned "
-                                                          + "after expiration of <code>session.timeout.ms</code>. This mirrors the behavior of a static consumer which has shutdown.";
+                                                          + "after expiration of the session timeout (defined by the client config <code>session.timeout.ms</code> if using the Classic rebalance protocol, or by the broker config <code>group.consumer.session.timeout.ms</code> if using the Consumer protocol). "
+                                                          + "This mirrors the behavior of a static consumer which has shutdown.";
 
     public static final String REBALANCE_TIMEOUT_MS_CONFIG = "rebalance.timeout.ms";
     public static final String REBALANCE_TIMEOUT_MS_DOC = "The maximum allowed time for each worker to join the group "
@@ -206,15 +210,18 @@ public class CommonClientConfigs {
                                                         + "to the broker. If no heartbeats are received by the broker before the expiration of this session timeout, "
                                                         + "then the broker will remove this client from the group and initiate a rebalance. Note that the value "
                                                         + "must be in the allowable range as configured in the broker configuration by <code>group.min.session.timeout.ms</code> "
-                                                        + "and <code>group.max.session.timeout.ms</code>. Note that this configuration is not supported when <code>group.protocol</code> "
-                                                        + "is set to \"consumer\".";
+                                                        + "and <code>group.max.session.timeout.ms</code>. Note that this client configuration is not supported when <code>group.protocol</code> "
+                                                        + "is set to \"consumer\". In that case, session timeout is controlled by the broker config <code>group.consumer.session.timeout.ms</code>.";
 
     public static final String HEARTBEAT_INTERVAL_MS_CONFIG = "heartbeat.interval.ms";
     public static final String HEARTBEAT_INTERVAL_MS_DOC = "The expected time between heartbeats to the consumer "
                                                            + "coordinator when using Kafka's group management facilities. Heartbeats are used to ensure that the "
                                                            + "consumer's session stays active and to facilitate rebalancing when new consumers join or leave the group. "
-                                                           + "The value must be set lower than <code>session.timeout.ms</code>, but typically should be set no higher "
-                                                           + "than 1/3 of that value. It can be adjusted even lower to control the expected time for normal rebalances.";
+                                                           + "This config is only supported if <code>group.protocol</code> is set to \"classic\". In that case, "
+                                                           + "the value must be set lower than <code>session.timeout.ms</code>, but typically should be set no higher "
+                                                           + "than 1/3 of that value. It can be adjusted even lower to control the expected time for normal rebalances."
+                                                           + "If <code>group.protocol</code> is set to \"consumer\", this config is not supported, as "
+                                                           + "the heartbeat interval is controlled by the broker with <code>group.consumer.heartbeat.interval.ms</code>.";
 
     public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = "default.api.timeout.ms";
     public static final String DEFAULT_API_TIMEOUT_MS_DOC = "Specifies the timeout (in milliseconds) for client APIs. " +

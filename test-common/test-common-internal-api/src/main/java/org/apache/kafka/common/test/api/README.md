@@ -79,7 +79,7 @@ references a static method on the test class. This method is used to produce any
 number of test configurations using a fluent builder style API.
 
 ```java
-import java.util.Arrays;
+import java.util.List;
 
 @ClusterTemplate("generateConfigs")
 void testSomething() { ... }
@@ -99,7 +99,7 @@ static List<ClusterConfig> generateConfigs() {
           .name("Generated Test 3")
           .serverProperties(props3)
           .build();
-  return Arrays.asList(config1, config2, config3);
+  return List.of(config1, config2, config3);
 }
 ```
 

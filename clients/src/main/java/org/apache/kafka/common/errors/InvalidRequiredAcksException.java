@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.errors;
 
-public class InvalidRequiredAcksException extends ApiException {
+public class InvalidRequiredAcksException extends InvalidConfigurationException {
     private static final long serialVersionUID = 1L;
 
     public InvalidRequiredAcksException(String message) {

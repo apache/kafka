@@ -141,7 +141,7 @@ public class HerderRequestHandler {
 
     public void completeOrForwardRequest(FutureCallback<Void> cb, String path, String method, HttpHeaders headers, Object body,
                                           Boolean forward) throws Throwable {
-        completeOrForwardRequest(cb, path, method, headers, body, new TypeReference<Void>() { }, new IdentityTranslator<>(), forward);
+        completeOrForwardRequest(cb, path, method, headers, body, new TypeReference<>() { }, new IdentityTranslator<>(), forward);
     }
 
     public interface Translator<T, U> {

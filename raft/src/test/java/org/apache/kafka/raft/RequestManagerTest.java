@@ -223,7 +223,7 @@ public class RequestManagerTest {
     }
 
     @Test
-    public void testFindReadyWithRequestTimedout() {
+    public void testFindReadyWithRequestTimedOut() {
         Node otherNode = new Node(1, "other-node", 1234);
         List<Node> bootstrapList = makeBootstrapList(3);
         RequestManager cache = new RequestManager(
@@ -243,6 +243,41 @@ public class RequestManagerTest {
         Node bootstrapNode = cache.findReadyBootstrapServer(time.milliseconds()).get();
         assertTrue(bootstrapList.contains(bootstrapNode));
         assertFalse(cache.isResponseExpected(otherNode, 1));
+    }
+
+    @Test
+    public void testHasRequestTimedOut() {
+        List<Node> bootstrapList = makeBootstrapList(2);
+        RequestManager cache = new RequestManager(
+            bootstrapList,
+            retryBackoffMs,
+            requestTimeoutMs,
+            random
+        );
+
+        // Find a ready node with the starting state
+        Node bootstrapNode1 = cache.findReadyBootstrapServer(time.milliseconds()).get();
+        assertTrue(
+            bootstrapList.contains(bootstrapNode1),
+            String.format("%s is not in %s", bootstrapNode1, bootstrapList)
+        );
+        // Before sending a request, no request should have timed out
+        assertFalse(cache.hasRequestTimedOut(bootstrapNode1, time.milliseconds()));
+
+        // Send a request
+        cache.onRequestSent(bootstrapNode1, 1, time.milliseconds());
+        assertEquals(
+            Optional.empty(),
+            cache.findReadyBootstrapServer(time.milliseconds())
+        );
+        assertFalse(cache.hasRequestTimedOut(bootstrapNode1, time.milliseconds()));
+
+        time.sleep(requestTimeoutMs - 1);
+        assertFalse(cache.hasRequestTimedOut(bootstrapNode1, time.milliseconds()));
+
+        // Timeout the request
+        time.sleep(1);
+        assertTrue(cache.hasRequestTimedOut(bootstrapNode1, time.milliseconds()));
     }
 
     @Test

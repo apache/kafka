@@ -114,10 +114,8 @@ public interface DecodeJson<T> {
         return node -> {
             if (node.isObject()) {
                 Map<String, V> result = new HashMap<>();
-                Iterator<Map.Entry<String, JsonNode>> elements = node.fields();
-                while (elements.hasNext()) {
-                    Map.Entry<String, JsonNode> next = elements.next();
-                    result.put(next.getKey(), decodeJson.decode(next.getValue()));
+                for (Map.Entry<String, JsonNode> entry : node.properties()) {
+                    result.put(entry.getKey(), decodeJson.decode(entry.getValue()));
                 }
                 return result;
             }

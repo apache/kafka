@@ -18,7 +18,6 @@
 package kafka.server.metadata
 
 import kafka.utils.Logging
-import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.InvalidTopicException
@@ -341,13 +340,6 @@ class KRaftMetadataCache(
     Option(_currentImage.cluster.broker(brokerId)).count(_.inControlledShutdown) == 1
   }
 
-  private def getAliveBrokers(image: MetadataImage): util.List[BrokerMetadata] = {
-    image.cluster().brokers().values().stream()
-      .filter(Predicate.not(_.fenced))
-      .map(broker => new BrokerMetadata(broker.id, broker.rack))
-      .collect(Collectors.toList())
-  }
-
   override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): util.Optional[Node] = {
     util.Optional.ofNullable(_currentImage.cluster().broker(brokerId))
       .filter(Predicate.not(_.fenced))
@@ -380,6 +372,8 @@ class KRaftMetadataCache(
   }
 
   override def topicIdsToNames(): util.Map[Uuid, String] = _currentImage.topics.topicIdToNameView()
+
+  override def topicNamesToIds(): util.Map[String, Uuid] = _currentImage.topics().topicNameToIdView()
 
   // if the leader is not known, return None;
   // if the leader is known and corresponding node is available, return Some(node)
@@ -422,11 +416,13 @@ class KRaftMetadataCache(
   }
 
   private def getRandomAliveBroker(image: MetadataImage): util.Optional[Integer] = {
-    val aliveBrokers = getAliveBrokers(image)
+    val aliveBrokers = image.cluster().brokers().values().stream()
+      .filter(Predicate.not(_.fenced))
+      .map(_.id()).toList
     if (aliveBrokers.isEmpty) {
       util.Optional.empty()
     } else {
-      util.Optional.of(aliveBrokers.get(ThreadLocalRandom.current().nextInt(aliveBrokers.size)).id)
+      util.Optional.of(aliveBrokers.get(ThreadLocalRandom.current().nextInt(aliveBrokers.size)))
     }
   }
 

@@ -59,7 +59,6 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
@@ -122,8 +121,8 @@ public class LogValidatorTest {
             } else {
                 ValidationResult result = validateMessages(invalidRecords, version.value, CompressionType.GZIP, compression);
                 List<Long> recordsResult = new ArrayList<>();
-                result.validatedRecords.records().forEach(s -> recordsResult.add(s.offset()));
-                assertEquals(LongStream.range(0, numRecords).boxed().collect(Collectors.toList()), recordsResult);
+                result.validatedRecords().records().forEach(s -> recordsResult.add(s.offset()));
+                assertEquals(LongStream.range(0, numRecords).boxed().toList(), recordsResult);
             }
         });
     }
@@ -227,7 +226,7 @@ public class LogValidatorTest {
                 RequestLocal.withThreadConfinedCaching().bufferSupplier()
         );
 
-        MemoryRecords validatedRecords = validatedResults.validatedRecords;
+        MemoryRecords validatedRecords = validatedResults.validatedRecords();
 
         for (RecordBatch batch : validatedRecords.batches()) {
             assertTrue(batch.isValid());
@@ -239,11 +238,11 @@ public class LogValidatorTest {
             assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence());
         }
 
-        assertEquals(timestamp, validatedResults.maxTimestampMs);
-        assertTrue(validatedResults.messageSizeMaybeChanged, "Message size should have been changed");
+        assertEquals(timestamp, validatedResults.maxTimestampMs());
+        assertTrue(validatedResults.messageSizeMaybeChanged(), "Message size should have been changed");
 
         verifyRecordValidationStats(
-                validatedResults.recordValidationStats,
+                validatedResults.recordValidationStats(),
                 3,
                 records,
                 true
@@ -273,7 +272,7 @@ public class LogValidatorTest {
                 metricsRecorder,
                 RequestLocal.withThreadConfinedCaching().bufferSupplier()
         );
-        MemoryRecords validatedRecords = validatedResults.validatedRecords;
+        MemoryRecords validatedRecords = validatedResults.validatedRecords();
 
         for (RecordBatch batch : validatedRecords.batches()) {
             assertTrue(batch.isValid());
@@ -284,11 +283,11 @@ public class LogValidatorTest {
             assertEquals(RecordBatch.NO_PRODUCER_ID, batch.producerId());
             assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence());
         }
-        assertEquals(RecordBatch.NO_TIMESTAMP, validatedResults.maxTimestampMs,
+        assertEquals(RecordBatch.NO_TIMESTAMP, validatedResults.maxTimestampMs(),
                 "Max timestamp should be " + RecordBatch.NO_TIMESTAMP);
-        assertTrue(validatedResults.messageSizeMaybeChanged, "Message size should have been changed");
+        assertTrue(validatedResults.messageSizeMaybeChanged(), "Message size should have been changed");
 
-        verifyRecordValidationStats(validatedResults.recordValidationStats, 3, records, true);
+        verifyRecordValidationStats(validatedResults.recordValidationStats(), 3, records, true);
     }
 
     @ParameterizedTest
@@ -296,7 +295,7 @@ public class LogValidatorTest {
     public void checkRecompression(byte magic) {
         long now = System.currentTimeMillis();
         // Set the timestamp of seq(1) (i.e. offset 1) as the max timestamp
-        List<Long> timestampSeq = Arrays.asList(now - 1, now + 1, now);
+        List<Long> timestampSeq = List.of(now - 1, now + 1, now);
 
         long producerId;
         short producerEpoch;
@@ -355,14 +354,14 @@ public class LogValidatorTest {
                 RequestLocal.withThreadConfinedCaching().bufferSupplier()
         );
 
-        MemoryRecords validatedRecords = validatingResults.validatedRecords;
+        MemoryRecords validatedRecords = validatingResults.validatedRecords();
 
         int i = 0;
         for (RecordBatch batch : validatedRecords.batches()) {
             assertTrue(batch.isValid());
             assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
             maybeCheckBaseTimestamp(timestampSeq.get(0), batch);
-            assertEquals(batch.maxTimestamp(), batch.maxTimestamp());
+            assertEquals(batch.maxTimestamp(), TestUtils.toList(batch).stream().map(Record::timestamp).max(Long::compare).get());
             assertEquals(producerEpoch, batch.producerEpoch());
             assertEquals(producerId, batch.producerId());
             assertEquals(baseSequence, batch.baseSequence());
@@ -375,16 +374,16 @@ public class LogValidatorTest {
             }
         }
 
-        assertEquals(now + 1, validatingResults.maxTimestampMs,
+        assertEquals(now + 1, validatingResults.maxTimestampMs(),
                 "Max timestamp should be " + (now + 1));
 
         // Both V2 and V1 have single batch in the validated records when compression is enabled, and hence their shallow
         // OffsetOfMaxTimestamp is the last offset of the single batch
         assertEquals(1, iteratorSize(validatedRecords.batches().iterator()));
-        assertTrue(validatingResults.messageSizeMaybeChanged,
+        assertTrue(validatingResults.messageSizeMaybeChanged(),
                 "Message size should have been changed");
 
-        verifyRecordValidationStats(validatingResults.recordValidationStats, 3, records, true);
+        verifyRecordValidationStats(validatingResults.recordValidationStats(), 3, records, true);
     }
 
     private MemoryRecords recordsWithInvalidInnerMagic(byte batchMagicValue, byte recordMagicValue, Compression codec) {
@@ -416,7 +415,7 @@ public class LogValidatorTest {
     private MemoryRecords recordsWithNonSequentialInnerOffsets(Byte magicValue, Compression compression, int numRecords) {
         List<SimpleRecord> records = IntStream.range(0, numRecords)
                 .mapToObj(id -> new SimpleRecord(String.valueOf(id).getBytes()))
-                .collect(Collectors.toList());
+                .toList();
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magicValue, compression, TimestampType.CREATE_TIME, 0L);
@@ -475,7 +474,7 @@ public class LogValidatorTest {
     private MemoryRecords createRecords(byte magicValue,
                                         long timestamp,
                                         Compression codec) {
-        List<byte[]> records = Arrays.asList("hello".getBytes(), "there".getBytes(), "beautiful".getBytes());
+        List<byte[]> records = List.of("hello".getBytes(), "there".getBytes(), "beautiful".getBytes());
         return createRecords(records, magicValue, timestamp, codec);
     }
 
@@ -484,7 +483,7 @@ public class LogValidatorTest {
     public void checkCompressed(byte magic) {
         long now = System.currentTimeMillis();
         // set the timestamp of seq(1) (i.e. offset 1) as the max timestamp
-        List<Long> timestampSeq = Arrays.asList(now - 1, now + 1, now);
+        List<Long> timestampSeq = List.of(now - 1, now + 1, now);
 
         long producerId;
         short producerEpoch;
@@ -506,7 +505,7 @@ public class LogValidatorTest {
             partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH;
         }
 
-        List<SimpleRecord> recordList = Arrays.asList(
+        List<SimpleRecord> recordList = List.of(
                 new SimpleRecord(timestampSeq.get(0), "hello".getBytes()),
                 new SimpleRecord(timestampSeq.get(1), "there".getBytes()),
                 new SimpleRecord(timestampSeq.get(2), "beautiful".getBytes())
@@ -546,14 +545,14 @@ public class LogValidatorTest {
                 RequestLocal.withThreadConfinedCaching().bufferSupplier()
         );
 
-        MemoryRecords validatedRecords = validatedResults.validatedRecords;
+        MemoryRecords validatedRecords = validatedResults.validatedRecords();
 
         int i = 0;
         for (RecordBatch batch : validatedRecords.batches()) {
             assertTrue(batch.isValid());
-            assertEquals(batch.timestampType(), TimestampType.CREATE_TIME);
+            assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
             maybeCheckBaseTimestamp(timestampSeq.get(0), batch);
-            assertEquals(batch.maxTimestamp(), batch.maxTimestamp());
+            assertEquals(batch.maxTimestamp(), TestUtils.toList(batch).stream().map(Record::timestamp).max(Long::compare).get());
             assertEquals(producerEpoch, batch.producerEpoch());
             assertEquals(producerId, batch.producerId());
             assertEquals(baseSequence, batch.baseSequence());
@@ -566,11 +565,11 @@ public class LogValidatorTest {
             }
         }
 
-        assertEquals(now + 1, validatedResults.maxTimestampMs, "Max timestamp should be " + (now + 1));
+        assertEquals(now + 1, validatedResults.maxTimestampMs(), "Max timestamp should be " + (now + 1));
 
-        assertFalse(validatedResults.messageSizeMaybeChanged, "Message size should not have been changed");
+        assertFalse(validatedResults.messageSizeMaybeChanged(), "Message size should not have been changed");
 
-        verifyRecordValidationStats(validatedResults.recordValidationStats, 0, records, true);
+        verifyRecordValidationStats(validatedResults.recordValidationStats(), 0, records, true);
     }
 
     private MemoryRecords createRecords(List<byte[]> records,
@@ -884,7 +883,7 @@ public class LogValidatorTest {
                         PrimitiveRef.ofLong(offset),
                         metricsRecorder,
                         RequestLocal.withThreadConfinedCaching().bufferSupplier()
-                ).validatedRecords, offset
+                ).validatedRecords(), offset
         );
     }
 
@@ -915,7 +914,7 @@ public class LogValidatorTest {
                         PrimitiveRef.ofLong(offset),
                         metricsRecorder,
                         RequestLocal.withThreadConfinedCaching().bufferSupplier()
-                ).validatedRecords,
+                ).validatedRecords(),
                 offset
         );
     }
@@ -945,7 +944,7 @@ public class LogValidatorTest {
                 PrimitiveRef.ofLong(offset),
                 metricsRecorder,
                 RequestLocal.withThreadConfinedCaching().bufferSupplier()
-        ).validatedRecords;
+        ).validatedRecords();
 
         checkOffsets(messageWithOffset, offset);
     }
@@ -975,7 +974,7 @@ public class LogValidatorTest {
                 PrimitiveRef.ofLong(offset),
                 metricsRecorder,
                 RequestLocal.withThreadConfinedCaching().bufferSupplier()
-        ).validatedRecords;
+        ).validatedRecords();
 
         checkOffsets(messageWithOffset, offset);
     }
@@ -1006,7 +1005,7 @@ public class LogValidatorTest {
                 PrimitiveRef.ofLong(offset),
                 metricsRecorder,
                 RequestLocal.withThreadConfinedCaching().bufferSupplier()
-        ).validatedRecords;
+        ).validatedRecords();
 
         checkOffsets(compressedMessagesWithOffset, offset);
     }
@@ -1037,7 +1036,7 @@ public class LogValidatorTest {
                 PrimitiveRef.ofLong(offset),
                 metricsRecorder,
                 RequestLocal.withThreadConfinedCaching().bufferSupplier()
-        ).validatedRecords;
+        ).validatedRecords();
 
         checkOffsets(compressedMessagesWithOffset, offset);
     }
@@ -1068,9 +1067,9 @@ public class LogValidatorTest {
                 RequestLocal.withThreadConfinedCaching().bufferSupplier()
         );
 
-        checkOffsets(validatedResults.validatedRecords, offset);
+        checkOffsets(validatedResults.validatedRecords(), offset);
         verifyRecordValidationStats(
-                validatedResults.recordValidationStats,
+                validatedResults.recordValidationStats(),
                 3, // numConvertedRecords
                 records,
                 false // compressed
@@ -1103,9 +1102,9 @@ public class LogValidatorTest {
                 RequestLocal.withThreadConfinedCaching().bufferSupplier()
         );
 
-        checkOffsets(validatedResults.validatedRecords, offset);
+        checkOffsets(validatedResults.validatedRecords(), offset);
         verifyRecordValidationStats(
-                validatedResults.recordValidationStats,
+                validatedResults.recordValidationStats(),
                 3, // numConvertedRecords
                 records,
                 false // compressed
@@ -1139,9 +1138,9 @@ public class LogValidatorTest {
                 RequestLocal.withThreadConfinedCaching().bufferSupplier()
         );
 
-        checkOffsets(validatedResults.validatedRecords, offset);
+        checkOffsets(validatedResults.validatedRecords(), offset);
         verifyRecordValidationStats(
-                validatedResults.recordValidationStats,
+                validatedResults.recordValidationStats(),
                 3, // numConvertedRecords
                 records,
                 true // compressed
@@ -1175,9 +1174,9 @@ public class LogValidatorTest {
                 RequestLocal.withThreadConfinedCaching().bufferSupplier()
         );
 
-        checkOffsets(validatedResults.validatedRecords, offset);
+        checkOffsets(validatedResults.validatedRecords(), offset);
         verifyRecordValidationStats(
-                validatedResults.recordValidationStats,
+                validatedResults.recordValidationStats(),
                 3, // numConvertedRecords
                 records,
                 true // compressed
@@ -1232,7 +1231,7 @@ public class LogValidatorTest {
                 metricsRecorder,
                 RequestLocal.withThreadConfinedCaching().bufferSupplier()
         );
-        MemoryRecords validatedRecords = result.validatedRecords;
+        MemoryRecords validatedRecords = result.validatedRecords();
         assertEquals(1, TestUtils.toList(validatedRecords.batches()).size());
         assertFalse(TestUtils.toList(validatedRecords.batches()).get(0).isCompressed());
     }
@@ -1260,7 +1259,7 @@ public class LogValidatorTest {
                 PrimitiveRef.ofLong(offset),
                 metricsRecorder,
                 RequestLocal.withThreadConfinedCaching().bufferSupplier()
-        ).validatedRecords, offset);
+        ).validatedRecords(), offset);
     }
 
     @Test
@@ -1285,7 +1284,7 @@ public class LogValidatorTest {
                 AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
-        ).validatedRecords, offset);
+        ).validatedRecords(), offset);
     }
 
     @Test
@@ -1308,7 +1307,7 @@ public class LogValidatorTest {
                 AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
-        ).validatedRecords, offset);
+        ).validatedRecords(), offset);
     }
 
     @Test
@@ -1332,7 +1331,7 @@ public class LogValidatorTest {
                 AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
-        ).validatedRecords, offset);
+        ).validatedRecords(), offset);
     }
 
     @Test
@@ -1356,7 +1355,7 @@ public class LogValidatorTest {
                 AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
-        ).validatedRecords, offset);
+        ).validatedRecords(), offset);
     }
 
     @Test
@@ -1381,7 +1380,7 @@ public class LogValidatorTest {
                 AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
-        ).validatedRecords, offset);
+        ).validatedRecords(), offset);
     }
 
     @Test
@@ -1458,7 +1457,7 @@ public class LogValidatorTest {
                 AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
-        ).validatedRecords, offset);
+        ).validatedRecords(), offset);
     }
 
 
@@ -1484,7 +1483,7 @@ public class LogValidatorTest {
                 AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsets(
                 PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
-        ).validatedRecords, offset);
+        ).validatedRecords(), offset);
     }
 
     @Test
@@ -1514,7 +1513,7 @@ public class LogValidatorTest {
                 PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching().bufferSupplier()
         ));
 
-        assertEquals(metricsRecorder.recordInvalidOffsetCount, 1);
+        assertEquals(1, metricsRecorder.recordInvalidOffsetCount);
     }
 
     @Test
@@ -1668,7 +1667,7 @@ public class LogValidatorTest {
 
     @Test
     public void testDifferentLevelDoesNotCauseRecompression() {
-        List<byte[]> records = Arrays.asList(
+        List<byte[]> records = List.of(
                 String.join("", Collections.nCopies(256, "some")).getBytes(),
                 String.join("", Collections.nCopies(256, "data")).getBytes()
         );
@@ -1703,13 +1702,13 @@ public class LogValidatorTest {
         );
 
         // Ensure validated records have not been changed so they are the same as the producer records
-        assertEquals(recordsGzipMax, result.validatedRecords);
-        assertNotEquals(recordsGzipMin, result.validatedRecords);
+        assertEquals(recordsGzipMax, result.validatedRecords());
+        assertNotEquals(recordsGzipMin, result.validatedRecords());
     }
 
     @Test
     public void testDifferentCodecCausesRecompression() {
-        List<byte[]> records = Arrays.asList(
+        List<byte[]> records = List.of(
                 "somedata".getBytes(),
                 "moredata".getBytes()
         );
@@ -1741,7 +1740,7 @@ public class LogValidatorTest {
         );
 
         // Ensure validated records have been recompressed and match lz4 min level
-        assertEquals(recordsLz4Min, result.validatedRecords);
+        assertEquals(recordsLz4Min, result.validatedRecords());
     }
 
     @ParameterizedTest
@@ -1799,14 +1798,14 @@ public class LogValidatorTest {
                 RequestLocal.withThreadConfinedCaching().bufferSupplier()
         );
 
-        MemoryRecords validatedRecords = validatingResults.validatedRecords;
+        MemoryRecords validatedRecords = validatingResults.validatedRecords();
 
         int i = 0;
         for (RecordBatch batch : validatedRecords.batches()) {
             assertTrue(batch.isValid());
             assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
             maybeCheckBaseTimestamp(timestampSeq[0], batch);
-            assertEquals(batch.maxTimestamp(), batch.maxTimestamp());
+            assertEquals(batch.maxTimestamp(), TestUtils.toList(batch).stream().map(Record::timestamp).max(Long::compare).get());
 
             assertEquals(producerEpoch, batch.producerEpoch());
             assertEquals(producerId, batch.producerId());
@@ -1821,7 +1820,7 @@ public class LogValidatorTest {
         }
 
         assertEquals(i, offsetCounter.value);
-        assertEquals(now + 1, validatingResults.maxTimestampMs,
+        assertEquals(now + 1, validatingResults.maxTimestampMs(),
                 "Max timestamp should be " + (now + 1));
 
         if (magic >= RecordBatch.MAGIC_VALUE_V2) {
@@ -1830,9 +1829,9 @@ public class LogValidatorTest {
             assertEquals(3, iteratorSize(records.batches().iterator()));
         }
 
-        assertFalse(validatingResults.messageSizeMaybeChanged,
+        assertFalse(validatingResults.messageSizeMaybeChanged(),
                 "Message size should not have been changed");
-        verifyRecordValidationStats(validatingResults.recordValidationStats, 0, records, false);
+        verifyRecordValidationStats(validatingResults.recordValidationStats(), 0, records, false);
     }
 
     private void assertInvalidBatchCountOverrides(int lastOffsetDelta, int count) {
@@ -1891,7 +1890,7 @@ public class LogValidatorTest {
                 RequestLocal.withThreadConfinedCaching().bufferSupplier()
         );
 
-        MemoryRecords validatedRecords = validatedResults.validatedRecords;
+        MemoryRecords validatedRecords = validatedResults.validatedRecords();
         assertEquals(records.sizeInBytes(), validatedRecords.sizeInBytes(),
                 "message set size should not change");
         long now = mockTime.milliseconds();
@@ -1899,12 +1898,12 @@ public class LogValidatorTest {
             validateLogAppendTime(now, 1234L, batch);
         assertTrue(validatedRecords.batches().iterator().next().isValid(),
                 "MessageSet should still valid");
-        assertEquals(now, validatedResults.maxTimestampMs,
+        assertEquals(now, validatedResults.maxTimestampMs(),
                 "Max timestamp should be " + now);
-        assertFalse(validatedResults.messageSizeMaybeChanged,
+        assertFalse(validatedResults.messageSizeMaybeChanged(),
                 "Message size should not have been changed");
 
-        verifyRecordValidationStats(validatedResults.recordValidationStats, 0, records, true);
+        verifyRecordValidationStats(validatedResults.recordValidationStats(), 0, records, true);
     }
 
     @ParameterizedTest
@@ -1933,18 +1932,18 @@ public class LogValidatorTest {
                 RequestLocal.withThreadConfinedCaching().bufferSupplier()
         );
 
-        MemoryRecords validatedRecords = validatedResults.validatedRecords;
+        MemoryRecords validatedRecords = validatedResults.validatedRecords();
         assertEquals(iteratorSize(records.records().iterator()), iteratorSize(validatedRecords.records().iterator()),
                 "message set size should not change");
         long now = mockTime.milliseconds();
         validatedRecords.batches().forEach(batch -> validateLogAppendTime(now, -1, batch));
         assertTrue(validatedRecords.batches().iterator().next().isValid(),
                 "MessageSet should still valid");
-        assertEquals(now, validatedResults.maxTimestampMs, String.format("Max timestamp should be %d", now));
-        assertTrue(validatedResults.messageSizeMaybeChanged,
+        assertEquals(now, validatedResults.maxTimestampMs(), String.format("Max timestamp should be %d", now));
+        assertTrue(validatedResults.messageSizeMaybeChanged(),
                 "Message size may have been changed");
 
-        RecordValidationStats stats = validatedResults.recordValidationStats;
+        RecordValidationStats stats = validatedResults.recordValidationStats();
         verifyRecordValidationStats(stats, 3, records, true);
     }
 
@@ -1974,7 +1973,7 @@ public class LogValidatorTest {
         );
         assertEquals(offsetCounter.value, iteratorSize(records.records().iterator()));
 
-        MemoryRecords validatedRecords = validatedResults.validatedRecords;
+        MemoryRecords validatedRecords = validatedResults.validatedRecords();
         assertEquals(iteratorSize(records.records().iterator()), iteratorSize(validatedRecords.records().iterator()), "message set size should not change");
 
         long now = mockTime.milliseconds();
@@ -1984,14 +1983,14 @@ public class LogValidatorTest {
         }
 
         if (magic == RecordBatch.MAGIC_VALUE_V0) {
-            assertEquals(RecordBatch.NO_TIMESTAMP, validatedResults.maxTimestampMs);
+            assertEquals(RecordBatch.NO_TIMESTAMP, validatedResults.maxTimestampMs());
         } else {
-            assertEquals(now, validatedResults.maxTimestampMs);
+            assertEquals(now, validatedResults.maxTimestampMs());
         }
 
-        assertFalse(validatedResults.messageSizeMaybeChanged, "Message size should not have been changed");
+        assertFalse(validatedResults.messageSizeMaybeChanged(), "Message size should not have been changed");
 
-        verifyRecordValidationStats(validatedResults.recordValidationStats, 0, records, false);
+        verifyRecordValidationStats(validatedResults.recordValidationStats(), 0, records, false);
     }
 
     /**
@@ -1999,7 +1998,7 @@ public class LogValidatorTest {
      */
     void validateLogAppendTime(long expectedLogAppendTime, long expectedBaseTimestamp, RecordBatch batch) {
         assertTrue(batch.isValid());
-        assertEquals(batch.timestampType(), TimestampType.LOG_APPEND_TIME);
+        assertEquals(TimestampType.LOG_APPEND_TIME, batch.timestampType());
         assertEquals(expectedLogAppendTime, batch.maxTimestamp(), "Unexpected max timestamp of batch $batch");
         maybeCheckBaseTimestamp(expectedBaseTimestamp, batch);
         batch.forEach(record -> {

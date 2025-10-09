@@ -25,7 +25,7 @@ public class NoOpValueTransformerWithKeySupplier<K, V> implements ValueTransform
 
     @Override
     public ValueTransformerWithKey<K, V, V> get() {
-        return new ValueTransformerWithKey<K, V, V>() {
+        return new ValueTransformerWithKey<>() {
 
             @Override
             public void init(final ProcessorContext context1) {

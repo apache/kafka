@@ -21,10 +21,9 @@ import org.apache.kafka.common.message.WriteTxnMarkersRequestData;
 import org.apache.kafka.common.message.WriteTxnMarkersRequestData.WritableTxnMarker;
 import org.apache.kafka.common.message.WriteTxnMarkersRequestData.WritableTxnMarkerTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -189,8 +188,8 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
         return markers;
     }
 
-    public static WriteTxnMarkersRequest parse(ByteBuffer buffer, short version) {
-        return new WriteTxnMarkersRequest(new WriteTxnMarkersRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static WriteTxnMarkersRequest parse(Readable readable, short version) {
+        return new WriteTxnMarkersRequest(new WriteTxnMarkersRequestData(readable, version), version);
     }
 
     @Override

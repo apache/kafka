@@ -63,8 +63,9 @@ def append_message_to_pr_body(pr: int , message: str):
         return
 
     print(f"""New PR body will be:\n\n---\n{updated_pr_body}---\n""")
-    choice = input(f'Update the body of "{pr_title}"? (y/n): ').strip().lower()
-    if choice in ['n', 'no']:
+    choice = input(f'Update the body of "{pr_title}"? [Y/n] ').strip().lower()
+    if choice not in ['', 'y']:
+        print("Abort.")
         return
 
     try:

@@ -20,7 +20,6 @@ package org.apache.kafka.metadata;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -109,9 +108,9 @@ public class ReplicasTest {
     @Test
     public void testToSet() {
         assertEquals(Set.of(), Replicas.toSet(new int[] {}));
-        assertEquals(new HashSet<>(List.of(3, 1, 5)),
+        assertEquals(Set.of(3, 1, 5),
             Replicas.toSet(new int[] {1, 3, 5}));
-        assertEquals(new HashSet<>(List.of(1, 2, 10)),
+        assertEquals(Set.of(1, 2, 10),
             Replicas.toSet(new int[] {1, 1, 2, 10, 10}));
     }
 

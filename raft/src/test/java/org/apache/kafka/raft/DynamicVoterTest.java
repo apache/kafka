@@ -23,7 +23,7 @@ import org.apache.kafka.common.network.ListenerName;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
-import java.util.Collections;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -171,7 +171,7 @@ public class DynamicVoterTest {
     @Test
     public void testToVoterNode() {
         ReplicaKey voterKey = ReplicaKey.of(5, Uuid.fromString("__0IZ-0DRNazJ49kCZ1EMQ"));
-        Endpoints listeners = Endpoints.fromInetSocketAddresses(Collections.singletonMap(
+        Endpoints listeners = Endpoints.fromInetSocketAddresses(Map.of(
             new ListenerName("CONTROLLER"),
             new InetSocketAddress("localhost", 8020)));
         SupportedVersionRange supportedKRaftVersion =

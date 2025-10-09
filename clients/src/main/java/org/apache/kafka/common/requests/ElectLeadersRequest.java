@@ -25,10 +25,9 @@ import org.apache.kafka.common.message.ElectLeadersRequestData.TopicPartitions;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -147,7 +146,7 @@ public class ElectLeadersRequest extends AbstractRequest {
         return new ElectLeadersResponse(throttleTimeMs, apiError.error().code(), electionResults, version());
     }
 
-    public static ElectLeadersRequest parse(ByteBuffer buffer, short version) {
-        return new ElectLeadersRequest(new ElectLeadersRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static ElectLeadersRequest parse(Readable readable, short version) {
+        return new ElectLeadersRequest(new ElectLeadersRequestData(readable, version), version);
     }
 }

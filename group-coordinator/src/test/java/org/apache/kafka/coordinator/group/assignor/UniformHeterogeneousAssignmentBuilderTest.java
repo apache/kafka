@@ -17,6 +17,8 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
@@ -25,7 +27,7 @@ import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
+import org.apache.kafka.image.MetadataImage;
 
 import org.junit.jupiter.api.Test;
 
@@ -89,15 +91,11 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
     @Test
     public void testTwoMembersNoTopicSubscription() {
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topic1Uuid, topic1Name, 3)
+            .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Map.of(
-                topic1Uuid,
-                new TopicMetadata(
-                    topic1Uuid,
-                    topic1Name,
-                    3
-                )
-            )
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -130,15 +128,11 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
     @Test
     public void testTwoMembersSubscribedToNonexistentTopics() {
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topic1Uuid, topic1Name, 3)
+            .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Map.of(
-                topic1Uuid,
-                new TopicMetadata(
-                    topic1Uuid,
-                    topic1Name,
-                    3
-                )
-            )
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -168,17 +162,10 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
     @Test
     public void testFirstAssignmentTwoMembersTwoTopics() {
-        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(topic1Uuid, new TopicMetadata(
-            topic1Uuid,
-            topic1Name,
-            3
-        ));
-        topicMetadata.put(topic3Uuid, new TopicMetadata(
-            topic3Uuid,
-            topic3Name,
-            6
-        ));
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topic1Uuid, topic1Name, 3)
+            .addTopic(topic3Uuid, topic3Name, 6)
+            .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
@@ -201,7 +188,9 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             HETEROGENEOUS,
             Map.of()
         );
-        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            new KRaftCoordinatorMetadataImage(metadataImage)
+        );
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
@@ -222,17 +211,10 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
     @Test
     public void testFirstAssignmentNumMembersGreaterThanTotalNumPartitions() {
-        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(topic3Uuid, new TopicMetadata(
-            topic3Uuid,
-            topic3Name,
-            1
-        ));
-        topicMetadata.put(topic1Uuid, new TopicMetadata(
-            topic1Uuid,
-            topic1Name,
-            2
-        ));
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topic1Uuid, topic1Name, 2)
+            .addTopic(topic3Uuid, topic3Name, 1)
+            .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
@@ -262,7 +244,9 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             HETEROGENEOUS,
             Map.of()
         );
-        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            new KRaftCoordinatorMetadataImage(metadataImage)
+        );
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
@@ -286,22 +270,11 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
     @Test
     public void testReassignmentForTwoMembersThreeTopicsGivenUnbalancedPrevAssignment() {
-        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(topic1Uuid, new TopicMetadata(
-            topic1Uuid,
-            topic1Name,
-            6
-        ));
-        topicMetadata.put(topic2Uuid, new TopicMetadata(
-            topic2Uuid,
-            topic2Name,
-            4
-        ));
-        topicMetadata.put(topic3Uuid, new TopicMetadata(
-            topic3Uuid,
-            topic3Name,
-            4
-        ));
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topic1Uuid, topic1Name, 6)
+            .addTopic(topic2Uuid, topic2Name, 4)
+            .addTopic(topic3Uuid, topic3Name, 4)
+            .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
@@ -340,7 +313,9 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             HETEROGENEOUS,
             invertedTargetAssignment(members)
         );
-        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            new KRaftCoordinatorMetadataImage(metadataImage)
+        );
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
@@ -366,27 +341,14 @@ public class UniformHeterogeneousAssignmentBuilderTest {
     @Test
     public void testReassignmentWhenPartitionsAreAddedForTwoMembers() {
         // Simulating adding partitions to T1, T2, T3 - originally T1 -> 4, T2 -> 3, T3 -> 2, T4 -> 3
-        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(topic1Uuid, new TopicMetadata(
-            topic1Uuid,
-            topic1Name,
-            6
-        ));
-        topicMetadata.put(topic2Uuid, new TopicMetadata(
-            topic2Uuid,
-            topic2Name,
-            5
-        ));
-        topicMetadata.put(topic3Uuid, new TopicMetadata(
-            topic3Uuid,
-            topic3Name,
-            3
-        ));
-        topicMetadata.put(topic4Uuid, new TopicMetadata(
-            topic4Uuid,
-            topic4Name,
-            3
-        ));
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topic1Uuid, topic1Name, 6)
+            .addTopic(topic2Uuid, topic2Name, 5)
+            .addTopic(topic3Uuid, topic3Name, 3)
+            .addTopic(topic4Uuid, topic4Name, 3)
+            .build();
+
+
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
@@ -415,7 +377,9 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             HETEROGENEOUS,
             invertedTargetAssignment(members)
         );
-        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            new KRaftCoordinatorMetadataImage(metadataImage)
+        );
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
@@ -438,17 +402,10 @@ public class UniformHeterogeneousAssignmentBuilderTest {
     @Test
     public void testReassignmentWhenOneMemberAddedAndPartitionsAddedTwoMembersTwoTopics() {
         // Initially T1 -> 3, T2 -> 3 partitions.
-        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(topic1Uuid, new TopicMetadata(
-            topic1Uuid,
-            topic1Name,
-            6
-        ));
-        topicMetadata.put(topic2Uuid, new TopicMetadata(
-            topic2Uuid,
-            topic2Name,
-            7
-        ));
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topic1Uuid, topic1Name, 6)
+            .addTopic(topic2Uuid, topic2Name, 7)
+            .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
@@ -485,7 +442,9 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             HETEROGENEOUS,
             invertedTargetAssignment(members)
         );
-        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            new KRaftCoordinatorMetadataImage(metadataImage)
+        );
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
@@ -509,22 +468,11 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
     @Test
     public void testReassignmentWhenOneMemberRemovedAfterInitialAssignmentWithThreeMembersThreeTopics() {
-        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(topic1Uuid, new TopicMetadata(
-            topic1Uuid,
-            topic1Name,
-            3
-        ));
-        topicMetadata.put(topic2Uuid, new TopicMetadata(
-            topic2Uuid,
-            topic2Name,
-            8
-        ));
-        topicMetadata.put(topic3Uuid, new TopicMetadata(
-            topic3Uuid,
-            topic3Name,
-            3
-        ));
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topic1Uuid, topic1Name, 3)
+            .addTopic(topic2Uuid, topic2Name, 8)
+            .addTopic(topic3Uuid, topic3Name, 3)
+            .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
@@ -554,7 +502,9 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             HETEROGENEOUS,
             invertedTargetAssignment(members)
         );
-        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            new KRaftCoordinatorMetadataImage(metadataImage)
+        );
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
@@ -575,17 +525,10 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
     @Test
     public void testReassignmentWhenOneSubscriptionRemovedAfterInitialAssignmentWithTwoMembersTwoTopics() {
-        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(topic1Uuid, new TopicMetadata(
-            topic1Uuid,
-            topic1Name,
-            3
-        ));
-        topicMetadata.put(topic2Uuid, new TopicMetadata(
-            topic2Uuid,
-            topic2Name,
-            5
-        ));
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topic1Uuid, topic1Name, 3)
+            .addTopic(topic2Uuid, topic2Name, 5)
+            .build();
 
         // Initial subscriptions were [T1, T2]
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
@@ -615,7 +558,9 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             HETEROGENEOUS,
             invertedTargetAssignment(members)
         );
-        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            new KRaftCoordinatorMetadataImage(metadataImage)
+        );
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
@@ -641,22 +586,11 @@ public class UniformHeterogeneousAssignmentBuilderTest {
      */
     @Test
     public void testReassignmentWhenTopicPartitionsRunOutAndMembersHaveNoPartitions() {
-        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(topic1Uuid, new TopicMetadata(
-            topic1Uuid,
-            topic1Name,
-            2
-        ));
-        topicMetadata.put(topic2Uuid, new TopicMetadata(
-            topic2Uuid,
-            topic2Name,
-            2
-        ));
-        topicMetadata.put(topic3Uuid, new TopicMetadata(
-            topic3Uuid,
-            topic3Name,
-            2
-        ));
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topic1Uuid, topic1Name, 2)
+            .addTopic(topic2Uuid, topic2Name, 2)
+            .addTopic(topic3Uuid, topic3Name, 2)
+            .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
@@ -683,7 +617,9 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             HETEROGENEOUS,
             invertedTargetAssignment(members)
         );
-        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            new KRaftCoordinatorMetadataImage(metadataImage)
+        );
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
@@ -705,12 +641,9 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
     @Test
     public void testFirstAssignmentWithTwoMembersIncludingOneWithoutSubscriptions() {
-        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(topic1Uuid, new TopicMetadata(
-            topic1Uuid,
-            topic1Name,
-            3
-        ));
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topic1Uuid, topic1Name, 3)
+            .build();
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
@@ -733,7 +666,9 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             HETEROGENEOUS,
             Map.of()
         );
-        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            new KRaftCoordinatorMetadataImage(metadataImage)
+        );
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,

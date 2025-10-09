@@ -16,40 +16,28 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.streams.assignor.TopologyDescriber;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.SortedMap;
-import java.util.stream.Stream;
 
 /**
  * The topology metadata class is used by the {@link org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor} to get topic and
  * partition metadata for the topology that the streams group using.
  *
- * @param topicMetadata  The topic Ids mapped to their corresponding {@link TopicMetadata} object, which contains topic and partition
- *                       metadata.
+ * @param metadataImage  The metadata image
  * @param subtopologyMap The configured subtopologies
  */
-public record TopologyMetadata(Map<String, TopicMetadata> topicMetadata, SortedMap<String, ConfiguredSubtopology> subtopologyMap) implements TopologyDescriber {
+public record TopologyMetadata(CoordinatorMetadataImage metadataImage, SortedMap<String, ConfiguredSubtopology> subtopologyMap) implements TopologyDescriber {
 
     public TopologyMetadata {
-        topicMetadata = Objects.requireNonNull(Collections.unmodifiableMap(topicMetadata));
-        subtopologyMap = Objects.requireNonNull(Collections.unmodifiableSortedMap(subtopologyMap));
-    }
-
-    /**
-     * Map of topic names to topic metadata.
-     *
-     * @return The map of topic Ids to topic metadata.
-     */
-    @Override
-    public Map<String, TopicMetadata> topicMetadata() {
-        return this.topicMetadata;
+        Objects.requireNonNull(metadataImage);
+        subtopologyMap = Collections.unmodifiableSortedMap(Objects.requireNonNull(subtopologyMap));
     }
 
     /**
@@ -87,12 +75,7 @@ public record TopologyMetadata(Map<String, TopicMetadata> topicMetadata, SortedM
     @Override
     public int maxNumInputPartitions(String subtopologyId) {
         final ConfiguredSubtopology subtopology = getSubtopologyOrFail(subtopologyId);
-        return Stream.concat(
-            subtopology.sourceTopics().stream(),
-            subtopology.repartitionSourceTopics().keySet().stream()
-        ).map(topic -> this.topicMetadata.get(topic).numPartitions()).max(Integer::compareTo).orElseThrow(
-            () -> new IllegalStateException("Subtopology does not contain any source topics")
-        );
+        return subtopology.numberOfTasks();
     }
 
     private ConfiguredSubtopology getSubtopologyOrFail(String subtopologyId) {

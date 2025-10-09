@@ -17,16 +17,16 @@
 
 package kafka.server
 
-import kafka.coordinator.group.{CoordinatorLoaderImpl, CoordinatorPartitionWriter, GroupCoordinatorAdapter}
+import kafka.coordinator.group.CoordinatorPartitionWriter
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.LogManager
-import kafka.log.remote.RemoteLogManager
-import kafka.network.{DataPlaneAcceptor, SocketServer}
+import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
 import kafka.server.metadata._
 import kafka.server.share.{ShareCoordinatorMetadataCacheHelperImpl, SharePartitionManager}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -34,34 +34,34 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
-import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord
+import org.apache.kafka.coordinator.common.runtime.{CoordinatorLoaderImpl, CoordinatorRecord}
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService}
 import org.apache.kafka.coordinator.share.metrics.{ShareCoordinatorMetrics, ShareCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRecordSerde, ShareCoordinatorService}
 import org.apache.kafka.coordinator.transaction.ProducerIdManager
 import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
-import org.apache.kafka.metadata.{BrokerState, ListenerInfo}
-import org.apache.kafka.metadata.publisher.AclPublisher
-import org.apache.kafka.security.CredentialProvider
+import org.apache.kafka.metadata.{BrokerState, ListenerInfo, MetadataVersionConfigValidator}
+import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, ScramPublisher}
+import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, TopicIdPartition}
-import org.apache.kafka.server.config.ConfigType
-import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
+import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
+import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpStatePersister, Persister, PersisterStateManager}
 import org.apache.kafka.server.share.session.ShareSessionCache
 import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
-import org.apache.kafka.server.{AssignmentsManager, BrokerFeatures, ClientMetricsManager, DelayedActionQueue}
+import org.apache.kafka.server.{AssignmentsManager, BrokerFeatures, ClientMetricsManager, DefaultApiVersionManager, DelayedActionQueue, ProcessRole}
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.time.Duration
 import java.util
 import java.util.Optional
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.{Condition, ReentrantLock}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import scala.collection.Map
@@ -95,15 +95,13 @@ class BrokerServer(
 
   private var assignmentsManager: AssignmentsManager = _
 
-  private val isShuttingDown = new AtomicBoolean(false)
-
   val lock: ReentrantLock = new ReentrantLock()
   val awaitShutdownCond: Condition = lock.newCondition()
   var status: ProcessStatus = SHUTDOWN
 
   @volatile var dataPlaneRequestProcessor: KafkaApis = _
 
-  var authorizer: Option[Authorizer] = None
+  var authorizerPlugin: Option[Plugin[Authorizer]] = None
   @volatile var socketServer: SocketServer = _
   var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = _
 
@@ -113,7 +111,7 @@ class BrokerServer(
 
   var tokenManager: DelegationTokenManager = _
 
-  var dynamicConfigHandlers: Map[String, ConfigHandler] = _
+  var dynamicConfigHandlers: Map[ConfigType, ConfigHandler] = _
 
   @volatile private[this] var _replicaManager: ReplicaManager = _
 
@@ -126,7 +124,7 @@ class BrokerServer(
 
   var transactionCoordinator: TransactionCoordinator = _
 
-  var shareCoordinator: Option[ShareCoordinator] = None
+  var shareCoordinator: ShareCoordinator = _
 
   var clientToControllerChannelManager: NodeToControllerChannelManager = _
 
@@ -171,10 +169,7 @@ class BrokerServer(
       info(s"Transition from $status to $to")
 
       status = to
-      if (to == SHUTTING_DOWN) {
-        isShuttingDown.set(true)
-      } else if (to == SHUTDOWN) {
-        isShuttingDown.set(false)
+      if (to == SHUTDOWN) {
         awaitShutdownCond.signalAll()
       }
     } finally {
@@ -196,8 +191,8 @@ class BrokerServer(
       val clientMetricsReceiverPlugin = new ClientMetricsReceiverPlugin()
 
       config.dynamicConfig.initialize(Some(clientMetricsReceiverPlugin))
-      quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-")
-      DynamicBrokerConfig.readDynamicBrokerConfigsFromSnapshot(raftManager, config, quotaManagers)
+      quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-", ProcessRole.BrokerRole.toString)
+      DynamicBrokerConfig.readDynamicBrokerConfigsFromSnapshot(raftManager, config, quotaManagers, logContext)
 
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -219,8 +214,6 @@ class BrokerServer(
         time,
         brokerTopicStats,
         logDirFailureChannel)
-
-      remoteLogManagerOpt = createRemoteLogManager()
 
       lifecycleManager = new BrokerLifecycleManager(config,
         time,
@@ -252,16 +245,24 @@ class BrokerServer(
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager, metrics)
       clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config.clientTelemetryMaxBytes, time, metrics)
 
-      val apiVersionManager = ApiVersionManager(
+      val apiVersionManager = new DefaultApiVersionManager(
         ListenerType.BROKER,
-        config,
-        forwardingManager,
+        () => forwardingManager.controllerApiVersions,
         brokerFeatures,
         metadataCache,
-        Some(clientMetricsManager)
+        config.unstableApiVersionsEnabled,
+        Optional.of(clientMetricsManager)
       )
 
-      val connectionDisconnectListeners = Seq(clientMetricsManager.connectionDisconnectListener())
+      val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(
+        config.shareGroupConfig.shareGroupMaxShareSessions()
+      )
+
+      val connectionDisconnectListeners = Seq(
+        clientMetricsManager.connectionDisconnectListener(),
+        shareFetchSessionCache.connectionDisconnectListener()
+      )
+
       // Create and start the socket server acceptor threads so that the bound port is known.
       // Delay starting processors until the end of the initialization sequence to ensure
       // that credentials have been loaded before processing authentications.
@@ -276,9 +277,11 @@ class BrokerServer(
       clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
 
       val listenerInfo = ListenerInfo.create(Optional.of(config.interBrokerListenerName.value()),
-          config.effectiveAdvertisedBrokerListeners.map(_.toPublic()).asJava).
+          config.effectiveAdvertisedBrokerListeners.asJava).
             withWildcardHostnamesResolved().
             withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
+
+      remoteLogManagerOpt = createRemoteLogManager(listenerInfo)
 
       alterPartitionManager = AlterPartitionManager(
         config,
@@ -345,8 +348,6 @@ class BrokerServer(
         logDirFailureChannel = logDirFailureChannel,
         alterPartitionManager = alterPartitionManager,
         brokerTopicStats = brokerTopicStats,
-        isShuttingDown = isShuttingDown,
-        threadNamePrefix = None, // The ReplicaManager only runs on the broker, and already includes the ID in thread names.
         delayedRemoteFetchPurgatoryParam = None,
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
         addPartitionsToTxnManager = Some(addPartitionsToTxnManager),
@@ -355,7 +356,10 @@ class BrokerServer(
       )
 
       /* start token manager */
-      tokenManager = new DelegationTokenManager(config, tokenCache, time)
+      tokenManager = new DelegationTokenManager(new DelegationTokenManagerConfigs(config), tokenCache)
+
+      // Create and initialize an authorizer if one is configured.
+      authorizerPlugin = config.createNewAuthorizer(metrics, ProcessRole.BrokerRole.toString)
 
       /* initializing the groupConfigManager */
       groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig))
@@ -383,9 +387,9 @@ class BrokerServer(
 
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(
         config, clientToControllerChannelManager, groupCoordinator,
-        transactionCoordinator, shareCoordinator)
+        transactionCoordinator, shareCoordinator, time)
 
-      dynamicConfigHandlers = Map[String, ConfigHandler](
+      dynamicConfigHandlers = Map[ConfigType, ConfigHandler](
         ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers),
         ConfigType.BROKER -> new BrokerConfigHandler(config, quotaManagers),
         ConfigType.CLIENT_METRICS -> new ClientMetricsConfigHandler(clientMetricsManager),
@@ -400,7 +404,7 @@ class BrokerServer(
         config,
         "heartbeat",
         s"broker-${config.nodeId}-",
-        config.brokerSessionTimeoutMs / 2 // KAFKA-14392
+        config.brokerHeartbeatIntervalMs
       )
       lifecycleManager.start(
         () => sharedServer.loader.lastAppliedOffset(),
@@ -410,10 +414,6 @@ class BrokerServer(
         featuresRemapped,
         logManager.readBrokerEpochFromCleanShutdownFiles()
       )
-
-      // Create and initialize an authorizer if one is configured.
-      authorizer = config.createNewAuthorizer()
-      authorizer.foreach(_.configure(config.originals))
 
       // The FetchSessionCache is divided into config.numIoThreads shards, each responsible
       // for Math.max(1, shardNum * sessionIdRange) <= sessionId < (shardNum + 1) * sessionIdRange
@@ -427,10 +427,6 @@ class BrokerServer(
         ))
       val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards))
 
-      val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(
-        config.shareGroupConfig.shareGroupMaxGroups * config.groupCoordinatorConfig.shareGroupMaxSize,
-        KafkaBroker.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS)
-
       sharePartitionManager = new SharePartitionManager(
         replicaManager,
         time,
@@ -438,7 +434,7 @@ class BrokerServer(
         config.shareGroupConfig.shareGroupRecordLockDurationMs,
         config.shareGroupConfig.shareGroupDeliveryCountLimit,
         config.shareGroupConfig.shareGroupPartitionMaxRecordLocks,
-        config.shareGroupConfig.shareFetchMaxFetchRecords,
+        config.remoteLogManagerConfig.remoteFetchMaxWaitMs().toLong,
         persister,
         groupConfigManager,
         brokerTopicStats
@@ -457,7 +453,7 @@ class BrokerServer(
         configRepository = metadataCache,
         metadataCache = metadataCache,
         metrics = metrics,
-        authorizer = authorizer,
+        authorizerPlugin = authorizerPlugin,
         quotas = quotaManagers,
         fetchManager = fetchManager,
         sharePartitionManager = sharePartitionManager,
@@ -466,31 +462,17 @@ class BrokerServer(
         time = time,
         tokenManager = tokenManager,
         apiVersionManager = apiVersionManager,
-        clientMetricsManager = clientMetricsManager)
+        clientMetricsManager = clientMetricsManager,
+        groupConfigManager = groupConfigManager)
 
       dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
-        config.numIoThreads, s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
-        DataPlaneAcceptor.ThreadPrefix)
+        config.numIoThreads, "RequestHandlerAvgIdlePercent")
 
-      // Start RemoteLogManager before initializing broker metadata publishers.
-      remoteLogManagerOpt.foreach { rlm =>
-        val listenerName = config.remoteLogManagerConfig.remoteLogMetadataManagerListenerName()
-        if (listenerName != null) {
-          val endpoint = listenerInfo.listeners().values().stream
-            .filter(e =>
-              e.listenerName().isPresent &&
-                ListenerName.normalised(e.listenerName().get()).equals(ListenerName.normalised(listenerName))
-            )
-            .findFirst()
-            .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
-              listenerName, "Should be set as a listener name within valid broker listener name list: " + listenerInfo.listeners().values()))
-          rlm.onEndPointCreated(endpoint)
-        }
-        rlm.startup()
-      }
-
-      metadataPublishers.add(new MetadataVersionConfigValidator(config, sharedServer.metadataPublishingFaultHandler))
+      metadataPublishers.add(new MetadataVersionConfigValidator(config.brokerId,
+        () => config.processRoles.contains(ProcessRole.BrokerRole) && config.logDirs().size() > 1,
+        sharedServer.metadataPublishingFaultHandler
+      ))
       brokerMetadataPublisher = new BrokerMetadataPublisher(config,
         metadataCache,
         logManager,
@@ -498,6 +480,7 @@ class BrokerServer(
         groupCoordinator,
         transactionCoordinator,
         shareCoordinator,
+        sharePartitionManager,
         new DynamicConfigPublisher(
           config,
           sharedServer.metadataPublishingFaultHandler,
@@ -517,12 +500,12 @@ class BrokerServer(
           quotaManagers,
         ),
         new ScramPublisher(
-          config,
+          config.nodeId,
           sharedServer.metadataPublishingFaultHandler,
           "broker",
           credentialProvider),
         new DelegationTokenPublisher(
-          config,
+          config.nodeId,
           sharedServer.metadataPublishingFaultHandler,
           "broker",
           tokenManager),
@@ -530,7 +513,7 @@ class BrokerServer(
           config.nodeId,
           sharedServer.metadataPublishingFaultHandler,
           "broker",
-          authorizer.toJava
+          authorizerPlugin.toJava
         ),
         sharedServer.initialBrokerMetadataLoadFaultHandler,
         sharedServer.metadataPublishingFaultHandler
@@ -587,7 +570,7 @@ class BrokerServer(
       // authorizer future is completed.
       val endpointReadyFutures = {
         val builder = new EndpointReadyFutures.Builder()
-        builder.build(authorizer.toJava,
+        builder.build(authorizerPlugin.toJava,
           new KafkaAuthorizerServerInfo(
             new ClusterResource(clusterId),
             config.nodeId,
@@ -622,78 +605,68 @@ class BrokerServer(
     // Create group coordinator, but don't start it until we've started replica manager.
     // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good
     // to fix the underlying issue.
-    if (config.isNewGroupCoordinatorEnabled) {
-      val time = Time.SYSTEM
-      val serde = new GroupCoordinatorRecordSerde
-      val timer = new SystemTimerReaper(
-        "group-coordinator-reaper",
-        new SystemTimer("group-coordinator")
-      )
-      val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
-        time,
-        replicaManager,
-        serde,
-        config.groupCoordinatorConfig.offsetsLoadBufferSize
-      )
-      val writer = new CoordinatorPartitionWriter(
-        replicaManager
-      )
-      new GroupCoordinatorService.Builder(config.brokerId, config.groupCoordinatorConfig)
-        .withTime(time)
-        .withTimer(timer)
-        .withLoader(loader)
-        .withWriter(writer)
-        .withCoordinatorRuntimeMetrics(new GroupCoordinatorRuntimeMetrics(metrics))
-        .withGroupCoordinatorMetrics(new GroupCoordinatorMetrics(KafkaYammerMetrics.defaultRegistry, metrics))
-        .withGroupConfigManager(groupConfigManager)
-        .withPersister(persister)
-        .withAuthorizer(authorizer.toJava)
-        .build()
-    } else {
-      GroupCoordinatorAdapter(
-        config,
-        replicaManager,
-        Time.SYSTEM,
-        metrics
-      )
-    }
+    val time = Time.SYSTEM
+    val serde = new GroupCoordinatorRecordSerde
+    val timer = new SystemTimerReaper(
+      "group-coordinator-reaper",
+      new SystemTimer("group-coordinator")
+    )
+    val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
+      time,
+      tp => replicaManager.getLog(tp).toJava,
+      tp => replicaManager.getLogEndOffset(tp).map(Long.box).toJava,
+      serde,
+      config.groupCoordinatorConfig.offsetsLoadBufferSize,
+      CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
+    )
+    val writer = new CoordinatorPartitionWriter(
+      replicaManager
+    )
+    new GroupCoordinatorService.Builder(config.brokerId, config.groupCoordinatorConfig)
+      .withTime(time)
+      .withTimer(timer)
+      .withLoader(loader)
+      .withWriter(writer)
+      .withCoordinatorRuntimeMetrics(new GroupCoordinatorRuntimeMetrics(metrics))
+      .withGroupCoordinatorMetrics(new GroupCoordinatorMetrics(KafkaYammerMetrics.defaultRegistry, metrics))
+      .withGroupConfigManager(groupConfigManager)
+      .withPersister(persister)
+      .withAuthorizerPlugin(authorizerPlugin.toJava)
+      .build()
   }
 
-  private def createShareCoordinator(): Option[ShareCoordinator] = {
-    if (config.shareGroupConfig.isShareGroupEnabled &&
-      config.shareGroupConfig.shareGroupPersisterClassName().nonEmpty) {
-      val time = Time.SYSTEM
-      val timer = new SystemTimerReaper(
-        "share-coordinator-reaper",
-        new SystemTimer("share-coordinator")
-      )
+  private def createShareCoordinator(): ShareCoordinator = {
+    val time = Time.SYSTEM
+    val timer = new SystemTimerReaper(
+      "share-coordinator-reaper",
+      new SystemTimer("share-coordinator")
+    )
 
-      val serde = new ShareCoordinatorRecordSerde
-      val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
-        time,
-        replicaManager,
-        serde,
-        config.shareCoordinatorConfig.shareCoordinatorLoadBufferSize()
-      )
-      val writer = new CoordinatorPartitionWriter(
-        replicaManager
-      )
-      Some(new ShareCoordinatorService.Builder(config.brokerId, config.shareCoordinatorConfig)
-        .withTimer(timer)
-        .withTime(time)
-        .withLoader(loader)
-        .withWriter(writer)
-        .withCoordinatorRuntimeMetrics(new ShareCoordinatorRuntimeMetrics(metrics))
-        .withCoordinatorMetrics(new ShareCoordinatorMetrics(metrics))
-        .build())
-    } else {
-      None
-    }
+    val serde = new ShareCoordinatorRecordSerde
+    val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
+      time,
+      tp => replicaManager.getLog(tp).toJava,
+      tp => replicaManager.getLogEndOffset(tp).map(Long.box).toJava,
+      serde,
+      config.shareCoordinatorConfig.shareCoordinatorLoadBufferSize(),
+      CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
+    )
+    val writer = new CoordinatorPartitionWriter(
+      replicaManager
+    )
+    new ShareCoordinatorService.Builder(config.brokerId, config.shareCoordinatorConfig)
+      .withTimer(timer)
+      .withTime(time)
+      .withLoader(loader)
+      .withWriter(writer)
+      .withCoordinatorRuntimeMetrics(new ShareCoordinatorRuntimeMetrics(metrics))
+      .withCoordinatorMetrics(new ShareCoordinatorMetrics(metrics))
+      .withShareGroupEnabledConfigSupplier(() => config.shareGroupConfig.isShareGroupEnabled)
+      .build()
   }
 
   private def createShareStatePersister(): Persister = {
-    if (config.shareGroupConfig.isShareGroupEnabled &&
-      config.shareGroupConfig.shareGroupPersisterClassName.nonEmpty) {
+    if (config.shareGroupConfig.shareGroupPersisterClassName.nonEmpty) {
       val klass = Utils.loadClass(config.shareGroupConfig.shareGroupPersisterClassName, classOf[Object]).asInstanceOf[Class[Persister]]
 
       if (klass.getName.equals(classOf[DefaultStatePersister].getName)) {
@@ -701,7 +674,7 @@ class BrokerServer(
           .newInstance(
             new PersisterStateManager(
               NetworkUtils.buildNetworkClient("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[Persister broker=${config.brokerId}]")),
-              new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.get.partitionFor(key), config.interBrokerListenerName),
+              new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName),
               Time.SYSTEM,
               new SystemTimerReaper(
                 "persister-state-manager-reaper",
@@ -723,16 +696,28 @@ class BrokerServer(
     }
   }
 
-  protected def createRemoteLogManager(): Option[RemoteLogManager] = {
-    if (config.remoteLogManagerConfig.isRemoteStorageSystemEnabled()) {
-      Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
+  protected def createRemoteLogManager(listenerInfo: ListenerInfo): Option[RemoteLogManager] = {
+    if (config.remoteLogManagerConfig.isRemoteStorageSystemEnabled) {
+      val listenerName = config.remoteLogManagerConfig.remoteLogMetadataManagerListenerName()
+      val endpoint = if (listenerName != null) {
+        Some(listenerInfo.listeners().values().stream
+          .filter(e => ListenerName.normalised(e.listener()).equals(ListenerName.normalised(listenerName)))
+          .findFirst()
+          .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
+            listenerName, "Should be set as a listener name within valid broker listener name list: " + listenerInfo.listeners().values())))
+      } else {
+        None
+      }
+
+      val rlm = new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.get(0), clusterId, time,
         (tp: TopicPartition) => logManager.getLog(tp).toJava,
         (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
           logManager.getLog(tp).foreach { log =>
             log.updateLogStartOffsetFromRemoteTier(remoteLogStartOffset)
           }
         },
-        brokerTopicStats, metrics))
+        brokerTopicStats, metrics, endpoint.toJava)
+      Some(rlm)
     } else {
       None
     }
@@ -775,7 +760,7 @@ class BrokerServer(
         CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)
       if (dataPlaneRequestProcessor != null)
         CoreUtils.swallow(dataPlaneRequestProcessor.close(), this)
-      authorizer.foreach(Utils.closeQuietly(_, "authorizer"))
+      authorizerPlugin.foreach(Utils.closeQuietly(_, "authorizer plugin"))
 
       /**
        * We must shutdown the scheduler early because otherwise, the scheduler could touch other
@@ -797,8 +782,11 @@ class BrokerServer(
         CoreUtils.swallow(groupConfigManager.close(), this)
       if (groupCoordinator != null)
         CoreUtils.swallow(groupCoordinator.shutdown(), this)
-      if (shareCoordinator.isDefined)
-        CoreUtils.swallow(shareCoordinator.get.shutdown(), this)
+      if (shareCoordinator != null)
+        CoreUtils.swallow(shareCoordinator.shutdown(), this)
+
+      if (autoTopicCreationManager != null)
+        CoreUtils.swallow(autoTopicCreationManager.close(), this)
 
       if (assignmentsManager != null)
         CoreUtils.swallow(assignmentsManager.close(), this)
@@ -835,8 +823,6 @@ class BrokerServer(
 
       if (persister != null)
         CoreUtils.swallow(persister.stop(), this)
-
-      isShuttingDown.set(false)
 
       if (lifecycleManager != null)
         CoreUtils.swallow(lifecycleManager.close(), this)

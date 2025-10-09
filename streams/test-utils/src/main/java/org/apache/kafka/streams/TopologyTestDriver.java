@@ -591,7 +591,7 @@ public class TopologyTestDriver implements Closeable {
                 // Process the record ...
                 task.process(mockWallClockTime.milliseconds());
                 task.maybePunctuateStreamTime();
-                commit(task.prepareCommit());
+                commit(task.prepareCommit(true));
                 task.postCommit(true);
                 captureOutputsAndReEnqueueInternalResults();
             }
@@ -709,7 +709,7 @@ public class TopologyTestDriver implements Closeable {
         mockWallClockTime.sleep(advance.toMillis());
         if (task != null) {
             task.maybePunctuateSystemTime();
-            commit(task.prepareCommit());
+            commit(task.prepareCommit(true));
             task.postCommit(true);
         }
         completeAllProcessableWork();
@@ -1130,7 +1130,7 @@ public class TopologyTestDriver implements Closeable {
     public void close() {
         if (task != null) {
             task.suspend();
-            task.prepareCommit();
+            task.prepareCommit(true);
             task.postCommit(true);
             task.closeClean();
         }

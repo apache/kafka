@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
+import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -429,16 +430,6 @@ public class CommitRequestManagerTest {
         assertExceptionHandling(commitRequestManager, error, true);
     }
 
-    private static Stream<Arguments> commitSyncExpectedExceptions() {
-        return Stream.of(
-            Arguments.of(Errors.UNKNOWN_MEMBER_ID, CommitFailedException.class),
-            Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE, Errors.OFFSET_METADATA_TOO_LARGE.exception().getClass()),
-            Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE, Errors.INVALID_COMMIT_OFFSET_SIZE.exception().getClass()),
-            Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, Errors.GROUP_AUTHORIZATION_FAILED.exception().getClass()),
-            Arguments.of(Errors.CORRUPT_MESSAGE, KafkaException.class),
-            Arguments.of(Errors.UNKNOWN_SERVER_ERROR, KafkaException.class));
-    }
-
     @Test
     public void testCommitSyncFailsWithCommitFailedExceptionIfUnknownMemberId() {
         CommitRequestManager commitRequestManager = create(false, 100);
@@ -727,7 +718,7 @@ public class CommitRequestManagerTest {
 
     @ParameterizedTest
     @MethodSource("offsetFetchExceptionSupplier")
-    public void testOffsetFetchRequestTimeoutRequests(final Errors error, 
+    public void testOffsetFetchRequestTimeoutRequests(final Errors error,
                                                      final Class<? extends Exception> expectedExceptionClass) {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
@@ -762,10 +753,10 @@ public class CommitRequestManagerTest {
         CommitRequestManager commitManager = create(false, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
+        TopicPartition tp = new TopicPartition("topic1", 0);
         long deadlineMs = time.milliseconds() + defaultApiTimeoutMs;
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchResult =
-            commitManager.fetchOffsets(Collections.singleton(new TopicPartition("test", 0)),
-                deadlineMs);
+            commitManager.fetchOffsets(Collections.singleton(tp), deadlineMs);
 
         // Send fetch request
         NetworkClientDelegate.PollResult result = commitManager.poll(time.milliseconds());
@@ -774,14 +765,23 @@ public class CommitRequestManagerTest {
         assertFalse(fetchResult.isDone());
 
         // Complete request with a response
-        TopicPartition tp = new TopicPartition("topic1", 0);
         long expectedOffset = 100;
+        String expectedMetadata = "metadata";
         NetworkClientDelegate.UnsentRequest req = result.unsentRequests.get(0);
-        Map<TopicPartition, OffsetFetchResponse.PartitionData> topicPartitionData =
-            Collections.singletonMap(
-                tp,
-                new OffsetFetchResponse.PartitionData(expectedOffset, Optional.of(1), "", Errors.NONE));
-        req.handler().onComplete(buildOffsetFetchClientResponse(req, topicPartitionData, Errors.NONE, false));
+        OffsetFetchResponseData.OffsetFetchResponseGroup groupResponse = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+            .setGroupId(DEFAULT_GROUP_ID)
+            .setTopics(List.of(
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                    .setName(tp.topic())
+                    .setPartitions(List.of(
+                        new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                            .setPartitionIndex(tp.partition())
+                            .setCommittedOffset(expectedOffset)
+                            .setCommittedLeaderEpoch(1)
+                            .setMetadata(expectedMetadata)
+                    ))
+            ));
+        req.handler().onComplete(buildOffsetFetchClientResponse(req, groupResponse, false));
 
         // Validate request future completes with the response received
         assertTrue(fetchResult.isDone());
@@ -796,6 +796,7 @@ public class CommitRequestManagerTest {
         assertEquals(1, offsetsAndMetadata.size());
         assertTrue(offsetsAndMetadata.containsKey(tp));
         assertEquals(expectedOffset, offsetsAndMetadata.get(tp).offset());
+        assertEquals(expectedMetadata, offsetsAndMetadata.get(tp).metadata());
         assertEquals(0, commitManager.pendingRequests.inflightOffsetFetches.size(), "Inflight " +
             "request should be removed from the queue when a response is received.");
     }
@@ -916,7 +917,7 @@ public class CommitRequestManagerTest {
     @ParameterizedTest
     @MethodSource("offsetCommitExceptionSupplier")
     public void testOffsetCommitSyncFailedWithRetriableThrowsTimeoutWhenRetryTimeExpires(
-            final Errors error, 
+            final Errors error,
             final Class<? extends Exception> expectedExceptionClass) {
         CommitRequestManager commitRequestManager = create(false, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
@@ -1338,7 +1339,7 @@ public class CommitRequestManagerTest {
             Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE, TimeoutException.class),
             Arguments.of(Errors.REQUEST_TIMED_OUT, TimeoutException.class),
             Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, TimeoutException.class),
-            
+
             // Non-retriable errors should result in their specific exceptions
             Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, GroupAuthorizationException.class),
             Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE, OffsetMetadataTooLarge.class),
@@ -1346,7 +1347,7 @@ public class CommitRequestManagerTest {
             Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, TopicAuthorizationException.class),
             Arguments.of(Errors.UNKNOWN_MEMBER_ID, CommitFailedException.class),
             Arguments.of(Errors.STALE_MEMBER_EPOCH, CommitFailedException.class),
-            
+
             // Generic errors should result in KafkaException
             Arguments.of(Errors.UNKNOWN_SERVER_ERROR, KafkaException.class));
     }
@@ -1363,7 +1364,7 @@ public class CommitRequestManagerTest {
             Arguments.of(Errors.REQUEST_TIMED_OUT, TimeoutException.class),
             Arguments.of(Errors.UNSTABLE_OFFSET_COMMIT, TimeoutException.class),
             Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, TimeoutException.class),
-            
+
             // Non-retriable errors should result in their specific exceptions
             Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, GroupAuthorizationException.class),
             Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE, KafkaException.class),
@@ -1374,7 +1375,7 @@ public class CommitRequestManagerTest {
             // Adding STALE_MEMBER_EPOCH as non-retriable here because it is only retried if a new
             // member epoch is received. Tested separately.
             Arguments.of(Errors.STALE_MEMBER_EPOCH, StaleMemberEpochException.class),
-            
+
             // Generic errors should result in KafkaException
             Arguments.of(Errors.UNKNOWN_SERVER_ERROR, KafkaException.class));
     }
@@ -1410,15 +1411,43 @@ public class CommitRequestManagerTest {
         assertEquals(1, res.unsentRequests.size());
 
         // Setting 1 partition with error
-        HashMap<TopicPartition, OffsetFetchResponse.PartitionData> topicPartitionData = new HashMap<>();
-        topicPartitionData.put(tp1, new OffsetFetchResponse.PartitionData(100L, Optional.of(1), "metadata", error));
-        topicPartitionData.put(tp2, new OffsetFetchResponse.PartitionData(100L, Optional.of(1), "metadata", Errors.NONE));
-        topicPartitionData.put(tp3, new OffsetFetchResponse.PartitionData(100L, Optional.of(1), "metadata", error));
+        OffsetFetchResponseData.OffsetFetchResponseGroup groupResponse = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+            .setGroupId(DEFAULT_GROUP_ID)
+            .setTopics(List.of(
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                    .setName(tp1.topic())
+                    .setPartitions(List.of(
+                        new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                            .setPartitionIndex(tp1.partition())
+                            .setCommittedOffset(100L)
+                            .setCommittedLeaderEpoch(1)
+                            .setMetadata("metadata")
+                            .setErrorCode(error.code())
+                    )),
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                    .setName(tp2.topic())
+                    .setPartitions(List.of(
+                        new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                            .setPartitionIndex(tp2.partition())
+                            .setCommittedOffset(100L)
+                            .setCommittedLeaderEpoch(1)
+                            .setMetadata("metadata")
+                    )),
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                    .setName(tp3.topic())
+                    .setPartitions(List.of(
+                        new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                            .setPartitionIndex(tp3.partition())
+                            .setCommittedOffset(100L)
+                            .setCommittedLeaderEpoch(1)
+                            .setMetadata("metadata")
+                            .setErrorCode(error.code())
+                    ))
+            ));
 
         res.unsentRequests.get(0).handler().onComplete(buildOffsetFetchClientResponse(
                 res.unsentRequests.get(0),
-                topicPartitionData,
-                Errors.NONE,
+                groupResponse,
                 false));
         if (isRetriable)
             testRetriable(commitRequestManager, Collections.singletonList(future), error);
@@ -1458,11 +1487,52 @@ public class CommitRequestManagerTest {
 
         assertEmptyPendingRequests(commitRequestManager);
     }
-    
+
     private static void assertEmptyPendingRequests(CommitRequestManager commitRequestManager) {
         assertTrue(commitRequestManager.pendingRequests.inflightOffsetFetches.isEmpty());
         assertTrue(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());
         assertTrue(commitRequestManager.pendingRequests.unsentOffsetCommits.isEmpty());
+    }
+
+    @Test
+    public void testPollWithFatalErrorDuringCoordinatorIsEmptyAndClosing() {
+        CommitRequestManager commitRequestManager = create(true, 100);
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = Map.of(new TopicPartition("topic", 1),
+                new OffsetAndMetadata(0));
+
+        var commitFuture = commitRequestManager.commitAsync(offsets);
+
+        commitRequestManager.signalClose();
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+        when(coordinatorRequestManager.fatalError())
+                .thenReturn(Optional.of(new GroupAuthorizationException("Fatal error")));
+
+        assertEquals(NetworkClientDelegate.PollResult.EMPTY, commitRequestManager.poll(time.milliseconds()));
+
+        assertTrue(commitFuture.isCompletedExceptionally());
+
+        TestUtils.assertFutureThrows(GroupAuthorizationException.class, commitFuture, "Fatal error");
+    }
+
+    @Test
+    public void testPollWithClosingAndPendingRequests() {
+        CommitRequestManager commitRequestManager = create(true, 100);
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = Map.of(new TopicPartition("topic", 1),
+                new OffsetAndMetadata(0));
+
+        var commitFuture = commitRequestManager.commitAsync(offsets);
+
+        commitRequestManager.signalClose();
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+
+        assertEquals(NetworkClientDelegate.PollResult.EMPTY, commitRequestManager.poll(time.milliseconds()));
+
+        assertTrue(commitFuture.isCompletedExceptionally());
+
+        TestUtils.assertFutureThrows(CommitFailedException.class, commitFuture,
+                "Failed to commit offsets: Coordinator unknown and consumer is closing");
     }
 
     // Supplies (error, isRetriable)
@@ -1535,6 +1605,7 @@ public class CommitRequestManagerTest {
     private CommitRequestManager create(final boolean autoCommitEnabled, final long autoCommitInterval) {
         props.setProperty(AUTO_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(autoCommitInterval));
         props.setProperty(ENABLE_AUTO_COMMIT_CONFIG, String.valueOf(autoCommitEnabled));
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
 
         if (autoCommitEnabled)
             props.setProperty(GROUP_ID_CONFIG, TestUtils.randomString(10));
@@ -1559,18 +1630,26 @@ public class CommitRequestManagerTest {
             final NetworkClientDelegate.UnsentRequest request,
             final Set<TopicPartition> topicPartitions,
             final Errors error) {
-        HashMap<TopicPartition, OffsetFetchResponse.PartitionData> topicPartitionData = new HashMap<>();
-        topicPartitions.forEach(tp -> topicPartitionData.put(tp, new OffsetFetchResponse.PartitionData(
-                100L,
-                Optional.of(1),
-                "metadata",
-                Errors.NONE)));
-        return buildOffsetFetchClientResponse(request, topicPartitionData, error, false);
+        OffsetFetchResponseData.OffsetFetchResponseGroup group = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+            .setGroupId(DEFAULT_GROUP_ID)
+            .setErrorCode(error.code())
+            .setTopics(topicPartitions.stream().collect(Collectors.groupingBy(TopicPartition::topic)).entrySet().stream().map(entry ->
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                    .setName(entry.getKey())
+                    .setPartitions(entry.getValue().stream().map(partition ->
+                        new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                            .setPartitionIndex(partition.partition())
+                            .setCommittedOffset(100L)
+                            .setCommittedLeaderEpoch(1)
+                            .setMetadata("metadata")
+                    ).collect(Collectors.toList()))
+             ).collect(Collectors.toList()));
+        return buildOffsetFetchClientResponse(request, group, false);
     }
 
     private ClientResponse buildOffsetFetchClientResponseDisconnected(
         final NetworkClientDelegate.UnsentRequest request) {
-        return buildOffsetFetchClientResponse(request, Collections.emptyMap(), Errors.NONE, true);
+        return buildOffsetFetchClientResponse(request, new OffsetFetchResponseData.OffsetFetchResponseGroup(), true);
     }
 
     private ClientResponse buildOffsetCommitClientResponse(final OffsetCommitResponse commitResponse) {
@@ -1686,14 +1765,12 @@ public class CommitRequestManagerTest {
 
     private ClientResponse buildOffsetFetchClientResponse(
             final NetworkClientDelegate.UnsentRequest request,
-            final Map<TopicPartition, OffsetFetchResponse.PartitionData> topicPartitionData,
-            final Errors error,
+            final OffsetFetchResponseData.OffsetFetchResponseGroup groupResponse,
             final boolean disconnected) {
         AbstractRequest abstractRequest = request.requestBuilder().build();
         assertInstanceOf(OffsetFetchRequest.class, abstractRequest);
         OffsetFetchRequest offsetFetchRequest = (OffsetFetchRequest) abstractRequest;
-        OffsetFetchResponse response =
-                new OffsetFetchResponse(error, topicPartitionData);
+        OffsetFetchResponse response = new OffsetFetchResponse.Builder(groupResponse).build(ApiKeys.OFFSET_FETCH.latestVersion());
         return new ClientResponse(
                 new RequestHeader(ApiKeys.OFFSET_FETCH, offsetFetchRequest.version(), "", 1),
                 request.handler(),

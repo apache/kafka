@@ -17,12 +17,11 @@
 package org.apache.kafka.streams.examples.pageview;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.connect.json.JsonDeserializer;
-import org.apache.kafka.connect.json.JsonSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -35,9 +34,11 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Properties;
 
@@ -56,6 +57,44 @@ import java.util.Properties;
  */
 public class PageViewUntypedDemo {
 
+    /**
+     * Custom JSON serializer for JsonNode objects using Jackson ObjectMapper.
+     */
+    public static class JsonNodeSerializer implements Serializer<JsonNode> {
+        private final ObjectMapper objectMapper = new ObjectMapper();
+
+        @Override
+        public byte[] serialize(final String topic, final JsonNode data) {
+            if (data == null) {
+                return null;
+            }
+            try {
+                return objectMapper.writeValueAsBytes(data);
+            } catch (final IOException e) {
+                throw new SerializationException("Error serializing JSON message", e);
+            }
+        }
+    }
+
+    /**
+     * Custom JSON deserializer for JsonNode objects using Jackson ObjectMapper.
+     */
+    public static class JsonNodeDeserializer implements Deserializer<JsonNode> {
+        private final ObjectMapper objectMapper = new ObjectMapper();
+
+        @Override
+        public JsonNode deserialize(final String topic, final byte[] data) {
+            if (data == null) {
+                return null;
+            }
+            try {
+                return objectMapper.readTree(data);
+            } catch (final IOException e) {
+                throw new SerializationException("Error deserializing JSON message", e);
+            }
+        }
+    }
+
     public static void main(final String[] args) throws Exception {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-pageview-untyped");
@@ -68,8 +107,8 @@ public class PageViewUntypedDemo {
 
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Serializer<JsonNode> jsonSerializer = new JsonSerializer();
-        final Deserializer<JsonNode> jsonDeserializer = new JsonDeserializer();
+        final Serializer<JsonNode> jsonSerializer = new JsonNodeSerializer();
+        final Deserializer<JsonNode> jsonDeserializer = new JsonNodeDeserializer();
         final Serde<JsonNode> jsonSerde = Serdes.serdeFrom(jsonSerializer, jsonDeserializer);
 
         final Consumed<String, JsonNode> consumed = Consumed.with(Serdes.String(), jsonSerde);

@@ -27,7 +27,7 @@
   // the request is now relevant.  Partitions will be processed in the order
   // they appear in the request.
   //
-  // Version 4 adds IsolationLevel.  Starting in version 4, the reqestor must be
+  // Version 4 adds IsolationLevel.  Starting in version 4, the requestor must be
   // able to handle Kafka log message format version 2.
   //
   // Version 5 adds LogStartOffset to indicate the earliest available offset of
@@ -56,7 +56,9 @@
   // Version 16 is the same as version 15 (KIP-951).
   //
   // Version 17 adds directory id support from KIP-853
-  "validVersions": "4-17",
+  //
+  // Version 18 adds high-watermark from KIP-1166
+  "validVersions": "4-18",
   "flexibleVersions": "12+",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "12+", "nullableVersions": "12+", "default": "null",
@@ -103,7 +105,10 @@
         { "name": "PartitionMaxBytes", "type": "int32", "versions": "0+",
           "about": "The maximum bytes to fetch from this partition.  See KIP-74 for cases where this limit may not be honored." },
         { "name": "ReplicaDirectoryId", "type": "uuid", "versions": "17+", "taggedVersions": "17+", "tag": 0, "ignorable": true,
-          "about": "The directory id of the follower fetching." }
+          "about": "The directory id of the follower fetching." },
+        { "name": "HighWatermark", "type": "int64", "versions": "18+", "default": "9223372036854775807", "taggedVersions": "18+",
+          "tag": 1, "ignorable": true,
+          "about": "The high-watermark known by the replica. -1 if the high-watermark is not known and 9223372036854775807 if the feature is not supported." }
       ]}
     ]},
     { "name": "ForgottenTopicsData", "type": "[]ForgottenTopic", "versions": "7+", "ignorable": false,

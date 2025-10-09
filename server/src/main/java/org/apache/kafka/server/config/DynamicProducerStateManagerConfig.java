@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.server.config;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.config.BrokerReconfigurable;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.storage.internals.log.ProducerStateManagerConfig;
 
@@ -39,16 +41,16 @@ public class DynamicProducerStateManagerConfig implements BrokerReconfigurable {
     }
 
     @Override
-    public void validateReconfiguration(AbstractKafkaConfig newConfig) {
-        TransactionLogConfig transactionLogConfig = newConfig.transactionLogConfig();
+    public void validateReconfiguration(AbstractConfig newConfig) {
+        TransactionLogConfig transactionLogConfig = new TransactionLogConfig(newConfig);
         if (transactionLogConfig.producerIdExpirationMs() < 0)
             throw new ConfigException(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_CONFIG + "cannot be less than 0, current value is " +
                                       producerStateManagerConfig.producerIdExpirationMs() + ", and new value is " + transactionLogConfig.producerIdExpirationMs());
     }
 
     @Override
-    public void reconfigure(AbstractKafkaConfig oldConfig, AbstractKafkaConfig newConfig) {
-        TransactionLogConfig transactionLogConfig = newConfig.transactionLogConfig();
+    public void reconfigure(AbstractConfig oldConfig, AbstractConfig newConfig) {
+        TransactionLogConfig transactionLogConfig = new TransactionLogConfig(newConfig);
         if (producerStateManagerConfig.producerIdExpirationMs() != transactionLogConfig.producerIdExpirationMs()) {
             log.info("Reconfigure {} from {} to {}",
                 TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_CONFIG,

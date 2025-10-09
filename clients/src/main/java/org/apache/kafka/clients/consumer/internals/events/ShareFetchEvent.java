@@ -25,13 +25,21 @@ public class ShareFetchEvent extends ApplicationEvent {
 
     private final Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap;
 
-    public ShareFetchEvent(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
+    private final Map<TopicIdPartition, NodeAcknowledgements> controlRecordAcknowledgements;
+
+    public ShareFetchEvent(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap,
+                           Map<TopicIdPartition, NodeAcknowledgements> controlRecordAcknowledgements) {
         super(Type.SHARE_FETCH);
         this.acknowledgementsMap = acknowledgementsMap;
+        this.controlRecordAcknowledgements = controlRecordAcknowledgements;
     }
 
     public Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap() {
         return acknowledgementsMap;
+    }
+
+    public Map<TopicIdPartition, NodeAcknowledgements> controlRecordAcknowledgements() {
+        return controlRecordAcknowledgements;
     }
 
     @Override

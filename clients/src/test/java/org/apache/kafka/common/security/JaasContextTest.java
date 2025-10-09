@@ -39,10 +39,12 @@ import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.AppConfigurationEntry.LoginModuleControlFlag;
 import javax.security.auth.login.Configuration;
 
+import static org.apache.kafka.common.security.JaasContext.throwIfLoginModuleIsNotAllowed;
 import static org.apache.kafka.common.security.JaasUtils.DISALLOWED_LOGIN_MODULES_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
@@ -224,7 +226,7 @@ public class JaasContextTest {
                 "SOME-MECHANISM", Collections.emptyMap()));
 
 
-        //Remove default value for org.apache.kafka.disallowed.login.modules
+        //  clear disallowed login modules
         System.setProperty(DISALLOWED_LOGIN_MODULES_CONFIG, "");
 
         checkConfiguration("com.sun.security.auth.module.JndiLoginModule", LoginModuleControlFlag.REQUIRED, new HashMap<>());
@@ -251,6 +253,39 @@ public class JaasContextTest {
         assertEquals(1, context.configurationEntries().size());
         checkEntry(context.configurationEntries().get(0), "com.sun.security.auth.module.LdapLoginModule",
                 LoginModuleControlFlag.REQUISITE, Collections.emptyMap());
+    }
+    
+    @Test
+     void testAllowedLoginModulesSystemProperty() {
+        AppConfigurationEntry ldap = new AppConfigurationEntry(
+            "com.ibm.security.auth.module.LdapLoginModule",
+            AppConfigurationEntry.LoginModuleControlFlag.REQUIRED,
+            Map.of()
+        );
+        AppConfigurationEntry jndi = new AppConfigurationEntry(
+            "com.sun.security.auth.module.JndiLoginModule",
+            AppConfigurationEntry.LoginModuleControlFlag.REQUIRED,
+            Map.of()
+        );
+        //  default
+        throwIfLoginModuleIsNotAllowed(ldap);
+
+        //  set allowed list, but not set disallowed list
+        System.setProperty(JaasUtils.ALLOWED_LOGIN_MODULES_CONFIG, "com.ibm.security.auth.module.LdapLoginModule");
+        throwIfLoginModuleIsNotAllowed(ldap);
+        assertThrows(IllegalArgumentException.class, () ->  throwIfLoginModuleIsNotAllowed(jndi));
+        
+        //  set both allowed list and disallowed list
+        System.setProperty(JaasUtils.DISALLOWED_LOGIN_MODULES_CONFIG, "com.ibm.security.auth.module.LdapLoginModule");
+        throwIfLoginModuleIsNotAllowed(ldap);
+        assertThrows(IllegalArgumentException.class, () ->  throwIfLoginModuleIsNotAllowed(jndi));
+        
+        //  set disallowed list, but not set allowed list
+        System.clearProperty(JaasUtils.ALLOWED_LOGIN_MODULES_CONFIG);
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () ->  throwIfLoginModuleIsNotAllowed(ldap));
+        //  Ensure the exception message includes the deprecation warning for the disallowed login modules config
+        assertTrue(error.getMessage().contains("The system property '" + DISALLOWED_LOGIN_MODULES_CONFIG + "' is deprecated."));
+        throwIfLoginModuleIsNotAllowed(jndi);
     }
 
     @Test

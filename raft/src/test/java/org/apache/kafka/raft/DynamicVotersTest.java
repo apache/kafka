@@ -20,8 +20,8 @@ import org.apache.kafka.common.Uuid;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,7 +38,7 @@ public class DynamicVotersTest {
 
     @Test
     public void testParsingSingleDynamicVoter() {
-        assertEquals(new DynamicVoters(Arrays.asList(
+        assertEquals(new DynamicVoters(List.of(
             new DynamicVoter(
                 Uuid.fromString("K90IZ-0DRNazJ49kCZ1EMQ"),
                 2,
@@ -49,7 +49,7 @@ public class DynamicVotersTest {
 
     @Test
     public void testParsingThreeDynamicVoters() {
-        assertEquals(new DynamicVoters(Arrays.asList(
+        assertEquals(new DynamicVoters(List.of(
             new DynamicVoter(
                 Uuid.fromString("K90IZ-0DRNazJ49kCZ1EMQ"),
                 0,

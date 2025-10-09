@@ -67,6 +67,7 @@ import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -82,7 +83,6 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -108,6 +108,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class RaftClientTestContext {
@@ -143,9 +144,11 @@ public final class RaftClientTestContext {
     // Used to determine which RPC request and response to construct
     final RaftProtocol raftProtocol;
     // Used to determine if the local kraft client was configured to always flush
-    final boolean alwaysFlush;
+    final boolean canBecomeVoter;
 
     private final List<RaftResponse.Outbound> sentResponses = new ArrayList<>();
+
+    private static final int NUMBER_FETCH_TIMEOUTS_IN_UPDATE_VOTER_SET_PERIOD = 1;
 
     public static final class Builder {
         static final int DEFAULT_ELECTION_TIMEOUT_MS = 10000;
@@ -177,10 +180,11 @@ public final class RaftClientTestContext {
         private MemoryPool memoryPool = MemoryPool.NONE;
         private Optional<List<InetSocketAddress>> bootstrapServers = Optional.empty();
         private RaftProtocol raftProtocol = RaftProtocol.KIP_595_PROTOCOL;
-        private boolean alwaysFlush = false;
+        private boolean canBecomeVoter = false;
         private VoterSet startingVoters = VoterSet.empty();
         private Endpoints localListeners = Endpoints.empty();
         private boolean isStartingVotersStatic = false;
+        private boolean autoJoin = false;
 
         public Builder(int localId, Set<Integer> staticVoters) {
             this(OptionalInt.of(localId), staticVoters);
@@ -309,8 +313,8 @@ public final class RaftClientTestContext {
             return this;
         }
 
-        Builder withAlwaysFlush(boolean alwaysFlush) {
-            this.alwaysFlush = alwaysFlush;
+        Builder withCanBecomeVoter(boolean canBecomeVoter) {
+            this.canBecomeVoter = canBecomeVoter;
             return this;
         }
 
@@ -376,11 +380,16 @@ public final class RaftClientTestContext {
             return this;
         }
 
+        Builder withAutoJoin(boolean autoJoin) {
+            this.autoJoin = autoJoin;
+            return this;
+        }
+
         public RaftClientTestContext build() throws IOException {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel();
             MockListener listener = new MockListener(localId);
-            Map<Integer, InetSocketAddress> staticVoterAddressMap = Collections.emptyMap();
+            Map<Integer, InetSocketAddress> staticVoterAddressMap = Map.of();
             if (isStartingVotersStatic) {
                 staticVoterAddressMap = startingVoters
                     .voterNodes(startingVoters.voterIds().stream(), channel.listenerName())
@@ -404,18 +413,19 @@ public final class RaftClientTestContext {
                     Endpoints.empty() :
                 this.localListeners;
 
-            Map<String, Integer> configMap = new HashMap<>();
+            Map<String, Object> configMap = new HashMap<>();
             configMap.put(QuorumConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs);
             configMap.put(QuorumConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, RETRY_BACKOFF_MS);
             configMap.put(QuorumConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG, electionTimeoutMs);
             configMap.put(QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, ELECTION_BACKOFF_MAX_MS);
             configMap.put(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, FETCH_TIMEOUT_MS);
             configMap.put(QuorumConfig.QUORUM_LINGER_MS_CONFIG, appendLingerMs);
+            configMap.put(QuorumConfig.QUORUM_AUTO_JOIN_ENABLE_CONFIG, autoJoin);
             QuorumConfig quorumConfig = new QuorumConfig(new AbstractConfig(QuorumConfig.CONFIG_DEF, configMap));
 
             List<InetSocketAddress> computedBootstrapServers = bootstrapServers.orElseGet(() -> {
                 if (isStartingVotersStatic) {
-                    return Collections.emptyList();
+                    return List.of();
                 } else {
                     return startingVoters
                         .voterNodes(startingVoters.voterIds().stream(), channel.listenerName())
@@ -436,7 +446,7 @@ public final class RaftClientTestContext {
                 time,
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
-                alwaysFlush,
+                canBecomeVoter,
                 clusterId,
                 computedBootstrapServers,
                 localListeners,
@@ -474,7 +484,7 @@ public final class RaftClientTestContext {
                     .boxed()
                     .collect(Collectors.toSet()),
                 raftProtocol,
-                alwaysFlush,
+                canBecomeVoter,
                 metrics,
                 externalKRaftMetrics,
                 listener
@@ -503,7 +513,7 @@ public final class RaftClientTestContext {
         VoterSet startingVoters,
         Set<Integer> bootstrapIds,
         RaftProtocol raftProtocol,
-        boolean alwaysFlush,
+        boolean canBecomeVoter,
         Metrics metrics,
         ExternalKRaftMetrics externalKRaftMetrics,
         MockListener listener
@@ -521,7 +531,7 @@ public final class RaftClientTestContext {
         this.startingVoters = startingVoters;
         this.bootstrapIds = bootstrapIds;
         this.raftProtocol = raftProtocol;
-        this.alwaysFlush = alwaysFlush;
+        this.canBecomeVoter = canBecomeVoter;
         this.metrics = metrics;
         this.externalKRaftMetrics = externalKRaftMetrics;
         this.listener = listener;
@@ -730,7 +740,7 @@ public final class RaftClientTestContext {
 
     // Voters are only written to ElectionState in KRaftVersion 0
     private Set<Integer> expectedVoters() {
-        return kraftVersion.isReconfigSupported() ? Collections.emptySet() : startingVoters.voterIds();
+        return kraftVersion.isReconfigSupported() ? Set.of() : startingVoters.voterIds();
     }
 
     DescribeQuorumResponseData collectDescribeQuorumResponse() {
@@ -869,8 +879,7 @@ public final class RaftClientTestContext {
     ) {
         List<RaftRequest.Outbound> voteRequests = new ArrayList<>();
         for (RaftRequest.Outbound raftMessage : channel.drainSendQueue()) {
-            if (raftMessage.data() instanceof VoteRequestData) {
-                VoteRequestData request = (VoteRequestData) raftMessage.data();
+            if (raftMessage.data() instanceof VoteRequestData request) {
                 VoteRequestData.PartitionData partitionRequest = unwrap(request);
 
                 assertTrue(partitionRequest.preVote());
@@ -950,6 +959,51 @@ public final class RaftClientTestContext {
         channel.mockReceive(new RaftResponse.Inbound(correlationId, versionedResponse, source));
     }
 
+    /**
+     * Advance time and complete an empty fetch to reset the fetch timer.
+     * This is used to expire the update voter set timer without also expiring the fetch timer,
+     * which is needed for add, remove, and update voter tests.
+     * For voters and observers, polling after exiting this method expires the update voter set timer.
+     * @param epoch - the current epoch 
+     * @param leaderId - the leader id
+     * @param expireUpdateVoterSetTimer - if true, advance time again to expire this timer
+     */
+    void advanceTimeAndCompleteFetch(
+        int epoch,
+        int leaderId,
+        boolean expireUpdateVoterSetTimer
+    ) throws Exception {
+        for (int i = 0; i < NUMBER_FETCH_TIMEOUTS_IN_UPDATE_VOTER_SET_PERIOD; i++) {
+            time.sleep(fetchTimeoutMs - 1);
+            pollUntilRequest();
+            final var fetchRequest = assertSentFetchRequest();
+            assertFetchRequestData(
+                fetchRequest,
+                epoch,
+                log.endOffset().offset(),
+                log.lastFetchedEpoch(),
+                client.highWatermark()
+            );
+
+            deliverResponse(
+                fetchRequest.correlationId(),
+                fetchRequest.destination(),
+                fetchResponse(
+                    epoch,
+                    leaderId,
+                    MemoryRecords.EMPTY,
+                    log.endOffset().offset(),
+                    Errors.NONE
+                )
+            );
+            // poll kraft to handle the fetch response
+            client.poll();
+        }
+        if (expireUpdateVoterSetTimer) {
+            time.sleep(fetchTimeoutMs - 1);
+        }
+    }
+
     List<RaftRequest.Outbound> assertSentBeginQuorumEpochRequest(int epoch, Set<Integer> destinationIds) {
         List<RaftRequest.Outbound> requests = collectBeginEpochRequests(epoch);
         assertEquals(destinationIds.size(), requests.size());
@@ -958,7 +1012,7 @@ public final class RaftClientTestContext {
         return requests;
     }
 
-    private List<RaftResponse.Outbound> drainSentResponses(
+    List<RaftResponse.Outbound> drainSentResponses(
         ApiKeys apiKey
     ) {
         List<RaftResponse.Outbound> res = new ArrayList<>();
@@ -1040,7 +1094,7 @@ public final class RaftClientTestContext {
     RaftRequest.Outbound assertSentEndQuorumEpochRequest(int epoch, int destinationId) {
         List<RaftRequest.Outbound> endQuorumRequests = collectEndQuorumRequests(
             epoch,
-            Collections.singleton(destinationId),
+            Set.of(destinationId),
             Optional.empty()
         );
         assertEquals(1, endQuorumRequests.size());
@@ -1115,23 +1169,20 @@ public final class RaftClientTestContext {
     RaftRequest.Outbound assertSentFetchRequest(
         int epoch,
         long fetchOffset,
-        int lastFetchedEpoch
+        int lastFetchedEpoch,
+        OptionalLong highWatermark
     ) {
         List<RaftRequest.Outbound> sentMessages = channel.drainSendQueue();
         assertEquals(1, sentMessages.size());
 
         RaftRequest.Outbound raftRequest = sentMessages.get(0);
-        assertFetchRequestData(raftRequest, epoch, fetchOffset, lastFetchedEpoch);
+        assertFetchRequestData(raftRequest, epoch, fetchOffset, lastFetchedEpoch, highWatermark);
         return raftRequest;
     }
 
-    FetchResponseData.PartitionData assertSentFetchPartitionResponse() {
-        List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.FETCH);
-        assertEquals(
-            1, sentMessages.size(), "Found unexpected sent messages " + sentMessages);
-        RaftResponse.Outbound raftMessage = sentMessages.get(0);
-        assertEquals(ApiKeys.FETCH.id, raftMessage.data().apiKey());
-        FetchResponseData response = (FetchResponseData) raftMessage.data();
+    FetchResponseData.PartitionData assertFetchResponseData(RaftResponse.Outbound message) {
+        assertEquals(ApiKeys.FETCH.id, message.data().apiKey());
+        FetchResponseData response = (FetchResponseData) message.data();
         assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
 
         assertEquals(1, response.responses().size());
@@ -1153,16 +1204,29 @@ public final class RaftClientTestContext {
         return partitionResponse;
     }
 
+    FetchResponseData.PartitionData assertSentFetchPartitionResponse() {
+        List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.FETCH);
+        assertEquals(
+            1,
+            sentMessages.size(),
+            "Found unexpected sent messages " + sentMessages
+        );
+
+        return assertFetchResponseData(sentMessages.get(0));
+    }
+
     void assertSentFetchPartitionResponse(Errors topLevelError) {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.FETCH);
         assertEquals(
-            1, sentMessages.size(), "Found unexpected sent messages " + sentMessages);
+            1,
+            sentMessages.size(),
+            "Found unexpected sent messages " + sentMessages
+        );
         RaftResponse.Outbound raftMessage = sentMessages.get(0);
         assertEquals(ApiKeys.FETCH.id, raftMessage.data().apiKey());
         FetchResponseData response = (FetchResponseData) raftMessage.data();
         assertEquals(topLevelError, Errors.forCode(response.errorCode()));
     }
-
 
     MemoryRecords assertSentFetchPartitionResponse(
         Errors error,
@@ -1250,6 +1314,26 @@ public final class RaftClientTestContext {
         return sentRequests.get(0);
     }
 
+    RaftRequest.Outbound assertSentAddVoterRequest(
+        ReplicaKey replicaKey,
+        Endpoints endpoints
+    ) {
+        final var sentRequests = channel.drainSentRequests(Optional.of(ApiKeys.ADD_RAFT_VOTER));
+        assertEquals(1, sentRequests.size());
+
+        final var request = sentRequests.get(0);
+        assertInstanceOf(AddRaftVoterRequestData.class, request.data());
+
+        final var addRaftVoterRequestData = (AddRaftVoterRequestData) request.data();
+        assertEquals(clusterId, addRaftVoterRequestData.clusterId());
+        assertEquals(replicaKey.id(), addRaftVoterRequestData.voterId());
+        assertEquals(replicaKey.directoryId().get(), addRaftVoterRequestData.voterDirectoryId());
+        assertEquals(endpoints, Endpoints.fromAddVoterRequest(addRaftVoterRequestData.listeners()));
+        assertEquals(false, addRaftVoterRequestData.ackWhenCommitted());
+
+        return request;
+    }
+
     AddRaftVoterResponseData assertSentAddVoterResponse(Errors error) {
         List<RaftResponse.Outbound> sentResponses = drainSentResponses(ApiKeys.ADD_RAFT_VOTER);
         assertEquals(1, sentResponses.size());
@@ -1258,9 +1342,30 @@ public final class RaftClientTestContext {
         assertInstanceOf(AddRaftVoterResponseData.class, response.data());
 
         AddRaftVoterResponseData addVoterResponse = (AddRaftVoterResponseData) response.data();
-        assertEquals(error, Errors.forCode(addVoterResponse.errorCode()));
-
+        if (Errors.NONE.equals(error)) {
+            assertEquals(error, Errors.forCode(addVoterResponse.errorCode()));
+            assertNull(addVoterResponse.errorMessage());
+        } else {
+            assertEquals(error, Errors.forCode(addVoterResponse.errorCode()));
+        }
         return addVoterResponse;
+    }
+
+    RaftRequest.Outbound assertSentRemoveVoterRequest(
+        ReplicaKey replicaKey
+    ) {
+        final var sentRequests = channel.drainSentRequests(Optional.of(ApiKeys.REMOVE_RAFT_VOTER));
+        assertEquals(1, sentRequests.size());
+
+        final var request = sentRequests.get(0);
+        assertInstanceOf(RemoveRaftVoterRequestData.class, request.data());
+
+        final var removeRaftVoterRequestData = (RemoveRaftVoterRequestData) request.data();
+        assertEquals(clusterId, removeRaftVoterRequestData.clusterId());
+        assertEquals(replicaKey.id(), removeRaftVoterRequestData.voterId());
+        assertEquals(replicaKey.directoryId().get(), removeRaftVoterRequestData.voterDirectoryId());
+
+        return request;
     }
 
     RemoveRaftVoterResponseData assertSentRemoveVoterResponse(Errors error) {
@@ -1271,8 +1376,12 @@ public final class RaftClientTestContext {
         assertInstanceOf(RemoveRaftVoterResponseData.class, response.data());
 
         RemoveRaftVoterResponseData removeVoterResponse = (RemoveRaftVoterResponseData) response.data();
-        assertEquals(error, Errors.forCode(removeVoterResponse.errorCode()));
-
+        if (Errors.NONE.equals(error)) {
+            assertEquals(error, Errors.forCode(removeVoterResponse.errorCode()));
+            assertNull(removeVoterResponse.errorMessage());
+        } else {
+            assertEquals(error, Errors.forCode(removeVoterResponse.errorCode()));
+        }
         return removeVoterResponse;
     }
 
@@ -1320,7 +1429,7 @@ public final class RaftClientTestContext {
             int id = updateVoterResponse.currentLeader().leaderId();
             Endpoints expectedLeaderEndpoints = startingVoters.listeners(id);
             Endpoints responseEndpoints = Endpoints.fromInetSocketAddresses(
-                Collections.singletonMap(
+                Map.of(
                     channel.listenerName(),
                     InetSocketAddress.createUnresolved(
                         updateVoterResponse.currentLeader().host(),
@@ -1376,7 +1485,8 @@ public final class RaftClientTestContext {
 
     void discoverLeaderAsObserver(
         int leaderId,
-        int epoch
+        int epoch,
+        OptionalLong highWatermark
     ) throws Exception {
         pollUntilRequest();
         RaftRequest.Outbound fetchRequest = assertSentFetchRequest();
@@ -1385,7 +1495,7 @@ public final class RaftClientTestContext {
             startingVoters.voterIds().contains(destinationId) || bootstrapIds.contains(destinationId),
             String.format("id %d is not in sets %s or %s", destinationId, startingVoters, bootstrapIds)
         );
-        assertFetchRequestData(fetchRequest, 0, 0L, 0);
+        assertFetchRequestData(fetchRequest, 0, 0L, 0, highWatermark);
 
         deliverResponse(
             fetchRequest.correlationId(),
@@ -1673,7 +1783,8 @@ public final class RaftClientTestContext {
         RaftRequest.Outbound message,
         int epoch,
         long fetchOffset,
-        int lastFetchedEpoch
+        int lastFetchedEpoch,
+        OptionalLong highWatermark
     ) {
         assertInstanceOf(
             FetchRequestData.class,
@@ -1692,10 +1803,11 @@ public final class RaftClientTestContext {
         assertEquals(fetchOffset, fetchPartition.fetchOffset());
         assertEquals(lastFetchedEpoch, fetchPartition.lastFetchedEpoch());
         assertEquals(localId.orElse(-1), request.replicaState().replicaId());
+        assertEquals(highWatermark.orElse(-1), fetchPartition.highWatermark());
 
         // Assert that voters have flushed up to the fetch offset
         if ((localId.isPresent() && startingVoters.voterIds().contains(localId.getAsInt())) ||
-            alwaysFlush
+            canBecomeVoter
         ) {
             assertEquals(
                 log.firstUnflushedOffset(),
@@ -1720,10 +1832,29 @@ public final class RaftClientTestContext {
     ) {
         return fetchRequest(
             epoch,
+            replicaKey,
+            fetchOffset,
+            lastFetchedEpoch,
+            OptionalLong.of(Long.MAX_VALUE),
+            maxWaitTimeMs
+        );
+    }
+
+    FetchRequestData fetchRequest(
+        int epoch,
+        ReplicaKey replicaKey,
+        long fetchOffset,
+        int lastFetchedEpoch,
+        OptionalLong highWatermark,
+        int maxWaitTimeMs
+    ) {
+        return fetchRequest(
+            epoch,
             clusterId,
             replicaKey,
             fetchOffset,
             lastFetchedEpoch,
+            highWatermark,
             maxWaitTimeMs
         );
     }
@@ -1734,6 +1865,7 @@ public final class RaftClientTestContext {
         ReplicaKey replicaKey,
         long fetchOffset,
         int lastFetchedEpoch,
+        OptionalLong highWatermark,
         int maxWaitTimeMs
     ) {
         FetchRequestData request = RaftUtil.singletonFetchRequest(
@@ -1743,7 +1875,8 @@ public final class RaftClientTestContext {
                 fetchPartition
                     .setCurrentLeaderEpoch(epoch)
                     .setLastFetchedEpoch(lastFetchedEpoch)
-                    .setFetchOffset(fetchOffset);
+                    .setFetchOffset(fetchOffset)
+                    .setHighWatermark(highWatermark.orElse(-1));
                 if (raftProtocol.isReconfigSupported()) {
                     fetchPartition
                         .setReplicaDirectoryId(replicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID));
@@ -1888,7 +2021,8 @@ public final class RaftClientTestContext {
             clusterId,
             timeoutMs,
             voter,
-            endpoints
+            endpoints,
+            true
         );
     }
 
@@ -1933,7 +2067,9 @@ public final class RaftClientTestContext {
     }
 
     private short fetchRpcVersion() {
-        if (raftProtocol.isReconfigSupported()) {
+        if (raftProtocol.isHwmInFetchSupported()) {
+            return 18;
+        } else if (raftProtocol.isReconfigSupported()) {
             return 17;
         } else {
             return 16;
@@ -1983,7 +2119,9 @@ public final class RaftClientTestContext {
     }
 
     private short addVoterRpcVersion() {
-        if (raftProtocol.isReconfigSupported()) {
+        if (raftProtocol.isAutoJoinSupported()) {
+            return 1;
+        } else if (raftProtocol.isReconfigSupported()) {
             return 0;
         } else {
             throw new IllegalStateException("Reconfiguration must be enabled by calling withRaftProtocol(KIP_853_PROTOCOL)");
@@ -2229,7 +2367,7 @@ public final class RaftClientTestContext {
 
     /**
      * Determines what versions of RPCs are in use. Note, these are ordered from oldest to newest, and are
-     * cumulative. E.g. KIP_996_PROTOCOL includes KIP_853_PROTOCOL and KIP_595_PROTOCOL changes
+     * cumulative. E.g. KIP_1186_PROTOCOL includes KIP_996_PROTOCOL, KIP_853_PROTOCOL, and KIP_595_PROTOCOL changes
      */
     enum RaftProtocol {
         // kraft support
@@ -2237,7 +2375,11 @@ public final class RaftClientTestContext {
         // dynamic quorum reconfiguration support
         KIP_853_PROTOCOL,
         // preVote support
-        KIP_996_PROTOCOL;
+        KIP_996_PROTOCOL,
+        // HWM in FETCH request support
+        KIP_1166_PROTOCOL,
+        // autoJoin support
+        KIP_1186_PROTOCOL;
 
         boolean isKRaftSupported() {
             return isAtLeast(KIP_595_PROTOCOL);
@@ -2249,6 +2391,14 @@ public final class RaftClientTestContext {
 
         boolean isPreVoteSupported() {
             return isAtLeast(KIP_996_PROTOCOL);
+        }
+
+        boolean isHwmInFetchSupported() {
+            return isAtLeast(KIP_1166_PROTOCOL);
+        }
+      
+        boolean isAutoJoinSupported() {
+            return isAtLeast(KIP_1186_PROTOCOL);
         }
 
         private boolean isAtLeast(RaftProtocol otherRpc) {

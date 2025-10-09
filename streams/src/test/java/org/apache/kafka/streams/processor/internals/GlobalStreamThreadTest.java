@@ -103,7 +103,7 @@ public class GlobalStreamThreadTest {
             );
 
         final ProcessorSupplier<Object, Object, Void, Void> processorSupplier = () ->
-            new ContextualProcessor<Object, Object, Void, Void>() {
+            new ContextualProcessor<>() {
                 @Override
                 public void process(final Record<Object, Object> record) {
                 }
@@ -150,12 +150,10 @@ public class GlobalStreamThreadTest {
         // should throw as the MockConsumer hasn't been configured and there are no
         // partitions available
         final StateStore globalStore = builder.globalStateStores().get(GLOBAL_STORE_NAME);
-        try {
-            globalStreamThread.start();
-            fail("Should have thrown StreamsException if start up failed");
-        } catch (final StreamsException e) {
-            // ok
-        }
+        assertThrows(StreamsException.class,
+            () -> globalStreamThread.start(),
+            "Should have thrown StreamsException if start up failed.");
+
         globalStreamThread.join();
         assertThat(globalStore.isOpen(), is(false));
         assertFalse(globalStreamThread.stillRunning());
@@ -163,7 +161,7 @@ public class GlobalStreamThreadTest {
 
     @Test
     public void shouldThrowStreamsExceptionOnStartupIfExceptionOccurred() throws Exception {
-        final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
                 throw new RuntimeException("KABOOM!");

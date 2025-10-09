@@ -279,11 +279,16 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#close(Duration)
      */
+    @Deprecated
     void close(Duration timeout);
+
+    /**
+     * @see KafkaConsumer#close(CloseOptions)
+     */
+    void close(final CloseOptions option);
 
     /**
      * @see KafkaConsumer#wakeup()
      */
     void wakeup();
-
 }

@@ -146,7 +146,7 @@ public class CurrentAssignmentBuilder {
      * @param ownedAssignment A collection of active, standby and warm-up tasks
      * @return This object.
      */
-    protected CurrentAssignmentBuilder withOwnedAssignment(TasksTuple ownedAssignment) {
+    public CurrentAssignmentBuilder withOwnedAssignment(TasksTuple ownedAssignment) {
         this.ownedTasks = Optional.ofNullable(ownedAssignment);
         return this;
     }

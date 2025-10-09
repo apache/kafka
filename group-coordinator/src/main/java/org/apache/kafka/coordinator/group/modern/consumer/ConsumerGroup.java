@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
@@ -37,13 +38,11 @@ import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
-import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
@@ -120,11 +119,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     private final TimelineHashMap<String, Integer> serverAssignors;
 
     /**
-     * The coordinator metrics.
-     */
-    private final GroupCoordinatorMetricsShard metrics;
-
-    /**
      * The number of members that use the classic protocol.
      */
     private final TimelineInteger numClassicProtocolMembers;
@@ -151,21 +145,22 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      */
     private final TimelineHashMap<String, ResolvedRegularExpression> resolvedRegularExpressions;
 
+    private final TimelineObject<Boolean> hasSubscriptionMetadataRecord;
+
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
-        String groupId,
-        GroupCoordinatorMetricsShard metrics
+        String groupId
     ) {
         super(snapshotRegistry, groupId);
         this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.metrics = Objects.requireNonNull(metrics);
         this.numClassicProtocolMembers = new TimelineInteger(snapshotRegistry);
         this.classicProtocolMembersSupportedProtocols = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedRegularExpressions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.resolvedRegularExpressions = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.hasSubscriptionMetadataRecord = new TimelineObject<>(snapshotRegistry, false);
     }
 
     /**
@@ -383,7 +378,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             // is not subscribed to it, we must remove it from the subscribed topic names.
             if (!oldSubscribedTopicRegex.equals(newSubscribedTopicRegex) && numSubscribedMembers(oldSubscribedTopicRegex) == 1) {
                 resolvedRegularExpression(oldSubscribedTopicRegex).ifPresent(resolvedRegularExpression ->
-                    resolvedRegularExpression.topics.forEach(topic -> subscribedTopicsNames.compute(topic, SubscriptionCount::decRegexCount))
+                    resolvedRegularExpression.topics().forEach(topic -> subscribedTopicsNames.compute(topic, SubscriptionCount::decRegexCount))
                 );
             }
         }
@@ -437,7 +432,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
 
         removedRegexes.forEach(regex ->
             resolvedRegularExpression(regex).ifPresent(resolvedRegularExpression ->
-                resolvedRegularExpression.topics.forEach(topic ->
+                resolvedRegularExpression.topics().forEach(topic ->
                     subscribedTopicsNames.compute(topic, SubscriptionCount::decRegexCount)
                 )
             )
@@ -459,7 +454,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         removeResolvedRegularExpression(regex);
         if (newResolvedRegularExpression != null) {
             resolvedRegularExpressions.put(regex, newResolvedRegularExpression);
-            newResolvedRegularExpression.topics.forEach(topicName -> subscribedTopicNames.compute(topicName, SubscriptionCount::incRegexCount));
+            newResolvedRegularExpression.topics().forEach(topicName -> subscribedTopicNames.compute(topicName, SubscriptionCount::incRegexCount));
         }
     }
 
@@ -471,7 +466,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     public void removeResolvedRegularExpression(String regex) {
         ResolvedRegularExpression oldResolvedRegularExpression = resolvedRegularExpressions.remove(regex);
         if (oldResolvedRegularExpression != null) {
-            oldResolvedRegularExpression.topics.forEach(topicName -> subscribedTopicNames.compute(topicName, SubscriptionCount::decRegexCount));
+            oldResolvedRegularExpression.topics().forEach(topicName -> subscribedTopicNames.compute(topicName, SubscriptionCount::decRegexCount));
         }
     }
 
@@ -483,7 +478,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     public long lastResolvedRegularExpressionRefreshTimeMs() {
         Iterator<ResolvedRegularExpression> iterator = resolvedRegularExpressions.values().iterator();
         if (iterator.hasNext()) {
-            return iterator.next().timestamp;
+            return iterator.next().timestamp();
         } else {
             return Long.MIN_VALUE;
         }
@@ -495,7 +490,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     public long lastResolvedRegularExpressionVersion() {
         Iterator<ResolvedRegularExpression> iterator = resolvedRegularExpressions.values().iterator();
         if (iterator.hasNext()) {
-            return iterator.next().version;
+            return iterator.next().version();
         } else {
             return 0L;
         }
@@ -644,7 +639,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         String groupInstanceId,
         int memberEpoch,
         boolean isTransactional,
-        short apiVersion
+        int apiVersion
     ) throws UnknownMemberIdException, StaleMemberEpochException, IllegalGenerationException {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,
@@ -848,7 +843,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             // considered as homogeneous if all the members are subscribed to the
             // same topics. Otherwise, it is considered as heterogeneous.
             for (SubscriptionCount subscriberCount : subscribedTopicNames.values()) {
-                if (subscriberCount.byNameCount != numberOfMembers) {
+                if (subscriberCount.byNameCount() != numberOfMembers) {
                     return HETEROGENEOUS;
                 }
             }
@@ -861,7 +856,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                 // is considered as homogeneous. If some members are subscribed to
                 // topic names too, the subscription is considered as heterogeneous.
                 for (SubscriptionCount subscriberCount : subscribedTopicNames.values()) {
-                    if (subscriberCount.byRegexCount != 1 || subscriberCount.byNameCount > 0) {
+                    if (subscriberCount.byRegexCount() != 1 || subscriberCount.byNameCount() > 0) {
                         return HETEROGENEOUS;
                     }
                 }
@@ -1104,7 +1099,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     public ConsumerGroupDescribeResponseData.DescribedGroup asDescribedGroup(
         long committedOffset,
         String defaultAssignor,
-        TopicsImage topicsImage
+        CoordinatorMetadataImage image
     ) {
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId(groupId)
@@ -1116,7 +1111,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             entry -> describedGroup.members().add(
                 entry.getValue().asConsumerGroupDescribeMember(
                     targetAssignment.get(entry.getValue().memberId(), committedOffset),
-                    topicsImage
+                    image
                 )
             )
         );
@@ -1127,9 +1122,9 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * Create a new consumer group according to the given classic group.
      *
      * @param snapshotRegistry  The SnapshotRegistry.
-     * @param metrics           The GroupCoordinatorMetricsShard.
      * @param classicGroup      The converted classic group.
-     * @param topicsImage       The TopicsImage for topic id and topic name conversion.
+     * @param topicHashCache    The cache for topic hashes.
+     * @param metadataImage     The current metadata image for the Kafka cluster.
      * @return  The created ConsumerGroup.
      *
      * @throws SchemaException if any member's subscription or assignment cannot be deserialized.
@@ -1137,12 +1132,12 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      */
     public static ConsumerGroup fromClassicGroup(
         SnapshotRegistry snapshotRegistry,
-        GroupCoordinatorMetricsShard metrics,
         ClassicGroup classicGroup,
-        TopicsImage topicsImage
+        Map<String, Long> topicHashCache,
+        CoordinatorMetadataImage metadataImage
     ) {
         String groupId = classicGroup.groupId();
-        ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
+        ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId);
         consumerGroup.setGroupEpoch(classicGroup.generationId());
         consumerGroup.setTargetAssignmentEpoch(classicGroup.generationId());
 
@@ -1159,7 +1154,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                 if (assignment.userData() != null && assignment.userData().hasRemaining()) {
                     throw new UnsupportedVersionException("userData from a custom assignor would be lost");
                 }
-                assignedPartitions = toTopicPartitionMap(assignment, topicsImage);
+                assignedPartitions = toTopicPartitionMap(assignment, metadataImage);
             }
 
             // Every member is guaranteed to have metadata set when it joins,
@@ -1195,6 +1190,12 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             consumerGroup.updateMember(newMember);
         });
 
+        consumerGroup.setMetadataHash(ModernGroup.computeMetadataHash(
+            consumerGroup.subscribedTopicNames(),
+            topicHashCache,
+            metadataImage
+        ));
+
         return consumerGroup;
     }
 
@@ -1210,7 +1211,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId(), consumerGroupMember))
         );
 
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId(), groupEpoch()));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId(), groupEpoch(), metadataHash()));
 
         members().forEach((consumerGroupMemberId, consumerGroupMember) ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(
@@ -1297,5 +1298,13 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             }
         }
         return false;
+    }
+
+    public void setHasSubscriptionMetadataRecord(boolean hasSubscriptionMetadataRecord) {
+        this.hasSubscriptionMetadataRecord.set(hasSubscriptionMetadataRecord);
+    }
+
+    public boolean hasSubscriptionMetadataRecord() {
+        return hasSubscriptionMetadataRecord.get();
     }
 }

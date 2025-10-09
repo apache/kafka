@@ -17,8 +17,6 @@
 
 package org.apache.kafka.coordinator.group.classic;
 
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 
@@ -131,7 +129,7 @@ public enum ClassicGroupState {
     }
 
     private void addValidPreviousStates(ClassicGroupState... validPreviousStates) {
-        this.validPreviousStates = new HashSet<>(Arrays.asList(validPreviousStates));
+        this.validPreviousStates = Set.of(validPreviousStates);
     }
 
     /**

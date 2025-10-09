@@ -16,13 +16,19 @@
  */
 package org.apache.kafka.security.authorizer;
 
+import org.apache.kafka.common.internals.Plugin;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.authorizer.Authorizer;
 
+import java.util.Map;
+
 public class AuthorizerUtils {
-    public static Authorizer createAuthorizer(String className) throws ClassNotFoundException {
-        return Utils.newInstance(className, Authorizer.class);
+    public static Plugin<Authorizer> createAuthorizer(String className, Map<String, Object> configs, Metrics metrics, String key, String role) throws ClassNotFoundException {
+        Authorizer authorizer = Utils.newInstance(className, Authorizer.class);
+        authorizer.configure(configs);
+        return Plugin.wrapInstance(authorizer, metrics, key, "role", role);
     }
 
     public static boolean isClusterResource(String name) {

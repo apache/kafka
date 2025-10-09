@@ -30,6 +30,7 @@ import org.apache.kafka.common.network.DefaultChannelMetadataRegistry;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
@@ -127,7 +128,7 @@ public class SaslServerAuthenticatorTest {
             return headerBuffer.remaining();
         });
 
-        assertThrows(InvalidRequestException.class, () -> authenticator.authenticate());
+        assertThrows(InvalidRequestException.class, authenticator::authenticate);
         verify(transportLayer, times(2)).read(any(ByteBuffer.class));
     }
 
@@ -155,7 +156,7 @@ public class SaslServerAuthenticatorTest {
             return headerBuffer.remaining();
         });
 
-        assertThrows(InvalidRequestException.class, () -> authenticator.authenticate());
+        assertThrows(InvalidRequestException.class, authenticator::authenticate);
         verify(transportLayer, times(2)).read(any(ByteBuffer.class));
     }
 
@@ -198,7 +199,7 @@ public class SaslServerAuthenticatorTest {
 
             ByteBuffer secondResponseSent = getResponses(transportLayer).get(1);
             consumeSizeAndHeader(secondResponseSent);
-            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(secondResponseSent, (short) 2);
+            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(new ByteBufferAccessor(secondResponseSent), (short) 2);
             assertEquals(tokenExpirationDuration.toMillis(), response.sessionLifetimeMs());
         }
     }
@@ -231,7 +232,7 @@ public class SaslServerAuthenticatorTest {
 
             ByteBuffer secondResponseSent = getResponses(transportLayer).get(1);
             consumeSizeAndHeader(secondResponseSent);
-            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(secondResponseSent, (short) 2);
+            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(new ByteBufferAccessor(secondResponseSent), (short) 2);
             assertEquals(maxReauthMs, response.sessionLifetimeMs());
         }
     }
@@ -264,8 +265,37 @@ public class SaslServerAuthenticatorTest {
 
             ByteBuffer secondResponseSent = getResponses(transportLayer).get(1);
             consumeSizeAndHeader(secondResponseSent);
-            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(secondResponseSent, (short) 2);
+            SaslAuthenticateResponse response = SaslAuthenticateResponse.parse(new ByteBufferAccessor(secondResponseSent), (short) 2);
             assertEquals(tokenExpiryShorterThanMaxReauth.toMillis(), response.sessionLifetimeMs());
+        }
+    }
+
+    @Test
+    public void testSessionWontExpireWithLargeExpirationTime() throws IOException {
+        String mechanism = OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+        SaslServer saslServer = mock(SaslServer.class);
+        MockTime time = new MockTime(0, 1, 1000);
+        // set a Long.MAX_VALUE as the expiration time
+        Duration largeExpirationTime = Duration.ofMillis(Long.MAX_VALUE);
+
+        try (
+            MockedStatic<?> ignored = mockSaslServer(saslServer, mechanism, time, largeExpirationTime);
+            MockedStatic<?> ignored2 = mockKafkaPrincipal("[principal-type]", "[principal-name");
+            TransportLayer transportLayer = mockTransportLayer()
+        ) {
+
+            SaslServerAuthenticator authenticator = getSaslServerAuthenticatorForOAuth(mechanism, transportLayer, time, largeExpirationTime.toMillis());
+
+            mockRequest(saslHandshakeRequest(mechanism), transportLayer);
+            authenticator.authenticate();
+
+            when(saslServer.isComplete()).thenReturn(false).thenReturn(true);
+            mockRequest(saslAuthenticateRequest(), transportLayer);
+
+            Throwable t = assertThrows(IllegalArgumentException.class, authenticator::authenticate);
+            assertEquals(ArithmeticException.class, t.getCause().getClass());
+            assertEquals("Cannot convert " + Long.MAX_VALUE + " millisecond to nanosecond due to arithmetic overflow",
+                t.getMessage());
         }
     }
 
@@ -354,7 +384,7 @@ public class SaslServerAuthenticatorTest {
     private void mockRequest(RequestHeader header, AbstractRequest request, TransportLayer transportLayer) throws IOException {
         ByteBuffer headerBuffer = RequestTestUtils.serializeRequestHeader(header);
 
-        ByteBuffer requestBuffer = request.serialize();
+        ByteBuffer requestBuffer = request.serialize().buffer();
         requestBuffer.rewind();
 
         when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {

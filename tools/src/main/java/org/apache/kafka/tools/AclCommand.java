@@ -40,9 +40,7 @@ import org.apache.kafka.server.util.CommandLineUtils;
 import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -75,14 +73,13 @@ public class AclCommand {
 
     public static void main(String[] args) {
         AclCommandOptions opts = new AclCommandOptions(args);
-        AdminClientService aclCommandService = new AdminClientService(opts);
         try (Admin admin = Admin.create(adminConfigs(opts))) {
             if (opts.options.has(opts.addOpt)) {
-                aclCommandService.addAcls(admin);
+                addAcls(admin, opts);
             } else if (opts.options.has(opts.removeOpt)) {
-                aclCommandService.removeAcls(admin);
+                removeAcls(admin, opts);
             } else if (opts.options.has(opts.listOpt)) {
-                aclCommandService.listAcls(admin);
+                listAcls(admin, opts);
             }
         } catch (Throwable e) {
             System.out.println("Error while executing ACL command: " + e.getMessage());
@@ -104,106 +101,112 @@ public class AclCommand {
         return props;
     }
 
-    private static class AdminClientService {
+    private static void addAcls(Admin admin, AclCommandOptions opts) throws ExecutionException, InterruptedException {
+        Map<ResourcePattern, Set<AccessControlEntry>> resourceToAcl = getResourceToAcls(opts);
+        for (Map.Entry<ResourcePattern, Set<AccessControlEntry>> entry : resourceToAcl.entrySet()) {
+            ResourcePattern resource = entry.getKey();
+            Set<AccessControlEntry> acls = entry.getValue();
 
-        private final AclCommandOptions opts;
+            AclBindingFilter filter = new AclBindingFilter(resource.toFilter(), AccessControlEntryFilter.ANY);
+            Set<AclBinding> existingBindingsSet = Set.copyOf(admin.describeAcls(filter).values().get());
 
-        AdminClientService(AclCommandOptions opts) {
-            this.opts = opts;
-        }
+            List<AclBinding> aclBindings = new ArrayList<>();
+            for (AccessControlEntry acl : acls) {
+                AclBinding binding = new AclBinding(resource, acl);
+                if (existingBindingsSet.contains(binding)) {
+                    System.out.println("Acl " + binding + " already exists.");
+                } else {
+                    aclBindings.add(binding);
+                }
+            }
 
-        void addAcls(Admin admin) throws ExecutionException, InterruptedException {
-            Map<ResourcePattern, Set<AccessControlEntry>> resourceToAcl = getResourceToAcls(opts);
-            for (Map.Entry<ResourcePattern, Set<AccessControlEntry>> entry : resourceToAcl.entrySet()) {
-                ResourcePattern resource = entry.getKey();
-                Set<AccessControlEntry> acls = entry.getValue();
-                System.out.println("Adding ACLs for resource `" + resource + "`: " + NL + " " + acls.stream().map(a -> "\t" + a).collect(Collectors.joining(NL)) + NL);
-                Collection<AclBinding> aclBindings = acls.stream().map(acl -> new AclBinding(resource, acl)).collect(Collectors.toList());
+            if (!aclBindings.isEmpty()) {
+                System.out.println("Adding ACLs for resource `" + resource + "`: " + NL + " " + aclBindings.stream().map(AclBinding::entry).map(a -> "\t" + a).collect(Collectors.joining(NL)) + NL);
                 admin.createAcls(aclBindings).all().get();
             }
         }
+    }
 
-        void removeAcls(Admin admin) throws ExecutionException, InterruptedException {
-            Map<ResourcePatternFilter, Set<AccessControlEntry>> filterToAcl = getResourceFilterToAcls(opts);
-            for (Map.Entry<ResourcePatternFilter, Set<AccessControlEntry>> entry : filterToAcl.entrySet()) {
-                ResourcePatternFilter filter = entry.getKey();
-                Set<AccessControlEntry> acls = entry.getValue();
-                if (acls.isEmpty()) {
-                    if (confirmAction(opts, "Are you sure you want to delete all ACLs for resource filter `" + filter + "`? (y/n)")) {
-                        removeAcls(admin, acls, filter);
-                    }
-                } else {
-                    String msg = "Are you sure you want to remove ACLs: " + NL +
-                            " " + acls.stream().map(a -> "\t" + a).collect(Collectors.joining(NL)) + NL +
-                            " from resource filter `" + filter + "`? (y/n)";
-                    if (confirmAction(opts, msg)) {
-                        removeAcls(admin, acls, filter);
-                    }
-                }
-            }
-        }
-
-        private void listAcls(Admin admin) throws ExecutionException, InterruptedException {
-            Set<ResourcePatternFilter> filters = getResourceFilter(opts, false);
-            Set<KafkaPrincipal> listPrincipals = getPrincipals(opts, opts.listPrincipalsOpt);
-            Map<ResourcePattern, Set<AccessControlEntry>> resourceToAcls = getAcls(admin, filters);
-
-            if (listPrincipals.isEmpty()) {
-                printResourceAcls(resourceToAcls);
-            } else {
-                listPrincipals.forEach(principal -> {
-                    System.out.println("ACLs for principal `" + principal + "`");
-                    Map<ResourcePattern, Set<AccessControlEntry>> filteredResourceToAcls = resourceToAcls.entrySet().stream()
-                            .map(entry -> {
-                                ResourcePattern resource = entry.getKey();
-                                Set<AccessControlEntry> acls = entry.getValue().stream()
-                                        .filter(acl -> principal.toString().equals(acl.principal()))
-                                        .collect(Collectors.toSet());
-                                return new AbstractMap.SimpleEntry<>(resource, acls);
-                            })
-                            .filter(entry -> !entry.getValue().isEmpty())
-                            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-                    printResourceAcls(filteredResourceToAcls);
-                });
-            }
-        }
-
-        private static void printResourceAcls(Map<ResourcePattern, Set<AccessControlEntry>> resourceToAcls) {
-            resourceToAcls.forEach((resource, acls) ->
-                System.out.println("Current ACLs for resource `" + resource + "`:" + NL +
-                        acls.stream().map(acl -> "\t" + acl).collect(Collectors.joining(NL)) + NL)
-            );
-        }
-
-        private static void removeAcls(Admin adminClient, Set<AccessControlEntry> acls, ResourcePatternFilter filter) throws ExecutionException, InterruptedException {
+    private static void removeAcls(Admin admin, AclCommandOptions opts) throws ExecutionException, InterruptedException {
+        Map<ResourcePatternFilter, Set<AccessControlEntry>> filterToAcl = getResourceFilterToAcls(opts);
+        for (Map.Entry<ResourcePatternFilter, Set<AccessControlEntry>> entry : filterToAcl.entrySet()) {
+            ResourcePatternFilter filter = entry.getKey();
+            Set<AccessControlEntry> acls = entry.getValue();
             if (acls.isEmpty()) {
-                adminClient.deleteAcls(Collections.singletonList(new AclBindingFilter(filter, AccessControlEntryFilter.ANY))).all().get();
+                if (confirmAction(opts, "Are you sure you want to delete all ACLs for resource filter `" + filter + "`? (y/n)")) {
+                    removeAcls(admin, acls, filter);
+                }
             } else {
-                List<AclBindingFilter> aclBindingFilters = acls.stream().map(acl -> new AclBindingFilter(filter, acl.toFilter())).collect(Collectors.toList());
-                adminClient.deleteAcls(aclBindingFilters).all().get();
-            }
-        }
-
-        private Map<ResourcePattern, Set<AccessControlEntry>> getAcls(Admin adminClient, Set<ResourcePatternFilter> filters) throws ExecutionException, InterruptedException {
-            Collection<AclBinding> aclBindings;
-            if (filters.isEmpty()) {
-                aclBindings = adminClient.describeAcls(AclBindingFilter.ANY).values().get();
-            } else {
-                aclBindings = new ArrayList<>();
-                for (ResourcePatternFilter filter : filters) {
-                    aclBindings.addAll(adminClient.describeAcls(new AclBindingFilter(filter, AccessControlEntryFilter.ANY)).values().get());
+                String msg = "Are you sure you want to remove ACLs: " + NL +
+                        " " + acls.stream().map(a -> "\t" + a).collect(Collectors.joining(NL)) + NL +
+                        " from resource filter `" + filter + "`? (y/n)";
+                if (confirmAction(opts, msg)) {
+                    removeAcls(admin, acls, filter);
                 }
             }
-
-            Map<ResourcePattern, Set<AccessControlEntry>> resourceToAcls = new HashMap<>();
-            for (AclBinding aclBinding : aclBindings) {
-                ResourcePattern resource = aclBinding.pattern();
-                Set<AccessControlEntry> acls = resourceToAcls.getOrDefault(resource, new HashSet<>());
-                acls.add(aclBinding.entry());
-                resourceToAcls.put(resource, acls);
-            }
-            return resourceToAcls;
         }
+    }
+
+    private static void listAcls(Admin admin, AclCommandOptions opts) throws ExecutionException, InterruptedException {
+        Set<ResourcePatternFilter> filters = getResourceFilter(opts, false);
+        Set<KafkaPrincipal> listPrincipals = getPrincipals(opts, opts.listPrincipalsOpt);
+        Map<ResourcePattern, Set<AccessControlEntry>> resourceToAcls = getAcls(admin, filters);
+
+        if (listPrincipals.isEmpty()) {
+            printResourceAcls(resourceToAcls);
+        } else {
+            listPrincipals.forEach(principal -> {
+                System.out.println("ACLs for principal `" + principal + "`");
+                Map<ResourcePattern, Set<AccessControlEntry>> filteredResourceToAcls = resourceToAcls.entrySet().stream()
+                        .map(entry -> {
+                            ResourcePattern resource = entry.getKey();
+                            Set<AccessControlEntry> acls = entry.getValue().stream()
+                                    .filter(acl -> principal.toString().equals(acl.principal()))
+                                    .collect(Collectors.toSet());
+                            return new AbstractMap.SimpleEntry<>(resource, acls);
+                        })
+                        .filter(entry -> !entry.getValue().isEmpty())
+                        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                printResourceAcls(filteredResourceToAcls);
+            });
+        }
+    }
+
+    private static void printResourceAcls(Map<ResourcePattern, Set<AccessControlEntry>> resourceToAcls) {
+        resourceToAcls.forEach((resource, acls) ->
+            System.out.println("Current ACLs for resource `" + resource + "`:" + NL +
+                    acls.stream().map(acl -> "\t" + acl).collect(Collectors.joining(NL)) + NL)
+        );
+    }
+
+    private static void removeAcls(Admin adminClient, Set<AccessControlEntry> acls, ResourcePatternFilter filter) throws ExecutionException, InterruptedException {
+        if (acls.isEmpty()) {
+            adminClient.deleteAcls(List.of(new AclBindingFilter(filter, AccessControlEntryFilter.ANY))).all().get();
+        } else {
+            List<AclBindingFilter> aclBindingFilters = acls.stream().map(acl -> new AclBindingFilter(filter, acl.toFilter())).collect(Collectors.toList());
+            adminClient.deleteAcls(aclBindingFilters).all().get();
+        }
+    }
+
+    private static Map<ResourcePattern, Set<AccessControlEntry>> getAcls(Admin adminClient, Set<ResourcePatternFilter> filters) throws ExecutionException, InterruptedException {
+        Collection<AclBinding> aclBindings;
+        if (filters.isEmpty()) {
+            aclBindings = adminClient.describeAcls(AclBindingFilter.ANY).values().get();
+        } else {
+            aclBindings = new ArrayList<>();
+            for (ResourcePatternFilter filter : filters) {
+                aclBindings.addAll(adminClient.describeAcls(new AclBindingFilter(filter, AccessControlEntryFilter.ANY)).values().get());
+            }
+        }
+
+        Map<ResourcePattern, Set<AccessControlEntry>> resourceToAcls = new HashMap<>();
+        for (AclBinding aclBinding : aclBindings) {
+            ResourcePattern resource = aclBinding.pattern();
+            Set<AccessControlEntry> acls = resourceToAcls.getOrDefault(resource, new HashSet<>());
+            acls.add(aclBinding.entry());
+            resourceToAcls.put(resource, acls);
+        }
+        return resourceToAcls;
     }
 
     private static Map<ResourcePattern, Set<AccessControlEntry>> getResourceToAcls(AclCommandOptions opts) {
@@ -249,8 +252,8 @@ public class AclCommand {
         Set<ResourcePatternFilter> transactionalIds = filters.stream().filter(f -> f.resourceType() == ResourceType.TRANSACTIONAL_ID).collect(Collectors.toSet());
         boolean enableIdempotence = opts.options.has(opts.idempotentOpt);
 
-        Set<AccessControlEntry> topicAcls = getAcl(opts, new HashSet<>(Arrays.asList(WRITE, DESCRIBE, CREATE)));
-        Set<AccessControlEntry> transactionalIdAcls = getAcl(opts, new HashSet<>(Arrays.asList(WRITE, DESCRIBE)));
+        Set<AccessControlEntry> topicAcls = getAcl(opts, Set.of(WRITE, DESCRIBE, CREATE));
+        Set<AccessControlEntry> transactionalIdAcls = getAcl(opts, Set.of(WRITE, DESCRIBE));
 
         //Write, Describe, Create permission on topics, Write, Describe on transactionalIds
         Map<ResourcePatternFilter, Set<AccessControlEntry>> result = new HashMap<>();
@@ -261,7 +264,7 @@ public class AclCommand {
             result.put(transactionalId, transactionalIdAcls);
         }
         if (enableIdempotence) {
-            result.put(CLUSTER_RESOURCE_FILTER, getAcl(opts, Collections.singleton(IDEMPOTENT_WRITE)));
+            result.put(CLUSTER_RESOURCE_FILTER, getAcl(opts, Set.of(IDEMPOTENT_WRITE)));
         }
         return result;
     }
@@ -272,8 +275,8 @@ public class AclCommand {
         Set<ResourcePatternFilter> groups = filters.stream().filter(f -> f.resourceType() == ResourceType.GROUP).collect(Collectors.toSet());
 
         //Read, Describe on topic, Read on consumerGroup
-        Set<AccessControlEntry> topicAcls = getAcl(opts, new HashSet<>(Arrays.asList(READ, DESCRIBE)));
-        Set<AccessControlEntry> groupAcls = getAcl(opts, Collections.singleton(READ));
+        Set<AccessControlEntry> topicAcls = getAcl(opts, Set.of(READ, DESCRIBE));
+        Set<AccessControlEntry> groupAcls = getAcl(opts, Set.of(READ));
 
         Map<ResourcePatternFilter, Set<AccessControlEntry>> result = new HashMap<>();
         for (ResourcePatternFilter topic : topics) {
@@ -333,9 +336,9 @@ public class AclCommand {
         if (opts.options.has(hostOptionSpec)) {
             return opts.options.valuesOf(hostOptionSpec).stream().map(String::trim).collect(Collectors.toSet());
         } else if (opts.options.has(principalOptionSpec)) {
-            return Collections.singleton(AclEntry.WILDCARD_HOST);
+            return Set.of(AclEntry.WILDCARD_HOST);
         } else {
-            return Collections.emptySet();
+            return Set.of();
         }
     }
 
@@ -345,7 +348,7 @@ public class AclCommand {
                     .map(s -> SecurityUtils.parseKafkaPrincipal(s.trim()))
                     .collect(Collectors.toSet());
         } else {
-            return Collections.emptySet();
+            return Set.of();
         }
     }
 
@@ -404,7 +407,7 @@ public class AclCommand {
         }
     }
 
-    public static class AclCommandOptions extends CommandDefaultOptions {
+    public static final class AclCommandOptions extends CommandDefaultOptions {
 
         private final OptionSpec<String> bootstrapServerOpt;
         private final OptionSpec<String> bootstrapControllerOpt;
@@ -430,7 +433,6 @@ public class AclCommand {
         private final OptionSpecBuilder forceOpt;
         private final OptionSpec<String> userPrincipalOpt;
 
-        @SuppressWarnings("this-escape")
         public AclCommandOptions(String[] args) {
             super(args);
             bootstrapServerOpt = parser.accepts("bootstrap-server", "A list of host/port pairs to use for establishing the connection to the Kafka cluster." +
@@ -548,7 +550,7 @@ public class AclCommand {
             if (!options.has(bootstrapServerOpt) && !options.has(bootstrapControllerOpt)) {
                 CommandLineUtils.printUsageAndExit(parser, "One of --bootstrap-server or --bootstrap-controller must be specified");
             }
-            List<AbstractOptionSpec<?>> mutuallyExclusiveOptions = Arrays.asList(addOpt, removeOpt, listOpt);
+            List<AbstractOptionSpec<?>> mutuallyExclusiveOptions = List.of(addOpt, removeOpt, listOpt);
             long mutuallyExclusiveOptionsCount = mutuallyExclusiveOptions.stream()
                     .filter(abstractOptionSpec -> options.has(abstractOptionSpec))
                     .count();
@@ -593,10 +595,10 @@ public class AclCommand {
 
         @Override
         public String valuePattern() {
-            List<PatternType> values = Arrays.asList(PatternType.values());
+            List<PatternType> values = List.of(PatternType.values());
             List<PatternType> filteredValues = values.stream()
                     .filter(type -> type != PatternType.UNKNOWN)
-                    .collect(Collectors.toList());
+                    .toList();
             return filteredValues.stream()
                     .map(Object::toString)
                     .collect(Collectors.joining("|"));

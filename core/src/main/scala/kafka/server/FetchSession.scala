@@ -270,8 +270,7 @@ class FetchSession(val id: Int,
 
   // Update the cached partition data based on the request.
   def update(fetchData: FetchSession.REQ_MAP,
-             toForget: util.List[TopicIdPartition],
-             reqMetadata: JFetchMetadata): (TL, TL, TL) = synchronized {
+             toForget: util.List[TopicIdPartition]): (TL, TL, TL) = synchronized {
     val added = new TL
     val updated = new TL
     val removed = new TL
@@ -804,7 +803,10 @@ class FetchSessionCacheShard(private val maxEntries: Int,
   }
 }
 object FetchSessionCache {
-  private[server] val metricsGroup = new KafkaMetricsGroup(classOf[FetchSessionCache])
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+  private val metricsPackage = "kafka.server"
+  private val metricsClassName = "FetchSessionCache"
+  private[server] val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
   private[server] val counter = new AtomicInteger(0)
 }
 
@@ -880,7 +882,7 @@ class FetchManager(private val time: Time,
                 s", but request version $reqVersion means that we can not.")
               new SessionErrorContext(Errors.FETCH_SESSION_TOPIC_ID_ERROR, reqMetadata)
             } else {
-              val (added, updated, removed) = session.update(fetchData, toForget, reqMetadata)
+              val (added, updated, removed) = session.update(fetchData, toForget)
               if (session.isEmpty) {
                 debug(s"Created a new sessionless FetchContext and closing session id ${session.id}, " +
                   s"epoch ${session.epoch}: after removing ${partitionsToLogString(removed)}, " +

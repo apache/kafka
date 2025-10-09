@@ -22,20 +22,21 @@ import java.nio.channels.OverlappingFileLockException
 import java.nio.file.{Files, Path, StandardOpenOption}
 import java.util.Properties
 import java.util.concurrent.CompletableFuture
-import kafka.log.LogManager
 import kafka.server.KafkaConfig
 import kafka.tools.TestRaftServer.ByteArraySerde
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.Endpoints
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.raft.{Endpoints, MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.FaultHandler
+import org.apache.kafka.storage.internals.log.LogManager
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -58,7 +59,7 @@ class RaftManagerTest {
       props.setProperty(ServerLogConfigs.LOG_DIR_CONFIG, value.toString)
     }
     metadataDir.foreach { value =>
-      props.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, value.toString)
+      props.setProperty(MetadataLogConfig.METADATA_LOG_DIR_CONFIG, value.toString)
     }
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, processRoles.mkString(","))
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
@@ -89,7 +90,7 @@ class RaftManagerTest {
     val endpoints = Endpoints.fromInetSocketAddresses(
       config.effectiveAdvertisedControllerListeners
         .map { endpoint =>
-          (endpoint.listenerName, InetSocketAddress.createUnresolved(endpoint.host, endpoint.port))
+          (ListenerName.normalised(endpoint.listener), InetSocketAddress.createUnresolved(endpoint.host, endpoint.port))
         }
         .toMap
         .asJava
@@ -126,17 +127,21 @@ class RaftManagerTest {
 
     val logDir = TestUtils.tempDir()
     val nodeId = 1
-    val raftManager = createRaftManager(
-      new TopicPartition("__raft_id_test", 0),
-      createConfig(
-        processRolesSet,
-        nodeId,
-        Seq(logDir.toPath),
-        None
+    try {
+      val raftManager = createRaftManager(
+        new TopicPartition("__raft_id_test", 0),
+        createConfig(
+          processRolesSet,
+          nodeId,
+          Seq(logDir.toPath),
+          None
+        )
       )
-    )
-    assertEquals(nodeId, raftManager.client.nodeId.getAsInt)
-    raftManager.shutdown()
+      assertEquals(nodeId, raftManager.client.nodeId.getAsInt)
+      raftManager.shutdown()
+    } finally {
+      Utils.delete(logDir)
+    }
   }
 
   @ParameterizedTest
@@ -155,22 +160,27 @@ class RaftManagerTest {
     }
 
     val nodeId = 1
-    val raftManager = createRaftManager(
-      new TopicPartition("__raft_id_test", 0),
-      createConfig(
-        Set(ProcessRole.ControllerRole),
-        nodeId,
-        logDir,
-        metadataDir
+    try {
+      val raftManager = createRaftManager(
+        new TopicPartition("__raft_id_test", 0),
+        createConfig(
+          Set(ProcessRole.ControllerRole),
+          nodeId,
+          logDir,
+          metadataDir
+        )
       )
-    )
 
-    val lockPath = metadataDir.getOrElse(logDir.head).resolve(LogManager.LockFileName)
-    assertTrue(fileLocked(lockPath))
+      val lockPath = metadataDir.getOrElse(logDir.head).resolve(LogManager.LOCK_FILE_NAME)
+      assertTrue(fileLocked(lockPath))
 
-    raftManager.shutdown()
+      raftManager.shutdown()
 
-    assertFalse(fileLocked(lockPath))
+      assertFalse(fileLocked(lockPath))
+    } finally {
+      logDir.foreach(p => Utils.delete(p.toFile))
+      metadataDir.foreach(p => Utils.delete(p.toFile))
+    }
   }
 
   @Test
@@ -179,22 +189,27 @@ class RaftManagerTest {
     val metadataDir = Some(TestUtils.tempDir().toPath)
 
     val nodeId = 1
-    val raftManager = createRaftManager(
-      new TopicPartition("__raft_id_test", 0),
-      createConfig(
-        Set(ProcessRole.BrokerRole),
-        nodeId,
-        logDir,
-        metadataDir
+    try {
+      val raftManager = createRaftManager(
+        new TopicPartition("__raft_id_test", 0),
+        createConfig(
+          Set(ProcessRole.BrokerRole),
+          nodeId,
+          logDir,
+          metadataDir
+        )
       )
-    )
 
-    val lockPath = metadataDir.getOrElse(logDir.head).resolve(LogManager.LockFileName)
-    assertTrue(fileLocked(lockPath))
+      val lockPath = metadataDir.getOrElse(logDir.head).resolve(LogManager.LOCK_FILE_NAME)
+      assertTrue(fileLocked(lockPath))
 
-    raftManager.shutdown()
+      raftManager.shutdown()
 
-    assertFalse(fileLocked(lockPath))
+      assertFalse(fileLocked(lockPath))
+    } finally {
+      logDir.foreach(p => Utils.delete(p.toFile))
+      metadataDir.foreach(p => Utils.delete(p.toFile))
+    }
   }
 
   def createMetadataLog(config: KafkaConfig): Unit = {

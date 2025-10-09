@@ -31,6 +31,7 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
     private Set<Long> filteredProducerIds = Collections.emptySet();
 
     private long filteredDuration = -1L;
+    private String filteredTransactionalIdPattern;
     /**
      * Filter only the transactions that are in a specific set of states. If no filter
      * is specified or if the passed set of states is empty, then transactions in all
@@ -71,6 +72,19 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
     }
 
     /**
+     * Filter only the transactions that match with the given transactional ID pattern.
+     * If the filter is null or if the passed string is empty,
+     * then all the transactions will be returned.
+     *
+     * @param pattern the transactional ID regular expression pattern to filter by
+     * @return this object
+     */
+    public ListTransactionsOptions filterOnTransactionalIdPattern(String pattern) {
+        this.filteredTransactionalIdPattern = pattern;
+        return this;
+    }
+
+    /**
      * Returns the set of states to be filtered or empty if no states have been specified.
      *
      * @return the current set of filtered states (empty means that no states are filtered and
@@ -99,12 +113,23 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
         return filteredDuration;
     }
 
+    /**
+     * Returns transactional ID being filtered.
+     *
+     * @return the current transactional ID pattern filter (empty means no transactional IDs are filtered and all
+     *         transactions will be returned)
+     */
+    public String filteredTransactionalIdPattern() {
+        return filteredTransactionalIdPattern;
+    }
+
     @Override
     public String toString() {
         return "ListTransactionsOptions(" +
             "filteredStates=" + filteredStates +
             ", filteredProducerIds=" + filteredProducerIds +
             ", filteredDuration=" + filteredDuration +
+            ", filteredTransactionalIdPattern=" + filteredTransactionalIdPattern +
             ", timeoutMs=" + timeoutMs +
             ')';
     }
@@ -116,11 +141,12 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
         ListTransactionsOptions that = (ListTransactionsOptions) o;
         return Objects.equals(filteredStates, that.filteredStates) &&
             Objects.equals(filteredProducerIds, that.filteredProducerIds) &&
-            Objects.equals(filteredDuration, that.filteredDuration);
+            Objects.equals(filteredDuration, that.filteredDuration) &&
+            Objects.equals(filteredTransactionalIdPattern, that.filteredTransactionalIdPattern);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(filteredStates, filteredProducerIds, filteredDuration);
+        return Objects.hash(filteredStates, filteredProducerIds, filteredDuration, filteredTransactionalIdPattern);
     }
 }

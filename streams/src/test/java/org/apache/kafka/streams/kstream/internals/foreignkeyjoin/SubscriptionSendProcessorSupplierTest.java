@@ -149,7 +149,7 @@ public class SubscriptionSendProcessorSupplierTest {
         assertThat(context.forwarded().size(), greaterThan(0));
         assertThat(
             context.forwarded().get(0).record(),
-            is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), DELETE_KEY_AND_PROPAGATE, pk, 0), 0))
+            is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), DELETE_KEY_NO_PROPAGATE, pk, 0), 0))
         );
     }
 
@@ -198,7 +198,7 @@ public class SubscriptionSendProcessorSupplierTest {
         assertThat(context.forwarded().size(), greaterThan(0));
         assertThat(
             context.forwarded().get(0).record(),
-            is(new Record<>(fk1, new SubscriptionWrapper<>(null, DELETE_KEY_AND_PROPAGATE, pk, 0), 0))
+            is(new Record<>(fk1, new SubscriptionWrapper<>(null, DELETE_KEY_NO_PROPAGATE, pk, 0), 0))
         );
     }
 
@@ -295,10 +295,57 @@ public class SubscriptionSendProcessorSupplierTest {
         innerJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, leftRecordValue), 0));
 
         assertThat(context.forwarded(), empty());
+    }
 
-        // test dropped-records sensors
-        assertEquals(1.0, getDroppedRecordsTotalMetric(context));
-        assertNotEquals(0.0, getDroppedRecordsRateMetric(context));
+    @Test
+    public void innerJoinShouldPropagateChangeFromNullFKToNonNullFK() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        innerJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        final LeftValue leftRecordValue = new LeftValue(fk1);
+
+        innerJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, new LeftValue(null)), 0));
+
+        assertThat(context.forwarded().size(), is(1));
+        assertThat(
+            context.forwarded().get(0).record(),
+            is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, pk, 0), 0))
+        );
+    }
+
+    @Test
+    public void innerJoinShouldDeleteAndPropagateChangeFromNonNullFKToNullFK() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        innerJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        final LeftValue leftRecordValue = new LeftValue(null);
+
+        innerJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, new LeftValue(fk1)), 0));
+
+        assertThat(context.forwarded().size(), is(1));
+        assertThat(
+            context.forwarded().get(0).record(),
+            is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), DELETE_KEY_AND_PROPAGATE, pk, 0), 0))
+        );
+    }
+
+    @Test
+    public void innerJoinShouldPropagateUnchangedFKOnlyIfFKExistsInRightTable() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        innerJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        final LeftValue leftRecordValue = new LeftValue(fk1);
+
+        innerJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, leftRecordValue), 0));
+
+        assertThat(context.forwarded().size(), is(1));
+        assertThat(
+            context.forwarded().get(0).record(),
+            is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, pk, 0), 0))
+        );
     }
 
     @Test
@@ -314,6 +361,17 @@ public class SubscriptionSendProcessorSupplierTest {
             context.forwarded().get(0).record(),
             is(new Record<>(fk1, new SubscriptionWrapper<>(null, DELETE_KEY_AND_PROPAGATE, pk, 0), 0))
         );
+    }
+
+    @Test
+    public void innerJoinShouldNotPropagateDeletionOfPrimaryKeyWhenPreviousFKIsNull() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        innerJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        innerJoinProcessor.process(new Record<>(pk, new Change<>(null, new LeftValue(null)), 0));
+
+        assertThat(context.forwarded(), empty());
     }
 
     @Test
@@ -438,7 +496,7 @@ public class SubscriptionSendProcessorSupplierTest {
         assertThat(context.forwarded().size(), greaterThan(0));
         assertThat(
             context.forwarded().get(0).record(),
-            is(new Record<>(compositeKey, new SubscriptionWrapper<>(hash(leftRecordValue), DELETE_KEY_AND_PROPAGATE, pk, 0), 0))
+            is(new Record<>(compositeKey, new SubscriptionWrapper<>(hash(leftRecordValue), DELETE_KEY_NO_PROPAGATE, pk, 0), 0))
         );
     }
 
@@ -491,7 +549,7 @@ public class SubscriptionSendProcessorSupplierTest {
         assertThat(context.forwarded().size(), greaterThan(0));
         assertThat(
             context.forwarded().get(0).record(),
-            is(new Record<>(compositeKey, new SubscriptionWrapper<>(null, DELETE_KEY_AND_PROPAGATE, pk, 0), 0))
+            is(new Record<>(compositeKey, new SubscriptionWrapper<>(null, DELETE_KEY_NO_PROPAGATE, pk, 0), 0))
         );
     }
 

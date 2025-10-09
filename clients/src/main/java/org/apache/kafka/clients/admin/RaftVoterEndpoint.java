@@ -26,7 +26,7 @@ import java.util.Objects;
  */
 @InterfaceStability.Stable
 public class RaftVoterEndpoint {
-    private final String name;
+    private final String listener;
     private final String host;
     private final int port;
 
@@ -49,22 +49,33 @@ public class RaftVoterEndpoint {
     /**
      * Create an endpoint for a metadata quorum voter.
      *
-     * @param name              The human-readable name for this endpoint. For example, CONTROLLER.
+     * @param listener          The human-readable name for this endpoint. For example, CONTROLLER.
      * @param host              The DNS hostname for this endpoint.
      * @param port              The network port for this endpoint.
      */
     public RaftVoterEndpoint(
-        String name,
+        String listener,
         String host,
         int port
     ) {
-        this.name = requireNonNullAllCapsNonEmpty(name);
+        this.listener = requireNonNullAllCapsNonEmpty(listener);
         this.host = Objects.requireNonNull(host);
         this.port = port;
     }
 
+    /**
+     * The listener name for this endpoint.
+     */
+    public String listener() {
+        return listener;
+    }
+
+    /**
+     * @deprecated Since 4.1. Use {@link #listener()} instead. This function will be removed in 5.0.
+     */
+    @Deprecated(since = "4.1", forRemoval = true)
     public String name() {
-        return name;
+        return listener;
     }
 
     public String host() {
@@ -79,20 +90,20 @@ public class RaftVoterEndpoint {
     public boolean equals(Object o) {
         if (o == null || (!o.getClass().equals(getClass()))) return false;
         RaftVoterEndpoint other = (RaftVoterEndpoint) o;
-        return name.equals(other.name) &&
+        return listener.equals(other.listener) &&
             host.equals(other.host) &&
             port == other.port;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, host, port);
+        return Objects.hash(listener, host, port);
     }
 
     @Override
     public String toString() {
         // enclose IPv6 hosts in square brackets for readability
         String hostString = host.contains(":") ? "[" + host + "]" : host;
-        return name + "://" + hostString + ":" + port;
+        return listener + "://" + hostString + ":" + port;
     }
 }

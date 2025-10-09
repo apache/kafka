@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceRecord;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -35,7 +36,7 @@ public class MonitorableSourceConnector extends TestableSourceConnector {
     public void start(Map<String, String> props) {
         super.start(props);
         PluginMetrics pluginMetrics = context.pluginMetrics();
-        metricsName = pluginMetrics.metricName("start", "description", Map.of());
+        metricsName = pluginMetrics.metricName("start", "description", new LinkedHashMap<>());
         pluginMetrics.addMetric(metricsName, (Gauge<Object>) (config, now) -> VALUE);
     }
 
@@ -53,7 +54,7 @@ public class MonitorableSourceConnector extends TestableSourceConnector {
         public void start(Map<String, String> props) {
             super.start(props);
             PluginMetrics pluginMetrics = context.pluginMetrics();
-            metricsName = pluginMetrics.metricName("poll", "description", Map.of());
+            metricsName = pluginMetrics.metricName("poll", "description", new LinkedHashMap<>());
             pluginMetrics.addMetric(metricsName, (Measurable) (config, now) -> count);
         }
 

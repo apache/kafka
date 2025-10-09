@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import java.util.Optional
+import java.util.{Optional, OptionalLong}
 import scala.collection.Seq
 import kafka.cluster.Partition
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
@@ -25,6 +25,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest
+import org.apache.kafka.server.LogReadResult
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogOffsetMetadata, LogOffsetSnapshot}
 import org.junit.jupiter.api.Test
@@ -255,16 +256,16 @@ class DelayedFetchTest {
   }
 
   private def buildReadResult(error: Errors): LogReadResult = {
-    LogReadResult(
-      exception = if (error != Errors.NONE) Some(error.exception) else None,
-      info = new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
-      divergingEpoch = None,
-      highWatermark = -1L,
-      leaderLogStartOffset = -1L,
-      leaderLogEndOffset = -1L,
-      followerLogStartOffset = -1L,
-      fetchTimeMs = -1L,
-      lastStableOffset = None)
+    new LogReadResult(
+      new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
+      Optional.empty(),
+      -1L,
+      -1L,
+      -1L,
+      -1L,
+      -1L,
+      OptionalLong.empty(),
+      if (error != Errors.NONE) Optional.of[Throwable](error.exception) else Optional.empty[Throwable]())
   }
 
 }

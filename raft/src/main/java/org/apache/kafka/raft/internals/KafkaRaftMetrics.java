@@ -26,11 +26,12 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.raft.LogOffsetMetadata;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
 import org.apache.kafka.raft.ReplicaKey;
+import org.apache.kafka.server.common.OffsetAndEpoch;
+import org.apache.kafka.server.metrics.TimeRatio;
 
-import java.util.Arrays;
+import java.util.List;
 import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
 
@@ -262,7 +263,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
     @Override
     public void close() {
-        Arrays.asList(
+        List.of(
             currentLeaderIdMetricName,
             currentVotedIdMetricName,
             currentVotedDirectoryIdMetricName,
@@ -277,7 +278,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
             uncommittedVoterChangeMetricName
         ).forEach(metrics::removeMetric);
 
-        Arrays.asList(
+        List.of(
             commitTimeSensor.name(),
             electionTimeSensor.name(),
             fetchRecordsSensor.name(),

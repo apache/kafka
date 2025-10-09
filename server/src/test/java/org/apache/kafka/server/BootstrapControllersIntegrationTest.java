@@ -63,17 +63,13 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG;
 import static org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG;
@@ -92,13 +88,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class BootstrapControllersIntegrationTest {
     private Map<String, Object> adminConfig(ClusterInstance clusterInstance, boolean usingBootstrapControllers) {
         return usingBootstrapControllers ?
-                Collections.singletonMap(BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapControllers()) :
-                Collections.singletonMap(BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
+                Map.of(BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapControllers()) :
+                Map.of(BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
     }
 
     @ClusterTest
     public void testPutBrokersInBootstrapControllersConfig(ClusterInstance clusterInstance) {
-        Map<String, Object> config = Collections.singletonMap(BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapServers());
+        Map<String, Object> config = Map.of(BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapServers());
         try (Admin admin = Admin.create(config)) {
             ExecutionException exception = assertThrows(ExecutionException.class,
                 () -> admin.describeCluster().clusterId().get(1, TimeUnit.MINUTES));
@@ -111,7 +107,7 @@ public class BootstrapControllersIntegrationTest {
 
     @ClusterTest
     public void testPutControllersInBootstrapBrokersConfig(ClusterInstance clusterInstance) {
-        Map<String, Object> config = Collections.singletonMap(BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapControllers());
+        Map<String, Object> config = Map.of(BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapControllers());
         try (Admin admin = Admin.create(config)) {
             ExecutionException exception = assertThrows(ExecutionException.class,
                     () -> admin.describeCluster().clusterId().get(1, TimeUnit.MINUTES));
@@ -173,7 +169,7 @@ public class BootstrapControllersIntegrationTest {
 
     private void testUpdateFeatures(ClusterInstance clusterInstance, boolean usingBootstrapControllers) {
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
-            UpdateFeaturesResult result = admin.updateFeatures(Collections.singletonMap("foo.bar.feature",
+            UpdateFeaturesResult result = admin.updateFeatures(Map.of("foo.bar.feature",
                             new FeatureUpdate((short) 1, FeatureUpdate.UpgradeType.UPGRADE)),
                     new UpdateFeaturesOptions());
             ExecutionException exception =
@@ -208,8 +204,7 @@ public class BootstrapControllersIntegrationTest {
     @ClusterTest
     public void testUsingBootstrapControllersOnUnsupportedAdminApi(ClusterInstance clusterInstance) {
         try (Admin admin = Admin.create(adminConfig(clusterInstance, true))) {
-            ListOffsetsResult result = admin.listOffsets(Collections.singletonMap(
-                    new TopicPartition("foo", 0), OffsetSpec.earliest()));
+            ListOffsetsResult result = admin.listOffsets(Map.of(new TopicPartition("foo", 0), OffsetSpec.earliest()));
             ExecutionException exception =
                 assertThrows(ExecutionException.class,
                     () -> result.all().get(1, TimeUnit.MINUTES));
@@ -237,20 +232,17 @@ public class BootstrapControllersIntegrationTest {
                     clusterInstance.brokers().values().iterator().next().config().nodeId();
             ConfigResource nodeResource = new ConfigResource(BROKER, "" + nodeId);
             ConfigResource defaultResource = new ConfigResource(BROKER, "");
-            Map<ConfigResource, Collection<AlterConfigOp>> alterations = new HashMap<>();
-            alterations.put(nodeResource, Collections.singletonList(
-                    new AlterConfigOp(new ConfigEntry("my.custom.config", "foo"),
-                            AlterConfigOp.OpType.SET)));
-            alterations.put(defaultResource, Collections.singletonList(
-                    new AlterConfigOp(new ConfigEntry("my.custom.config", "bar"),
-                            AlterConfigOp.OpType.SET)));
+            Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(
+                    nodeResource, List.of(new AlterConfigOp(new ConfigEntry("my.custom.config", "foo"), AlterConfigOp.OpType.SET)),
+                    defaultResource, List.of(new AlterConfigOp(new ConfigEntry("my.custom.config", "bar"), AlterConfigOp.OpType.SET))
+            );
             admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES);
             TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
-                Config config = admin.describeConfigs(Collections.singletonList(nodeResource)).
+                Config config = admin.describeConfigs(List.of(nodeResource)).
                         all().get(1, TimeUnit.MINUTES).get(nodeResource);
                 ConfigEntry entry = config.entries().stream().
                         filter(e -> e.name().equals("my.custom.config")).
-                        findFirst().get();
+                        findFirst().orElseThrow();
                 assertEquals(DYNAMIC_BROKER_CONFIG, entry.source(),
                         "Expected entry for my.custom.config to come from DYNAMIC_BROKER_CONFIG. " +
                                 "Instead, the entry was: " + entry);
@@ -262,21 +254,23 @@ public class BootstrapControllersIntegrationTest {
     public void testAlterReassignmentsWithBootstrapControllers(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         String topicName = "foo";
         try (Admin admin = Admin.create(adminConfig(clusterInstance, false))) {
-            Map<Integer, List<Integer>> assignments = new HashMap<>();
-            assignments.put(0, Arrays.asList(0, 1, 2));
-            assignments.put(1, Arrays.asList(1, 2, 0));
-            assignments.put(2, Arrays.asList(2, 1, 0));
-            CreateTopicsResult createTopicResult = admin.createTopics(Collections.singletonList(new NewTopic(topicName, assignments)));
+            Map<Integer, List<Integer>> assignments = Map.of(
+                    0, List.of(0, 1, 2),
+                    1, List.of(1, 2, 0),
+                    2, List.of(2, 1, 0)
+            );
+            CreateTopicsResult createTopicResult = admin.createTopics(List.of(new NewTopic(topicName, assignments)));
             createTopicResult.all().get();
-            waitForTopics(admin, Collections.singleton(topicName));
+            waitForTopics(admin, Set.of(topicName));
 
-            List<Integer> part0Reassignment = Arrays.asList(2, 1, 0);
-            List<Integer> part1Reassignment = Arrays.asList(0, 1, 2);
-            List<Integer> part2Reassignment = Arrays.asList(1, 2);
-            Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments = new HashMap<>();
-            reassignments.put(new TopicPartition(topicName, 0), Optional.of(new NewPartitionReassignment(part0Reassignment)));
-            reassignments.put(new TopicPartition(topicName, 1), Optional.of(new NewPartitionReassignment(part1Reassignment)));
-            reassignments.put(new TopicPartition(topicName, 2), Optional.of(new NewPartitionReassignment(part2Reassignment)));
+            List<Integer> part0Reassignment = List.of(2, 1, 0);
+            List<Integer> part1Reassignment = List.of(0, 1, 2);
+            List<Integer> part2Reassignment = List.of(1, 2);
+            Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments = Map.of(
+                    new TopicPartition(topicName, 0), Optional.of(new NewPartitionReassignment(part0Reassignment)),
+                    new TopicPartition(topicName, 1), Optional.of(new NewPartitionReassignment(part1Reassignment)),
+                    new TopicPartition(topicName, 2), Optional.of(new NewPartitionReassignment(part2Reassignment))
+            );
 
             try (Admin adminWithBootstrapControllers = Admin.create(adminConfig(clusterInstance, true))) {
                 adminWithBootstrapControllers.alterPartitionReassignments(reassignments).all().get();
@@ -285,9 +279,9 @@ public class BootstrapControllersIntegrationTest {
                         "The reassignment never completed.");
             }
 
-            List<List<Integer>> expectedMapping = Arrays.asList(part0Reassignment, part1Reassignment, part2Reassignment);
+            List<List<Integer>> expectedMapping = List.of(part0Reassignment, part1Reassignment, part2Reassignment);
             TestUtils.waitForCondition(() -> {
-                Map<String, TopicDescription> topicInfoMap = admin.describeTopics(Collections.singleton(topicName)).allTopicNames().get();
+                Map<String, TopicDescription> topicInfoMap = admin.describeTopics(Set.of(topicName)).allTopicNames().get();
                 if (topicInfoMap.containsKey(topicName)) {
                     List<List<Integer>> currentMapping = translatePartitionInfoToNodeIdList(topicInfoMap.get(topicName).partitions());
                     return expectedMapping.equals(currentMapping);
@@ -305,8 +299,8 @@ public class BootstrapControllersIntegrationTest {
 
     private static List<List<Integer>> translatePartitionInfoToNodeIdList(List<TopicPartitionInfo> partitions) {
         return partitions.stream()
-                .map(partition -> partition.replicas().stream().map(Node::id).collect(Collectors.toList()))
-                .collect(Collectors.toList());
+                .map(partition -> partition.replicas().stream().map(Node::id).toList())
+                .toList();
     }
 
     @ClusterTest(serverProperties = {
@@ -330,16 +324,16 @@ public class BootstrapControllersIntegrationTest {
             ResourcePattern resourcePattern = new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL);
             AccessControlEntry accessControlEntry = new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW);
             AclBinding aclBinding = new AclBinding(resourcePattern, accessControlEntry);
-            assertDoesNotThrow(() -> admin.createAcls(Collections.singleton(aclBinding)).all().get(1, TimeUnit.MINUTES));
+            assertDoesNotThrow(() -> admin.createAcls(Set.of(aclBinding)).all().get(1, TimeUnit.MINUTES));
 
             clusterInstance.waitAcls(new AclBindingFilter(resourcePattern.toFilter(), AccessControlEntryFilter.ANY),
-                    Collections.singleton(accessControlEntry));
+                    Set.of(accessControlEntry));
 
             Collection<AclBinding> aclBindings = admin.describeAcls(AclBindingFilter.ANY).values().get(1, TimeUnit.MINUTES);
             assertEquals(1, aclBindings.size());
             assertEquals(aclBinding, aclBindings.iterator().next());
 
-            Collection<AclBinding> deletedAclBindings = admin.deleteAcls(Collections.singleton(AclBindingFilter.ANY)).all().get(1, TimeUnit.MINUTES);
+            Collection<AclBinding> deletedAclBindings = admin.deleteAcls(Set.of(AclBindingFilter.ANY)).all().get(1, TimeUnit.MINUTES);
             assertEquals(1, deletedAclBindings.size());
             assertEquals(aclBinding, deletedAclBindings.iterator().next());
         }

@@ -17,9 +17,12 @@
 
 package org.apache.kafka.server.share.persister;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.InitializeShareGroupStateResponseData;
+import org.apache.kafka.common.protocol.Errors;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -45,6 +48,28 @@ public class InitializeShareGroupStateResult implements PersisterResult {
                                         .collect(Collectors.toList())))
                         .collect(Collectors.toList()))
                 .build();
+    }
+
+    public Map<Errors, Integer> errorCounts() {
+        return topicsData.stream()
+            .flatMap(topicData -> topicData.partitions().stream())
+            .filter(e -> e.errorCode() != Errors.NONE.code())
+            .collect(Collectors.groupingBy(
+                partitionError -> Errors.forCode(partitionError.errorCode()),
+                Collectors.summingInt(partitionError -> 1)
+            ));
+    }
+
+    public Map<Uuid, Map<Integer, PartitionErrorData>> getErrors() {
+        return topicsData.stream()
+            .collect(Collectors.toMap(
+                TopicData::topicId,
+                topicData -> topicData.partitions().stream()
+                    .collect(Collectors.toMap(
+                        PartitionIdData::partition,
+                        partitionErrorData -> partitionErrorData
+                    ))
+            ));
     }
 
     public static class Builder {

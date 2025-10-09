@@ -59,7 +59,7 @@ public class DeleteConsumerGroupOffsetsResultTest {
     }
 
     @Test
-    public void testTopLevelErrorConstructor() throws InterruptedException {
+    public void testTopLevelErrorConstructor() {
         partitionFutures.completeExceptionally(Errors.GROUP_AUTHORIZATION_FAILED.exception());
         DeleteConsumerGroupOffsetsResult topLevelErrorResult =
             new DeleteConsumerGroupOffsetsResult(partitionFutures, partitions);

@@ -50,7 +50,7 @@ class OffsetsForLeaderEpochTest {
 
   @BeforeEach
   def setUp(): Unit = {
-    quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
+    quotaManager = QuotaFactory.instantiate(config, metrics, time, "", "")
   }
 
   @Test
@@ -86,7 +86,7 @@ class OffsetsForLeaderEpochTest {
 
     //Then
     assertEquals(
-      Seq(newOffsetForLeaderTopicResult(tp, Errors.NONE, offsetAndEpoch.leaderEpoch, offsetAndEpoch.offset)),
+      Seq(newOffsetForLeaderTopicResult(tp, Errors.NONE, offsetAndEpoch.epoch(), offsetAndEpoch.offset)),
       response)
   }
 

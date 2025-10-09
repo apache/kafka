@@ -20,14 +20,12 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 
-import static java.util.Arrays.asList;
 
 public final class ServerTopicConfigSynonyms {
     public static final String LOG_PREFIX = "log.";
@@ -49,8 +47,7 @@ public final class ServerTopicConfigSynonyms {
      * both the first and the second synonyms are configured, we will use only the value of
      * the first synonym and ignore the second.
      */
-    // Topic configs with no mapping to a server config can be found in `LogConfig.CONFIGS_WITH_NO_SERVER_DEFAULTS`
-    public static final Map<String, List<ConfigSynonym>> ALL_TOPIC_CONFIG_SYNONYMS = Collections.unmodifiableMap(Utils.mkMap(
+    public static final Map<String, List<ConfigSynonym>> ALL_TOPIC_CONFIG_SYNONYMS = Utils.mkMap(
         sameNameWithLogPrefix(TopicConfig.SEGMENT_BYTES_CONFIG),
         listWithLogPrefix(TopicConfig.SEGMENT_MS_CONFIG,
             new ConfigSynonym("roll.ms"),
@@ -88,17 +85,17 @@ public final class ServerTopicConfigSynonyms {
         sameNameWithLogPrefix(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG),
         sameNameWithLogPrefix(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG),
         sameNameWithLogPrefix(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG)
-    ));
+    );
 
     /**
      * Map topic config to the server config with the highest priority. Some of these have additional
      * synonyms that can be obtained using [[kafka.server.DynamicBrokerConfig#brokerConfigSynonyms]]
      * or using [[AllTopicConfigSynonyms]]
      */
-    public static final Map<String, String> TOPIC_CONFIG_SYNONYMS = Collections.unmodifiableMap(
+    public static final Map<String, String> TOPIC_CONFIG_SYNONYMS =
         ALL_TOPIC_CONFIG_SYNONYMS.entrySet()
         .stream()
-        .collect(Collectors.toMap(Entry::getKey, e -> e.getValue().get(0).name())));
+        .collect(Collectors.toMap(Entry::getKey, e -> e.getValue().get(0).name()));
 
     /**
      * Return the server config with the highest priority for `topicConfigName` if it exists. Otherwise,
@@ -112,23 +109,23 @@ public final class ServerTopicConfigSynonyms {
     }
 
     private static Entry<String, List<ConfigSynonym>> sameName(String configName) {
-        return Utils.mkEntry(configName, asList(new ConfigSynonym(configName)));
+        return Utils.mkEntry(configName, List.of(new ConfigSynonym(configName)));
     }
 
     private static Entry<String, List<ConfigSynonym>> sameNameWithLogPrefix(String configName) {
-        return Utils.mkEntry(configName, asList(new ConfigSynonym(LOG_PREFIX + configName)));
+        return Utils.mkEntry(configName, List.of(new ConfigSynonym(LOG_PREFIX + configName)));
     }
 
     private static Entry<String, List<ConfigSynonym>> sameNameWithLogCleanerPrefix(String configName) {
-        return Utils.mkEntry(configName, asList(new ConfigSynonym(LOG_CLEANER_PREFIX + configName)));
+        return Utils.mkEntry(configName, List.of(new ConfigSynonym(LOG_CLEANER_PREFIX + configName)));
     }
 
     private static Entry<String, List<ConfigSynonym>> singleWithLogPrefix(String topicConfigName, String brokerConfigName) {
-        return Utils.mkEntry(topicConfigName, asList(new ConfigSynonym(LOG_PREFIX + brokerConfigName)));
+        return Utils.mkEntry(topicConfigName, List.of(new ConfigSynonym(LOG_PREFIX + brokerConfigName)));
     }
 
     private static Entry<String, List<ConfigSynonym>> singleWithLogCleanerPrefix(String topicConfigName, String brokerConfigName) {
-        return Utils.mkEntry(topicConfigName, asList(new ConfigSynonym(LOG_CLEANER_PREFIX + brokerConfigName)));
+        return Utils.mkEntry(topicConfigName, List.of(new ConfigSynonym(LOG_CLEANER_PREFIX + brokerConfigName)));
     }
 
     private static Entry<String, List<ConfigSynonym>> listWithLogPrefix(String topicConfigName, ConfigSynonym... synonyms) {
@@ -139,6 +136,6 @@ public final class ServerTopicConfigSynonyms {
     }
 
     private static Entry<String, List<ConfigSynonym>> single(String topicConfigName, String brokerConfigName) {
-        return Utils.mkEntry(topicConfigName, asList(new ConfigSynonym(brokerConfigName)));
+        return Utils.mkEntry(topicConfigName, List.of(new ConfigSynonym(brokerConfigName)));
     }
 }

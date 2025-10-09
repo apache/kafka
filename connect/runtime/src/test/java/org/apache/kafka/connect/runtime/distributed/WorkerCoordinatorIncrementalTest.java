@@ -42,9 +42,7 @@ import org.mockito.quality.Strictness;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -126,7 +124,7 @@ public class WorkerCoordinatorIncrementalTest {
         this.time = new MockTime();
         this.metadata = new Metadata(0, 0, Long.MAX_VALUE, loggerFactory, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
-        this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
+        this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Map.of("topic", 1)));
         this.node = metadata.fetch().nodes().get(0);
         this.consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time,
             retryBackoffMs, requestTimeoutMs, heartbeatIntervalMs);
@@ -149,9 +147,9 @@ public class WorkerCoordinatorIncrementalTest {
             heartbeatIntervalMs,
             groupId,
             Optional.empty(),
+            null,
             retryBackoffMs,
-            retryBackoffMaxMs,
-            true);
+            retryBackoffMaxMs);
         this.coordinator = new WorkerCoordinator(rebalanceConfig,
             loggerFactory,
             consumerClient,
@@ -209,8 +207,8 @@ public class WorkerCoordinatorIncrementalTest {
 
         ExtendedAssignment assignment = new ExtendedAssignment(
                 CONNECT_PROTOCOL_V1, ExtendedAssignment.NO_ERROR, leaderId, leaderUrl, configState1.offset(),
-                Collections.singletonList(connectorId1), Arrays.asList(taskId1x0, taskId2x0),
-                Collections.emptyList(), Collections.emptyList(), 0);
+                List.of(connectorId1), List.of(taskId1x0, taskId2x0),
+                List.of(), List.of(), 0);
         ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment, false);
         // Using onJoinComplete to register the protocol selection decided by the broker
         // coordinator as well as an existing previous assignment that the call to metadata will
@@ -228,8 +226,8 @@ public class WorkerCoordinatorIncrementalTest {
                 .deserializeMetadata(ByteBuffer.wrap(selectedMetadata.metadata()));
         assertEquals(offset, state.offset());
         assertNotEquals(ExtendedAssignment.empty(), state.assignment());
-        assertEquals(Collections.singletonList(connectorId1), state.assignment().connectors());
-        assertEquals(Arrays.asList(taskId1x0, taskId2x0), state.assignment().tasks());
+        assertEquals(List.of(connectorId1), state.assignment().connectors());
+        assertEquals(List.of(taskId1x0, taskId2x0), state.assignment().tasks());
 
         verify(configStorage, times(1)).snapshot();
     }
@@ -242,8 +240,8 @@ public class WorkerCoordinatorIncrementalTest {
 
         ExtendedAssignment assignment = new ExtendedAssignment(
                 CONNECT_PROTOCOL_V1, ExtendedAssignment.NO_ERROR, leaderId, leaderUrl, configState1.offset(),
-                Collections.singletonList(connectorId1), Arrays.asList(taskId1x0, taskId2x0),
-                Collections.emptyList(), Collections.emptyList(), 0);
+                List.of(connectorId1), List.of(taskId1x0, taskId2x0),
+                List.of(), List.of(), 0);
         ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment, false);
         // Using onJoinComplete to register the protocol selection decided by the broker
         // coordinator as well as an existing previous assignment that the call to metadata will
@@ -282,14 +280,14 @@ public class WorkerCoordinatorIncrementalTest {
 
         ExtendedAssignment leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
-                Collections.singletonList(connectorId1), 4,
-                Collections.emptyList(), 0,
+                List.of(connectorId1), 4,
+                List.of(), 0,
                 leaderAssignment);
 
         ExtendedAssignment memberAssignment = deserializeAssignment(result, memberId);
         assertAssignment(leaderId, offset,
-                Collections.singletonList(connectorId2), 4,
-                Collections.emptyList(), 0,
+                List.of(connectorId2), 4,
+                List.of(), 0,
                 memberAssignment);
 
         coordinator.metadata();
@@ -305,20 +303,20 @@ public class WorkerCoordinatorIncrementalTest {
         //Equally distributing tasks across member
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
-            Collections.emptyList(), 0,
-            Collections.emptyList(), 1,
+            List.of(), 0,
+            List.of(), 1,
             leaderAssignment);
 
         memberAssignment = deserializeAssignment(result, memberId);
         assertAssignment(leaderId, offset,
-            Collections.emptyList(), 0,
-            Collections.emptyList(), 1,
+            List.of(), 0,
+            List.of(), 1,
             memberAssignment);
 
         ExtendedAssignment anotherMemberAssignment = deserializeAssignment(result, anotherMemberId);
         assertAssignment(leaderId, offset,
-            Collections.emptyList(), 0,
-            Collections.emptyList(), 0,
+            List.of(), 0,
+            List.of(), 0,
             anotherMemberAssignment);
 
         verify(configStorage, times(configStorageCalls)).snapshot();
@@ -343,20 +341,20 @@ public class WorkerCoordinatorIncrementalTest {
 
         ExtendedAssignment leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
-                Collections.singletonList(connectorId1), 3,
-                Collections.emptyList(), 0,
+                List.of(connectorId1), 3,
+                List.of(), 0,
                 leaderAssignment);
 
         ExtendedAssignment memberAssignment = deserializeAssignment(result, memberId);
         assertAssignment(leaderId, offset,
-                Collections.singletonList(connectorId2), 3,
-                Collections.emptyList(), 0,
+                List.of(connectorId2), 3,
+                List.of(), 0,
                 memberAssignment);
 
         ExtendedAssignment anotherMemberAssignment = deserializeAssignment(result, anotherMemberId);
         assertAssignment(leaderId, offset,
-                Collections.emptyList(), 2,
-                Collections.emptyList(), 0,
+                List.of(), 2,
+                List.of(), 0,
                 anotherMemberAssignment);
 
         // Second rebalance detects a worker is missing
@@ -372,15 +370,15 @@ public class WorkerCoordinatorIncrementalTest {
 
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
-                Collections.emptyList(), 0,
-                Collections.emptyList(), 0,
+                List.of(), 0,
+                List.of(), 0,
                 rebalanceDelay,
                 leaderAssignment);
 
         memberAssignment = deserializeAssignment(result, memberId);
         assertAssignment(leaderId, offset,
-                Collections.emptyList(), 0,
-                Collections.emptyList(), 0,
+                List.of(), 0,
+                List.of(), 0,
                 rebalanceDelay,
                 memberAssignment);
 
@@ -392,15 +390,15 @@ public class WorkerCoordinatorIncrementalTest {
 
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
-                Collections.emptyList(), 0,
-                Collections.emptyList(), 0,
+                List.of(), 0,
+                List.of(), 0,
                 rebalanceDelay,
                 leaderAssignment);
 
         memberAssignment = deserializeAssignment(result, memberId);
         assertAssignment(leaderId, offset,
-                Collections.emptyList(), 0,
-                Collections.emptyList(), 0,
+                List.of(), 0,
+                List.of(), 0,
                 rebalanceDelay,
                 memberAssignment);
 
@@ -411,14 +409,14 @@ public class WorkerCoordinatorIncrementalTest {
 
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
-                Collections.emptyList(), 1,
-                Collections.emptyList(), 0,
+                List.of(), 1,
+                List.of(), 0,
                 leaderAssignment);
 
         memberAssignment = deserializeAssignment(result, memberId);
         assertAssignment(leaderId, offset,
-                Collections.emptyList(), 1,
-                Collections.emptyList(), 0,
+                List.of(), 1,
+                List.of(), 0,
                 memberAssignment);
 
         verify(configStorage, times(configStorageCalls)).snapshot();
@@ -443,20 +441,20 @@ public class WorkerCoordinatorIncrementalTest {
 
         ExtendedAssignment leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
-                Collections.singletonList(connectorId1), 3,
-                Collections.emptyList(), 0,
+                List.of(connectorId1), 3,
+                List.of(), 0,
                 leaderAssignment);
 
         ExtendedAssignment memberAssignment = deserializeAssignment(result, memberId);
         assertAssignment(leaderId, offset,
-                Collections.singletonList(connectorId2), 3,
-                Collections.emptyList(), 0,
+                List.of(connectorId2), 3,
+                List.of(), 0,
                 memberAssignment);
 
         ExtendedAssignment anotherMemberAssignment = deserializeAssignment(result, anotherMemberId);
         assertAssignment(leaderId, offset,
-                Collections.emptyList(), 2,
-                Collections.emptyList(), 0,
+                List.of(), 2,
+                List.of(), 0,
                 anotherMemberAssignment);
 
         // Second rebalance detects a worker is missing
@@ -471,15 +469,15 @@ public class WorkerCoordinatorIncrementalTest {
 
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
-                Collections.emptyList(), 0,
-                Collections.emptyList(), 0,
+                List.of(), 0,
+                List.of(), 0,
                 rebalanceDelay,
                 leaderAssignment);
 
         memberAssignment = deserializeAssignment(result, memberId);
         assertAssignment(leaderId, offset,
-                Collections.emptyList(), 0,
-                Collections.emptyList(), 0,
+                List.of(), 0,
+                List.of(), 0,
                 rebalanceDelay,
                 memberAssignment);
 
@@ -493,22 +491,22 @@ public class WorkerCoordinatorIncrementalTest {
 
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
-                Collections.emptyList(), 0,
-                Collections.emptyList(), 0,
+                List.of(), 0,
+                List.of(), 0,
                 rebalanceDelay,
                 leaderAssignment);
 
         memberAssignment = deserializeAssignment(result, memberId);
         assertAssignment(leaderId, offset,
-                Collections.emptyList(), 0,
-                Collections.emptyList(), 0,
+                List.of(), 0,
+                List.of(), 0,
                 rebalanceDelay,
                 memberAssignment);
 
         anotherMemberAssignment = deserializeAssignment(result, anotherMemberId);
         assertAssignment(leaderId, offset,
-                Collections.emptyList(), 0,
-                Collections.emptyList(), 0,
+                List.of(), 0,
+                List.of(), 0,
                 rebalanceDelay,
                 anotherMemberAssignment);
 
@@ -519,20 +517,20 @@ public class WorkerCoordinatorIncrementalTest {
         // A rebalance after the delay expires re-assigns the lost tasks to the returning member
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
-                Collections.emptyList(), 0,
-                Collections.emptyList(), 0,
+                List.of(), 0,
+                List.of(), 0,
                 leaderAssignment);
 
         memberAssignment = deserializeAssignment(result, memberId);
         assertAssignment(leaderId, offset,
-                Collections.emptyList(), 0,
-                Collections.emptyList(), 0,
+                List.of(), 0,
+                List.of(), 0,
                 memberAssignment);
 
         anotherMemberAssignment = deserializeAssignment(result, anotherMemberId);
         assertAssignment(leaderId, offset,
-                Collections.emptyList(), 2,
-                Collections.emptyList(), 0,
+                List.of(), 2,
+                List.of(), 0,
                 anotherMemberAssignment);
 
         verify(configStorage, times(configStorageCalls)).snapshot();
@@ -542,8 +540,8 @@ public class WorkerCoordinatorIncrementalTest {
         public ExtendedAssignment assignment = null;
 
         public String revokedLeader;
-        public Collection<String> revokedConnectors = Collections.emptyList();
-        public Collection<ConnectorTaskId> revokedTasks = Collections.emptyList();
+        public Collection<String> revokedConnectors = List.of();
+        public Collection<ConnectorTaskId> revokedTasks = List.of();
 
         public int revokedCount = 0;
         public int assignedCount = 0;

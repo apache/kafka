@@ -178,10 +178,10 @@ public class StickyTaskAssignor implements TaskAssignor {
         // assign any remaining unassigned tasks
         final List<TaskId> sortedTasks = new ArrayList<>(unassigned);
         Collections.sort(sortedTasks);
-        for (final TaskId taskId : sortedTasks) {
-            final Set<ProcessId> candidateClients = clients.stream()
+        final Set<ProcessId> candidateClients = clients.stream()
                 .map(KafkaStreamsState::processId)
                 .collect(Collectors.toSet());
+        for (final TaskId taskId : sortedTasks) {
             final ProcessId bestClient = assignmentState.findBestClientForTask(taskId, candidateClients);
             assignmentState.finalizeAssignment(taskId, bestClient, AssignedTask.Type.ACTIVE);
         }

@@ -381,7 +381,7 @@ public class Metadata implements Closeable {
     public synchronized Set<TopicPartition> updatePartitionLeadership(Map<TopicPartition, LeaderIdAndEpoch> partitionLeaders, List<Node> leaderNodes) {
         Map<Integer, Node> newNodes = leaderNodes.stream().collect(Collectors.toMap(Node::id, node -> node));
         // Insert non-overlapping nodes from existing-nodes into new-nodes.
-        this.metadataSnapshot.cluster().nodes().stream().forEach(node -> newNodes.putIfAbsent(node.id(), node));
+        this.metadataSnapshot.cluster().nodes().forEach(node -> newNodes.putIfAbsent(node.id(), node));
 
         // Create partition-metadata for all updated partitions. Exclude updates for partitions -
         // 1. for which the corresponding partition has newer leader in existing metadata.
@@ -508,7 +508,7 @@ public class Metadata implements Closeable {
                 topicId = null;
             }
 
-            if (!retainTopic(topicName, metadata.isInternal(), nowMs))
+            if (!retainTopic(topicName, topicId, metadata.isInternal(), nowMs))
                 continue;
 
             if (metadata.isInternal())
@@ -758,8 +758,18 @@ public class Metadata implements Closeable {
         return metadataSnapshot.topicNames();
     }
 
+    /**
+     * Based on the topic name, check if the topic metadata should be kept when received in a metadata response.
+     */
     protected boolean retainTopic(String topic, boolean isInternal, long nowMs) {
         return true;
+    }
+
+    /**
+     * Based on the topic name and topic ID, check if the topic metadata should be kept when received in a metadata response.
+     */
+    protected boolean retainTopic(String topicName, Uuid topicId, boolean isInternal, long nowMs) {
+        return retainTopic(topicName, isInternal, nowMs);
     }
 
     public static class MetadataRequestAndVersion {

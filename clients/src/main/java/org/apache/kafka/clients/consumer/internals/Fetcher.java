@@ -138,7 +138,7 @@ public class Fetcher<K, V> extends AbstractFetch {
             // here.
             log.debug("All requests couldn't be sent in the specific timeout period {}ms. " +
                     "This may result in unnecessary fetch sessions at the broker. Consider increasing the timeout passed for " +
-                    "KafkaConsumer.close(Duration timeout)", timer.timeoutMs());
+                    "KafkaConsumer.close(...)", timer.timeoutMs());
         }
     }
 

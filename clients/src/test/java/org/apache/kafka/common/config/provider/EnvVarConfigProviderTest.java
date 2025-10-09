@@ -22,10 +22,8 @@ import org.apache.kafka.common.config.ConfigException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -88,7 +86,7 @@ class EnvVarConfigProviderTest {
 
     @Test
     void testGetEnvVarsByKeyList() {
-        Set<String> keyList = new HashSet<>(Arrays.asList("test_var1", "secret_var2"));
+        Set<String> keyList = Set.of("test_var1", "secret_var2");
         Set<String> keys = envVarConfigProvider.get(null, keyList).data().keySet();
         assertEquals(keyList, keys);
     }

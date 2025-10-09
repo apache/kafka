@@ -66,7 +66,7 @@ class RegistrationTestContext(
   val controllerEpoch = new AtomicInteger(123)
   config.effectiveAdvertisedBrokerListeners.foreach { ep =>
     advertisedListeners.add(new Listener().setHost(ep.host).
-      setName(ep.listenerName.value()).
+      setName(ep.listener).
       setPort(ep.port.shortValue()).
       setSecurityProtocol(ep.securityProtocol.id))
   }

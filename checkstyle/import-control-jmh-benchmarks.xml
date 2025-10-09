@@ -42,7 +42,6 @@
     <allow pkg="kafka.network"/>
     <allow pkg="kafka.utils"/>
     <allow pkg="kafka.zk"/>
-    <allow class="kafka.utils.Pool"/>
     <allow class="kafka.utils.KafkaScheduler"/>
     <allow class="org.apache.kafka.clients.FetchSessionHandler"/>
     <allow pkg="kafka.common"/>
@@ -53,7 +52,7 @@
     <allow pkg="org.apache.kafka.server"/>
     <allow pkg="org.apache.kafka.storage"/>
     <allow pkg="org.apache.kafka.clients"/>
-    <allow class="org.apache.kafka.coordinator.common.runtime.HdrHistogram"/>
+    <allow pkg="org.apache.kafka.coordinator.common.runtime"/>
     <allow pkg="org.apache.kafka.coordinator.group"/>
     <allow pkg="org.apache.kafka.image"/>
     <allow pkg="org.apache.kafka.metadata"/>

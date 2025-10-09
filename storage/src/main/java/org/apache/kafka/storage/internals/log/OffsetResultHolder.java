@@ -25,7 +25,7 @@ import java.util.Optional;
 public class OffsetResultHolder {
 
     private Optional<TimestampAndOffset> timestampAndOffsetOpt;
-    private Optional<AsyncOffsetReadFutureHolder<FileRecordsOrError>> futureHolderOpt;
+    private final Optional<AsyncOffsetReadFutureHolder<FileRecordsOrError>> futureHolderOpt;
     private Optional<ApiException> maybeOffsetsError = Optional.empty();
     private Optional<Long> lastFetchableOffset = Optional.empty();
 
@@ -95,51 +95,20 @@ public class OffsetResultHolder {
         return result;
     }
 
-    public static class FileRecordsOrError {
-        private Optional<Exception> exception;
-        private Optional<TimestampAndOffset> timestampAndOffset;
-
-        public FileRecordsOrError(
-                Optional<Exception> exception,
-                Optional<TimestampAndOffset> timestampAndOffset
-        ) {
+    public record FileRecordsOrError(Optional<Exception> exception, Optional<TimestampAndOffset> timestampAndOffset) {
+        public FileRecordsOrError {
             if (exception.isPresent() && timestampAndOffset.isPresent()) {
                 throw new IllegalArgumentException("Either exception or timestampAndOffset should be present, but not both");
             }
-            this.exception = exception;
-            this.timestampAndOffset = timestampAndOffset;
         }
 
-        public Optional<Exception> exception() {
-            return exception;
-        }
-
-        public Optional<TimestampAndOffset> timestampAndOffset() {
-            return timestampAndOffset;
-        }
-        
         public boolean hasException() {
             return exception.isPresent();
         }
-        
+
         public boolean hasTimestampAndOffset() {
             return timestampAndOffset.isPresent();
         }
 
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-
-            FileRecordsOrError that = (FileRecordsOrError) o;
-            return Objects.equals(exception, that.exception) && Objects.equals(timestampAndOffset, that.timestampAndOffset);
-        }
-
-        @Override
-        public int hashCode() {
-            int result = Objects.hashCode(exception);
-            result = 31 * result + Objects.hashCode(timestampAndOffset);
-            return result;
-        }
     }
 }

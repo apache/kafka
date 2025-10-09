@@ -94,12 +94,13 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
                             StatusBackingStore statusBackingStore,
                             Executor closeExecutor,
                             Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier,
+                            TaskPluginsMetadata pluginsMetadata,
                             Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
 
         super(id, task, statusListener, initialState, configState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, transformationChain,
                 null, producer,
                 admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics, errorMetrics, loader,
-                time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier, pluginLoaderSwapper);
+                time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier, pluginsMetadata, pluginLoaderSwapper);
 
         this.committableOffsets = CommittableOffsets.EMPTY;
         this.submittedRecords = new SubmittedRecords();

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.jmh.producer;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.Errors;
@@ -36,10 +37,8 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 @State(Scope.Benchmark)
@@ -51,15 +50,15 @@ import java.util.stream.IntStream;
 public class ProducerRequestBenchmark {
     private static final int NUMBER_OF_PARTITIONS = 3;
     private static final int NUMBER_OF_RECORDS = 3;
-    private static final List<ProduceRequestData.TopicProduceData> TOPIC_PRODUCE_DATA = Collections.singletonList(new ProduceRequestData.TopicProduceData()
-            .setName("tp")
+    private static final List<ProduceRequestData.TopicProduceData> TOPIC_PRODUCE_DATA = List.of(new ProduceRequestData.TopicProduceData()
+            .setTopicId(Uuid.fromString("4NeOmt3TH3vW7AKKORPaCW"))
             .setPartitionData(IntStream.range(0, NUMBER_OF_PARTITIONS).mapToObj(partitionIndex -> new ProduceRequestData.PartitionProduceData()
                 .setIndex(partitionIndex)
                 .setRecords(MemoryRecords.withRecords(Compression.NONE, IntStream.range(0, NUMBER_OF_RECORDS)
                     .mapToObj(recordIndex -> new SimpleRecord(100, "hello0".getBytes(StandardCharsets.UTF_8)))
-                    .collect(Collectors.toList())
+                    .toList()
                     .toArray(new SimpleRecord[0]))))
-                .collect(Collectors.toList()))
+                .toList())
     );
     private static final ProduceRequestData PRODUCE_REQUEST_DATA = new ProduceRequestData()
             .setTimeoutMs(100)

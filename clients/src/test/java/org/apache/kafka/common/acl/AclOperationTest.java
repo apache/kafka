@@ -50,7 +50,8 @@ public class AclOperationTest {
         new AclOperationTestInfo(AclOperation.ALTER_CONFIGS, 11, "alter_configs", false),
         new AclOperationTestInfo(AclOperation.IDEMPOTENT_WRITE, 12, "idempotent_write", false),
         new AclOperationTestInfo(AclOperation.CREATE_TOKENS, 13, "create_tokens", false),
-        new AclOperationTestInfo(AclOperation.DESCRIBE_TOKENS, 14, "describe_tokens", false)
+        new AclOperationTestInfo(AclOperation.DESCRIBE_TOKENS, 14, "describe_tokens", false),
+        new AclOperationTestInfo(AclOperation.TWO_PHASE_COMMIT, 15, "two_phase_commit", false)
     };
 
     @Test

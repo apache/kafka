@@ -19,7 +19,9 @@
   "listeners": ["broker"],
   "name": "ListTransactionsRequest",
   // Version 1: adds DurationFilter to list transactions older than specified duration
-  "validVersions": "0-1",
+
+  // Version 2: adds TransactionalIdPattern to list transactions with the same pattern(KIP-1152)
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "StateFilters", "type": "[]string", "versions": "0+",
@@ -30,6 +32,9 @@
     },
     { "name": "DurationFilter", "type": "int64", "versions": "1+", "default": -1,
       "about": "Duration (in millis) to filter by: if < 0, all transactions will be returned; otherwise, only transactions running longer than this duration will be returned."
+    },
+    { "name": "TransactionalIdPattern", "type": "string", "versions": "2+", "nullableVersions": "2+", "default": "null",
+      "about": "The transactional ID regular expression pattern to filter by: if it is empty or null, all transactions are returned; Otherwise then only the transactions matching the given regular expression will be returned."
     }
   ]
 }

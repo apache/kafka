@@ -32,7 +32,7 @@ def key_exists(key_id):
     """
     try:
         execute(f"gpg --list-keys {key_id}")
-    except Exception as e:
+    except Exception:
         return False
     return True
 
@@ -70,13 +70,13 @@ def valid_passphrase(key_id, passphrase):
     with tempfile.TemporaryDirectory() as tmpdir:
         content = __file__
         signature = tmpdir + '/sig.asc'
-        # if the agent is running, the suplied passphrase may be ignored
+        # if the agent is running, the supplied passphrase may be ignored
         agent_kill()
         try:
             sign(key_id, passphrase, content, signature)
             verify(content, signature)
-        except subprocess.CalledProcessError as e:
-            False
+        except subprocess.CalledProcessError:
+            return False
     return True
 
 
@@ -88,5 +88,3 @@ def key_pass_id(key_id, passphrase):
     h.update(key_id.encode())
     h.update(passphrase.encode())
     return h.hexdigest()
-
-

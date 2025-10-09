@@ -23,12 +23,10 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import org.slf4j.Logger;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -185,7 +183,7 @@ public class QuorumState {
                 election.epoch(),
                 partitionState.lastVoterSet().voterIds(),
                 randomElectionTimeoutMs(),
-                Collections.emptyList(),
+                List.of(),
                 localListeners,
                 logContext
             );
@@ -200,7 +198,6 @@ public class QuorumState {
                 election.epoch(),
                 partitionState.lastVoterSet(),
                 Optional.empty(),
-                1,
                 randomElectionTimeoutMs(),
                 logContext
             );
@@ -481,6 +478,9 @@ public class QuorumState {
         int epoch,
         ReplicaKey candidateKey
     ) {
+        // Verify the current state is prospective, this method should only be used to add voted state to
+        // prospective state. Transitions from other states to prospective use transitionToProspective instead.
+        prospectiveStateOrThrow();
         int currentEpoch = state.epoch();
         if (localId.isPresent() && candidateKey.id() == localId.getAsInt()) {
             throw new IllegalStateException(
@@ -505,7 +505,6 @@ public class QuorumState {
             );
         }
 
-        ProspectiveState prospectiveState = prospectiveStateOrThrow();
         // Note that we reset the election timeout after voting for a candidate because we
         // know that the candidate has at least as good of a chance of getting elected as us
         durableTransitionTo(
@@ -518,7 +517,6 @@ public class QuorumState {
                 Optional.of(candidateKey),
                 partitionState.lastVoterSet(),
                 state.highWatermark(),
-                prospectiveState.retries(),
                 randomElectionTimeoutMs(),
                 logContext
             )
@@ -620,8 +618,6 @@ public class QuorumState {
                 " is state " + state);
         }
 
-        int retries = isCandidate() ? candidateStateOrThrow().retries() + 1 : 1;
-
         // Durable transition is not necessary since there is no change to the persisted electionState
         memoryTransitionTo(
             new ProspectiveState(
@@ -633,7 +629,6 @@ public class QuorumState {
                 votedKey(),
                 partitionState.lastVoterSet(),
                 state.highWatermark(),
-                retries,
                 randomElectionTimeoutMs(),
                 logContext
             )
@@ -646,8 +641,6 @@ public class QuorumState {
         int newEpoch = epoch() + 1;
         int electionTimeoutMs = randomElectionTimeoutMs();
 
-        int retries = isProspective() ? prospectiveStateOrThrow().retries() : 1;
-
         durableTransitionTo(new CandidateState(
             time,
             localIdOrThrow(),
@@ -655,7 +648,6 @@ public class QuorumState {
             newEpoch,
             partitionState.lastVoterSet(),
             state.highWatermark(),
-            retries,
             electionTimeoutMs,
             logContext
         ));
@@ -717,7 +709,7 @@ public class QuorumState {
 
         LeaderState<T> state = new LeaderState<>(
             time,
-            ReplicaKey.of(localIdOrThrow(), localDirectoryId),
+            localVoterNodeOrThrow(),
             epoch(),
             epochStartOffset,
             partitionState.lastVoterSet(),
@@ -725,7 +717,6 @@ public class QuorumState {
             partitionState.lastKraftVersion(),
             candidateState.epochElection().grantingVoters(),
             accumulator,
-            localListeners,
             fetchTimeoutMs,
             logContext,
             kafkaRaftMetrics
@@ -743,12 +734,7 @@ public class QuorumState {
 
     private void memoryTransitionTo(EpochState newState) {
         if (state != null) {
-            try {
-                state.close();
-            } catch (IOException e) {
-                throw new UncheckedIOException(
-                    "Failed to transition from " + state.name() + " to " + newState.name(), e);
-            }
+            state.close();
         }
 
         EpochState from = state;

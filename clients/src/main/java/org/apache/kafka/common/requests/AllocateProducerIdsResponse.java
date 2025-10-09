@@ -19,10 +19,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Map;
 
@@ -65,8 +64,8 @@ public class AllocateProducerIdsResponse extends AbstractResponse {
         return Errors.forCode(data.errorCode());
     }
 
-    public static AllocateProducerIdsResponse parse(ByteBuffer buffer, short version) {
+    public static AllocateProducerIdsResponse parse(Readable readable, short version) {
         return new AllocateProducerIdsResponse(new AllocateProducerIdsResponseData(
-                new ByteBufferAccessor(buffer), version));
+                readable, version));
     }
 }

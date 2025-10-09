@@ -51,7 +51,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -774,7 +773,7 @@ public class OffsetsRequestManagerTest {
 
         // tp2 added to the assignment when the Offset Fetch request is already sent including tp1 only
         TopicPartition tp2 = new TopicPartition("topic2", 2);
-        Set<TopicPartition> initPartitions2 = new HashSet<>(Arrays.asList(tp1, tp2));
+        Set<TopicPartition> initPartitions2 = Set.of(tp1, tp2);
         mockAssignedPartitionsMissingPositions(initPartitions2, initPartitions2, leaderAndEpoch);
 
         // tp2 requires a position, but shouldn't be reset after receiving the offset fetch response that will only

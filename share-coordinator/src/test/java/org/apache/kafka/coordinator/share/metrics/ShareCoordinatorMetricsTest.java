@@ -26,9 +26,8 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME;
 import static org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME;
@@ -42,12 +41,12 @@ public class ShareCoordinatorMetricsTest {
     public void testMetricNames() {
         Metrics metrics = new Metrics();
 
-        HashSet<MetricName> expectedMetrics = new HashSet<>(Arrays.asList(
+        Set<MetricName> expectedMetrics = Set.of(
             metrics.metricName("write-rate", ShareCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("write-total", ShareCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("write-latency-avg", ShareCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("write-latency-max", ShareCoordinatorMetrics.METRICS_GROUP)
-        ));
+        );
 
         ShareCoordinatorMetrics coordMetrics = new ShareCoordinatorMetrics(metrics);
         for (MetricName metricName : expectedMetrics) {

@@ -37,15 +37,17 @@ import java.lang.{Byte => JByte}
 import java.util.Collections
 import scala.jdk.CollectionConverters._
 
-@ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1)
+@ClusterTestDefaults(
+  types = Array(Type.KRAFT),
+  brokers = 1,
+  serverProperties = Array(
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+  )
+)
 class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
   @ClusterTest(
-    types = Array(Type.KRAFT),
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-    ),
     features = Array(
       new ClusterFeature(feature = Feature.GROUP_VERSION, version = 0)
     )
@@ -71,13 +73,7 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(expectedResponse, consumerGroupDescribeResponse.data)
   }
 
-  @ClusterTest(
-    types = Array(Type.KRAFT),
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-    )
-  )
+  @ClusterTest
   def testConsumerGroupDescribeWithNewGroupCoordinator(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
@@ -211,19 +207,27 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
         )
 
         assertEquals(expected, actual)
+
+        val unknownGroupResponse = consumerGroupDescribe(
+          groupIds = List("grp-unknown"),
+          includeAuthorizedOperations = true,
+          version = version.toShort,
+        )
+        assertEquals(Errors.GROUP_ID_NOT_FOUND.code, unknownGroupResponse.head.errorCode())
+
+        val emptyGroupResponse = consumerGroupDescribe(
+          groupIds = List(""),
+          includeAuthorizedOperations = true,
+          version = version.toShort,
+        )
+        assertEquals(Errors.INVALID_GROUP_ID.code, emptyGroupResponse.head.errorCode())
       }
     } finally {
       admin.close()
     }
   }
 
-  @ClusterTest(
-    types = Array(Type.KRAFT),
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-    )
-  )
+  @ClusterTest
   def testConsumerGroupDescribeWithMigrationMember(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.

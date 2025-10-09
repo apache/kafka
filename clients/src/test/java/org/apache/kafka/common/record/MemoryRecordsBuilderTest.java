@@ -22,7 +22,6 @@ import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CloseableIterator;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 
@@ -50,7 +49,6 @@ import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V1;
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -90,8 +88,6 @@ public class MemoryRecordsBuilderTest {
             return values.stream();
         }
     }
-
-    private final Time time = Time.SYSTEM;
 
     @Test
     public void testUnsupportedCompress() {
@@ -635,31 +631,6 @@ public class MemoryRecordsBuilderTest {
                     values.add(Arguments.of(new Args(bufferOffset, Compression.of(type).build(), MAGIC_VALUE_V2)));
                 }
             return values.stream();
-        }
-    }
-
-    private void verifyRecordsProcessingStats(Compression compression, RecordValidationStats processingStats,
-                                              int numRecords, int numRecordsConverted, long finalBytes,
-                                              long preConvertedBytes) {
-        assertNotNull(processingStats, "Records processing info is null");
-        assertEquals(numRecordsConverted, processingStats.numRecordsConverted());
-        // Since nanoTime accuracy on build machines may not be sufficient to measure small conversion times,
-        // only check if the value >= 0. Default is -1, so this checks if time has been recorded.
-        assertTrue(processingStats.conversionTimeNanos() >= 0, "Processing time not recorded: " + processingStats);
-        long tempBytes = processingStats.temporaryMemoryBytes();
-        if (compression.type() == CompressionType.NONE) {
-            if (numRecordsConverted == 0)
-                assertEquals(finalBytes, tempBytes);
-            else if (numRecordsConverted == numRecords)
-                assertEquals(preConvertedBytes + finalBytes, tempBytes);
-            else {
-                assertTrue(tempBytes > finalBytes && tempBytes < finalBytes + preConvertedBytes,
-                    String.format("Unexpected temp bytes %d final %d pre %d", tempBytes, finalBytes, preConvertedBytes));
-            }
-        } else {
-            long compressedBytes = finalBytes - Records.LOG_OVERHEAD - LegacyRecord.RECORD_OVERHEAD_V0;
-            assertTrue(tempBytes > compressedBytes,
-                String.format("Uncompressed size expected temp=%d, compressed=%d", tempBytes, compressedBytes));
         }
     }
 

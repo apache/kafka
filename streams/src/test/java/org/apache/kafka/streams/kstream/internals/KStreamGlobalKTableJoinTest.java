@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -46,6 +47,10 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class KStreamGlobalKTableJoinTest {
@@ -89,7 +94,7 @@ public class KStreamGlobalKTableJoinTest {
         }
         keyMapper = (key, value) -> {
             final String[] tokens = value.split(",");
-            // Value is comma delimited. If second token is present, it's the key to the global ktable.
+            // Value is comma-delimited. If second token is present, it's the key to the global ktable.
             // If not present, use null to indicate no match
             return tokens.length > 1 ? tokens[1] : null;
         };
@@ -169,8 +174,10 @@ public class KStreamGlobalKTableJoinTest {
         // push all four items to the primary stream. this should produce two items.
 
         pushToStream(4, "X", true, false);
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0,FKey0+Y0", 2),
-                new KeyValueTimestamp<>(1, "X1,FKey1+Y1", 3));
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "X0,FKey0+Y0", 2),
+            new KeyValueTimestamp<>(1, "X1,FKey1+Y1", 3)
+        );
 
         // push all items to the globalTable. this should not produce any item
 
@@ -180,10 +187,12 @@ public class KStreamGlobalKTableJoinTest {
         // push all four items to the primary stream. this should produce four items.
 
         pushToStream(4, "X", true, false);
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0,FKey0+YY0", 6),
-                new KeyValueTimestamp<>(1, "X1,FKey1+YY1", 7),
-                new KeyValueTimestamp<>(2, "X2,FKey2+YY2", 8),
-                new KeyValueTimestamp<>(3, "X3,FKey3+YY3", 9));
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "X0,FKey0+YY0", 6),
+            new KeyValueTimestamp<>(1, "X1,FKey1+YY1", 7),
+            new KeyValueTimestamp<>(2, "X2,FKey2+YY2", 8),
+            new KeyValueTimestamp<>(3, "X3,FKey3+YY3", 9)
+        );
 
         // push all items to the globalTable. this should not produce any item
 
@@ -202,8 +211,10 @@ public class KStreamGlobalKTableJoinTest {
         // push all four items to the primary stream. this should produce two items.
 
         pushToStream(4, "X", true, false);
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0,FKey0+Y0", 0),
-                new KeyValueTimestamp<>(1, "X1,FKey1+Y1", 1));
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "X0,FKey0+Y0", 0),
+            new KeyValueTimestamp<>(1, "X1,FKey1+Y1", 1)
+        );
 
     }
 
@@ -218,10 +229,12 @@ public class KStreamGlobalKTableJoinTest {
         // push all four items to the primary stream. this should produce four items.
 
         pushToStream(4, "X", true, false);
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0,FKey0+Y0", 0),
-                new KeyValueTimestamp<>(1, "X1,FKey1+Y1", 1),
-                new KeyValueTimestamp<>(2, "X2,FKey2+Y2", 2),
-                new KeyValueTimestamp<>(3, "X3,FKey3+Y3", 3));
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "X0,FKey0+Y0", 0),
+            new KeyValueTimestamp<>(1, "X1,FKey1+Y1", 1),
+            new KeyValueTimestamp<>(2, "X2,FKey2+Y2", 2),
+            new KeyValueTimestamp<>(3, "X3,FKey3+Y3", 3)
+        );
 
         // push two items with null to the globalTable as deletes. this should not produce any item.
 
@@ -231,8 +244,10 @@ public class KStreamGlobalKTableJoinTest {
         // push all four items to the primary stream. this should produce two items.
 
         pushToStream(4, "XX", true, false);
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(2, "XX2,FKey2+Y2", 6),
-                new KeyValueTimestamp<>(3, "XX3,FKey3+Y3", 7));
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(2, "XX2,FKey2+Y2", 6),
+            new KeyValueTimestamp<>(3, "XX3,FKey3+Y3", 7)
+        );
     }
 
     @Test
@@ -248,10 +263,54 @@ public class KStreamGlobalKTableJoinTest {
 
         pushToStream(4, "XXX", false, false);
         processor.checkAndClearProcessResult(EMPTY);
+
+        assertThat(
+            driver.metrics().get(
+                    new MetricName(
+                        "dropped-records-total",
+                        "stream-task-metrics",
+                        "",
+                        mkMap(
+                            mkEntry("thread-id", Thread.currentThread().getName()),
+                            mkEntry("task-id", "0_0")
+                        )
+                    ))
+                .metricValue(),
+            is(4.0)
+        );
     }
 
     @Test
-    public void shouldJoinOnNullKeyWithNonNullKeyMapperValues() {
+    public void shouldNotJoinOnNullKeyMapperValuesWithNullKeys() {
+        // push all items to the globalTable. this should not produce any item
+
+        pushToGlobalTable(4, "Y");
+        processor.checkAndClearProcessResult(EMPTY);
+
+        // push all four items to the primary stream with no foreign key, resulting in null keyMapper values.
+        // this should not produce any item.
+
+        pushToStream(4, "XXX", false, true);
+        processor.checkAndClearProcessResult(EMPTY);
+
+        assertThat(
+            driver.metrics().get(
+                    new MetricName(
+                        "dropped-records-total",
+                        "stream-task-metrics",
+                        "",
+                        mkMap(
+                            mkEntry("thread-id", Thread.currentThread().getName()),
+                            mkEntry("task-id", "0_0")
+                        )
+                    ))
+                .metricValue(),
+            is(4.0)
+        );
+    }
+
+    @Test
+    public void shouldJoinOnNullKey() {
         // push two items to the globalTable. this should not produce any item.
 
         pushToGlobalTable(2, "Y");
@@ -260,7 +319,24 @@ public class KStreamGlobalKTableJoinTest {
         // push all four items to the primary stream. this should produce two items.
 
         pushToStream(4, "X", true, true);
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(null, "X0,FKey0+Y0", 0),
-                new KeyValueTimestamp<>(1, "X1,FKey1+Y1", 1));
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(null, "X0,FKey0+Y0", 0),
+            new KeyValueTimestamp<>(1, "X1,FKey1+Y1", 1)
+        );
+
+        assertThat(
+            driver.metrics().get(
+                    new MetricName(
+                        "dropped-records-total",
+                        "stream-task-metrics",
+                        "",
+                        mkMap(
+                            mkEntry("thread-id", Thread.currentThread().getName()),
+                            mkEntry("task-id", "0_0")
+                        )
+                    ))
+                .metricValue(),
+            is(0.0)
+        );
     }
 }

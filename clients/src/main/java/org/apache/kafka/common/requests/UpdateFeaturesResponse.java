@@ -20,11 +20,10 @@ import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -51,7 +50,7 @@ public class UpdateFeaturesResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
+        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
         updateErrorCounts(errorCounts, Errors.forCode(data.errorCode()));
         for (UpdatableFeatureResult result : data.results()) {
             updateErrorCounts(errorCounts, Errors.forCode(result.errorCode()));
@@ -79,8 +78,8 @@ public class UpdateFeaturesResponse extends AbstractResponse {
         return data;
     }
 
-    public static UpdateFeaturesResponse parse(ByteBuffer buffer, short version) {
-        return new UpdateFeaturesResponse(new UpdateFeaturesResponseData(new ByteBufferAccessor(buffer), version));
+    public static UpdateFeaturesResponse parse(Readable readable, short version) {
+        return new UpdateFeaturesResponse(new UpdateFeaturesResponseData(readable, version));
     }
 
     public static UpdateFeaturesResponse createWithErrors(ApiError topLevelError, Set<String> updates, int throttleTimeMs) {

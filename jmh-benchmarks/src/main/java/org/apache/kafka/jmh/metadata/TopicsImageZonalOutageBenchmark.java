@@ -36,12 +36,10 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -75,16 +73,16 @@ public class TopicsImageZonalOutageBenchmark {
         Set<Uuid> perturbedTopics = new HashSet<>();
         builtupTopicsImage.topicsById().forEach((topicId, topicImage) ->
             topicImage.partitions().forEach((partitionNumber, partitionRegistration) -> {
-                List<Integer> newIsr = Arrays.stream(partitionRegistration.isr).boxed().filter(n -> n != 0).collect(Collectors.toList());
+                List<Integer> newIsr = Arrays.stream(partitionRegistration.isr).boxed().filter(n -> n != 0).toList();
                 if (newIsr.size() < replicationFactor) {
                     perturbedTopics.add(topicId);
                     topicsDelta.replay(new PartitionRecord().
                         setPartitionId(partitionNumber).
                         setTopicId(topicId).
-                        setReplicas(Arrays.stream(partitionRegistration.replicas).boxed().collect(Collectors.toList())).
+                        setReplicas(Arrays.stream(partitionRegistration.replicas).boxed().toList()).
                         setIsr(newIsr).
-                        setRemovingReplicas(Collections.emptyList()).
-                        setAddingReplicas(Collections.emptyList()).
+                        setRemovingReplicas(List.of()).
+                        setAddingReplicas(List.of()).
                         setLeader(newIsr.get(0)));
                 }
             })

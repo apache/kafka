@@ -25,7 +25,6 @@ import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Map;
@@ -147,7 +146,7 @@ public class ConnectAssertions {
      * @param topicNames the names of the topics that are expected to not exist
      */
     public void assertTopicsDoNotExist(String... topicNames) throws InterruptedException {
-        Set<String> topicNameSet = new HashSet<>(Arrays.asList(topicNames));
+        Set<String> topicNameSet = Set.of(topicNames);
         AtomicReference<Set<String>> existingTopics = new AtomicReference<>(topicNameSet);
         waitForCondition(
             () -> checkTopicsExist(topicNameSet, (actual, expected) -> {
@@ -164,7 +163,7 @@ public class ConnectAssertions {
      * @param topicNames the names of the topics that are expected to exist
      */
     public void assertTopicsExist(String... topicNames) throws InterruptedException {
-        Set<String> topicNameSet = new HashSet<>(Arrays.asList(topicNames));
+        Set<String> topicNameSet = Set.of(topicNames);
         AtomicReference<Set<String>> missingTopics = new AtomicReference<>(topicNameSet);
         waitForCondition(
             () -> checkTopicsExist(topicNameSet, (actual, expected) -> {

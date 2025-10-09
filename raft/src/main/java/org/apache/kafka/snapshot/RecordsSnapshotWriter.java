@@ -27,11 +27,11 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
 import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import java.util.List;
@@ -44,7 +44,7 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
 
     private RecordsSnapshotWriter(
         RawSnapshotWriter snapshot,
-        int maxBatchSize,
+        int maxBatchSizeBytes,
         MemoryPool memoryPool,
         Time time,
         Compression compression,
@@ -57,7 +57,7 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             snapshot.snapshotId().epoch(),
             0,
             Integer.MAX_VALUE,
-            maxBatchSize,
+            maxBatchSizeBytes,
             10, // maxNumberOfBatches
             memoryPool,
             time,
@@ -145,7 +145,7 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         private long lastContainedLogTimestamp = 0;
         private Compression compression = Compression.NONE;
         private Time time = Time.SYSTEM;
-        private int maxBatchSize = 1024;
+        private int maxBatchSizeBytes = 1024;
         private MemoryPool memoryPool = MemoryPool.NONE;
         private KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
         private Optional<VoterSet> voterSet = Optional.empty();
@@ -166,8 +166,8 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             return this;
         }
 
-        public Builder setMaxBatchSize(int maxBatchSize) {
-            this.maxBatchSize = maxBatchSize;
+        public Builder setMaxBatchSizeBytes(int maxBatchSizeBytes) {
+            this.maxBatchSizeBytes = maxBatchSizeBytes;
             return this;
         }
 
@@ -206,7 +206,7 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
 
             RecordsSnapshotWriter<T> writer = new RecordsSnapshotWriter<>(
                 rawSnapshotWriter.get(),
-                maxBatchSize,
+                maxBatchSizeBytes,
                 memoryPool,
                 time,
                 compression,
@@ -246,12 +246,10 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                                 .setKRaftVersion(kraftVersion.featureLevel())
                         );
 
-                        if (voterSet.isPresent()) {
-                            builder.appendVotersMessage(
-                                now,
-                                voterSet.get().toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
-                            );
-                        }
+                        voterSet.ifPresent(set -> builder.appendVotersMessage(
+                            now,
+                            set.toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
+                        ));
                     }
 
                     return builder.build();

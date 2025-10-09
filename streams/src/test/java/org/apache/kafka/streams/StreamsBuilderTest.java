@@ -145,7 +145,7 @@ public class StreamsBuilderTest {
             ),
             "topic",
             Consumed.with(Serdes.String(), Serdes.String()),
-            () -> new Processor<String, String, Void, Void>() {
+            () -> new Processor<>() {
                 private KeyValueStore<String, String> store;
 
                 @Override
@@ -454,7 +454,7 @@ public class StreamsBuilderTest {
 
         builder.stream(topic)
                 .groupByKey()
-                .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("store"))
+                .count(Materialized.as("store"))
                 .toStream();
 
         builder.build();
@@ -474,7 +474,7 @@ public class StreamsBuilderTest {
 
         builder.stream(topic)
                 .groupByKey()
-                .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("store"))
+                .count(Materialized.as("store"))
                 .toStream();
 
         builder.build();

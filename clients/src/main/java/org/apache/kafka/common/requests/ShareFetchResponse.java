@@ -22,16 +22,15 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -55,9 +54,7 @@ public class ShareFetchResponse extends AbstractResponse {
 
     private final ShareFetchResponseData data;
 
-    private volatile LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData = null;
-
-    public ShareFetchResponse(ShareFetchResponseData data) {
+    private ShareFetchResponse(ShareFetchResponseData data) {
         super(ApiKeys.SHARE_FETCH);
         this.data = data;
     }
@@ -73,7 +70,7 @@ public class ShareFetchResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        HashMap<Errors, Integer> counts = new HashMap<>();
+        Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
         updateErrorCounts(counts, Errors.forCode(data.errorCode()));
         data.responses().forEach(
                 topic -> topic.partitions().forEach(
@@ -84,23 +81,14 @@ public class ShareFetchResponse extends AbstractResponse {
     }
 
     public LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData(Map<Uuid, String> topicNames) {
-        if (responseData == null) {
-            synchronized (this) {
-                // Assigning the lazy-initialized `responseData` in the last step
-                // to avoid other threads accessing a half-initialized object.
-                if (responseData == null) {
-                    final LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseDataTmp = new LinkedHashMap<>();
-                    data.responses().forEach(topicResponse -> {
-                        String name = topicNames.get(topicResponse.topicId());
-                        if (name != null) {
-                            topicResponse.partitions().forEach(partitionData -> responseDataTmp.put(new TopicIdPartition(topicResponse.topicId(),
-                                    new TopicPartition(name, partitionData.partitionIndex())), partitionData));
-                        }
-                    });
-                    responseData = responseDataTmp;
-                }
+        final LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
+        data.responses().forEach(topicResponse -> {
+            String name = topicNames.get(topicResponse.topicId());
+            if (name != null) {
+                topicResponse.partitions().forEach(partitionData -> responseData.put(new TopicIdPartition(topicResponse.topicId(),
+                        new TopicPartition(name, partitionData.partitionIndex())), partitionData));
             }
-        }
+        });
         return responseData;
     }
 
@@ -114,9 +102,16 @@ public class ShareFetchResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    public static ShareFetchResponse parse(ByteBuffer buffer, short version) {
+    /**
+     * Creates a {@link org.apache.kafka.common.requests.ShareFetchResponse} from the given byte buffer.
+     * Unlike {@link org.apache.kafka.common.requests.ShareFetchResponse#of(Errors, int, LinkedHashMap, List, int)},
+     * this method doesn't convert null records to {@link org.apache.kafka.common.record.MemoryRecords#EMPTY}.
+     *
+     * <p><strong>This method should only be used in client-side.</strong></p>
+     */
+    public static ShareFetchResponse parse(Readable readable, short version) {
         return new ShareFetchResponse(
-                new ShareFetchResponseData(new ByteBufferAccessor(buffer), version)
+                new ShareFetchResponseData(readable, version)
         );
     }
 
@@ -144,7 +139,7 @@ public class ShareFetchResponse extends AbstractResponse {
                              Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partIterator) {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
         // use arbitrary values here without affecting the result.
-        ShareFetchResponseData data = toMessage(Errors.NONE, 0, partIterator, Collections.emptyList());
+        ShareFetchResponseData data = toMessage(Errors.NONE, 0, partIterator, Collections.emptyList(), 0);
         ObjectSerializationCache cache = new ObjectSerializationCache();
         return 4 + data.size(cache, version);
     }
@@ -156,32 +151,43 @@ public class ShareFetchResponse extends AbstractResponse {
         return partition.records() == null ? 0 : partition.records().sizeInBytes();
     }
 
+    /**
+     * Creates a {@link org.apache.kafka.common.requests.ShareFetchResponse} from the given data.
+     * This method converts null records to {@link org.apache.kafka.common.record.MemoryRecords#EMPTY}
+     * to ensure consistent record representation in the response.
+     *
+     * <p><strong>This method should only be used in server-side.</strong></p>
+     */
     public static ShareFetchResponse of(Errors error,
                                         int throttleTimeMs,
                                         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData,
-                                        List<Node> nodeEndpoints) {
-        return new ShareFetchResponse(toMessage(error, throttleTimeMs, responseData.entrySet().iterator(), nodeEndpoints));
+                                        List<Node> nodeEndpoints, int acquisitionLockTimeout) {
+        return new ShareFetchResponse(toMessage(error, throttleTimeMs, responseData.entrySet().iterator(), nodeEndpoints, acquisitionLockTimeout));
     }
 
-    public static ShareFetchResponseData toMessage(Errors error, int throttleTimeMs,
+    private static ShareFetchResponseData toMessage(Errors error, int throttleTimeMs,
                                                    Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partIterator,
-                                                   List<Node> nodeEndpoints) {
-        Map<Uuid, ShareFetchResponseData.ShareFetchableTopicResponse> topicResponseList = new LinkedHashMap<>();
+                                                   List<Node> nodeEndpoints, int acquisitionLockTimeout) {
+        ShareFetchResponseData.ShareFetchableTopicResponseCollection topicResponses = new ShareFetchResponseData.ShareFetchableTopicResponseCollection();
         while (partIterator.hasNext()) {
             Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData> entry = partIterator.next();
             ShareFetchResponseData.PartitionData partitionData = entry.getValue();
             // Since PartitionData alone doesn't know the partition ID, we set it here
             partitionData.setPartitionIndex(entry.getKey().topicPartition().partition());
+            // To protect the clients from failing due to null records,
+            // we always convert null records to MemoryRecords.EMPTY
+            // We will propose a KIP to change the schema definitions in the future
+            if (partitionData.records() == null)
+                partitionData.setRecords(MemoryRecords.EMPTY);
             // Checking if the topic is already present in the map
-            if (topicResponseList.containsKey(entry.getKey().topicId())) {
-                topicResponseList.get(entry.getKey().topicId()).partitions().add(partitionData);
-            } else {
-                List<ShareFetchResponseData.PartitionData> partitionResponses = new ArrayList<>();
-                partitionResponses.add(partitionData);
-                topicResponseList.put(entry.getKey().topicId(), new ShareFetchResponseData.ShareFetchableTopicResponse()
+            ShareFetchResponseData.ShareFetchableTopicResponse topicResponse = topicResponses.find(entry.getKey().topicId());
+            if (topicResponse == null) {
+                topicResponse = new ShareFetchResponseData.ShareFetchableTopicResponse()
                         .setTopicId(entry.getKey().topicId())
-                        .setPartitions(partitionResponses));
+                        .setPartitions(new ArrayList<>());
+                topicResponses.add(topicResponse);
             }
+            topicResponse.partitions().add(partitionData);
         }
         ShareFetchResponseData data = new ShareFetchResponseData();
         // KafkaApis should only pass in node endpoints on error, otherwise this should be an empty list
@@ -193,16 +199,18 @@ public class ShareFetchResponse extends AbstractResponse {
                         .setRack(endpoint.rack())));
         return data.setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(error.code())
-                .setResponses(new ArrayList<>(topicResponseList.values()));
+                .setAcquisitionLockTimeoutMs(acquisitionLockTimeout)
+                .setResponses(topicResponses);
     }
 
     public static ShareFetchResponseData.PartitionData partitionResponse(TopicIdPartition topicIdPartition, Errors error) {
         return partitionResponse(topicIdPartition.topicPartition().partition(), error);
     }
 
-    public static ShareFetchResponseData.PartitionData partitionResponse(int partition, Errors error) {
+    private static ShareFetchResponseData.PartitionData partitionResponse(int partition, Errors error) {
         return new ShareFetchResponseData.PartitionData()
                 .setPartitionIndex(partition)
-                .setErrorCode(error.code());
+                .setErrorCode(error.code())
+                .setRecords(MemoryRecords.EMPTY);
     }
 }

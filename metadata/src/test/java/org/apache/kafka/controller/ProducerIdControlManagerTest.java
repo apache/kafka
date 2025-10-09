@@ -154,12 +154,11 @@ public class ProducerIdControlManagerTest {
         assertEquals(new ProducerIdsBlock(3, 100000, 1000), producerIdControlManager.nextProducerBlock());
     }
 
-    static ProducerIdsBlock generateProducerIds(
+    static void generateProducerIds(
             ProducerIdControlManager producerIdControlManager, int brokerId, long brokerEpoch) {
         ControllerResult<ProducerIdsBlock> result =
             producerIdControlManager.generateNextProducerId(brokerId, brokerEpoch);
         result.records().forEach(apiMessageAndVersion ->
             producerIdControlManager.replay((ProducerIdsRecord) apiMessageAndVersion.message()));
-        return result.response();
     }
 }

@@ -52,6 +52,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -73,7 +74,6 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -160,7 +160,9 @@ public class TestUtils {
      * Asserts that there are no leaked threads with a specified name prefix and daemon status.
      * This method checks all threads in the JVM, filters them by the provided thread name prefix
      * and daemon status, and verifies that no matching threads are alive.
-     * If any matching threads are found, the test will fail.
+     * Use the {@link #waitForCondition(TestCondition, String) waitForCondition} to retry the check at a regular interval
+     * until either no matching threads are found or the timeout is exceeded.
+     * If any matching, alive threads are found after the timeout has elapsed, the assertion will fail.
      *
      * @param threadName The prefix of the thread names to check. Only threads whose names
      *                   start with this prefix will be considered.
@@ -168,14 +170,11 @@ public class TestUtils {
      *                   daemon status (either true for daemon threads or false for non-daemon threads)
      *                   will be considered.
      *
-     * @throws AssertionError If any thread with the specified name prefix and daemon status is found and is alive.
+     * @throws AssertionError If any thread with the specified name prefix and daemon status are found after the timeout. 
      */
-    public static void assertNoLeakedThreadsWithNameAndDaemonStatus(String threadName, boolean isDaemon) {
-        List<Thread> threads = Thread.getAllStackTraces().keySet().stream()
-                .filter(t -> t.isDaemon() == isDaemon && t.isAlive() && t.getName().startsWith(threadName))
-                .collect(Collectors.toList());
-        int threadCount = threads.size();
-        assertEquals(0, threadCount);
+    public static void assertNoLeakedThreadsWithNameAndDaemonStatus(String threadName, boolean isDaemon) throws InterruptedException {
+        waitForCondition(() -> Thread.getAllStackTraces().keySet().stream()
+                .noneMatch(t -> t.isDaemon() == isDaemon && t.isAlive() && t.getName().startsWith(threadName)), String.format("Thread leak detected: %s", threadName));
     }
 
     /**
@@ -209,6 +208,17 @@ public class TestUtils {
         for (int i = 0; i < len; i++)
             b.append(LETTERS_AND_DIGITS.charAt(SEEDED_RANDOM.nextInt(LETTERS_AND_DIGITS.length())));
         return b.toString();
+    }
+
+    /**
+     * Select a random element from collections
+     *
+     * @param elements A collection we can select
+     * @return A element from collection
+     */
+    public static <T> T randomSelect(final Collection<T> elements) {
+        List<T> elementsCopy = new ArrayList<>(elements);
+        return elementsCopy.get(SEEDED_RANDOM.nextInt(elementsCopy.size()));
     }
 
     /**
@@ -505,7 +515,7 @@ public class TestUtils {
         assertNotNull(clusterId);
 
         // Base 64 encoded value is 22 characters
-        assertEquals(clusterId.length(), 22);
+        assertEquals(22, clusterId.length());
 
         Pattern clusterIdPattern = Pattern.compile("[a-zA-Z0-9_\\-]+");
         Matcher matcher = clusterIdPattern.matcher(clusterId);
@@ -516,7 +526,7 @@ public class TestUtils {
         byte[] decodedUuid = Base64.getDecoder().decode(originalClusterId);
 
         // We expect 16 bytes, same as the input UUID.
-        assertEquals(decodedUuid.length, 16);
+        assertEquals(16, decodedUuid.length);
 
         //Check if it can be converted back to a UUID.
         try {
@@ -568,17 +578,6 @@ public class TestUtils {
 
     public static ByteBuffer toBuffer(UnalignedRecords records) {
         return toBuffer(records.toSend());
-    }
-
-    public static Set<TopicPartition> generateRandomTopicPartitions(int numTopic, int numPartitionPerTopic) {
-        Set<TopicPartition> tps = new HashSet<>();
-        for (int i = 0; i < numTopic; i++) {
-            String topic = randomString(32);
-            for (int j = 0; j < numPartitionPerTopic; j++) {
-                tps.add(new TopicPartition(topic, j));
-            }
-        }
-        return tps;
     }
 
     /**

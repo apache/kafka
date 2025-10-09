@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.errors;
 
-public class FencedInstanceIdException extends ApiException {
+public class FencedInstanceIdException extends ApplicationRecoverableException {
     private static final long serialVersionUID = 1L;
 
     public FencedInstanceIdException(String message) {

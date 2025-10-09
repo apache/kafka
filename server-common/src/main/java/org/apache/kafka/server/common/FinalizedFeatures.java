@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.common;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -27,7 +26,7 @@ public record FinalizedFeatures(
     long finalizedFeaturesEpoch
 ) {
     public static FinalizedFeatures fromKRaftVersion(MetadataVersion version) {
-        return new FinalizedFeatures(version, Collections.emptyMap(), -1);
+        return new FinalizedFeatures(version, Map.of(), -1);
     }
 
     public FinalizedFeatures(
