@@ -654,7 +654,7 @@ public class StreamsGroupTest {
         assertThrows(UnknownMemberIdException.class, () ->
             group.validateOffsetCommit("member-id", null, 0, isTransactional, version));
 
-        // Create a member with revocation epoch.3
+        // Create a member with revocation epoch 3
         group.updateMember(new StreamsGroupMember.Builder("member-id").setMemberEpoch(5).setRevocationEpoch(3).build());
 
         // A call from the admin client should fail as the group is not empty.
