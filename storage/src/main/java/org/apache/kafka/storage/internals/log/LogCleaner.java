@@ -483,7 +483,9 @@ public class LogCleaner implements BrokerReconfigurable {
                     config.dedupeBufferLoadFactor,
                     throttler,
                     time,
-                    this::checkDone
+                    // Use a lambda instead of method reference to avoid `this` escape
+                    // The lambda captures `this` but doesn't evaluate it until runtime
+                    topicPartition -> checkDone(topicPartition)
             );
 
             if (config.dedupeBufferSize / config.numThreads > Integer.MAX_VALUE) {
