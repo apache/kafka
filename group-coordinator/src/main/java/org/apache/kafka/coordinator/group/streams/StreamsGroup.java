@@ -706,7 +706,7 @@ public class StreamsGroup implements Group {
         if (member.revocationEpoch() >= 0) {
             validateMemberEpochWithRevocationEpoch(memberEpoch, member.revocationEpoch(), member.memberEpoch());
         } else {
-            // If the member was read from a legacy record without a revocation epoch, 
+            // If the member was read from a legacy record without a revocation epoch,
             // we don't know the revocation epoch, so we fall back to the original behavior.
             validateMemberEpoch(memberEpoch, member.memberEpoch());
         }
