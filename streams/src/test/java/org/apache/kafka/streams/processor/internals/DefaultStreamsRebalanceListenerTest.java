@@ -40,7 +40,6 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
@@ -265,11 +264,10 @@ public class DefaultStreamsRebalanceListenerTest {
             Map.of()
         ));
 
-        final Optional<Exception> result = defaultStreamsRebalanceListener.onTasksRevoked(
+        defaultStreamsRebalanceListener.onTasksRevoked(
             Set.of(new StreamsRebalanceData.TaskId("1", 0))
         );
 
-        assertTrue(result.isEmpty());
         verify(tasksRevokedSensor).record(100L);
         verify(taskManager).handleRevocation(
             Set.of(new TopicPartition("source1", 0), new TopicPartition("repartition1", 0))
@@ -300,7 +298,7 @@ public class DefaultStreamsRebalanceListenerTest {
             Map.of()
         ));
 
-        final Optional<Exception> result = defaultStreamsRebalanceListener.onTasksAssigned(
+        defaultStreamsRebalanceListener.onTasksAssigned(
             new StreamsRebalanceData.Assignment(
                 Set.of(new StreamsRebalanceData.TaskId("1", 0)),
                 Set.of(),
@@ -308,7 +306,6 @@ public class DefaultStreamsRebalanceListenerTest {
             )
         );
 
-        assertTrue(result.isEmpty());
         verify(tasksAssignedSensor).record(150L);
         verify(taskManager).handleAssignment(
             Map.of(new TaskId(1, 0), Set.of(new TopicPartition("source1", 0), new TopicPartition("repartition1", 0))),
@@ -328,9 +325,8 @@ public class DefaultStreamsRebalanceListenerTest {
 
         createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of()));
 
-        final Optional<Exception> result = defaultStreamsRebalanceListener.onAllTasksLost();
+        defaultStreamsRebalanceListener.onAllTasksLost();
 
-        assertTrue(result.isEmpty());
         verify(tasksLostSensor).record(200L);
         verify(taskManager).handleLostAll();
     }
@@ -360,11 +356,10 @@ public class DefaultStreamsRebalanceListenerTest {
             Map.of()
         ));
 
-        final Optional<Exception> result = defaultStreamsRebalanceListener.onTasksRevoked(
+        assertThrows(RuntimeException.class, () -> defaultStreamsRebalanceListener.onTasksRevoked(
             Set.of(new StreamsRebalanceData.TaskId("1", 0))
-        );
+        ));
 
-        assertTrue(result.isPresent());
         verify(tasksRevokedSensor).record(50L);
         verify(taskManager).handleRevocation(any());
     }
@@ -380,11 +375,10 @@ public class DefaultStreamsRebalanceListenerTest {
 
         createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of()));
 
-        final Optional<Exception> result = defaultStreamsRebalanceListener.onTasksAssigned(
+        assertThrows(RuntimeException.class, () -> defaultStreamsRebalanceListener.onTasksAssigned(
             new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of())
-        );
+        ));
 
-        assertTrue(result.isPresent());
         verify(tasksAssignedSensor).record(75L);
         verify(taskManager).handleAssignment(any(), any());
     }
@@ -398,177 +392,15 @@ public class DefaultStreamsRebalanceListenerTest {
             throw exception;
         }).when(taskManager).handleLostAll();
 
-        createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of()));
-        final Optional<Exception> result = defaultStreamsRebalanceListener.onAllTasksLost();
-        assertTrue(result.isPresent());
-        assertEquals(exception, result.get());
-        verify(taskManager).handleLostAll();
-        verify(streamsRebalanceData, never()).setReconciledAssignment(any());
-    }
+        final StreamsRebalanceData streamsRebalanceData = mock(StreamsRebalanceData.class);
+        when(streamsRebalanceData.subtopologies()).thenReturn(Map.of());
+        createRebalanceListenerWithRebalanceData(streamsRebalanceData);
 
-    @Test
-    void testOnTasksRevokedRecordsMetrics() {
-        // Mock handleRevocation to simulate time passing
-        doAnswer(invocation -> {
-            mockTime.sleep(100); // Simulate task revocation taking 100ms
-            return null;
-        }).when(taskManager).handleRevocation(any());
+        final Exception actualException = assertThrows(RuntimeException.class, () -> defaultStreamsRebalanceListener.onAllTasksLost());
 
-        createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(
-            UUID.randomUUID(),
-            Optional.empty(),
-            Map.of(
-                "1",
-                new StreamsRebalanceData.Subtopology(
-                    Set.of("source1"),
-                    Set.of(),
-                    Map.of("repartition1", new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.of((short) 1), Map.of())),
-                    Map.of(),
-                    Set.of()
-                )
-            ),
-            Map.of()
-        ));
-
-        final Optional<Exception> result = defaultStreamsRebalanceListener.onTasksRevoked(
-            Set.of(new StreamsRebalanceData.TaskId("1", 0))
-        );
-
-        assertTrue(result.isEmpty());
-        verify(tasksRevokedSensor).record(100L);
-        verify(taskManager).handleRevocation(
-            Set.of(new TopicPartition("source1", 0), new TopicPartition("repartition1", 0))
-        );
-    }
-
-    @Test
-    void testOnTasksAssignedRecordsMetrics() {
-        // Mock handleAssignment to simulate time passing
-        doAnswer(invocation -> {
-            mockTime.sleep(150); // Simulate task assignment taking 150ms
-            return null;
-        }).when(taskManager).handleAssignment(any(), any());
-
-        createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(
-            UUID.randomUUID(),
-            Optional.empty(),
-            Map.of(
-                "1",
-                new StreamsRebalanceData.Subtopology(
-                    Set.of("source1"),
-                    Set.of(),
-                    Map.of("repartition1", new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.of((short) 1), Map.of())),
-                    Map.of(),
-                    Set.of()
-                )
-            ),
-            Map.of()
-        ));
-
-        final Optional<Exception> result = defaultStreamsRebalanceListener.onTasksAssigned(
-            new StreamsRebalanceData.Assignment(
-                Set.of(new StreamsRebalanceData.TaskId("1", 0)),
-                Set.of(),
-                Set.of()
-            )
-        );
-
-        assertTrue(result.isEmpty());
-        verify(tasksAssignedSensor).record(150L);
-        verify(taskManager).handleAssignment(
-            Map.of(new TaskId(1, 0), Set.of(new TopicPartition("source1", 0), new TopicPartition("repartition1", 0))),
-            Map.of()
-        );
-        verify(streamThread).setState(StreamThread.State.PARTITIONS_ASSIGNED);
-        verify(taskManager).handleRebalanceComplete();
-    }
-
-    @Test
-    void testOnAllTasksLostRecordsMetrics() {
-        // Mock handleLostAll to simulate time passing
-        doAnswer(invocation -> {
-            mockTime.sleep(200); // Simulate task lost handling taking 200ms
-            return null;
-        }).when(taskManager).handleLostAll();
-
-        createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of()));
-
-        final Optional<Exception> result = defaultStreamsRebalanceListener.onAllTasksLost();
-
-        assertTrue(result.isEmpty());
-        verify(tasksLostSensor).record(200L);
-        verify(taskManager).handleLostAll();
-    }
-
-    @Test
-    void testOnTasksRevokedRecordsMetricsEvenWithException() {
-        final Exception exception = new RuntimeException("sample exception");
-        // Mock handleRevocation to first advance time, then throw exception
-        doAnswer(invocation -> {
-            mockTime.sleep(50); // Simulate some work before exception
-            throw exception;
-        }).when(taskManager).handleRevocation(any());
-
-        createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(
-            UUID.randomUUID(),
-            Optional.empty(),
-            Map.of(
-                "1",
-                new StreamsRebalanceData.Subtopology(
-                    Set.of("source1"),
-                    Set.of(),
-                    Map.of(),
-                    Map.of(),
-                    Set.of()
-                )
-            ),
-            Map.of()
-        ));
-
-        final Optional<Exception> result = defaultStreamsRebalanceListener.onTasksRevoked(
-            Set.of(new StreamsRebalanceData.TaskId("1", 0))
-        );
-
-        assertTrue(result.isPresent());
-        verify(tasksRevokedSensor).record(50L);
-        verify(taskManager).handleRevocation(any());
-    }
-
-    @Test
-    void testOnTasksAssignedRecordsMetricsEvenWithException() {
-        final Exception exception = new RuntimeException("sample exception");
-        // Mock handleAssignment to first advance time, then throw exception
-        doAnswer(invocation -> {
-            mockTime.sleep(75); // Simulate some work before exception
-            throw exception;
-        }).when(taskManager).handleAssignment(any(), any());
-
-        createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of()));
-
-        final Optional<Exception> result = defaultStreamsRebalanceListener.onTasksAssigned(
-            new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of())
-        );
-
-        assertTrue(result.isPresent());
-        verify(tasksAssignedSensor).record(75L);
-        verify(taskManager).handleAssignment(any(), any());
-    }
-
-    @Test
-    void testOnAllTasksLostRecordsMetricsEvenWithException() {
-        final Exception exception = new RuntimeException("sample exception");
-        // Mock handleLostAll to first advance time, then throw exception
-        doAnswer(invocation -> {
-            mockTime.sleep(125); // Simulate some work before exception
-            throw exception;
-        }).when(taskManager).handleLostAll();
-
-        createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of()));
-
-        final Optional<Exception> result = defaultStreamsRebalanceListener.onAllTasksLost();
-
-        assertTrue(result.isPresent());
+        assertEquals(exception, actualException);
         verify(tasksLostSensor).record(125L);
         verify(taskManager).handleLostAll();
+        verify(streamsRebalanceData, never()).setReconciledAssignment(any());
     }
 }

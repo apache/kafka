@@ -95,19 +95,25 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
 
         log.info("Processing new assignment {} from Streams Rebalance Protocol", assignment);
 
-        taskManager.handleAssignment(activeTasksWithPartitions, standbyTasksWithPartitions);
-        streamThread.setState(StreamThread.State.PARTITIONS_ASSIGNED);
-        taskManager.handleRebalanceComplete();
-        streamsRebalanceData.setReconciledAssignment(assignment);
-        tasksAssignedSensor.record(time.milliseconds() - start);
+        try {
+            taskManager.handleAssignment(activeTasksWithPartitions, standbyTasksWithPartitions);
+            streamThread.setState(StreamThread.State.PARTITIONS_ASSIGNED);
+            taskManager.handleRebalanceComplete();
+            streamsRebalanceData.setReconciledAssignment(assignment);
+        } finally {
+            tasksAssignedSensor.record(time.milliseconds() - start);
+        }
     }
 
     @Override
     public void onAllTasksLost() {
         final long start = time.milliseconds();
-        taskManager.handleLostAll();
-        streamsRebalanceData.setReconciledAssignment(StreamsRebalanceData.Assignment.EMPTY);
-        tasksLostSensor.record(time.milliseconds() - start);
+        try {
+            taskManager.handleLostAll();
+            streamsRebalanceData.setReconciledAssignment(StreamsRebalanceData.Assignment.EMPTY);
+        } finally {
+            tasksLostSensor.record(time.milliseconds() - start);
+        }
     }
 
     private Map<TaskId, Set<TopicPartition>> pairWithTopicPartitions(final Stream<StreamsRebalanceData.TaskId> taskIdStream) {
