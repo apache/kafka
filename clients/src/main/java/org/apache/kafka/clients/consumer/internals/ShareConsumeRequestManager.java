@@ -49,7 +49,6 @@ import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -91,7 +90,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private Uuid memberId;
     private boolean fetchMoreRecords = false;
     private final AtomicInteger fetchRecordsNodeId = new AtomicInteger(-1);
-    private int fetchRotationDistance = 0;
     private final Map<Integer, Map<TopicIdPartition, Acknowledgements>> fetchAcknowledgementsToSend;
     private final Map<Integer, Map<TopicIdPartition, Acknowledgements>> fetchAcknowledgementsInFlight;
     private final Map<Integer, Tuple<AcknowledgeRequestState>> acknowledgeRequestStates;
@@ -152,12 +150,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
         Map<Node, ShareSessionHandler> handlerMap = new HashMap<>();
         Map<String, Uuid> topicIds = metadata.topicIds();
-        List<TopicPartition> rotatedPartitionsToFetch = partitionsToFetch();
-        Collections.rotate(rotatedPartitionsToFetch, fetchRotationDistance++);
-        if (fetchRotationDistance >= rotatedPartitionsToFetch.size()) {
-            fetchRotationDistance = 0;
-        }
-        for (TopicPartition partition : rotatedPartitionsToFetch) {
+        for (TopicPartition partition : partitionsToFetch()) {
             Optional<Node> leaderOpt = metadata.currentLeader(partition).leader;
 
             if (leaderOpt.isEmpty()) {
@@ -204,8 +197,11 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 }
                 topicNamesMap.putIfAbsent(new IdAndPartition(tip.topicId(), tip.partition()), tip.topic());
 
-                // If we have not chosen a node for fetching records yet, choose now.
-                fetchRecordsNodeId.compareAndSet(-1, node.id());
+                // If we have not chosen a node for fetching records yet, choose now, and rotate the
+                // assigned partitions so the next poll starts on a different partition.
+                if (fetchRecordsNodeId.compareAndSet(-1, node.id())) {
+                    subscriptions.movePartitionToEnd(partition);
+                }
                 log.debug("Added fetch request for partition {} to node {}", tip, node.id());
             }
         }
