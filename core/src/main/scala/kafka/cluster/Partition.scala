@@ -116,7 +116,10 @@ class DelayedOperations(topicId: Option[Uuid],
 }
 
 object Partition {
-  private val metricsGroup = new KafkaMetricsGroup(classOf[Partition])
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+  private val metricsPackage = "kafka.cluster"
+  private val metricsClassName = "Partition"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   def apply(topicIdPartition: TopicIdPartition,
             time: Time,
@@ -852,6 +855,8 @@ class Partition(val topicPartition: TopicPartition,
       val isNewLeaderEpoch = partitionRegistration.leaderEpoch > leaderEpoch
       // The leader should be updated before updateAssignmentAndIsr where we clear the ISR. Or it is possible to meet
       // the under min isr condition during the makeFollower process and emits the wrong metric.
+      val prevLeaderReplicaIdOpt = leaderReplicaIdOpt
+      val prevLeaderEpoch = leaderEpoch
       leaderReplicaIdOpt = Option(partitionRegistration.leader)
       leaderEpoch = partitionRegistration.leaderEpoch
       leaderEpochStartOffsetOpt = None
@@ -874,7 +879,7 @@ class Partition(val topicPartition: TopicPartition,
         stateChangeLogger.info(s"Follower $topicPartition starts at leader epoch ${partitionRegistration.leaderEpoch} from " +
           s"offset $leaderEpochEndOffset with partition epoch ${partitionRegistration.partitionEpoch} and " +
           s"high watermark ${followerLog.highWatermark}. Current leader is ${partitionRegistration.leader}. " +
-          s"Previous leader $leaderReplicaIdOpt and previous leader epoch was $leaderEpoch.")
+          s"Previous leader $prevLeaderReplicaIdOpt and previous leader epoch was $prevLeaderEpoch.")
       } else {
         stateChangeLogger.info(s"Skipped the become-follower state change for $topicPartition with topic id $topicId, " +
           s"partition registration $partitionRegistration and isNew=$isNew since it is already a follower with leader epoch $leaderEpoch.")
