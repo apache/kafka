@@ -44,7 +44,7 @@ public class ProduceRequestResult {
     /**
      * Create an instance of this class.
      *
-     * @param topicPartition The topic and partition to which this record set was sent was sent
+     * @param topicPartition The topic and partition to which this record set was sent
      */
     public ProduceRequestResult(TopicPartition topicPartition) {
         this.topicPartition = topicPartition;
