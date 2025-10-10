@@ -415,11 +415,9 @@ public class ConnectorConfig extends AbstractConfig {
         try {
             VersionRange range = PluginUtils.connectorVersionRequirement(getString(versionConfig));
             VersionRange connectorRange = PluginUtils.connectorVersionRequirement(getString(CONNECTOR_VERSION));
-            String connName = getString(CONNECTOR_CLASS_CONFIG);
-            System.out.println("getTransformationOrPredicate " + connName + " " + connectorRange + " " + range);
-            ClassLoader cl = plugins.connectorLoader(connName, connectorRange);
-            System.out.println("getTransformationOrPredicate " + cl);
-            return (T) plugins.newPlugin(getClass(classConfig).getName(), range, cl);
+            return (T) plugins.newPlugin(getClass(classConfig).getName(),
+                                         range,
+                                         plugins.connectorLoader(getString(CONNECTOR_CLASS_CONFIG), connectorRange));
         } catch (Exception e) {
             throw new ConnectException(e);
         }
@@ -743,7 +741,6 @@ public class ConnectorConfig extends AbstractConfig {
 
             T plugin;
             try {
-                System.out.println(pluginClass + " " + pluginVersion + " " + connectorVersionRange);
                 plugin = (T) plugins.newPlugin(pluginClass, pluginVersion, plugins.connectorLoader(connectorClass, connectorVersionRange));
             } catch (VersionedPluginLoadingException e) {
                 throw e;

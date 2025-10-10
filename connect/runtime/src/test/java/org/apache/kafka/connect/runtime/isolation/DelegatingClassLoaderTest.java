@@ -17,8 +17,8 @@
 package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.connect.sink.SinkConnector;
-
 import org.apache.kafka.connect.transforms.Transformation;
+
 import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
 import org.apache.maven.artifact.versioning.VersionRange;
 import org.junit.jupiter.api.BeforeEach;
@@ -155,6 +155,10 @@ public class DelegatingClassLoaderTest {
         assertSame(pluginLoader, classLoader.pluginLoader(PluginUtils.prunedName(transformationPluginDesc), range, pluginLoader));
         assertSame(pluginLoader, classLoader.pluginLoader(PluginUtils.simpleName(transformationPluginDesc), range, pluginLoader));
         assertSame(pluginLoader, classLoader.pluginLoader(connectorPluginDesc.className(), range, pluginLoader));
+
+        assertSame(pluginLoader, classLoader.pluginLoader(PluginUtils.prunedName(transformationPluginDesc), range, pluginLoader2));
+        assertSame(pluginLoader, classLoader.pluginLoader(PluginUtils.simpleName(transformationPluginDesc), range, pluginLoader2));
+        assertSame(pluginLoader, classLoader.pluginLoader(connectorPluginDesc.className(), range, pluginLoader2));
 
         assertThrows(VersionedPluginLoadingException.class, () -> classLoader.pluginLoader(PluginUtils.prunedName(transformationPluginDesc), VersionRange.createFromVersion("[123]"), pluginLoader));
         assertThrows(VersionedPluginLoadingException.class, () -> classLoader.pluginLoader(PluginUtils.simpleName(transformationPluginDesc), VersionRange.createFromVersion("[123]"), pluginLoader));

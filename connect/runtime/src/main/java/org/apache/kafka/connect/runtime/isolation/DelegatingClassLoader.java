@@ -168,13 +168,9 @@ public class DelegatingClassLoader extends URLClassLoader {
         }
 
         ClassLoader loader = null;
+        // the entries should be in sorted order of versions so this should end up picking the latest version which matches the range
         for (Map.Entry<PluginDesc<?>, ClassLoader> entry : loaders.entrySet()) {
-            if (range != null) {
-                // the entries should be in sorted order of versions so this should end up picking the latest version which matches the range
-                if (range.containsVersion(entry.getKey().encodedVersion())) {
-                    loader = entry.getValue();
-                }
-            } else {
+            if (range == null || range.containsVersion(entry.getKey().encodedVersion())) {
                 loader = entry.getValue();
             }
             // if we find a plugin with the same loader as the connector, we can end our search

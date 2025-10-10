@@ -326,6 +326,7 @@ public class WorkerTest {
         mockKafkaClusterId();
         mockVersionedConnectorIsolation(connectorClass, null, sourceConnector);
         mockExecutorRealSubmit(WorkerConnector.class);
+        when(plugins.connectorLoader(any(), any())).thenReturn(pluginLoader);
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
         worker.start();
@@ -389,9 +390,8 @@ public class WorkerTest {
 
         Exception exception = new ConnectException("Failed to find Connector");
         mockKafkaClusterId();
-        mockGenericIsolation();
+        mockGenericIsolation(false);
 
-        when(plugins.pluginLoader(nonConnectorClass, null, any())).thenReturn(pluginLoader);
         when(plugins.newConnector(nonConnectorClass, null)).thenThrow(exception);
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
@@ -430,6 +430,7 @@ public class WorkerTest {
         final String connectorAlias = "SampleSourceConnector";
         mockKafkaClusterId();
         mockVersionedConnectorIsolation(connectorAlias, null, sinkConnector);
+        when(plugins.connectorLoader(any(), any())).thenReturn(pluginLoader);
         mockExecutorRealSubmit(WorkerConnector.class);
 
         connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorAlias);
@@ -475,6 +476,7 @@ public class WorkerTest {
         final String shortConnectorAlias = "WorkerTest";
 
         mockKafkaClusterId();
+        when(plugins.connectorLoader(any(), any())).thenReturn(pluginLoader);
         mockVersionedConnectorIsolation(shortConnectorAlias, null, sinkConnector);
         mockExecutorRealSubmit(WorkerConnector.class);
         connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, shortConnectorAlias);
@@ -535,6 +537,7 @@ public class WorkerTest {
 
         mockKafkaClusterId();
         mockVersionedConnectorIsolation(connectorClass, null, sinkConnector);
+        when(plugins.connectorLoader(any(), any())).thenReturn(pluginLoader);
         mockExecutorRealSubmit(WorkerConnector.class);
 
         Map<String, String> taskProps = Map.of("foo", "bar");
@@ -609,7 +612,7 @@ public class WorkerTest {
         mockVersionedTaskConverterFromConnector(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, taskValueConverter);
         mockVersionedTaskHeaderConverterFromConnector(taskHeaderConverter);
         mockExecutorFakeSubmit(WorkerTask.class);
-
+        when(plugins.connectorLoader(any(), any())).thenReturn(pluginLoader);
         Map<String, String> origProps = Map.of(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
@@ -665,6 +668,7 @@ public class WorkerTest {
         mockVersionedTaskConverterFromConnector(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, taskValueConverter);
         mockVersionedTaskHeaderConverterFromConnector(taskHeaderConverter);
         mockExecutorFakeSubmit(WorkerTask.class);
+        when(plugins.connectorLoader(any(), any())).thenReturn(pluginLoader);
 
         Map<String, String> origProps = Map.of(TaskConfig.TASK_CLASS_CONFIG, TestSinkTask.class.getName());
 
@@ -737,6 +741,7 @@ public class WorkerTest {
         mockVersionedTaskConverterFromConnector(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, taskValueConverter);
         mockVersionedTaskHeaderConverterFromConnector(taskHeaderConverter);
         mockExecutorFakeSubmit(WorkerTask.class);
+        when(plugins.connectorLoader(any(), any())).thenReturn(pluginLoader);
 
         Runnable preProducer = mock(Runnable.class);
         Runnable postProducer = mock(Runnable.class);
@@ -797,6 +802,7 @@ public class WorkerTest {
         TaskConfig taskConfig = new TaskConfig(origProps);
 
         mockKafkaClusterId();
+        when(plugins.connectorLoader(any(), any())).thenReturn(pluginLoader);
         mockVersionedTaskIsolation(SampleSourceConnector.class, TestSourceTask.class, null, sourceConnector, task);
         mockVersionedTaskConverterFromConnector(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, taskKeyConverter);
         mockVersionedTaskConverterFromConnector(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, taskValueConverter);
@@ -908,8 +914,7 @@ public class WorkerTest {
         Map<String, String> origProps = Map.of(TaskConfig.TASK_CLASS_CONFIG, "missing.From.This.Workers.Classpath");
 
         mockKafkaClusterId();
-        mockGenericIsolation();
-        when(plugins.pluginLoader(SampleSourceConnector.class.getName(), null, any())).thenReturn(pluginLoader);
+        mockGenericIsolation(false);
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
@@ -947,6 +952,7 @@ public class WorkerTest {
         mockVersionedTaskHeaderConverterFromConnector(null);
         mockVersionedTaskHeaderConverterFromWorker(taskHeaderConverter);
         mockExecutorFakeSubmit(WorkerTask.class);
+        when(plugins.connectorLoader(any(), any())).thenReturn(pluginLoader);
 
         Map<String, String> origProps = Map.of(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
 
@@ -1003,6 +1009,7 @@ public class WorkerTest {
         mockVersionedTaskHeaderConverterFromConnector(null);
         mockVersionedTaskHeaderConverterFromWorker(taskHeaderConverter);
         mockExecutorFakeSubmit(WorkerTask.class);
+        when(plugins.connectorLoader(any(), any())).thenReturn(pluginLoader);
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
                             noneConnectorClientConfigOverridePolicy, null);
@@ -1892,9 +1899,8 @@ public class WorkerTest {
         when(fenceProducersFuture.whenComplete(any())).thenReturn(expectedZombieFenceFuture);
 
         mockKafkaClusterId();
-        mockGenericIsolation();
+        mockGenericIsolation(false);
         when(plugins.connectorClass(anyString(), any())).thenReturn((Class) sourceConnector.getClass());
-        when(plugins.pluginLoader(SampleSourceConnector.class.getName(), null, any())).thenReturn(pluginLoader);
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
                 allConnectorClientConfigOverridePolicy, mockAdminConstructor);
@@ -2103,10 +2109,9 @@ public class WorkerTest {
                 allConnectorClientConfigOverridePolicy, null);
         worker.start();
 
-        mockGenericIsolation();
+        mockGenericIsolation(false);
         when(plugins.newConnector(anyString(), any())).thenReturn(sourceConnector);
-        when(plugins.pluginLoader(SampleSourceConnector.class.getName(), null, any())).thenReturn(pluginLoader);
-        when(plugins.withClassLoader(any(ClassLoader.class), any(Runnable.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
+        when(plugins.withClassLoader(any(), any(Runnable.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
         when(sourceConnector.alterOffsets(eq(connectorProps), anyMap())).thenThrow(new UnsupportedOperationException("This connector doesn't " +
                 "support altering of offsets"));
 
@@ -2697,6 +2702,7 @@ public class WorkerTest {
         String connectorClass = SampleSourceConnector.class.getName();
         connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
         connectorProps.put(TASKS_MAX_ENFORCE_CONFIG, Boolean.toString(enforced));
+        when(plugins.connectorLoader(any(), any())).thenReturn(pluginLoader);
         mockVersionedConnectorIsolation(connectorClass, null, sourceConnector);
 
         mockExecutorRealSubmit(WorkerConnector.class);
@@ -2815,6 +2821,7 @@ public class WorkerTest {
     private void testStartTaskWithTooManyTaskConfigs(boolean enforced) {
         SinkTask task = mock(TestSinkTask.class);
         mockKafkaClusterId();
+        when(plugins.connectorLoader(any(), any())).thenReturn(pluginLoader);
 
         Map<String, String> origProps = Map.of(TaskConfig.TASK_CLASS_CONFIG, TestSinkTask.class.getName());
 
@@ -3025,24 +3032,26 @@ public class WorkerTest {
         verify(plugins).newHeaderConverter(any(WorkerConfig.class), eq(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG), eq(WorkerConfig.HEADER_CONVERTER_VERSION));
     }
 
-    private void mockGenericIsolation() {
-        when(plugins.withClassLoader(pluginLoader)).thenReturn(loaderSwap);
+    private void mockGenericIsolation(boolean connector) {
+        if (!connector) {
+            when(plugins.withClassLoader(null)).thenReturn(loaderSwap);
+        } else {
+            when(plugins.withClassLoader(pluginLoader)).thenReturn(loaderSwap);
+        }
     }
 
     private void verifyGenericIsolation() {
-        verify(plugins, atLeastOnce()).withClassLoader(pluginLoader);
         verify(loaderSwap, atLeastOnce()).close();
     }
 
     private void mockConnectorIsolation(String connectorClass, Connector connector) {
-        mockGenericIsolation();
+        mockGenericIsolation(true);
         when(plugins.newConnector(connectorClass)).thenReturn(connector);
         when(connector.version()).thenReturn("1.0");
     }
 
     private void mockVersionedConnectorIsolation(String connectorClass, VersionRange range, Connector connector) {
-        mockGenericIsolation();
-        when(plugins.pluginLoader(connectorClass, range, any())).thenReturn(pluginLoader);
+        mockGenericIsolation(true);
         when(plugins.newConnector(connectorClass, range)).thenReturn(connector);
         when(connector.version()).thenReturn(range == null ? "unknown" : range.toString());
     }
@@ -3055,13 +3064,12 @@ public class WorkerTest {
 
     private void verifyVersionedConnectorIsolation(String connectorClass, VersionRange range, Connector connector) {
         verifyGenericIsolation();
-        verify(plugins).pluginLoader(connectorClass, range, any());
         verify(plugins).newConnector(connectorClass, range);
         verify(connector, atLeastOnce()).version();
     }
 
     private void mockTaskIsolation(Class<? extends Connector> connector, Class<? extends Task> taskClass, Task task) {
-        mockGenericIsolation();
+        mockGenericIsolation(true);
         doReturn(connector).when(plugins).connectorClass(connector.getName());
         when(plugins.newTask(taskClass)).thenReturn(task);
         when(task.version()).thenReturn("1.0");
@@ -3069,8 +3077,7 @@ public class WorkerTest {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void mockVersionedTaskIsolation(Class<? extends Connector> connectorClass, Class<? extends Task> taskClass, VersionRange range, Connector connector, Task task) {
-        mockGenericIsolation();
-        when(plugins.pluginLoader(connectorClass.getName(), range, null)).thenReturn(pluginLoader);
+        mockGenericIsolation(true);
         when(plugins.connectorClass(connectorClass.getName(), range)).thenReturn((Class) connectorClass);
         when(plugins.newTask(taskClass)).thenReturn(task);
         when(plugins.safeLoaderSwapper()).thenReturn(TestPlugins.noOpLoaderSwap());
@@ -3086,7 +3093,6 @@ public class WorkerTest {
 
     private void verifyVersionedTaskIsolation(Class<? extends Connector> connectorClass, Class<? extends Task> taskClass, VersionRange range, Task task) {
         verifyGenericIsolation();
-        verify(plugins).pluginLoader(connectorClass.getName(), range, any());
         verify(plugins).connectorClass(connectorClass.getName(), range);
         verify(plugins).newTask(taskClass);
         verify(task, times(2)).version();
