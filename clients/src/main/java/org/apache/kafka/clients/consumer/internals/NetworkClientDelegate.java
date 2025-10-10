@@ -210,30 +210,6 @@ public class NetworkClientDelegate implements AutoCloseable {
         }
         ClientRequest request = makeClientRequest(r, node, currentTimeMs);
         if (!client.ready(node, currentTimeMs)) {
-            AuthenticationException authenticationException = client.authenticationException(node);
-
-            // The client may not be ready because it hit an unrecoverable authentication error. In that case, there's
-            // no benefit from retrying, so propagate the error here.
-            if (authenticationException != null) {
-                request.callback().onComplete(
-                    new ClientResponse(
-                        request.makeHeader(
-                            request.requestBuilder().latestAllowedVersion()
-                        ),
-                        request.callback(),
-                        request.destination(),
-                        request.createdTimeMs(),
-                        currentTimeMs,
-                        true,
-                        null,
-                        authenticationException,
-                        null
-                    )
-                );
-
-                return false;
-            }
-
             // enqueue the request again if the node isn't ready yet. The request will be handled in the next iteration
             // of the event loop
             log.debug("Node is not ready, handle the request in the next event loop: node={}, request={}", node, r);
