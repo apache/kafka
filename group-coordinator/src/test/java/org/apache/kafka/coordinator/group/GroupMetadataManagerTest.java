@@ -16365,7 +16365,7 @@ public class GroupMetadataManagerTest {
                 TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)))
             .build();
 
-        // Commit the offset and test again
+        // Commit the offset, so that the latest state will be described below
         context.commit();
 
         List<StreamsGroupDescribeResponseData.DescribedGroup> actualDescribedGroups = context.groupMetadataManager.streamsGroupDescribe(List.of(groupId), context.lastCommittedOffset);
@@ -16899,12 +16899,7 @@ public class GroupMetadataManagerTest {
             result1.records()
         );
 
-        for (CoordinatorRecord record : result1.records()) {
-            context.replay(record);
-        }
-        assignor.prepareGroupAssignment(
-            Map.of(memberId2, TasksTuple.EMPTY)
-        );
+        assignor.prepareGroupAssignment(Map.of());
 
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result2 = context.streamsGroupHeartbeat(
             new StreamsGroupHeartbeatRequestData()
