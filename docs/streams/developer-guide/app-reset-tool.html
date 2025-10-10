@@ -73,8 +73,9 @@
 ---------------------                 -----------
 * --application-id &lt;String: id&gt;       REQUIRED: The Kafka Streams application ID
                                         (application.id).
-* --bootstrap-server &lt;String: server to  REQUIRED: The server(s) to connect to.
+--bootstrap-server &lt;String: server to  The server(s) to connect to.
                            connect to&gt;  The broker list string in the form HOST1:PORT1,HOST2:PORT2.
+                                        (default: localhost:9092)
 --by-duration &lt;String: urls&gt;          Reset offsets to offset by duration from
                                         current timestamp. Format: &#39;PnDTnHnMnS&#39;
 --config-file &lt;String: file name&gt;     (Deprecated) Property file containing configs to be
