@@ -854,7 +854,7 @@ public class StreamsGroup implements Group {
         }
         if (receivedMemberEpoch != brokerSideMemberEpoch) {
             log.trace("Permitting stale member epoch {} sent by the client (broker-side member epoch is {}), since it's larger than revocation epoch {}", 
-                receivedMemberEpoch, brokerSideMemberEpoch, revocationEpoch);
+                    receivedMemberEpoch, brokerSideMemberEpoch, revocationEpoch);
         }
     }
 
