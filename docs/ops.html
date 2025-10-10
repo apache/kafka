@@ -4048,7 +4048,7 @@ inter.broker.listener.name=PLAINTEXT
 
   <p>The new standalone controller in the example configuration above should be formatted using the <code>kafka-storage format --standalone</code>command.</p>
 
-  <p>Note: The migration can stall if the <a href="#zk_authz_migration">ZooKeeper Security Migration Tool</a> was previously executed (fixed from 3.9.2, see <a href="https://issues.apache.org/jira/browse/KAFKA-19480">KAFKA-19026</a> for more details). As a workaround, the malformed "/migration" node can be removed from ZooKeeper by running <code>delete /migration</code> with the <code>zookeeper-shell.sh</code> CLI tool.</p>
+  <p>Note: The migration can stall if the <a href="#zk_authz_migration">ZooKeeper Security Migration Tool</a> was previously executed (fixed from 3.9.2, see <a href="https://issues.apache.org/jira/browse/KAFKA-19480">KAFKA-19480</a> for more details). As a workaround, the malformed "/migration" node can be removed from ZooKeeper by running <code>delete /migration</code> with the <code>zookeeper-shell.sh</code> CLI tool.</p>
 
   <p><em>Note: The KRaft cluster <code>node.id</code> values must be different from any existing ZK broker <code>broker.id</code>.
   In KRaft-mode, the brokers and controllers share the same Node ID namespace.</em></p>
