@@ -201,7 +201,7 @@ fi
 
 
 # Loop in case we encounter an error.
-REQUIRED_WRAPPER_JAR_CHECKSUM=$(curl -sSL "https://services.gradle.org/distributions/gradle-9.1.0-wrapper.jar.sha256")
+REQUIRED_WRAPPER_JAR_CHECKSUM="76805e32c009c0cf0dd5d206bddc9fb22ea42e84db904b764f3047de095493f3"
 for attempt in 1 2 3; do
   if [ ! -e "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" ]; then
     if ! curl -s -S --retry 3 -L -o "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" "https://raw.githubusercontent.com/gradle/gradle/v9.1.0/gradle/wrapper/gradle-wrapper.jar"; then
@@ -211,7 +211,8 @@ for attempt in 1 2 3; do
       continue
     fi
   else
-    # Verify checksum of existing wrapper JAR.
+    # Verify checksum of existing wrapper JAR. 
+    # This prevents developers from running into incompatibility issues when using an outdated wrapper JAR after a Gradle upgrade.
     # Use sha256sum or shasum, whichever is available.
     if command -v sha256sum >/dev/null 2>&1; then
       LOCAL_WRAPPER_JAR_CHECKSUM=$(sha256sum "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" | awk '{print $1}')
