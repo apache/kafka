@@ -467,6 +467,8 @@ public class ShareConsumerTest {
             int numRecords = 1;
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             record.headers().add("headerKey", "headerValue".getBytes());
+            record.headers().add("headerKey2", "headerValue2".getBytes());
+            record.headers().add("headerKey3", "headerValue3".getBytes());
             producer.send(record);
             producer.flush();
 
@@ -475,11 +477,15 @@ public class ShareConsumerTest {
             List<ConsumerRecord<byte[], byte[]>> records = consumeRecords(shareConsumer, numRecords);
             assertEquals(numRecords, records.size());
 
-            for (ConsumerRecord<byte[], byte[]> consumerRecord : records) {
-                Header header = consumerRecord.headers().lastHeader("headerKey");
-                if (header != null)
-                    assertEquals("headerValue", new String(header.value()));
-            }
+            Header header = records.get(0).headers().lastHeader("headerKey");
+            assertEquals("headerValue", new String(header.value()));
+
+            // Test the order of headers in a record is preserved when producing and consuming
+            Header[] headers = records.get(0).headers().toArray();
+            assertEquals("headerKey", headers[0].key());
+            assertEquals("headerKey2", headers[1].key());
+            assertEquals("headerKey3", headers[2].key());
+
             verifyShareGroupStateTopicRecordsProduced();
         }
     }

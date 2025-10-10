@@ -203,7 +203,10 @@ public class PlaintextConsumerTest {
         ) {
             var record = new ProducerRecord<>(TP.topic(), TP.partition(), null, "key".getBytes(), "value".getBytes());
             record.headers().add("headerKey", "headerValue".getBytes());
+            record.headers().add("headerKey2", "headerValue2".getBytes());
+            record.headers().add("headerKey3", "headerValue3".getBytes());
             producer.send(record);
+            producer.flush();
 
             assertEquals(0, consumer.assignment().size());
             consumer.assign(List.of(TP));
@@ -212,8 +215,15 @@ public class PlaintextConsumerTest {
             consumer.seek(TP, 0);
             var records = consumeRecords(consumer, numRecords);
             assertEquals(numRecords, records.size());
+
             var header = records.get(0).headers().lastHeader("headerKey");
             assertEquals("headerValue", header == null ? null : new String(header.value()));
+
+            // Test the order of headers in a record is preserved when producing and consuming
+            Header[] headers = records.get(0).headers().toArray();
+            assertEquals("headerKey", headers[0].key());
+            assertEquals("headerKey2", headers[1].key());
+            assertEquals("headerKey3", headers[2].key());
         }
     }
 
