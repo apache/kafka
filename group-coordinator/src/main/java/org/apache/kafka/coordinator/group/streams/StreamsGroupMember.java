@@ -51,6 +51,8 @@ import java.util.stream.Collectors;
  * @param clientTags                    Tags of the client of the member used for rack-aware assignment.
  * @param assignedTasks                 Tasks assigned to the member.
  * @param tasksPendingRevocation        Tasks owned by the member pending revocation.
+ * @param revocationEpoch               The largest epoch at which any task was revoked from the member and which
+ *                                      is not the current member epoch. Used to fence zombie commits requests.
  */
 @SuppressWarnings("checkstyle:JavaNCSS")
 public record StreamsGroupMember(String memberId,
@@ -67,7 +69,8 @@ public record StreamsGroupMember(String memberId,
                                  Optional<StreamsGroupMemberMetadataValue.Endpoint> userEndpoint,
                                  Map<String, String> clientTags,
                                  TasksTuple assignedTasks,
-                                 TasksTuple tasksPendingRevocation) {
+                                 TasksTuple tasksPendingRevocation,
+                                 Integer revocationEpoch) {
 
     public StreamsGroupMember {
         Objects.requireNonNull(memberId, "memberId cannot be null");
@@ -96,6 +99,7 @@ public record StreamsGroupMember(String memberId,
         private Map<String, String> clientTags = null;
         private TasksTuple assignedTasks = null;
         private TasksTuple tasksPendingRevocation = null;
+        private Integer revocationEpoch = null;
 
         public Builder(String memberId) {
             this.memberId = Objects.requireNonNull(memberId, "memberId cannot be null");
@@ -107,6 +111,7 @@ public record StreamsGroupMember(String memberId,
             this.memberId = member.memberId;
             this.memberEpoch = member.memberEpoch;
             this.previousMemberEpoch = member.previousMemberEpoch;
+            this.revocationEpoch = member.revocationEpoch;
             this.instanceId = member.instanceId;
             this.rackId = member.rackId;
             this.rebalanceTimeoutMs = member.rebalanceTimeoutMs;
@@ -135,6 +140,11 @@ public record StreamsGroupMember(String memberId,
 
         public Builder setPreviousMemberEpoch(int previousMemberEpoch) {
             this.previousMemberEpoch = previousMemberEpoch;
+            return this;
+        }
+
+        public Builder setRevocationEpoch(int activeTaskRevocationEpoch) {
+            this.revocationEpoch = activeTaskRevocationEpoch;
             return this;
         }
 
@@ -252,6 +262,7 @@ public record StreamsGroupMember(String memberId,
         public Builder updateWith(StreamsGroupCurrentMemberAssignmentValue record) {
             setMemberEpoch(record.memberEpoch());
             setPreviousMemberEpoch(record.previousMemberEpoch());
+            setRevocationEpoch(record.revocationEpoch());
             setState(MemberState.fromValue(record.state()));
             setAssignedTasks(
                 new TasksTuple(
@@ -284,13 +295,16 @@ public record StreamsGroupMember(String memberId,
                 .setTopologyEpoch(-1)
                 .setInstanceId(null)
                 .setRackId(null)
+                .setClientId("")
+                .setClientHost("")
                 .setProcessId("")
                 .setClientTags(Collections.emptyMap())
                 .setState(MemberState.STABLE)
                 .setMemberEpoch(0)
                 .setAssignedTasks(TasksTuple.EMPTY)
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
-                .setUserEndpoint(null);
+                .setUserEndpoint(null)
+                .setRevocationEpoch(0);
         }
 
         public StreamsGroupMember build() {
@@ -309,7 +323,8 @@ public record StreamsGroupMember(String memberId,
                 userEndpoint,
                 clientTags,
                 assignedTasks,
-                tasksPendingRevocation
+                tasksPendingRevocation,
+                revocationEpoch
             );
         }
     }

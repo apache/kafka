@@ -396,6 +396,7 @@ class StreamsCoordinatorRecordHelpersTest {
             .setProcessId(PROCESS_ID)
             .setUserEndpoint(new Endpoint().setHost(USER_ENDPOINT).setPort(USER_ENDPOINT_PORT))
             .setClientTags(Map.of(TAG_1, VALUE_1, TAG_2, VALUE_2))
+            .setRevocationEpoch(0)
             .setAssignedTasks(new TasksTuple(
                 Map.of(
                     SUBTOPOLOGY_1, Set.of(1, 2, 3)
@@ -458,7 +459,8 @@ class StreamsCoordinatorRecordHelpersTest {
                         new StreamsGroupCurrentMemberAssignmentValue.TaskIds()
                             .setSubtopologyId(SUBTOPOLOGY_3)
                             .setPartitions(List.of(7, 8, 9))
-                    )),
+                    ))
+                    .setRevocationEpoch(0),
                 (short) 0
             )
         );
@@ -481,6 +483,7 @@ class StreamsCoordinatorRecordHelpersTest {
             .setProcessId(PROCESS_ID)
             .setUserEndpoint(new Endpoint().setHost(USER_ENDPOINT).setPort(USER_ENDPOINT_PORT))
             .setClientTags(Map.of(TAG_1, VALUE_1, TAG_2, VALUE_2))
+            .setRevocationEpoch(0)
             .setAssignedTasks(new TasksTuple(Map.of(), Map.of(), Map.of()))
             .setTasksPendingRevocation(new TasksTuple(Map.of(), Map.of(), Map.of()))
             .build();
@@ -499,7 +502,8 @@ class StreamsCoordinatorRecordHelpersTest {
                     .setWarmupTasks(List.of())
                     .setActiveTasksPendingRevocation(List.of())
                     .setStandbyTasksPendingRevocation(List.of())
-                    .setWarmupTasksPendingRevocation(List.of()),
+                    .setWarmupTasksPendingRevocation(List.of())
+                    .setRevocationEpoch(0),
                 (short) 0
             )
         );

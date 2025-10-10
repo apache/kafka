@@ -260,7 +260,8 @@ public class StreamsCoordinatorRecordHelpers {
                     .setWarmupTasks(toTaskIds(member.assignedTasks().warmupTasks()))
                     .setActiveTasksPendingRevocation(toTaskIds(member.tasksPendingRevocation().activeTasks()))
                     .setStandbyTasksPendingRevocation(toTaskIds(member.tasksPendingRevocation().standbyTasks()))
-                    .setWarmupTasksPendingRevocation(toTaskIds(member.tasksPendingRevocation().warmupTasks())),
+                    .setWarmupTasksPendingRevocation(toTaskIds(member.tasksPendingRevocation().warmupTasks()))
+                    .setRevocationEpoch(member.revocationEpoch()),
                 (short) 0
             )
         );

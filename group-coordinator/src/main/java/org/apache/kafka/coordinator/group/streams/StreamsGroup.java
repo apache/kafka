@@ -703,7 +703,13 @@ public class StreamsGroup implements Group {
                 "by members using the streams group protocol");
         }
 
-        validateMemberEpoch(memberEpoch, member.memberEpoch());
+        if (member.revocationEpoch() >= 0) {
+            validateMemberEpochWithRevocationEpoch(memberEpoch, member.revocationEpoch(), member.memberEpoch());
+        } else {
+            // If the member was read from a legacy record without a revocation epoch, 
+            // we don't know the revocation epoch, so we fall back to the original behavior.
+            validateMemberEpoch(memberEpoch, member.memberEpoch());
+        }
     }
 
     /**
@@ -824,6 +830,31 @@ public class StreamsGroup implements Group {
         if (receivedMemberEpoch != expectedMemberEpoch) {
             throw new StaleMemberEpochException(String.format("The received member epoch %d does not match "
                 + "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
+        }
+    }
+
+
+    /**
+     * Throws a StaleMemberEpochException if the received member epoch does not match the range of allowed member epochs.
+     *
+     * @param receivedMemberEpoch The received member epoch.
+     * @param revocationEpoch The revocation epoch.
+     * @param brokerSideMemberEpoch The broker-side member epoch.
+     * @throws StaleMemberEpochException If the received member epoch does not match the range of allowed member epochs.
+     */
+    private void validateMemberEpochWithRevocationEpoch(
+        int receivedMemberEpoch,
+        int revocationEpoch,
+        int brokerSideMemberEpoch
+    ) throws StaleMemberEpochException {
+        if (receivedMemberEpoch <= revocationEpoch || receivedMemberEpoch > brokerSideMemberEpoch) {
+            throw new StaleMemberEpochException(String.format("The received member epoch %d does not match "
+                + "the range of allowed member epochs from %d to %d.",
+                receivedMemberEpoch, revocationEpoch + 1, brokerSideMemberEpoch));
+        }
+        if (receivedMemberEpoch != brokerSideMemberEpoch) {
+            log.trace("Permitting stale member epoch {} sent by the client (broker-side member epoch is {}), since it's larger than revocation epoch {}", 
+                receivedMemberEpoch, brokerSideMemberEpoch, revocationEpoch);
         }
     }
 

@@ -4276,6 +4276,7 @@ public class GroupMetadataManagerTest {
                         TaskAssignmentTestUtil.mkTasks(fooTopicName, 0, 1, 2)))
                     .setTasksPendingRevocation(TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                         TaskAssignmentTestUtil.mkTasks(fooTopicName, 3, 4, 5)))
+                    .setRevocationEpoch(7)
                     .build())
                 .withMember(new StreamsGroupMember.Builder("foo-2")
                     .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
@@ -4292,6 +4293,7 @@ public class GroupMetadataManagerTest {
                     .setUserEndpoint(new Endpoint().setHost("localhost").setPort(1500))
                     .setClientId(DEFAULT_CLIENT_ID)
                     .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setRevocationEpoch(7)
                     .build())
                 .withTargetAssignment("foo-1", TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                     TaskAssignmentTestUtil.mkTasks(fooTopicName, 3, 4, 5)))
@@ -4488,6 +4490,7 @@ public class GroupMetadataManagerTest {
             .setRebalanceTimeoutMs(1500)
             .setAssignedTasks(TasksTuple.EMPTY)
             .setTasksPendingRevocation(TasksTuple.EMPTY)
+            .setRevocationEpoch(0)
             .setTopologyEpoch(0)
             .setClientTags(Map.of())
             .setClientId(DEFAULT_CLIENT_ID)
@@ -17317,6 +17320,7 @@ public class GroupMetadataManagerTest {
                     .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                         TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2),
                         TaskAssignmentTestUtil.mkTasks(subtopology2, 0, 1)))
+                    .setRevocationEpoch(7)
                     .build())
                 .withMember(streamsGroupMemberBuilderWithDefaults(memberId2)
                     .setMemberEpoch(10)
@@ -17324,6 +17328,7 @@ public class GroupMetadataManagerTest {
                     .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                         TaskAssignmentTestUtil.mkTasks(subtopology1, 3, 4, 5),
                         TaskAssignmentTestUtil.mkTasks(subtopology2, 2)))
+                    .setRevocationEpoch(7)
                     .build())
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
                 .withTargetAssignment(memberId1, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
@@ -17440,6 +17445,7 @@ public class GroupMetadataManagerTest {
                     .setTasksPendingRevocation(TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                         TaskAssignmentTestUtil.mkTasks(subtopology1, 2),
                         TaskAssignmentTestUtil.mkTasks(subtopology2, 1)))
+                    .setRevocationEpoch(7)
                     .build())),
             result.records()
         );
@@ -17485,6 +17491,7 @@ public class GroupMetadataManagerTest {
                         TaskAssignmentTestUtil.mkTasks(subtopology2, 2)))
                     .setTasksPendingRevocation(TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                         TaskAssignmentTestUtil.mkTasks(subtopology1, 4, 5)))
+                    .setRevocationEpoch(7)
                     .build())),
             result.records()
         );
@@ -17556,6 +17563,7 @@ public class GroupMetadataManagerTest {
                     .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                         TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1),
                         TaskAssignmentTestUtil.mkTasks(subtopology2, 0)))
+                    .setRevocationEpoch(10) // Revocation epoch was bumped, since we transitioned to a new epoch after revoking tasks.
                     .build())),
             result.records()
         );
@@ -17686,6 +17694,7 @@ public class GroupMetadataManagerTest {
                     .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                         TaskAssignmentTestUtil.mkTasks(subtopology1, 2, 3),
                         TaskAssignmentTestUtil.mkTasks(subtopology2, 2)))
+                    .setRevocationEpoch(10) // Revocation epoch is preserved
                     .build())),
             result.records()
         );
@@ -17731,6 +17740,7 @@ public class GroupMetadataManagerTest {
                     .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                         TaskAssignmentTestUtil.mkTasks(subtopology1, 4, 5),
                         TaskAssignmentTestUtil.mkTasks(subtopology2, 1)))
+                    .setRevocationEpoch(0) // Nothing was ever revoked from the member
                     .build())),
             result.records()
         );
@@ -19617,6 +19627,7 @@ public class GroupMetadataManagerTest {
                 TaskAssignmentTestUtil.mkTasksPerSubtopology(TaskAssignmentTestUtil.mkTasks("subtopology-1", 6, 7, 8))
             ))
             .setTasksPendingRevocation(TasksTuple.EMPTY)
+            .setRevocationEpoch(7)
             .build();
 
         // The group and the member are created if they do not exist.

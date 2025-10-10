@@ -3696,9 +3696,10 @@ public class GroupMetadataManager {
         if (!updatedMember.equals(member)) {
             records.add(newStreamsGroupCurrentAssignmentRecord(groupId, updatedMember));
 
-            log.info("[GroupId {}][MemberId {}] Member's new assignment state: epoch={}, previousEpoch={}, state={}, "
+            log.info("[GroupId {}][MemberId {}] Member's new assignment state: epoch={}, previousEpoch={}, revocationEpoch={}, state={}, "
                     + "assignedTasks={} and tasksPendingRevocation={}.",
-                groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(), updatedMember.state(),
+                groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(),
+                updatedMember.revocationEpoch(), updatedMember.state(),
                 updatedMember.assignedTasks().toString(),
                 updatedMember.tasksPendingRevocation().toString());
 
@@ -5679,6 +5680,7 @@ public class GroupMetadataManager {
             StreamsGroupMember newMember = new StreamsGroupMember.Builder(oldMember)
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
                 .setPreviousMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+                .setRevocationEpoch(LEAVE_GROUP_MEMBER_EPOCH)
                 .setAssignedTasks(TasksTuple.EMPTY)
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
                 .build();

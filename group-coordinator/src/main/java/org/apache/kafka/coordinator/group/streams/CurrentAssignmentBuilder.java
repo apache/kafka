@@ -165,7 +165,8 @@ public class CurrentAssignmentBuilder {
                 if (member.memberEpoch() != targetAssignmentEpoch) {
                     return computeNextAssignment(
                         member.memberEpoch(),
-                        member.assignedTasks()
+                        member.assignedTasks(),
+                        member.revocationEpoch()
                     );
                 } else {
                     return member;
@@ -190,9 +191,12 @@ public class CurrentAssignmentBuilder {
                 // When the member has revoked all the pending tasks, it can
                 // transition to the next epoch (current + 1) and we can reconcile
                 // its state towards the latest target assignment.
+                // Since we finished revocation of all tasks, we bump the revocation
+                // epoch to the old member epoch.
                 return computeNextAssignment(
                     member.memberEpoch() + 1,
-                    member.assignedTasks()
+                    member.assignedTasks(),
+                    member.memberEpoch()
                 );
 
             case UNRELEASED_TASKS:
@@ -201,7 +205,8 @@ public class CurrentAssignmentBuilder {
                 // of the unreleased tasks when they become available.
                 return computeNextAssignment(
                     member.memberEpoch(),
-                    member.assignedTasks()
+                    member.assignedTasks(),
+                    member.revocationEpoch()
                 );
 
             case UNKNOWN:
@@ -217,7 +222,8 @@ public class CurrentAssignmentBuilder {
 
                 return computeNextAssignment(
                     targetAssignmentEpoch,
-                    member.assignedTasks()
+                    member.assignedTasks(),
+                    member.revocationEpoch()
                 );
         }
 
@@ -313,7 +319,8 @@ public class CurrentAssignmentBuilder {
      * @return A new StreamsGroupMember.
      */
     private StreamsGroupMember computeNextAssignment(int memberEpoch,
-                                                     TasksTuple memberAssignedTasks) {
+                                                     TasksTuple memberAssignedTasks,
+                                                     int newRevocationEpoch) {
         Map<String, Set<Integer>> newActiveAssignedTasks = new HashMap<>();
         Map<String, Set<Integer>> newActiveTasksPendingRevocation = new HashMap<>();
         Map<String, Set<Integer>> newActiveTasksPendingAssignment = new HashMap<>();
@@ -385,7 +392,8 @@ public class CurrentAssignmentBuilder {
                 newStandbyTasksPendingAssignment,
                 newWarmupTasksPendingAssignment
             ),
-            hasUnreleasedActiveTasks || hasUnreleasedStandbyTasks || hasUnreleasedWarmupTasks
+            hasUnreleasedActiveTasks || hasUnreleasedStandbyTasks || hasUnreleasedWarmupTasks,
+            newRevocationEpoch
         );
     }
 
@@ -393,7 +401,8 @@ public class CurrentAssignmentBuilder {
                                               final TasksTuple newTasksPendingRevocation,
                                               final TasksTuple newAssignedTasks,
                                               final TasksTuple newTasksPendingAssignment,
-                                              final boolean hasUnreleasedTasks) {
+                                              final boolean hasUnreleasedTasks,
+                                              final int newRevocationEpoch) {
 
         final boolean hasTasksToBeRevoked =
             (!newTasksPendingRevocation.isEmpty())
@@ -409,6 +418,7 @@ public class CurrentAssignmentBuilder {
                 .updateMemberEpoch(memberEpoch)
                 .setAssignedTasks(newAssignedTasks)
                 .setTasksPendingRevocation(newTasksPendingRevocation)
+                .setRevocationEpoch(newRevocationEpoch)
                 .build();
         } else if (!newTasksPendingAssignment.isEmpty()) {
             // If there are tasks to be assigned, the member transitions to the
@@ -425,6 +435,7 @@ public class CurrentAssignmentBuilder {
                 .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedTasks(newAssignedTasks.merge(newTasksPendingAssignment))
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setRevocationEpoch(newRevocationEpoch)
                 .build();
         } else if (hasUnreleasedTasks) {
             // If there are no tasks to be revoked nor to be assigned but some
@@ -435,6 +446,7 @@ public class CurrentAssignmentBuilder {
                 .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedTasks(newAssignedTasks)
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setRevocationEpoch(newRevocationEpoch)
                 .build();
         } else {
             // Otherwise, the member transitions to the target epoch and to the
@@ -444,6 +456,7 @@ public class CurrentAssignmentBuilder {
                 .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedTasks(newAssignedTasks)
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setRevocationEpoch(newRevocationEpoch)
                 .build();
         }
     }

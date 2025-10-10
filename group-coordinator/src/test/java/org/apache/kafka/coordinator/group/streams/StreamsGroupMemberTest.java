@@ -48,6 +48,7 @@ public class StreamsGroupMemberTest {
     private static final String MEMBER_ID = "member-id";
     private static final int MEMBER_EPOCH = 10;
     private static final int PREVIOUS_MEMBER_EPOCH = 9;
+    private static final int REVOCATION_EPOCH = 8;
     private static final MemberState STATE = MemberState.UNRELEASED_TASKS;
     private static final String INSTANCE_ID = "instance-id";
     private static final String RACK_ID = "rack-id";
@@ -102,12 +103,13 @@ public class StreamsGroupMemberTest {
     }
 
     @Test
-    public void testBuilderWithDefaults() {
+    public void testBuilderWithoutDefaults() {
         StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_ID).build();
 
         assertEquals(MEMBER_ID, member.memberId());
         assertNull(member.memberEpoch());
         assertNull(member.previousMemberEpoch());
+        assertNull(member.revocationEpoch());
         assertNull(member.state());
         assertNull(member.instanceId());
         assertNull(member.rackId());
@@ -123,12 +125,35 @@ public class StreamsGroupMemberTest {
     }
 
     @Test
+    public void testBuilderWithDefaults() {
+        StreamsGroupMember member = StreamsGroupMember.Builder.withDefaults(MEMBER_ID)
+            .build();
+
+        assertEquals(MEMBER_ID, member.memberId());
+        assertEquals(0, member.memberEpoch());
+        assertEquals(0, member.revocationEpoch());
+        assertEquals(MemberState.STABLE, member.state());
+        assertEquals(Optional.empty(), member.instanceId());
+        assertEquals(Optional.empty(), member.rackId());
+        assertEquals("", member.clientId());
+        assertEquals("", member.clientHost());
+        assertEquals(-1, member.rebalanceTimeoutMs());
+        assertEquals(-1, member.topologyEpoch());
+        assertEquals("", member.processId());
+        assertEquals(Optional.empty(), member.userEndpoint());
+        assertEquals(Map.of(), member.clientTags());
+        assertEquals(TasksTuple.EMPTY, member.assignedTasks());
+        assertEquals(TasksTuple.EMPTY, member.tasksPendingRevocation());
+    }
+
+    @Test
     public void testBuilderNewMember() {
         StreamsGroupMember member = createStreamsGroupMember();
 
         assertEquals(MEMBER_ID, member.memberId());
         assertEquals(MEMBER_EPOCH, member.memberEpoch());
         assertEquals(PREVIOUS_MEMBER_EPOCH, member.previousMemberEpoch());
+        assertEquals(REVOCATION_EPOCH, member.revocationEpoch());
         assertEquals(STATE, member.state());
         assertEquals(Optional.of(INSTANCE_ID), member.instanceId());
         assertEquals(Optional.of(RACK_ID), member.rackId());
@@ -176,6 +201,7 @@ public class StreamsGroupMemberTest {
         assertEquals(MEMBER_ID, member.memberId());
         assertNull(member.memberEpoch());
         assertNull(member.previousMemberEpoch());
+        assertNull(member.revocationEpoch());
         assertNull(member.state());
         assertNull(member.assignedTasks());
         assertNull(member.tasksPendingRevocation());
@@ -186,6 +212,7 @@ public class StreamsGroupMemberTest {
         StreamsGroupCurrentMemberAssignmentValue record = new StreamsGroupCurrentMemberAssignmentValue()
             .setMemberEpoch(MEMBER_EPOCH)
             .setPreviousMemberEpoch(PREVIOUS_MEMBER_EPOCH)
+            .setRevocationEpoch(REVOCATION_EPOCH)
             .setState(STATE.value())
             .setActiveTasks(List.of(new TaskIds().setSubtopologyId(SUBTOPOLOGY1).setPartitions(TASKS1)))
             .setStandbyTasks(List.of(new TaskIds().setSubtopologyId(SUBTOPOLOGY2).setPartitions(TASKS2)))
@@ -201,6 +228,7 @@ public class StreamsGroupMemberTest {
         assertEquals(MEMBER_ID, member.memberId());
         assertEquals(record.memberEpoch(), member.memberEpoch());
         assertEquals(record.previousMemberEpoch(), member.previousMemberEpoch());
+        assertEquals(record.revocationEpoch(), member.revocationEpoch());
         assertEquals(MemberState.fromValue(record.state()), member.state());
         assertEquals(ASSIGNED_TASKS, member.assignedTasks());
         assertEquals(TASKS_PENDING_REVOCATION, member.tasksPendingRevocation());
@@ -213,6 +241,28 @@ public class StreamsGroupMemberTest {
         assertNull(member.processId());
         assertNull(member.userEndpoint());
         assertNull(member.clientTags());
+    }
+
+
+    @Test
+    public void testBuilderSetRevocationEpoch() {
+        int newRevocationEpoch = 15;
+
+        StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_ID)
+            .setRevocationEpoch(newRevocationEpoch)
+            .build();
+
+        assertEquals(newRevocationEpoch, member.revocationEpoch());
+    }
+
+    @Test
+    public void testBuilderCopiesRevocationEpoch() {
+        StreamsGroupMember originalMember = createStreamsGroupMember();
+
+        StreamsGroupMember copiedMember = new StreamsGroupMember.Builder(originalMember)
+            .build();
+
+        assertEquals(REVOCATION_EPOCH, copiedMember.revocationEpoch());
     }
 
     @Test
@@ -262,6 +312,7 @@ public class StreamsGroupMemberTest {
         assertEquals(member.memberId(), updatedMember.memberId());
         assertEquals(member.memberEpoch(), updatedMember.memberEpoch());
         assertEquals(member.previousMemberEpoch(), updatedMember.previousMemberEpoch());
+        assertEquals(member.revocationEpoch(), updatedMember.revocationEpoch());
         assertEquals(member.state(), updatedMember.state());
         assertEquals(member.clientId(), updatedMember.clientId());
         assertEquals(member.clientHost(), updatedMember.clientHost());
@@ -282,6 +333,7 @@ public class StreamsGroupMemberTest {
         assertEquals(newMemberEpoch, updatedMember.memberEpoch());
         // The previous member epoch becomes the old current member epoch.
         assertEquals(member.memberEpoch(), updatedMember.previousMemberEpoch());
+        assertEquals(member.revocationEpoch(), updatedMember.revocationEpoch());
         assertEquals(member.state(), updatedMember.state());
         assertEquals(member.instanceId(), updatedMember.instanceId());
         assertEquals(member.rackId(), updatedMember.rackId());
@@ -416,6 +468,7 @@ public class StreamsGroupMemberTest {
         return new StreamsGroupMember.Builder(MEMBER_ID)
             .setMemberEpoch(MEMBER_EPOCH)
             .setPreviousMemberEpoch(PREVIOUS_MEMBER_EPOCH)
+            .setRevocationEpoch(REVOCATION_EPOCH)
             .setState(STATE)
             .setInstanceId(INSTANCE_ID)
             .setRackId(RACK_ID)

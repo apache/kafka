@@ -38,7 +38,9 @@
     { "name": "StandbyTasksPendingRevocation", "versions": "0+", "type": "[]TaskIds",
       "about": "The standby tasks that must be revoked by this member." },
     { "name": "WarmupTasksPendingRevocation", "versions": "0+", "type": "[]TaskIds",
-      "about": "The warmup tasks that must be revoked by this member." }
+      "about": "The warmup tasks that must be revoked by this member." },
+    { "name": "RevocationEpoch", "versions": "0+", "taggedVersions": "0+", "tag": 0, "type": "int32", "default": -1,
+      "about": "The largest epoch at which any task was revoked from the member and which is not the current member epoch. Used to fence zombie commits requests." }
   ],
   "commonStructs": [
     { "name": "TaskIds", "versions": "0+", "fields": [

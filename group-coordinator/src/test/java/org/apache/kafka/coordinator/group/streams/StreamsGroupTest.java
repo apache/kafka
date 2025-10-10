@@ -609,7 +609,7 @@ public class StreamsGroupTest {
 
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.TXN_OFFSET_COMMIT)
-    public void testValidateTransactionalOffsetCommit(short version) {
+    public void testValidateTransactionalOffsetCommitWithoutRevocationEpoch(short version) {
         boolean isTransactional = true;
         StreamsGroup group = createStreamsGroup("group-foo");
 
@@ -622,8 +622,8 @@ public class StreamsGroupTest {
         assertThrows(UnknownMemberIdException.class, () ->
             group.validateOffsetCommit("member-id", null, 0, isTransactional, version));
 
-        // Create a member.
-        group.updateMember(new StreamsGroupMember.Builder("member-id").setMemberEpoch(0).build());
+        // Create a member without revocation epoch (read from a legacy record).
+        group.updateMember(new StreamsGroupMember.Builder("member-id").setMemberEpoch(0).setRevocationEpoch(-1).build());
 
         // A call from the admin client should fail as the group is not empty.
         assertThrows(UnknownMemberIdException.class, () ->
@@ -641,8 +641,47 @@ public class StreamsGroupTest {
     }
 
     @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.TXN_OFFSET_COMMIT)
+    public void testValidateTransactionalOffsetCommitWithRevocationEpoch(short version) {
+        boolean isTransactional = true;
+        StreamsGroup group = createStreamsGroup("group-foo");
+
+        // Simulate a call from the admin client without member ID and member epoch.
+        // This should pass only if the group is empty.
+        group.validateOffsetCommit("", "", -1, isTransactional, version);
+
+        // The member does not exist.
+        assertThrows(UnknownMemberIdException.class, () ->
+            group.validateOffsetCommit("member-id", null, 0, isTransactional, version));
+
+        // Create a member with revocation epoch.3
+        group.updateMember(new StreamsGroupMember.Builder("member-id").setMemberEpoch(5).setRevocationEpoch(3).build());
+
+        // A call from the admin client should fail as the group is not empty.
+        assertThrows(UnknownMemberIdException.class, () ->
+            group.validateOffsetCommit("", "", -1, isTransactional, version));
+
+        // The member epoch is stale.
+        assertThrows(StaleMemberEpochException.class, () ->
+            group.validateOffsetCommit("member-id", "", 10, isTransactional, version));
+
+        // Allowed range is (revocationEpoch, memberEpoch] i.e. 4..5
+        assertThrows(StaleMemberEpochException.class, () ->
+            group.validateOffsetCommit("member-id", "", 3, true, version));
+        assertThrows(StaleMemberEpochException.class, () ->
+            group.validateOffsetCommit("member-id", "", 6, true, version));
+
+        // This should succeed.
+        group.validateOffsetCommit("member-id", "", 4, true, version);
+        group.validateOffsetCommit("member-id", "", 5, true, version);
+
+        // This should succeed.
+        group.validateOffsetCommit("", null, -1, isTransactional, version);
+    }
+
+    @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
-    public void testValidateOffsetCommit(short version) {
+    public void testValidateOffsetCommitWithoutRevocationEpoch(short version) {
         boolean isTransactional = false;
         StreamsGroup group = createStreamsGroup("group-foo");
 
@@ -657,7 +696,7 @@ public class StreamsGroupTest {
         // Create members.
         group.updateMember(
             new StreamsGroupMember
-                .Builder("new-protocol-member-id").setMemberEpoch(0).build()
+                .Builder("new-protocol-member-id").setMemberEpoch(0).setRevocationEpoch(-1).build()
         );
 
         // A call from the admin client should fail as the group is not empty.
@@ -681,6 +720,56 @@ public class StreamsGroupTest {
         } else {
             assertThrows(UnsupportedVersionException.class, () ->
                 group.validateOffsetCommit("new-protocol-member-id", "", 0, isTransactional, version));
+        }
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+    public void testValidateOffsetCommitWithRevocationEpoch(short version) {
+        boolean isTransactional = false;
+        StreamsGroup group = createStreamsGroup("group-foo");
+
+        // Simulate a call from the admin client without member ID and member epoch.
+        // This should pass only if the group is empty.
+        group.validateOffsetCommit("", "", -1, isTransactional, version);
+
+        // The member does not exist.
+        assertThrows(UnknownMemberIdException.class, () ->
+            group.validateOffsetCommit("member-id", null, 0, isTransactional, version));
+
+        // Create members.
+        group.updateMember(
+            new StreamsGroupMember
+                .Builder("new-protocol-member-id").setMemberEpoch(5).setRevocationEpoch(3).build()
+        );
+
+        // A call from the admin client should fail as the group is not empty.
+        assertThrows(UnknownMemberIdException.class, () ->
+            group.validateOffsetCommit("", "", -1, isTransactional, version));
+        assertThrows(UnknownMemberIdException.class, () ->
+            group.validateOffsetCommit("", null, -1, isTransactional, version));
+
+        // The member epoch is stale.
+        if (version >= 9) {
+            // Allowed range is (revocationEpoch, memberEpoch] i.e. 4..5
+            assertThrows(StaleMemberEpochException.class, () ->
+                group.validateOffsetCommit("new-protocol-member-id", "", 3, isTransactional, version));
+            assertThrows(StaleMemberEpochException.class, () ->
+                group.validateOffsetCommit("new-protocol-member-id", "", 6, isTransactional, version));
+        } else {
+            assertThrows(UnsupportedVersionException.class, () ->
+                group.validateOffsetCommit("new-protocol-member-id", "", 6, isTransactional, version));
+        }
+
+        // This should succeed.
+        if (version >= 9) {
+            // Lower bound just above revocationEpoch should pass
+            group.validateOffsetCommit("new-protocol-member-id", "", 4, isTransactional, version);
+            // Upper bound equal to broker-side memberEpoch should pass
+            group.validateOffsetCommit("new-protocol-member-id", "", 5, isTransactional, version);
+        } else {
+            assertThrows(UnsupportedVersionException.class, () ->
+                group.validateOffsetCommit("new-protocol-member-id", "", 5, isTransactional, version));
         }
     }
 

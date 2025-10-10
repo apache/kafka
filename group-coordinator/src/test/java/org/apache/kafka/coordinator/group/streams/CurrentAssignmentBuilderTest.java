@@ -42,6 +42,7 @@ public class CurrentAssignmentBuilderTest {
     @EnumSource(TaskRole.class)
     public void testStableToStable(TaskRole taskRole) {
         final int memberEpoch = 10;
+        final int revocationEpoch = 9;
 
         StreamsGroupMember member =
             new StreamsGroupMember.Builder(MEMBER_NAME)
@@ -55,6 +56,7 @@ public class CurrentAssignmentBuilderTest {
                         mkTasks(SUBTOPOLOGY_ID1, 1, 2),
                         mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setRevocationEpoch(revocationEpoch)
                 .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
@@ -78,6 +80,7 @@ public class CurrentAssignmentBuilderTest {
                     mkTasks(SUBTOPOLOGY_ID1, 1, 2),
                     mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setRevocationEpoch(revocationEpoch) // Preserve the existing revocation epoch
                 .build(),
             updatedMember
         );
@@ -87,6 +90,7 @@ public class CurrentAssignmentBuilderTest {
     @EnumSource(TaskRole.class)
     public void testStableToStableAtTargetEpoch(TaskRole taskRole) {
         final int memberEpoch = 10;
+        final int revocationEpoch = 9;
 
         StreamsGroupMember member =
             new StreamsGroupMember.Builder(MEMBER_NAME)
@@ -100,6 +104,7 @@ public class CurrentAssignmentBuilderTest {
                         mkTasks(SUBTOPOLOGY_ID1, 1, 2),
                         mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setRevocationEpoch(revocationEpoch)
                 .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
@@ -123,6 +128,7 @@ public class CurrentAssignmentBuilderTest {
                     mkTasks(SUBTOPOLOGY_ID1, 1, 2),
                     mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setRevocationEpoch(revocationEpoch) // Preserve the existing revocation epoch
                 .build(),
             updatedMember
         );
@@ -132,6 +138,7 @@ public class CurrentAssignmentBuilderTest {
     @EnumSource(TaskRole.class)
     public void testStableToStableWithNewTasks(TaskRole taskRole) {
         final int memberEpoch = 10;
+        final int revocationEpoch = 9;
 
         StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.STABLE)
@@ -142,6 +149,7 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID1, 1, 2),
                 mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
             .setTasksPendingRevocation(TasksTuple.EMPTY)
+            .setRevocationEpoch(revocationEpoch)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
@@ -164,6 +172,7 @@ public class CurrentAssignmentBuilderTest {
                     mkTasks(SUBTOPOLOGY_ID1, 1, 2, 4),
                     mkTasks(SUBTOPOLOGY_ID2, 3, 4, 7)))
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setRevocationEpoch(revocationEpoch) // Preserve the existing revocation epoch
                 .build(),
             updatedMember
         );
@@ -173,6 +182,7 @@ public class CurrentAssignmentBuilderTest {
     @EnumSource(TaskRole.class)
     public void testStableToUnrevokedTasks(TaskRole taskRole) {
         final int memberEpoch = 10;
+        final int revocationEpoch = 9;
 
         StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.STABLE)
@@ -183,6 +193,7 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID1, 1, 2),
                 mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
             .setTasksPendingRevocation(TasksTuple.EMPTY)
+            .setRevocationEpoch(revocationEpoch)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
@@ -207,6 +218,7 @@ public class CurrentAssignmentBuilderTest {
                 .setTasksPendingRevocation(mkTasksTuple(taskRole,
                     mkTasks(SUBTOPOLOGY_ID1, 1),
                     mkTasks(SUBTOPOLOGY_ID2, 3)))
+                .setRevocationEpoch(revocationEpoch) // Preserve the existing revocation epoch
                 .build(),
             updatedMember
         );
@@ -216,6 +228,7 @@ public class CurrentAssignmentBuilderTest {
     @EnumSource(TaskRole.class)
     public void testStableToUnrevokedWithEmptyAssignment(TaskRole taskRole) {
         final int memberEpoch = 10;
+        final int revocationEpoch = 9;
 
         StreamsGroupMember member =
             new StreamsGroupMember.Builder(MEMBER_NAME)
@@ -229,6 +242,7 @@ public class CurrentAssignmentBuilderTest {
                         mkTasks(SUBTOPOLOGY_ID1, 1, 2),
                         mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setRevocationEpoch(revocationEpoch)
                 .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
@@ -251,6 +265,7 @@ public class CurrentAssignmentBuilderTest {
                         taskRole,
                         mkTasks(SUBTOPOLOGY_ID1, 1, 2),
                         mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
+                .setRevocationEpoch(revocationEpoch) // Preserve the existing revocation epoch
                 .build(),
             updatedMember
         );
@@ -260,6 +275,7 @@ public class CurrentAssignmentBuilderTest {
     @EnumSource(TaskRole.class)
     public void testStableToUnreleasedTasks(TaskRole taskRole) {
         final int memberEpoch = 10;
+        final int revocationEpoch = 9;
 
         StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.STABLE)
@@ -270,6 +286,7 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID1, 1, 2),
                 mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
             .setTasksPendingRevocation(TasksTuple.EMPTY)
+            .setRevocationEpoch(revocationEpoch)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
@@ -292,6 +309,7 @@ public class CurrentAssignmentBuilderTest {
                     mkTasks(SUBTOPOLOGY_ID1, 1, 2),
                     mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setRevocationEpoch(revocationEpoch) // Preserve the existing revocation epoch
                 .build(),
             updatedMember
         );
@@ -301,6 +319,7 @@ public class CurrentAssignmentBuilderTest {
     @EnumSource(TaskRole.class)
     public void testStableToUnreleasedTasksWithOwnedTasksNotHavingRevokedTasks(TaskRole taskRole) {
         final int memberEpoch = 10;
+        final int revocationEpoch = 9;
 
         StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.STABLE)
@@ -311,6 +330,7 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID1, 1, 2),
                 mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
             .setTasksPendingRevocation(TasksTuple.EMPTY)
+            .setRevocationEpoch(revocationEpoch)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
@@ -336,6 +356,7 @@ public class CurrentAssignmentBuilderTest {
                     mkTasks(SUBTOPOLOGY_ID1, 1, 2),
                     mkTasks(SUBTOPOLOGY_ID2, 3)))
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setRevocationEpoch(revocationEpoch) // Preserve the existing revocation epoch
                 .build(),
             updatedMember
         );
@@ -345,6 +366,7 @@ public class CurrentAssignmentBuilderTest {
     @EnumSource(TaskRole.class)
     public void testUnrevokedTasksToStable(TaskRole taskRole) {
         final int memberEpoch = 10;
+        final int revocationEpoch = 9;
 
         StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNREVOKED_TASKS)
@@ -357,6 +379,7 @@ public class CurrentAssignmentBuilderTest {
             .setTasksPendingRevocation(mkTasksTuple(taskRole,
                 mkTasks(SUBTOPOLOGY_ID1, 1),
                 mkTasks(SUBTOPOLOGY_ID2, 4)))
+            .setRevocationEpoch(revocationEpoch)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
@@ -382,6 +405,7 @@ public class CurrentAssignmentBuilderTest {
                     mkTasks(SUBTOPOLOGY_ID1, 2, 3),
                     mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setRevocationEpoch(memberEpoch) // We transitioned out of a revocation epoch, so bump it
                 .build(),
             updatedMember
         );
@@ -391,6 +415,7 @@ public class CurrentAssignmentBuilderTest {
     @EnumSource(TaskRole.class)
     public void testRemainsInUnrevokedTasks(TaskRole taskRole) {
         final int memberEpoch = 10;
+        final int revocationEpoch = 9;
 
         StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNREVOKED_TASKS)
@@ -403,6 +428,7 @@ public class CurrentAssignmentBuilderTest {
             .setTasksPendingRevocation(mkTasksTuple(taskRole,
                 mkTasks(SUBTOPOLOGY_ID1, 1),
                 mkTasks(SUBTOPOLOGY_ID2, 4)))
+            .setRevocationEpoch(revocationEpoch)
             .build();
 
         CurrentAssignmentBuilder currentAssignmentBuilder = new CurrentAssignmentBuilder(
@@ -446,6 +472,7 @@ public class CurrentAssignmentBuilderTest {
     @EnumSource(TaskRole.class)
     public void testUnrevokedTasksToUnrevokedTasks(TaskRole taskRole) {
         final int memberEpoch = 10;
+        final int revocationEpoch = 9;
 
         StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNREVOKED_TASKS)
@@ -458,6 +485,7 @@ public class CurrentAssignmentBuilderTest {
             .setTasksPendingRevocation(mkTasksTuple(taskRole,
                 mkTasks(SUBTOPOLOGY_ID1, 1),
                 mkTasks(SUBTOPOLOGY_ID2, 4)))
+            .setRevocationEpoch(revocationEpoch)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
@@ -482,6 +510,7 @@ public class CurrentAssignmentBuilderTest {
                 .setTasksPendingRevocation(mkTasksTuple(taskRole,
                     mkTasks(SUBTOPOLOGY_ID1, 2),
                     mkTasks(SUBTOPOLOGY_ID2, 5)))
+                .setRevocationEpoch(memberEpoch) // We transitioned out of a revocation epoch, so bump it
                 .build(),
             updatedMember
         );
@@ -491,6 +520,7 @@ public class CurrentAssignmentBuilderTest {
     @EnumSource(TaskRole.class)
     public void testUnrevokedTasksToUnreleasedTasks(TaskRole taskRole) {
         final int memberEpoch = 11;
+        final int revocationEpoch = 9;
 
         StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNREVOKED_TASKS)
@@ -503,6 +533,7 @@ public class CurrentAssignmentBuilderTest {
             .setTasksPendingRevocation(mkTasksTuple(taskRole,
                 mkTasks(SUBTOPOLOGY_ID1, 1),
                 mkTasks(SUBTOPOLOGY_ID2, 4)))
+            .setRevocationEpoch(revocationEpoch)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
@@ -529,6 +560,7 @@ public class CurrentAssignmentBuilderTest {
                     mkTasks(SUBTOPOLOGY_ID1, 2, 3),
                     mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setRevocationEpoch(memberEpoch) // We transitioned out of a revocation epoch, so bump it
                 .build(),
             updatedMember
         );
@@ -538,6 +570,7 @@ public class CurrentAssignmentBuilderTest {
     @EnumSource(TaskRole.class)
     public void testUnreleasedTasksToStable(TaskRole taskRole) {
         final int memberEpoch = 11;
+        final int revocationEpoch = 9;
 
         StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNRELEASED_TASKS)
@@ -548,6 +581,7 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID1, 2, 3),
                 mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
             .setTasksPendingRevocation(TasksTuple.EMPTY)
+            .setRevocationEpoch(revocationEpoch)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
@@ -571,6 +605,7 @@ public class CurrentAssignmentBuilderTest {
                     mkTasks(SUBTOPOLOGY_ID1, 2, 3),
                     mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setRevocationEpoch(revocationEpoch)
                 .build(),
             updatedMember
         );
@@ -580,6 +615,7 @@ public class CurrentAssignmentBuilderTest {
     @EnumSource(TaskRole.class)
     public void testUnreleasedTasksToStableWithNewTasks(TaskRole taskRole) {
         int memberEpoch = 11;
+        final int revocationEpoch = 9;
 
         StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNRELEASED_TASKS)
@@ -590,6 +626,7 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID1, 2, 3),
                 mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
             .setTasksPendingRevocation(TasksTuple.EMPTY)
+            .setRevocationEpoch(revocationEpoch)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
@@ -612,6 +649,7 @@ public class CurrentAssignmentBuilderTest {
                     mkTasks(SUBTOPOLOGY_ID1, 2, 3, 4),
                     mkTasks(SUBTOPOLOGY_ID2, 5, 6, 7)))
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setRevocationEpoch(revocationEpoch)
                 .build(),
             updatedMember
         );
@@ -621,6 +659,7 @@ public class CurrentAssignmentBuilderTest {
     @EnumSource(TaskRole.class)
     public void testUnreleasedTasksToUnreleasedTasks(TaskRole taskRole) {
         int memberEpoch = 11;
+        final int revocationEpoch = 9;
 
         StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNRELEASED_TASKS)
@@ -631,6 +670,7 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID1, 2, 3),
                 mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
             .setTasksPendingRevocation(TasksTuple.EMPTY)
+            .setRevocationEpoch(revocationEpoch)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
@@ -651,6 +691,7 @@ public class CurrentAssignmentBuilderTest {
     @EnumSource(TaskRole.class)
     public void testUnreleasedTasksToUnreleasedTasksOtherUnreleasedTaskRole(TaskRole taskRole) {
         int memberEpoch = 11;
+        final int revocationEpoch = 9;
 
         // The unreleased task is owned by a task of a different role on the same process.
         StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
@@ -662,6 +703,7 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID1, 2, 3),
                 mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
             .setTasksPendingRevocation(TasksTuple.EMPTY)
+            .setRevocationEpoch(revocationEpoch)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
@@ -683,6 +725,7 @@ public class CurrentAssignmentBuilderTest {
     @Test
     public void testUnreleasedTasksToUnreleasedTasksAnyActiveOwner() {
         int memberEpoch = 11;
+        final int revocationEpoch = 9;
 
         // The unreleased task remains unreleased, because it is owned by any other instance in
         // an active role, no matter the process.
@@ -695,6 +738,7 @@ public class CurrentAssignmentBuilderTest {
             .setAssignedTasks(mkTasksTuple(TaskRole.ACTIVE,
                 mkTasks(SUBTOPOLOGY_ID1, 2, 3),
                 mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
+            .setRevocationEpoch(revocationEpoch)
             .build();
 
         StreamsGroupMember expectedMember = new StreamsGroupMember.Builder(MEMBER_NAME)
@@ -706,6 +750,7 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID1, 2, 3),
                 mkTasks(SUBTOPOLOGY_ID2, 5, 6, 7)))
             .setTasksPendingRevocation(TasksTuple.EMPTY)
+            .setRevocationEpoch(revocationEpoch) // Preserve the existing revocation epoch
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
@@ -728,6 +773,7 @@ public class CurrentAssignmentBuilderTest {
     @EnumSource(TaskRole.class)
     public void testUnreleasedTasksToUnrevokedTasks(TaskRole taskRole) {
         int memberEpoch = 11;
+        final int revocationEpoch = 9;
 
         StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNRELEASED_TASKS)
@@ -740,6 +786,7 @@ public class CurrentAssignmentBuilderTest {
             .setTasksPendingRevocation(mkTasksTuple(TaskRole.ACTIVE,
                 mkTasks(SUBTOPOLOGY_ID1, 4),
                 mkTasks(SUBTOPOLOGY_ID2, 7)))
+            .setRevocationEpoch(revocationEpoch)
             .build();
 
         StreamsGroupMember updatedMember = new CurrentAssignmentBuilder(member)
@@ -764,6 +811,7 @@ public class CurrentAssignmentBuilderTest {
                 .setTasksPendingRevocation(mkTasksTuple(taskRole,
                     mkTasks(SUBTOPOLOGY_ID1, 2),
                     mkTasks(SUBTOPOLOGY_ID2, 5)))
+                .setRevocationEpoch(revocationEpoch) // Preserve the existing revocation epoch
                 .build(),
             updatedMember
         );
@@ -773,6 +821,7 @@ public class CurrentAssignmentBuilderTest {
     @EnumSource(TaskRole.class)
     public void testUnknownState(TaskRole taskRole) {
         int memberEpoch = 11;
+        final int revocationEpoch = 9;
 
         StreamsGroupMember member = new StreamsGroupMember.Builder(MEMBER_NAME)
             .setState(MemberState.UNKNOWN)
@@ -785,6 +834,7 @@ public class CurrentAssignmentBuilderTest {
             .setTasksPendingRevocation(mkTasksTuple(taskRole,
                 mkTasks(SUBTOPOLOGY_ID1, 2),
                 mkTasks(SUBTOPOLOGY_ID2, 5)))
+            .setRevocationEpoch(revocationEpoch)
             .build();
 
         // When the member is in an unknown state, the member is first to force
@@ -818,6 +868,7 @@ public class CurrentAssignmentBuilderTest {
                     mkTasks(SUBTOPOLOGY_ID1, 3),
                     mkTasks(SUBTOPOLOGY_ID2, 6)))
                 .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setRevocationEpoch(revocationEpoch) // Preserve the existing revocation epoch
                 .build(),
             updatedMember
         );
