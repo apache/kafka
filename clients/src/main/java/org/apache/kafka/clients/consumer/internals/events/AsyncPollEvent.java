@@ -80,8 +80,8 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
     }
 
     public void completeExceptionally(KafkaException e) {
+        error = e;
         isComplete = true;
-        this.error = e;
     }
 
     @Override
