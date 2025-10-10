@@ -68,8 +68,7 @@ import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
@@ -127,24 +126,7 @@ public class EosIntegrationTest {
     private static final int MAX_POLL_INTERVAL_MS = 30_000;
     private static final int MAX_WAIT_TIME_MS = 120_000;
 
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
-        NUM_BROKERS,
-        Utils.mkProperties(mkMap(
-            mkEntry("auto.create.topics.enable", "true"),
-            mkEntry("transaction.max.timeout.ms", "" + Integer.MAX_VALUE)
-        ))
-    );
-
-    @BeforeAll
-    public static void startCluster() throws IOException {
-        CLUSTER.start();
-    }
-
-    @AfterAll
-    public static void closeCluster() {
-        CLUSTER.stop();
-    }
-
+    public EmbeddedKafkaCluster cluster;
 
     private String applicationId;
     private static final int NUM_TOPIC_PARTITIONS = 2;
@@ -180,18 +162,32 @@ public class EosIntegrationTest {
     }
 
     @BeforeEach
-    public void createTopics() throws Exception {
+    public void setUp() throws Exception {
+        cluster = new EmbeddedKafkaCluster(
+                NUM_BROKERS,
+                Utils.mkProperties(mkMap(
+                        mkEntry("auto.create.topics.enable", "true"),
+                        mkEntry("transaction.max.timeout.ms", "" + Integer.MAX_VALUE)
+                ))
+        );
+        cluster.start();
+
         applicationId = "appId-" + TEST_NUMBER.getAndIncrement();
-        CLUSTER.deleteTopics(
+        cluster.deleteTopics(
             SINGLE_PARTITION_INPUT_TOPIC, MULTI_PARTITION_INPUT_TOPIC,
             SINGLE_PARTITION_THROUGH_TOPIC, MULTI_PARTITION_THROUGH_TOPIC,
             SINGLE_PARTITION_OUTPUT_TOPIC, MULTI_PARTITION_OUTPUT_TOPIC);
 
-        CLUSTER.createTopics(SINGLE_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_THROUGH_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC);
-        CLUSTER.createTopic(MULTI_PARTITION_INPUT_TOPIC, NUM_TOPIC_PARTITIONS, 1);
-        CLUSTER.createTopic(MULTI_PARTITION_THROUGH_TOPIC, NUM_TOPIC_PARTITIONS, 1);
-        CLUSTER.createTopic(MULTI_PARTITION_OUTPUT_TOPIC, NUM_TOPIC_PARTITIONS, 1);
-        CLUSTER.setGroupStandbyReplicas(applicationId, 1);
+        cluster.createTopics(SINGLE_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_THROUGH_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC);
+        cluster.createTopic(MULTI_PARTITION_INPUT_TOPIC, NUM_TOPIC_PARTITIONS, 1);
+        cluster.createTopic(MULTI_PARTITION_THROUGH_TOPIC, NUM_TOPIC_PARTITIONS, 1);
+        cluster.createTopic(MULTI_PARTITION_OUTPUT_TOPIC, NUM_TOPIC_PARTITIONS, 1);
+        cluster.setGroupStandbyReplicas(applicationId, 1);
+    }
+
+    @AfterEach
+    public void closeCluster() {
+        cluster.stop();
     }
 
     @ParameterizedTest
@@ -205,9 +201,9 @@ public class EosIntegrationTest {
     public void shouldCommitCorrectOffsetIfInputTopicIsTransactional(final String groupProtocol) throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, true, groupProtocol);
 
-        try (final Admin adminClient = Admin.create(mkMap(mkEntry(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())));
+        try (final Admin adminClient = Admin.create(mkMap(mkEntry(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())));
              final Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(mkMap(
-                 mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                 mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers()),
                  mkEntry(ConsumerConfig.GROUP_ID_CONFIG, applicationId),
                  mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class),
                  mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class)))) {
@@ -287,7 +283,7 @@ public class EosIntegrationTest {
         for (int i = 0; i < numberOfRestarts; ++i) {
             final Properties config = StreamsTestUtils.getStreamsConfig(
                 applicationId,
-                CLUSTER.bootstrapServers(),
+                cluster.bootstrapServers(),
                 Serdes.LongSerde.class.getName(),
                 Serdes.LongSerde.class.getName(),
                 properties);
@@ -302,8 +298,8 @@ public class EosIntegrationTest {
             IntegrationTestUtils.produceKeyValuesSynchronously(
                 inputTopic,
                 inputData,
-                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class, producerConfigs),
-                CLUSTER.time,
+                TestUtils.producerConfig(cluster.bootstrapServers(), LongSerializer.class, LongSerializer.class, producerConfigs),
+                cluster.time,
                 inputTopicTransactional
             );
 
@@ -362,7 +358,7 @@ public class EosIntegrationTest {
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,
-            CLUSTER.bootstrapServers(),
+            cluster.bootstrapServers(),
             Serdes.LongSerde.class.getName(),
             Serdes.LongSerde.class.getName(),
             properties);
@@ -376,8 +372,8 @@ public class EosIntegrationTest {
             IntegrationTestUtils.produceKeyValuesSynchronously(
                 SINGLE_PARTITION_INPUT_TOPIC,
                 firstBurstOfData,
-                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
-                CLUSTER.time
+                TestUtils.producerConfig(cluster.bootstrapServers(), LongSerializer.class, LongSerializer.class),
+                cluster.time
             );
 
             final List<KeyValue<Long, Long>> firstCommittedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, firstBurstOfData.size(), CONSUMER_GROUP_ID);
@@ -386,8 +382,8 @@ public class EosIntegrationTest {
             IntegrationTestUtils.produceKeyValuesSynchronously(
                 SINGLE_PARTITION_INPUT_TOPIC,
                 secondBurstOfData,
-                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
-                CLUSTER.time
+                TestUtils.producerConfig(cluster.bootstrapServers(), LongSerializer.class, LongSerializer.class),
+                cluster.time
             );
 
             final List<KeyValue<Long, Long>> secondCommittedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, secondBurstOfData.size(), CONSUMER_GROUP_ID);
@@ -810,7 +806,7 @@ public class EosIntegrationTest {
 
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
-        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
@@ -829,10 +825,10 @@ public class EosIntegrationTest {
         final List<KeyValue<Integer, Integer>> recordBatch1 = IntStream.range(startKey, endKey - 1000).mapToObj(i -> KeyValue.pair(i, 0)).collect(Collectors.toList());
         IntegrationTestUtils.produceKeyValuesSynchronously(MULTI_PARTITION_INPUT_TOPIC,
             recordBatch1,
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
+            TestUtils.producerConfig(cluster.bootstrapServers(),
                 IntegerSerializer.class,
                 IntegerSerializer.class),
-            CLUSTER.time);
+            cluster.time);
 
         final StoreBuilder<KeyValueStore<Integer, String>> stateStore = Stores.keyValueStoreBuilder(
             Stores.persistentKeyValueStore(stateStoreName),
@@ -915,10 +911,10 @@ public class EosIntegrationTest {
         final List<KeyValue<Integer, Integer>> recordBatch2 = IntStream.range(endKey - 1000, endKey).mapToObj(i -> KeyValue.pair(i, 0)).collect(Collectors.toList());
         IntegrationTestUtils.produceKeyValuesSynchronously(MULTI_PARTITION_INPUT_TOPIC,
             recordBatch2,
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
+            TestUtils.producerConfig(cluster.bootstrapServers(),
                 IntegerSerializer.class,
                 IntegerSerializer.class),
-            CLUSTER.time);
+            cluster.time);
         latch.await();
         kafkaStreams.close();
         waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.NOT_RUNNING, Duration.ofSeconds(60));
@@ -997,7 +993,7 @@ public class EosIntegrationTest {
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,
-            CLUSTER.bootstrapServers(),
+            cluster.bootstrapServers(),
             Serdes.LongSerde.class.getName(),
             Serdes.LongSerde.class.getName(),
             properties
@@ -1015,8 +1011,8 @@ public class EosIntegrationTest {
             IntegrationTestUtils.produceKeyValuesSynchronously(
                 MULTI_PARTITION_INPUT_TOPIC,
                 inputDataTask0,
-                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
-                CLUSTER.time
+                TestUtils.producerConfig(cluster.bootstrapServers(), LongSerializer.class, LongSerializer.class),
+                cluster.time
             );
 
             final List<KeyValue<Long, Long>> expectedUncommittedResultTask0 = Collections.singletonList(KeyValue.pair(1L, 0L));
@@ -1051,8 +1047,8 @@ public class EosIntegrationTest {
             IntegrationTestUtils.produceKeyValuesSynchronously(
                 MULTI_PARTITION_INPUT_TOPIC,
                 inputDataTask0Fencing,
-                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class, producerConfigs),
-                CLUSTER.time,
+                TestUtils.producerConfig(cluster.bootstrapServers(), LongSerializer.class, LongSerializer.class, producerConfigs),
+                cluster.time,
                 true
             );
 
@@ -1079,7 +1075,7 @@ public class EosIntegrationTest {
         try (
             KafkaConsumer<String, String> consumer = new KafkaConsumer<>(
                 consumerConfig(
-                    CLUSTER.bootstrapServers(),
+                    cluster.bootstrapServers(),
                     ByteArrayDeserializer.class,
                     ByteArrayDeserializer.class
                 )
@@ -1241,7 +1237,7 @@ public class EosIntegrationTest {
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,
-            CLUSTER.bootstrapServers(),
+            cluster.bootstrapServers(),
             Serdes.LongSerde.class.getName(),
             Serdes.LongSerde.class.getName(),
             properties);
@@ -1265,8 +1261,8 @@ public class EosIntegrationTest {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             MULTI_PARTITION_INPUT_TOPIC,
             records,
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
-            CLUSTER.time
+            TestUtils.producerConfig(cluster.bootstrapServers(), LongSerializer.class, LongSerializer.class),
+            cluster.time
         );
     }
 
@@ -1292,7 +1288,7 @@ public class EosIntegrationTest {
         if (groupId != null) {
             return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
                 TestUtils.consumerConfig(
-                    CLUSTER.bootstrapServers(),
+                    cluster.bootstrapServers(),
                     groupId,
                     keyDeserializer,
                     valueDeserializer,
@@ -1307,7 +1303,7 @@ public class EosIntegrationTest {
 
         // read uncommitted
         return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-            TestUtils.consumerConfig(CLUSTER.bootstrapServers(), keyDeserializer, valueDeserializer),
+            TestUtils.consumerConfig(cluster.bootstrapServers(), keyDeserializer, valueDeserializer),
             topic,
             numberOfRecords,
             timeout
@@ -1324,7 +1320,7 @@ public class EosIntegrationTest {
         while (true) {
             final List<ConsumerRecord<K, V>> consumerRecords = waitUntilMinRecordsReceived(
                 TestUtils.consumerConfig(
-                    CLUSTER.bootstrapServers(),
+                    cluster.bootstrapServers(),
                     CONSUMER_GROUP_ID,
                     IntegerDeserializer.class,
                     IntegerDeserializer.class,
