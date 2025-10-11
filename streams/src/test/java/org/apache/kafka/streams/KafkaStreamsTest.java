@@ -1549,7 +1549,7 @@ public class KafkaStreamsTest {
             streams.start();
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
-                "Streams never started, state is " + streams.state());
+                    () -> "Streams never started, state is " + streams.state());
 
             streams.close();
 
