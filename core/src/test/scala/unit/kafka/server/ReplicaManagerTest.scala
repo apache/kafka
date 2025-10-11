@@ -3436,7 +3436,7 @@ class ReplicaManagerTest {
     val spyRLM = spy(remoteLogManager)
 
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2),
-      // Increased the `remote.max.wait.ms` to avoid flaky test
+      // Increased the `remote.max.wait.ms` to avoid flaky test due to usage of SystemTimer
       propsModifier = props => props.put(RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_PROP, 2000),
       enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(spyRLM), remoteFetchReaperEnabled = true)
     try {
@@ -3605,6 +3605,8 @@ class ReplicaManagerTest {
     val tidp0 = new TopicIdPartition(topicId, tp0)
     val tidp1 = new TopicIdPartition(topicId, tp1)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2),
+      // Increased the `remote.max.wait.ms` to avoid flaky test due to usage of SystemTimer
+      propsModifier = props => props.put(RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_PROP, 2000),
       enableRemoteStorage = true, shouldMockLog = true, remoteFetchQuotaExceeded = Some(false), remoteFetchReaperEnabled = true)
     try {
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
@@ -3707,6 +3709,8 @@ class ReplicaManagerTest {
     val tidp1 = new TopicIdPartition(topicId, tp1)
     val tidp2 = new TopicIdPartition(topicId, tp2)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2),
+      // Increased the `remote.max.wait.ms` to avoid flaky test due to usage of SystemTimer
+      propsModifier = props => props.put(RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_PROP, 2000),
       enableRemoteStorage = true, shouldMockLog = true, remoteFetchQuotaExceeded = Some(false), remoteFetchReaperEnabled = true)
     try {
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
