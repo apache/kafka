@@ -74,6 +74,8 @@ task bootstrapWrapper() {
           # If the local checksum does not match the required checksum, delete the JAR to force re-download.
           if [ "\$LOCAL_WRAPPER_JAR_CHECKSUM" != "\$REQUIRED_WRAPPER_JAR_CHECKSUM" ] ; then
             rm -f "$wrapperJarPath"
+          else
+            break
           fi
         fi
       done

@@ -228,6 +228,8 @@ for attempt in 1 2 3; do
     # If the local checksum does not match the required checksum, delete the JAR to force re-download.
     if [ "$LOCAL_WRAPPER_JAR_CHECKSUM" != "$REQUIRED_WRAPPER_JAR_CHECKSUM" ] ; then
       rm -f "$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
+    else
+      break
     fi
   fi
 done
