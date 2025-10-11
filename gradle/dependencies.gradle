@@ -22,17 +22,7 @@ ext {
   libs = [:]
 }
 
-// Add Scala version
-def defaultScala213Version = '2.13.17'
-if (hasProperty('scalaVersion')) {
-  if (scalaVersion == '2.13') {
-    versions["scala"] = defaultScala213Version
-  }  else {
-    versions["scala"] = scalaVersion
-  }
-} else {
-  versions["scala"] = defaultScala213Version
-}
+versions["scala"] = scalaVersion
 
 /* Resolve base Scala version according to these patterns:
  1. generally available Scala versions (such as: 2.13.z) corresponding base versions will be: 2.13 (respectively)
