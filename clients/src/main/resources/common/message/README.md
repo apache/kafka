@@ -91,6 +91,8 @@ There are several primitive field types available.
 
 * "records": recordset such as memory recordset.
 
+* "struct": a composite object consisting of one or more fields.
+
 In addition to these primitive field types, there is also an array type.  Array
 types start with a "[]" and end with the name of the element type.  For
 example, []Foo declares an array of "Foo" objects.  Array fields have their own
@@ -102,7 +104,7 @@ Guide](https://kafka.apache.org/protocol.html).
 Nullable Fields
 ---------------
 Booleans, ints, and floats can never be null.  However, fields that are strings,
-bytes, uuid, records, or arrays may optionally be "nullable".  When a field is 
+bytes, records, struct, or arrays may optionally be "nullable".  When a field is 
 "nullable", that simply means that we are prepared to serialize and deserialize
 null entries for that field.
 

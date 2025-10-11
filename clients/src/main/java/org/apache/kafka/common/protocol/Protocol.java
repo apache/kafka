@@ -66,6 +66,8 @@ public class Protocol {
                 b.append(indentStr);
                 b.append(entry.getKey());
                 b.append(" => ");
+                b.append(((Schema) entry.getValue()).typeName());
+                b.append(" ");
                 schemaToBnfHtml((Schema) entry.getValue(), b, indentSize + 2);
             } else {
                 // Standard Field Type

@@ -30,6 +30,10 @@ public class BoundField {
         this.index = index;
     }
 
+    public Field def() {
+        return this.def;
+    }
+
     @Override
     public String toString() {
         return def.name + ":" + def.type;

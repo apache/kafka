@@ -17,6 +17,7 @@
 package org.apache.kafka.common.protocol.types;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 /**
  * The nullable schema for a compound record definition
@@ -31,6 +32,10 @@ public final class NullableSchema extends Schema {
 
     public NullableSchema(boolean tolerateMissingFieldsWithDefaults, Field... fs) {
         super(tolerateMissingFieldsWithDefaults, fs);
+    }
+
+    public NullableSchema(Schema schema) {
+        this(schema.tolerateMissingFieldsWithDefaults(), Arrays.stream(schema.fields()).map(BoundField::def).toArray(Field[]::new));
     }
 
     @Override
