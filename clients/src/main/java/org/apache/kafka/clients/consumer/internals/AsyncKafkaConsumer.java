@@ -909,6 +909,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     throw errorOpt.get();
                 }
             } else if (!newlySubmittedEvent) {
+                timer.update();
+
                 if (timer.isExpired()) {
                     // The inflight event is expired...
                     log.trace("Inflight event {} expired without completing, clearing", inflightPoll);
