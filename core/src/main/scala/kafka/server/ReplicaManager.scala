@@ -253,7 +253,7 @@ class ReplicaManager(val config: KafkaConfig,
       config.deleteRecordsPurgatoryPurgeIntervalRequests))
   val delayedRemoteFetchPurgatory = delayedRemoteFetchPurgatoryParam.getOrElse(
     new DelayedOperationPurgatory[DelayedRemoteFetch](
-      "RemoteFetch", config.brokerId, 10))
+      "RemoteFetch", config.brokerId, 0))
   val delayedRemoteListOffsetsPurgatory = delayedRemoteListOffsetsPurgatoryParam.getOrElse(
     new DelayedOperationPurgatory[DelayedRemoteListOffsets](
       "RemoteListOffsets", config.brokerId))
@@ -1637,7 +1637,7 @@ class ReplicaManager(val config: KafkaConfig,
                                    params: FetchParams,
                                    responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit,
                                    logReadResults: Seq[(TopicIdPartition, LogReadResult)],
-                                   remoteFetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)]): Unit = {
+                                   fetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)]): Unit = {
     val remoteFetchTasks = new util.HashMap[TopicIdPartition, Future[Void]]
     val remoteFetchResults = new util.HashMap[TopicIdPartition, CompletableFuture[RemoteLogReadResult]]
 
@@ -1649,7 +1649,7 @@ class ReplicaManager(val config: KafkaConfig,
 
     val remoteFetchMaxWaitMs = config.remoteLogManagerConfig.remoteFetchMaxWaitMs().toLong
     val remoteFetch = new DelayedRemoteFetch(remoteFetchTasks, remoteFetchResults, remoteFetchInfos, remoteFetchMaxWaitMs,
-      remoteFetchPartitionStatus, params, logReadResults, this, responseCallback)
+      fetchPartitionStatus, params, logReadResults, this, responseCallback)
 
     // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
     val delayedFetchKeys = remoteFetchTasks.asScala.map { case (tp, _) => new TopicPartitionOperationKey(tp) }.toList
@@ -1737,6 +1737,8 @@ class ReplicaManager(val config: KafkaConfig,
         // try to complete the request immediately, otherwise put it into the purgatory;
         // this is because while the delayed fetch operation is being created, new requests
         // may arrive and hence make this operation completable.
+        // We only guarantee eventual cleanup via the next FETCH request for the same set of partitions or
+        // using reaper-thread.
         delayedFetchPurgatory.tryCompleteElseWatch(delayedFetch, delayedFetchKeys.asJava)
       }
     }

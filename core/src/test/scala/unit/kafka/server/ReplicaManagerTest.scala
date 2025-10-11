@@ -76,7 +76,7 @@ import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.LazyOffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, FetchDataInfo, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetsListener, LogOffsetSnapshot, LogSegments, ProducerStateManager, ProducerStateManagerConfig, RemoteLogReadResult, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, FetchDataInfo, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegments, ProducerStateManager, ProducerStateManagerConfig, RemoteLogReadResult, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeEach, Test}
@@ -97,7 +97,7 @@ import java.util.concurrent.{Callable, CompletableFuture, ConcurrentHashMap, Cou
 import java.util.function.{BiConsumer, Consumer}
 import java.util.stream.IntStream
 import java.util.{Collections, Optional, OptionalLong, Properties}
-import scala.collection.{mutable, Map, Seq}
+import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.{RichOption, RichOptional}
 
@@ -2964,7 +2964,8 @@ class ReplicaManagerTest {
     setupLogDirMetaProperties: Boolean = false,
     directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP,
     buildRemoteLogAuxState: Boolean = false,
-    remoteFetchQuotaExceeded: Option[Boolean] = None
+    remoteFetchQuotaExceeded: Option[Boolean] = None,
+    remoteFetchReaperEnabled: Boolean = false,
   ): ReplicaManager = {
     val props = TestUtils.createBrokerConfig(brokerId)
     val path1 = TestUtils.tempRelativeDir("data").getAbsolutePath
@@ -3007,8 +3008,9 @@ class ReplicaManagerTest {
       "Fetch", timer, 0, false)
     val mockDeleteRecordsPurgatory = new DelayedOperationPurgatory[DelayedDeleteRecords](
       "DeleteRecords", timer, 0, false)
+    // When enabling reaper, set the new timer instance so that other tests won't be affected.
     val mockDelayedRemoteFetchPurgatory = new DelayedOperationPurgatory[DelayedRemoteFetch](
-      "DelayedRemoteFetch", timer, 0, false)
+      "DelayedRemoteFetch", if (remoteFetchReaperEnabled) new MockTimer() else timer, 0, 0, remoteFetchReaperEnabled, true)
     val mockDelayedRemoteListOffsetsPurgatory = new DelayedOperationPurgatory[DelayedRemoteListOffsets](
       "RemoteListOffsets", timer, 0, false)
     val mockDelayedShareFetchPurgatory = new DelayedOperationPurgatory[DelayedShareFetch](
@@ -3433,7 +3435,8 @@ class ReplicaManagerTest {
       Optional.empty)
     val spyRLM = spy(remoteLogManager)
 
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(spyRLM))
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2),
+      enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(spyRLM))
     try {
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Some(topicId))
@@ -3599,9 +3602,8 @@ class ReplicaManagerTest {
     val tp1 = new TopicPartition(topic, 1)
     val tidp0 = new TopicIdPartition(topicId, tp0)
     val tidp1 = new TopicIdPartition(topicId, tp1)
-
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteFetchQuotaExceeded = Some(false))
-
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2),
+      enableRemoteStorage = true, shouldMockLog = true, remoteFetchQuotaExceeded = Some(false), remoteFetchReaperEnabled = true)
     try {
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Some(topicId))
@@ -3686,8 +3688,8 @@ class ReplicaManagerTest {
       responseData.foreach { case (_, fetchPartitionData) =>
         assertEquals(Errors.NONE, fetchPartitionData.error)
       }
-      // Verify that remote fetch purgatory size reduce by 1
-      assertEquals(1, replicaManager.delayedRemoteFetchPurgatory.watched)
+      TestUtils.waitUntilTrue(() => replicaManager.delayedRemoteFetchPurgatory.watched == 0,
+        "DelayedRemoteFetch purgatory should not have any pending / completed operation")
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -3702,8 +3704,8 @@ class ReplicaManagerTest {
     val tidp0 = new TopicIdPartition(topicId, tp0)
     val tidp1 = new TopicIdPartition(topicId, tp1)
     val tidp2 = new TopicIdPartition(topicId, tp2)
-
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteFetchQuotaExceeded = Some(false))
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2),
+      enableRemoteStorage = true, shouldMockLog = true, remoteFetchQuotaExceeded = Some(false), remoteFetchReaperEnabled = true)
     try {
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       val leaderEpoch = 0
@@ -3793,8 +3795,8 @@ class ReplicaManagerTest {
       responseData.foreach { case (_, fetchPartitionData) =>
         assertEquals(Errors.NONE, fetchPartitionData.error)
       }
-      // Verify that remote fetch purgatory size reduce by 1
-      assertEquals(1, replicaManager.delayedRemoteFetchPurgatory.watched)
+      TestUtils.waitUntilTrue(() => replicaManager.delayedRemoteFetchPurgatory.watched == 0,
+        "DelayedRemoteFetch purgatory should not have any pending / completed operation")
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -5832,25 +5834,29 @@ class ReplicaManagerTest {
     val aliveBrokerIds = Array(1, 2)
 
     val rm = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, setupLogDirMetaProperties = true, directoryEventHandler = directoryEventHandler)
-    val directoryIds = rm.logManager.directoryIdsSet.toList
-    assertEquals(directoryIds.size, 2)
-    val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, isStartIdLeader = true, directoryIds = directoryIds)
-    val (partition: Partition, _) = rm.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
-    partition.makeLeader(partitionRegistration(localId, 1, aliveBrokerIds, partitionEpoch, aliveBrokerIds),
-      isNew = false,
-      new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava),
-      None)
+    try {
+      val directoryIds = rm.logManager.directoryIdsSet.toList
+      assertEquals(directoryIds.size, 2)
+      val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, isStartIdLeader = true, directoryIds = directoryIds)
+      val (partition: Partition, _) = rm.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
+      partition.makeLeader(partitionRegistration(localId, 1, aliveBrokerIds, partitionEpoch, aliveBrokerIds),
+        isNew = false,
+        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava),
+        None)
 
-    def callback(responseStatus: Map[TopicPartition, DeleteRecordsResponseData.DeleteRecordsPartitionResult]): Unit = {
-      assert(responseStatus.values.head.errorCode == Errors.INVALID_TOPIC_EXCEPTION.code)
+      def callback(responseStatus: Map[TopicPartition, DeleteRecordsResponseData.DeleteRecordsPartitionResult]): Unit = {
+        assert(responseStatus.values.head.errorCode == Errors.INVALID_TOPIC_EXCEPTION.code)
+      }
+
+      // default internal topics delete disabled
+      rm.deleteRecords(
+        timeout = 0L,
+        Map[TopicPartition, Long](topicPartition0.topicPartition() -> 10L),
+        responseCallback = callback
+      )
+    } finally {
+        rm.shutdown(checkpointHW = false)
     }
-
-    // default internal topics delete disabled
-    rm.deleteRecords(
-      timeout = 0L,
-      Map[TopicPartition, Long](topicPartition0.topicPartition() -> 10L),
-      responseCallback = callback
-    )
   }
 
   @Test
@@ -5861,26 +5867,30 @@ class ReplicaManagerTest {
     val aliveBrokerIds = Array(1, 2)
 
     val rm = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, setupLogDirMetaProperties = true, directoryEventHandler = directoryEventHandler)
+    try {
       val directoryIds = rm.logManager.directoryIdsSet.toList
       assertEquals(directoryIds.size, 2)
       val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, isStartIdLeader = true, directoryIds = directoryIds)
       val (partition: Partition, _) = rm.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
-    partition.makeLeader(partitionRegistration(localId, 1, aliveBrokerIds, partitionEpoch, aliveBrokerIds),
-      isNew = false,
-      new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava),
-      None)
+      partition.makeLeader(partitionRegistration(localId, 1, aliveBrokerIds, partitionEpoch, aliveBrokerIds),
+        isNew = false,
+        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava),
+        None)
 
-    def callback(responseStatus: Map[TopicPartition, DeleteRecordsResponseData.DeleteRecordsPartitionResult]): Unit = {
-      assert(responseStatus.values.head.errorCode == Errors.NONE.code)
+      def callback(responseStatus: Map[TopicPartition, DeleteRecordsResponseData.DeleteRecordsPartitionResult]): Unit = {
+        assert(responseStatus.values.head.errorCode == Errors.NONE.code)
+      }
+
+      // internal topics delete allowed
+      rm.deleteRecords(
+        timeout = 0L,
+        Map[TopicPartition, Long](topicPartition0.topicPartition() -> 0L),
+        responseCallback = callback,
+        allowInternalTopicDeletion = true
+      )
+    } finally {
+      rm.shutdown(checkpointHW = false)
     }
-
-    // internal topics delete allowed
-    rm.deleteRecords(
-      timeout = 0L,
-      Map[TopicPartition, Long](topicPartition0.topicPartition() -> 0L),
-      responseCallback = callback,
-      allowInternalTopicDeletion = true
-    )
   }
 
   @Test
