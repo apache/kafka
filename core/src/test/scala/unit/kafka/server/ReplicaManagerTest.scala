@@ -72,7 +72,7 @@ import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPa
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation.{ADD_PARTITION, GENERIC_ERROR_SUPPORTED}
-import org.apache.kafka.server.util.timer.MockTimer
+import org.apache.kafka.server.util.timer.{MockTimer, SystemTimer}
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.LazyOffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
@@ -3010,7 +3010,7 @@ class ReplicaManagerTest {
       "DeleteRecords", timer, 0, false)
     // When enabling reaper, set the new timer instance so that other tests won't be affected.
     val mockDelayedRemoteFetchPurgatory = new DelayedOperationPurgatory[DelayedRemoteFetch](
-      "DelayedRemoteFetch", if (remoteFetchReaperEnabled) new MockTimer() else timer, 0, 0, remoteFetchReaperEnabled, true)
+      "DelayedRemoteFetch", if (remoteFetchReaperEnabled) new SystemTimer("DelayedRemoteFetch") else timer, 0, 0, remoteFetchReaperEnabled, true)
     val mockDelayedRemoteListOffsetsPurgatory = new DelayedOperationPurgatory[DelayedRemoteListOffsets](
       "RemoteListOffsets", timer, 0, false)
     val mockDelayedShareFetchPurgatory = new DelayedOperationPurgatory[DelayedShareFetch](
@@ -3436,7 +3436,9 @@ class ReplicaManagerTest {
     val spyRLM = spy(remoteLogManager)
 
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2),
-      enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(spyRLM))
+      // Increased the `remote.max.wait.ms` to avoid flaky test
+      propsModifier = props => props.put(RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_PROP, 2000),
+      enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(spyRLM), remoteFetchReaperEnabled = true)
     try {
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Some(topicId))
