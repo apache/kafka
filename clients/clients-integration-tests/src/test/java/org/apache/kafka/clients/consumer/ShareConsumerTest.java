@@ -2253,7 +2253,7 @@ public class ShareConsumerTest {
     public void testComplexShareConsumer() throws Exception {
         String topicName = "multipart";
         String groupId = "multipartGrp";
-        createTopic(topicName, 3, 3);
+        createTopic(topicName, 1, 3);
         TopicPartition multiTp = new TopicPartition(topicName, 0);
 
         ScheduledExecutorService service = Executors.newScheduledThreadPool(5);
@@ -2307,7 +2307,6 @@ public class ShareConsumerTest {
         serverProperties = {
             @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
             @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
-            @ClusterConfigProperty(key = "group.share.enable", value = "true"),
             @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
             @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),

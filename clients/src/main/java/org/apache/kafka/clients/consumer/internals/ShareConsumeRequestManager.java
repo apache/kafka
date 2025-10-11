@@ -280,6 +280,15 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         return new PollResult(requests);
     }
 
+    @Override
+    public long maximumTimeToWait(long currentTimeMs) {
+        // When fetching records and there is no chosen node for fetching, we do not want to wait for the next poll
+        if (fetchMoreRecords && fetchRecordsNodeId.get() == -1) {
+            return 0L;
+        }
+        return Long.MAX_VALUE;
+    }
+
     /**
      *
      * @return True if we can add acknowledgements to the share session.
