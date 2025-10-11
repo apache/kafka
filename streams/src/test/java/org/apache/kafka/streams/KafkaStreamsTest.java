@@ -1300,7 +1300,7 @@ public class KafkaStreamsTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldNotThrowOnNullTimeoutForCloseWithCloseOptionLeaveGroupTrue() throws Exception {
+    public void shouldUseDefaultTimeoutForCloseWithNullTimeout() throws Exception {
         prepareStreams();
         prepareStreamThread(streamThreadOne, 1);
         prepareStreamThread(streamThreadTwo, 2);
