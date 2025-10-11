@@ -1599,6 +1599,7 @@ kafka.server.AuthHelperTest:
 - testComputeDescribeClusterResponseWhereControllerIsNotFound
 - testFilterByAuthorized
 kafka.server.AutoTopicCreationManagerTest:
+- testBackoffAndInflightInteraction
 - testCreateNonInternalTopic
 - testCreateOffsetTopic
 - testCreateShareStateTopic
@@ -1614,11 +1615,14 @@ kafka.server.AutoTopicCreationManagerTest:
 - testErrorCacheExpirationBasedEviction
 - testErrorCacheTTL
 - testGetTopicCreationErrorsWithMultipleTopics
+- testInflightTopicsAreNotRetriedConcurrently
 - testSendCreateTopicRequestEnvelopeHandling
 - testTopicCreationErrorCaching
 - testTopicCreationWithMetadataContextNoRetryUponUnsupportedVersion
 - testTopicCreationWithMetadataContextPassPrincipal
 - testTopicCreationWithMetadataContextWhenPrincipalSerdeNotDefined
+- testTopicsInBackoffAreNotRetried
+- testTopicsOutOfBackoffCanBeRetried
 kafka.server.BrokerLifecycleManagerTest:
 - testAlwaysSendsAccumulatedOfflineDirs
 - testControlledShutdown
