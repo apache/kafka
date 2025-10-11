@@ -250,7 +250,7 @@ public final class MessageGenerator {
                     numProcessed++;
                     typeClassGenerators.forEach(generator -> generator.registerMessageType(spec));
                 } catch (Exception e) {
-                    throw new RuntimeException("Exception while processing " + inputPath.toString(), e);
+                    throw new RuntimeException("Exception while processing " + inputPath, e);
                 }
             }
         }

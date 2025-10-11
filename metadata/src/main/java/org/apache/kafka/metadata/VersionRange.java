@@ -72,9 +72,9 @@ public class VersionRange {
         if (min == max) {
             return String.valueOf(min);
         } else if (max == Short.MAX_VALUE) {
-            return String.valueOf(min) + "+";
+            return min + "+";
         } else {
-            return String.valueOf(min) + "-" + String.valueOf(max);
+            return min + "-" + max;
         }
     }
 }

@@ -39,7 +39,7 @@ public class QuickUnion<T> {
         T parent = ids.get(current);
 
         if (parent == null) {
-            throw new NoSuchElementException("id: " + id.toString());
+            throw new NoSuchElementException("id: " + id);
         }
 
         while (!parent.equals(current)) {

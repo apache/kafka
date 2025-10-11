@@ -161,11 +161,11 @@ public class ClientUtils {
                 result.put(partition, future.get());
             } catch (final ExecutionException e) {
                 final Throwable cause = e.getCause();
-                final String msg = String.format("Error while attempting to read end offsets for partition '%s'", partition.toString());
+                final String msg = String.format("Error while attempting to read end offsets for partition '%s'", partition);
                 throw new StreamsException(msg, cause);
             } catch (final InterruptedException e) {
                 Thread.interrupted();
-                final String msg = String.format("Interrupted while attempting to read end offsets for partition '%s'", partition.toString());
+                final String msg = String.format("Interrupted while attempting to read end offsets for partition '%s'", partition);
                 throw new StreamsException(msg, e);
             }
         }

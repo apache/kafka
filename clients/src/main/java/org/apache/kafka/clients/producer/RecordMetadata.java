@@ -119,6 +119,6 @@ public final class RecordMetadata {
 
     @Override
     public String toString() {
-        return topicPartition.toString() + "@" + offset;
+        return topicPartition + "@" + offset;
     }
 }

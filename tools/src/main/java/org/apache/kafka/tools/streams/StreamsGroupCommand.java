@@ -361,12 +361,12 @@ public class StreamsGroupCommand {
             if (!verbose) {
                 String fmt = "%" + -groupLen + "s %" + -coordinatorLen + "s %" + -stateLen + "s %s\n";
                 System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "STATE", "#MEMBERS");
-                System.out.printf(fmt, description.groupId(), coordinator, description.groupState().toString(), description.members().size());
+                System.out.printf(fmt, description.groupId(), coordinator, description.groupState(), description.members().size());
             } else {
                 final int groupEpochLen = 15, targetAssignmentEpochLen = 25;
                 String fmt = "%" + -groupLen + "s %" + -coordinatorLen + "s %" + -stateLen + "s %" + -groupEpochLen + "s %" + -targetAssignmentEpochLen + "s %s\n";
                 System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "STATE", "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS");
-                System.out.printf(fmt, description.groupId(), coordinator, description.groupState().toString(), description.groupEpoch(), description.targetAssignmentEpoch(), description.members().size());
+                System.out.printf(fmt, description.groupId(), coordinator, description.groupState(), description.groupEpoch(), description.targetAssignmentEpoch(), description.members().size());
             }
         }
 

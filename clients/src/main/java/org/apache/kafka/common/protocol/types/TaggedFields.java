@@ -138,7 +138,7 @@ public class TaggedFields extends DocumentedType {
         for (Map.Entry<Integer, Field> field : fields.entrySet()) {
             bld.append(prefix);
             prefix = ", ";
-            bld.append(field.getKey()).append(" -> ").append(field.getValue().toString());
+            bld.append(field.getKey()).append(" -> ").append(field.getValue());
         }
         bld.append(")");
         return bld.toString();

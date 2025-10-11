@@ -283,7 +283,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
                 default -> throw new DataException(targetType + " is not supported in the Cast transformation.");
             };
         } catch (NumberFormatException e) {
-            throw new DataException("Value (" + value.toString() + ") was out of range for requested data type", e);
+            throw new DataException("Value (" + value + ") was out of range for requested data type", e);
         }
     }
 

@@ -387,7 +387,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 if (hasCycles(topicMovementPairs)) {
                     log.error("Stickiness is violated for topic {}"
                         + "\nPartition movements for this topic occurred among the following consumer pairs:"
-                        + "\n{}", topicMovements.getKey(), topicMovements.getValue().toString());
+                        + "\n{}", topicMovements.getKey(), topicMovements.getValue());
                     return false;
                 }
             }

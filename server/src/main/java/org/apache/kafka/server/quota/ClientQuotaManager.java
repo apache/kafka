@@ -482,11 +482,11 @@ public class ClientQuotaManager {
     }
 
     private String getThrottleTimeSensorName(Map<String, String> metricTags) {
-        return quotaType.toString() + "ThrottleTime-" + metricTagsToSensorSuffix(metricTags);
+        return quotaType + "ThrottleTime-" + metricTagsToSensorSuffix(metricTags);
     }
 
     private String getQuotaSensorName(Map<String, String> metricTags) {
-        return quotaType.toString() + "-" + metricTagsToSensorSuffix(metricTags);
+        return quotaType + "-" + metricTagsToSensorSuffix(metricTags);
     }
 
     protected MetricConfig getQuotaMetricConfig(Map<String, String> metricTags) {

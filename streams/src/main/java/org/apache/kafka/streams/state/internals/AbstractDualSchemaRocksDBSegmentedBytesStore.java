@@ -216,13 +216,13 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         if (baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema) {
             if (timestampFromRawKey < observedStreamTime - retentionPeriod) {
                 LOG.debug("Record with key {} is expired as timestamp from key ({}) < actual stream time ({})",
-                        rawKey.toString(), timestampFromRawKey, observedStreamTime - retentionPeriod);
+                        rawKey, timestampFromRawKey, observedStreamTime - retentionPeriod);
                 return null;
             }
         } else {
             if (timestampFromRawKey < observedStreamTime - retentionPeriod + 1) {
                 LOG.debug("Record with key {} is expired as timestamp from key ({}) < actual stream time ({})",
-                        rawKey.toString(), timestampFromRawKey, observedStreamTime - retentionPeriod + 1);
+                        rawKey, timestampFromRawKey, observedStreamTime - retentionPeriod + 1);
                 return null;
             }
         }

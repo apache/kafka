@@ -370,7 +370,7 @@ public class LogCompactionTester {
 
         ProcessBuilder builder = new ProcessBuilder(
                 "sort", "--key=1,2", "--stable", "--buffer-size=20%",
-                "--temporary-directory=" + tempDir.toString(), file.getAbsolutePath());
+                "--temporary-directory=" + tempDir, file.getAbsolutePath());
         builder.redirectError(ProcessBuilder.Redirect.INHERIT);
         
         Process process;

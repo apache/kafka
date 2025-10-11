@@ -465,7 +465,7 @@ public class RecordCollectorImpl implements RecordCollector {
                                  final ProducerRecord<byte[], byte[]> serializedRecord,
                                  final InternalProcessorContext<?, ?> context,
                                  final String processorNodeId) {
-        String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, productionException.toString());
+        String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, productionException);
 
         if (isFatalException(productionException)) {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.";

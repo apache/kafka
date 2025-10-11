@@ -50,7 +50,7 @@ public class DeleteRecordsPartitionStatus {
     @Override
     public String toString() {
         return String.format("[acksPending: %b, error: %s, lowWatermark: %d, requiredOffset: %d]",
-                acksPending, Errors.forCode(responseStatus.errorCode()).toString(), responseStatus.lowWatermark(),
+                acksPending, Errors.forCode(responseStatus.errorCode()), responseStatus.lowWatermark(),
                 requiredOffset);
     }
 

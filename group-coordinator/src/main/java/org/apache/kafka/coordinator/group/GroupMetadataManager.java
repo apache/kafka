@@ -3699,8 +3699,8 @@ public class GroupMetadataManager {
             log.info("[GroupId {}][MemberId {}] Member's new assignment state: epoch={}, previousEpoch={}, state={}, "
                     + "assignedTasks={} and tasksPendingRevocation={}.",
                 groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(), updatedMember.state(),
-                updatedMember.assignedTasks().toString(),
-                updatedMember.tasksPendingRevocation().toString());
+                updatedMember.assignedTasks(),
+                updatedMember.tasksPendingRevocation());
 
             // Schedule/cancel the rebalance timeout.
             if (updatedMember.state() == org.apache.kafka.coordinator.group.streams.MemberState.UNREVOKED_TASKS) {

@@ -313,7 +313,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             return mergeColumnFamilyHandleLists(existingColumnFamilies, createdColumnFamilies, allDescriptors);
 
         } catch (final RocksDBException e) {
-            throw new ProcessorStateException("Error opening store " + name + " at location " + dbDir.toString(), e);
+            throw new ProcessorStateException("Error opening store " + name + " at location " + dbDir, e);
         }
     }
 

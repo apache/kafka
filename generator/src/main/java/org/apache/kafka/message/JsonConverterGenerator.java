@@ -262,7 +262,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
         } else if (target.field().type().isStruct()) {
             buffer.printf("%s;%n", target.assignmentStatement(
                 String.format("%s%s.read(%s, _version)",
-                target.field().type().toString(), SUFFIX, target.sourceVariable())));
+                target.field().type(), SUFFIX, target.sourceVariable())));
         } else {
             throw new RuntimeException("Unexpected type " + target.field().type());
         }
@@ -439,7 +439,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
         } else if (target.field().type().isStruct()) {
             buffer.printf("%s;%n", target.assignmentStatement(
                 String.format("%sJsonConverter.write(%s, _version, _serializeRecords)",
-                    target.field().type().toString(), target.sourceVariable())));
+                    target.field().type(), target.sourceVariable())));
         } else {
             throw new RuntimeException("unknown type " + target.field().type());
         }

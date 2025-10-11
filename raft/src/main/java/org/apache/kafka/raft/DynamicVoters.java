@@ -109,7 +109,7 @@ public final class DynamicVoters {
         for (DynamicVoter voter : voters.values()) {
             builder.append(prefix);
             prefix = ",";
-            builder.append(voter.toString());
+            builder.append(voter);
         }
         return builder.toString();
     }

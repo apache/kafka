@@ -167,7 +167,7 @@ public final class IntGaugeSuite<K> implements AutoCloseable {
         synchronized (this) {
             if (closed) {
                 log.warn("{}: Attempted to increment {}, but the GaugeSuite was closed.",
-                    suiteName, key.toString());
+                    suiteName, key);
                 return;
             }
             StoredIntGauge gauge = gauges.get(key);
@@ -181,7 +181,7 @@ public final class IntGaugeSuite<K> implements AutoCloseable {
             if (gauges.size() == maxEntries) {
                 if (removable.isEmpty()) {
                     log.debug("{}: Attempted to increment {}, but there are already {} entries.",
-                        suiteName, key.toString(), maxEntries);
+                        suiteName, key, maxEntries);
                     return;
                 }
                 Iterator<K> iter = removable.iterator();
@@ -191,13 +191,13 @@ public final class IntGaugeSuite<K> implements AutoCloseable {
                 gauges.remove(keyToRemove);
                 pending.push(new PendingMetricsChange(metricNameToRemove, null));
                 log.trace("{}: Removing the metric {}, which has a value of 0.",
-                    suiteName, keyToRemove.toString());
+                    suiteName, keyToRemove);
             }
             MetricName metricNameToAdd = metricNameCalculator.apply(key);
             gauge = new StoredIntGauge(metricNameToAdd);
             gauges.put(key, gauge);
             pending.push(new PendingMetricsChange(metricNameToAdd, gauge));
-            log.trace("{}: Adding a new metric {}.", suiteName, key.toString());
+            log.trace("{}: Adding a new metric {}.", suiteName, key);
         }
         // Drop the object monitor and perform any pending metrics additions or removals.
         performPendingMetricsOperations();
@@ -236,17 +236,17 @@ public final class IntGaugeSuite<K> implements AutoCloseable {
     public synchronized void decrement(K key) {
         if (closed) {
             log.warn("{}: Attempted to decrement {}, but the gauge suite was closed.",
-                suiteName, key.toString());
+                suiteName, key);
             return;
         }
         StoredIntGauge gauge = gauges.get(key);
         if (gauge == null) {
             log.debug("{}: Attempted to decrement {}, but no such metric was registered.",
-                suiteName, key.toString());
+                suiteName, key);
         } else {
             int cur = gauge.decrement();
             log.trace("{}: Removed a reference to {}.  {} reference(s) remaining.",
-                suiteName, key.toString(), cur);
+                suiteName, key, cur);
             if (cur <= 0) {
                 removable.add(key);
             }

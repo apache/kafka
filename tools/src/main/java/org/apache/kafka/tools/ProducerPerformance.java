@@ -648,7 +648,7 @@ public class ProducerPerformance {
                 Optional<String> txIdInProps =
                         Optional.ofNullable(producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG))
                                 .map(Object::toString);
-                String transactionId = Optional.ofNullable(transactionIdArg).orElse(txIdInProps.orElse(DEFAULT_TRANSACTION_ID_PREFIX + Uuid.randomUuid().toString()));
+                String transactionId = Optional.ofNullable(transactionIdArg).orElse(txIdInProps.orElse(DEFAULT_TRANSACTION_ID_PREFIX + Uuid.randomUuid()));
                 producerProps.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionId);
 
                 if (transactionDurationMsArg == null) {

@@ -892,7 +892,7 @@ public class SelectorTest {
                 entry.getKey().name().equals(name) && entry.getKey().tags().equals(tags))
             .findFirst();
         if (metric.isEmpty())
-            throw new Exception(String.format("Could not find metric called %s with tags %s", name, tags.toString()));
+            throw new Exception(String.format("Could not find metric called %s with tags %s", name, tags));
 
         return metric.get().getValue();
     }

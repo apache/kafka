@@ -331,7 +331,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         this.image = image;
 
         if (stillNeedToCatchUp(
-            "maybePublishMetadata(" + manifest.type().toString() + ")",
+            "maybePublishMetadata(" + manifest.type() + ")",
             manifest.provenance().lastContainedOffset())
         ) {
             return;

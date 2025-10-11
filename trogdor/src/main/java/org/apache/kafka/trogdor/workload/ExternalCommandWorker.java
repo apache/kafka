@@ -208,7 +208,7 @@ public class ExternalCommandWorker implements TaskWorker {
                     log.trace("{}: read line from stdin: {}", id, line);
                     JsonNode resp = readObject(line);
                     if (resp.has("status")) {
-                        log.info("{}: New status: {}", id, resp.get("status").toString());
+                        log.info("{}: New status: {}", id, resp.get("status"));
                         status.update(resp.get("status"));
                     }
                     if (resp.has("log")) {

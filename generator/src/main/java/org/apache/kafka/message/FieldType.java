@@ -379,7 +379,7 @@ public interface FieldType {
 
         @Override
         public String toString() {
-            return "[]" + elementType.toString();
+            return "[]" + elementType;
         }
     }
 

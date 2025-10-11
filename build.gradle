@@ -41,6 +41,7 @@ plugins {
   id 'org.scoverage' version '8.0.3' apply false
   id 'com.gradleup.shadow' version '8.3.9' apply false
   id 'com.diffplug.spotless' version "7.2.1"
+  id 'net.ltgt.errorprone' version '4.3.0' apply false
 }
 
 ext {
@@ -76,7 +77,7 @@ ext {
     // until version can be upgraded: https://github.com/spotbugs/spotbugs/issues/3564
     project.gradle.startParameter.excludedTaskNames.add("spotbugsMain")
     project.gradle.startParameter.excludedTaskNames.add("spotbugsTest")
-  }    
+  }
 
   maxTestForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : Runtime.runtime.availableProcessors()
   maxScalacThreads = project.hasProperty('maxScalacThreads') ? maxScalacThreads.toInteger() :
@@ -228,6 +229,8 @@ allprojects {
     delete "${projectDir}/src/generated"
     delete "${projectDir}/src/generated-test"
   }
+
+  apply from: rootProject.file('gradle/error-prone.gradle')
 }
 
 def determineCommitId() {

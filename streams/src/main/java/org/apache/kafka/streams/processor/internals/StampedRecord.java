@@ -79,7 +79,7 @@ public class StampedRecord extends Stamped<ConsumerRecord<?, ?>> {
 
     @Override
     public String toString() {
-        return value.toString() + ", timestamp = " + timestamp;
+        return value + ", timestamp = " + timestamp;
     }
 
     @Override

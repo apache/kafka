@@ -58,7 +58,7 @@ public class ByteArrayConverter implements Converter, HeaderConverter, Versioned
     @Override
     public byte[] fromConnectData(String topic, Schema schema, Object value) {
         if (schema != null && schema.type() != Schema.Type.BYTES)
-            throw new DataException("Invalid schema type for ByteArrayConverter: " + schema.type().toString());
+            throw new DataException("Invalid schema type for ByteArrayConverter: " + schema.type());
 
         if (value != null && !(value instanceof byte[]) && !(value instanceof ByteBuffer))
             throw new DataException("ByteArrayConverter is not compatible with objects of type " + value.getClass());

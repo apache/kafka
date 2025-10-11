@@ -109,6 +109,6 @@ public class CleanShutdownFileHandler {
 
     @Override
     public String toString() {
-        return "CleanShutdownFile=(" + "file=" + cleanShutdownFile.toString() + ')';
+        return "CleanShutdownFile=(" + "file=" + cleanShutdownFile + ')';
     }
 }

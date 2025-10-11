@@ -567,12 +567,12 @@ public class ShareGroupCommand {
                 if (verbose) {
                     String fmt = "\n%" + -groupLen + "s %" + -coordinatorLen + "s %-15s %-12s %-17s %s";
                     System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "STATE", "GROUP-EPOCH", "ASSIGNMENT-EPOCH", "#MEMBERS");
-                    System.out.printf(fmt, groupId, coordinator, description.groupState().toString(),
+                    System.out.printf(fmt, groupId, coordinator, description.groupState(),
                         description.groupEpoch(), description.targetAssignmentEpoch(), description.members().size());
                 } else {
                     String fmt = "\n%" + -groupLen + "s %" + -coordinatorLen + "s %-15s %s";
                     System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "STATE", "#MEMBERS");
-                    System.out.printf(fmt, groupId, coordinator, description.groupState().toString(), description.members().size());
+                    System.out.printf(fmt, groupId, coordinator, description.groupState(), description.members().size());
                 }
                 System.out.println();
             });

@@ -119,7 +119,7 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
         return "StrictBufferConfigImpl{maxKeys=" + maxRecords +
             ", maxBytes=" + maxBytes +
             ", bufferFullStrategy=" + bufferFullStrategy +
-            ", logConfig=" + logConfig().toString() +
+            ", logConfig=" + logConfig() +
              '}';
     }
 }

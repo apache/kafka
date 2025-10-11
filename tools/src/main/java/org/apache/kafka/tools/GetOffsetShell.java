@@ -246,7 +246,7 @@ public class GetOffsetShell {
                     partitionInfo = listOffsetsResult.partitionResult(partition).get();
                 } catch (ExecutionException e) {
                     if (e.getCause() instanceof KafkaException) {
-                        System.err.println("Skip getting offsets for topic-partition " + partition.toString() + " due to error: " + e.getMessage());
+                        System.err.println("Skip getting offsets for topic-partition " + partition + " due to error: " + e.getMessage());
                     } else {
                         throw e;
                     }

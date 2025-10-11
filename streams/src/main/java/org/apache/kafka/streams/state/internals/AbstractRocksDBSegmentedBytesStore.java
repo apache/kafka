@@ -95,7 +95,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         final long actualFrom = getActualFrom(from);
 
         if (keySchema instanceof WindowKeySchema && to < actualFrom) {
-            LOG.debug("Returning no records for key {} as to ({}) < actualFrom ({}) ", key.toString(), to, actualFrom);
+            LOG.debug("Returning no records for key {} as to ({}) < actualFrom ({}) ", key, to, actualFrom);
             return KeyValueIterators.emptyIterator();
         }
 
@@ -275,7 +275,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         // check if timestamp is expired
         if (timestampFromKey < observedStreamTime - retentionPeriod + 1) {
             LOG.debug("Record with key {} is expired as timestamp from key ({}) < actual stream time ({})",
-                    key.toString(), timestampFromKey, observedStreamTime - retentionPeriod + 1);
+                    key, timestampFromKey, observedStreamTime - retentionPeriod + 1);
             return null;
         }
         final S segment = segments.segmentForTimestamp(timestampFromKey);

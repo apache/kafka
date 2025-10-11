@@ -185,7 +185,7 @@ public final class LoggingContext implements AutoCloseable {
         // Append non-task scopes (e.g., worker and offset)
         if (scope != Scope.TASK) {
             sb.append("|");
-            sb.append(scope.toString());
+            sb.append(scope);
         }
         sb.append("] ");
         return sb.toString();

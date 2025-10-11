@@ -251,11 +251,11 @@ public class JmxTool {
             for (Attribute attribute : attributes.asList()) {
                 if (attributesInclude.isPresent()) {
                     if (List.of(attributesInclude.get()).contains(attribute.getName())) {
-                        result.put(String.format("%s:%s", objectName.toString(), attribute.getName()),
+                        result.put(String.format("%s:%s", objectName, attribute.getName()),
                                 attribute.getValue());
                     }
                 } else {
-                    result.put(String.format("%s:%s", objectName.toString(), attribute.getName()),
+                    result.put(String.format("%s:%s", objectName, attribute.getName()),
                             attribute.getValue());
                 }
             }

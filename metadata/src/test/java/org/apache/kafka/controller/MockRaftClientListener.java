@@ -54,7 +54,7 @@ public class MockRaftClientListener implements RaftClient.Listener<ApiMessageAnd
 
                 for (ApiMessageAndVersion messageAndVersion : batch.records()) {
                     ApiMessage message = messageAndVersion.message();
-                    serializedEvents.add(COMMIT + " " + message.toString());
+                    serializedEvents.add(COMMIT + " " + message);
                 }
                 serializedEvents.add(LAST_COMMITTED_OFFSET + " " + lastCommittedOffset);
             }
@@ -72,7 +72,7 @@ public class MockRaftClientListener implements RaftClient.Listener<ApiMessageAnd
 
                 for (ApiMessageAndVersion messageAndVersion : batch.records()) {
                     ApiMessage message = messageAndVersion.message();
-                    serializedEvents.add(SNAPSHOT + " " + message.toString());
+                    serializedEvents.add(SNAPSHOT + " " + message);
                 }
                 serializedEvents.add(LAST_COMMITTED_OFFSET + " " + lastCommittedOffset);
             }

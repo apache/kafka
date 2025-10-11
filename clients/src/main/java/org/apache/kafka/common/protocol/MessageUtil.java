@@ -57,7 +57,7 @@ public final class MessageUtil {
         while (iter.hasNext()) {
             Object object = iter.next();
             bld.append(prefix);
-            bld.append(object.toString());
+            bld.append(object);
             prefix = ", ";
         }
         bld.append("]");

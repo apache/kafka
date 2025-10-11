@@ -226,12 +226,12 @@ public class MirrorMaker {
 
     private void checkHerder(SourceAndTarget sourceAndTarget) {
         if (!herders.containsKey(sourceAndTarget)) {
-            throw new IllegalArgumentException("No herder for " + sourceAndTarget.toString());
+            throw new IllegalArgumentException("No herder for " + sourceAndTarget);
         }
     }
 
     private void addHerder(SourceAndTarget sourceAndTarget) {
-        log.info("creating herder for {}", sourceAndTarget.toString());
+        log.info("creating herder for {}", sourceAndTarget);
         Map<String, String> workerProps = config.workerConfig(sourceAndTarget);
         DistributedConfig distributedConfig = new DistributedConfig(workerProps);
         String encodedSource = encodePath(sourceAndTarget.source());
@@ -289,13 +289,13 @@ public class MirrorMaker {
 
     private String generateWorkerId(SourceAndTarget sourceAndTarget) {
         if (config.enableInternalRest()) {
-            return advertisedUrl.getHost() + ":" + advertisedUrl.getPort() + "/" + sourceAndTarget.toString();
+            return advertisedUrl.getHost() + ":" + advertisedUrl.getPort() + "/" + sourceAndTarget;
         }
         try {
             //UUID to make sure it is unique even if multiple workers running on the same host
-            return InetAddress.getLocalHost().getCanonicalHostName() + "/" + sourceAndTarget.toString() + "/" + UUID.randomUUID();
+            return InetAddress.getLocalHost().getCanonicalHostName() + "/" + sourceAndTarget + "/" + UUID.randomUUID();
         } catch (UnknownHostException e) {
-            return sourceAndTarget.toString() + "/" + UUID.randomUUID();
+            return sourceAndTarget + "/" + UUID.randomUUID();
         }
     }
 

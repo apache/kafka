@@ -34,7 +34,7 @@ public class RocksDBMetricsRecordingTrigger implements Runnable {
         final String metricsRecorderName = metricsRecorderName(metricsRecorder);
         if (metricsRecordersToTrigger.containsKey(metricsRecorderName)) {
             throw new IllegalStateException("RocksDB metrics recorder for store \"" + metricsRecorder.storeName() +
-                "\" of task " + metricsRecorder.taskId().toString() + " has already been added. "
+                "\" of task " + metricsRecorder.taskId() + " has already been added. "
                 + "This is a bug in Kafka Streams.");
         }
         metricsRecordersToTrigger.put(metricsRecorderName, metricsRecorder);
@@ -51,7 +51,7 @@ public class RocksDBMetricsRecordingTrigger implements Runnable {
     }
 
     private String metricsRecorderName(final RocksDBMetricsRecorder metricsRecorder) {
-        return metricsRecorder.taskId().toString() + "-" + metricsRecorder.storeName();
+        return metricsRecorder.taskId() + "-" + metricsRecorder.storeName();
     }
 
     @Override

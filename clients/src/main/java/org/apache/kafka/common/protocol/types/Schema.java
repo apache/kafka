@@ -181,7 +181,7 @@ public final class Schema extends Type {
         StringBuilder b = new StringBuilder();
         b.append('{');
         for (int i = 0; i < this.fields.length; i++) {
-            b.append(this.fields[i].toString());
+            b.append(this.fields[i]);
             if (i < this.fields.length - 1)
                 b.append(',');
         }

@@ -71,7 +71,7 @@ public class BooleanConverter implements Converter, HeaderConverter, Versioned {
     @Override
     public byte[] fromConnectData(String topic, Schema schema, Object value) {
         if (schema != null && schema.type() != Type.BOOLEAN)
-            throw new DataException("Invalid schema type for BooleanConverter: " + schema.type().toString());
+            throw new DataException("Invalid schema type for BooleanConverter: " + schema.type());
 
         try {
             return serializer.serialize(topic, (Boolean) value);

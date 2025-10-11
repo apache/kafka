@@ -1347,7 +1347,7 @@ public class InternalTopologyBuilder {
             latestResetPatterns.stream().anyMatch(p -> p.matcher(topic).matches())) {
             return AutoOffsetResetStrategy.LATEST;
         } else if (maybeDecorateInternalSourceTopics(durationResetTopics.keySet()).contains(topic)) {
-            return AutoOffsetResetStrategy.fromString("by_duration:" + durationResetTopics.get(topic).toString());
+            return AutoOffsetResetStrategy.fromString("by_duration:" + durationResetTopics.get(topic));
         } else if ((resetDuration = findDuration(topic)).isPresent()) {
             return AutoOffsetResetStrategy.fromString("by_duration:" + resetDuration.get());
         } else if (containsTopic(topic)) {
@@ -1719,8 +1719,8 @@ public class InternalTopologyBuilder {
         @Override
         public String toString() {
             return "Sub-topology: " + id + " for global store (will not generate tasks)\n"
-                    + "    " + source.toString() + "\n"
-                    + "    " + processor.toString() + "\n";
+                    + "    " + source + "\n"
+                    + "    " + processor + "\n";
         }
 
         @Override

@@ -490,7 +490,7 @@ public class TopologyMetadata {
         }
         final StringBuilder sb = new StringBuilder();
 
-        applyToEachBuilder(b -> sb.append(b.describe().toString()));
+        applyToEachBuilder(b -> sb.append(b.describe()));
 
         return sb.toString();
     }

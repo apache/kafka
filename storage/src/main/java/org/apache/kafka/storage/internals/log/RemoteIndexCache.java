@@ -670,7 +670,7 @@ public class RemoteIndexCache implements Closeable {
         long startOffset = remoteLogSegmentMetadata.startOffset();
         Uuid segmentId = remoteLogSegmentMetadata.remoteLogSegmentId().id();
         // uuid.toString uses URL encoding which is safe for filenames and URLs.
-        return startOffset + "_" + segmentId.toString();
+        return startOffset + "_" + segmentId;
     }
 
     static File remoteOffsetIndexFile(File dir, RemoteLogSegmentMetadata remoteLogSegmentMetadata) {

@@ -114,7 +114,7 @@ public class RemoteLogMetadataSerde {
             output.printf("partition: %d, offset: %d, value: %s%n",
                     consumerRecord.partition(),
                     consumerRecord.offset(),
-                    remoteLogMetadataSerde.deserialize(consumerRecord.value()).toString());
+                    remoteLogMetadataSerde.deserialize(consumerRecord.value()));
         }
     }
 }

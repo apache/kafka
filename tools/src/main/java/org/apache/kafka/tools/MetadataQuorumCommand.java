@@ -323,7 +323,7 @@ public class MetadataQuorumCommand {
                 sb.append(", \"endpoints\": [");
                 for (RaftVoterEndpoint endpoint : endpoints) {
                     sb.append("\"");
-                    sb.append(endpoint.toString()).append("\", ");
+                    sb.append(endpoint).append("\", ");
                 }
                 sb.setLength(sb.length() - 2);  // remove the last comma and space
                 sb.append("]");
