@@ -1222,7 +1222,7 @@ streamsConfig.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksD
             These optimizations include moving/reducing repartition topics and reusing the source topic as the changelog for source KTables. These optimizations will save on network traffic and storage in Kafka without changing the semantics of your applications. Enabling them is recommended.
           </p>
           <p>
-            Note that as of 2.3, you need to do two things to enable optimizations. In addition to setting this config to <code>StreamsConfig.OPTIMIZE</code>, you'll need to pass in your
+            Note that you need to do two things to enable optimizations. In addition to setting this config to <code>StreamsConfig.OPTIMIZE</code>, you'll need to pass in your
             configuration properties when building your topology by using the overloaded <code>StreamsBuilder.build(Properties)</code> method.
             For example <code>KafkaStreams myStream = new KafkaStreams(streamsBuilder.build(properties), properties)</code>.
           </p>
@@ -1235,7 +1235,7 @@ streamsConfig.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksD
           The version you are upgrading from. It is important to set this config when performing a rolling upgrade to certain versions, as described in the upgrade guide.
           You should set this config to the appropriate version before bouncing your instances and upgrading them to the newer version. Once everyone is on the
           newer version, you should remove this config and do a second rolling bounce. It is only necessary to set this config and follow the two-bounce upgrade path
-          when upgrading from below version 2.0, or when upgrading to 2.4+ from any version lower than 2.4.
+          when upgrading to 3.4+ from any version lower than 3.4.
         </div>
       </blockquote>
     </div>
