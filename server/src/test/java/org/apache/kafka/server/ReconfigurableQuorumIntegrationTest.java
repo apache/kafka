@@ -15,13 +15,16 @@
  * limitations under the License.
  */
 
-package kafka.server;
+package org.apache.kafka.server;
 
+import org.apache.kafka.clients.admin.AddRaftVoterOptions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.FeatureMetadata;
 import org.apache.kafka.clients.admin.QuorumInfo;
 import org.apache.kafka.clients.admin.RaftVoterEndpoint;
+import org.apache.kafka.clients.admin.RemoveRaftVoterOptions;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.test.api.TestKitDefaults;
@@ -29,10 +32,12 @@ import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -41,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Tag("integration")
 public class ReconfigurableQuorumIntegrationTest {
     static void checkKRaftVersions(Admin admin, short finalized) throws Exception {
         FeatureMetadata featureMetadata = admin.describeFeatures().featureMetadata().get();
@@ -70,7 +76,7 @@ public class ReconfigurableQuorumIntegrationTest {
         ).build()) {
             cluster.format();
             cluster.startup();
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (var admin = Admin.create(cluster.clientProperties())) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
                     checkKRaftVersions(admin, KRaftVersion.KRAFT_VERSION_0.featureLevel());
                 });
@@ -88,7 +94,7 @@ public class ReconfigurableQuorumIntegrationTest {
         ).setStandalone(true).build()) {
             cluster.format();
             cluster.startup();
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (var admin = Admin.create(cluster.clientProperties())) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
                     checkKRaftVersions(admin, KRaftVersion.KRAFT_VERSION_1.featureLevel());
                 });
@@ -126,7 +132,7 @@ public class ReconfigurableQuorumIntegrationTest {
         ) {
             cluster.format();
             cluster.startup();
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (var admin = Admin.create(cluster.clientProperties())) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     assertEquals(Set.of(3000, 3001, 3002), voters.keySet());
@@ -161,7 +167,7 @@ public class ReconfigurableQuorumIntegrationTest {
         ) {
             cluster.format();
             cluster.startup();
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (var admin = Admin.create(cluster.clientProperties())) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     assertEquals(Set.of(3000, 3001, 3002, 3003), voters.keySet());
@@ -200,7 +206,7 @@ public class ReconfigurableQuorumIntegrationTest {
         ) {
             cluster.format();
             cluster.startup();
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (var admin = Admin.create(cluster.clientProperties())) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     assertEquals(Set.of(3000, 3001, 3002), voters.keySet());
@@ -238,7 +244,7 @@ public class ReconfigurableQuorumIntegrationTest {
         ) {
             cluster.format();
             cluster.startup();
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (var admin = Admin.create(cluster.clientProperties())) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     assertEquals(Set.of(3000, 3001, 3002), voters.keySet());
@@ -246,6 +252,97 @@ public class ReconfigurableQuorumIntegrationTest {
                         assertEquals(nodes.controllerNodes().get(replicaId).metadataDirectoryId(), voters.get(replicaId));
                     }
                 });
+            }
+        }
+    }
+
+    @Test
+    public void testRemoveAndAddVoterWithValidClusterId() throws Exception {
+        final var nodes = new TestKitNodes.Builder()
+            .setClusterId("test-cluster")
+            .setNumBrokerNodes(1)
+            .setNumControllerNodes(3)
+            .build();
+
+        final Map<Integer, Uuid> initialVoters = new HashMap<>();
+        for (final var controllerNode : nodes.controllerNodes().values()) {
+            initialVoters.put(
+                controllerNode.id(),
+                controllerNode.metadataDirectoryId()
+            );
+        }
+
+        try (var cluster = new KafkaClusterTestKit.Builder(nodes).setInitialVoterSet(initialVoters).build()) {
+            cluster.format();
+            cluster.startup();
+            try (var admin = Admin.create(cluster.clientProperties())) {
+                TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
+                    Map<Integer, Uuid> voters = findVoterDirs(admin);
+                    assertEquals(Set.of(3000, 3001, 3002), voters.keySet());
+                    for (int replicaId : new int[] {3000, 3001, 3002}) {
+                        assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
+                    }
+                });
+
+                Uuid dirId = cluster.nodes().controllerNodes().get(3000).metadataDirectoryId();
+                admin.removeRaftVoter(
+                    3000,
+                    dirId,
+                    new RemoveRaftVoterOptions().setClusterId(Optional.of("test-cluster"))
+                ).all().get();
+                TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
+                    Map<Integer, Uuid> voters = findVoterDirs(admin);
+                    assertEquals(Set.of(3001, 3002), voters.keySet());
+                    for (int replicaId : new int[] {3001, 3002}) {
+                        assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
+                    }
+                });
+
+                admin.addRaftVoter(
+                    3000,
+                    dirId,
+                    Set.of(new RaftVoterEndpoint("CONTROLLER", "example.com", 8080)),
+                    new AddRaftVoterOptions().setClusterId(Optional.of("test-cluster"))
+                ).all().get();
+            }
+        }
+    }
+
+    @Test
+    public void testRemoveAndAddVoterWithInconsistentClusterId() throws Exception {
+        final var nodes = new TestKitNodes.Builder()
+            .setClusterId("test-cluster")
+            .setNumBrokerNodes(1)
+            .setNumControllerNodes(3)
+            .build();
+
+        final Map<Integer, Uuid> initialVoters = new HashMap<>();
+        for (final var controllerNode : nodes.controllerNodes().values()) {
+            initialVoters.put(
+                controllerNode.id(),
+                controllerNode.metadataDirectoryId()
+            );
+        }
+
+        try (var cluster = new KafkaClusterTestKit.Builder(nodes).setInitialVoterSet(initialVoters).build()) {
+            cluster.format();
+            cluster.startup();
+            try (var admin = Admin.create(cluster.clientProperties())) {
+                Uuid dirId = cluster.nodes().controllerNodes().get(3000).metadataDirectoryId();
+                var removeFuture = admin.removeRaftVoter(
+                    3000,
+                    dirId,
+                    new RemoveRaftVoterOptions().setClusterId(Optional.of("inconsistent"))
+                ).all();
+                TestUtils.assertFutureThrows(InconsistentClusterIdException.class, removeFuture);
+
+                var addFuture = admin.addRaftVoter(
+                    3000,
+                    dirId,
+                    Set.of(new RaftVoterEndpoint("CONTROLLER", "example.com", 8080)),
+                    new AddRaftVoterOptions().setClusterId(Optional.of("inconsistent"))
+                ).all();
+                TestUtils.assertFutureThrows(InconsistentClusterIdException.class, addFuture);
             }
         }
     }
