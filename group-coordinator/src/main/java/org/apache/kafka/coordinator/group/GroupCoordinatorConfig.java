@@ -69,7 +69,6 @@ public class GroupCoordinatorConfig {
         Group.GroupType.CLASSIC.toString(),
         Group.GroupType.CONSUMER.toString(),
         Group.GroupType.STREAMS.toString());
-    public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_ALLOWED = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT;
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG = "group.coordinator.append.linger.ms";
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_DOC = "The duration in milliseconds that the coordinator will " +
         "wait for writes to accumulate before flushing them to disk. Increasing this value improves write efficiency and batch size, " +
@@ -298,9 +297,8 @@ public class GroupCoordinatorConfig {
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
         // Group coordinator configs
-        .define(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, LIST, GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT,
-                ConfigDef.ValidList.in(false, GROUP_COORDINATOR_REBALANCE_PROTOCOLS_ALLOWED.toArray(new String[0])), 
-                MEDIUM, GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC)
+        .define(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, LIST, GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT, 
+            ConfigDef.ValidList.in(false, Group.GroupType.documentValidValues()), MEDIUM, GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC)
         .define(GROUP_COORDINATOR_NUM_THREADS_CONFIG, INT, GROUP_COORDINATOR_NUM_THREADS_DEFAULT, atLeast(1), HIGH, GROUP_COORDINATOR_NUM_THREADS_DOC)
         .define(GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG, INT, GROUP_COORDINATOR_APPEND_LINGER_MS_DEFAULT, atLeast(0), MEDIUM, GROUP_COORDINATOR_APPEND_LINGER_MS_DOC)
         .define(OFFSET_COMMIT_TIMEOUT_MS_CONFIG, INT, OFFSET_COMMIT_TIMEOUT_MS_DEFAULT, atLeast(1), HIGH, OFFSET_COMMIT_TIMEOUT_MS_DOC)
