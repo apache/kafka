@@ -33,7 +33,7 @@ public class StateChangeLogger {
     }
 
     public void trace(String message) {
-        LOGGER.info("{}{}", logIdent, message);
+        LOGGER.trace("{}{}", logIdent, message);
     }
 
     public void info(String message) {
