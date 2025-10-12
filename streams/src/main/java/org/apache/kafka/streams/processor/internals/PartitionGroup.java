@@ -125,12 +125,13 @@ class PartitionGroup extends AbstractPartitionGroup {
 
             if (!queue.isEmpty()) {
                 // this partition is ready for processing
+                logger.trace("Partition {} has buffered data, ready for processing", partition);
                 idlePartitionDeadlines.remove(partition);
                 queued.add(partition);
             } else {
                 final Long fetchedLag = fetchedLags.getOrDefault(partition, -1L);
 
-                logger.trace("Fetched lag for {} is {}", partition, fetchedLag);
+                logger.trace("Fetched lag for partition {} is {}", partition, fetchedLag);
 
                 if (fetchedLag == -1L) {
                     // must wait to fetch metadata for the partition
@@ -141,7 +142,7 @@ class PartitionGroup extends AbstractPartitionGroup {
                     // must wait to poll the data we know to be on the broker
                     idlePartitionDeadlines.remove(partition);
                     logger.trace(
-                            "Lag for {} is currently {}, but no data is buffered locally. Waiting to buffer some records.",
+                            "Lag for partition {} is currently {}, but no data is buffered locally. Waiting to buffer some records.",
                             partition,
                             fetchedLag
                     );
@@ -157,7 +158,7 @@ class PartitionGroup extends AbstractPartitionGroup {
                     final long deadline = idlePartitionDeadlines.get(partition);
                     if (wallClockTime < deadline) {
                         logger.trace(
-                                "Lag for {} is currently 0 and current time is {}. Waiting for new data to be produced for configured idle time {} (deadline is {}).",
+                                "Lag for partition {} is currently 0 and current time is {}. Waiting for new data to be produced for configured idle time {} (deadline is {}).",
                                 partition,
                                 wallClockTime,
                                 maxTaskIdleMs,
@@ -166,6 +167,7 @@ class PartitionGroup extends AbstractPartitionGroup {
                         return false;
                     } else {
                         // this partition is ready for processing due to the task idling deadline passing
+                        logger.trace("Partition {} is ready for processing due to the task idling deadline passing", partition);
                         if (enforced == null) {
                             enforced = new HashMap<>();
                         }

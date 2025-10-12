@@ -450,7 +450,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     }
                     hasPendingTxCommit = eosEnabled;
 
-                    log.debug("Prepared {} task for committing", state());
+                    log.debug("Prepared {} task {} for committing", state(), id);
                     return committableOffsetsAndMetadata();
                 } else {
                     log.debug("Skipped preparing {} task for commit since there is nothing to commit", state());
@@ -742,6 +742,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         if (hasPendingTxCommit) {
             // if the task has a pending TX commit, we should just retry the commit but not process any records
             // thus, the task is not processable, even if there is available data in the record queue
+            if (log.isDebugEnabled()) {
+                log.debug("Stream task {} has a pending transaction commit, skip processing it.", id());
+            }
             return false;
         }
         final boolean readyToProcess = partitionGroup.readyToProcess(wallClockTime);
@@ -749,6 +752,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             if (timeCurrentIdlingStarted.isEmpty()) {
                 timeCurrentIdlingStarted = Optional.of(wallClockTime);
             }
+            log.debug("Task {} started idling at time {}", id, timeCurrentIdlingStarted.get());
         } else {
             timeCurrentIdlingStarted = Optional.empty();
         }
@@ -773,6 +777,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             // if there is no record to process, return immediately
             if (record == null) {
+                log.trace("Task {} has no next record to process.", id());
                 return false;
             }
         }
@@ -788,9 +793,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             consumedOffsets.put(partition, record.offset());
             commitNeeded = true;
 
+            log.trace("Task {} processed record: topic={}, partition={}, offset={}, remainingBuffered={}",
+                id, record.topic(), record.partition(), record.offset(), recordInfo.queue().size());
+
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
             if (recordInfo.queue().size() <= maxBufferedSize) {
+                log.trace("Resume consumption for partition {}: buffered size {} is under the threshold {}",
+                    partition, recordInfo.queue().size(), maxBufferedSize);
                 partitionsToResume.add(partition);
             }
 
