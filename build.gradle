@@ -602,7 +602,12 @@ subprojects {
     finalizedBy("copyTestXml")
   }
 
-  task integrationTest(type: Test, dependsOn: compileJava) {
+  tasks.register('integrationTest', Test) {
+    dependsOn(tasks.compileJava)
+
+    testClassesDirs = testing.suites.test.sources.output.classesDirs
+    classpath = testing.suites.test.sources.runtimeClasspath
+
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
@@ -634,7 +639,12 @@ subprojects {
     }
   }
 
-  task unitTest(type: Test, dependsOn: compileJava) {
+  tasks.register('unitTest', Test)  {
+    dependsOn(tasks.compileJava)
+
+    testClassesDirs = testing.suites.test.sources.output.classesDirs
+    classpath = testing.suites.test.sources.runtimeClasspath
+
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
