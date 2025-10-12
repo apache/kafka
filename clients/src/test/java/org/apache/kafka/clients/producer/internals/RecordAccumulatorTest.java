@@ -36,6 +36,7 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.DefaultRecord;
 import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
@@ -71,7 +72,9 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -1827,47 +1830,63 @@ public class RecordAccumulatorTest {
     }
 
     @Test
-    public void testSplitBatchProduceFutureWaitsForAllSplits() throws Exception {
-        long now = time.milliseconds();
-        // small batch size to force splitting
-        RecordAccumulator accum = createTestRecordAccumulator(1024, 10 * 1024, Compression.gzip().build(), 10);
+    public void testProduceRequestResultawaitAllDependents() throws Exception {
+        ProduceRequestResult parent = new ProduceRequestResult(tp1);
 
-        // create a big batch manually
-        ByteBuffer buffer = ByteBuffer.allocate(4096);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE, TimestampType.CREATE_TIME, 0L);
-        ProducerBatch originalBatch = new ProducerBatch(tp1, builder, now, true);
+        // make two dependent ProduceRequestResults -- mimicking split batches
+        ProduceRequestResult dependent1 = new ProduceRequestResult(tp1);
+        ProduceRequestResult dependent2 = new ProduceRequestResult(tp1);
 
-        byte[] value = new byte[1024];
-        final AtomicInteger acked = new AtomicInteger(0);
-        Callback cb = (metadata, exception) -> acked.incrementAndGet();
+        // add dependents
+        parent.addDependentResult(dependent1);
+        parent.addDependentResult(dependent2);
 
-        // append two messages so the batch is too big
-        Future<RecordMetadata> future1 = originalBatch.tryAppend(now, null, value, Record.EMPTY_HEADERS, cb, now);
-        Future<RecordMetadata> future2 = originalBatch.tryAppend(now, null, value, Record.EMPTY_HEADERS, cb, now);
-        assertNotNull(future1);
-        assertNotNull(future2);
-        originalBatch.close();
+        parent.set(0L, RecordBatch.NO_TIMESTAMP, null);
+        parent.done();
 
-        // reenqueue
-        accum.reenqueue(originalBatch, now);
-        time.sleep(121L);
+        // parent.completed() should return true (only checks latch)
+        assertTrue(parent.completed(), "Parent should be completed after done()");
 
-        // drain
-        RecordAccumulator.ReadyCheckResult result = accum.ready(metadataCache, time.milliseconds());
-        assertFalse(result.readyNodes.isEmpty(), "The batch should be ready");
-        Map<Integer, List<ProducerBatch>> drained = accum.drain(metadataCache, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
-        assertEquals(1, drained.size(), "Only node1 should be drained");
-        assertEquals(1, drained.get(node1.id()).size(), "Only one batch should be drained");
+        // awaitAllDependents() should block because dependents are not complete
+        final AtomicBoolean awaitCompleted = new AtomicBoolean(false);
+        final AtomicReference<Exception> awaitException = new AtomicReference<>();
 
-        ProducerBatch drainedBatch = drained.get(node1.id()).get(0);
+        // to prove awaitAllDependents() is blocking, we run it in a separate thread
+        Thread awaitThread = new Thread(() -> {
+            try {
+                parent.awaitAllDependents();
+                awaitCompleted.set(true);
+            } catch (Exception e) {
+                awaitException.set(e);
+            }
+        });
+        awaitThread.start();
+        Thread.sleep(100);
 
-        // split and reenqueue
-        int numSplitBatches = accum.splitAndReenqueue(drainedBatch);
-        assertTrue(numSplitBatches > 0, "Should have split into multiple batches");
+        // verify awaitAllDependents() is blocking
+        assertFalse(awaitCompleted.get(),
+            "awaitAllDependents() should block because dependents are not complete");
 
-        // original batch's produceFuture should NOT be completed yet
-        // because the split batches haven't been completed
-        assertFalse(originalBatch.produceFuture.completed(),
-            "Original batch produceFuture should not be completed until all split batches are completed");
+        // now complete the first dependent
+        dependent1.set(0L, RecordBatch.NO_TIMESTAMP, null);
+        dependent1.done();
+
+        Thread.sleep(100);
+
+        // this should still be blocking because dependent2 is not complete
+        assertFalse(awaitCompleted.get(),
+            "awaitAllDependents() should still block because dependent2 is not complete");
+
+        // now complete the second dependent
+        dependent2.set(0L, RecordBatch.NO_TIMESTAMP, null);
+        dependent2.done();
+
+        // now awaitAllDependents() should complete
+        awaitThread.join(5000);
+
+        assertNull(awaitException.get(), "awaitAllDependents() should not throw exception");
+        assertTrue(awaitCompleted.get(),
+            "awaitAllDependents() should complete after all dependents are done");
+        assertFalse(awaitThread.isAlive(), "await thread should have completed");
     }
 }

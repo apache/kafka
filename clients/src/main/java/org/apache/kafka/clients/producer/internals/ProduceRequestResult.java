@@ -20,8 +20,10 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.RecordBatch;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -87,9 +89,15 @@ public class ProduceRequestResult {
 
     /**
      * Await the completion of this request.
-     * Note: This only waits for the local latch and not dependent results.
-     * The dependent results are tracked for completion status via completed() method,
-     * but individual record futures handle chaining via FutureRecordMetadata.chain().
+     *
+     * This only waits for THIS request's latch and not dependent results.
+     * When a batch is split into multiple batches, dependent results are created and tracked
+     * separately, but this method does not wait for them. Individual record futures automatically
+     * handle waiting for their respective split batch via {@link FutureRecordMetadata#chain(FutureRecordMetadata)},
+     * which redirects the future to point to the correct split batch's result.
+     *
+     * For flush() semantics that require waiting for all dependent results, use
+     * {@link #awaitAllDependents()}.
      */
     public void await() throws InterruptedException {
         latch.await();
@@ -103,6 +111,34 @@ public class ProduceRequestResult {
      */
     public boolean await(long timeout, TimeUnit unit) throws InterruptedException {
         return latch.await(timeout, unit);
+    }
+
+    /**
+     * Await the completion of this request and all the dependent requests.
+     *
+     * This method is used by flush() to ensure all split batches have completed before
+     * returning. This method waits for all dependent {@link ProduceRequestResult}s that
+     * were created when the batch was split.
+     *
+     * @throws InterruptedException if the thread is interrupted while waiting
+     */
+    public void awaitAllDependents() throws InterruptedException {
+        Queue<ProduceRequestResult> toWait = new ArrayDeque<>();
+        toWait.add(this);
+
+        while (!toWait.isEmpty()) {
+            ProduceRequestResult current = toWait.poll();
+
+            // first wait for THIS result's latch to be released
+            current.latch.await();
+
+            // add all dependent split batches to the queue.
+            // we synchronize to get a consistent snapshot, then release the lock
+            // before continuing but the actual waiting happens outside the lock.
+            synchronized (current.dependentResults) {
+                toWait.addAll(current.dependentResults);
+            }
+        }
     }
 
     /**
@@ -146,19 +182,17 @@ public class ProduceRequestResult {
 
     /**
      * Has the request completed?
+     *
+     * This method only checks if THIS request has completed and not its dependent results.
+     * When a batch is split into multiple batches, the dependent split batches are tracked
+     * separately. Individual record futures handle waiting for their respective split
+     * batch via {@link FutureRecordMetadata#chain(FutureRecordMetadata)}, which updates the
+     * {@code nextRecordMetadata} pointer to follow the correct split batch.
+     *
+     * For flush() semantics that require waiting for all dependent results, use
+     * {@link #awaitAllDependents()}.
      */
     public boolean completed() {
-        if (this.latch.getCount() != 0L) {
-            return false;
-        }
-        // are all the dependent results completed?
-        synchronized (dependentResults) {
-            for (ProduceRequestResult dependentResult : dependentResults) {
-                if (!dependentResult.completed()) {
-                    return false;
-                }
-            }
-        }
-        return true;
+        return this.latch.getCount() == 0L;
     }
 }
