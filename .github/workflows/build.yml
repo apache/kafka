@@ -127,7 +127,7 @@ jobs:
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
-          java-version: 24
+          java-version: 17
           gradle-cache-read-only: ${{ !inputs.is-trunk }}
           gradle-cache-write-only: ${{ inputs.is-trunk }}
           develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
@@ -181,7 +181,7 @@ jobs:
       fail-fast: false
       matrix:
         # If we change these, make sure to adjust ci-complete.yml
-        java: [ 24, 17 ]
+        java: [ 25, 17 ]
         run-flaky: [ true, false ]
         run-new: [ true, false ]
         exclude:
@@ -270,7 +270,7 @@ jobs:
           python .github/scripts/junit.py \
            --path build/junit-xml >> $GITHUB_STEP_SUMMARY
 
-  # This job downloads all the JUnit XML files and thread dumps from the JDK 24 test runs.
+  # This job downloads all the JUnit XML files and thread dumps from the JDK 25 test runs.
   # If any test job fails, we will not run this job. Also, if any thread dump artifacts
   # are present, this means there was a timeout in the tests and so we will not proceed
   # with catalog creation.
@@ -288,7 +288,7 @@ jobs:
       - name: Download Thread Dumps
         uses: actions/download-artifact@v5
         with:
-          pattern: junit-thread-dumps-24-*
+          pattern: junit-thread-dumps-25-*
           path: thread-dumps
           merge-multiple: true
       - name: Check For Thread Dump
@@ -302,7 +302,7 @@ jobs:
       - name: Download JUnit XMLs
         uses: actions/download-artifact@v5
         with:
-          pattern: junit-xml-24-*  # Only look at JDK 24 tests for the test catalog
+          pattern: junit-xml-25-*  # Only look at JDK 25 tests for the test catalog
           path: junit-xml
           merge-multiple: true
       - name: Collate Test Catalog
