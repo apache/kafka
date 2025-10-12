@@ -58,11 +58,11 @@ public class OpenIteratorsTest {
         assertThat(gauge.value(null, 0), is(2L));
 
         openIterators.remove(meteredIterator2);
-        verify(streamsMetrics, never()).removeMetric(any());
+        verify(streamsMetrics, never()).removeStoreLevelMetric(any());
         assertThat(gauge.value(null, 0), is(5L));
 
         openIterators.remove(meteredIterator1);
-        verify(streamsMetrics).removeMetric(any());
+        verify(streamsMetrics).removeStoreLevelMetric(any());
         assertThat(gauge.value(null, 0), is(5L));
 
         openIterators.add(meteredIterator3);

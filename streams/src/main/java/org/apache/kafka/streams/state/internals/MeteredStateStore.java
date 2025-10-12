@@ -14,10 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.metrics;
+package org.apache.kafka.streams.state.internals;
 
-/**
- * A gauge metric is an instantaneous reading of a particular value.
- */
-@FunctionalInterface
-public interface Gauge<T> extends MetricValueProvider<T> { }
+public interface MeteredStateStore {
+
+    void recordRestoreTime(final long restoreTimeNs);
+}
