@@ -23,10 +23,12 @@ import org.apache.kafka.common.utils.Exit;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
@@ -127,6 +129,34 @@ public class CommandLineUtils {
                             usedOptions, arg, trailingAdditionalMessage.orElse("")));
                 }
             }
+        }
+    }
+
+    public static void printErrorAndExit(String message) {
+        System.err.println(message);
+        Exit.exit(1, message);
+    }
+
+    /**
+     * Check that exactly one of a set of mutually exclusive arguments is present.
+     */
+    public static void checkOneOfArgs(OptionParser parser, OptionSet options, OptionSpec<?>... optionSpecs) {
+        if (optionSpecs == null || optionSpecs.length == 0) {
+            throw new IllegalArgumentException("At least one option must be provided");
+        }
+
+        int presentCount = 0;
+        for (OptionSpec<?> spec : optionSpecs) {
+            if (options.has(spec)) {
+                presentCount++;
+            }
+        }
+
+        if (presentCount != 1) {
+            printUsageAndExit(parser, "Exactly one of the following arguments is required: " +
+                    Arrays.stream(optionSpecs)
+                            .map(Object::toString)
+                            .collect(Collectors.joining(", ")));
         }
     }
 

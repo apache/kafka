@@ -31,6 +31,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
@@ -55,7 +56,6 @@ import org.junit.jupiter.api.Timeout;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -513,9 +513,8 @@ public class DeleteStreamsGroupTest {
 
     private void stopKSApp(String appId, KafkaStreams streams, StreamsGroupCommand.StreamsGroupService service) throws InterruptedException {
         if (streams != null) {
-            KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
-            closeOptions.timeout(Duration.ofSeconds(30));
-            closeOptions.leaveGroup(true);
+            CloseOptions closeOptions = CloseOptions.timeout(Duration.ofSeconds(30))
+                    .withGroupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
             streams.close(closeOptions);
             streams.cleanUp();
 
@@ -560,7 +559,7 @@ public class DeleteStreamsGroupTest {
     private static StreamsBuilder builder(String inputTopic, String outputTopic) {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(inputTopic, Consumed.with(Serdes.String(), Serdes.String()))
-            .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
+            .flatMapValues(value -> List.of(value.toLowerCase(Locale.getDefault()).split("\\W+")))
             .groupBy((key, value) -> value)
             .count()
             .toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));

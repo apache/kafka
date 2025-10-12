@@ -116,10 +116,10 @@ public class AssignmentTest {
 
     @Test
     public void testAssignmentToString() {
-        assertEquals("Assignment(topicIdPartition=rTudty6ITOCcO_ldVyzZYg:1, " +
+        assertEquals("Assignment[topicIdPartition=rTudty6ITOCcO_ldVyzZYg:1, " +
             "directoryId=rzRT8XZaSbKsP6j238zogg, " +
             "submissionTimeNs=123, " +
-            "successCallback=NoOpRunnable)",
+            "successCallback=NoOpRunnable]",
             new Assignment(new TopicIdPartition(TOPIC_ID, 1),
                 DIRECTORY_ID,
                 123,

@@ -68,18 +68,11 @@ public class TopicIds implements Set<Uuid> {
     /**
      * A TopicResolver without any caching.
      */
-    public static class DefaultTopicResolver implements TopicResolver {
-        private final CoordinatorMetadataImage image;
-
+    public record DefaultTopicResolver(CoordinatorMetadataImage image) implements TopicResolver {
         public DefaultTopicResolver(
             CoordinatorMetadataImage image
         ) {
             this.image = Objects.requireNonNull(image);
-        }
-
-        @Override
-        public final CoordinatorMetadataImage image() {
-            return image;
         }
 
         @Override
@@ -93,7 +86,8 @@ public class TopicIds implements Set<Uuid> {
         }
 
         @Override
-        public void clear() {}
+        public void clear() {
+        }
 
         @Override
         public String toString() {

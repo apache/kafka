@@ -84,7 +84,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignment
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
@@ -1384,10 +1383,9 @@ public class GroupCoordinatorShardTest {
         ArgumentCaptor<List<CoordinatorRecord>> recordsCapture = ArgumentCaptor.forClass(List.class);
 
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        GroupCoordinatorMetricsShard metricsShard = mock(GroupCoordinatorMetricsShard.class);
 
-        ConsumerGroup group1 = new ConsumerGroup(snapshotRegistry, "group-id", metricsShard);
-        ConsumerGroup group2 = new ConsumerGroup(snapshotRegistry, "other-group-id", metricsShard);
+        ConsumerGroup group1 = new ConsumerGroup(snapshotRegistry, "group-id");
+        ConsumerGroup group2 = new ConsumerGroup(snapshotRegistry, "other-group-id");
 
         when(groupMetadataManager.groupIds()).thenReturn(Set.of("group-id", "other-group-id"));
         when(groupMetadataManager.group("group-id")).thenReturn(group1);
@@ -1484,7 +1482,7 @@ public class GroupCoordinatorShardTest {
         // The counter is scheduled.
         assertEquals(
             DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
-            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs - time.milliseconds()
+            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs() - time.milliseconds()
         );
 
         // Advance the timer to trigger the update.
@@ -1495,7 +1493,7 @@ public class GroupCoordinatorShardTest {
         // The counter is scheduled.
         assertEquals(
             DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
-            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs - time.milliseconds()
+            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs() - time.milliseconds()
         );
     }
 

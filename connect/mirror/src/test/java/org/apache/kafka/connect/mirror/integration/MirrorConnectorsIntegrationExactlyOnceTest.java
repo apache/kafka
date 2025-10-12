@@ -81,7 +81,7 @@ public class MirrorConnectorsIntegrationExactlyOnceTest extends MirrorConnectors
         assertEquals(expectedRecordsTopic2, backup.kafka().consume(expectedRecordsTopic2, RECORD_TRANSFER_DURATION_MS, backupTopic2).count(),
                 "New topic was not re-replicated to backup cluster after altering offsets.");
 
-        @SuppressWarnings({"unchecked", "rawtypes"})
+        @SuppressWarnings("unchecked")
         Class<? extends Connector>[] connectorsToReset = CONNECTOR_LIST.toArray(new Class[0]);
         stopMirrorMakerConnectors(backup, connectorsToReset);
         // Resetting the offsets for the heartbeat and checkpoint connectors doesn't have any effect

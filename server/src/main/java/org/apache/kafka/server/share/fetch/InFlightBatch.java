@@ -25,6 +25,9 @@ import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
  * The InFlightBatch maintains the in-memory state of the fetched records i.e. in-flight records.
+ * <p>
+ * This class is not thread-safe and caller should attain locks if concurrent updates on same batch
+ * are expected.
  */
 public class InFlightBatch {
     // The timer is used to schedule the acquisition lock timeout task for the batch.
@@ -48,7 +51,7 @@ public class InFlightBatch {
 
     // The offset state map is used to track the state of the records per offset. However, the
     // offset state map is only required when the state of the offsets within same batch are
-    // different. The states can be different when explicit offset acknowledgment is done which
+    // different. The states can be different when explicit offset acknowledgement is done which
     // is different from the batch state.
     private NavigableMap<Long, InFlightState> offsetState;
 
@@ -147,11 +150,10 @@ public class InFlightBatch {
     /**
      * Archive the batch state. This is used to mark the batch as archived and no further updates
      * are allowed to the batch state.
-     * @param newMemberId The new member id for the records.
      * @throws IllegalStateException if the offset state is maintained and the batch state is not available.
      */
-    public void archiveBatch(String newMemberId) {
-        inFlightState().archive(newMemberId);
+    public void archiveBatch() {
+        inFlightState().archive();
     }
 
     /**

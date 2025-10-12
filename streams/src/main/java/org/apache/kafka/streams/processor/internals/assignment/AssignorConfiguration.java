@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
-import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
@@ -59,8 +58,6 @@ public final class AssignorConfiguration {
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
 
-        validateUpgradeFrom();
-
         {
             final Object o = configs.get(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR);
             if (o == null) {
@@ -92,32 +89,6 @@ public final class AssignorConfiguration {
 
     public ReferenceContainer referenceContainer() {
         return referenceContainer;
-    }
-
-    // cooperative rebalancing was introduced in 2.4 and the old protocol (eager rebalancing) was removed
-    // in 4.0, meaning live upgrades from 2.3 or below to 4.0+ are no longer possible without a bridge release
-    public void validateUpgradeFrom() {
-        final String upgradeFrom = streamsConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
-        if (upgradeFrom != null) {
-            switch (UpgradeFromValues.fromString(upgradeFrom)) {
-                case UPGRADE_FROM_0100:
-                case UPGRADE_FROM_0101:
-                case UPGRADE_FROM_0102:
-                case UPGRADE_FROM_0110:
-                case UPGRADE_FROM_10:
-                case UPGRADE_FROM_11:
-                case UPGRADE_FROM_20:
-                case UPGRADE_FROM_21:
-                case UPGRADE_FROM_22:
-                case UPGRADE_FROM_23:
-                    final String errMsg = String.format(
-                        "The eager rebalancing protocol is no longer supported in 4.0 which means live upgrades from 2.3 or below are not possible."
-                            + " Please see the Streams upgrade guide for the bridge releases and recommended upgrade path. Got upgrade.from='%s'", upgradeFrom);
-                    log.error(errMsg);
-                    throw new ConfigException(errMsg);
-
-            }
-        }
     }
 
     public String logPrefix() {

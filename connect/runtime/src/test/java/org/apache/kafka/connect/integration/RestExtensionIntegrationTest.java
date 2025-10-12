@@ -31,7 +31,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -112,7 +111,7 @@ public class RestExtensionIntegrationTest {
                     workerId,
                     null
                 ),
-                Collections.singletonMap(
+                Map.of(
                     0,
                     new TaskState(0, "RUNNING", workerId, null)
                 ),

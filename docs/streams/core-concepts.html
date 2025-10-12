@@ -279,7 +279,7 @@
     <p>
         In stream processing, one of the most frequently asked question is "does my stream processing system guarantee that each record is processed once and only once, even if some failures are encountered in the middle of processing?"
         Failing to guarantee exactly-once stream processing is a deal-breaker for many applications that cannot tolerate any data-loss or data duplicates, and in that case a batch-oriented framework is usually used in addition
-        to the stream processing pipeline, known as the <a href="http://lambda-architecture.net/">Lambda Architecture</a>.
+        to the stream processing pipeline, known as the <a href="https://en.wikipedia.org/wiki/Lambda_architecture">Lambda Architecture</a>.
         Prior to 0.11.0.0, Kafka only provides at-least-once delivery guarantees and hence any stream processing systems that leverage it as the backend storage could not guarantee end-to-end exactly-once semantics.
         In fact, even for those stream processing systems that claim to support exactly-once processing, as long as they are reading from / writing to Kafka as the source / sink, their applications cannot actually guarantee that
         no duplicates will be generated throughout the pipeline.<br />

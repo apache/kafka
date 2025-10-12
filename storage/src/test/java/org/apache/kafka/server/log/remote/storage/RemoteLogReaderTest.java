@@ -79,9 +79,9 @@ public class RemoteLogReaderTest {
         ArgumentCaptor<RemoteLogReadResult> remoteLogReadResultArg = ArgumentCaptor.forClass(RemoteLogReadResult.class);
         verify(callback, times(1)).accept(remoteLogReadResultArg.capture());
         RemoteLogReadResult actualRemoteLogReadResult = remoteLogReadResultArg.getValue();
-        assertFalse(actualRemoteLogReadResult.error.isPresent());
-        assertTrue(actualRemoteLogReadResult.fetchDataInfo.isPresent());
-        assertEquals(fetchDataInfo, actualRemoteLogReadResult.fetchDataInfo.get());
+        assertFalse(actualRemoteLogReadResult.error().isPresent());
+        assertTrue(actualRemoteLogReadResult.fetchDataInfo().isPresent());
+        assertEquals(fetchDataInfo, actualRemoteLogReadResult.fetchDataInfo().get());
 
         // verify the record method on quota manager was called with the expected value
         ArgumentCaptor<Double> recordedArg = ArgumentCaptor.forClass(Double.class);
@@ -112,8 +112,8 @@ public class RemoteLogReaderTest {
         ArgumentCaptor<RemoteLogReadResult> remoteLogReadResultArg = ArgumentCaptor.forClass(RemoteLogReadResult.class);
         verify(callback, times(1)).accept(remoteLogReadResultArg.capture());
         RemoteLogReadResult actualRemoteLogReadResult = remoteLogReadResultArg.getValue();
-        assertTrue(actualRemoteLogReadResult.error.isPresent());
-        assertFalse(actualRemoteLogReadResult.fetchDataInfo.isPresent());
+        assertTrue(actualRemoteLogReadResult.error().isPresent());
+        assertFalse(actualRemoteLogReadResult.fetchDataInfo().isPresent());
 
         // verify the record method on quota manager was called with the expected value
         ArgumentCaptor<Double> recordedArg = ArgumentCaptor.forClass(Double.class);

@@ -2107,6 +2107,16 @@ The following set of metrics are available for monitoring the group coordinator:
         <td>The max time in millis remote copies was throttled by a broker</td>
         <td>kafka.server:type=RemoteLogManager, name=remote-copy-throttle-time-max</td>
       </tr>
+      <tr>
+        <td>RemoteLogReader Fetch Rate And Time</td>
+        <td>The time to read data from remote storage by a broker</td>
+        <td>kafka.log.remote:type=RemoteLogManager,name=RemoteLogReaderFetchRateAndTimeMs</td>
+      </tr>
+      <tr>
+        <td>Delayed Remote List Offsets Expires Per Sec</td>
+        <td>The number of expired remote list offsets per second. Omitting 'topic=(...), partition=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=DelayedRemoteListOffsetsMetrics,name=ExpiresPerSec,topic=([-.\w]+),partition=([0-9]+)</td>
+      </tr>
 
     </tbody>
   </table>
@@ -4057,60 +4067,42 @@ In the replica description 0@controller-0:1234:3Db5QLSqSZieL3rJBUUegA, 0 is the 
   <h4 class="anchor-heading"><a id="kraft_reconfig" class="anchor-link"></a><a href="#kraft_reconfig">Controller membership changes</a></h4>
 
   <h5 class="anchor-heading"><a id="static_versus_dynamic_kraft_quorums" class="anchor-link"></a><a href="#static_versus_dynamic_kraft_quorums">Static versus Dynamic KRaft Quorums</a></h5>
-  There are two ways to run KRaft: the old way using static controller quorums, and the new way
-  using KIP-853 dynamic controller quorums.<p>
+  There are two ways to run KRaft: using KIP-853 dynamic controller quorums, or the old way
+  using static controller quorums.<p>
 
-  When using a static quorum, the configuration file for each broker and controller must specify
-  the IDs, hostnames, and ports of all controllers in <code>controller.quorum.voters</code>.<p>
-
-  In contrast, when using a dynamic quorum, you should set
-  <code>controller.quorum.bootstrap.servers</code> instead. This configuration key need not
+  When using a dynamic quorum, <code>controller.quorum.voters</code> must not be set
+  and <code>controller.quorum.bootstrap.servers</code> is set instead. This configuration key need not
   contain all the controllers, but it should contain as many as possible so that all the servers
   can locate the quorum. In other words, its function is much like the
   <code>bootstrap.servers</code> configuration used by Kafka clients.<p>
 
+  When using a static quorum, the configuration file for each broker and controller must specify
+  the IDs, hostnames, and ports of all controllers in <code>controller.quorum.voters</code>.<p>
+
   If you are not sure whether you are using static or dynamic quorums, you can determine this by
   running something like the following:<p>
 
-<pre><code class="language-bash">
-  $ bin/kafka-features.sh --bootstrap-controller localhost:9093 describe
-</code></pre><p>
-
-  If the <code>kraft.version</code> field is level 0 or absent, you are using a static quorum. If
-  it is 1 or above, you are using a dynamic quorum. For example, here is an example of a static
-  quorum:<p/>
-<pre><code class="language-bash">
-Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 0 Epoch: 5
-Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 3.9-IV0 FinalizedVersionLevel: 3.9-IV0  Epoch: 5
-</code></pre><p/>
-
-  Here is another example of a static quorum:<p/>
-<pre><code class="language-bash">
-Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 3.8-IV0 FinalizedVersionLevel: 3.8-IV0  Epoch: 5
-</code></pre><p/>
-
-  Here is an example of a dynamic quorum:<p/>
-<pre><code class="language-bash">
-Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 1 Epoch: 5
-Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 3.9-IV0 FinalizedVersionLevel: 3.9-IV0  Epoch: 5
-</code></pre><p/>
-
-  The static versus dynamic nature of the quorum is determined at the time of formatting.
-  Specifically, the quorum will be formatted as dynamic if <code>controller.quorum.voters</code> is
-  <b>not</b> present, and if the software version is Apache Kafka 3.9 or newer. If you have
-  followed the instructions earlier in this document, you will get a dynamic quorum.<p>
-
-  If you would like the formatting process to fail if a dynamic quorum cannot be achieved, format your
-  controllers using the <code>--feature kraft.version=1</code>. (Note that you should not supply
-  this flag when formatting brokers -- only when formatting controllers.)<p>
-
-<pre><code class="language-bash">
-  $ bin/kafka-storage.sh format -t KAFKA_CLUSTER_ID --feature kraft.version=1 -c controller.properties
-  Cannot set kraft.version to 1 unless KIP-853 configuration is present. Try removing the --feature flag for kraft.version.
-</code></pre><p>
-
-  Note: Currently it is <b>not</b> possible to convert clusters using a static controller quorum to
-  use a dynamic controller quorum. This function will be supported in the future release.
+  <pre><code class="language-bash">$ bin/kafka-features.sh --bootstrap-controller localhost:9093 describe</code></pre>
+  <p>
+    If the <code>kraft.version</code> field is level 0 or absent, you are using a static quorum. If
+    it is 1 or above, you are using a dynamic quorum. For example, here is an example of a static
+    quorum:<p>
+  <pre><code class="language-bash">Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 0 Epoch: 5
+Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 3.9-IV0 FinalizedVersionLevel: 3.9-IV0  Epoch: 5</code></pre>
+  <p>
+    Here is another example of a static quorum:<p>
+  <pre><code class="language-bash">Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 3.8-IV0 FinalizedVersionLevel: 3.8-IV0  Epoch: 5</code></pre>
+  <p>
+    Here is an example of a dynamic quorum:<p>
+  <pre><code class="language-bash">Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 1 Epoch: 5
+Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 3.9-IV0 FinalizedVersionLevel: 3.9-IV0  Epoch: 5</code></pre>
+  <p>
+    The static versus dynamic nature of the quorum is determined at the time of formatting.
+    Specifically, the quorum will be formatted as dynamic if <code>controller.quorum.voters</code> is
+    <b>not</b> present, and one of --standalone, --initial-controllers, or --no-initial-controllers is set.
+    If you have followed the instructions earlier in this document, you will get a dynamic quorum.
+  <p>
+  Note: To migrate from static voter set to dynamic voter set, please refer to the <a href="#kraft_upgrade">Upgrade</a> section.
 
   <h5 class="anchor-heading"><a id="kraft_reconfig_add" class="anchor-link"></a><a href="#kraft_reconfig_add">Add New Controller</a></h5>
   If a dynamic controller cluster already exists, it can be expanded by first provisioning a new controller using the <a href="#kraft_nodes_observers">kafka-storage.sh tool</a> and starting the controller.
@@ -4122,6 +4114,9 @@ Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVers
 
   When using controller endpoints use the --bootstrap-controller flag:
   <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --command-config config/controller.properties --bootstrap-controller localhost:9093 add-controller</code></pre>
+
+  <p>Note that if there are any configs needed to be passed to the Admin Client, like the authentication configuration,
+    please also include in the "controller.properties".</p>
 
   <h5 class="anchor-heading"><a id="kraft_reconfig_remove" class="anchor-link"></a><a href="#kraft_reconfig_remove">Remove Controller</a></h5>
   If the dynamic controller cluster already exists, it can be shrunk using the <code>bin/kafka-metadata-quorum.sh remove-controller</code> command. Until KIP-996: Pre-vote has been implemented and released, it is recommended to shutdown the controller that will be removed before running the remove-controller command.
@@ -4158,7 +4153,7 @@ CurrentObservers:       [{"id": 0, "directoryId": "3Db5QLSqSZieL3rJBUUegA"},
 
   <pre><code class="language-bash">$ bin/kafka-dump-log.sh --cluster-metadata-decoder --files metadata_log_dir/__cluster_metadata-0/00000000000000000000.log</code></pre>
 
-  <p>This command decodes and prints the records in the a cluster metadata snapshot:</p>
+  <p>This command decodes and prints the records in a cluster metadata snapshot:</p>
 
   <pre><code class="language-bash">$ bin/kafka-dump-log.sh --cluster-metadata-decoder --files metadata_log_dir/__cluster_metadata-0/00000000000000000100-0000000001.checkpoint</code></pre>
 
@@ -4188,7 +4183,7 @@ foo
   <h4 class="anchor-heading"><a id="kraft_deployment" class="anchor-link"></a><a href="#kraft_deployment">Deploying Considerations</a></h4>
 
   <ul>
-    <li>Kafka server's <code>process.role</code> should be set to either <code>broker</code> or <code>controller</code> but not both. Combined mode can be used in development environments, but it should be avoided in critical deployment environments.</li>
+    <li>Kafka server's <code>process.roles</code> should be set to either <code>broker</code> or <code>controller</code> but not both. Combined mode can be used in development environments, but it should be avoided in critical deployment environments.</li>
     <li>For redundancy, a Kafka cluster should use 3 or more controllers, depending on factors like cost and the number of concurrent failures your system should withstand without availability impact. For the KRaft controller cluster to withstand <code>N</code> concurrent failures the controller cluster must include <code>2N + 1</code> controllers.</li>
     <li>The Kafka controllers store all the metadata for the cluster in memory and on disk. We believe that for a typical Kafka cluster 5GB of main memory and 5GB of disk space on the metadata log director is sufficient.</li>
   </ul>
@@ -4305,7 +4300,7 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
 
 <p>Try to send messages to the `tieredTopic` topic to roll the log segment:</p>
 
-<pre><code class="language-bash">$ bin/kafka-producer-perf-test.sh --topic tieredTopic --num-records 1200 --record-size 1024 --throughput -1 --producer-props bootstrap.servers=localhost:9092</code></pre>
+<pre><code class="language-bash">$ bin/kafka-producer-perf-test.sh --bootstrap-server localhost:9092 --topic tieredTopic --num-records 1200 --record-size 1024 --throughput -1</code></pre>
 
 <p>Then, after the active segment is rolled, the old segment should be moved to the remote storage and get deleted.
   This can be verified by checking the remote log directory configured above. For example:
@@ -4320,7 +4315,7 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
 
 <p>Lastly, we can try to consume some data from the beginning and print offset number, to make sure it will successfully fetch offset 0 from the remote storage.</p>
 
-<pre><code class="language-bash">$ bin/kafka-console-consumer.sh --topic tieredTopic --from-beginning --max-messages 1 --bootstrap-server localhost:9092 --property print.offset=true</code></pre>
+<pre><code class="language-bash">$ bin/kafka-console-consumer.sh --topic tieredTopic --from-beginning --max-messages 1 --bootstrap-server localhost:9092 --formatter-property print.offset=true</code></pre>
 
 <p>In KRaft mode, you can disable tiered storage at the topic level, to make the remote logs as read-only logs, or completely delete all remote logs.</p>
 
@@ -4498,9 +4493,16 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
   <p>Downgrades are safe to perform by setting <code>eligible.leader.replicas.version=0</code>.</p>
 
   <h4 class="anchor-heading"><a id="eligible_leader_replicas_tool" class="anchor-link"></a><a href="#eligible_leader_replicas_tool">Tool</a></h4>
-  <p>The ELR fields can be checked through the API DescribeTopicPartitions. The admin client can fetch the ELR info by describing the topics.
-    Also note that, if <code>min.insync.replicas</code> is updated for a topic, the ELR field will be cleaned. If cluster default min ISR is updated,
-    all the ELR fields will be cleaned.</p>
+  <p>The ELR fields can be checked through the API DescribeTopicPartitions. The admin client can fetch the ELR info by describing the topics.</p>
+  <p>Note that when the ELR feature is enabled:</p>
+  <ul>
+    <li>The cluster-level <code>min.insync.replicas</code> config will be added if there is not any. The value is the same as the static config in the active controller.</li>
+    <li>The removal of <code>min.insync.replicas</code> config at the cluster-level is not allowed.</li>
+    <li>If the cluster-level <code>min.insync.replicas</code> is updated, even if the value is unchanged, all the ELR state will be cleaned.</li>
+    <li>The previously set <code>min.insync.replicas</code> value at the broker-level config will be removed. Please set at the cluster-level if necessary.</li>
+    <li>The alteration of <code>min.insync.replicas</code> config at the broker-level is not allowed.</li>
+    <li>If <code>min.insync.replicas</code> is updated for a topic, the ELR state will be cleaned.</li>
+  </ul>
 
 </script>
 

@@ -300,7 +300,7 @@ public class DelegationTokenCommand {
             CommandLineUtils.checkInvalidArgs(parser, options, createOpt, Set.of(hmacOpt, renewTimePeriodOpt, expiryTimePeriodOpt));
             CommandLineUtils.checkInvalidArgs(parser, options, renewOpt, Set.of(renewPrincipalsOpt, maxLifeTimeOpt, expiryTimePeriodOpt, ownerPrincipalsOpt));
             CommandLineUtils.checkInvalidArgs(parser, options, expiryOpt, Set.of(renewOpt, maxLifeTimeOpt, renewTimePeriodOpt, ownerPrincipalsOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, Set.of(renewTimePeriodOpt, maxLifeTimeOpt, hmacOpt, renewTimePeriodOpt, expiryTimePeriodOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, Set.of(renewTimePeriodOpt, maxLifeTimeOpt, hmacOpt, expiryTimePeriodOpt));
         }
     }
 }

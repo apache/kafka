@@ -18,23 +18,7 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.record.DefaultRecordBatch;
 
-public class BatchMetadata {
-
-    public final int lastSeq;
-    public final long lastOffset;
-    public final int offsetDelta;
-    public final long timestamp;
-
-    public BatchMetadata(
-            int lastSeq,
-            long lastOffset,
-            int offsetDelta,
-            long timestamp) {
-        this.lastSeq = lastSeq;
-        this.lastOffset = lastOffset;
-        this.offsetDelta = offsetDelta;
-        this.timestamp = timestamp;
-    }
+public record BatchMetadata(int lastSeq, long lastOffset, int offsetDelta, long timestamp) {
 
     public int firstSeq() {
         return DefaultRecordBatch.decrementSequence(lastSeq, offsetDelta);
@@ -42,28 +26,6 @@ public class BatchMetadata {
 
     public long firstOffset() {
         return lastOffset - offsetDelta;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        BatchMetadata that = (BatchMetadata) o;
-
-        return lastSeq == that.lastSeq &&
-                lastOffset == that.lastOffset &&
-                offsetDelta == that.offsetDelta &&
-                timestamp == that.timestamp;
-    }
-
-    @Override
-    public int hashCode() {
-        int result = lastSeq;
-        result = 31 * result + Long.hashCode(lastOffset);
-        result = 31 * result + offsetDelta;
-        result = 31 * result + Long.hashCode(timestamp);
-        return result;
     }
 
     @Override

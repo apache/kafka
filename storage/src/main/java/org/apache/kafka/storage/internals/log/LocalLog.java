@@ -557,8 +557,8 @@ public class LocalLog {
         while (segmentEntryOpt.isPresent()) {
             LogSegment segment = segmentEntryOpt.get();
             TxnIndexSearchResult searchResult = segment.collectAbortedTxns(startOffset, upperBoundOffset);
-            accumulator.accept(searchResult.abortedTransactions);
-            if (searchResult.isComplete) return;
+            accumulator.accept(searchResult.abortedTransactions());
+            if (searchResult.isComplete()) return;
             segmentEntryOpt = nextItem(higherSegments);
         }
     }
@@ -752,7 +752,7 @@ public class LocalLog {
             throw new KafkaException("dir should not be null");
         }
         String dirName = dir.getName();
-        if (dirName.isEmpty() || !dirName.contains("-")) {
+        if (!dirName.contains("-")) {
             throw exception(dir);
         }
         if (dirName.endsWith(DELETE_DIR_SUFFIX) && !DELETE_DIR_PATTERN.matcher(dirName).matches() ||
@@ -1055,20 +1055,12 @@ public class LocalLog {
         return deletedNotReplaced;
     }
 
-    public static class SplitSegmentResult {
-
-        public final List<LogSegment> deletedSegments;
-        public final List<LogSegment> newSegments;
-
-        /**
-         * Holds the result of splitting a segment into one or more segments, see LocalLog.splitOverflowedSegment().
-         *
-         * @param deletedSegments segments deleted when splitting a segment
-         * @param newSegments new segments created when splitting a segment
-         */
-        public SplitSegmentResult(List<LogSegment> deletedSegments, List<LogSegment> newSegments) {
-            this.deletedSegments = deletedSegments;
-            this.newSegments = newSegments;
-        }
+    /**
+     * Holds the result of splitting a segment into one or more segments, see LocalLog.splitOverflowedSegment().
+     *
+     * @param deletedSegments segments deleted when splitting a segment
+     * @param newSegments     new segments created when splitting a segment
+     */
+    public record SplitSegmentResult(List<LogSegment> deletedSegments, List<LogSegment> newSegments) {
     }
 }

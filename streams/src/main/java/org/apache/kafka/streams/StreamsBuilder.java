@@ -75,7 +75,7 @@ public class StreamsBuilder {
     public StreamsBuilder() {
         topology = new Topology();
         internalTopologyBuilder = topology.internalTopologyBuilder;
-        internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
+        internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder, false);
     }
 
     /**
@@ -87,7 +87,14 @@ public class StreamsBuilder {
     public StreamsBuilder(final TopologyConfig topologyConfigs) {
         topology = newTopology(topologyConfigs);
         internalTopologyBuilder = topology.internalTopologyBuilder;
-        internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
+        internalStreamsBuilder = new InternalStreamsBuilder(
+            internalTopologyBuilder,
+            TopologyConfig.InternalConfig.getBoolean(
+                topologyConfigs.originals(),
+                TopologyConfig.InternalConfig.ENABLE_PROCESS_PROCESSVALUE_FIX,
+                false
+            )
+        );
     }
 
     protected Topology newTopology(final TopologyConfig topologyConfigs) {

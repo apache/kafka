@@ -52,6 +52,9 @@ Configuration:
       - name: org.apache.kafka.streams
         level: INFO
 
+      - name: org.apache.kafka.coordinator.group
+        level: INFO
+
       - name: org.apache.kafka.clients.producer.ProducerConfig
         level: ERROR
 

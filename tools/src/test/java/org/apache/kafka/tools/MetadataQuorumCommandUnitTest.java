@@ -28,7 +28,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -41,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class MetadataQuorumCommandUnitTest {
     @Test
     public void testRemoveControllerDryRun() {
-        List<String> outputs = Arrays.asList(
+        List<String> outputs = List.of(
             ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(0, MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092",
                     "remove-controller",
@@ -250,7 +249,7 @@ public class MetadataQuorumCommandUnitTest {
                  new MetadataQuorumCommandUnitTestEnv(Optional.
                      of(Uuid.fromString("wZoXPqWoSu6F6c8MkmdyAg")))) {
             File propsFile = testEnv.writePropertiesFile();
-            List<String> outputs = Arrays.asList(
+            List<String> outputs = List.of(
                 ToolsTestUtils.captureStandardOut(() ->
                     assertEquals(0, MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092",
                         "--command-config", propsFile.getAbsolutePath(),
