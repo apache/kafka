@@ -74,6 +74,7 @@ public class ShareGroupMember extends ModernGroupMember {
             this.memberId = Objects.requireNonNull(newMemberId);
             this.memberEpoch = member.memberEpoch;
             this.previousMemberEpoch = member.previousMemberEpoch;
+            this.state = member.state;
             this.rackId = member.rackId;
             this.clientId = member.clientId;
             this.clientHost = member.clientHost;
