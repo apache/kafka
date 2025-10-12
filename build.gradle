@@ -605,9 +605,6 @@ subprojects {
   tasks.register('integrationTest', Test) {
     dependsOn(tasks.compileJava)
 
-    testClassesDirs = testing.suites.test.sources.output.classesDirs
-    classpath = testing.suites.test.sources.runtimeClasspath
-
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
@@ -642,9 +639,6 @@ subprojects {
   tasks.register('unitTest', Test)  {
     dependsOn(tasks.compileJava)
 
-    testClassesDirs = testing.suites.test.sources.output.classesDirs
-    classpath = testing.suites.test.sources.runtimeClasspath
-
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
@@ -671,6 +665,17 @@ subprojects {
         maxRetries = userMaxTestRetries
         maxFailures = userMaxTestRetryFailures
       }
+    }
+  }
+
+  testing {
+    suites {
+        test {
+            targets {
+                integrationTest
+                unitTest
+            }
+        }
     }
   }
 
