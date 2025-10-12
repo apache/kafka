@@ -158,6 +158,7 @@ public class DescribeConsumerGroupsHandlerTest {
             new MemberDescription(
                 "memberId",
                 Optional.of("instanceId"),
+                Optional.of("rackid"),
                 "clientId",
                 "host",
                 new MemberAssignment(Set.of(
@@ -172,6 +173,7 @@ public class DescribeConsumerGroupsHandlerTest {
             new MemberDescription(
                 "memberId-classic",
                 Optional.of("instanceId-classic"),
+                Optional.of("rackid"),
                 "clientId-classic",
                 "host",
                 new MemberAssignment(Set.of(
@@ -268,6 +270,7 @@ public class DescribeConsumerGroupsHandlerTest {
     public void testSuccessfulHandleClassicGroupResponse() {
         Collection<MemberDescription> members = singletonList(new MemberDescription(
                 "memberId",
+                Optional.empty(),
                 Optional.empty(),
                 "clientId",
                 "host",

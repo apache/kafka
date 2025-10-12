@@ -197,7 +197,7 @@ public class ShareGroupCommandTest {
             DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
             ShareGroupDescription exp = new ShareGroupDescription(
                 firstGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0))
                 ), 0)),
                 GroupState.STABLE,
@@ -245,7 +245,7 @@ public class ShareGroupCommandTest {
             DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
             ShareGroupDescription exp = new ShareGroupDescription(
                 firstGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0))
                 ), 0)),
                 GroupState.STABLE,
@@ -298,14 +298,14 @@ public class ShareGroupCommandTest {
             DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
             ShareGroupDescription exp1 = new ShareGroupDescription(
                 firstGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0))
                 ), 0)),
                 GroupState.STABLE,
                 new Node(0, "host1", 9090), 0, 0);
             ShareGroupDescription exp2 = new ShareGroupDescription(
                 secondGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0))
                 ), 0)),
                 GroupState.STABLE,
@@ -373,7 +373,7 @@ public class ShareGroupCommandTest {
             DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
             ShareGroupDescription exp1 = new ShareGroupDescription(
                 firstGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0))
                 ), 0)),
                 GroupState.STABLE,
@@ -419,14 +419,14 @@ public class ShareGroupCommandTest {
             DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
             ShareGroupDescription exp1 = new ShareGroupDescription(
                 firstGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0))
                 ), 0)),
                 GroupState.STABLE,
                 new Node(0, "host1", 9090), 0, 0);
             ShareGroupDescription exp2 = new ShareGroupDescription(
                 secondGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0))
                 ), 0)),
                 GroupState.STABLE,
@@ -474,7 +474,7 @@ public class ShareGroupCommandTest {
             DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
             ShareGroupDescription exp1 = new ShareGroupDescription(
                 firstGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0), new TopicPartition("topic1", 1), new TopicPartition("topic2", 0))
                 ), 0)),
                 GroupState.STABLE,
@@ -520,14 +520,14 @@ public class ShareGroupCommandTest {
             DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
             ShareGroupDescription exp1 = new ShareGroupDescription(
                 firstGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0), new TopicPartition("topic1", 1), new TopicPartition("topic2", 0))
                 ), 0)),
                 GroupState.STABLE,
                 new Node(0, "host1", 9090), 0, 0);
             ShareGroupDescription exp2 = new ShareGroupDescription(
                 secondGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0))
                 ), 0)),
                 GroupState.STABLE,
@@ -1334,7 +1334,7 @@ public class ShareGroupCommandTest {
 
         ShareGroupDescription exp = new ShareGroupDescription(
             group,
-            List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+            List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                 Set.of(new TopicPartition("topic", 0))
             ), 0)),
             GroupState.STABLE,

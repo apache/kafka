@@ -4758,6 +4758,7 @@ public class KafkaAdminClientTest {
                     new MemberDescription(
                         "memberId",
                         Optional.of("instanceId"),
+                        Optional.of("rackid"),
                         "clientId",
                         "host",
                         new MemberAssignment(
@@ -10684,6 +10685,7 @@ public class KafkaAdminClientTest {
     private static ShareMemberDescription convertToShareMemberDescriptions(ShareGroupDescribeResponseData.Member member,
                                                                            ShareMemberAssignment assignment) {
         return new ShareMemberDescription(member.memberId(),
+                                          Optional.ofNullable(member.rackId()),
                                           member.clientId(),
                                           member.clientHost(),
                                           assignment,
