@@ -2249,18 +2249,13 @@ public class GroupMetadataManager {
             .setClassicMemberMetadata(null)
             .build();
 
-        // If the group is newly created, we must ensure that it moves away from
-        // epoch 0 and that it is fully initialized.
-        boolean bumpGroupEpoch = group.groupEpoch() == 0;
-
-        bumpGroupEpoch |= hasMemberSubscriptionChanged(
+        boolean subscribedTopicNamesChanged = hasMemberSubscriptionChanged(
             groupId,
             member,
             updatedMember,
             records
         );
-
-        bumpGroupEpoch |= maybeUpdateRegularExpressions(
+        UpdateRegularExpressionsResult updateRegularExpressionsResult = maybeUpdateRegularExpressions(
             context,
             group,
             member,
@@ -2268,8 +2263,23 @@ public class GroupMetadataManager {
             records
         );
 
+        // The subscription has changed when either the subscribed topic names or subscribed topic
+        // regex has changed.
+        boolean hasSubscriptionChanged = subscribedTopicNamesChanged || updateRegularExpressionsResult.regexUpdated();
         int groupEpoch = group.groupEpoch();
         SubscriptionType subscriptionType = group.subscriptionType();
+
+        boolean bumpGroupEpoch =
+            // If the group is newly created, we must ensure that it moves away from
+            // epoch 0 and that it is fully initialized.
+            groupEpoch == 0 ||
+            // Bumping the group epoch signals that the target assignment should be updated. We bump
+            // the group epoch when the member has changed its subscribed topic names or the member
+            // has changed its subscribed topic regex to a regex that is already resolved. We avoid
+            // bumping the group epoch when the new subscribed topic regex has not been resolved
+            // yet, since we will have to update the target assignment again later.
+            subscribedTopicNamesChanged ||
+            updateRegularExpressionsResult == UpdateRegularExpressionsResult.REGEX_UPDATED_AND_RESOLVED;
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
@@ -2315,6 +2325,9 @@ public class GroupMetadataManager {
             group::currentPartitionEpoch,
             targetAssignmentEpoch,
             targetAssignment,
+            group.resolvedRegularExpressions(),
+            // Force consistency with the subscription when the subscription has changed.
+            hasSubscriptionChanged,
             ownedTopicPartitions,
             records
         );
@@ -2468,6 +2481,8 @@ public class GroupMetadataManager {
                     group::currentPartitionEpoch,
                     group.assignmentEpoch(),
                     group.targetAssignment(updatedMember.memberId(), updatedMember.instanceId()),
+                    group.resolvedRegularExpressions(),
+                    bumpGroupEpoch,
                     toTopicPartitions(subscription.ownedPartitions(), metadataImage),
                     records
                 );
@@ -2511,6 +2526,9 @@ public class GroupMetadataManager {
                 group::currentPartitionEpoch,
                 targetAssignmentEpoch,
                 targetAssignment,
+                group.resolvedRegularExpressions(),
+                // Force consistency with the subscription when the subscription has changed.
+                bumpGroupEpoch,
                 toTopicPartitions(subscription.ownedPartitions(), metadataImage),
                 records
             );
@@ -2669,6 +2687,8 @@ public class GroupMetadataManager {
             updatedMember,
             targetAssignmentEpoch,
             targetAssignment,
+            // Force consistency with the subscription when the subscription has changed.
+            bumpGroupEpoch,
             records
         );
 
@@ -3108,6 +3128,16 @@ public class GroupMetadataManager {
         return value != null && !value.isEmpty();
     }
 
+    private enum UpdateRegularExpressionsResult {
+        NO_CHANGE,
+        REGEX_UPDATED,
+        REGEX_UPDATED_AND_RESOLVED;
+
+        public boolean regexUpdated() {
+            return this == REGEX_UPDATED || this == REGEX_UPDATED_AND_RESOLVED;
+        }
+    }
+
     /**
      * Check whether the member has updated its subscribed topic regular expression and
      * may trigger the resolution/the refresh of all the regular expressions in the
@@ -3119,9 +3149,9 @@ public class GroupMetadataManager {
      * @param member        The old member.
      * @param updatedMember The new member.
      * @param records       The records accumulator.
-     * @return Whether a rebalance must be triggered.
+     * @return The result of the update.
      */
-    private boolean maybeUpdateRegularExpressions(
+    private UpdateRegularExpressionsResult maybeUpdateRegularExpressions(
         AuthorizableRequestContext context,
         ConsumerGroup group,
         ConsumerGroupMember member,
@@ -3134,13 +3164,16 @@ public class GroupMetadataManager {
         String oldSubscribedTopicRegex = member.subscribedTopicRegex();
         String newSubscribedTopicRegex = updatedMember.subscribedTopicRegex();
 
-        boolean bumpGroupEpoch = false;
         boolean requireRefresh = false;
+        UpdateRegularExpressionsResult updateRegularExpressionsResult = UpdateRegularExpressionsResult.NO_CHANGE;
 
         // Check whether the member has changed its subscribed regex.
-        if (!Objects.equals(oldSubscribedTopicRegex, newSubscribedTopicRegex)) {
+        boolean subscribedTopicRegexChanged = !Objects.equals(oldSubscribedTopicRegex, newSubscribedTopicRegex);
+        if (subscribedTopicRegexChanged) {
             log.debug("[GroupId {}] Member {} updated its subscribed regex to: {}.",
                 groupId, memberId, newSubscribedTopicRegex);
+
+            updateRegularExpressionsResult = UpdateRegularExpressionsResult.REGEX_UPDATED;
 
             if (isNotEmpty(oldSubscribedTopicRegex) && group.numSubscribedMembers(oldSubscribedTopicRegex) == 1) {
                 // If the member was the last one subscribed to the regex, we delete the
@@ -3160,7 +3193,9 @@ public class GroupMetadataManager {
                 } else {
                     // If the new regex is already resolved, we trigger a rebalance
                     // by bumping the group epoch.
-                    bumpGroupEpoch = group.resolvedRegularExpression(newSubscribedTopicRegex).isPresent();
+                    if (group.resolvedRegularExpression(newSubscribedTopicRegex).isPresent()) {
+                        updateRegularExpressionsResult = UpdateRegularExpressionsResult.REGEX_UPDATED_AND_RESOLVED;
+                    }
                 }
             }
         }
@@ -3176,20 +3211,20 @@ public class GroupMetadataManager {
         // 0. The group is subscribed to regular expressions. We also take the one
         //    that the current may have just introduced.
         if (!requireRefresh && group.subscribedRegularExpressions().isEmpty()) {
-            return bumpGroupEpoch;
+            return updateRegularExpressionsResult;
         }
 
         // 1. There is no ongoing refresh for the group.
         String key = group.groupId() + "-regex";
         if (executor.isScheduled(key)) {
-            return bumpGroupEpoch;
+            return updateRegularExpressionsResult;
         }
 
         // 2. The last refresh is older than 10s. If the group does not have any regular
         //    expressions but the current member just brought a new one, we should continue.
         long lastRefreshTimeMs = group.lastResolvedRegularExpressionRefreshTimeMs();
         if (currentTimeMs <= lastRefreshTimeMs + REGEX_BATCH_REFRESH_MIN_INTERVAL_MS) {
-            return bumpGroupEpoch;
+            return updateRegularExpressionsResult;
         }
 
         // 3.1 The group has unresolved regular expressions.
@@ -3218,7 +3253,7 @@ public class GroupMetadataManager {
             );
         }
 
-        return bumpGroupEpoch;
+        return updateRegularExpressionsResult;
     }
 
     /**
@@ -3492,16 +3527,18 @@ public class GroupMetadataManager {
     /**
      * Reconciles the current assignment of the member towards the target assignment if needed.
      *
-     * @param groupId               The group id.
-     * @param member                The member to reconcile.
-     * @param currentPartitionEpoch The function returning the current epoch of
-     *                              a given partition.
-     * @param targetAssignmentEpoch The target assignment epoch.
-     * @param targetAssignment      The target assignment.
-     * @param ownedTopicPartitions  The list of partitions owned by the member. This
-     *                              is reported in the ConsumerGroupHeartbeat API and
-     *                              it could be null if not provided.
-     * @param records               The list to accumulate any new records.
+     * @param groupId                    The group id.
+     * @param member                     The member to reconcile.
+     * @param currentPartitionEpoch      The function returning the current epoch of
+     *                                   a given partition.
+     * @param targetAssignmentEpoch      The target assignment epoch.
+     * @param targetAssignment           The target assignment.
+     * @param resolvedRegularExpressions The resolved regular expressions.
+     * @param hasSubscriptionChanged     Whether the member has changed its subscription on the current heartbeat.
+     * @param ownedTopicPartitions       The list of partitions owned by the member. This
+     *                                   is reported in the ConsumerGroupHeartbeat API and
+     *                                   it could be null if not provided.
+     * @param records                    The list to accumulate any new records.
      * @return The received member if no changes have been made; or a new
      *         member containing the new assignment.
      */
@@ -3511,15 +3548,20 @@ public class GroupMetadataManager {
         BiFunction<Uuid, Integer, Integer> currentPartitionEpoch,
         int targetAssignmentEpoch,
         Assignment targetAssignment,
+        Map<String, ResolvedRegularExpression> resolvedRegularExpressions,
+        boolean hasSubscriptionChanged,
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions,
         List<CoordinatorRecord> records
     ) {
-        if (member.isReconciledTo(targetAssignmentEpoch)) {
+        if (!hasSubscriptionChanged && member.isReconciledTo(targetAssignmentEpoch)) {
             return member;
         }
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
+            .withMetadataImage(metadataImage)
             .withTargetAssignment(targetAssignmentEpoch, targetAssignment)
+            .withHasSubscriptionChanged(hasSubscriptionChanged)
+            .withResolvedRegularExpressions(resolvedRegularExpressions)
             .withCurrentPartitionEpoch(currentPartitionEpoch)
             .withOwnedTopicPartitions(ownedTopicPartitions)
             .build();
@@ -3556,11 +3598,12 @@ public class GroupMetadataManager {
     /**
      * Reconciles the current assignment of the member towards the target assignment if needed.
      *
-     * @param groupId               The group id.
-     * @param member                The member to reconcile.
-     * @param targetAssignmentEpoch The target assignment epoch.
-     * @param targetAssignment      The target assignment.
-     * @param records               The list to accumulate any new records.
+     * @param groupId                The group id.
+     * @param member                 The member to reconcile.
+     * @param targetAssignmentEpoch  The target assignment epoch.
+     * @param targetAssignment       The target assignment.
+     * @param hasSubscriptionChanged Whether the member has changed its subscription on the current heartbeat.
+     * @param records                The list to accumulate any new records.
      * @return The received member if no changes have been made; or a new
      *         member containing the new assignment.
      */
@@ -3569,14 +3612,17 @@ public class GroupMetadataManager {
         ShareGroupMember member,
         int targetAssignmentEpoch,
         Assignment targetAssignment,
+        boolean hasSubscriptionChanged,
         List<CoordinatorRecord> records
     ) {
-        if (member.isReconciledTo(targetAssignmentEpoch)) {
+        if (!hasSubscriptionChanged && member.isReconciledTo(targetAssignmentEpoch)) {
             return member;
         }
 
         ShareGroupMember updatedMember = new ShareGroupAssignmentBuilder(member)
+            .withMetadataImage(metadataImage)
             .withTargetAssignment(targetAssignmentEpoch, targetAssignment)
+            .withHasSubscriptionChanged(hasSubscriptionChanged)
             .build();
 
         if (!updatedMember.equals(member)) {

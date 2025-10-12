@@ -91,9 +91,9 @@ import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -367,7 +367,8 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
-    private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
+    private final AtomicReference<org.apache.kafka.streams.CloseOptions.GroupMembershipOperation> leaveGroupRequested =
+        new AtomicReference<>(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
     private final AtomicLong lastShutdownWarningTimestamp = new AtomicLong(0L);
     private final boolean eosEnabled;
     private final boolean stateUpdaterEnabled;
@@ -898,7 +899,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             cleanRun = runLoop();
         } catch (final Throwable e) {
             failedStreamThreadSensor.record();
-            leaveGroupRequested.set(true);
+            leaveGroupRequested.set(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
             streamsUncaughtExceptionHandler.accept(e, false);
             // Note: the above call currently rethrows the exception, so nothing below this line will be executed
         } finally {
@@ -1547,7 +1548,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (streamsRebalanceData.isPresent()) {
             boolean hasMissingSourceTopics = false;
             String missingTopicsDetail = null;
-            
+
             for (final StreamsGroupHeartbeatResponseData.Status status : streamsRebalanceData.get().statuses()) {
                 if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code()) {
                     shutdownErrorHook.run();
@@ -1560,7 +1561,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                     throw new TopologyException(errorMsg);
                 }
             }
-            
+
             if (hasMissingSourceTopics) {
                 handleMissingSourceTopicsWithTimeout(missingTopicsDetail);
             } else {
@@ -1589,25 +1590,25 @@ public class StreamThread extends Thread implements ProcessingThread {
         // Start timeout tracking on first encounter with missing topics
         if (topicsReadyTimer == null) {
             topicsReadyTimer = time.timer(maxPollTimeMs);
-            log.info("Missing source topics detected: {}. Will wait up to {}ms before failing.", 
+            log.info("Missing source topics detected: {}. Will wait up to {}ms before failing.",
                 missingTopicsDetail, maxPollTimeMs);
         } else {
             topicsReadyTimer.update();
         }
-        
+
         if (topicsReadyTimer.isExpired()) {
             final long elapsedTime = topicsReadyTimer.elapsedMs();
-            final String errorMsg = String.format("Missing source topics: %s. Timeout exceeded after %dms.", 
+            final String errorMsg = String.format("Missing source topics: %s. Timeout exceeded after %dms.",
                 missingTopicsDetail, elapsedTime);
             log.error(errorMsg);
-            
+
             throw new MissingSourceTopicException(errorMsg);
         } else {
-            log.debug("Missing source topics: {}. Elapsed time: {}ms, timeout in: {}ms", 
+            log.debug("Missing source topics: {}. Elapsed time: {}ms, timeout in: {}ms",
                 missingTopicsDetail, topicsReadyTimer.elapsedMs(), topicsReadyTimer.remainingMs());
         }
     }
-    
+
 
     static Map<TopicPartition, PartitionInfo> getTopicPartitionInfo(final Map<HostInfo, Set<TopicPartition>> partitionsByHost) {
         final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
@@ -1879,12 +1880,12 @@ public class StreamThread extends Thread implements ProcessingThread {
      * Note that there is nothing to prevent this function from being called multiple times
      * (e.g., in testing), hence the state is set only the first time
      *
-     * @param leaveGroup this flag will control whether the consumer will leave the group on close or not
+     * @param operation the group membership operation to apply on shutdown. Must be one of LEAVE_GROUP or REMAIN_IN_GROUP.
      */
-    public void shutdown(final boolean leaveGroup) {
+    public void shutdown(final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
         log.info("Informed to shut down");
         final State oldState = setState(State.PENDING_SHUTDOWN);
-        leaveGroupRequested.set(leaveGroup);
+        leaveGroupRequested.set(operation);
         if (oldState == State.CREATED) {
             // The thread may not have been started. Take responsibility for shutting down
             completeShutdown(true);
@@ -1917,7 +1918,8 @@ public class StreamThread extends Thread implements ProcessingThread {
             log.error("Failed to close changelog reader due to the following error:", e);
         }
         try {
-            final GroupMembershipOperation membershipOperation = leaveGroupRequested.get() ? LEAVE_GROUP : REMAIN_IN_GROUP;
+            final GroupMembershipOperation membershipOperation =
+                leaveGroupRequested.get() == org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP ? LEAVE_GROUP : REMAIN_IN_GROUP;
             mainConsumer.close(CloseOptions.groupMembershipOperation(membershipOperation));
         } catch (final Throwable e) {
             log.error("Failed to close consumer due to the following error:", e);

@@ -78,8 +78,10 @@ class SocketServer(
   val socketFactory: ServerSocketFactory = ServerSocketFactory.INSTANCE,
   val connectionDisconnectListeners: Seq[ConnectionDisconnectListener] = Seq.empty
 ) extends Logging with BrokerReconfigurable {
-
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+  private val metricsPackage = "kafka.network"
+  private val metricsClassName = "SocketServer"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   private val maxQueuedRequests = config.queuedMaxRequests
 
@@ -485,9 +487,6 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
                                        memoryPool: MemoryPool,
                                        apiVersionManager: ApiVersionManager)
   extends Runnable with Logging {
-
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
-
   val shouldRun = new AtomicBoolean(true)
 
   private val sendBufferSize = config.socketSendBufferBytes
@@ -516,7 +515,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   private val blockedPercentMeterMetricName = backwardCompatibilityMetricGroup.metricName(
     "AcceptorBlockedPercent",
     Map(ListenerMetricTag -> endPoint.listener).asJava)
-  private val blockedPercentMeter = metricsGroup.newMeter(blockedPercentMeterMetricName,"blocked time", TimeUnit.NANOSECONDS)
+  private val blockedPercentMeter = backwardCompatibilityMetricGroup.newMeter(blockedPercentMeterMetricName,"blocked time", TimeUnit.NANOSECONDS)
   private var currentProcessorIndex = 0
   private[network] val throttledSockets = new mutable.PriorityQueue[DelayedCloseSocket]()
   private val started = new AtomicBoolean()
@@ -834,7 +833,9 @@ private[kafka] class Processor(
   threadName: String,
   connectionDisconnectListeners: Seq[ConnectionDisconnectListener]
 ) extends Runnable with Logging {
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  private val metricsPackage = "kafka.network"
+  private val metricsClassName = "Processor"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   val shouldRun: AtomicBoolean = new AtomicBoolean(true)
   private val started: AtomicBoolean = new AtomicBoolean()

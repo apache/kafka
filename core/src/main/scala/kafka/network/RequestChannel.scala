@@ -346,7 +346,10 @@ class RequestChannel(val queueSize: Int,
                      val metrics: RequestChannelMetrics) {
   import RequestChannel._
 
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+  private val metricsPackage = "kafka.network"
+  private val metricsClassName = "RequestChannel"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
   private val processors = new ConcurrentHashMap[Int, Processor]()
