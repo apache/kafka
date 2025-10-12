@@ -110,7 +110,7 @@ public class TestSslUtils {
      * @param dn the X.509 Distinguished Name, eg "CN=Test, L=London, C=GB"
      * @param pair the KeyPair
      * @param days how many days from now the Certificate is valid for, or - for negative values - how many days before now
-     * @param algorithm the signing algorithm, eg "SHA1withRSA"
+     * @param algorithm the signing algorithm, eg "SHA256withRSA"
      * @return the self-signed certificate
      * @throws CertificateException thrown if a security error or an IO error occurred.
      */
@@ -131,7 +131,7 @@ public class TestSslUtils {
      *        CA.
      * @param parentKeyPair The key pair of the issuer. Leave null if you want to generate a root
      *        CA.
-     * @param algorithm the signing algorithm, eg "SHA1withRSA"
+     * @param algorithm the signing algorithm, eg "SHA256withRSA"
      * @return the signed certificate
      * @throws CertificateException
      */
@@ -399,7 +399,7 @@ public class TestSslUtils {
         private byte[] subjectAltName;
 
         public CertificateBuilder() {
-            this(30, "SHA1withRSA");
+            this(30, "SHA256withRSA");
         }
 
         public CertificateBuilder(int days, String algorithm) {
