@@ -380,7 +380,7 @@ public final class ProducerBatch {
         // Chain all split batch ProduceRequestResults to the original batch's produceFuture
         // Ensures the original batch's future doesn't complete until all split batches complete
         for (ProducerBatch splitBatch : batches) {
-            produceFuture.addDependentResult(splitBatch.produceFuture);
+            produceFuture.addDependent(splitBatch.produceFuture);
         }
 
         produceFuture.set(ProduceResponse.INVALID_OFFSET, NO_TIMESTAMP, index -> new RecordBatchTooLargeException());

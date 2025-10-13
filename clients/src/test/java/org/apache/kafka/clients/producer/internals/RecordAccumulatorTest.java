@@ -1838,8 +1838,8 @@ public class RecordAccumulatorTest {
         ProduceRequestResult dependent2 = new ProduceRequestResult(tp1);
 
         // add dependents
-        parent.addDependentResult(dependent1);
-        parent.addDependentResult(dependent2);
+        parent.addDependent(dependent1);
+        parent.addDependent(dependent2);
 
         parent.set(0L, RecordBatch.NO_TIMESTAMP, null);
         parent.done();

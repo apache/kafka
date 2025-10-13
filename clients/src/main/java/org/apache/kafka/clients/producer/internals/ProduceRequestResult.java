@@ -81,7 +81,7 @@ public class ProduceRequestResult {
      *
      * @param dependentResult The dependent result to wait for
      */
-    public void addDependentResult(ProduceRequestResult dependentResult) {
+    public void addDependent(ProduceRequestResult dependentResult) {
         synchronized (dependentResults) {
             dependentResults.add(dependentResult);
         }
