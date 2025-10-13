@@ -835,8 +835,7 @@ class Partition(val topicPartition: TopicPartition,
 
   /**
    * Make the local replica the follower by setting the new leader and ISR to empty
-   * If the leader replica id does not change and the new epoch is equal or one
-   * greater (that is, no updates have been missed), return false to indicate to the
+   * If the new leader epoch is less than current, return false to indicate to the
    * replica manager that state is already correct and the become-follower steps can
    * be skipped.
    */
@@ -882,7 +881,7 @@ class Partition(val topicPartition: TopicPartition,
           s"Previous leader $prevLeaderReplicaIdOpt and previous leader epoch was $prevLeaderEpoch.")
       } else {
         stateChangeLogger.info(s"Skipped the become-follower state change for $topicPartition with topic id $topicId, " +
-          s"partition registration $partitionRegistration and isNew=$isNew since it is already a follower with leader epoch $leaderEpoch.")
+          s"partition registration $partitionRegistration and isNew=$isNew since it is already a follower with leader epoch $prevLeaderEpoch.")
       }
 
       // We must restart the fetchers when the leader epoch changed regardless of

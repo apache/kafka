@@ -1523,7 +1523,8 @@ public class KafkaStreams implements AutoCloseable {
         }, clientId + "-CloseThread");
     }
 
-    private boolean close(final Optional<Long> timeout, final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
+    // visible for testing
+    boolean close(final Optional<Long> timeout, final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
         final long timeoutMs;
         if (timeout.isPresent()) {
             timeoutMs = timeout.get();
@@ -1635,8 +1636,9 @@ public class KafkaStreams implements AutoCloseable {
     public synchronized boolean close(final org.apache.kafka.streams.CloseOptions options) throws IllegalArgumentException {
         Objects.requireNonNull(options, "options cannot be null");
         final CloseOptionsInternal optionsInternal = new CloseOptionsInternal(options);
-        final String msgPrefix = prepareMillisCheckFailMsgPrefix(optionsInternal.timeout(), "timeout");
-        final long timeoutMs = validateMillisecondDuration(optionsInternal.timeout().get(), msgPrefix);
+        final Duration timeout = optionsInternal.timeout().orElseGet(() -> Duration.ofMillis(Long.MAX_VALUE));
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeout, "timeout");
+        final long timeoutMs = validateMillisecondDuration(timeout, msgPrefix);
         if (timeoutMs < 0) {
             throw new IllegalArgumentException("Timeout can't be negative.");
         }
