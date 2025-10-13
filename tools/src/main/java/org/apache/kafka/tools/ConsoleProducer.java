@@ -249,7 +249,7 @@ public class ConsoleProducer {
                                     "\n  \"key\\tvalue\"" +
                                     "\n parse.headers=true:" +
                                     "\n  \"h1:v1,h2:v2...\\tvalue\"" +
-                                    "This option will be removed in a future version. Use --reader-property instead.")
+                                    "\n This option will be removed in a future version. Use --reader-property instead.")
                     .withRequiredArg()
                     .describedAs("prop")
                     .ofType(String.class);
