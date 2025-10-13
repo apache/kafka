@@ -238,6 +238,8 @@ public class StreamsGroup implements Group {
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.assignmentConfigs = new TimelineHashMap<>(snapshotRegistry, 0);
+        // Set default assignment configuration
+        this.assignmentConfigs.put("num.standby.replicas", "0");
     }
 
     /**
