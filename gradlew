@@ -219,10 +219,8 @@ for attempt in 1 2 3; do
     elif command -v shasum >/dev/null 2>&1; then
       LOCAL_WRAPPER_JAR_CHECKSUM=$(shasum -a 256 "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" | awk '{print $1}')
     else
-      # If no checksum tool is found, delete the JAR and re-download.
-      warn "Cannot find sha256sum or shasum to verify wrapper JAR. Deleting and re-downloading."
-      rm -f "$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
-      continue
+      # If no checksum tool is found, exit with an error.
+      die "ERROR: Cannot find sha256sum or shasum to verify wrapper JAR. Please install one of these tools."
     fi
 
     # If the local checksum does not match the required checksum, delete the JAR to force re-download.
