@@ -21,10 +21,7 @@ import org.apache.kafka.common.compress.GzipCompression;
 import org.apache.kafka.common.compress.Lz4Compression;
 import org.apache.kafka.common.compress.ZstdCompression;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.record.*;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
@@ -108,7 +105,7 @@ public class TestLinearWriteSpeed {
                 logProperties.put(TopicConfig.SEGMENT_BYTES_CONFIG, Integer.toString(segmentSize));
                 logProperties.put(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, Long.toString(flushInterval));
                 LogConfig logConfig = new LogConfig(logProperties);
-                writables[i] = new LogWritable(new File(dir, "kafka-test-" + i), logConfig, scheduler, messageSet, compression, recordsList);
+                writables[i] = new LogWritable(new File(dir, "kafka-test-" + i), logConfig, scheduler, messageSet);
             } else {
                 System.err.println("Must specify what to write to with one of --log, --channel, or --mmap");
                 Exit.exit(1);
@@ -237,13 +234,9 @@ public class TestLinearWriteSpeed {
     static class LogWritable implements Writable {
         MemoryRecords messages;
         UnifiedLog log;
-        Compression compression;
-        SimpleRecord[] records;
 
-        public LogWritable(File dir, LogConfig config, Scheduler scheduler, MemoryRecords messages, Compression compression, List<SimpleRecord> recordsList) throws IOException {
+        public LogWritable(File dir, LogConfig config, Scheduler scheduler, MemoryRecords messages) throws IOException {
             this.messages = messages;
-            this.compression = compression;
-            this.records = recordsList.toArray(new SimpleRecord[0]);
             Utils.delete(dir);
             this.log = UnifiedLog.create(
                 dir,
@@ -266,7 +259,8 @@ public class TestLinearWriteSpeed {
         }
 
         public int write() {
-            this.messages = MemoryRecords.withRecords(compression, records);
+            ByteBuffer buffer = messages.buffer();
+            buffer.putLong(0, 0L);
             log.appendAsLeader(
                 messages,
                 0,
