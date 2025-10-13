@@ -283,7 +283,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
         // When fetching records and there is no chosen node for fetching, we do not want to wait for the next poll
-        if (fetchMoreRecords && fetchRecordsNodeId.get() == -1) {
+        if (fetchMoreRecords && subscriptions.numAssignedPartitions() > 0 && fetchRecordsNodeId.get() == -1) {
             return 0L;
         }
         return Long.MAX_VALUE;
