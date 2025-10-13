@@ -1789,7 +1789,7 @@ public class TaskManagerTest {
         when(runningStatefulTask.changelogOffsets()).thenReturn(changelogOffsets);
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
-        when(stateUpdater.tasks()).thenReturn(Set.of(runningStatefulTask));
+        when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, runningStatefulTask)));
 
         assertThat(
             taskManager.taskOffsetSums(),
