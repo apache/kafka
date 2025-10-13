@@ -63,12 +63,3 @@ Configuration:
 
       - name: org.apache.kafka.streams.StreamsConfig
         level: ERROR
-
-      - name: org.apache.kafka.streams.processor.internals.StreamTask
-        level: TRACE
-
-      - name: org.apache.kafka.streams.processor.internals.PartitionGroup
-        level: TRACE
-
-      - name: org.apache.kafka.streams.processor.internals.TaskExecutionMetadata
-        level: TRACE
