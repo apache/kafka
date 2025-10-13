@@ -31,6 +31,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
@@ -512,9 +513,8 @@ public class DeleteStreamsGroupTest {
 
     private void stopKSApp(String appId, KafkaStreams streams, StreamsGroupCommand.StreamsGroupService service) throws InterruptedException {
         if (streams != null) {
-            KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
-            closeOptions.timeout(Duration.ofSeconds(30));
-            closeOptions.leaveGroup(true);
+            CloseOptions closeOptions = CloseOptions.timeout(Duration.ofSeconds(30))
+                    .withGroupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
             streams.close(closeOptions);
             streams.cleanUp();
 

@@ -2477,7 +2477,7 @@ public class ShareConsumeRequestManagerTest {
 
         // Verify that sensors exist before closing
         for (String sensorName : sensorNames) {
-            assertNotNull(metrics.getSensor(sensorName), 
+            assertNotNull(metrics.getSensor(sensorName),
                 "Sensor " + sensorName + " should exist before closing");
         }
 
@@ -2486,7 +2486,7 @@ public class ShareConsumeRequestManagerTest {
 
         // Verify that all sensors are removed after closing
         for (String sensorName : sensorNames) {
-            assertNull(metrics.getSensor(sensorName), 
+            assertNull(metrics.getSensor(sensorName),
                 "Sensor " + sensorName + " should be removed after closing");
         }
     }
@@ -2683,6 +2683,7 @@ public class ShareConsumeRequestManagerTest {
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.setProperty(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, String.valueOf(requestTimeoutMs));
         properties.setProperty(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(retryBackoffMs));
+        properties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         ConsumerConfig config = new ConsumerConfig(properties);
         networkClientDelegate = spy(new TestableNetworkClientDelegate(
             time, config, logContext, client, metadata,

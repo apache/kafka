@@ -1278,6 +1278,7 @@ public class DelayedShareFetchTest {
         assertEquals(1, delayedShareFetch.expiredRequestMeter().count());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testRemoteStorageFetchTryCompleteReturnsFalse() {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
@@ -1357,6 +1358,7 @@ public class DelayedShareFetchTest {
         delayedShareFetch.lock().unlock();
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testRemoteStorageFetchPartitionLeaderChanged() {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
@@ -1421,6 +1423,7 @@ public class DelayedShareFetchTest {
         delayedShareFetch.lock().unlock();
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testRemoteStorageFetchTryCompleteThrowsException() {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
@@ -1507,6 +1510,7 @@ public class DelayedShareFetchTest {
         delayedShareFetch.lock().unlock();
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testRemoteStorageFetchTryCompletionDueToBrokerBecomingOffline() {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
@@ -2197,6 +2201,7 @@ public class DelayedShareFetchTest {
         return mock(BiConsumer.class);
     }
 
+    @SuppressWarnings("unchecked")
     static class DelayedShareFetchBuilder {
         private ShareFetch shareFetch = mock(ShareFetch.class);
         private ReplicaManager replicaManager = mock(ReplicaManager.class);

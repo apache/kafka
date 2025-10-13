@@ -249,6 +249,7 @@ public class WorkerTest {
                                 .strictness(Strictness.STRICT_STUBS)
                                 .startMocking();
 
+        workerProps.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
@@ -2863,7 +2864,7 @@ public class WorkerTest {
 
                 ArgumentCaptor<Throwable> failureCaptor = ArgumentCaptor.forClass(Throwable.class);
                 verify(taskStatusListener, times(1)).onFailure(eq(TASK_ID), failureCaptor.capture());
-                assertInstanceOf(TooManyTasksException.class, failureCaptor.getValue(), 
+                assertInstanceOf(TooManyTasksException.class, failureCaptor.getValue(),
                         "Expected task start exception to be TooManyTasksException, but was " + failureCaptor.getValue().getClass() + " instead");
 
                 tasksMaxExceededMessage = failureCaptor.getValue().getMessage();
