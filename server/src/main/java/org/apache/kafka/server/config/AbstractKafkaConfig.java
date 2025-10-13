@@ -190,14 +190,17 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
         if (!requireDistinctPorts) return;
 
+        // Exception case, let's allow duplicate ports if one host is on IPv4 and the other one is on IPv6
         endPoints.stream()
             .filter(ep -> ep.port() != 0) // filter port 0 for unit tests
             .collect(Collectors.groupingBy(Endpoint::port))
             .entrySet().stream()
             .filter(entry -> entry.getValue().size() > 1)
             .forEach(entry -> {
+                // Iterate through every grouping of duplicates by port to see if they are valid
                 int port = entry.getKey();
                 List<Endpoint> eps = entry.getValue();
+                // Exception case, let's allow duplicate ports if one host is on IPv4 and the other one is on IPv6
                 Map<Boolean, List<Endpoint>> partitionedByValidIp = eps.stream()
                         .collect(Collectors.partitioningBy(ep -> ep.host() != null && INET_ADDRESS_VALIDATOR.isValid(ep.host())));
 
@@ -216,10 +219,15 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
                         throw new IllegalArgumentException(errorMessage);
                     }
 
+                    // If we reach this point it means that even though duplicatesWithIpHosts in isolation can be valid, if
+                    // there happens to be ANOTHER listener on this port without an IP host (such as a null host) then its
+                    // not valid.
                     if (!duplicatesWithoutIpHosts.isEmpty()) {
                         throw new IllegalArgumentException(errorMessage);
                     }
                 } else {
+                    // Having more than 2 duplicate endpoints doesn't make sense since we only have 2 IP stacks (one is IPv4
+                    // and the other is IPv6)
                     throw new IllegalArgumentException("Each listener must have a different port unless exactly one listener has an IPv4 address and the other IPv6 address, listeners: " + listeners + ", port: " + port);
                 }
             });
