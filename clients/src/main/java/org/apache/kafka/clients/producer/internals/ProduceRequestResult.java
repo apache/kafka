@@ -37,6 +37,13 @@ public class ProduceRequestResult {
 
     private final CountDownLatch latch = new CountDownLatch(1);
     private final TopicPartition topicPartition;
+
+    /**
+     * List of dependent ProduceRequestResults created when this batch is split.
+     * When a batch is too large to send, it's split into multiple smaller batches.
+     * The original batch's ProduceRequestResult tracks all the split batches here
+     * so that flush() can wait for all splits to complete via awaitAllDependents().
+     */
     private final List<ProduceRequestResult> dependentResults = new ArrayList<>();
 
     private volatile Long baseOffset = null;
@@ -76,8 +83,8 @@ public class ProduceRequestResult {
 
     /**
      * Add a dependent ProduceRequestResult that must complete before this result is considered complete.
-     * This is used when a batch is split into multiple batches - the original batch's result
-     * should not complete until all split batches have completed.
+     * This is used when a batch is split into multiple batches - in some cases like flush(), the original
+     * batch's result should not complete until all split batches have completed.
      *
      * @param dependentResult The dependent result to wait for
      */
