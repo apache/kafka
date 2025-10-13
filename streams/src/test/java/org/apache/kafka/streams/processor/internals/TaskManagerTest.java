@@ -2109,7 +2109,21 @@ public class TaskManagerTest {
         when(tasks.allTasks()).thenReturn(Set.of(task00, task01));
         when(tasks.allTaskIds()).thenReturn(Set.of(taskId00, taskId01));
 
+        final ArrayList<TaskDirectory> taskFolders = new ArrayList<>(2);
+        taskFolders.add(new TaskDirectory(testFolder.resolve(taskId00.toString()).toFile(), null));
+        taskFolders.add(new TaskDirectory(testFolder.resolve(taskId01.toString()).toFile(), null));
+
+        when(stateDirectory.listNonEmptyTaskDirectories())
+            .thenReturn(taskFolders)
+            .thenReturn(new ArrayList<>());
+
+        expectLockObtainedFor(taskId00, taskId01);
+        expectDirectoryNotEmpty(taskId00, taskId01);
+
         final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        taskManager.handleRebalanceStart(emptySet());
+        assertThat(taskManager.lockedTaskDirectories(), is(Set.of(taskId00, taskId01)));
 
         // this should close only active tasks as zombies
         taskManager.handleLostAll();
@@ -2127,6 +2141,12 @@ public class TaskManagerTest {
         verify(task01, never()).closeClean();
         verify(tasks, never()).removeTask(task01);
 
+        // The locked task map will not be cleared.
+        assertThat(taskManager.lockedTaskDirectories(), is(Set.of(taskId00, taskId01)));
+
+        taskManager.handleRebalanceStart(emptySet());
+
+        assertThat(taskManager.lockedTaskDirectories(), is(emptySet()));
     }
 
     @Test
