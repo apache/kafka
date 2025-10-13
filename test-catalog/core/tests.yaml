@@ -3252,6 +3252,7 @@ kafka.tools.StorageToolTest:
 - testFormatWithoutStaticQuorumSucceedsWithoutInitialControllersOnBroker
 - testHandleFeatureDependenciesForFeatureWithNoDependencies
 - testHandleFeatureDependenciesForFeatureWithUnknownFeatureVersion
+- testHandleFeatureDependenciesForInvalidFormat
 - testHandleFeatureDependenciesForInvalidVersionFormat
 - testHandleFeatureDependenciesForUnknownFeature
 - testIgnoreFormatted
