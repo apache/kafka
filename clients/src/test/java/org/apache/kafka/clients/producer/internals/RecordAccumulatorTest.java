@@ -1830,7 +1830,7 @@ public class RecordAccumulatorTest {
     }
 
     @Test
-    public void testProduceRequestResultawaitAllDependents() throws Exception {
+    public void testProduceRequestResultAwaitAllDependents() throws Exception {
         ProduceRequestResult parent = new ProduceRequestResult(tp1);
 
         // make two dependent ProduceRequestResults -- mimicking split batches
@@ -1861,7 +1861,7 @@ public class RecordAccumulatorTest {
             }
         });
         awaitThread.start();
-        Thread.sleep(100);
+        Thread.sleep(5);
 
         // verify awaitAllDependents() is blocking
         assertFalse(awaitCompleted.get(),
@@ -1871,7 +1871,7 @@ public class RecordAccumulatorTest {
         dependent1.set(0L, RecordBatch.NO_TIMESTAMP, null);
         dependent1.done();
 
-        Thread.sleep(100);
+        Thread.sleep(5);
 
         // this should still be blocking because dependent2 is not complete
         assertFalse(awaitCompleted.get(),
