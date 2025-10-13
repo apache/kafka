@@ -190,7 +190,6 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
         if (!requireDistinctPorts) return;
 
-        // Exception case, let's allow duplicate ports if one host is on IPv4 and the other one is on IPv6
         endPoints.stream()
             .filter(ep -> ep.port() != 0) // filter port 0 for unit tests
             .collect(Collectors.groupingBy(Endpoint::port))
