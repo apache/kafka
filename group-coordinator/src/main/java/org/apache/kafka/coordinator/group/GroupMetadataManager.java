@@ -8655,21 +8655,17 @@ public class GroupMetadataManager {
 
     /**
      * Get the assignment configurations for the provided streams group.
-     * This method combines stored assignment configurations with default configurations.
      */
     private Map<String, String> streamsGroupAssignmentConfigs(String groupId) {
         Map<String, String> assignmentConfigs = new HashMap<>();
-        
-        // Get stored assignment configurations from the group
+
         try {
             StreamsGroup group = getStreamsGroupOrThrow(groupId);
             assignmentConfigs.putAll(group.assignmentConfigs());
         } catch (GroupIdNotFoundException ex) {
             // Use default configurations if the group does not exist
         }
-        
-        // Always use the current group configuration for num.standby.replicas
-        // This ensures that dynamic config changes are reflected immediately
+
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
         final Integer numStandbyReplicas = groupConfig.map(GroupConfig::streamsNumStandbyReplicas)
             .orElse(config.streamsGroupNumStandbyReplicas());
