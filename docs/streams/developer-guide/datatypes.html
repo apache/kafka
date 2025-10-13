@@ -217,15 +217,15 @@ TimeWindowedDeserializer&lt;String&gt; deserializer = new TimeWindowedDeserializ
         <h4>Usage in Command Line</h4>
         <p>When using command-line tools (like <code>bin/kafka-console-consumer.sh</code>), you can configure windowed deserializers by passing the inner class and window size via configuration properties. The property names use a prefix pattern:</p>
         <pre class="line-numbers"><code class="language-bash"># Time windowed deserializer configuration
---property print.key=true \
---property key.deserializer=org.apache.kafka.streams.kstream.TimeWindowedDeserializer \
---property key.deserializer.windowed.inner.deserializer.class=org.apache.kafka.common.serialization.StringDeserializer \
---property key.deserializer.window.size.ms=500
+--formatter-property print.key=true \
+--formatter-property key.deserializer=org.apache.kafka.streams.kstream.TimeWindowedDeserializer \
+--formatter-property key.deserializer.windowed.inner.deserializer.class=org.apache.kafka.common.serialization.StringDeserializer \
+--formatter-property key.deserializer.window.size.ms=500
 
 # Session windowed deserializer configuration  
---property print.key=true \
---property key.deserializer=org.apache.kafka.streams.kstream.SessionWindowedDeserializer \
---property key.deserializer.windowed.inner.deserializer.class=org.apache.kafka.common.serialization.StringDeserializer</code></pre>
+--formatter-property print.key=true \
+--formatter-property key.deserializer=org.apache.kafka.streams.kstream.SessionWindowedDeserializer \
+--formatter-property key.deserializer.windowed.inner.deserializer.class=org.apache.kafka.common.serialization.StringDeserializer</code></pre>
 
         <h4>Deprecated Configs</h4>
         <p>The following <code>StreamsConfig</code> parameters are deprecated in favor of passing parameters directly to serializer/deserializer constructors:</p>
