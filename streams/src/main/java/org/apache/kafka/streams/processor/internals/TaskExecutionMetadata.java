@@ -44,6 +44,7 @@ public class TaskExecutionMetadata {
     private final Collection<Task> successfullyProcessed = new HashSet<>();
     // map of topologies experiencing errors/currently under backoff
     private final ConcurrentHashMap<String, NamedTopologyMetadata> topologyNameToErrorMetadata = new ConcurrentHashMap<>();
+    private final Logger log;
 
     public TaskExecutionMetadata(final Set<String> allTopologyNames,
                                  final Set<String> pausedTopologies,
@@ -51,6 +52,7 @@ public class TaskExecutionMetadata {
         this.hasNamedTopologies = !(allTopologyNames.size() == 1 && allTopologyNames.contains(UNNAMED_TOPOLOGY));
         this.pausedTopologies = pausedTopologies;
         this.processingMode = processingMode;
+        this.log = new LogContext("[TaskExecutionMetadata]").logger(TaskExecutionMetadata.class);
     }
 
     public boolean hasNamedTopologies() {
@@ -65,9 +67,11 @@ public class TaskExecutionMetadata {
         final String topologyName = task.id().topologyName();
         if (!hasNamedTopologies) {
             // TODO implement error handling/backoff for non-named topologies (needs KIP)
+            log.debug("Task {} has no named topologies", task.id());
             return !pausedTopologies.contains(UNNAMED_TOPOLOGY);
         } else {
             if (pausedTopologies.contains(topologyName)) {
+                log.debug("Task {} has paused topologies", task.id());
                 return false;
             } else {
                 final NamedTopologyMetadata metadata = topologyNameToErrorMetadata.get(topologyName);

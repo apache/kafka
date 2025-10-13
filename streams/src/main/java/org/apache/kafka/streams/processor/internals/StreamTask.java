@@ -752,7 +752,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             if (timeCurrentIdlingStarted.isEmpty()) {
                 timeCurrentIdlingStarted = Optional.of(wallClockTime);
             }
-            log.debug("Task {} started idling at time {}", id, timeCurrentIdlingStarted.get());
+            if (log.isDebugEnabled()) {
+                log.debug("Task {} started idling at time {}", id, timeCurrentIdlingStarted.get());
+            }
         } else {
             timeCurrentIdlingStarted = Optional.empty();
         }
@@ -793,14 +795,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             consumedOffsets.put(partition, record.offset());
             commitNeeded = true;
 
-            log.trace("Task {} processed record: topic={}, partition={}, offset={}, remainingBuffered={}",
-                id, record.topic(), record.partition(), record.offset(), recordInfo.queue().size());
+            if (log.isTraceEnabled()) {
+                log.trace("Task {} processed record: topic={}, partition={}, offset={}",
+                    id, record.topic(), record.partition(), record.offset());
+            }
 
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
             if (recordInfo.queue().size() <= maxBufferedSize) {
                 log.trace("Resume consumption for partition {}: buffered size {} is under the threshold {}",
-                    partition, recordInfo.queue().size(), maxBufferedSize);
+                        partition, recordInfo.queue().size(), maxBufferedSize);
                 partitionsToResume.add(partition);
             }
 
