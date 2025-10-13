@@ -99,9 +99,20 @@ public class StreamsCoordinatorRecordHelpers {
     public static CoordinatorRecord newStreamsGroupEpochRecord(
         String groupId,
         int newGroupEpoch,
-        long metadataHash
+        long metadataHash,
+        Map<String, String> assignmentConfigs
     ) {
         Objects.requireNonNull(groupId, "groupId should not be null here");
+
+        List<StreamsGroupMetadataValue.AssignmentConfig> assignmentConfigList = new ArrayList<>();
+        if (assignmentConfigs != null && !assignmentConfigs.isEmpty()) {
+            assignmentConfigList = assignmentConfigs.entrySet().stream()
+                .map(entry -> new StreamsGroupMetadataValue.AssignmentConfig()
+                    .setKey(entry.getKey())
+                    .setValue(entry.getValue()))
+                .sorted(Comparator.comparing(StreamsGroupMetadataValue.AssignmentConfig::key))
+                .toList();
+        }
 
         return CoordinatorRecord.record(
             new StreamsGroupMetadataKey()
@@ -109,7 +120,8 @@ public class StreamsCoordinatorRecordHelpers {
             new ApiMessageAndVersion(
                 new StreamsGroupMetadataValue()
                     .setEpoch(newGroupEpoch)
-                    .setMetadataHash(metadataHash),
+                    .setMetadataHash(metadataHash)
+                    .setAssignmentConfigs(assignmentConfigList),
                 (short) 0
             )
         );

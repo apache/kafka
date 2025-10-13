@@ -24,6 +24,20 @@
     { "name": "Epoch", "versions": "0+", "type": "int32",
       "about": "The group epoch." },
     { "name": "MetadataHash", "versions": "0+", "type": "int64",
-      "about": "The hash of all topics in the group." }
+      "about": "The hash of all topics in the group." },
+    {
+      "name": "AssignmentConfigs",
+      "type": "[]AssignmentConfig",
+      "versions": "0+",
+      "about": "Assignment configuration parameters as key-value pairs."
+    }
+  ],
+  "commonStructs": [
+    { "name": "AssignmentConfig", "versions": "0+", "fields": [
+      { "name": "Key", "type": "string", "versions": "0+",
+        "about": "Key of the config." },
+      { "name": "Value", "type": "string", "versions": "0+",
+        "about": "Value of the config." }
+    ]}
   ]
 }

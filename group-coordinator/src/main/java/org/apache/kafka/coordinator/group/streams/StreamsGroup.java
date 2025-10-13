@@ -210,6 +210,12 @@ public class StreamsGroup implements Group {
      */
     private int endpointInformationEpoch = -1;
 
+    /**
+     * The assignment configurations for this streams group.
+     * This is used to determine when assignment configuration changes should trigger a rebalance.
+     */
+    private TimelineHashMap<String, String> assignmentConfigs;
+
     public StreamsGroup(
         LogContext logContext,
         SnapshotRegistry snapshotRegistry,
@@ -231,6 +237,7 @@ public class StreamsGroup implements Group {
         this.currentWarmupTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
+        this.assignmentConfigs = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
     /**
@@ -1081,5 +1088,22 @@ public class StreamsGroup implements Group {
 
     public void setEndpointInformationEpoch(int endpointInformationEpoch) {
         this.endpointInformationEpoch = endpointInformationEpoch;
+    }
+
+    /**
+     * @return The assignment configurations for this streams group.
+     */
+    public Map<String, String> assignmentConfigs() {
+        return Collections.unmodifiableMap(assignmentConfigs);
+    }
+
+    /**
+     * Sets a specific assignment configuration.
+     * 
+     * @param key The configuration key.
+     * @param value The configuration value.
+     */
+    public void setAssignmentConfig(String key, String value) {
+        this.assignmentConfigs.put(key, value);
     }
 }

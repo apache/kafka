@@ -79,7 +79,7 @@ public class StreamsGroupBuilder {
 
         // Add group epoch record.
         records.add(
-            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(groupId, groupEpoch, metadataHash));
+            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(groupId, groupEpoch, metadataHash, Map.of()));
 
         // Add target assignment records.
         targetAssignments.forEach((memberId, assignment) ->

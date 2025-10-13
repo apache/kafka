@@ -1949,6 +1949,15 @@ public class GroupMetadataManager {
                 reconfigureTopology = true;
             }
 
+            // Check if assignment configurations have changed
+            Map<String, String> currentAssignmentConfigs = streamsGroupAssignmentConfigs(groupId);
+            Map<String, String> storedAssignmentConfigs = group.assignmentConfigs();
+            if (!currentAssignmentConfigs.equals(storedAssignmentConfigs)) {
+                log.info("[GroupId {}][MemberId {}] Assignment configurations changed to {}. Triggering rebalance.",
+                    groupId, memberId, currentAssignmentConfigs);
+                bumpGroupEpoch = true;
+            }
+
             if (reconfigureTopology || group.configuredTopology().isEmpty()) {
                 log.info("[GroupId {}][MemberId {}] Configuring the topology {}", groupId, memberId, updatedTopology);
                 updatedConfiguredTopology = InternalTopicManager.configureTopics(logContext, metadataHash, updatedTopology, metadataImage);
@@ -1971,8 +1980,10 @@ public class GroupMetadataManager {
         int groupEpoch = group.groupEpoch();
         if (bumpGroupEpoch) {
             groupEpoch += 1;
-            records.add(newStreamsGroupEpochRecord(groupId, groupEpoch, metadataHash));
-            log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {}.", groupId, memberId, groupEpoch, metadataHash);
+            Map<String, String> assignmentConfigs = streamsGroupAssignmentConfigs(groupId);
+            records.add(newStreamsGroupEpochRecord(groupId, groupEpoch, metadataHash, assignmentConfigs));
+            log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {}.",
+                groupId, memberId, groupEpoch, metadataHash);
             metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
         }
@@ -4291,7 +4302,7 @@ public class GroupMetadataManager {
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
-        records.add(newStreamsGroupEpochRecord(group.groupId(), groupEpoch, 0));
+        records.add(newStreamsGroupEpochRecord(group.groupId(), groupEpoch, 0, Map.of()));
 
         cancelTimers(group.groupId(), member.memberId());
 
@@ -5411,6 +5422,13 @@ public class GroupMetadataManager {
             StreamsGroup streamsGroup = getOrMaybeCreatePersistedStreamsGroup(groupId, true);
             streamsGroup.setGroupEpoch(value.epoch());
             streamsGroup.setMetadataHash(value.metadataHash());
+
+            if (value.assignmentConfigs() != null) {
+                for (StreamsGroupMetadataValue.AssignmentConfig config : value.assignmentConfigs()) {
+                    streamsGroup.setAssignmentConfig(config.key(), config.value());
+                }
+            }
+
         } else {
             StreamsGroup streamsGroup;
             try {
@@ -8636,13 +8654,29 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Get the assignor of the provided streams group.
+     * Get the assignment configurations for the provided streams group.
+     * This method combines stored assignment configurations with default configurations.
      */
     private Map<String, String> streamsGroupAssignmentConfigs(String groupId) {
+        Map<String, String> assignmentConfigs = new HashMap<>();
+        
+        // Get stored assignment configurations from the group
+        try {
+            StreamsGroup group = getStreamsGroupOrThrow(groupId);
+            assignmentConfigs.putAll(group.assignmentConfigs());
+        } catch (GroupIdNotFoundException ex) {
+            // Use default configurations if the group does not exist
+        }
+        
+        // Always use the current group configuration for num.standby.replicas
+        // This ensures that dynamic config changes are reflected immediately
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
         final Integer numStandbyReplicas = groupConfig.map(GroupConfig::streamsNumStandbyReplicas)
             .orElse(config.streamsGroupNumStandbyReplicas());
-        return Map.of("num.standby.replicas", numStandbyReplicas.toString());
+
+        assignmentConfigs.put("num.standby.replicas", numStandbyReplicas.toString());
+        
+        return assignmentConfigs;
     }
 
     /**
