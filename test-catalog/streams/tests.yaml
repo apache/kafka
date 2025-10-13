@@ -66,6 +66,7 @@ org.apache.kafka.streams.KafkaStreamsTest:
 - shouldThrowUnknownStateStoreExceptionWhenStoreNotExist
 - shouldTransitToRunningWithGlobalOnlyTopology
 - shouldTriggerRecordingOfRocksDBMetricsIfRecordingLevelIsDebug
+- shouldUseDefaultTimeoutForCloseWithNullTimeout
 - shouldUseProvidedClientSupplier
 - stateShouldTransitToRunningIfNonDeadThreadsBackToRunning
 - statefulTopologyShouldCreateStateDirectory
