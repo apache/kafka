@@ -23,14 +23,4 @@ package org.apache.kafka.storage.internals.log;
  */
 public record LogOffsetSnapshot(long logStartOffset, LogOffsetMetadata logEndOffset, LogOffsetMetadata highWatermark,
                                 LogOffsetMetadata lastStableOffset) {
-
-    @Override
-    public String toString() {
-        return "LogOffsetSnapshot(" +
-                "logStartOffset=" + logStartOffset +
-                ", logEndOffset=" + logEndOffset +
-                ", highWatermark=" + highWatermark +
-                ", lastStableOffset=" + lastStableOffset +
-                ')';
-    }
 }

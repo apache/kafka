@@ -20,6 +20,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
@@ -528,13 +529,13 @@ public class ClientTelemetryReporter implements MetricsReporter {
         @Override
         public void handleFailedGetTelemetrySubscriptionsRequest(KafkaException maybeFatalException) {
             log.debug("The broker generated an error for the get telemetry network API request", maybeFatalException);
-            handleFailedRequest(maybeFatalException != null);
+            handleFailedRequest(isRetryable(maybeFatalException));
         }
 
         @Override
         public void handleFailedPushTelemetryRequest(KafkaException maybeFatalException) {
             log.debug("The broker generated an error for the push telemetry network API request", maybeFatalException);
-            handleFailedRequest(maybeFatalException != null);
+            handleFailedRequest(isRetryable(maybeFatalException));
         }
 
         @Override
@@ -626,6 +627,12 @@ public class ClientTelemetryReporter implements MetricsReporter {
             } finally {
                 lock.writeLock().unlock();
             }
+        }
+
+        private boolean isRetryable(final KafkaException maybeFatalException) {
+            return maybeFatalException == null ||
+                (maybeFatalException instanceof RetriableException) ||
+                (maybeFatalException.getCause() != null && maybeFatalException.getCause() instanceof RetriableException);
         }
 
         private Optional<Builder<?>> createSubscriptionRequest(ClientTelemetrySubscription localSubscription) {
