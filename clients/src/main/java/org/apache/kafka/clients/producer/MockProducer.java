@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A mock of the producer interface you can use for testing code that uses Kafka.
@@ -73,7 +74,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private boolean transactionAborted;
     private boolean producerFenced;
     private boolean sentOffsets;
-    private long commitCount = 0L;
+    private final AtomicLong commitCount = new AtomicLong(0);
     private final List<KafkaMetric> addedMetrics = new ArrayList<>();
 
     public RuntimeException initTransactionException = null;
@@ -235,7 +236,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.transactionAborted = false;
         this.transactionInFlight = false;
 
-        ++this.commitCount;
+        this.commitCount.getAndIncrement();
     }
 
     @Override
@@ -491,7 +492,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     public long commitCount() {
-        return this.commitCount;
+        return this.commitCount.get();
     }
 
     /**

@@ -555,7 +555,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         These are possibly real bugs, and have not been evaluated, they were just bulk excluded to unblock upgrading Spotbugs.
          -->
         <Or>
-            <Class name="org.apache.kafka.clients.producer.MockProducer"/>
             <Class name="org.apache.kafka.clients.producer.internals.ProducerBatch"/>
             <Class name="org.apache.kafka.common.utils.ChunkedBytesStream"/>
             <Class name="org.apache.kafka.common.security.authenticator.LoginManager"/>
