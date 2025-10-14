@@ -342,6 +342,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testHeartbeatIllegalGeneration
 - testHeartbeatUnknownGroup
 - testHeartbeatUnknownMemberExistingGroup
+- testJoinEmptyStreamsGroupAndDescribe
 - testJoinGroupAppendErrorConversion
 - testJoinGroupAsExistingLeaderTriggersRebalanceInStableState
 - testJoinGroupAsExistingMemberWithUpdatedMetadataTriggersRebalanceInStableState
@@ -1024,7 +1025,6 @@ org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpersTest:
 - testNewStreamsGroupCurrentAssignmentTombstoneRecord
 - testNewStreamsGroupCurrentAssignmentTombstoneRecordNullGroupId
 - testNewStreamsGroupCurrentAssignmentTombstoneRecordNullMemberId
-- testNewStreamsGroupEpochRecord
 - testNewStreamsGroupEpochRecordNullGroupId
 - testNewStreamsGroupEpochTombstoneRecord
 - testNewStreamsGroupEpochTombstoneRecordNullGroupId
@@ -1037,6 +1037,7 @@ org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpersTest:
 - testNewStreamsGroupMemberTombstoneRecord
 - testNewStreamsGroupMemberTombstoneRecordNullGroupId
 - testNewStreamsGroupMemberTombstoneRecordNullMemberId
+- testNewStreamsGroupMetadataRecord
 - testNewStreamsGroupTargetAssignmentEpochRecord
 - testNewStreamsGroupTargetAssignmentEpochRecordNullGroupId
 - testNewStreamsGroupTargetAssignmentEpochTombstoneRecord
