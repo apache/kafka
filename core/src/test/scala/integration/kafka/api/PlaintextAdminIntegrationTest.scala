@@ -24,7 +24,7 @@ import java.lang.{Long => JLong}
 import java.time.{Duration => JDuration}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
-import java.util.{Collections, Locale, Optional, Properties}
+import java.util.{Collections, Optional, Properties}
 import java.{time, util}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
@@ -2355,9 +2355,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       defaultConsumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
       defaultConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
       defaultConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
-      // We need to set internal.leave.group.on.close to validate dynamic member removal, but it only works for ClassicConsumer
-      // After KIP-1092, we can control dynamic member removal for both ClassicConsumer and AsyncConsumer
-      defaultConsumerConfig.setProperty("internal.leave.group.on.close", "false")
 
       val backgroundConsumerSet = new BackgroundConsumerSet(defaultConsumerConfig)
       groupInstanceSet.zip(topicSet).foreach { case (groupInstanceId, topic) =>
@@ -2406,14 +2403,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         var testGroupDescription = describeTestGroupResult.describedGroups().get(testGroupId).get()
         assertEquals(testGroupId, testGroupDescription.groupId)
         assertFalse(testGroupDescription.isSimpleConsumerGroup)
-
-        // Although we set `internal.leave.group.on.close` in the consumer, it only works for ClassicConsumer.
-        // After KIP-1092, we can control dynamic member removal in consumer.close()
-        if (groupProtocol == GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT)) {
-          assertEquals(3, testGroupDescription.members().size())
-        } else if (groupProtocol == GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT)) {
-          assertEquals(2, testGroupDescription.members().size())
-        }
+        assertEquals(2, testGroupDescription.members().size())
 
         // Test delete one static member
         removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId,
@@ -2426,11 +2416,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
         testGroupDescription = describeTestGroupResult.describedGroups().get(testGroupId).get()
 
-        if (groupProtocol == GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT)) {
-          assertEquals(2, testGroupDescription.members().size())
-        } else if (groupProtocol == GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT)) {
-          assertEquals(1, testGroupDescription.members().size())
-        }
+        assertEquals(1, testGroupDescription.members().size())
 
         // Delete all active members remaining
         removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions())

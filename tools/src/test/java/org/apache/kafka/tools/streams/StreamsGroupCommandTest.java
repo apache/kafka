@@ -105,7 +105,7 @@ public class StreamsGroupCommandTest {
         TestUtils.waitForCondition(() -> {
             foundGroups[0] = new HashSet<>(service.listStreamsGroups());
             return Objects.equals(expectedGroups, foundGroups[0]);
-        }, "Expected --list to show groups " + expectedGroups + ", but found " + foundGroups[0] + ".");
+        }, () -> "Expected --list to show groups " + expectedGroups + ", but found " + foundGroups[0] + ".");
 
         service.close();
     }
@@ -138,7 +138,7 @@ public class StreamsGroupCommandTest {
         TestUtils.waitForCondition(() -> {
             foundListing[0] = new HashSet<>(service.listStreamsGroupsInStates(Set.of(GroupState.values())));
             return Objects.equals(expectedListing, foundListing[0]);
-        }, "Expected to show groups " + expectedListing + ", but found " + foundListing[0]);
+        }, () -> "Expected to show groups " + expectedListing + ", but found " + foundListing[0]);
 
         ListGroupsResult resultWithStableState = mock(ListGroupsResult.class);
         when(resultWithStableState.all()).thenReturn(KafkaFuture.completedFuture(List.of(
@@ -153,7 +153,7 @@ public class StreamsGroupCommandTest {
         TestUtils.waitForCondition(() -> {
             foundListing[0] = new HashSet<>(service.listStreamsGroupsInStates(Set.of(GroupState.STABLE)));
             return Objects.equals(expectedListingStable, foundListing[0]);
-        }, "Expected to show groups " + expectedListingStable + ", but found " + foundListing[0]);
+        }, () -> "Expected to show groups " + expectedListingStable + ", but found " + foundListing[0]);
 
         service.close();
     }

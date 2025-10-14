@@ -458,14 +458,17 @@ public class MeteredSessionStoreTest {
     }
 
     @Test
-    public void shouldRecordRestoreTimeOnInit() {
+    public void shouldRecordRestoreLatencyOnRecordRestoreTime() {
         setUp();
         init();
 
+        final long restoreTimeNs = 1000L;
+        store.recordRestoreTime(restoreTimeNs);
+
         // it suffices to verify one restore metric since all restore metrics are recorded by the same sensor
         // and the sensor is tested elsewhere
-        final KafkaMetric metric = metric("restore-rate");
-        assertTrue((Double) metric.metricValue() > 0);
+        final KafkaMetric metric = metric("restore-latency-max");
+        assertThat((Double) metric.metricValue(), equalTo((double) restoreTimeNs));
     }
 
     @Test
