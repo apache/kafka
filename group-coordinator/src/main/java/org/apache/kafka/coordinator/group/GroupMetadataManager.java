@@ -8669,7 +8669,6 @@ public class GroupMetadataManager {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
         final Integer numStandbyReplicas = groupConfig.map(GroupConfig::streamsNumStandbyReplicas)
             .orElse(config.streamsGroupNumStandbyReplicas());
-
         assignmentConfigs.put("num.standby.replicas", numStandbyReplicas.toString());
         
         return assignmentConfigs;
