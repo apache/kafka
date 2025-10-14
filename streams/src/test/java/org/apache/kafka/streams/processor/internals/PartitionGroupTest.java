@@ -833,7 +833,7 @@ public class PartitionGroupTest {
                 appender.getEvents(),
                 hasItem(Matchers.allOf(
                     Matchers.hasProperty("level", equalTo("TRACE")),
-                    Matchers.hasProperty("message", equalTo("[test] Lag for topic-2 is currently 1, but no data is buffered locally. Waiting to buffer some records."))
+                    Matchers.hasProperty("message", equalTo("[test] Lag for partition topic-2 is currently 1, but no data is buffered locally. Waiting to buffer some records."))
                 ))
             );
         }
@@ -868,7 +868,7 @@ public class PartitionGroupTest {
                 appender.getEvents(),
                 hasItem(Matchers.allOf(
                     Matchers.hasProperty("level", equalTo("TRACE")),
-                    Matchers.hasProperty("message", equalTo("[test] Lag for topic-2 is currently 0 and current time is 0. Waiting for new data to be produced for configured idle time 1 (deadline is 1)."))
+                    Matchers.hasProperty("message", equalTo("[test] Lag for partition topic-2 is currently 0 and current time is 0. Waiting for new data to be produced for configured idle time 1 (deadline is 1)."))
                 ))
             );
         }
@@ -926,7 +926,7 @@ public class PartitionGroupTest {
             appender.setClassLogger(PartitionGroup.class, Level.TRACE);
             assertFalse(group.readyToProcess(0L));
             assertThat(appender.getEvents(), hasItem(Matchers.hasProperty("message",
-                startsWith(String.format("[test] Lag for %s is currently 0 and current time is %d. "
+                startsWith(String.format("[test] Lag for partition %s is currently 0 and current time is %d. "
                     + "Waiting for new data to be produced for configured idle time", partition, 0L)))));
         }
     }
@@ -937,7 +937,7 @@ public class PartitionGroupTest {
             appender.setClassLogger(PartitionGroup.class, Level.TRACE);
             assertFalse(group.readyToProcess(0L));
             assertThat(appender.getEvents(), hasItem(Matchers.hasProperty("message",
-                equalTo(String.format("[test] Lag for %s is currently %d, but no data is buffered locally. "
+                equalTo(String.format("[test] Lag for partition %s is currently %d, but no data is buffered locally. "
                     + "Waiting to buffer some records.", partition, lag)))));
         }
     }
