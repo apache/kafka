@@ -629,7 +629,7 @@ class ReplicaManagerTest {
 
       def replicaManagerMetricValue(): Int = {
         KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.filter { case (metricName, _) =>
-          metricName.getName == "ProducerIdCount" && metricName.getType == replicaManager.getClass.getSimpleName
+          metricName.getName == "ProducerIdCount" && metricName.getType == "ReplicaManager"
         }.head._2.asInstanceOf[Gauge[Int]].value
       }
 

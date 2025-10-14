@@ -36,6 +36,9 @@
         The <code>KafkaPrincipalBuilder</code> now extends <code>KafkaPrincipalSerde</code>. Force developer to implement <code>KafkaPrincipalSerde</code> interface for custom <code>KafkaPrincipalBuilder</code>.
         For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/1gq9F">KIP-1157</a>.
     </li>
+    <li>The behavior of <code>org.apache.kafka.streams.KafkaStreams#removeStreamThread</code> has been changed. The consumer has no longer remove once <code>removeStreamThread</code> finished.
+        Instead, consumer would be kicked off from the group after <code>org.apache.kafka.streams.processor.internals.StreamThread</code> completes its <code>run</code> function.
+    </li>
     <li>
         The support for MX4J library, enabled through <code>kafka_mx4jenable</code> system property, was deprecated and will be removed in Kafka 5.0.
     </li>
@@ -136,9 +139,17 @@
                 settings.
             </li>
             <li>
-                The <code>cleanup.policy</code> is empty and <code>remote.storage.enable</code> is set to true, the
+                <code>cleanup.policy</code> now supports empty values, which means infinite retention.
+                This is equivalent to setting <code>retention.ms=-1</code> and <code>retention.bytes=-1</code>
+                <br>
+                If <code>cleanup.policy</code> is empty and <code>remote.storage.enable</code> is set to true, the
                 local log segments will be cleaned based on the values of <code>log.local.retention.bytes</code> and
                 <code>log.local.retention.ms</code>.
+                <br>
+                If <code>cleanup.policy</code> is empty and <code>remote.storage.enable</code> is set to false,
+                local log segments will not be deleted automatically. However, records can still be deleted
+                explicitly through <code>deleteRecords</code> API calls, which will advance the log start offset
+                and remove the corresponding log segments.
             </li>
         </ul>
     </li>
@@ -162,9 +173,34 @@
         </ul>
         For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/3gn0Ew">KIP-1120</a>.
     </li>
+    <li>
+        The metrics <code>org.apache.kafka.server:type=AssignmentsManager.QueuedReplicaToDirAssignments</code>,
+        <code>org.apache.kafka.storage.internals.log:type=RemoteStorageThreadPool.RemoteLogReaderTaskQueueSize</code>, and
+        <code>org.apache.kafka.storage.internals.log:type=RemoteStorageThreadPool.RemoteLogReaderAvgIdlePercent</code>
+        have been deprecated and will be removed in Kafka 5.0.
+
+        As replacements, the following metrics have been introduced, which report the same information:
+        <code>kafka.server:type=AssignmentsManager.QueuedReplicaToDirAssignments</code>,
+        <code>kafka.log.remote:type=RemoteStorageThreadPool.RemoteLogReaderTaskQueueSize</code>, and
+        <code>kafka.log.remote:type=RemoteStorageThreadPool.RemoteLogReaderAvgIdlePercent</code>.
+        For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/6oqMEw">KIP-1100</a>.
+    </li>
+    <li>
+        A new metric <code>AvgIdleRatio</code> has been added to the <code>ControllerEventManager</code> group. This metric measures the average idle ratio of the controller event queue thread,
+        providing visibility into how much time the controller spends waiting for events versus processing them. The metric value ranges from 0.0 (always busy) to 1.0 (always idle).
+    </li>
+    <li>
+        Deprecated <code>org.apache.kafka.streams.KafkaStreams$CloseOptions</code> and its related methods, such as
+        <code>KafkaStreams#close(org.apache.kafka.streams.KafkaStreams$CloseOptions)</code>.
+        As a replacement, please use <code>org.apache.kafka.streams.CloseOptions</code> and
+        <code>KafkaStreams#close(org.apache.kafka.streams.CloseOptions)</code>.
+        For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/QAq9F">KIP-1153</a>.
+    </li>
 </ul>
 
 <h4><a id="upgrade_4_1_0" href="#upgrade_4_1_0">Upgrading to 4.1.0</a></h4>
+
+<p><b>Note:</b> Kafka Streams 4.1.0 contains a critical memory leak bug (<a href="https://issues.apache.org/jira/browse/KAFKA-19748">KAFKA-19748</a>) that affects users of range scans and certain DSL operators (session windows, sliding windows, stream-stream joins, foreign-key joins). Users running Kafka Streams should consider upgrading directly to 4.1.1 when available.</p>
 
 <h5><a id="upgrade_4_1_0_from" href="#upgrade_4_1_0_from">Upgrading Servers to 4.1.0 from any version 3.3.x through 4.0.x</a></h5>
     <h5><a id="upgrade_410_notable" href="#upgrade_410_notable">Notable changes in 4.1.0</a></h5>

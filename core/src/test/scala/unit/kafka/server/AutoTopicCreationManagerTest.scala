@@ -33,6 +33,7 @@ import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopi
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, ByteBufferAccessor, Errors}
 import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.RequestUtils
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
 import org.apache.kafka.server.util.MockTime
@@ -521,6 +522,324 @@ class AutoTopicCreationManagerTest {
     // Verify error is now expired and proactively cleaned up
     val expiredErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(Set("test-topic"), mockTime.milliseconds())
     assertTrue(expiredErrors.isEmpty, "Expired errors should be proactively cleaned up")
+  }
+
+  @Test
+  def testEnvelopeResponseSuccessfulParsing(): Unit = {
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      brokerToController,
+      groupCoordinator,
+      transactionCoordinator,
+      shareCoordinator,
+      mockTime,
+      topicErrorCacheCapacity = testCacheCapacity)
+
+    val topics = Map(
+      "test-topic" -> new CreatableTopic().setName("test-topic").setNumPartitions(1).setReplicationFactor(1)
+    )
+    val requestContext = initializeRequestContextWithUserPrincipal()
+    val timeoutMs = 5000L
+
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, timeoutMs)
+
+    val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
+    Mockito.verify(brokerToController).sendRequest(
+      any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+      argumentCaptor.capture())
+
+    // Create a successful CreateTopicsResponse
+    val createTopicsResponseData = new org.apache.kafka.common.message.CreateTopicsResponseData()
+    val topicResult = new org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult()
+      .setName("test-topic")
+      .setErrorCode(Errors.NONE.code())
+      .setNumPartitions(1)
+      .setReplicationFactor(1.toShort)
+    createTopicsResponseData.topics().add(topicResult)
+
+    val createTopicsResponse = new CreateTopicsResponse(createTopicsResponseData)
+    val requestVersion = ApiKeys.CREATE_TOPICS.latestVersion()
+    val correlationId = requestContext.correlationId // Use the actual correlation ID from request context
+    val clientId = requestContext.clientId
+
+    // Serialize the CreateTopicsResponse with header as it would appear in an envelope
+    val responseHeader = new ResponseHeader(correlationId, ApiKeys.CREATE_TOPICS.responseHeaderVersion(requestVersion))
+    val serializedResponse = RequestUtils.serialize(responseHeader.data(), responseHeader.headerVersion(), 
+                                                     createTopicsResponse.data(), requestVersion)
+
+    // Create an EnvelopeResponse containing the serialized CreateTopicsResponse
+    val envelopeResponse = new EnvelopeResponse(serializedResponse, Errors.NONE)
+    val requestHeader = new RequestHeader(ApiKeys.ENVELOPE, 0, clientId, correlationId)
+    val clientResponse = new ClientResponse(requestHeader, null, null,
+      0, 0, false, null, null, envelopeResponse)
+
+    // Trigger the completion handler
+    argumentCaptor.getValue.onComplete(clientResponse)
+
+    // Verify no errors were cached (successful response)
+    val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(Set("test-topic"), mockTime.milliseconds())
+    assertTrue(cachedErrors.isEmpty, "No errors should be cached for successful response")
+  }
+
+  @Test
+  def testEnvelopeResponseWithEnvelopeError(): Unit = {
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      brokerToController,
+      groupCoordinator,
+      transactionCoordinator,
+      shareCoordinator,
+      mockTime,
+      topicErrorCacheCapacity = testCacheCapacity)
+
+    val topics = Map(
+      "test-topic" -> new CreatableTopic().setName("test-topic").setNumPartitions(1).setReplicationFactor(1)
+    )
+    val requestContext = initializeRequestContextWithUserPrincipal()
+    val timeoutMs = 5000L
+
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, timeoutMs)
+
+    val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
+    Mockito.verify(brokerToController).sendRequest(
+      any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+      argumentCaptor.capture())
+
+    // Create an EnvelopeResponse with an envelope-level error
+    val envelopeResponse = new EnvelopeResponse(ByteBuffer.allocate(0), Errors.UNSUPPORTED_VERSION)
+    val requestHeader = new RequestHeader(ApiKeys.ENVELOPE, 0, requestContext.clientId, requestContext.correlationId)
+    val clientResponse = new ClientResponse(requestHeader, null, null,
+      0, 0, false, null, null, envelopeResponse)
+
+    // Trigger the completion handler
+    argumentCaptor.getValue.onComplete(clientResponse)
+
+    // Verify the envelope error was cached
+    val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(Set("test-topic"), mockTime.milliseconds())
+    assertEquals(1, cachedErrors.size)
+    assertTrue(cachedErrors("test-topic").contains("Envelope error: UNSUPPORTED_VERSION"))
+  }
+
+  @Test
+  def testEnvelopeResponseParsingException(): Unit = {
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      brokerToController,
+      groupCoordinator,
+      transactionCoordinator,
+      shareCoordinator,
+      mockTime,
+      topicErrorCacheCapacity = testCacheCapacity)
+
+    val topics = Map(
+      "test-topic" -> new CreatableTopic().setName("test-topic").setNumPartitions(1).setReplicationFactor(1)
+    )
+    val requestContext = initializeRequestContextWithUserPrincipal()
+    val timeoutMs = 5000L
+
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, timeoutMs)
+
+    val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
+    Mockito.verify(brokerToController).sendRequest(
+      any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+      argumentCaptor.capture())
+
+    // Create an EnvelopeResponse with malformed response data that will cause parsing to fail
+    val malformedData = ByteBuffer.wrap("invalid response data".getBytes())
+    val envelopeResponse = new EnvelopeResponse(malformedData, Errors.NONE)
+    val requestHeader = new RequestHeader(ApiKeys.ENVELOPE, 0, requestContext.clientId, requestContext.correlationId)
+    val clientResponse = new ClientResponse(requestHeader, null, null,
+      0, 0, false, null, null, envelopeResponse)
+
+    // Trigger the completion handler
+    argumentCaptor.getValue.onComplete(clientResponse)
+
+    // Verify the parsing error was cached
+    val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(Set("test-topic"), mockTime.milliseconds())
+    assertEquals(1, cachedErrors.size)
+    assertTrue(cachedErrors("test-topic").contains("Response parsing error:"))
+  }
+
+  @Test
+  def testEnvelopeResponseCorrelationIdMismatch(): Unit = {
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      brokerToController,
+      groupCoordinator,
+      transactionCoordinator,
+      shareCoordinator,
+      mockTime,
+      topicErrorCacheCapacity = testCacheCapacity)
+
+    val topics = Map(
+      "test-topic" -> new CreatableTopic().setName("test-topic").setNumPartitions(1).setReplicationFactor(1)
+    )
+    val requestContext = initializeRequestContextWithUserPrincipal()
+    val timeoutMs = 5000L
+
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, timeoutMs)
+
+    val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
+    Mockito.verify(brokerToController).sendRequest(
+      any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+      argumentCaptor.capture())
+
+    // Create a CreateTopicsResponse with a different correlation ID than the request
+    val createTopicsResponseData = new org.apache.kafka.common.message.CreateTopicsResponseData()
+    val topicResult = new org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult()
+      .setName("test-topic")
+      .setErrorCode(Errors.NONE.code())
+    createTopicsResponseData.topics().add(topicResult)
+
+    val createTopicsResponse = new CreateTopicsResponse(createTopicsResponseData)
+    val requestVersion = ApiKeys.CREATE_TOPICS.latestVersion()
+    val requestCorrelationId = 123
+    val responseCorrelationId = 456 // Different correlation ID
+    val clientId = "test-client"
+
+    // Serialize the CreateTopicsResponse with mismatched correlation ID
+    val responseHeader = new ResponseHeader(responseCorrelationId, ApiKeys.CREATE_TOPICS.responseHeaderVersion(requestVersion))
+    val serializedResponse = RequestUtils.serialize(responseHeader.data(), responseHeader.headerVersion(),
+                                                     createTopicsResponse.data(), requestVersion)
+
+    // Create an EnvelopeResponse containing the serialized CreateTopicsResponse
+    val envelopeResponse = new EnvelopeResponse(serializedResponse, Errors.NONE)
+    val requestHeader = new RequestHeader(ApiKeys.ENVELOPE, 0, clientId, requestCorrelationId)
+    val clientResponse = new ClientResponse(requestHeader, null, null,
+      0, 0, false, null, null, envelopeResponse)
+
+    // Trigger the completion handler
+    argumentCaptor.getValue.onComplete(clientResponse)
+
+    // Verify the correlation ID mismatch error was cached
+    val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(Set("test-topic"), mockTime.milliseconds())
+    assertEquals(1, cachedErrors.size)
+    assertTrue(cachedErrors("test-topic").contains("Response parsing error:"))
+  }
+
+  @Test
+  def testEnvelopeResponseWithTopicErrors(): Unit = {
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      brokerToController,
+      groupCoordinator,
+      transactionCoordinator,
+      shareCoordinator,
+      mockTime,
+      topicErrorCacheCapacity = testCacheCapacity)
+
+    val topics = Map(
+      "test-topic-1" -> new CreatableTopic().setName("test-topic-1").setNumPartitions(1).setReplicationFactor(1),
+      "test-topic-2" -> new CreatableTopic().setName("test-topic-2").setNumPartitions(1).setReplicationFactor(1)
+    )
+    val requestContext = initializeRequestContextWithUserPrincipal()
+    val timeoutMs = 5000L
+
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, timeoutMs)
+
+    val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
+    Mockito.verify(brokerToController).sendRequest(
+      any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+      argumentCaptor.capture())
+
+    // Create a CreateTopicsResponse with mixed success and error results
+    val createTopicsResponseData = new org.apache.kafka.common.message.CreateTopicsResponseData()
+
+    // Successful topic
+    val successResult = new org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult()
+      .setName("test-topic-1")
+      .setErrorCode(Errors.NONE.code())
+      .setNumPartitions(1)
+      .setReplicationFactor(1.toShort)
+    createTopicsResponseData.topics().add(successResult)
+
+    // Failed topic
+    val errorResult = new org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult()
+      .setName("test-topic-2")
+      .setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code())
+      .setErrorMessage("Topic already exists")
+    createTopicsResponseData.topics().add(errorResult)
+
+    val createTopicsResponse = new CreateTopicsResponse(createTopicsResponseData)
+    val requestVersion = ApiKeys.CREATE_TOPICS.latestVersion()
+    val correlationId = requestContext.correlationId  // Use the actual correlation ID from request context
+    val clientId = requestContext.clientId
+
+    // Serialize the CreateTopicsResponse with header
+    val responseHeader = new ResponseHeader(correlationId, ApiKeys.CREATE_TOPICS.responseHeaderVersion(requestVersion))
+    val serializedResponse = RequestUtils.serialize(responseHeader.data(), responseHeader.headerVersion(),
+                                                     createTopicsResponse.data(), requestVersion)
+
+    // Create an EnvelopeResponse containing the serialized CreateTopicsResponse
+    val envelopeResponse = new EnvelopeResponse(serializedResponse, Errors.NONE)
+    val requestHeader = new RequestHeader(ApiKeys.ENVELOPE, 0, clientId, correlationId)
+    val clientResponse = new ClientResponse(requestHeader, null, null,
+      0, 0, false, null, null, envelopeResponse)
+
+    // Trigger the completion handler
+    argumentCaptor.getValue.onComplete(clientResponse)
+
+    // Verify only the failed topic was cached
+    val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(
+      Set("test-topic-1", "test-topic-2"), mockTime.milliseconds())
+    
+    assertEquals(1, cachedErrors.size, s"Expected only 1 error but found: $cachedErrors")
+    assertTrue(cachedErrors.contains("test-topic-2"))
+    assertEquals("Topic already exists", cachedErrors("test-topic-2"))
+  }
+
+  @Test
+  def testSendCreateTopicRequestEnvelopeHandling(): Unit = {
+    // Test the sendCreateTopicRequest method (without error caching) handles envelopes correctly
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      brokerToController,
+      groupCoordinator,
+      transactionCoordinator,
+      shareCoordinator,
+      mockTime,
+      topicErrorCacheCapacity = testCacheCapacity)
+
+    val requestContext = initializeRequestContextWithUserPrincipal()
+
+    // Call createTopics which uses sendCreateTopicRequest internally
+    autoTopicCreationManager.createTopics(
+      Set("test-topic"), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Some(requestContext))
+
+    val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
+    Mockito.verify(brokerToController).sendRequest(
+      any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+      argumentCaptor.capture())
+
+    // Create a CreateTopicsResponse with an error
+    val createTopicsResponseData = new org.apache.kafka.common.message.CreateTopicsResponseData()
+    val topicResult = new org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult()
+      .setName("test-topic")
+      .setErrorCode(Errors.INVALID_TOPIC_EXCEPTION.code())
+      .setErrorMessage("Invalid topic name")
+    createTopicsResponseData.topics().add(topicResult)
+
+    val createTopicsResponse = new CreateTopicsResponse(createTopicsResponseData)
+    val requestVersion = ApiKeys.CREATE_TOPICS.latestVersion()
+    val correlationId = requestContext.correlationId  // Use the actual correlation ID from request context
+    val clientId = requestContext.clientId
+
+    // Serialize the CreateTopicsResponse with header
+    val responseHeader = new ResponseHeader(correlationId, ApiKeys.CREATE_TOPICS.responseHeaderVersion(requestVersion))
+    val serializedResponse = RequestUtils.serialize(responseHeader.data(), responseHeader.headerVersion(),
+                                                     createTopicsResponse.data(), requestVersion)
+
+    // Create an EnvelopeResponse containing the serialized CreateTopicsResponse
+    val envelopeResponse = new EnvelopeResponse(serializedResponse, Errors.NONE)
+    val requestHeader = new RequestHeader(ApiKeys.ENVELOPE, 0, clientId, correlationId)
+    val clientResponse = new ClientResponse(requestHeader, null, null,
+      0, 0, false, null, null, envelopeResponse)
+
+    // Trigger the completion handler
+    argumentCaptor.getValue.onComplete(clientResponse)
+
+    // For sendCreateTopicRequest, errors are not cached, but we can verify the handler completed without exception
+    // The test passes if no exception is thrown during envelope processing
   }
 
   @Test

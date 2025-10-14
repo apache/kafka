@@ -572,28 +572,6 @@ public class StreamsPartitionAssignorTest {
 
     @ParameterizedTest
     @MethodSource("parameter")
-    public void shouldThrowOnEagerSubscription(final Map<String, Object> parameterizedConfig) {
-        setUp(parameterizedConfig, false);
-        builder.addSource(null, "source1", null, null, null, "topic1");
-        builder.addSource(null, "source2", null, null, null, "topic2");
-        builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source1", "source2");
-
-        final Set<TaskId> prevTasks = Set.of(
-            new TaskId(0, 1), new TaskId(1, 1), new TaskId(2, 1)
-        );
-        final Set<TaskId> standbyTasks = Set.of(
-            new TaskId(0, 2), new TaskId(1, 2), new TaskId(2, 2)
-        );
-
-        createMockTaskManager(prevTasks, standbyTasks);
-        assertThrows(
-            ConfigException.class,
-            () -> configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_23), parameterizedConfig)
-        );
-    }
-
-    @ParameterizedTest
-    @MethodSource("parameter")
     public void testCooperativeSubscription(final Map<String, Object> parameterizedConfig) {
         setUp(parameterizedConfig, false);
 

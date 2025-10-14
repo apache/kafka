@@ -112,6 +112,9 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.wa
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.allOf;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -682,6 +685,52 @@ public class RestoreIntegrationTest {
 
             assertTrue(kafkaStreams1StateRestoreListener.awaitUntilRestorationEnds());
             assertTrue(kafkaStreams2StateRestoreListener.awaitUntilRestorationEnds());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldRecordRestoreMetrics(final boolean useNewProtocol) throws Exception {
+        final AtomicInteger numReceived = new AtomicInteger(0);
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Properties props = props();
+
+        if (useNewProtocol) {
+            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        }
+
+        props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
+
+        createStateForRestoration(inputStream, 10000);
+
+        final CountDownLatch shutdownLatch = new CountDownLatch(1);
+        builder.table(inputStream, Consumed.with(Serdes.Integer(), Serdes.Integer()), Materialized.as("store"))
+                .toStream()
+                .foreach((key, value) -> {
+                    if (numReceived.incrementAndGet() == numberOfKeys) {
+                        shutdownLatch.countDown();
+                    }
+                });
+
+        kafkaStreams = new KafkaStreams(builder.build(), props);
+
+        final AtomicLong restored = new AtomicLong(0);
+        final TrackingStateRestoreListener restoreListener = new TrackingStateRestoreListener(restored);
+        kafkaStreams.setGlobalStateRestoreListener(restoreListener);
+        kafkaStreams.start();
+
+        assertTrue(shutdownLatch.await(30, TimeUnit.SECONDS));
+        assertThat(numReceived.get(), equalTo(numberOfKeys));
+
+        final Map<String, Long> taskIdToMetricValue = kafkaStreams.metrics().entrySet().stream()
+                .filter(e -> e.getKey().name().equals("restore-latency-max"))
+                .collect(Collectors.toMap(e -> e.getKey().tags().get("task-id"), e -> ((Double) e.getValue().metricValue()).longValue()));
+
+        for (final Map.Entry<TopicPartition, Long> entry : restoreListener.changelogToRestoreTime().entrySet()) {
+            final long lowerBound = entry.getValue() - TimeUnit.NANOSECONDS.convert(1, TimeUnit.SECONDS);
+            final long upperBound = entry.getValue() + TimeUnit.NANOSECONDS.convert(1, TimeUnit.SECONDS);
+            assertThat(taskIdToMetricValue.get("0_" + entry.getKey().partition()), allOf(greaterThanOrEqualTo(lowerBound), lessThanOrEqualTo(upperBound)));
         }
     }
 
