@@ -160,6 +160,7 @@ org.apache.kafka.tools.ConnectPluginPathTest:
 org.apache.kafka.tools.ConsoleProducerTest:
 - shouldExitOnBothProducerConfigAndCommandConfig
 - shouldExitOnBothProducerPropertyAndCommandProperty
+- shouldExitOnBothPropertyAndReaderProperty
 - testBatchSizeNotSetAndMaxPartitionMemoryBytesSet
 - testBatchSizeOverriddenByMaxPartitionMemoryBytesValue
 - testBatchSizeSetAndMaxPartitionMemoryBytesNotSet
@@ -173,7 +174,9 @@ org.apache.kafka.tools.ConsoleProducerTest:
 - testLoopReader
 - testNewReader
 - testParseKeyProp
+- testParseKeyPropDeprecated
 - testParseReaderConfigFile
+- testParseReaderConfigFileDeprecated
 - testProducerConfigFromFileUsingCommandConfig
 - testValidConfigsBootstrapServer
 org.apache.kafka.tools.ConsumerPerformanceTest:
