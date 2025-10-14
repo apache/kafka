@@ -154,7 +154,7 @@ public class ConnectAssertions {
                 return actual.isEmpty();
             }).orElse(false),
             CONNECTOR_SETUP_DURATION_MS,
-            "Unexpectedly found topics " + existingTopics.get());
+                () -> "Unexpectedly found topics " + existingTopics.get());
     }
 
     /**
@@ -173,7 +173,7 @@ public class ConnectAssertions {
                 return missing.isEmpty();
             }).orElse(false),
             CONNECTOR_SETUP_DURATION_MS,
-            "Didn't find the topics " + missingTopics.get());
+                () -> "Didn't find the topics " + missingTopics.get());
     }
 
     protected Optional<Boolean> checkTopicsExist(Set<String> topicNames, BiFunction<Set<String>, Set<String>, Boolean> comp) {

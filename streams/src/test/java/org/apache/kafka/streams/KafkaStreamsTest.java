@@ -120,6 +120,7 @@ import static org.mockito.Mockito.anyInt;
 import static org.mockito.Mockito.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.isA;
 import static org.mockito.Mockito.mock;
@@ -1298,6 +1299,28 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    public void shouldUseDefaultTimeoutForCloseWithNullTimeout() throws Exception {
+        prepareStreams();
+        prepareStreamThread(streamThreadOne, 1);
+        prepareStreamThread(streamThreadTwo, 2);
+        prepareTerminableThread(streamThreadOne);
+
+        final MockClientSupplier mockClientSupplier = spy(MockClientSupplier.class);
+        when(mockClientSupplier.getAdmin(any())).thenReturn(adminClient);
+
+        final CloseOptions closeOptions = CloseOptions.timeout(null)
+                .withGroupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
+        final KafkaStreams streams = spy(new KafkaStreamsWithTerminableThread(
+                getBuilderWithSource().build(), props, mockClientSupplier, time));
+
+        doReturn(false).when(streams).close(any(Optional.class), any());
+        streams.close(closeOptions);
+
+        verify(streams).close(eq(Optional.of(Long.MAX_VALUE)), eq(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
+    }
+
+    @Test
     public void shouldNotBlockInCloseWithCloseOptionLeaveGroupTrueForZeroDuration() throws Exception {
         prepareStreams();
         prepareStreamThread(streamThreadOne, 1);
@@ -1549,7 +1572,7 @@ public class KafkaStreamsTest {
             streams.start();
             waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
-                "Streams never started, state is " + streams.state());
+                    () -> "Streams never started, state is " + streams.state());
 
             streams.close();
 

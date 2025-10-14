@@ -108,7 +108,7 @@ public class ListStreamsGroupTest {
             TestUtils.waitForCondition(() -> {
                 foundGroups.set(new HashSet<>(service.listStreamsGroups()));
                 return Objects.equals(expectedGroups, foundGroups.get());
-            }, "Expected --list to show streams groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
+            }, () -> "Expected --list to show streams groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
 
         }
     }
@@ -135,7 +135,7 @@ public class ListStreamsGroupTest {
             TestUtils.waitForCondition(() -> {
                 foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Set.of())));
                 return Objects.equals(expectedListing, foundListing.get());
-            }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
+            }, () -> "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
     }
 
@@ -155,7 +155,7 @@ public class ListStreamsGroupTest {
             TestUtils.waitForCondition(() -> {
                 foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Set.of())));
                 return Objects.equals(expectedListing, foundListing.get());
-            }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
+            }, () -> "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
 
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "PreparingRebalance"})) {
@@ -166,7 +166,7 @@ public class ListStreamsGroupTest {
             TestUtils.waitForCondition(() -> {
                 foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Set.of(GroupState.PREPARING_REBALANCE))));
                 return Objects.equals(expectedListing, foundListing.get());
-            }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
+            }, () -> "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
     }
 
