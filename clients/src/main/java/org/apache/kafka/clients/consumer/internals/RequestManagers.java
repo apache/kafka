@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.internals.IdempotentCloser;
@@ -318,7 +319,7 @@ public class RequestManagers implements Closeable {
     public static Supplier<RequestManagers> supplier(final Time time,
                                                      final LogContext logContext,
                                                      final BackgroundEventHandler backgroundEventHandler,
-                                                     final ConsumerMetadata metadata,
+                                                     final Metadata metadata,
                                                      final SubscriptionState subscriptions,
                                                      final ShareFetchBuffer fetchBuffer,
                                                      final ConsumerConfig config,
