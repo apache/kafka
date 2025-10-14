@@ -674,8 +674,7 @@ public class LeaderState<T> implements EpochState {
 
     @Override
     public ElectionState election() {
-        return ElectionState.withElectedLeader(
-                epoch, localVoterNode.voterKey().id(), Optional.empty(), voterStates.keySet());
+        return ElectionState.withElectedLeader(epoch, localVoterNode.voterKey().id(), Optional.empty(), voterStates.keySet());
     }
 
     @Override
@@ -745,7 +744,6 @@ public class LeaderState<T> implements EpochState {
                         Optional<LogOffsetMetadata> oldHighWatermark = highWatermark;
                         highWatermark = highWatermarkUpdateOpt;
                         updateCommittedVoter(highWatermark.get().offset());
-
                         logHighWatermarkUpdate(
                             oldHighWatermark,
                             highWatermarkUpdateMetadata,
@@ -810,13 +808,11 @@ public class LeaderState<T> implements EpochState {
      *
      * @param endOffsetMetadata updated log end offset of local replica
      * @param lastVoterSet the up-to-date voter set
-     * @param lastVoterSetOffset the offset of up-to-date voter set
      * @return true if the high watermark is updated as a result of this call
      */
     public boolean updateLocalState(
         LogOffsetMetadata endOffsetMetadata,
-        VoterSet lastVoterSet,
-        long lastVoterSetOffset
+        VoterSet lastVoterSet
     ) {
         ReplicaState state = getOrCreateReplicaState(localVoterNode.voterKey());
         state.endOffset.ifPresent(currentEndOffset -> {
@@ -827,7 +823,7 @@ public class LeaderState<T> implements EpochState {
         });
 
         state.updateLeaderEndOffset(endOffsetMetadata);
-        updateVoterAndObserverStates(lastVoterSet, lastVoterSetOffset);
+        updateVoterAndObserverStates(lastVoterSet);
 
         return maybeUpdateHighWatermark();
     }
@@ -960,7 +956,7 @@ public class LeaderState<T> implements EpochState {
         return state != null && state.matchesKey(remoteReplicaKey);
     }
 
-    private void updateVoterAndObserverStates(VoterSet lastVoterSet, long lastVoterSetOffset) {
+    private void updateVoterAndObserverStates(VoterSet lastVoterSet) {
         Map<Integer, ReplicaState> newVoterStates = new HashMap<>();
         Map<Integer, ReplicaState> oldVoterStates = new HashMap<>(voterStates);
 
