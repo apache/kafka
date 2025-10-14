@@ -80,7 +80,8 @@ public class OffsetFetcher {
                          long retryBackoffMs,
                          int requestTimeoutMs,
                          IsolationLevel isolationLevel,
-                         ApiVersions apiVersions) {
+                         ApiVersions apiVersions,
+                         boolean enableDataLossDetection) {
         this.log = logContext.logger(getClass());
         this.time = time;
         this.client = client;
@@ -91,7 +92,7 @@ public class OffsetFetcher {
         this.apiVersions = apiVersions;
         this.offsetsForLeaderEpochClient = new OffsetsForLeaderEpochClient(client, logContext);
         this.offsetFetcherUtils = new OffsetFetcherUtils(logContext, metadata, subscriptions,
-                time, retryBackoffMs, apiVersions);
+                time, retryBackoffMs, apiVersions, enableDataLossDetection);
     }
 
     /**

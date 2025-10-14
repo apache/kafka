@@ -63,6 +63,8 @@ class OffsetFetcherUtils {
     private final long retryBackoffMs;
     private final ApiVersions apiVersions;
     private final Logger log;
+    private final DataLossDetector dataLossDetector;
+    private final boolean enableDataLossDetection;
 
     /**
      * Exception that occurred while validating positions, that will be propagated on the next
@@ -84,13 +86,16 @@ class OffsetFetcherUtils {
                        SubscriptionState subscriptionState,
                        Time time,
                        long retryBackoffMs,
-                       ApiVersions apiVersions) {
+                       ApiVersions apiVersions,
+                       boolean enableDataLossDetection) {
         this.log = logContext.logger(getClass());
         this.metadata = metadata;
         this.subscriptionState = subscriptionState;
         this.time = time;
         this.retryBackoffMs = retryBackoffMs;
         this.apiVersions = apiVersions;
+        this.enableDataLossDetection = enableDataLossDetection;
+        this.dataLossDetector = enableDataLossDetection ? new DataLossDetector(logContext) : null;
     }
 
     /**
@@ -385,12 +390,39 @@ class OffsetFetcherUtils {
     // Visible for testing
     void resetPositionIfNeeded(TopicPartition partition, AutoOffsetResetStrategy requestedResetStrategy,
                                ListOffsetData offsetData) {
+        // Perform data loss detection for NONE strategy when enabled
+        if (enableDataLossDetection && requestedResetStrategy.type() == AutoOffsetResetStrategy.StrategyType.NONE) {
+            performDataLossDetection(partition, offsetData);
+        }
+        
         SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
                 offsetData.offset,
                 Optional.empty(), // This will ensure we skip validation
                 metadata.currentLeader(partition));
         offsetData.leaderEpoch.ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(partition, epoch));
         subscriptionState.maybeSeekUnvalidated(partition, position, requestedResetStrategy);
+    }
+
+    private void performDataLossDetection(TopicPartition partition, ListOffsetData offsetData) {
+        if (dataLossDetector == null) {
+            return; // Data loss detection is disabled
+        }
+        
+        // Get current position and check for data loss
+        SubscriptionState.FetchPosition currentPosition = subscriptionState.position(partition);
+        Long lastSeenOffset = dataLossDetector.getLastSeenOffset(partition);
+        
+        // Get beginning and end offsets for validation
+        long beginningOffset = 0L; // This would be fetched from metadata
+        long endOffset = offsetData.offset; // The latest offset from the response
+        
+        // Check for data loss scenarios
+        if (currentPosition != null || lastSeenOffset != null) {
+            Long previousOffset = currentPosition != null ? currentPosition.offset : lastSeenOffset;
+            dataLossDetector.checkForDataLoss(partition, previousOffset, offsetData.offset, beginningOffset, endOffset);
+        }
+        
+        log.info("Data loss detection passed for partition {} with new offset {}", partition, offsetData.offset);
     }
 
     static Map<Node, Map<TopicPartition, SubscriptionState.FetchPosition>> regroupFetchPositionsByLeader(

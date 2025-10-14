@@ -119,7 +119,8 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                                  final ApiVersions apiVersions,
                                  final NetworkClientDelegate networkClientDelegate,
                                  final CommitRequestManager commitRequestManager,
-                                 final LogContext logContext) {
+                                 final LogContext logContext,
+                                 final boolean enableDataLossDetection) {
         requireNonNull(subscriptionState);
         requireNonNull(metadata);
         requireNonNull(isolationLevel);
@@ -140,7 +141,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         this.apiVersions = apiVersions;
         this.networkClientDelegate = networkClientDelegate;
         this.offsetFetcherUtils = new OffsetFetcherUtils(logContext, metadata, subscriptionState,
-                time, retryBackoffMs, apiVersions);
+                time, retryBackoffMs, apiVersions, enableDataLossDetection);
         // Register the cluster metadata update callback. Note this only relies on the
         // requestsToRetry initialized above, and won't be invoked until all managers are
         // initialized and the network thread started.
