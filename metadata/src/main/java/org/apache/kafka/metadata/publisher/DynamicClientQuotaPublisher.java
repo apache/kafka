@@ -23,6 +23,8 @@ import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.server.fault.FaultHandler;
 
+import java.util.function.Consumer;
+
 /**
  * Publishes dynamic client quota changes to the client quota metadata manager.
  */
@@ -30,13 +32,13 @@ public class DynamicClientQuotaPublisher implements MetadataPublisher {
     private final int nodeId;
     private final FaultHandler faultHandler;
     private final String nodeType;
-    private final ClientQuotaUpdater clientQuotaUpdater;
+    private final Consumer<ClientQuotasDelta> clientQuotaUpdater;
 
     public DynamicClientQuotaPublisher(
         int nodeId,
         FaultHandler faultHandler,
         String nodeType,
-        ClientQuotaUpdater clientQuotaUpdater
+        Consumer<ClientQuotasDelta> clientQuotaUpdater
     ) {
         this.nodeId = nodeId;
         this.faultHandler = faultHandler;
@@ -51,13 +53,12 @@ public class DynamicClientQuotaPublisher implements MetadataPublisher {
 
     @Override
     public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage, LoaderManifest manifest) {
-        String deltaName = "MetadataDelta up to " + newImage.highestOffsetAndEpoch().offset();
         ClientQuotasDelta clientQuotasDelta = delta.clientQuotasDelta();
         if (clientQuotasDelta != null) {
             try {
-                clientQuotaUpdater.update(clientQuotasDelta);
+                clientQuotaUpdater.accept(clientQuotasDelta);
             } catch (Throwable t) {
-                faultHandler.handleFault("Uncaught exception while publishing dynamic client quota changes from " + deltaName, t);
+                faultHandler.handleFault("Uncaught exception while publishing dynamic client quota changes from MetadataDelta up to " + newImage.highestOffsetAndEpoch().offset(), t);
             }
         }
     }
