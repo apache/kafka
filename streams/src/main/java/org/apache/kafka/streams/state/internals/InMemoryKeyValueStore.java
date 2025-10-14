@@ -75,7 +75,9 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
                 false
             );
             // register the store
-            open = true;
+            if (!open) {
+                open(stateStoreContext);
+            }
 
             stateStoreContext.register(
                 root,
@@ -94,7 +96,9 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             );
         }
 
-        open = true;
+        if (!open) {
+            open(stateStoreContext);
+        }
         this.context = stateStoreContext;
     }
 
@@ -237,6 +241,11 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     public void close() {
         map.clear();
         open = false;
+    }
+
+    @Override
+    public void open(final StateStoreContext stateStoreContext) {
+        open = true;
     }
 
     private class InMemoryKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {

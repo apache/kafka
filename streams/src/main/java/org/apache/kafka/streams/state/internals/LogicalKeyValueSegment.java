@@ -163,6 +163,11 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     }
 
     @Override
+    public void open(final StateStoreContext stateStoreContext) {
+        //NOOP
+    }
+
+    @Override
     public boolean persistent() {
         return true;
     }

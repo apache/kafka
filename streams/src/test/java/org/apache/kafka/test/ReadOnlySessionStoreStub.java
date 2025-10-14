@@ -197,6 +197,11 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
     }
 
     @Override
+    public void open(StateStoreContext stateStoreContext) {
+
+    }
+
+    @Override
     public boolean persistent() {
         return false;
     }

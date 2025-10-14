@@ -228,6 +228,11 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
         open = false;
     }
 
+    @Override
+    public void open(final StateStoreContext stateStoreContext) {
+        //NOOP
+    }
+
     public int size() {
         return this.map.size();
     }

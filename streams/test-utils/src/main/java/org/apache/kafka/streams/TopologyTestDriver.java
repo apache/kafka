@@ -1246,6 +1246,11 @@ public class TopologyTestDriver implements Closeable {
         }
 
         @Override
+        public void open(final StateStoreContext stateStoreContext) {
+            inner.open(stateStoreContext);
+        }
+
+        @Override
         public String name() {
             return inner.name();
         }
@@ -1335,6 +1340,11 @@ public class TopologyTestDriver implements Closeable {
         @Override
         public void close() {
             inner.close();
+        }
+
+        @Override
+        public void open(final StateStoreContext stateStoreContext) {
+            inner.open(stateStoreContext);
         }
 
         @Override

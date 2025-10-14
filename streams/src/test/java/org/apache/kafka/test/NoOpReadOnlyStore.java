@@ -99,6 +99,11 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
     }
 
     @Override
+    public void open(StateStoreContext stateStoreContext) {
+        // NOOP
+    }
+
+    @Override
     public boolean persistent() {
         return rocksdbStore;
     }

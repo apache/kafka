@@ -318,6 +318,10 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // same physical RocksDB instance
     }
 
+    public void open(final StateStoreContext stateStoreContext) {
+        open = true;
+    }
+
     @Override
     public <R> QueryResult<R> query(
             final Query<R> query,
@@ -351,7 +355,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     @Override
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         this.internalProcessorContext = ProcessorContextUtils.asInternalProcessorContext(stateStoreContext);
-
+        if (!open) {
+            open(stateStoreContext);
+        }
         final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(stateStoreContext);
         final String threadId = Thread.currentThread().getName();
         final String taskName = stateStoreContext.taskId().toString();
@@ -376,8 +382,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                 (RecordBatchingStateRestoreCallback) RocksDBVersionedStore.this::restoreBatch,
                 () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
         );
-
-        open = true;
 
         consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
                 stateStoreContext.appConfigs(),

@@ -99,6 +99,9 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         this.stateStoreContext = stateStoreContext;
         final String threadId = Thread.currentThread().getName();
         final String taskName = stateStoreContext.taskId().toString();
+        if (!open) {
+            open(stateStoreContext);
+        }
 
         // The provided context is not required to implement InternalProcessorContext,
         // If it doesn't, we can't record this metric.
@@ -137,7 +140,6 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                 }
             );
         }
-        open = true;
     }
 
     @Override
@@ -378,6 +380,11 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         endTimeMap.clear();
         openIterators.clear();
         open = false;
+    }
+
+    @Override
+    public void open(final StateStoreContext stateStoreContext) {
+        this.open = true;
     }
 
     private void removeExpiredSegments() {

@@ -129,6 +129,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     private final boolean autoManagedIterators;
 
     protected volatile boolean open = false;
+    protected volatile boolean initialized = false;
     protected StateStoreContext context;
     protected Position position;
     private OffsetCheckpoint positionCheckpoint;
@@ -157,9 +158,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     @Override
     public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
+        initialized = true;
         // open the DB dir
         metricsRecorder.init(metricsImpl(stateStoreContext), stateStoreContext.taskId());
-        openDB(stateStoreContext.appConfigs(), stateStoreContext.stateDir());
+        if (!open) {
+            openDB(stateStoreContext.appConfigs(), stateStoreContext.stateDir());
+        }
+        addValueProvidersToMetricsRecorder();
+//        openDB(stateStoreContext.appConfigs(), stateStoreContext.stateDir());
 
         final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
         this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
@@ -241,8 +247,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         openRocksDB(dbOptions, columnFamilyOptions);
         dbAccessor = new DirectDBAccessor(db, fOptions, wOptions);
         open = true;
-
-        addValueProvidersToMetricsRecorder();
     }
 
     private void setupStatistics(final Map<String, Object> configs, final DBOptions dbOptions) {
@@ -677,8 +681,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             configSetter.close(name, userSpecifiedOptions);
             configSetter = null;
         }
-
-        metricsRecorder.removeValueProviders(name);
+        if (initialized) {
+            metricsRecorder.removeValueProviders(name);
+        }
 
         // Important: do not rearrange the order in which the below objects are closed!
         // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
@@ -703,6 +708,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         filter = null;
         cache = null;
         statistics = null;
+    }
+
+    @Override
+    public void open(final StateStoreContext stateStoreContext) {
+        openDB(stateStoreContext.appConfigs(), stateStoreContext.stateDir());
     }
 
     private void closeOpenIterators() {

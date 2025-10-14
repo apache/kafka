@@ -198,6 +198,9 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     @Override
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         this.context = ProcessorContextUtils.asInternalProcessorContext(stateStoreContext);
+        if (!open) {
+            open(stateStoreContext);
+        }
         changelogTopic = ProcessorContextUtils.changelogFor(stateStoreContext, name(), Boolean.TRUE);
         taskId = context.taskId().toString();
         streamsMetrics = context.metrics();
@@ -217,7 +220,6 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
 
         this.context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
         updateBufferMetrics();
-        open = true;
         partition = context.taskId().partition();
     }
 
@@ -241,6 +243,11 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         minTimestamp = Long.MAX_VALUE;
         updateBufferMetrics();
         streamsMetrics.removeAllStoreLevelSensorsAndMetrics(taskId, storeName);
+    }
+
+    @Override
+    public void open(final StateStoreContext stateStoreContext) {
+        open = true;
     }
 
     @Override

@@ -242,7 +242,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     @Override
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         this.internalProcessorContext = asInternalProcessorContext(stateStoreContext);
-
+        if (!open) {
+            open(stateStoreContext);
+        }
         final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(stateStoreContext);
         final String threadId = Thread.currentThread().getName();
         final String taskName = stateStoreContext.taskId().toString();
@@ -267,8 +269,6 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
             () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
         );
 
-        open = true;
-
         consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
             stateStoreContext.appConfigs(),
             IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
@@ -285,6 +285,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     public void close() {
         open = false;
         segments.close();
+    }
+
+    @Override
+    public void open(final StateStoreContext stateStoreContext) {
+        open = true;
     }
 
     @Override

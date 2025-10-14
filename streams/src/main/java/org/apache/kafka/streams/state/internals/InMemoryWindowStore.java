@@ -113,6 +113,10 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             metrics
         );
 
+        if (!open) {
+            open(stateStoreContext);
+        }
+
         if (root != null) {
             final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
                 stateStoreContext.appConfigs(),
@@ -400,6 +404,11 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
         segmentMap.clear();
         open = false;
+    }
+
+    @Override
+    public void open(final StateStoreContext stateStoreContext) {
+        this.open = true;
     }
 
     private void removeExpiredSegments() {

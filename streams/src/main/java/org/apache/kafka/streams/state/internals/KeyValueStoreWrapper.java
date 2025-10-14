@@ -132,6 +132,11 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
     }
 
     @Override
+    public void open(final StateStoreContext stateStoreContext) {
+        store.open(stateStoreContext);
+    }
+
+    @Override
     public void close() {
         store.close();
     }

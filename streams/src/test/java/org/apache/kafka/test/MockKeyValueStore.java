@@ -80,6 +80,11 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
     }
 
     @Override
+    public void open(final StateStoreContext stateStoreContext) {
+        closed = false;
+    }
+
+    @Override
     public boolean persistent() {
         return persistent;
     }

@@ -53,6 +53,11 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         throw new UnsupportedOperationException(ERROR_MESSAGE);
     }
 
+    @Override
+    public void open(final StateStoreContext stateStoreContext) {
+        throw new UnsupportedOperationException(ERROR_MESSAGE);
+    }
+
     static StateStore wrapWithReadWriteStore(final StateStore store) {
         if (store instanceof TimestampedKeyValueStore) {
             return new TimestampedKeyValueStoreReadWriteDecorator<>((TimestampedKeyValueStore<?, ?>) store);

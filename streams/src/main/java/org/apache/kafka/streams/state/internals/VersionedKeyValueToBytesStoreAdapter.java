@@ -103,6 +103,11 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
     }
 
     @Override
+    public void open(final StateStoreContext stateStoreContext) {
+        inner.open(stateStoreContext);
+    }
+
+    @Override
     public boolean persistent() {
         return inner.persistent();
     }

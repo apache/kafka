@@ -59,6 +59,11 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         throw new UnsupportedOperationException(ERROR_MESSAGE);
     }
 
+    @Override
+    public void open(final StateStoreContext stateStoreContext) {
+        throw new UnsupportedOperationException(ERROR_MESSAGE);
+    }
+
     static StateStore getReadOnlyStore(final StateStore global) {
         if (global instanceof TimestampedKeyValueStore) {
             return new TimestampedKeyValueStoreReadOnlyDecorator<>((TimestampedKeyValueStore<?, ?>) global);

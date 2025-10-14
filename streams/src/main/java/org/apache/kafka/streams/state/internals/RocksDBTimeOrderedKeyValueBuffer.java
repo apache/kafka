@@ -205,6 +205,11 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     }
 
     @Override
+    public void open(final StateStoreContext stateStoreContext) {
+        store.open(stateStoreContext);
+    }
+
+    @Override
     public boolean persistent() {
         return store.persistent();
     }

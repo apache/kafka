@@ -99,6 +99,8 @@ public interface StateStore {
      */
     boolean isOpen();
 
+    void open(final StateStoreContext stateStoreContext);
+
     /**
      * Execute a query. Returns a QueryResult containing either result data or
      * a failure.

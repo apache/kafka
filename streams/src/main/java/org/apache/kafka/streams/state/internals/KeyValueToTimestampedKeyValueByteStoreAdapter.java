@@ -110,6 +110,11 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
     }
 
     @Override
+    public void open(final StateStoreContext stateStoreContext) {
+        store.open(stateStoreContext);
+    }
+
+    @Override
     public boolean persistent() {
         return true;
     }

@@ -171,6 +171,11 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
     }
 
     @Override
+    public void open(final StateStoreContext stateStoreContext) {
+        store.open(stateStoreContext);
+    }
+
+    @Override
     public boolean persistent() {
         return true;
     }

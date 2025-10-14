@@ -120,6 +120,11 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
     }
 
     @Override
+    public void open(final StateStoreContext stateStoreContext) {
+        wrapped.open(stateStoreContext);
+    }
+
+    @Override
     public <R> QueryResult<R> query(final Query<R> query,
         final PositionBound positionBound,
         final QueryConfig config) {
