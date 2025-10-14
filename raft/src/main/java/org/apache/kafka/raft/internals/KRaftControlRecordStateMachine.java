@@ -18,6 +18,7 @@ package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.VotersRecord;
+import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.Batch;
@@ -35,6 +36,7 @@ import org.apache.kafka.snapshot.SnapshotReader;
 
 import org.slf4j.Logger;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 
@@ -114,6 +116,7 @@ public final class KRaftControlRecordStateMachine {
      * Must be called whenever the {@code log} has changed.
      */
     public void updateState() {
+
         maybeLoadSnapshot();
         maybeLoadLog();
     }
@@ -200,6 +203,29 @@ public final class KRaftControlRecordStateMachine {
         synchronized (voterSetHistory) {
             return voterSetHistory.valueAtOrBefore(offset);
         }
+    }
+
+    public VoterSet committedVoterSetFromLog(long offset) {
+        LogFetchInfo info = log.read(offset, Isolation.COMMITTED);
+        try (RecordsIterator<?> iterator = new RecordsIterator<>(
+                info.records,
+                serde,
+                bufferSupplier,
+                maxBatchSizeBytes,
+                true, // Validate batch CRC
+                logContext
+        )) {
+            while (iterator.hasNext()) {
+                Batch<?> batch = iterator.next();
+                for (ControlRecord controlRecord : batch.controlRecords()) {
+                    // Skip the rest of the control records
+                    if (Objects.requireNonNull(controlRecord.type()) == ControlRecordType.KRAFT_VOTERS) {
+                        return VoterSet.fromVotersRecord((VotersRecord) controlRecord.message());
+                    }
+                }
+            }
+        }
+        return staticVoterSet;
     }
 
     /**

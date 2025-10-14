@@ -32,6 +32,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.internals.AddVoterHandlerState;
 import org.apache.kafka.raft.internals.BatchAccumulator;
+import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
 import org.apache.kafka.raft.internals.KRaftVersionUpgrade;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.raft.internals.RemoveVoterHandlerState;
@@ -72,9 +73,11 @@ public class LeaderState<T> implements EpochState {
     // This field is non-empty if the voter set at epoch start came from a snapshot or log segment
     private final OptionalLong offsetOfVotersAtEpochStart;
     private final KRaftVersion kraftVersionAtEpochStart;
+    private final KRaftControlRecordStateMachine partitionState;
 
     private Optional<LogOffsetMetadata> highWatermark = Optional.empty();
     private Map<Integer, ReplicaState> voterStates = new HashMap<>();
+    private Map<Integer, ReplicaState> committedVoterStates = new HashMap<>();
     private Optional<AddVoterHandlerState> addVoterHandlerState = Optional.empty();
     private Optional<RemoveVoterHandlerState> removeVoterHandlerState = Optional.empty();
 
@@ -120,7 +123,8 @@ public class LeaderState<T> implements EpochState {
         BatchAccumulator<T> accumulator,
         int fetchTimeoutMs,
         LogContext logContext,
-        KafkaRaftMetrics kafkaRaftMetrics
+        KafkaRaftMetrics kafkaRaftMetrics,
+        KRaftControlRecordStateMachine partitionState
     ) {
         if (localVoterNode.voterKey().directoryId().isEmpty()) {
             throw new IllegalArgumentException(
@@ -158,6 +162,8 @@ public class LeaderState<T> implements EpochState {
         this.voterSetAtEpochStart =  voterSetAtEpochStart;
         this.offsetOfVotersAtEpochStart = offsetOfVotersAtEpochStart;
         this.kraftVersionAtEpochStart = kraftVersionAtEpochStart;
+        this.partitionState = partitionState;
+        offsetOfVotersAtEpochStart.ifPresent(this::updateCommittedVoter);
 
         kafkaRaftMetrics.addLeaderMetrics();
         this.kafkaRaftMetrics = kafkaRaftMetrics;
@@ -735,6 +741,7 @@ public class LeaderState<T> implements EpochState {
                             indexOfHw,
                             followersByDescendingFetchOffset
                         );
+                        updateCommittedVoter(highWatermark.get().offset());
                         return true;
                     } else if (highWatermarkUpdateOffset < currentHighWatermarkMetadata.offset()) {
                         log.info("The latest computed high watermark {} is smaller than the current " +
@@ -755,6 +762,7 @@ public class LeaderState<T> implements EpochState {
                         indexOfHw,
                         followersByDescendingFetchOffset
                     );
+                    highWatermark.ifPresent(logOffsetMetadata -> updateCommittedVoter(logOffsetMetadata.offset()));
                     return true;
                 }
             }
@@ -861,6 +869,24 @@ public class LeaderState<T> implements EpochState {
             .filter(state -> !state.matchesKey(localVoterNode.voterKey()))
             .map(state -> state.replicaKey)
             .collect(Collectors.toList());
+    }
+
+    private void updateCommittedVoter(long highWatermark) {
+       Optional<VoterSet> voters = partitionState.voterSetAtOffset(highWatermark);
+        if (voters.isPresent()) {
+            // if voters are present in partitionState, we read it from memory
+            for (VoterSet.VoterNode voterNode : voters.get().voterNodes()) {
+                ReplicaKey key = voterNode.voterKey();
+                committedVoterStates.put(voterNode.voterKey().id(), getOrCreateReplicaState(key));
+            }
+        } else {
+            log.info("Read committed voter with start offset={} from log", highWatermark - 1);
+            VoterSet committedvoterSet = partitionState.committedVoterSetFromLog(highWatermark - 1);
+            for (VoterSet.VoterNode voterNode : committedvoterSet.voterNodes()) {
+                ReplicaKey key = voterNode.voterKey();
+                committedVoterStates.put(key.id(), getOrCreateReplicaState(key));
+            }
+        }
     }
 
     private Stream<ReplicaState> followersByDescendingFetchOffset() {
@@ -1105,12 +1131,13 @@ public class LeaderState<T> implements EpochState {
     @Override
     public String toString() {
         return String.format(
-            "Leader(localVoterNode=%s, epoch=%d, epochStartOffset=%d, highWatermark=%s, voterStates=%s)",
+            "Leader(localVoterNode=%s, epoch=%d, epochStartOffset=%d, highWatermark=%s, voterStates=%s, committedVoterState=%s)",
             localVoterNode,
             epoch,
             epochStartOffset,
             highWatermark,
-            voterStates
+            voterStates,
+            committedVoterStates
         );
     }
 
