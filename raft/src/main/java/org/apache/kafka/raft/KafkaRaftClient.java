@@ -2442,6 +2442,27 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
+    /**
+     * Handle an UpdateVoter request. This API is used to update the metadata (endpoints
+     * and supported KRaft version range) of an existing voter in the quorum. The request
+     * should be sent to the current quorum leader, and will only succeed if the leader
+     * has committed its current epoch and HWM.
+     *
+     * This API may return the following errors:
+     *
+     * - {@link Errors#INCONSISTENT_CLUSTER_ID} if the cluster id is provided but does
+     *     not match this cluster's id
+     * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
+     * - {@link Errors#UNKNOWN_LEADER_EPOCH} if the epoch is larger than this node's epoch
+     * - {@link Errors#NOT_LEADER_OR_FOLLOWER} if the request was sent to a broker that
+     *     is not the current quorum leader
+     * - {@link Errors#BROKER_NOT_AVAILABLE} if this node is currently shutting down
+     * - {@link Errors#REQUEST_TIMED_OUT} if the leader is still processing a previous
+     *     voter change, or if the high watermark has not yet advanced
+     * - {@link Errors#INVALID_REQUEST} if the request does not include a valid voter id,
+     *     directory id, endpoint, or KRaft version
+     * - {@link Errors#VOTER_NOT_FOUND} if the specified voter does not exist in the current set
+     */
     private CompletableFuture<UpdateRaftVoterResponseData> handleUpdateVoterRequest(
         RaftRequest.Inbound requestMetadata,
         long currentTimeMs
