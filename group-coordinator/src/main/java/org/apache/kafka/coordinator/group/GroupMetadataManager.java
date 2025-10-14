@@ -250,9 +250,9 @@ import static org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMe
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord;
-import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord;
+import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedTasksChanged;
@@ -1969,11 +1969,18 @@ public class GroupMetadataManager {
             updatedConfiguredTopology = group.configuredTopology().get();
         }
 
+        // 3b. If the topology is validated, persist the fact that it is validated.
+        int validatedTopologyEpoch = -1;
         if (updatedConfiguredTopology.isReady()) {
+            validatedTopologyEpoch = updatedTopology.topologyEpoch();
             SortedMap<String, ConfiguredSubtopology> subtopologySortedMap = updatedConfiguredTopology.subtopologies().get();
             throwIfRequestContainsInvalidTasks(subtopologySortedMap, ownedActiveTasks);
             throwIfRequestContainsInvalidTasks(subtopologySortedMap, ownedStandbyTasks);
             throwIfRequestContainsInvalidTasks(subtopologySortedMap, ownedWarmupTasks);
+        }
+        // We validated a topology that was not validated before, so bump the group epoch as we may have to reassign tasks.
+        if (validatedTopologyEpoch != group.validatedTopologyEpoch()) {
+            bumpGroupEpoch = true;
         }
 
         // Actually bump the group epoch
@@ -1981,9 +1988,8 @@ public class GroupMetadataManager {
         if (bumpGroupEpoch) {
             groupEpoch += 1;
             Map<String, String> assignmentConfigs = streamsGroupAssignmentConfigs(groupId);
-            records.add(newStreamsGroupEpochRecord(groupId, groupEpoch, metadataHash, assignmentConfigs));
-            log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {}.",
-                groupId, memberId, groupEpoch, metadataHash);
+            records.add(newStreamsGroupMetadataRecord(groupId, groupEpoch, metadataHash, validatedTopologyEpoch, assignmentConfigs));
+            log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {} and validated topic epoch {}.", groupId, memberId, groupEpoch, metadataHash, validatedTopologyEpoch);
             metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
         }
@@ -4302,7 +4308,7 @@ public class GroupMetadataManager {
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
-        records.add(newStreamsGroupEpochRecord(group.groupId(), groupEpoch, 0, Map.of()));
+        records.add(newStreamsGroupMetadataRecord(group.groupId(), groupEpoch, group.metadataHash(), group.validatedTopologyEpoch(), Map.of()));
 
         cancelTimers(group.groupId(), member.memberId());
 
@@ -5422,6 +5428,7 @@ public class GroupMetadataManager {
             StreamsGroup streamsGroup = getOrMaybeCreatePersistedStreamsGroup(groupId, true);
             streamsGroup.setGroupEpoch(value.epoch());
             streamsGroup.setMetadataHash(value.metadataHash());
+            streamsGroup.setValidatedTopologyEpoch(value.validatedTopologyEpoch());
 
             if (value.assignmentConfigs() != null) {
                 for (StreamsGroupMetadataValue.AssignmentConfig config : value.assignmentConfigs()) {
@@ -8654,7 +8661,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Get the assignment configurations for the provided streams group.
+     * Get the assignor of the provided streams group.
      */
     private Map<String, String> streamsGroupAssignmentConfigs(String groupId) {
         Map<String, String> assignmentConfigs = new HashMap<>();
@@ -8670,7 +8677,7 @@ public class GroupMetadataManager {
         final Integer numStandbyReplicas = groupConfig.map(GroupConfig::streamsNumStandbyReplicas)
             .orElse(config.streamsGroupNumStandbyReplicas());
         assignmentConfigs.put("num.standby.replicas", numStandbyReplicas.toString());
-        
+
         return assignmentConfigs;
     }
 

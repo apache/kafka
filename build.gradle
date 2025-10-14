@@ -136,6 +136,11 @@ ext {
       options.compilerArgs << "-Xlint:-serial"
       options.compilerArgs << "-Xlint:-try"
       options.compilerArgs << "-Werror"
+      if (userKeepAliveMode == KeepAliveMode.SESSION){
+        // Suppress warning triggered under keepAliveMode=SESSION during joint compilation
+        // Unexpected javac output: warning: [path] bad path element ".../core/build/classes/java/main": no such file or directory
+        options.compilerArgs << "-Xlint:-path"
+      }
     }
   }
 

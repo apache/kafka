@@ -838,6 +838,16 @@ Found problem:
   }
 
   @Test
+  def testHandleFeatureDependenciesForInvalidFormat(): Unit = {
+    val stream = new ByteArrayOutputStream()
+
+    val exception = assertThrows(classOf[TerseFailure], () => {
+      runFeatureDependenciesCommand(stream, Seq("metadata.version"))
+    })
+    assertEquals("Invalid feature format: metadata.version. Expected format: 'feature=version' (e.g. 'group.version=1')", exception.getMessage)
+  }
+
+  @Test
   def testBootstrapScramRecords(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()

@@ -113,7 +113,7 @@ public class ListConsumerGroupTest {
                 TestUtils.waitForCondition(() -> {
                     foundGroups.set(set(service.listConsumerGroups()));
                     return Objects.equals(expectedGroups, foundGroups.get());
-                }, "Expected --list to show groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
+                }, () -> "Expected --list to show groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
             }
 
             removeConsumer(set(List.of(topicPartitionsGroup, topicGroup, protocolGroup)));
