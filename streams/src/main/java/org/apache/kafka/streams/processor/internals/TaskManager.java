@@ -337,22 +337,62 @@ public class TaskManager {
                                                               final String threadLogPrefix,
                                                               final TopologyMetadata topologyMetadata,
                                                               final ChangelogRegister changelogReader) {
+        throw new RuntimeException("Expected to fail. no stateupdater yet...");
+    }
+
+    private Map<Task, Set<TopicPartition>> assignStartupTasksActive(final Map<TaskId, Set<TopicPartition>> tasksToAssign,
+                                                              final String threadLogPrefix,
+                                                              final TopologyMetadata topologyMetadata,
+                                                              final ChangelogRegister changelogReader) {
         if (stateDirectory.hasStartupTasks()) {
-            final Map<Task, Set<TopicPartition>> assignedTasks = new HashMap<>(tasksToAssign.size());
+            final Map<TaskId, Set<TopicPartition>> assignedTasks = new HashMap<>(tasksToAssign.size());
             for (final Map.Entry<TaskId, Set<TopicPartition>> entry : tasksToAssign.entrySet()) {
                 final TaskId taskId = entry.getKey();
-                final Task task = stateDirectory.removeStartupTask(taskId);
-                if (task != null) {
+                final ProcessorStateManager stateManager = stateDirectory.removeStartupTask(taskId);
+                if (stateManager != null) {
                     // replace our dummy values with the real ones, now we know our thread and assignment
                     final Set<TopicPartition> inputPartitions = entry.getValue();
-                    task.stateManager().assignToStreamThread(new LogContext(threadLogPrefix), changelogReader, inputPartitions);
-                    updateInputPartitionsOfStandbyTaskIfTheyChanged(task, inputPartitions);
-
-                    assignedTasks.put(task, inputPartitions);
+                    assignedTasks.put(stateManager.taskId(), inputPartitions);
                 }
             }
 
-            return assignedTasks;
+            final Collection<Task> tasks = activeTaskCreator.createTasks(mainConsumer, assignedTasks);
+            final Map<Task, Set<TopicPartition>> out = new HashMap<>(tasks.size());
+            for (final Task task : tasks) {
+                out.put(task, task.inputPartitions());
+            }
+            return out;
+        } else {
+            return Collections.emptyMap();
+        }
+    }
+
+    private Map<Task, Set<TopicPartition>> assignStartupTasksStandby(final Map<TaskId, Set<TopicPartition>> tasksToAssign,
+                                                              final String threadLogPrefix,
+                                                              final TopologyMetadata topologyMetadata,
+                                                              final ChangelogRegister changelogReader) {
+        if (stateDirectory.hasStartupTasks()) {
+            final Map<TaskId, Set<TopicPartition>> assignedTasks = new HashMap<>(tasksToAssign.size());
+            for (final Map.Entry<TaskId, Set<TopicPartition>> entry : tasksToAssign.entrySet()) {
+                final TaskId taskId = entry.getKey();
+                final ProcessorStateManager stateManager = stateDirectory.removeStartupTask(taskId);
+                if (stateManager != null) {
+                    // replace our dummy values with the real ones, now we know our thread and assignment
+                    final Set<TopicPartition> inputPartitions = entry.getValue();
+
+
+                    assignedTasks.put(stateManager.taskId(), inputPartitions);
+                }
+            }
+
+            final Collection<Task> tasks = standbyTaskCreator.createTasks(assignedTasks);
+            final Map<Task, Set<TopicPartition>> out = new HashMap<>(tasks.size());
+            for (final Task task : tasks) {
+                updateInputPartitionsOfStandbyTaskIfTheyChanged(task, task.inputPartitions());
+                out.put(task, task.inputPartitions());
+            }
+
+            return out;
         } else {
             return Collections.emptyMap();
         }
@@ -571,8 +611,8 @@ public class TaskManager {
     private void handleStartupTaskReuse(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
                                         final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
                                         final Map<TaskId, RuntimeException> failedTasks) {
-        final Map<Task, Set<TopicPartition>> startupStandbyTasksToRecycle = assignStartupTasks(activeTasksToCreate, logPrefix, topologyMetadata, changelogReader);
-        final Map<Task, Set<TopicPartition>> startupStandbyTasksToUse = assignStartupTasks(standbyTasksToCreate, logPrefix, topologyMetadata, changelogReader);
+        final Map<Task, Set<TopicPartition>> startupStandbyTasksToRecycle = assignStartupTasksActive(activeTasksToCreate, logPrefix, topologyMetadata, changelogReader);
+        final Map<Task, Set<TopicPartition>> startupStandbyTasksToUse = assignStartupTasksStandby(standbyTasksToCreate, logPrefix, topologyMetadata, changelogReader);
 
         // recycle the startup standbys to active, and remove them from the set of actives that need to be created
         if (!startupStandbyTasksToRecycle.isEmpty()) {

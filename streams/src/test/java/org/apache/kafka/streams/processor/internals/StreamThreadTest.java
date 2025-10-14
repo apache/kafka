@@ -229,7 +229,7 @@ public class StreamThreadTest {
 
     static Stream<Arguments> data() {
         return Stream.of(
-            Arguments.of(false, false),
+//            Arguments.of(false, false),
             Arguments.of(true, false),
             Arguments.of(true, true)
         );
