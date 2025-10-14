@@ -2009,7 +2009,7 @@ public class ShareConsumerTest {
     public void testShareConsumerAfterCoordinatorMovement() throws Exception {
         String topicName = "multipart";
         String groupId = "multipartGrp";
-        Uuid topicId = createTopic(topicName, 3, 3);
+        Uuid topicId = createTopic(topicName, 1, 3);
         alterShareAutoOffsetReset(groupId, "earliest");
         ScheduledExecutorService service = Executors.newScheduledThreadPool(5);
 
