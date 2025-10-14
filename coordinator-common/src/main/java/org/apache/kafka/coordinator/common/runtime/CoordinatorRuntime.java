@@ -830,11 +830,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         }
 
         /**
-         * Flushes the current batch if it is transactional or if it has passed the append linger time.
+         * Flushes the current batch if it is transactional, if it has passed the append linger time, or if it is full.
          */
         private void maybeFlushCurrentBatch(long currentTimeMs) {
             if (currentBatch != null) {
-                if (currentBatch.builder.isTransactional() || (currentBatch.appendTimeMs - currentTimeMs) >= appendLingerMs) {
+                if (currentBatch.builder.isTransactional() || (currentBatch.appendTimeMs - currentTimeMs) >= appendLingerMs || !currentBatch.builder.hasRoomFor(0)) {
                     flushCurrentBatch();
                 }
             }
@@ -1089,17 +1089,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 // Add the event to the list of pending events associated with the batch.
                 currentBatch.deferredEvents.add(event);
 
-                if (isAtomic && !currentBatch.builder.hasRoomFor(0)) {
-                    // Flush the batch if its uncompressed size is larger than the max batch size.
-                    // It would get flushed on the next append() anyway.
-                    flushCurrentBatch();
-                } else {
-                    // Write the current batch if it is transactional or if the linger timeout
-                    // has expired.
-                    // If flushing fails, we don't catch the exception in order to let
-                    // the caller fail the current operation. 
-                    maybeFlushCurrentBatch(currentTimeMs);
-                }
+                // Write the current batch if it is transactional, if the linger timeout
+                // has expired, or if it is full. 
+                // If flushing fails, we don't catch the exception in order to let
+                // the caller fail the current operation.
+                maybeFlushCurrentBatch(currentTimeMs);
             }
         }
 
