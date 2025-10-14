@@ -25,8 +25,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
 
-public class RebalanceMetrics {
-    private RebalanceMetrics() {}
+public class RebalanceListenerMetrics {
+    private RebalanceListenerMetrics() {}
 
     private static final String TASKS_REVOKED = "tasks-revoked";
     private static final String TASKS_ASSIGNED = "tasks-assigned";

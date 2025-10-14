@@ -21,7 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.metrics.RebalanceMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.RebalanceListenerMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -69,12 +69,12 @@ public class DefaultStreamsRebalanceListenerTest {
     }
 
     private void createRebalanceListenerWithRebalanceData(final StreamsRebalanceData streamsRebalanceData) {
-        try (MockedStatic<RebalanceMetrics> rebalanceMetricsMock = mockStatic(RebalanceMetrics.class)) {
-            rebalanceMetricsMock.when(() -> RebalanceMetrics.tasksRevokedSensor(anyString(), any(StreamsMetricsImpl.class)))
+        try (MockedStatic<RebalanceListenerMetrics> rebalanceMetricsMock = mockStatic(RebalanceListenerMetrics.class)) {
+            rebalanceMetricsMock.when(() -> RebalanceListenerMetrics.tasksRevokedSensor(anyString(), any(StreamsMetricsImpl.class)))
                 .thenReturn(tasksRevokedSensor);
-            rebalanceMetricsMock.when(() -> RebalanceMetrics.tasksAssignedSensor(anyString(), any(StreamsMetricsImpl.class)))
+            rebalanceMetricsMock.when(() -> RebalanceListenerMetrics.tasksAssignedSensor(anyString(), any(StreamsMetricsImpl.class)))
                 .thenReturn(tasksAssignedSensor);
-            rebalanceMetricsMock.when(() -> RebalanceMetrics.tasksLostSensor(anyString(), any(StreamsMetricsImpl.class)))
+            rebalanceMetricsMock.when(() -> RebalanceListenerMetrics.tasksLostSensor(anyString(), any(StreamsMetricsImpl.class)))
                 .thenReturn(tasksLostSensor);
 
             defaultStreamsRebalanceListener = new DefaultStreamsRebalanceListener(

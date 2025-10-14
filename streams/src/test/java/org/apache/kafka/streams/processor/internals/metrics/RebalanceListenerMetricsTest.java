@@ -32,7 +32,7 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-public class RebalanceMetricsTest {
+public class RebalanceListenerMetricsTest {
 
     private static final String THREAD_ID = "test-thread";
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
@@ -46,7 +46,7 @@ public class RebalanceMetricsTest {
         when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
 
         try (MockedStatic<StreamsMetricsImpl> streamsMetricsStatic = mockStatic(StreamsMetricsImpl.class)) {
-            final Sensor sensor = RebalanceMetrics.tasksRevokedSensor(THREAD_ID, streamsMetrics);
+            final Sensor sensor = RebalanceListenerMetrics.tasksRevokedSensor(THREAD_ID, streamsMetrics);
 
             assertEquals(expectedSensor, sensor);
             verify(streamsMetrics).threadLevelSensor(THREAD_ID, "tasks-revoked" + LATENCY_SUFFIX, RecordingLevel.INFO);
@@ -70,7 +70,7 @@ public class RebalanceMetricsTest {
         when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
 
         try (MockedStatic<StreamsMetricsImpl> streamsMetricsStatic = mockStatic(StreamsMetricsImpl.class)) {
-            final Sensor sensor = RebalanceMetrics.tasksAssignedSensor(THREAD_ID, streamsMetrics);
+            final Sensor sensor = RebalanceListenerMetrics.tasksAssignedSensor(THREAD_ID, streamsMetrics);
 
             assertEquals(expectedSensor, sensor);
             verify(streamsMetrics).threadLevelSensor(THREAD_ID, "tasks-assigned" + LATENCY_SUFFIX, RecordingLevel.INFO);
@@ -94,7 +94,7 @@ public class RebalanceMetricsTest {
         when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
 
         try (MockedStatic<StreamsMetricsImpl> streamsMetricsStatic = mockStatic(StreamsMetricsImpl.class)) {
-            final Sensor sensor = RebalanceMetrics.tasksLostSensor(THREAD_ID, streamsMetrics);
+            final Sensor sensor = RebalanceListenerMetrics.tasksLostSensor(THREAD_ID, streamsMetrics);
 
             assertEquals(expectedSensor, sensor);
             verify(streamsMetrics).threadLevelSensor(THREAD_ID, "tasks-lost" + LATENCY_SUFFIX, RecordingLevel.INFO);

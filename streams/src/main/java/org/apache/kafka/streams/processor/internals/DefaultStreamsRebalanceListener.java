@@ -22,7 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.metrics.RebalanceMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.RebalanceListenerMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import org.slf4j.Logger;
@@ -58,9 +58,9 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
         this.taskManager = taskManager;
         
         // Create sensors for rebalance metrics
-        this.tasksRevokedSensor = RebalanceMetrics.tasksRevokedSensor(threadId, streamsMetrics);
-        this.tasksAssignedSensor = RebalanceMetrics.tasksAssignedSensor(threadId, streamsMetrics);
-        this.tasksLostSensor = RebalanceMetrics.tasksLostSensor(threadId, streamsMetrics);
+        this.tasksRevokedSensor = RebalanceListenerMetrics.tasksRevokedSensor(threadId, streamsMetrics);
+        this.tasksAssignedSensor = RebalanceListenerMetrics.tasksAssignedSensor(threadId, streamsMetrics);
+        this.tasksLostSensor = RebalanceListenerMetrics.tasksLostSensor(threadId, streamsMetrics);
     }
 
     @Override
