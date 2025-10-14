@@ -625,6 +625,7 @@ public class RaftUtilTest {
                 highWatermark,
                 List.of(replicaState),
                 List.of(replicaState),
+                List.of(replicaState),
                 0
         );
         JsonNode json = DescribeQuorumResponseDataJsonConverter.write(describeQuorumResponseData, version);

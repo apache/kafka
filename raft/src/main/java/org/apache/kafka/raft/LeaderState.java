@@ -150,6 +150,10 @@ public class LeaderState<T> implements EpochState {
                 voterNode.voterKey().id(),
                 new ReplicaState(voterNode.voterKey(), hasAcknowledgedLeader, voterNode.listeners())
             );
+            this.committedVoterStates.put(
+                voterNode.voterKey().id(),
+                new ReplicaState(voterNode.voterKey(), hasAcknowledgedLeader, voterNode.listeners())
+            );
         }
         this.grantingVoters = Set.copyOf(grantingVoters);
         this.log = logContext.logger(LeaderState.class);
@@ -670,7 +674,8 @@ public class LeaderState<T> implements EpochState {
 
     @Override
     public ElectionState election() {
-        return ElectionState.withElectedLeader(epoch, localVoterNode.voterKey().id(), Optional.empty(), voterStates.keySet());
+        return ElectionState.withElectedLeader(
+                epoch, localVoterNode.voterKey().id(), Optional.empty(), voterStates.keySet());
     }
 
     @Override
@@ -685,6 +690,10 @@ public class LeaderState<T> implements EpochState {
 
     Map<Integer, ReplicaState> voterStates() {
         return voterStates;
+    }
+
+    Map<Integer, ReplicaState> committedVoterStates() {
+        return committedVoterStates;
     }
 
     Map<ReplicaKey, ReplicaState> observerStates(final long currentTimeMs) {
@@ -735,13 +744,14 @@ public class LeaderState<T> implements EpochState {
                             !highWatermarkUpdateMetadata.metadata().equals(currentHighWatermarkMetadata.metadata()))) {
                         Optional<LogOffsetMetadata> oldHighWatermark = highWatermark;
                         highWatermark = highWatermarkUpdateOpt;
+                        updateCommittedVoter(highWatermark.get().offset());
+
                         logHighWatermarkUpdate(
                             oldHighWatermark,
                             highWatermarkUpdateMetadata,
                             indexOfHw,
                             followersByDescendingFetchOffset
                         );
-                        updateCommittedVoter(highWatermark.get().offset());
                         return true;
                     } else if (highWatermarkUpdateOffset < currentHighWatermarkMetadata.offset()) {
                         log.info("The latest computed high watermark {} is smaller than the current " +
@@ -756,13 +766,13 @@ public class LeaderState<T> implements EpochState {
                 } else {
                     Optional<LogOffsetMetadata> oldHighWatermark = highWatermark;
                     highWatermark = highWatermarkUpdateOpt;
+                    highWatermark.ifPresent(logOffsetMetadata -> updateCommittedVoter(logOffsetMetadata.offset()));
                     logHighWatermarkUpdate(
                         oldHighWatermark,
                         highWatermarkUpdateMetadata,
                         indexOfHw,
                         followersByDescendingFetchOffset
                     );
-                    highWatermark.ifPresent(logOffsetMetadata -> updateCommittedVoter(logOffsetMetadata.offset()));
                     return true;
                 }
             }
@@ -800,11 +810,13 @@ public class LeaderState<T> implements EpochState {
      *
      * @param endOffsetMetadata updated log end offset of local replica
      * @param lastVoterSet the up-to-date voter set
+     * @param lastVoterSetOffset the offset of up-to-date voter set
      * @return true if the high watermark is updated as a result of this call
      */
     public boolean updateLocalState(
         LogOffsetMetadata endOffsetMetadata,
-        VoterSet lastVoterSet
+        VoterSet lastVoterSet,
+        long lastVoterSetOffset
     ) {
         ReplicaState state = getOrCreateReplicaState(localVoterNode.voterKey());
         state.endOffset.ifPresent(currentEndOffset -> {
@@ -815,7 +827,7 @@ public class LeaderState<T> implements EpochState {
         });
 
         state.updateLeaderEndOffset(endOffsetMetadata);
-        updateVoterAndObserverStates(lastVoterSet);
+        updateVoterAndObserverStates(lastVoterSet, lastVoterSetOffset);
 
         return maybeUpdateHighWatermark();
     }
@@ -872,7 +884,7 @@ public class LeaderState<T> implements EpochState {
     }
 
     private void updateCommittedVoter(long highWatermark) {
-       Optional<VoterSet> voters = partitionState.voterSetAtOffset(highWatermark);
+        Optional<VoterSet> voters = partitionState.voterSetAtOffset(highWatermark);
         if (voters.isPresent()) {
             // if voters are present in partitionState, we read it from memory
             for (VoterSet.VoterNode voterNode : voters.get().voterNodes()) {
@@ -948,7 +960,7 @@ public class LeaderState<T> implements EpochState {
         return state != null && state.matchesKey(remoteReplicaKey);
     }
 
-    private void updateVoterAndObserverStates(VoterSet lastVoterSet) {
+    private void updateVoterAndObserverStates(VoterSet lastVoterSet, long lastVoterSetOffset) {
         Map<Integer, ReplicaState> newVoterStates = new HashMap<>();
         Map<Integer, ReplicaState> oldVoterStates = new HashMap<>(voterStates);
 

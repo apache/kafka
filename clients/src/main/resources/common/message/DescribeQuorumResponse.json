@@ -19,7 +19,8 @@
   "name": "DescribeQuorumResponse",
   // Version 1 adds LastFetchTimeStamp and LastCaughtUpTimestamp in ReplicaState (KIP-836).
   // Version 2 adds ErrorMessage, Nodes, ErrorMessage in ParitionData, ReplicaDirectoryId in ReplicaState (KIP-853).
-  "validVersions": "0-2",
+  // Version 3 adds CommittedVoters in PartitionData
+  "validVersions": "0-3",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
@@ -46,6 +47,8 @@
           "about": "The high water mark."},
         { "name": "CurrentVoters", "type": "[]ReplicaState", "versions": "0+",
           "about": "The current voters of the partition."},
+        { "name": "CommittedVoters", "type": "[]ReplicaState", "versions": "3+", "ignorable": true,
+          "about":  "The voters has been committed."},
         { "name": "Observers", "type": "[]ReplicaState", "versions": "0+",
           "about": "The observers of the partition."}
       ]}

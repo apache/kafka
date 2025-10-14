@@ -758,10 +758,12 @@ public final class RaftClientTestContext {
         int leaderId,
         int leaderEpoch,
         long highWatermark,
-        List<ReplicaState> voterStates,
+        List<ReplicaState> currentVoterStates,
+        List<ReplicaState> committedVoterStates,
         List<ReplicaState> observerStates
     ) {
-        assertSentDescribeQuorumResponse(Errors.NONE, leaderId, leaderEpoch, highWatermark, voterStates, observerStates);
+        assertSentDescribeQuorumResponse(Errors.NONE, leaderId, leaderEpoch, highWatermark,
+                currentVoterStates, committedVoterStates, observerStates);
     }
 
     void assertSentDescribeQuorumResponse(
@@ -769,7 +771,8 @@ public final class RaftClientTestContext {
         int leaderId,
         int leaderEpoch,
         long highWatermark,
-        List<ReplicaState> voterStates,
+        List<ReplicaState> currentVoterStates,
+        List<ReplicaState> committedVoterStates,
         List<ReplicaState> observerStates
     ) {
         DescribeQuorumResponseData response = collectDescribeQuorumResponse();
@@ -779,7 +782,8 @@ public final class RaftClientTestContext {
             .setLeaderId(leaderId)
             .setLeaderEpoch(leaderEpoch)
             .setHighWatermark(highWatermark)
-            .setCurrentVoters(voterStates)
+            .setCurrentVoters(currentVoterStates)
+            .setCommittedVoters(committedVoterStates)
             .setObservers(observerStates);
 
         if (!error.equals(Errors.NONE)) {
@@ -788,8 +792,8 @@ public final class RaftClientTestContext {
 
         DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection(0);
         if (describeQuorumRpcVersion() >= 2) {
-            nodes = new DescribeQuorumResponseData.NodeCollection(voterStates.size());
-            for (ReplicaState voterState : voterStates) {
+            nodes = new DescribeQuorumResponseData.NodeCollection(currentVoterStates.size());
+            for (ReplicaState voterState : currentVoterStates) {
                 nodes.add(new DescribeQuorumResponseData.Node()
                     .setNodeId(voterState.replicaId())
                     .setListeners(startingVoters.listeners(voterState.replicaId()).toDescribeQuorumResponseListeners()));
@@ -802,7 +806,7 @@ public final class RaftClientTestContext {
             nodes
         );
 
-        List<ReplicaState> sortedVoters = response
+        List<ReplicaState> sortedCuttentVoters = response
             .topics()
             .get(0)
             .partitions()
@@ -811,7 +815,17 @@ public final class RaftClientTestContext {
             .stream()
             .sorted(Comparator.comparingInt(ReplicaState::replicaId))
             .collect(Collectors.toList());
-        response.topics().get(0).partitions().get(0).setCurrentVoters(sortedVoters);
+        List<ReplicaState> sortedCommittedVoters = response
+                .topics()
+                .get(0)
+                .partitions()
+                .get(0)
+                .committedVoters()
+                .stream()
+                .sorted(Comparator.comparingInt(ReplicaState::replicaId))
+                .collect(Collectors.toList());
+        response.topics().get(0).partitions().get(0).setCurrentVoters(sortedCuttentVoters);
+        response.topics().get(0).partitions().get(0).setCommittedVoters(sortedCommittedVoters);
         response.nodes().sort(Comparator.comparingInt(DescribeQuorumResponseData.Node::nodeId));
 
         assertEquals(expectedResponse, response);

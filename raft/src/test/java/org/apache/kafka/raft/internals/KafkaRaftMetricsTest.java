@@ -223,7 +223,7 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue()); // todo, bug fix
 
         // leader with updated HW
-        state.leaderStateOrThrow().updateLocalState(new LogOffsetMetadata(10L), voters);
+        state.leaderStateOrThrow().updateLocalState(new LogOffsetMetadata(10L), voters, 0);
         state.leaderStateOrThrow().updateReplicaState(
             voterMap.get(1).voterKey(),
             0,

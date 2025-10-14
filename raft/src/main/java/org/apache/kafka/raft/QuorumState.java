@@ -719,7 +719,8 @@ public class QuorumState {
             accumulator,
             fetchTimeoutMs,
             logContext,
-            kafkaRaftMetrics
+            kafkaRaftMetrics,
+            partitionState
         );
 
         durableTransitionTo(state);

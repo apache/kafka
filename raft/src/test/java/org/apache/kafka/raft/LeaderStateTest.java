@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.internals.BatchAccumulator;
+import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
 import org.apache.kafka.raft.internals.KRaftVersionUpgrade;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.server.common.KRaftVersion;
@@ -46,6 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 public class LeaderStateTest {
     private final VoterSet.VoterNode localVoterNode = VoterSetTest.voterNode(ReplicaKey.of(0, Uuid.randomUuid()));
@@ -55,6 +57,7 @@ public class LeaderStateTest {
     private final int fetchTimeoutMs = 2000;
     private final int checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
     private final int beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
+    private final KRaftControlRecordStateMachine partitionState = mock(KRaftControlRecordStateMachine.class);
 
     private LeaderState<?> newLeaderState(
         VoterSet voters,
@@ -65,7 +68,7 @@ public class LeaderStateTest {
             voters,
             epochStartOffset,
             kraftVersion,
-            Mockito.mock(BatchAccumulator.class)
+            mock(BatchAccumulator.class)
         );
     }
 
@@ -87,7 +90,8 @@ public class LeaderStateTest {
             accumulator,
             fetchTimeoutMs,
             logContext,
-            new KafkaRaftMetrics(new Metrics(), "raft")
+            new KafkaRaftMetrics(new Metrics(), "raft"),
+            partitionState
         );
     }
 
@@ -138,7 +142,8 @@ public class LeaderStateTest {
                 null,
                 fetchTimeoutMs,
                 logContext,
-                new KafkaRaftMetrics(new Metrics(), "raft")
+                new KafkaRaftMetrics(new Metrics(), "raft"),
+                partitionState
             )
         );
     }
@@ -181,12 +186,12 @@ public class LeaderStateTest {
         );
 
         assertEquals(Optional.empty(), state.highWatermark());
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), voters));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), voters, 0));
         assertEquals(Set.of(), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
-        assertTrue(state.updateLocalState(new LogOffsetMetadata(16L), voters));
+        assertTrue(state.updateLocalState(new LogOffsetMetadata(16L), voters, 0));
         assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
-        assertTrue(state.updateLocalState(new LogOffsetMetadata(20), voters));
+        assertTrue(state.updateLocalState(new LogOffsetMetadata(20), voters, 0));
         assertEquals(Optional.of(new LogOffsetMetadata(20L)), state.highWatermark());
     }
 
@@ -200,11 +205,11 @@ public class LeaderStateTest {
         );
 
         assertEquals(Optional.empty(), state.highWatermark());
-        assertTrue(state.updateLocalState(new LogOffsetMetadata(16L), voters));
+        assertTrue(state.updateLocalState(new LogOffsetMetadata(16L), voters, 0));
         assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
         assertThrows(
             IllegalStateException.class,
-            () -> state.updateLocalState(new LogOffsetMetadata(15L), voters)
+            () -> state.updateLocalState(new LogOffsetMetadata(15L), voters, 0)
         );
     }
 
@@ -217,8 +222,8 @@ public class LeaderStateTest {
             KRaftVersion.KRAFT_VERSION_1
         );
         assertEquals(Optional.empty(), state.highWatermark());
-        assertTrue(state.updateLocalState(new LogOffsetMetadata(16L), voters));
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(16L), voters));
+        assertTrue(state.updateLocalState(new LogOffsetMetadata(16L), voters, 0));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(16L), voters, 0));
         assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
     }
 
@@ -233,11 +238,11 @@ public class LeaderStateTest {
         assertEquals(Optional.empty(), state.highWatermark());
 
         LogOffsetMetadata initialHw = new LogOffsetMetadata(16L, Optional.of(new MockOffsetMetadata("bar")));
-        assertTrue(state.updateLocalState(initialHw, voters));
+        assertTrue(state.updateLocalState(initialHw, voters, 0));
         assertEquals(Optional.of(initialHw), state.highWatermark());
 
         LogOffsetMetadata updateHw = new LogOffsetMetadata(16L, Optional.of(new MockOffsetMetadata("baz")));
-        assertTrue(state.updateLocalState(updateHw, voters));
+        assertTrue(state.updateLocalState(updateHw, voters, 0));
         assertEquals(Optional.of(updateHw), state.highWatermark());
     }
 
@@ -253,7 +258,7 @@ public class LeaderStateTest {
             KRaftVersion.KRAFT_VERSION_1
         );
 
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(13L), voters));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(13L), voters, 0));
         assertEquals(Set.of(otherNodeKey), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateReplicaState(otherNodeKey, 0, new LogOffsetMetadata(10L)));
@@ -278,7 +283,7 @@ public class LeaderStateTest {
             KRaftVersion.KRAFT_VERSION_1
         );
 
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), voters));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), voters, 0));
         assertEquals(Set.of(nodeKey1, nodeKey2), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateReplicaState(nodeKey1, 0, new LogOffsetMetadata(10L)));
@@ -289,7 +294,7 @@ public class LeaderStateTest {
         assertEquals(Optional.empty(), state.highWatermark());
         assertTrue(state.updateReplicaState(nodeKey2, 0, new LogOffsetMetadata(15L)));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(20L), voters));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(20L), voters, 0));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
         assertTrue(state.updateReplicaState(nodeKey1, 0, new LogOffsetMetadata(20L)));
         assertEquals(Optional.of(new LogOffsetMetadata(20L)), state.highWatermark());
@@ -309,7 +314,7 @@ public class LeaderStateTest {
             KRaftVersion.KRAFT_VERSION_1
         );
 
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoters));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoters, 0));
         assertTrue(state.updateReplicaState(nodeKey1, 0, new LogOffsetMetadata(10L)));
         assertEquals(Optional.of(new LogOffsetMetadata(10L)), state.highWatermark());
 
@@ -319,11 +324,11 @@ public class LeaderStateTest {
 
         // adding node2 to voterSet will cause HW to increase to 15L
         VoterSet votersWithNode2 = originalVoters.addVoter(VoterSetTest.voterNode(nodeKey2)).get();
-        assertTrue(state.updateLocalState(new LogOffsetMetadata(15L), votersWithNode2));
+        assertTrue(state.updateLocalState(new LogOffsetMetadata(15L), votersWithNode2, 0));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
 
         // HW will not update to 16L until a majority reaches it
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(16L), votersWithNode2));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(16L), votersWithNode2, 0));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
         assertTrue(state.updateReplicaState(nodeKey2, 0, new LogOffsetMetadata(16L)));
         assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
@@ -343,7 +348,7 @@ public class LeaderStateTest {
             KRaftVersion.KRAFT_VERSION_1
         );
 
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoters));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoters, 0));
         assertTrue(state.updateReplicaState(nodeKey1, 0, new LogOffsetMetadata(15L)));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
         assertFalse(state.updateReplicaState(nodeKey2, 0, new LogOffsetMetadata(10L)));
@@ -353,7 +358,7 @@ public class LeaderStateTest {
 
         // adding node3 to voterSet should not cause HW to decrease even if majority is < HW
         VoterSet votersWithNode3 = originalVoters.addVoter(VoterSetTest.voterNode(nodeKey3)).get();
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(16L), votersWithNode3));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(16L), votersWithNode3, 0));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
 
         // HW will not decrease if calculated HW is anything lower than the last HW
@@ -381,20 +386,20 @@ public class LeaderStateTest {
             KRaftVersion.KRAFT_VERSION_1
         );
 
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoters));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoters, 0));
         assertTrue(state.updateReplicaState(nodeKey1, 0, new LogOffsetMetadata(15L)));
         assertFalse(state.updateReplicaState(nodeKey2, 0, new LogOffsetMetadata(10L)));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
 
         // removing node1 should not decrement HW to 10L
         VoterSet votersWithoutNode1 = originalVoters.removeVoter(nodeKey1).get();
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(17L), votersWithoutNode1));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(17L), votersWithoutNode1, 0));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
 
         // HW cannot change until after node2 catches up to last HW
         assertFalse(state.updateReplicaState(nodeKey2, 0, new LogOffsetMetadata(14L)));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(18L), votersWithoutNode1));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(18L), votersWithoutNode1, 0));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
         assertFalse(state.updateReplicaState(nodeKey1, 0, new LogOffsetMetadata(18L)));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
@@ -418,20 +423,20 @@ public class LeaderStateTest {
             KRaftVersion.KRAFT_VERSION_1
         );
 
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoters));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoters, 0));
         assertTrue(state.updateReplicaState(nodeKey1, 0, new LogOffsetMetadata(15L)));
         assertFalse(state.updateReplicaState(nodeKey2, 0, new LogOffsetMetadata(10L)));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
 
         // removing leader should not decrement HW to 10L
         VoterSet votersWithoutLeader = originalVoters.removeVoter(localVoterNode.voterKey()).get();
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(17L), votersWithoutLeader));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(17L), votersWithoutLeader, 0));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
 
         // HW cannot change until node2 catches up to last HW
         assertFalse(state.updateReplicaState(nodeKey1, 0, new LogOffsetMetadata(16L)));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(18L), votersWithoutLeader));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(18L), votersWithoutLeader, 0));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
         assertFalse(state.updateReplicaState(nodeKey2, 0, new LogOffsetMetadata(14L)));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
@@ -456,7 +461,7 @@ public class LeaderStateTest {
             KRaftVersion.KRAFT_VERSION_1
         );
 
-        state.updateLocalState(new LogOffsetMetadata(10L), voters);
+        state.updateLocalState(new LogOffsetMetadata(10L), voters, 0);
         state.updateReplicaState(nodeKey1, time.milliseconds(), new LogOffsetMetadata(10L));
         assertEquals(Optional.of(new LogOffsetMetadata(10L)), state.highWatermark());
 
@@ -481,7 +486,7 @@ public class LeaderStateTest {
             KRaftVersion.KRAFT_VERSION_1
         );
 
-        state.updateLocalState(new LogOffsetMetadata(leaderEndOffset), voters);
+        state.updateLocalState(new LogOffsetMetadata(leaderEndOffset), voters, 0);
         assertEquals(Optional.empty(), state.highWatermark());
         state.updateReplicaState(nodeKey1, 0, new LogOffsetMetadata(leaderStartOffset));
         state.updateReplicaState(nodeKey2, 0, new LogOffsetMetadata(leaderEndOffset));
@@ -563,7 +568,7 @@ public class LeaderStateTest {
 
         // Adding 1 new voter to the voter set
         VoterSet votersWithNode3 = originalVoters.addVoter(VoterSetTest.voterNode(nodeKey3)).get();
-        state.updateLocalState(new LogOffsetMetadata(1L), votersWithNode3);
+        state.updateLocalState(new LogOffsetMetadata(1L), votersWithNode3, 0);
 
         time.sleep(checkQuorumTimeoutMs / 2);
         // received fetch request from 1 voter node, the timer should not be reset because the majority should be 3
@@ -576,7 +581,7 @@ public class LeaderStateTest {
 
         // removing leader from the voter set
         VoterSet votersWithoutLeader = votersWithNode3.removeVoter(localVoterNode.voterKey()).get();
-        state.updateLocalState(new LogOffsetMetadata(1L), votersWithoutLeader);
+        state.updateLocalState(new LogOffsetMetadata(1L), votersWithoutLeader, 0);
 
         time.sleep(checkQuorumTimeoutMs / 2);
         // received fetch request from 1 voter, the timer should not be reset.
@@ -643,13 +648,13 @@ public class LeaderStateTest {
             KRaftVersion.KRAFT_VERSION_1
         );
 
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(10L), votersBeforeUpgrade));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(10L), votersBeforeUpgrade, 0));
         assertTrue(state.updateReplicaState(nodeKey1, 0L, new LogOffsetMetadata(10L)));
         assertEquals(Optional.of(new LogOffsetMetadata(10L)), state.highWatermark());
 
         VoterSet votersAfterUpgrade = localWithRemoteVoterSet(Stream.of(nodeKey1, nodeKey2), true);
 
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), votersAfterUpgrade));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), votersAfterUpgrade, 0));
         assertTrue(state.updateReplicaState(nodeKey2, 0L, new LogOffsetMetadata(13L)));
         assertEquals(Optional.of(new LogOffsetMetadata(13L)), state.highWatermark());
     }
@@ -817,7 +822,7 @@ public class LeaderStateTest {
         int follower1 = 1;
         int follower2 = 2;
         long epochStartOffset = 10L;
-        BatchAccumulator<?> accumulator = Mockito.mock(BatchAccumulator.class);
+        BatchAccumulator<?> accumulator = mock(BatchAccumulator.class);
 
         VoterSet persistedVoters = localWithRemoteVoterSet(IntStream.of(follower1, follower2), false);
         LeaderState<?> state = newLeaderState(

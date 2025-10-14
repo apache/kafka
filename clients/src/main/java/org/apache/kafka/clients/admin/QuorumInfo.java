@@ -31,6 +31,7 @@ public class QuorumInfo {
     private final long leaderEpoch;
     private final long highWatermark;
     private final List<ReplicaState> voters;
+    private final List<ReplicaState> committedVoters;
     private final List<ReplicaState> observers;
     private final Map<Integer, Node> nodes;
 
@@ -39,6 +40,7 @@ public class QuorumInfo {
         long leaderEpoch,
         long highWatermark,
         List<ReplicaState> voters,
+        List<ReplicaState> committedVoters,
         List<ReplicaState> observers,
         Map<Integer, Node> nodes
     ) {
@@ -46,6 +48,7 @@ public class QuorumInfo {
         this.leaderEpoch = leaderEpoch;
         this.highWatermark = highWatermark;
         this.voters = voters;
+        this.committedVoters = committedVoters;
         this.observers = observers;
         this.nodes = nodes;
     }
@@ -64,6 +67,10 @@ public class QuorumInfo {
 
     public List<ReplicaState> voters() {
         return voters;
+    }
+
+    public List<ReplicaState> committedVoters() {
+        return committedVoters;
     }
 
     public List<ReplicaState> observers() {
