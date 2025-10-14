@@ -20,6 +20,7 @@
   "name": "DescribeQuorumRequest",
   // Version 1 adds additional fields in the response. The request is unchanged (KIP-836).
   // Version 2 adds additional fields in the response. The request is unchanged (KIP-853).
+  // Version 3 adds additional fields in the response. The request is unchanged (KIP-853).
   "validVersions": "0-3",
   "flexibleVersions": "0+",
   "latestVersionUnstable": false,
