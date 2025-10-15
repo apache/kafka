@@ -1835,10 +1835,19 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // in poll for an unnecessarily long amount of time if we are missing some positions since the offset
         // lookup may be backing off after a failure.
         if (pollTimeout > retryBackoffMs) {
-            for (TopicPartition tp : subscriptions.assignedPartitions()) {
-                if (!subscriptions.hasValidPosition(tp)) {
-                    pollTimeout = retryBackoffMs;
-                    break;
+            Set<TopicPartition> partitions = subscriptions.assignedPartitions();
+
+            if (partitions.isEmpty()) {
+                // If there aren't any assigned partitions, this could mean that this consumer's group membership
+                // has not been established or assignments have been removed and not yet reassigned. In either case,
+                // reduce the poll time for the fetch buffer wait.
+                pollTimeout = retryBackoffMs;
+            } else {
+                for (TopicPartition tp : partitions) {
+                    if (!subscriptions.hasValidPosition(tp)) {
+                        pollTimeout = retryBackoffMs;
+                        break;
+                    }
                 }
             }
         }

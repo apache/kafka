@@ -123,6 +123,7 @@ public class ConsumerIntegrationTest {
             });
 
             TestUtils.waitForCondition(() -> consumer.poll(Duration.ofSeconds(1)).count() == 1,
+                    5000,
                     "failed to poll data");
         }
     }
