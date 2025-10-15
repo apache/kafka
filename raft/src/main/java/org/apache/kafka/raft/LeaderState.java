@@ -152,7 +152,7 @@ public class LeaderState<T> implements EpochState {
             );
             this.committedVoterStates.put(
                 voterNode.voterKey().id(),
-                new ReplicaState(voterNode.voterKey(), hasAcknowledgedLeader, voterNode.listeners())
+                    getReplicaState(voterNode.voterKey()).orElse(new ReplicaState(voterNode.voterKey(), false, voterNode.listeners()))
             );
         }
         this.grantingVoters = Set.copyOf(grantingVoters);
