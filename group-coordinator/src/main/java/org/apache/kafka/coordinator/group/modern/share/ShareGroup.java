@@ -244,10 +244,6 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         validateEmptyGroup();
     }
 
-    public void validateOffsetsAlterable() throws ApiException {
-        validateEmptyGroup();
-    }
-
     public void validateEmptyGroup() {
         if (state() != ShareGroupState.EMPTY) {
             throw Errors.NON_EMPTY_GROUP.exception();
