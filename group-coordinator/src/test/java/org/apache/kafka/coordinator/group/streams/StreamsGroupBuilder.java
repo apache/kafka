@@ -35,6 +35,7 @@ public class StreamsGroupBuilder {
     private final Map<String, StreamsGroupMember> members = new HashMap<>();
     private final Map<String, TasksTuple> targetAssignments = new HashMap<>();
     private long metadataHash = 0L;
+    private int validatedTopologyEpoch = -1;
 
     public StreamsGroupBuilder(String groupId, int groupEpoch) {
         this.groupId = groupId;
@@ -50,6 +51,11 @@ public class StreamsGroupBuilder {
 
     public StreamsGroupBuilder withMetadataHash(long metadataHash) {
         this.metadataHash = metadataHash;
+        return this;
+    }
+
+    public StreamsGroupBuilder withValidatedTopologyEpoch(int validatedTopologyEpoch) {
+        this.validatedTopologyEpoch = validatedTopologyEpoch;
         return this;
     }
 
@@ -79,7 +85,7 @@ public class StreamsGroupBuilder {
 
         // Add group epoch record.
         records.add(
-            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(groupId, groupEpoch, metadataHash));
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, groupEpoch, metadataHash, validatedTopologyEpoch));
 
         // Add target assignment records.
         targetAssignments.forEach((memberId, assignment) ->

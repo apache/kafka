@@ -313,7 +313,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
             num_rebalances = consumer.num_rebalances()
             conflict_consumer.start()
             if group_protocol == consumer_group.classic_group_protocol:
-                # Classic protocol: conflicting members should join, and the intial ones with conflicting instance id should fail.
+                # Classic protocol: conflicting members should join, and the initial ones with conflicting instance id should fail.
                 self.await_members(conflict_consumer, num_conflict_consumers)
                 self.await_members(consumer, len(consumer.nodes) - num_conflict_consumers)
 
@@ -332,6 +332,11 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 wait_until(lambda: len(consumer.dead_nodes()) == len(consumer.nodes),
                            timeout_sec=60,
                            err_msg="Timed out waiting for the consumer to shutdown")
+                # Wait until the group becomes empty to ensure the instance ID is released.
+                # We use the 50-second timeout because the consumer session timeout is 45 seconds.
+                wait_until(lambda: self.group_id in self.kafka.list_consumer_groups(state="empty"),
+                           timeout_sec=50,
+                           err_msg="Timed out waiting for the consumers to be removed from the group.")
                 conflict_consumer.start()
                 self.await_members(conflict_consumer, num_conflict_consumers)
 

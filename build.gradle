@@ -29,22 +29,21 @@ buildscript {
 }
 
 plugins {
-  id 'com.github.ben-manes.versions' version '0.48.0'
+  id 'com.github.ben-manes.versions' version '0.53.0'
   id 'idea'
   id 'jacoco'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '8.2.1'
+  id 'org.owasp.dependencycheck' version '12.1.3'
   id 'org.nosphere.apache.rat' version "0.8.1"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
-  id "com.github.spotbugs" version '6.2.3' apply false
+  id "com.github.spotbugs" version '6.2.5' apply false
   id 'org.scoverage' version '8.0.3' apply false
-  id 'com.gradleup.shadow' version '8.3.6' apply false
-  id 'com.diffplug.spotless' version "6.25.0"
+  id 'com.gradleup.shadow' version '8.3.9' apply false
+  id 'com.diffplug.spotless' version "7.2.1"
 }
 
 ext {
-  gradleVersion = versions.gradle
   minClientJavaVersion = 11
   minNonClientJavaVersion = 17
   modulesNeedingJava11 = [":clients", ":generator", ":streams", ":streams:test-utils", ":streams:examples", ":streams-scala", ":test-common:test-common-util"]
@@ -72,6 +71,13 @@ ext {
       "--add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED"
     )
 
+  if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_25)) {
+    // Spotbugs is not compatible with Java 25+ so Gradle related tasks are disabled
+    // until version can be upgraded: https://github.com/spotbugs/spotbugs/issues/3564
+    project.gradle.startParameter.excludedTaskNames.add("spotbugsMain")
+    project.gradle.startParameter.excludedTaskNames.add("spotbugsTest")
+  }    
+
   maxTestForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : Runtime.runtime.availableProcessors()
   maxScalacThreads = project.hasProperty('maxScalacThreads') ? maxScalacThreads.toInteger() :
       Math.min(Runtime.runtime.availableProcessors(), 8)
@@ -96,7 +102,7 @@ ext {
   userKeepAliveModeString = project.hasProperty("keepAliveMode") ? keepAliveMode : "daemon"
   userKeepAliveMode = KeepAliveMode.values().find(m -> m.name().toLowerCase().equals(userKeepAliveModeString))
   if (userKeepAliveMode == null) {
-    def keepAliveValues = KeepAliveMode.values().collect(m -> m.name.toLowerCase())
+    def keepAliveValues = KeepAliveMode.values().collect(m -> m.name().toLowerCase())
     throw new GradleException("Unexpected value for keepAliveMode property. Expected one of $keepAliveValues, but received: $userKeepAliveModeString")
   }
 
@@ -130,6 +136,11 @@ ext {
       options.compilerArgs << "-Xlint:-serial"
       options.compilerArgs << "-Xlint:-try"
       options.compilerArgs << "-Werror"
+      if (userKeepAliveMode == KeepAliveMode.SESSION){
+        // Suppress warning triggered under keepAliveMode=SESSION during joint compilation
+        // Unexpected javac output: warning: [path] bad path element ".../core/build/classes/java/main": no such file or directory
+        options.compilerArgs << "-Xlint:-path"
+      }
     }
   }
 
@@ -157,7 +168,7 @@ ext {
     libs.log4j2Api,
     libs.log4j2Core
   ]
-  
+
 }
 
 allprojects {
@@ -193,8 +204,6 @@ allprojects {
           // ensure we have a single version in the classpath despite transitive dependencies
           libs.scalaLibrary,
           libs.scalaReflect,
-          // Workaround before `commons-validator` has new release. See KAFKA-19359.
-          libs.commonsBeanutils,
           libs.jacksonAnnotations,
           libs.commonsLang
         )
@@ -299,7 +308,7 @@ if (repo != null) {
 } else {
   rat.enabled = false
 }
-println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $gradleVersion, Java ${JavaVersion.current()} and Scala ${versions.scala}")
+println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $versions.gradle, Java ${JavaVersion.current()} and Scala ${versions.scala}")
 println("Build properties: ignoreFailures=$userIgnoreFailures, maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
 
 subprojects {
@@ -328,6 +337,16 @@ subprojects {
     // The maven plugin was replaced by the maven-publish plugin in Gradle 7.0
     tasks.register('install').configure { dependsOn(publishToMavenLocal) }
     tasks.register('uploadArchives').configure { dependsOn(publish) }
+  }
+
+  tasks.withType(AbstractArchiveTask).configureEach {
+    reproducibleFileOrder = false
+    preserveFileTimestamps = true
+    useFileSystemPermissions()
+  }
+
+  tasks.withType(AbstractTestTask).configureEach {
+    failOnNoDiscoveredTests = false
   }
 
   // apply the eclipse plugin only to subprojects that hold code. 'connect' is just a folder.
@@ -484,10 +503,35 @@ subprojects {
     }
   }
 
+  // Workaround for Mockito Java Agent restrictions in Java 21+
+  // Starting with Java 21, the JDK restricts libraries from attaching a Java agent
+  // to their own JVM. As a result, Mockito’s inline mock maker (mockito-core)
+  // fails without explicit instrumentation, and the JVM consistently emits warnings.
+  // See also: https://javadoc.io/doc/org.mockito/mockito-core/latest/org.mockito/org/mockito/Mockito.html#mockito-instrumentation
+  afterEvaluate { subproject ->
+    def hasMockitoCore = subproject.configurations.findAll {
+      it.canBeResolved
+    }.any { config ->
+      config.incoming.dependencies.any { dependency ->
+          "$dependency" == libs.mockitoCore
+      }
+    }
+
+    if (hasMockitoCore) {
+      subproject.configurations {
+        mockitoAgent {
+          transitive = false
+        }
+      }
+      subproject.dependencies {
+        mockitoAgent libs.mockitoCore
+      }
+    }
+  }
+
   // The suites are for running sets of tests in IDEs.
   // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
   def testsToExclude = ['**/*Suite.class']
-
 
   // This task will copy JUnit XML files out of the sub-project's build directory and into
   // a top-level build/junit-xml directory. This is necessary to avoid reporting on tests which
@@ -518,6 +562,14 @@ subprojects {
   }
 
   test {
+
+    doFirst {
+      def mockitoAgentConfig = configurations.findByName('mockitoAgent')
+      if (mockitoAgentConfig) {
+        jvmArgs("-javaagent:${mockitoAgentConfig.asPath}")
+      }
+    }
+
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
@@ -551,11 +603,14 @@ subprojects {
         maxFailures = userMaxTestRetryFailures
       }
     }
-    
+
     finalizedBy("copyTestXml")
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
@@ -588,6 +643,9 @@ subprojects {
   }
 
   task unitTest(type: Test, dependsOn: compileJava) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
@@ -1008,6 +1066,8 @@ project(':core') {
     implementation project(':transaction-coordinator')
     implementation project(':metadata')
     implementation project(':storage:storage-api')
+    // tools-api is automatically included in releaseTarGz via core's runtimeClasspath.
+    // If removed from here, remember to explicitly add it back in the releaseTarGz task.
     implementation project(':tools:tools-api')
     implementation project(':raft')
     implementation project(':storage')
@@ -1230,8 +1290,6 @@ project(':core') {
     from(project(':streams:test-utils').configurations.runtimeClasspath) { into("libs/") }
     from(project(':streams:examples').jar) { into("libs/") }
     from(project(':streams:examples').configurations.runtimeClasspath) { into("libs/") }
-    from(project(':tools:tools-api').jar) { into("libs/") }
-    from(project(':tools:tools-api').configurations.runtimeClasspath) { into("libs/") }
     duplicatesStrategy 'exclude'
   }
 
@@ -3350,6 +3408,7 @@ project(':jmh-benchmarks') {
     implementation project(':raft')
     implementation project(':clients')
     implementation project(':coordinator-common')
+    implementation project(':coordinator-common').sourceSets.test.output
     implementation project(':group-coordinator')
     implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':metadata')

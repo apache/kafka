@@ -28,7 +28,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -73,7 +72,6 @@ public class StreamsRebalanceListenerInvokerTest {
 
         StreamsRebalanceData.Assignment mockAssignment = createMockAssignment();
         when(streamsRebalanceData.reconciledAssignment()).thenReturn(mockAssignment);
-        when(secondListener.onTasksRevoked(any())).thenReturn(Optional.empty());
 
         // Set first listener
         invoker.setRebalanceListener(firstListener);
@@ -89,21 +87,10 @@ public class StreamsRebalanceListenerInvokerTest {
 
     @Test
     public void testInvokeMethodsWithNoListener() {
-        IllegalStateException exception1 = assertThrows(IllegalStateException.class, 
-            () -> invoker.invokeAllTasksRevoked());
-        assertEquals("StreamsRebalanceListener is not defined", exception1.getMessage());
-
-        IllegalStateException exception2 = assertThrows(IllegalStateException.class, 
-            () -> invoker.invokeTasksAssigned(createMockAssignment()));
-        assertEquals("StreamsRebalanceListener is not defined", exception2.getMessage());
-
-        IllegalStateException exception3 = assertThrows(IllegalStateException.class, 
-            () -> invoker.invokeTasksRevoked(createMockTasks()));
-        assertEquals("StreamsRebalanceListener is not defined", exception3.getMessage());
-
-        IllegalStateException exception4 = assertThrows(IllegalStateException.class, 
-            () -> invoker.invokeAllTasksLost());
-        assertEquals("StreamsRebalanceListener is not defined", exception4.getMessage());
+        assertNull(invoker.invokeAllTasksRevoked());
+        assertNull(invoker.invokeTasksAssigned(createMockAssignment()));
+        assertNull(invoker.invokeTasksRevoked(createMockTasks()));
+        assertNull(invoker.invokeAllTasksLost());
     }
 
     @Test
@@ -112,8 +99,7 @@ public class StreamsRebalanceListenerInvokerTest {
         
         StreamsRebalanceData.Assignment mockAssignment = createMockAssignment();
         when(streamsRebalanceData.reconciledAssignment()).thenReturn(mockAssignment);
-        when(mockListener.onTasksRevoked(any())).thenReturn(Optional.empty());
-        
+
         Exception result = invoker.invokeAllTasksRevoked();
         
         assertNull(result);
@@ -124,8 +110,7 @@ public class StreamsRebalanceListenerInvokerTest {
     public void testInvokeTasksAssignedWithListener() {
         invoker.setRebalanceListener(mockListener);
         StreamsRebalanceData.Assignment assignment = createMockAssignment();
-        when(mockListener.onTasksAssigned(assignment)).thenReturn(Optional.empty());
-        
+
         Exception result = invoker.invokeTasksAssigned(assignment);
         
         assertNull(result);
@@ -177,8 +162,7 @@ public class StreamsRebalanceListenerInvokerTest {
     public void testInvokeTasksRevokedWithListener() {
         invoker.setRebalanceListener(mockListener);
         Set<StreamsRebalanceData.TaskId> tasks = createMockTasks();
-        when(mockListener.onTasksRevoked(tasks)).thenReturn(Optional.empty());
-        
+
         Exception result = invoker.invokeTasksRevoked(tasks);
         
         assertNull(result);
@@ -229,8 +213,7 @@ public class StreamsRebalanceListenerInvokerTest {
     @Test
     public void testInvokeAllTasksLostWithListener() {
         invoker.setRebalanceListener(mockListener);
-        when(mockListener.onAllTasksLost()).thenReturn(Optional.empty());
-        
+
         Exception result = invoker.invokeAllTasksLost();
         
         assertNull(result);
