@@ -48,6 +48,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -149,8 +150,8 @@ public class RecordAccumulatorFlushBenchmark {
     }
 
     private void appendRecords(Cluster cluster) throws InterruptedException {
-        byte[] key = "key".getBytes();
-        byte[] value = "value".getBytes();
+        byte[] key = "key".getBytes(StandardCharsets.UTF_8);
+        byte[] value = "value".getBytes(StandardCharsets.UTF_8);
 
         for (int i = 0; i < numRecords; i++) {
             accum.append(
