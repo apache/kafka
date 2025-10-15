@@ -42,8 +42,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.spi.FileSystemProvider;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
@@ -129,27 +127,24 @@ public class UtilsTest {
     }
 
     @Test
-    public void testMurmur2Checksum() throws NoSuchAlgorithmException {
+    public void testMurmur2Checksum() {
         // calculates the checksum of hashes of many different random byte arrays of variable length
         // this test detects any incompatible changes to the Murmur2 implementation with near certainty
-        MessageDigest md = MessageDigest.getInstance("SHA-256");
         int numTrials = 100;
         int maxLen = 1000;
         SplittableRandom random = new SplittableRandom(0xbd4458b165652255L);
+        long checkSum = 0;
 
         for (int len = 0; len <= maxLen; ++len) {
             byte[] data = new byte[len];
             for (int i = 0; i < numTrials; ++i) {
                 random.nextBytes(data);
                 int hash = Utils.murmur2(data);
-                md.update((byte) (hash >>> 0));
-                md.update((byte) (hash >>> 8));
-                md.update((byte) (hash >>> 16));
-                md.update((byte) (hash >>> 24));
+                checkSum += Integer.toUnsignedLong(hash);
             }
         }
 
-        assertEquals(toHexString(md.digest()), "647f78f4a7942bf4d23d2f226458809dda799795513a0532a1ed999014f5f113");
+        assertEquals(0xc300f155ae8eL, checkSum);
     }
 
     @ParameterizedTest
