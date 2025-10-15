@@ -4380,6 +4380,7 @@ public class CoordinatorRuntimeTest {
         assertEquals("response2", write2.get(5, TimeUnit.SECONDS));
     }
 
+    @Test
     public void testLargeCompressibleRecordTriggersFlushAndSucceeds() throws Exception {
         MockTimer timer = new MockTimer();
         MockPartitionWriter writer = new MockPartitionWriter();
