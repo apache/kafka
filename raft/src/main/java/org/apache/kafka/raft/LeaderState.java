@@ -881,19 +881,17 @@ public class LeaderState<T> implements EpochState {
 
     private void updateCommittedVoter(long highWatermark) {
         // high watermark is the offset will be written so we need to minus 1
-        Optional<VoterSet> voters = partitionState.voterSetAtOffset(highWatermark - 1);
+        Optional<VoterSet> voters = partitionState.voterSetAtOffsetUnchecked(highWatermark);
         Map<Integer, ReplicaState> newCommittedVoterStates = new HashMap<>();
         if (voters.isPresent()) {
-            log.debug("Read committed voter with start offset={} from memory", highWatermark - 1);
+            log.debug("Read committed voter with start offset={} from memory", highWatermark);
             // if voters are present in partitionState, we read it from memory
             for (VoterSet.VoterNode voterNode : voters.get().voterNodes()) {
                 newCommittedVoterStates.put(voterNode.voterKey().id(),
                         getReplicaState(voterNode.voterKey()).orElse(new ReplicaState(voterNode.voterKey(), false, voterNode.listeners())));            }
         } else {
-            // The log starting offset must great or equals zero so we need to set minimize as one.
-            highWatermark = Math.max(1, highWatermark);
-            log.debug("Read committed voter with start offset={} from log", highWatermark - 1);
-            VoterSet committedvoterSet = partitionState.committedVoterSetFromLog(highWatermark - 1);
+            log.debug("Read committed voter with start offset={} from log", highWatermark);
+            VoterSet committedvoterSet = partitionState.committedVoterSetFromLog(highWatermark);
             for (VoterSet.VoterNode voterNode : committedvoterSet.voterNodes()) {
                 newCommittedVoterStates.put(voterNode.voterKey().id(),
                         getReplicaState(voterNode.voterKey()).orElse(new ReplicaState(voterNode.voterKey(), false, voterNode.listeners())));

@@ -36,7 +36,6 @@ import org.apache.kafka.snapshot.SnapshotReader;
 
 import org.slf4j.Logger;
 
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -165,17 +164,6 @@ public final class KRaftControlRecordStateMachine {
     }
 
     /**
-     * Returns the last voter set with its offset.
-     */
-    public Map.Entry<VoterSet, Long> lastVoterSetWithOffset() {
-        synchronized (voterSetHistory) {
-            VoterSet voters = voterSetHistory.lastValue();
-            Long offset = voterSetHistory.lastVoterSetOffset().orElse(SMALLEST_LOG_OFFSET);
-            return Map.entry(voters, offset);
-        }
-    }
-
-    /**
      * Return the latest entry for the set of voters.
      */
     public Optional<LogHistory.Entry<VoterSet>> lastVoterSetEntry() {
@@ -212,12 +200,17 @@ public final class KRaftControlRecordStateMachine {
     public Optional<VoterSet> voterSetAtOffset(long offset) {
         checkOffsetIsValid(offset);
 
+        return voterSetAtOffsetUnchecked(offset);
+    }
+
+    public Optional<VoterSet> voterSetAtOffsetUnchecked(long offset) {
         synchronized (voterSetHistory) {
             return voterSetHistory.valueAtOrBefore(offset);
         }
     }
 
     public VoterSet committedVoterSetFromLog(long offset) {
+        VoterSet voterSet = staticVoterSet;
         LogFetchInfo info = log.read(offset, Isolation.COMMITTED);
         try (RecordsIterator<?> iterator = new RecordsIterator<>(
                 info.records,
@@ -230,14 +223,13 @@ public final class KRaftControlRecordStateMachine {
             while (iterator.hasNext()) {
                 Batch<?> batch = iterator.next();
                 for (ControlRecord controlRecord : batch.controlRecords()) {
-                    // Skip the rest of the control records
                     if (Objects.requireNonNull(controlRecord.type()) == ControlRecordType.KRAFT_VOTERS) {
-                        return VoterSet.fromVotersRecord((VotersRecord) controlRecord.message());
+                        voterSet = VoterSet.fromVotersRecord((VotersRecord) controlRecord.message());
                     }
                 }
             }
         }
-        return staticVoterSet;
+        return voterSet;
     }
 
     /**
