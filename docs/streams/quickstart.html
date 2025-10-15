@@ -175,10 +175,10 @@ and inspect the output of the WordCount demo application by reading from its out
 <pre><code class="language-bash">$ bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
     --topic streams-wordcount-output \
     --from-beginning \
-    --property print.key=true \
-    --property print.value=true \
-    --property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \
-    --property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer</code></pre>
+    --formatter-property print.key=true \
+    --formatter-property print.value=true \
+    --formatter-property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \
+    --formatter-property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer</code></pre>
 
 
 <h4><a id="quickstart_streams_process" href="#quickstart_streams_process">Step 5: Process some data</a></h4>
@@ -197,10 +197,10 @@ This message will be processed by the Wordcount application and the following ou
 <pre><code class="language-bash">$ bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
     --topic streams-wordcount-output \
     --from-beginning \
-    --property print.key=true \
-    --property print.value=true \
-    --property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \
-    --property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer
+    --formatter-property print.key=true \
+    --formatter-property print.value=true \
+    --formatter-property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \
+    --formatter-property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer
 
 all	    1
 streams	1
@@ -225,10 +225,10 @@ In your other terminal in which the console consumer is running, you will observ
 <pre><code class="language-bash">$ bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
     --topic streams-wordcount-output \
     --from-beginning \
-    --property print.key=true \
-    --property print.value=true \
-    --property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \
-    --property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer
+    --formatter-property print.key=true \
+    --formatter-property print.value=true \
+    --formatter-property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \
+    --formatter-property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer
 
 all	    1
 streams	1
@@ -255,10 +255,10 @@ The <b>streams-wordcount-output</b> topic will subsequently show the correspondi
 <pre><code class="language-bash">$ bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
     --topic streams-wordcount-output \
     --from-beginning \
-    --property print.key=true \
-    --property print.value=true \
-    --property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \
-    --property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer
+    --formatter-property print.key=true \
+    --formatter-property print.value=true \
+    --formatter-property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \
+    --formatter-property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer
 
 all	    1
 streams	1

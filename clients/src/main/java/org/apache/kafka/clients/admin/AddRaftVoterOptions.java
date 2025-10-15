@@ -17,11 +17,20 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.protocol.Errors;
 
 import java.util.Optional;
 
 /**
  * Options for {@link Admin#addRaftVoter}.
+ *
+ * <p>
+ * The clusterId is optional.
+ * <p>
+ * If provided, the request will only succeed if the cluster id matches the id of the current cluster.
+ * If the cluster id does not match, the request will fail with {@link Errors#INCONSISTENT_CLUSTER_ID}.
+ * <p>
+ * If not provided, the cluster id check is skipped.
  */
 @InterfaceStability.Stable
 public class AddRaftVoterOptions extends AbstractOptions<AddRaftVoterOptions> {
