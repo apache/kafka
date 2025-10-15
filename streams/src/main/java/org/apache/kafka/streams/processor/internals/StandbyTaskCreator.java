@@ -165,6 +165,34 @@ class StandbyTaskCreator {
         return task;
     }
 
+    StandbyTask createStandbyTaskFromStartupLocalStore(final TaskId taskId,
+                                  final Set<TopicPartition> inputPartitions,
+                                  final ProcessorTopology topology,
+                                  final ProcessorStateManager stateManager) {
+        final InternalProcessorContext<Object, Object> context = new ProcessorContextImpl(
+                taskId,
+                applicationConfig,
+                stateManager,
+                streamsMetrics,
+                dummyCache
+        );
+        final StandbyTask task = new StandbyTask(
+                taskId,
+                inputPartitions,
+                topology,
+                topologyMetadata.taskConfig(taskId),
+                streamsMetrics,
+                stateManager,
+                stateDirectory,
+                dummyCache,
+                context
+        );
+
+        log.trace("Created standby task {} with assigned partitions {}", taskId, inputPartitions);
+        createTaskSensor.record();
+        return task;
+    }
+
     private LogContext getLogContext(final TaskId taskId) {
         final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
         final String logPrefix = threadIdPrefix + String.format("%s [%s] ", "standby-task", taskId);
