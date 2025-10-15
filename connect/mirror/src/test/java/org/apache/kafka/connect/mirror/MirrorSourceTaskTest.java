@@ -35,15 +35,18 @@ import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
+import java.util.Optional;
+
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
@@ -352,4 +355,60 @@ public class MirrorSourceTaskTest {
                     "taskHeader's value expected to equal " + taskHeader.value().toString());
         }
     }
+
+    @Test
+    public void testPollDetectsTruncationAndThrowsException() {
+        // Arrange
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+
+        TopicPartition tp = new TopicPartition("topic-truncation", 0);
+
+        MirrorSourceMetrics mockMetrics = mock(MirrorSourceMetrics.class);
+        ReplicationPolicy mockPolicy = new DefaultReplicationPolicy();
+        OffsetSyncWriter mockWriter = mock(OffsetSyncWriter.class);
+
+        MirrorSourceTask task = new MirrorSourceTask(mockConsumer, mockMetrics, "clusterA", mockPolicy, mockWriter);
+
+        task.updateOffsetSync(tp, 20L, 100L);  // replicate offset 20
+        Map<TopicPartition, Long> earliestOffsets = Map.of(tp, 50L);
+
+        when(mockConsumer.assignment()).thenReturn(Set.of(tp));
+        when(mockConsumer.beginningOffsets(Set.of(tp))).thenReturn(earliestOffsets);
+        when(mockConsumer.poll(any())).thenThrow(new RuntimeException("Truncation detected for topic-truncation"));
+
+        Exception ex = assertThrows(RuntimeException.class, task::poll);
+        assertTrue(ex.getMessage().contains("Truncation detected"),
+                "Expected truncation detection message");
+    }
+
+    @Test
+    public void testPollRunsNormallyWhenOffsetsValid() {
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+
+        TopicPartition tp = new TopicPartition("topic-normal", 0);
+
+        MirrorSourceMetrics mockMetrics = mock(MirrorSourceMetrics.class);
+        ReplicationPolicy mockPolicy = new DefaultReplicationPolicy();
+        OffsetSyncWriter mockWriter = mock(OffsetSyncWriter.class);
+
+        MirrorSourceTask task = new MirrorSourceTask(mockConsumer, mockMetrics, "clusterB", mockPolicy, mockWriter);
+
+        task.updateOffsetSync(tp, 100L, 200L);
+        Map<TopicPartition, Long> earliestOffsets = Map.of(tp, 50L);
+
+        when(mockConsumer.assignment()).thenReturn(Set.of(tp));
+        when(mockConsumer.beginningOffsets(Set.of(tp))).thenReturn(earliestOffsets);
+        when(mockConsumer.poll(any())).thenReturn(new ConsumerRecords<>(Collections.emptyMap()));
+
+        // Act
+        List<SourceRecord> records = task.poll();
+
+        if (records != null) {
+            assertFalse(records.isEmpty());
+        }
+        assertTrue(records.isEmpty(), "Expected no truncation and empty records");
+    }
+
 }

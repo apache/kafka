@@ -31,7 +31,6 @@ import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 
-import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Collection;
 
@@ -170,6 +169,7 @@ public class MirrorSourceTask extends SourceTask {
                 metrics.recordBytes(tp, byteSize(record.value()));
             }
             if (sourceRecords.isEmpty()) {
+
                 // WorkerSourceTasks expects non-zero batch size
                 return null;
             } else {
@@ -282,5 +282,11 @@ public class MirrorSourceTask extends SourceTask {
 
     private boolean isUncommitted(Long offset) {
         return offset == null || offset < 0;
+    }
+
+    void updateOffsetSync(TopicPartition tp, long upstreamOffset, long downstreamOffset) {
+        // This method simulates offset synchronization for unit testing
+        lastReplicatedOffsets.put(tp, downstreamOffset);
+        log.debug("Updated offset sync for {}: upstream={} downstream={}", tp, upstreamOffset, downstreamOffset);
     }
 }
