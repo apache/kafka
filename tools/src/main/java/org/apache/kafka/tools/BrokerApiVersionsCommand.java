@@ -24,9 +24,14 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
+import org.apache.kafka.clients.MetadataUpdater;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.EndpointType;
+import org.apache.kafka.clients.admin.internals.AdminBootstrapAddresses;
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -34,6 +39,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.message.DescribeClusterRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.Errors;
@@ -41,8 +47,11 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.common.requests.DescribeClusterRequest;
+import org.apache.kafka.common.requests.DescribeClusterResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.LogContext;
@@ -64,6 +73,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import joptsimple.OptionSpec;
+
+import static org.apache.kafka.clients.admin.KafkaAdminClient.parseDescribeClusterResponse;
 
 public class BrokerApiVersionsCommand {
     public static void main(String... args) {
@@ -173,6 +184,8 @@ public class BrokerApiVersionsCommand {
         private final Time time;
         private final NetworkClient client;
         private final List<Node> bootstrapBrokers;
+        private final boolean usingBootstrapController;
+        private final AdminMetadataUpder adminMetadataUpder;
         // store the sync response temperature
         private ClientResponse clientResponse;
 
@@ -185,14 +198,22 @@ public class BrokerApiVersionsCommand {
             LogContext logContext = new LogContext("[LegacyAdminClient clientId=" + clientId + "] ");
             Time time = Time.SYSTEM;
             Metrics metrics = new Metrics(time);
-            Metadata metadata = new Metadata(
-                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
-                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
-                    60 * 60 * 1000L, logContext,
-                    new ClusterResourceListeners());
-            metadata.bootstrap(ClientUtils.parseAndValidateAddresses(
-                    config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
-                    config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)));
+
+            Cluster cluster = null;
+            Metadata metadata = null;
+            if (usingBootstrapController) {
+                cluster = Cluster.bootstrap(AdminBootstrapAddresses.fromConfig(config).addresses());
+            } else {
+                metadata = new Metadata(
+                        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
+                        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
+                        60 * 60 * 1000L, logContext,
+                        new ClusterResourceListeners());
+                metadata.bootstrap(ClientUtils.parseAndValidateAddresses(
+                        config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
+                        config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)));
+            }
+
             Selector selector = new Selector(
                     DEFAULT_CONNECTION_MAX_IDLE_MS,
                     metrics,
@@ -200,9 +221,10 @@ public class BrokerApiVersionsCommand {
                     "admin",
                     ClientUtils.createChannelBuilder(config, time, logContext),
                     logContext);
+            AdminMetadataUpder adminMetadataUpder = new AdminMetadataUpder(Optional.ofNullable(cluster), Optional.ofNullable(metadata));
             NetworkClient networkClient = new NetworkClient(
                     selector,
-                    metadata,
+                    adminMetadataUpder,
                     clientId,
                     DEFAULT_MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
                     DEFAULT_RECONNECT_BACKOFF_MS,
@@ -218,13 +240,16 @@ public class BrokerApiVersionsCommand {
                     logContext,
                     MetadataRecoveryStrategy.NONE);
 
-            return new AdminClient(time, networkClient, metadata.fetch().nodes());
+            return new AdminClient(time, networkClient, usingBootstrapController ? cluster.nodes() : metadata.fetch().nodes(),
+                    usingBootstrapController, adminMetadataUpder);
         }
 
-        AdminClient(Time time, NetworkClient client, List<Node> bootstrapBrokers) {
+        AdminClient(Time time, NetworkClient client, List<Node> bootstrapBrokers, boolean usingBootstrapController, AdminMetadataUpder adminMetadataUpder) {
             this.time = time;
             this.client = client;
             this.bootstrapBrokers = bootstrapBrokers;
+            this.usingBootstrapController = usingBootstrapController;
+            this.adminMetadataUpder = adminMetadataUpder;
         }
 
         private AbstractResponse sendSync(Node target, AbstractRequest.Builder<?> request, boolean waitConnection) {
@@ -302,11 +327,23 @@ public class BrokerApiVersionsCommand {
         }
 
         private List<Node> findAllBrokers() {
-            MetadataResponse response = (MetadataResponse) sendAnyNode(MetadataRequest.Builder.allTopics());
-            if (!response.errors().isEmpty()) {
-                LOGGER.debug("Metadata request contained errors: {}", response.errors());
+            List<Node> nodes;
+            if (usingBootstrapController) {
+                DescribeClusterResponse response = (DescribeClusterResponse) sendAnyNode(new DescribeClusterRequest.Builder(
+                        new DescribeClusterRequestData()
+                        .setIncludeClusterAuthorizedOperations(false)
+                        .setEndpointType(EndpointType.CONTROLLER.id())));
+                Cluster cluster = parseDescribeClusterResponse(response.data());
+                adminMetadataUpder.updateCluster(cluster);
+                nodes = cluster.nodes();
+            } else {
+                MetadataResponse response = (MetadataResponse) sendAnyNode(MetadataRequest.Builder.allTopics());
+                if (!response.errors().isEmpty()) {
+                    LOGGER.debug("Metadata request contained errors: {}", response.errors());
+                }
+                nodes = response.buildCluster().nodes();
             }
-            List<Node> nodes = response.buildCluster().nodes();
+
             awaitConnectAllBroker(nodes, time.milliseconds());
             return nodes;
         }
@@ -322,6 +359,69 @@ public class BrokerApiVersionsCommand {
         @Override
         public void close() {
             client.close();
+        }
+    }
+
+    private static class AdminMetadataUpder implements MetadataUpdater {
+        private Optional<Cluster> clusterOpt;
+        private Optional<Metadata> metadataOpt;
+
+
+        public AdminMetadataUpder(Optional<Cluster> clusterOpt, Optional<Metadata> metadataOpt) {
+            this.clusterOpt = clusterOpt;
+            this.metadataOpt = metadataOpt;
+        }
+
+        public void updateCluster(Cluster cluster) {
+            if (clusterOpt.isPresent()) {
+                this.clusterOpt = Optional.of(cluster);
+            }
+        }
+
+        @Override
+        public List<Node> fetchNodes() {
+            if (clusterOpt.isEmpty() && metadataOpt.isEmpty()) {
+                throw new IllegalStateException("Must be set Metadata or Cluster");
+            }
+
+            if (clusterOpt.isPresent()) {
+                return clusterOpt.get().nodes();
+            }
+            return metadataOpt.get().fetch().nodes();
+        }
+
+        @Override
+        public boolean isUpdateDue(long now) {
+            return false;
+        }
+
+        @Override
+        public long maybeUpdate(long now) {
+            return Long.MAX_VALUE;
+        }
+
+        @Override
+        public void handleServerDisconnect(long now, String nodeId, Optional<AuthenticationException> maybeFatalException) {
+            if (maybeFatalException.isPresent()) {
+                throw maybeFatalException.get();
+            }
+
+        }
+
+        @Override
+        public void handleFailedRequest(long now, Optional<KafkaException> maybeFatalException) {
+            // Not used in this context
+        }
+
+        @Override
+        public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse) {
+            // Not used in this context
+        }
+
+
+        @Override
+        public void close() {
+            // Nothing to close
         }
     }
 }
