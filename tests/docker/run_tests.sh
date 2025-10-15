@@ -20,9 +20,27 @@ KAFKA_NUM_CONTAINERS=${KAFKA_NUM_CONTAINERS:-14}
 TC_PATHS=${TC_PATHS:-./kafkatest/}
 REBUILD=${REBUILD:f}
 
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --prefix)
+            PREFIX="$2"
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
 die() {
     echo $@
     exit 1
+}
+
+prefix_args() {
+    if [[ -n "${PREFIX}" ]]; then
+        echo "--prefix ${PREFIX}"
+    fi
 }
 
 if [[ "$_DUCKTAPE_OPTIONS" == *"kafka_mode"* && "$_DUCKTAPE_OPTIONS" == *"native"* ]]; then
@@ -38,10 +56,10 @@ if [ "$REBUILD" == "t" ]; then
     fi
 fi
 
-if ${SCRIPT_DIR}/ducker-ak ssh | grep -q '(none)'; then
-    ${SCRIPT_DIR}/ducker-ak up -n "${KAFKA_NUM_CONTAINERS}" -m "${KAFKA_MODE}" || die "ducker-ak up failed"
+if DUCKER_PREFIX="${PREFIX:-${DUCKER_PREFIX}}" ${SCRIPT_DIR}/ducker-ak ssh | grep -q '(none)'; then
+    ${SCRIPT_DIR}/ducker-ak up -n "${KAFKA_NUM_CONTAINERS}" -m "${KAFKA_MODE}" $(prefix_args) || die "ducker-ak up failed"
 fi
 
 [[ -n ${_DUCKTAPE_OPTIONS} ]] && _DUCKTAPE_OPTIONS="-- ${_DUCKTAPE_OPTIONS}"
 
-${SCRIPT_DIR}/ducker-ak test ${TC_PATHS} ${_DUCKTAPE_OPTIONS} || die "ducker-ak test failed"
+${SCRIPT_DIR}/ducker-ak test $(prefix_args) ${TC_PATHS} ${_DUCKTAPE_OPTIONS} || die "ducker-ak test failed"

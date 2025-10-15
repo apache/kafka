@@ -58,6 +58,36 @@ default_kafka_mode="jvm"
 # Port to listen on when debugging
 debugpy_port=5678
 
+# Host port to bind for debugpy on ducker01
+debugpy_host_port="${DUCKER_DEBUGPY_PORT:-}"
+
+# Support for running multiple ducker‑ak clusters on one machine.
+prefix="${DUCKER_PREFIX:-}"
+
+# the docker network name for this cluster.
+net_name() {
+    if [[ -n "${prefix}" ]]; then
+        echo "${prefix}-ducknet"
+    else
+        echo "ducknet"
+    fi
+}
+
+# the container name prefix (e.g. ducker or <prefix>-ducker)
+container_prefix() {
+    if [[ -n "${prefix}" ]]; then
+        echo "${prefix}-ducker"
+    else
+        echo "ducker"
+    fi
+}
+
+# Given an integer index, produce the full container name.
+node_name() {
+    local idx="${1}"
+    printf "%s%02d" "$(container_prefix)" "${idx}"
+}
+
 # Display a usage message on the terminal and exit.
 #
 # $1: The exit status to use
@@ -72,7 +102,7 @@ help|-h|--help
     Display this help message
 
 up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
-        [-C|--custom-ducktape DIR] [-e|--expose-ports ports] [-j|--jdk JDK_VERSION] [--ipv6]
+        [-C|--custom-ducktape DIR] [-e|--expose-ports ports] [-j|--jdk JDK_VERSION] [--ipv6] [--prefix NAME] [--debug-port {PORT|auto}]
     Bring up a cluster with the specified amount of nodes (defaults to ${default_num_nodes}).
     The docker image name defaults to ${default_image_name}.  If --force is specified, we will
     attempt to bring up an image even some parameters are not valid.
@@ -91,15 +121,17 @@ up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
 
     If --ipv6 is specified, we will create a Docker network with IPv6 enabled.
     
-    Note that port 5678 will be automatically exposed for ducker01 node and will be mapped to 5678 
-    on your local machine to enable debugging in VS Code.
+    Debug port mapping:
+      - Without --prefix: ${debugpy_port} (container) -> ${debugpy_port} (host)
+      - With --prefix: default 'auto' (host random -> ${debugpy_port}); override via --debug-port or DUCKER_DEBUGPY_PORT
+      - The chosen host port is recorded at build/debug-port.<prefix>.txt
 
-test [-d|--debug] [test-name(s)] [-- [ducktape args]]
+test [-d|--debug] [--prefix NAME] [test-name(s)] [-- [ducktape args]]
     Run a test or set of tests inside the currently active Ducker nodes.
     For example, to run the system test produce_bench_test, you would run:
         ./tests/docker/ducker-ak test ./tests/kafkatest/tests/core/produce_bench_test.py
     
-    If --debug is passed, the tests will wait for remote VS Code debugger to connect on port 5678:
+    If --debug is passed, the tests will wait for remote VS Code debugger to connect on host debug port:
         ./tests/docker/ducker-ak test --debug ./tests/kafkatest/tests/core/produce_bench_test.py
     
     To pass arguments to underlying ducktape invocation, pass them after `--`, e.g.:
@@ -113,14 +145,20 @@ ssh [node-name|user-name@node-name] [command]
     is specified, we will run that command.  Otherwise, we will provide a login
     shell.
 
-down [-q|--quiet] [-f|--force]
+down [-q|--quiet] [-f|--force] [--prefix NAME]
     Tear down all the currently active ducker-ak nodes.  If --quiet is specified,
     only error messages are printed. If --force or -f is specified, "docker rm -f"
     will be used to remove the nodes, which kills currently running ducker-ak test.
+    If --prefix is provided, only that cluster is removed.
 
 purge [--f|--force]
     Purge Docker images created by ducker-ak.  This will free disk space.
     If --force is set, we run 'docker rmi -f'.
+
+Environment variables:
+    - DUCKER_PREFIX          : equivalent to --prefix
+    - DUCKER_DEBUGPY_PORT    : equivalent to --debug-port
+
 EOF
     exit "${exit_status}"
 }
@@ -292,14 +330,18 @@ docker_run() {
         done
     fi
     if [[ -n ${port_mapping} ]]; then
-        expose_ports="${expose_ports} -p ${port_mapping}:${port_mapping}"
+        if [[ "${port_mapping}" == *:* ]]; then
+          expose_ports="${expose_ports} -p ${port_mapping}"
+        else
+          expose_ports="${expose_ports} -p ${port_mapping}:${port_mapping}"
+        fi
     fi
 
     # Invoke docker-run. We need privileged mode to be able to run iptables
     # and mount FUSE filesystems inside the container.  We also need it to
     # run iptables inside the container.
     must_do -v docker run --privileged \
-        -d -t -h "${node}" --network ducknet "${expose_ports}" \
+        -d -t -h "${node}" --network "$(net_name)" "${expose_ports}" \
         --memory=${docker_run_memory_limit} --memory-swappiness=1 \
         -v "${kafka_dir}:/opt/kafka-dev" --name "${node}" -- "${image_name}"
 }
@@ -310,14 +352,14 @@ setup_custom_ducktape() {
 
     [[ -f "${custom_ducktape}/ducktape/__init__.py" ]] || \
         die "You must supply a valid ducktape directory to --custom-ducktape"
-    docker_run ducker01 "${image_name}"
-    local running_container="$(docker ps -f=network=ducknet -q)"
+    docker_run "$(node_name 1)" "${image_name}"
+    local running_container="$(docker ps -f=network=$(net_name) -q)"
     must_do -v -o docker cp "${custom_ducktape}" "${running_container}:/opt/ducktape"
-    docker exec --user=root ducker01 bash -c 'set -x && cd /opt/kafka-dev/tests && sudo python3 ./setup.py develop install && cd /opt/ducktape && sudo python3 ./setup.py develop install'
+    docker exec --user=root "$(node_name 1)" bash -c 'set -x && cd /opt/kafka-dev/tests && sudo python3 ./setup.py develop install && cd /opt/ducktape && sudo python3 ./setup.py develop install'
     [[ $? -ne 0 ]] && die "failed to install the new ducktape."
-    must_do -v -o docker commit ducker01 "${image_name}"
+    must_do -v -o docker commit "$(node_name 1)" "${image_name}"
     must_do -v docker kill "${running_container}"
-    must_do -v docker rm ducker01
+    must_do -v docker rm "$(node_name 1)"
 }
 
 cleanup_native_dir() {
@@ -348,6 +390,7 @@ prepare_native_dir() {
 
 ducker_up() {
     require_commands docker
+   [[ -z "${prefix}" ]] && prefix="${DUCKER_PREFIX:-}"
     while [[ $# -ge 1 ]]; do
         case "${1}" in
             -C|--custom-ducktape) set_once custom_ducktape "${2}" "the custom ducktape directory"; shift 2;;
@@ -357,6 +400,8 @@ ducker_up() {
             -e|--expose-ports) set_once expose_ports "${2}" "the ports to expose"; shift 2;;
             -m|--kafka_mode) set_once kafka_mode "${2}" "the mode in which kafka will run"; shift 2;;
             --ipv6) set_once ipv6 "true" "enable IPv6"; shift;;
+            --prefix) set_once prefix "${2}" "prefix"; shift 2;;
+            --debug-port) set_once debugpy_host_port "${2}" "debug host port (number or 'auto')"; shift 2;;
             *) set_once image_name "${1}" "docker image name"; shift;;
         esac
     done
@@ -396,36 +441,66 @@ it up anyway."
             exit 1
         fi
     fi
-    local running_containers="$(docker ps -f=network=ducknet -q)"
+    local running_containers="$(docker ps -f=network=$(net_name) -q)"
     local num_running_containers=$(count ${running_containers})
     if [[ ${num_running_containers} -gt 0 ]]; then
         die "ducker_up: there are ${num_running_containers} ducker containers \
-running already.  Use ducker down to bring down these containers before \
+running already.  Use ducker down --prefix ${prefix:-} to bring down these containers before \
 attempting to start new ones."
     fi
 
     echo "ducker_up: Bringing up ${image_name} with ${num_nodes} nodes..."
-    if docker network inspect ducknet &>/dev/null; then
-        must_do -v docker network rm ducknet
+    if docker network inspect "$(net_name)" &>/dev/null; then
+        must_do -v docker network rm "$(net_name)"
     fi
     network_create_args=""
     if [[ "${ipv6}" == "true" ]]; then
         subnet_cidr_prefix="${DUCKER_SUBNET_CIDR:-"fc00:cf17"}"
         network_create_args="--ipv6 --subnet ${subnet_cidr_prefix}::/64"
     fi
-    must_do -v docker network create ${network_create_args} ducknet
+    must_do -v docker network create ${network_create_args} "$(net_name)"
+
     if [[ -n "${custom_ducktape}" ]]; then
         setup_custom_ducktape "${custom_ducktape}" "${image_name}"
     fi
-    docker_run ducker01 "${image_name}" "${expose_ports}" "${debugpy_port}"
+    # Determine debug host port mapping for the first node:
+    # - If no prefix and not overridden -> fixed ${debugpy_port}
+    # - If prefix present and not overridden -> auto (random free host port)
+    if [[ -z "${debugpy_host_port}" ]]; then
+      if [[ -n "${prefix}" ]]; then
+        debugpy_host_port="auto"
+      else
+        debugpy_host_port="${debugpy_port}"
+      fi
+    fi
+    if [[ "${debugpy_host_port}" == "auto" ]]; then
+      debug_map="0:${debugpy_port}"
+    else
+      debug_map="${debugpy_host_port}:${debugpy_port}"
+    fi
+    docker_run "$(node_name 1)" "${image_name}" "${expose_ports}" "${debug_map}"
+
+    # Inform the user which host port is actually used for debug on node1.
+    if [[ "${debugpy_host_port}" == "auto" ]]; then
+      assigned="$(docker port "$(node_name 1)" ${debugpy_port}/tcp | awk -F: 'END{print $NF}')"
+      echo "ducker_up: assigned debug host port ${assigned} for $(node_name 1) (container ${debugpy_port}/tcp)"
+      debugpy_host_port="${assigned}"
+    else
+      echo "ducker_up: debug host port ${debugpy_host_port} mapped to container ${debugpy_port} on $(node_name 1)"
+    fi
+    if [[ -n "${prefix}" ]]; then
+      mkdir -p "${ducker_dir}/build"
+      echo "${debugpy_host_port}" > "${ducker_dir}/build/debug-port${prefix:+.${prefix}}.txt"
+    fi
+    
     for n in $(seq -f %02g 2 ${num_nodes}); do
-        local node="ducker${n}"
+        local node="$(container_prefix)${n}"
         docker_run "${node}" "${image_name}" "${expose_ports}"
     done
     mkdir -p "${ducker_dir}/build"
-    exec 3<> "${ducker_dir}/build/node_hosts"
+    exec 3<> "${ducker_dir}/build/node_hosts${prefix:+.${prefix}}"
     for n in $(seq -f %02g 1 ${num_nodes}); do
-        local node="ducker${n}"
+        local node="$(container_prefix)${n}"
         if [[ "${ipv6}" == "true" ]]; then
             docker exec --user=root "${node}" grep "${node}" /etc/hosts | grep "${subnet_cidr_prefix}" >&3
         else
@@ -435,25 +510,25 @@ attempting to start new ones."
     done
     exec 3>&-
     for n in $(seq -f %02g 1 ${num_nodes}); do
-        local node="ducker${n}"
+        local node="$(container_prefix)${n}"
         docker exec --user=root "${node}" \
-            bash -c "grep -v ${node} /opt/kafka-dev/tests/docker/build/node_hosts >> /etc/hosts"
+            bash -c "grep -v ${node} /opt/kafka-dev/tests/docker/build/node_hosts${prefix:+.${prefix}} >> /etc/hosts"
         [[ $? -ne 0 ]] && die "failed to append to the /etc/hosts file on ${node}"
         # Filter out ipv4 addresses if ipv6
         if [[ "${ipv6}" == "true" ]]; then
             docker exec --user=root "${node}" \
-                bash -c "grep -v -E '([0-9]{1,3}\.){3}[0-9]{1,3}' /opt/kafka-dev/tests/docker/build/node_hosts >> /etc/hosts"
+                bash -c "grep -v -E '([0-9]{1,3}\.){3}[0-9]{1,3}' /opt/kafka-dev/tests/docker/build/node_hosts${prefix:+.${prefix}} >> /etc/hosts"
             [[ $? -ne 0 ]] && die "failed to append to the /etc/hosts file on ${node}"
         fi
     done
 
     if [ "$kafka_mode" == "native" ]; then
-      docker exec --user=root ducker01 bash -c 'cp /opt/kafka-binary/kafka.Kafka /opt/kafka-dev/kafka.Kafka'
+      docker exec --user=root "$(node_name 1)" bash -c 'cp /opt/kafka-binary/kafka.Kafka /opt/kafka-dev/kafka.Kafka'
     fi
 
     echo "ducker_up: added the latest entries to /etc/hosts on each node."
-    generate_cluster_json_file "${num_nodes}" "${ducker_dir}/build/cluster.json"
-    echo "ducker_up: successfully wrote ${ducker_dir}/build/cluster.json"
+    generate_cluster_json_file "${num_nodes}" "${ducker_dir}/build/cluster${prefix:+.${prefix}}.json"
+    echo "ducker_up: successfully wrote ${ducker_dir}/build/cluster${prefix:+.${prefix}}.json"
     echo "** ducker_up: successfully brought up ${num_nodes} nodes."
 }
 
@@ -491,7 +566,8 @@ EOF
       else
         suffix=","
       fi
-      local node=$(printf ducker%02d ${n})
+      local node_prefix="${prefix:+${prefix}-}ducker"
+      local node=$(printf "%s%02d" "${node_prefix}" ${n})
 cat<<EOF >&3
     {
       "externally_routable_ip": "${node}",
@@ -527,13 +603,14 @@ correct_latest_link() {
 
 ducker_test() {
     require_commands docker
-    docker inspect ducker01 &>/dev/null || \
-        die "ducker_test: the ducker01 instance appears to be down. Did you run 'ducker up'?"
+    [[ -z "${prefix}" ]] && prefix="${DUCKER_PREFIX:-}"
+
     declare -a test_name_args=()
     local debug=0
     while [[ $# -ge 1 ]]; do
         case "${1}" in
             -d|--debug) debug=1; shift;;
+            --prefix) set_once prefix "${2}" "prefix"; shift 2;;
             --) shift; break;;
             *) test_name_args+=("${1}"); shift;;
         esac
@@ -563,9 +640,10 @@ ducker_test() {
         local ducktape_cmd="ducktape"
     fi
 
-    cmd="cd /opt/kafka-dev && ${ducktape_cmd} --cluster-file /opt/kafka-dev/tests/docker/build/cluster.json $test_names $ducktape_args"
-    echo "docker exec ducker01 bash -c \"${cmd}\""
-    docker exec --user=ducker ducker01 bash -c "${cmd}"
+    local cluster_json_in_container="/opt/kafka-dev/tests/docker/build/cluster${prefix:+.${prefix}}.json"
+    cmd="cd /opt/kafka-dev && ${ducktape_cmd} --cluster-file ${cluster_json_in_container} $test_names $ducktape_args"
+    echo "docker exec $(node_name 1) bash -c \"${cmd}\""
+    docker exec --user=ducker "$(node_name 1)" bash -c "${cmd}"
     docker_status=$?
     correct_latest_link
     exit "${docker_status}"
@@ -611,7 +689,7 @@ $(echo_running_container_names)"
 
 # Echo all the running Ducker container names, or (none) if there are no running Ducker containers.
 echo_running_container_names() {
-    node_names="$(docker ps -f=network=ducknet -q --format '{{.Names}}' | sort)"
+    node_names="$(docker ps -f=network=$(net_name) -q --format '{{.Names}}' | sort)"
     if [[ -z "${node_names}" ]]; then
         echo "(none)"
     else
@@ -621,20 +699,22 @@ echo_running_container_names() {
 
 ducker_down() {
     require_commands docker
+    [[ -z "${prefix}" ]] && prefix="${DUCKER_PREFIX:-}"
     local verbose=1
     local force_str=""
     while [[ $# -ge 1 ]]; do
         case "${1}" in
             -q|--quiet) verbose=0; shift;;
             -f|--force) force_str="-f"; shift;;
+            --prefix) set_once prefix "${2}" "prefix"; shift 2;;
             *) die "ducker_down: unexpected command-line argument ${1}";;
         esac
     done
     local running_containers
-    running_containers="$(docker ps -f=network=ducknet -q)"
-    [[ $? -eq 0 ]]  || die "ducker_down: docker command failed.  Is the docker daemon running?"
+    running_containers="$(docker ps -f=network=$(net_name) -q)"
+    [[ $? -eq 0 ]] || die "ducker_down: docker command failed. Is the docker daemon running?"
     running_containers=${running_containers//$'\n'/ }
-    local all_containers="$(docker ps -a -f=network=ducknet -q)"
+    local all_containers="$(docker ps -a -f=network=$(net_name) -q)"
     all_containers=${all_containers//$'\n'/ }
     if [[ -z "${all_containers}" ]]; then
         maybe_echo "${verbose}" "No ducker containers found."
@@ -648,9 +728,21 @@ ducker_down() {
         must_do ${verbose_flag} docker kill "${running_containers}"
     fi
     must_do ${verbose_flag} docker rm ${force_str} "${all_containers}"
-    must_do ${verbose_flag} -o rm -f -- "${ducker_dir}/build/node_hosts" "${ducker_dir}/build/cluster.json"
-    if docker network inspect ducknet &>/dev/null; then
-        must_do -v docker network rm ducknet
+    if [[ -n "${prefix}" ]]; then
+        # Prefixed cluster: remove only prefixed files
+        must_do ${verbose_flag} -o rm -f -- \
+            "${ducker_dir}/build/node_hosts.${prefix}" \
+            "${ducker_dir}/build/debug-port.${prefix}.txt" \
+            "${ducker_dir}/build/cluster.${prefix}.json"
+    else
+        # Unprefixed cluster: remove only unprefixed files
+        must_do ${verbose_flag} -o rm -f -- \
+            "${ducker_dir}/build/node_hosts" \
+            "${ducker_dir}/build/cluster.json"
+    fi
+
+    if docker network inspect "$(net_name)" &>/dev/null; then
+        must_do -v docker network rm "$(net_name)"
     fi
     maybe_echo "${verbose}" "ducker_down: removed $(count ${all_containers}) containers."
 }

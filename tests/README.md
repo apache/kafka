@@ -111,11 +111,38 @@ REBUILD="t" bash tests/docker/run_tests.sh
     ```
     tests/docker/ducker-ak test tests/kafkatest/tests/core/security_test.py --debug -- --debug
     ```
+* Run multiple ducker-ak clusters on one machine using prefixes:
+  - Use the `--prefix` option to create isolated clusters that can run simultaneously:
+    ```
+    bash tests/docker/ducker-ak up --prefix cluster1
+    bash tests/docker/ducker-ak up --prefix cluster2
+    ```
+  - Run tests on a specific prefixed cluster:
+    ```
+    bash tests/docker/ducker-ak test tests/kafkatest/tests/client/pluggable_test.py::PluggableConsumerTest.test_start_stop --prefix cluster1
+    ```
+  - Tear down a specific prefixed cluster:
+    ```
+    bash tests/docker/ducker-ak down --prefix cluster1
+    ```
+  - Alternatively, set the `DUCKER_PREFIX` environment variable:
+    ```
+    DUCKER_PREFIX=cluster1 TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py::PluggableConsumerTest.test_start_stop" bash tests/docker/run_tests.sh
+    ```
+* Configure debug port mapping:
+  - By default, debug port 5678 is mapped to the same port on the host for unprefixed clusters
+  - For prefixed clusters, debug ports are automatically assigned to random available host ports
+  - Override debug port behavior with `--debug-port`:
+    ```
+    bash tests/docker/ducker-ak up --prefix cluster1 --debug-port 55006
+    ```
+  - The assigned debug port for prefixed clusters is saved to `build/debug-port.<prefix>.txt`
+  - Use the `DUCKER_DEBUGPY_PORT` environment variable as an alternative to `--debug-port`
 
 * Notes
-  - The scripts to run tests creates and destroys docker network named *knw*.
-   This network can't be used for any other purpose.
-  - The docker containers are named knode01, knode02 etc.
+  - The scripts to run tests create and destroy docker networks. For unprefixed clusters, the network is named `ducknet`. For prefixed clusters, the network is named `<prefix>-ducknet`.
+   These networks can't be used for any other purpose.
+  - The docker containers are named `ducker01`, `ducker02` etc. for unprefixed clusters, or `<prefix>-ducker01`, `<prefix>-ducker02` etc. for prefixed clusters.
    These nodes can't be used for any other purpose.
 
 * Exposing ports using --expose-ports option of `ducker-ak up` command
