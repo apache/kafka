@@ -218,7 +218,6 @@ public final class KRaftControlRecordStateMachine {
     }
 
     public VoterSet committedVoterSetFromLog(long offset) {
-        offset = Math.max(0, offset);
         LogFetchInfo info = log.read(offset, Isolation.COMMITTED);
         try (RecordsIterator<?> iterator = new RecordsIterator<>(
                 info.records,

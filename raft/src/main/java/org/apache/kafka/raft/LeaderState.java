@@ -890,7 +890,9 @@ public class LeaderState<T> implements EpochState {
                 newCommittedVoterStates.put(voterNode.voterKey().id(),
                         getReplicaState(voterNode.voterKey()).orElse(new ReplicaState(voterNode.voterKey(), false, voterNode.listeners())));            }
         } else {
-            log.debug("Read committed voter with start offset={} from log", highWatermark);
+            // The log starting offset must great or equals zero so we need to set minimize as one.
+            highWatermark = Math.max(1, highWatermark);
+            log.debug("Read committed voter with start offset={} from log", highWatermark - 1);
             VoterSet committedvoterSet = partitionState.committedVoterSetFromLog(highWatermark - 1);
             for (VoterSet.VoterNode voterNode : committedvoterSet.voterNodes()) {
                 newCommittedVoterStates.put(voterNode.voterKey().id(),
