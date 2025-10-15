@@ -764,7 +764,7 @@ public class LeaderState<T> implements EpochState {
                 } else {
                     Optional<LogOffsetMetadata> oldHighWatermark = highWatermark;
                     highWatermark = highWatermarkUpdateOpt;
-                    highWatermark.ifPresent(logOffsetMetadata -> updateCommittedVoter(logOffsetMetadata.offset()));
+                    highWatermark.ifPresent(highWatermark -> updateCommittedVoter(highWatermark.offset()));
                     logHighWatermarkUpdate(
                         oldHighWatermark,
                         highWatermarkUpdateMetadata,
@@ -889,6 +889,7 @@ public class LeaderState<T> implements EpochState {
                 committedVoterStates.put(voterNode.voterKey().id(), getOrCreateReplicaState(key));
             }
         } else {
+            highWatermark = Math.min(1, highWatermark);
             log.info("Read committed voter with start offset={} from log", highWatermark - 1);
             VoterSet committedvoterSet = partitionState.committedVoterSetFromLog(highWatermark - 1);
             for (VoterSet.VoterNode voterNode : committedvoterSet.voterNodes()) {
