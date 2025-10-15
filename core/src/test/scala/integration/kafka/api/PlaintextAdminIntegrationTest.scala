@@ -2325,7 +2325,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
-
   /**
    * Test the consumer group APIs for member removal.
    */
@@ -2594,7 +2593,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val shareGroup = createShareConsumer(configOverrides = shareGroupConfig)
 
     val streamsGroup = createStreamsGroup(
-      inputTopic = testTopicName,
+      inputTopics = Set(testTopicName),
+      changelogTopics = Set(testTopicName + "-changelog"),
       streamsGroupId = streamsGroupId
     )
 
@@ -4419,7 +4419,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     prepareRecords(testTopicName)
 
     val streams = createStreamsGroup(
-      inputTopic = testTopicName,
+      inputTopics = Set(testTopicName),
+      changelogTopics = Set(testTopicName + "-changelog"),
       streamsGroupId = streamsGroupId
     )
     streams.poll(JDuration.ofMillis(500L))
@@ -4429,7 +4430,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         val firstGroup = client.listGroups().all().get().stream()
           .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
         firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
-      }, "Stream group not stable yet")
+      }, "Streams group did not transition to STABLE before timeout")
 
       // Verify the describe call works correctly
       val describedGroups = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get()
@@ -4465,7 +4466,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client = Admin.create(config)
 
     val streams = createStreamsGroup(
-      inputTopic = testTopicName,
+      inputTopics = Set(testTopicName),
+      changelogTopics = Set(testTopicName + "-changelog"),
       streamsGroupId = streamsGroupId
     )
     streams.poll(JDuration.ofMillis(500L))
@@ -4475,7 +4477,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         val firstGroup = client.listGroups().all().get().stream()
           .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
         firstGroup.groupState().orElse(null) == GroupState.NOT_READY && firstGroup.groupId() == streamsGroupId
-      }, "Stream group not NOT_READY yet")
+      }, "Streams group did not transition to NOT_READY before timeout")
 
       // Verify the describe call works correctly
       val describedGroups = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get()
@@ -4498,6 +4500,55 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @Test
+  def testDescribeStreamsGroupsForStatelessTopology(): Unit = {
+    val streamsGroupId = "stream_group_id"
+    val testTopicName = "test_topic"
+    val testNumPartitions = 1
+
+    val config = createConfig
+    client = Admin.create(config)
+
+    prepareTopics(List(testTopicName), testNumPartitions)
+    prepareRecords(testTopicName)
+
+    val streams = createStreamsGroup(
+      inputTopics = Set(testTopicName),
+      streamsGroupId = streamsGroupId
+    )
+    streams.poll(JDuration.ofMillis(500L))
+
+    try {
+      TestUtils.waitUntilTrue(() => {
+        val firstGroup = client.listGroups().all().get().stream().findFirst().orElse(null)
+        firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
+      }, "Streams group did not transition to STABLE before timeout")
+
+      // Verify the describe call works correctly
+      val describedGroups = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get()
+      val group = describedGroups.get(streamsGroupId)
+      assertNotNull(group)
+      assertEquals(streamsGroupId, group.groupId())
+      assertFalse(group.members().isEmpty)
+      assertNotNull(group.subtopologies())
+      assertFalse(group.subtopologies().isEmpty)
+
+      // Verify the topology contains the expected source and sink topics
+      val subtopologies = group.subtopologies().asScala
+      assertTrue(subtopologies.exists(subtopology =>
+        subtopology.sourceTopics().contains(testTopicName)))
+
+      // Test describing a non-existing group
+      val nonExistingGroup = "non_existing_stream_group"
+      val describedNonExistingGroupResponse = client.describeStreamsGroups(util.List.of(nonExistingGroup))
+      assertFutureThrows(classOf[GroupIdNotFoundException], describedNonExistingGroupResponse.all())
+
+    } finally {
+      Utils.closeQuietly(streams, "streams")
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
+  
+  @Test
   def testDeleteStreamsGroups(): Unit = {
     val testTopicName = "test_topic"
     val testNumPartitions = 3
@@ -4519,7 +4570,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         val streamsGroupId = s"stream_group_id_$i"
 
         val streams = createStreamsGroup(
-          inputTopic = testTopicName,
+          inputTopics = Set(testTopicName),
+          changelogTopics = Set(testTopicName + "-changelog"),
           streamsGroupId = streamsGroupId,
         )
         streams.poll(JDuration.ofMillis(500L))
@@ -4608,7 +4660,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     val streams = createStreamsGroup(
       configOverrides = consumerConfig,
-      inputTopic = testTopicName,
+      inputTopics = Set(testTopicName),
+      changelogTopics = Set(testTopicName + "-changelog"),
       streamsGroupId = streamsGroupId,
     )
 
@@ -4630,7 +4683,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       TestUtils.waitUntilTrue(() => {
         val firstGroup = client.listGroups().all().get().stream().findFirst().orElse(null)
         firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
-      }, "Stream group not stable yet")
+      }, "Streams group did not transition to STABLE before timeout")
 
       val allTopicPartitions = client.listStreamsGroupOffsets(
         util.Map.of(streamsGroupId, new ListStreamsGroupOffsetsSpec())
@@ -4680,7 +4733,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     val streams = createStreamsGroup(
       configOverrides = consumerConfig,
-      inputTopic = testTopicName,
+      inputTopics = Set(testTopicName),
+      changelogTopics = Set(testTopicName + "-changelog"),
       streamsGroupId = streamsGroupId,
     )
 
@@ -4769,7 +4823,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     val streams = createStreamsGroup(
       configOverrides = consumerConfig,
-      inputTopic = testTopicName,
+      inputTopics = Set(testTopicName),
+      changelogTopics = Set(testTopicName + "-changelog"),
       streamsGroupId = streamsGroupId,
     )
 

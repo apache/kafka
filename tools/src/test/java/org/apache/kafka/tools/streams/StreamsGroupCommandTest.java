@@ -17,7 +17,6 @@
 package org.apache.kafka.tools.streams;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupsOptions;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
@@ -49,10 +48,10 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
+import org.mockito.MockedStatic;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -60,9 +59,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import joptsimple.OptionException;
 
@@ -77,6 +76,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -477,6 +477,44 @@ public class StreamsGroupCommandTest {
         service.close();
     }
 
+    @Test
+    public void testExitCodeOnInvalidOption() {
+        String[] args = new String[]{"--invalid-option"};
+        assertEquals(1, StreamsGroupCommand.execute(args));
+    }
+
+    @Test
+    public void testExitCodeOnIllegalArguments() {
+        String[] args = new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS};
+        assertEquals(1, StreamsGroupCommand.execute(args));
+    }
+
+    @Test
+    public void testExitCodeOnExecutionException() {
+        try (MockedStatic<StreamsGroupCommand> mockedStreamGroupCommand = mockStatic(StreamsGroupCommand.class)) {
+            String[] args = new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--list"};
+            mockedStreamGroupCommand.when(() -> StreamsGroupCommand.execute(any(String[].class))).thenCallRealMethod();
+            mockedStreamGroupCommand.when(() -> StreamsGroupCommand.run(any(StreamsGroupCommandOptions.class))).thenThrow(new ExecutionException("ExecutionException", new RuntimeException()));
+            
+            assertEquals(1, StreamsGroupCommand.execute(args));
+            
+            mockedStreamGroupCommand.verify(() -> StreamsGroupCommand.run(any(StreamsGroupCommandOptions.class)));
+        }
+    }
+
+    @Test
+    public void testExitCodeOnInterruptedException() {
+        try (MockedStatic<StreamsGroupCommand> mockedStreamGroupCommand = mockStatic(StreamsGroupCommand.class)) {
+            String[] args = new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--list"};
+            mockedStreamGroupCommand.when(() -> StreamsGroupCommand.execute(any(String[].class))).thenCallRealMethod();
+            mockedStreamGroupCommand.when(() -> StreamsGroupCommand.run(any(StreamsGroupCommandOptions.class))).thenThrow(new InterruptedException("InterruptedException"));
+            
+            assertEquals(1, StreamsGroupCommand.execute(args));
+            
+            mockedStreamGroupCommand.verify(() -> StreamsGroupCommand.run(any(StreamsGroupCommandOptions.class)));
+        }
+    }
+
     private ListGroupsResult listGroupResult(String groupId) {
         ListGroupsResult listGroupsResult = mock(ListGroupsResult.class);
         when(listGroupsResult.all()).thenReturn(KafkaFuture.completedFuture(List.of(
@@ -527,14 +565,6 @@ public class StreamsGroupCommandTest {
         KafkaFutureImpl<StreamsGroupDescription> future = new KafkaFutureImpl<>();
         future.complete(description);
         return new DescribeStreamsGroupsResult(Map.of(groupId, future));
-    }
-
-    private DescribeTopicsResult describeTopicsResult(Collection<String> topics, int numOfPartitions) {
-        var topicDescriptions = topics.stream().collect(Collectors.toMap(Function.identity(),
-            topic -> new TopicDescription(topic, false, IntStream.range(0, numOfPartitions)
-                .mapToObj(i -> new TopicPartitionInfo(i, null, List.of(), List.of()))
-                .toList())));
-        return AdminClientTestUtils.describeTopicsResult(topicDescriptions);
     }
 
     private ListOffsetsResult listOffsetsResult() {

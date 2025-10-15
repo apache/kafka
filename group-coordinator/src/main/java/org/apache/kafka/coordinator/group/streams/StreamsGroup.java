@@ -147,9 +147,9 @@ public class StreamsGroup implements Group {
     private final TimelineHashMap<String, String> staticMembers;
 
     /**
-     * The metadata associated with each subscribed topic name.
+     * The topology epoch for which the subscribed topics identified by metadataHash are validated.
      */
-    private final TimelineHashMap<String, TopicMetadata> partitionMetadata;
+    private final TimelineInteger validatedTopologyEpoch;
 
     /**
      * The metadata hash which is computed based on the all subscribed topics.
@@ -222,7 +222,7 @@ public class StreamsGroup implements Group {
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.partitionMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.validatedTopologyEpoch = new TimelineInteger(snapshotRegistry);
         this.metadataHash = new TimelineLong(snapshotRegistry);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -282,7 +282,6 @@ public class StreamsGroup implements Group {
 
     public void setConfiguredTopology(ConfiguredTopology configuredTopology) {
         this.configuredTopology.set(Optional.ofNullable(configuredTopology));
-        maybeUpdateGroupState();
     }
 
     /**
@@ -599,6 +598,23 @@ public class StreamsGroup implements Group {
     }
 
     /**
+     * @return The validated topology epoch.
+     */
+    public int validatedTopologyEpoch() {
+        return validatedTopologyEpoch.get();
+    }
+
+    /**
+     * Updates the validated topology epoch.
+     *
+     * @param validatedTopologyEpoch The validated topology epoch
+     */
+    public void setValidatedTopologyEpoch(int validatedTopologyEpoch) {
+        this.validatedTopologyEpoch.set(validatedTopologyEpoch);
+        maybeUpdateGroupState();
+    }
+
+    /**
      * Computes the metadata hash based on the current topology and the current metadata image.
      *
      * @param metadataImage  The current metadata image.
@@ -835,7 +851,7 @@ public class StreamsGroup implements Group {
         if (members.isEmpty()) {
             newState = EMPTY;
             clearShutdownRequestMemberId();
-        } else if (topology().isEmpty() || configuredTopology().isEmpty() || !configuredTopology().get().isReady()) {
+        } else if (topology().filter(t -> t.topologyEpoch() == validatedTopologyEpoch.get()).isEmpty()) {
             newState = NOT_READY;
         } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
             newState = ASSIGNING;
