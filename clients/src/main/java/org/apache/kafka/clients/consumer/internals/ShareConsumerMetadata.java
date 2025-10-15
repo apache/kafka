@@ -67,4 +67,12 @@ public class ShareConsumerMetadata extends Metadata {
         topics.addAll(subscription.metadataTopics());
         return MetadataRequest.Builder.forTopicNames(topics, allowAutoTopicCreation);
     }
+
+    /**
+     * Check if the metadata for the topic should be retained, based on the topic name.
+     */
+    @Override
+    public synchronized boolean retainTopic(String topic, boolean isInternal, long nowMs) {
+        return subscription.needsMetadata(topic);
+    }
 }
