@@ -80,6 +80,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
@@ -162,7 +163,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // open the DB dir
         metricsRecorder.init(metricsImpl(stateStoreContext), stateStoreContext.taskId());
         if (!open) {
-            openDB(stateStoreContext.appConfigs(), stateStoreContext.stateDir());
+//            openDB(stateStoreContext.appConfigs(), stateStoreContext.stateDir());
+            throw new IllegalStateException("Store " + name + " is not open");
         }
         addValueProvidersToMetricsRecorder();
 //        openDB(stateStoreContext.appConfigs(), stateStoreContext.stateDir());
@@ -232,7 +234,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             configSetter = Utils.newInstance(configSetterClass);
             configSetter.setConfig(name, userSpecifiedOptions, configs);
         }
-
+        log.trace("Opening store for " + name + " at location " + stateDir.getAbsolutePath());
         dbDir = new File(new File(stateDir, parentDir), name);
         try {
             Files.createDirectories(dbDir.getParentFile().toPath());
@@ -712,6 +714,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public void open(final StateStoreContext stateStoreContext) {
+        if (open) {
+            return;
+        }
         openDB(stateStoreContext.appConfigs(), stateStoreContext.stateDir());
     }
 

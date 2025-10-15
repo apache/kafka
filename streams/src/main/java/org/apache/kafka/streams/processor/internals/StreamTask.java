@@ -42,6 +42,7 @@ import org.apache.kafka.streams.errors.internals.FailedProcessingException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.api.Record;
@@ -266,7 +267,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             recordCollector.initialize();
 
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
-
+            for (final StateStore stateStore : topology.stateStores()) {
+                stateStore.init(processorContext, stateStore);
+            }
             // without EOS the checkpoint file would not be deleted after loading, and
             // with EOS we would not checkpoint ever during running state anyways.
             // therefore we can initialize the snapshot as empty so that we would checkpoint right after loading
@@ -1424,7 +1427,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw new TopologyException(
                         "Topic " + partition.topic() + " is unknown to the topology. " +
                                 "This may happen if different KafkaStreams instances of the same application execute different Topologies. " +
-                                "Note that Topologies are only identical if all operators are added in the same order."
+                                "Note that Topologies are only identical if all operators are added in the same order." + topology.getSourceNodesByTopic()
                 );
             }
 

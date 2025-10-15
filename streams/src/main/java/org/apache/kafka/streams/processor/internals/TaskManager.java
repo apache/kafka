@@ -37,6 +37,7 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
@@ -346,21 +347,23 @@ public class TaskManager {
                                                               final ChangelogRegister changelogReader) {
         if (stateDirectory.hasStartupTasks()) {
             final Map<TaskId, Set<TopicPartition>> assignedTasks = new HashMap<>(tasksToAssign.size());
+            final Collection<Task> tasks = new HashSet<>();
             for (final Map.Entry<TaskId, Set<TopicPartition>> entry : tasksToAssign.entrySet()) {
                 final TaskId taskId = entry.getKey();
-                final ProcessorStateManager stateManager = stateDirectory.removeStartupTask(taskId);
+                final StateDirectory.StateMngrAndTopologyProcessor stateManager = stateDirectory.removeStartupTask(taskId);
                 if (stateManager != null) {
                     // replace our dummy values with the real ones, now we know our thread and assignment
                     final Set<TopicPartition> inputPartitions = entry.getValue();
-                    assignedTasks.put(stateManager.taskId(), inputPartitions);
+                    final Task task = activeTaskCreator.createTasks(mainConsumer, stateManager.stateMngr.taskId(), stateManager.stateMngr.changelogPartitions(), stateManager.getStateMngr(), stateManager.getProcessorTopology());
+                    tasks.add(task);
+                    assignedTasks.put(stateManager.stateMngr.taskId(), inputPartitions);
                 }
             }
-
-            final Collection<Task> tasks = activeTaskCreator.createTasks(mainConsumer, assignedTasks);
             final Map<Task, Set<TopicPartition>> out = new HashMap<>(tasks.size());
             for (final Task task : tasks) {
                 out.put(task, task.inputPartitions());
             }
+            this.tasks.addPendingTasksToInit(tasks);
             return out;
         } else {
             return Collections.emptyMap();
@@ -375,13 +378,13 @@ public class TaskManager {
             final Map<TaskId, Set<TopicPartition>> assignedTasks = new HashMap<>(tasksToAssign.size());
             for (final Map.Entry<TaskId, Set<TopicPartition>> entry : tasksToAssign.entrySet()) {
                 final TaskId taskId = entry.getKey();
-                final ProcessorStateManager stateManager = stateDirectory.removeStartupTask(taskId);
+                final StateDirectory.StateMngrAndTopologyProcessor stateManager = stateDirectory.removeStartupTask(taskId);
                 if (stateManager != null) {
                     // replace our dummy values with the real ones, now we know our thread and assignment
                     final Set<TopicPartition> inputPartitions = entry.getValue();
 
 
-                    assignedTasks.put(stateManager.taskId(), inputPartitions);
+                    assignedTasks.put(stateManager.stateMngr.taskId(), inputPartitions);
                 }
             }
 
@@ -391,7 +394,7 @@ public class TaskManager {
                 updateInputPartitionsOfStandbyTaskIfTheyChanged(task, task.inputPartitions());
                 out.put(task, task.inputPartitions());
             }
-
+            this.tasks.addPendingTasksToInit(tasks);
             return out;
         } else {
             return Collections.emptyMap();

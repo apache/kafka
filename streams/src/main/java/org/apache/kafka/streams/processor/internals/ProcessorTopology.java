@@ -84,6 +84,10 @@ public class ProcessorTopology {
         return sourceNodesByTopic.get(topic);
     }
 
+    public Map<String, SourceNode<?, ?>> getSourceNodesByTopic() {
+        return sourceNodesByTopic;
+    }
+
     public Set<SourceNode<?, ?>> sources() {
         return new HashSet<>(sourceNodesByTopic.values());
     }

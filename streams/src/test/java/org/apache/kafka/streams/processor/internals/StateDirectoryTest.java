@@ -845,7 +845,7 @@ public class StateDirectoryTest {
     public void shouldNotAssignStartupTasksWeDontHave() {
         final TaskId taskId = new TaskId(0, 0);
         initializeStartupTasks(taskId, false);
-        final ProcessorStateManager stateManager = directory.removeStartupTask(taskId);
+        final ProcessorStateManager stateManager = directory.removeStartupTask(taskId).getStateMngr();
         assertNull(stateManager);
     }
 
@@ -860,7 +860,7 @@ public class StateDirectoryTest {
 
         @Override
         public void run() {
-            result.set(directory.removeStartupTask(taskId));
+            result.set(directory.removeStartupTask(taskId).stateMngr);
         }
     }
 

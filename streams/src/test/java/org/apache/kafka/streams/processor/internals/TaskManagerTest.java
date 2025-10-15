@@ -4740,7 +4740,7 @@ public class TaskManagerTest {
             .thenReturn(activeTask);
 
         when(stateDirectory.hasStartupTasks()).thenReturn(true, false);
-        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(stateManager, stateManager);
+        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(new StateDirectory.StateMngrAndTopologyProcessor(null, null));
         when(standbyTaskCreator.createTasks(any())).thenReturn(Set.of(startupTask));
 
         taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
@@ -4765,7 +4765,7 @@ public class TaskManagerTest {
         final StandbyTask startupTask = standbyTask(taskId00, taskId00ChangelogPartitions).build();
 
         when(stateDirectory.hasStartupTasks()).thenReturn(true, true, false);
-        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(stateManager, stateManager);
+        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(new StateDirectory.StateMngrAndTopologyProcessor(null, null));
         when(standbyTaskCreator.createTasks(any())).thenReturn(Set.of(startupTask));
 
         taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
@@ -4796,7 +4796,7 @@ public class TaskManagerTest {
                 .thenReturn(activeTask);
 
         when(stateDirectory.hasStartupTasks()).thenReturn(true, false);
-        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(stateManager, stateManager);
+        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(new StateDirectory.StateMngrAndTopologyProcessor(null, null));
         when(activeTaskCreator.createTasks(any(), any())).thenReturn(Set.of(startupTask));
 
         taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
@@ -4831,7 +4831,7 @@ public class TaskManagerTest {
         final StandbyTask startupTask = standbyTask(taskId00, taskId00ChangelogPartitions).build();
 
         when(stateDirectory.hasStartupTasks()).thenReturn(true, true, false);
-        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(stateManager, stateManager);
+        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(new StateDirectory.StateMngrAndTopologyProcessor(null, null), new StateDirectory.StateMngrAndTopologyProcessor(null, null));
         when(standbyTaskCreator.createTasks(any())).thenReturn(Set.of(startupTask));
 
         assertFalse(taskRegistry.hasPendingTasksToInit());

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -24,13 +25,22 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
+import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,10 +55,12 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +74,7 @@ import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.wrapWithReadWriteStore;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.parseTaskDirectoryName;
 
@@ -110,7 +123,7 @@ public class StateDirectory implements AutoCloseable {
     private FileLock stateDirLock;
 
     private final StreamsConfig config;
-    private final ConcurrentMap<TaskId, ProcessorStateManager> tasksForLocalState = new ConcurrentHashMap<>();
+    private final ConcurrentMap<TaskId, StateMngrAndTopologyProcessor> tasksForLocalState = new ConcurrentHashMap<>();
 
     /**
      * Ensures that the state base directory as well as the application's sub-directory are created.
@@ -226,7 +239,33 @@ public class StateDirectory implements AutoCloseable {
                         inputPartitions,
                         stateUpdaterEnabled
                     );
-                    tasksForLocalState.put(id, stateManager);
+                    stateManager.close();
+                    Map<String, SourceNode<?, ?>> sourceNodesByTopic = subTopology.getSourceNodesByTopic();
+                    log.warn("sourceNodesByTopic {}", sourceNodesByTopic);
+                    final InitContext initContext = new InitContext(id, config, stateManager);
+//                    for (StateStore stateStore : subTopology.stateStores()) {
+//                        if (alreadyOpened.containsKey(stateStore.name())) {
+//                            continue;
+//                        }
+//                        stateStore.open(initContext);
+//                        log.warn("Task id " + id + "Store " + stateStore.name() + " opened for startup");
+//                        assert stateStore.isOpen();
+//                        alreadyOpened.put(stateStore.name(), true);
+//                    }
+
+//                    for (StateStore globalStateStore : subTopology.globalStateStores()) {
+//                        globalStateStore.open(initContext);
+//                        log.warn("Global Task id " + id + "Store " + globalStateStore.name() + " opened for startup");
+//                        assert globalStateStore.isOpen();
+//                    }
+                    log.trace("Task id " + id + " opened for startup");
+                    StateManagerUtil.registerStateStores(log, "", subTopology, stateManager, this, initContext);
+                    for (StateStore stateStore : subTopology.stateStores()) {
+                        if (!stateStore.isOpen()) {
+                            throw new IllegalStateException("StateStore [" + stateStore.name() + "] is not open");
+                        }
+                    }
+                    tasksForLocalState.put(id, new StateMngrAndTopologyProcessor(subTopology, stateManager));
                 }
             }
         }
@@ -236,8 +275,26 @@ public class StateDirectory implements AutoCloseable {
         return !tasksForLocalState.isEmpty();
     }
 
-    public ProcessorStateManager removeStartupTask(final TaskId taskId) {
-        final ProcessorStateManager task = tasksForLocalState.remove(taskId);
+    public static class StateMngrAndTopologyProcessor {
+        public final ProcessorTopology processorTopology;
+        public final ProcessorStateManager stateMngr;
+
+        public StateMngrAndTopologyProcessor(final ProcessorTopology processorTopology, final ProcessorStateManager stateMngr) {
+            this.processorTopology = processorTopology;
+            this.stateMngr = stateMngr;
+        }
+
+        public ProcessorStateManager getStateMngr() {
+            return stateMngr;
+        }
+
+        public ProcessorTopology getProcessorTopology() {
+            return processorTopology;
+        }
+    }
+
+    public StateMngrAndTopologyProcessor removeStartupTask(final TaskId taskId) {
+        final StateMngrAndTopologyProcessor task = tasksForLocalState.remove(taskId);
         if (task != null) {
             lockedTasksToOwner.replace(taskId, Thread.currentThread());
         }
@@ -252,11 +309,11 @@ public class StateDirectory implements AutoCloseable {
         if (!tasksForLocalState.isEmpty()) {
             // "drain" Tasks first to ensure that we don't try to close Tasks that another thread is attempting to close
             final Set<ProcessorStateManager> drainedTasks = new HashSet<>(tasksForLocalState.size());
-            for (final Map.Entry<TaskId, ProcessorStateManager> entry : tasksForLocalState.entrySet()) {
-                if (predicate.test(entry.getValue().taskId()) && removeStartupTask(entry.getKey()) != null) {
+            for (final Map.Entry<TaskId, StateMngrAndTopologyProcessor> entry : tasksForLocalState.entrySet()) {
+                if (predicate.test(entry.getValue().stateMngr.taskId()) && removeStartupTask(entry.getKey()) != null) {
                     // only add to our list of drained Tasks if we exclusively "claimed" a Task from tasksForLocalState
                     // to ensure we don't accidentally try to drain the same Task multiple times from concurrent threads
-                    drainedTasks.add(entry.getValue());
+                    drainedTasks.add(entry.getValue().stateMngr);
                 }
             }
 
@@ -736,6 +793,99 @@ public class StateDirectory implements AutoCloseable {
         } catch (final OverlappingFileLockException e) {
             return null;
         }
+    }
+
+    public static class InitContext extends AbstractProcessorContext<Object, Object> {
+
+        private final StateManager stateManager;
+
+        public InitContext(final TaskId taskId, final StreamsConfig config, final StateManager stateManager) {
+            super(taskId, config, null, null);
+            this.stateManager = stateManager;
+        }
+
+        @Override
+        protected StateManager stateManager() {
+            return stateManager;
+        }
+
+        @Override
+        public void transitionToActive(StreamTask streamTask, RecordCollector recordCollector, ThreadCache newCache) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public void transitionToStandby(ThreadCache newCache) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public void registerCacheFlushListener(String namespace, ThreadCache.DirtyEntryFlushListener listener) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public void logChange(String storeName, Bytes key, byte[] value, long timestamp, Position position) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public Cancellable schedule(Duration interval, PunctuationType type, Punctuator callback) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public <K, V> void forward(K key, V value) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public <K, V> void forward(K key, V value, To to) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public void commit() {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public long currentStreamTimeMs() {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public <K, V> void forward(FixedKeyRecord<K, V> record) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public <K, V> void forward(FixedKeyRecord<K, V> record, String childName) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public <K, V> void forward(Record<K, V> record) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public <K, V> void forward(Record<K, V> record, String childName) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public StreamsMetricsImpl metrics() {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public <S extends StateStore> S getStateStore(String name) {
+            final StateStore store = stateManager().store(name);
+            return (S) wrapWithReadWriteStore(store);
+        }
+
     }
 
     public static class TaskDirectory {
