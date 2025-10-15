@@ -102,7 +102,7 @@ ext {
   userKeepAliveModeString = project.hasProperty("keepAliveMode") ? keepAliveMode : "daemon"
   userKeepAliveMode = KeepAliveMode.values().find(m -> m.name().toLowerCase().equals(userKeepAliveModeString))
   if (userKeepAliveMode == null) {
-    def keepAliveValues = KeepAliveMode.values().collect(m -> m.name.toLowerCase())
+    def keepAliveValues = KeepAliveMode.values().collect(m -> m.name().toLowerCase())
     throw new GradleException("Unexpected value for keepAliveMode property. Expected one of $keepAliveValues, but received: $userKeepAliveModeString")
   }
 
@@ -136,6 +136,11 @@ ext {
       options.compilerArgs << "-Xlint:-serial"
       options.compilerArgs << "-Xlint:-try"
       options.compilerArgs << "-Werror"
+      if (userKeepAliveMode == KeepAliveMode.SESSION){
+        // Suppress warning triggered under keepAliveMode=SESSION during joint compilation
+        // Unexpected javac output: warning: [path] bad path element ".../core/build/classes/java/main": no such file or directory
+        options.compilerArgs << "-Xlint:-path"
+      }
     }
   }
 
@@ -603,6 +608,9 @@ subprojects {
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
@@ -635,6 +643,9 @@ subprojects {
   }
 
   task unitTest(type: Test, dependsOn: compileJava) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 

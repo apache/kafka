@@ -35,6 +35,7 @@ public final class RemoteStorageThreadPool extends ThreadPoolExecutor {
     private static final Logger LOGGER = LoggerFactory.getLogger(RemoteStorageThreadPool.class);
     @Deprecated(since = "4.2")
     // This metrics group is used to register deprecated metrics. It will be removed in Kafka 5.0
+    // Changing the package or class name may cause incompatibility with existing code and metrics configuration
     private final KafkaMetricsGroup deprecatedLogMetricsGroup = new KafkaMetricsGroup("org.apache.kafka.storage.internals.log", "RemoteStorageThreadPool");
     private final KafkaMetricsGroup logRemoteMetricsGroup = new KafkaMetricsGroup("kafka.log.remote", "RemoteStorageThreadPool");
 

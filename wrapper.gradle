@@ -28,7 +28,6 @@ wrapper {
 
 // Custom task to inject support for downloading the gradle wrapper jar if it doesn't exist.
 // This allows us to avoid checking in the jar to our repository.
-// Additionally adds a license header to the wrapper while editing the file contents.
 task bootstrapWrapper() {
     // In the doLast block so this runs when the task is called and not during project configuration.
     doLast {
