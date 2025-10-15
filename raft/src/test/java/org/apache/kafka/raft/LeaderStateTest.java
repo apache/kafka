@@ -82,6 +82,9 @@ public class LeaderStateTest {
         Mockito
             .when(partitionState.voterSetAtOffset(anyLong()))
             .thenReturn(Optional.of(voters));
+        Mockito
+                .when(partitionState.committedVoterSetFromLog(anyLong()))
+                .thenReturn(voters);
         return new LeaderState<>(
             time,
             localVoterNode,

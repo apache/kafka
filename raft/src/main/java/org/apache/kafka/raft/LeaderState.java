@@ -151,8 +151,7 @@ public class LeaderState<T> implements EpochState {
                 new ReplicaState(voterNode.voterKey(), hasAcknowledgedLeader, voterNode.listeners())
             );
             this.committedVoterStates.put(
-                voterNode.voterKey().id(),
-                    getReplicaState(voterNode.voterKey()).orElse(new ReplicaState(voterNode.voterKey(), false, voterNode.listeners()))
+                voterNode.voterKey().id(), getOrBuildReplicaState(voterNode)
             );
         }
         this.grantingVoters = Set.copyOf(grantingVoters);
@@ -880,23 +879,22 @@ public class LeaderState<T> implements EpochState {
     }
 
     private void updateCommittedVoter(long highWatermark) {
-        // high watermark is the offset will be written so we need to minus 1
         Optional<VoterSet> voters = partitionState.voterSetAtOffsetUnchecked(highWatermark);
         Map<Integer, ReplicaState> newCommittedVoterStates = new HashMap<>();
         if (voters.isPresent()) {
             log.debug("Read committed voter with start offset={} from memory", highWatermark);
             // if voters are present in partitionState, we read it from memory
             for (VoterSet.VoterNode voterNode : voters.get().voterNodes()) {
-                newCommittedVoterStates.put(voterNode.voterKey().id(),
-                        getReplicaState(voterNode.voterKey()).orElse(new ReplicaState(voterNode.voterKey(), false, voterNode.listeners())));            }
+                newCommittedVoterStates.put(voterNode.voterKey().id(), getOrBuildReplicaState(voterNode));
+            }
         } else {
             log.debug("Read committed voter with start offset={} from log", highWatermark);
             VoterSet committedvoterSet = partitionState.committedVoterSetFromLog(highWatermark);
             for (VoterSet.VoterNode voterNode : committedvoterSet.voterNodes()) {
-                newCommittedVoterStates.put(voterNode.voterKey().id(),
-                        getReplicaState(voterNode.voterKey()).orElse(new ReplicaState(voterNode.voterKey(), false, voterNode.listeners())));
+                newCommittedVoterStates.put(voterNode.voterKey().id(), getOrBuildReplicaState(voterNode));
             }
         }
+        committedVoterStates.clear();
         committedVoterStates = newCommittedVoterStates;
     }
 
@@ -932,6 +930,10 @@ public class LeaderState<T> implements EpochState {
             return observerStates.get(replicaKey);
         }
         return state;
+    }
+
+    public ReplicaState getOrBuildReplicaState(VoterSet.VoterNode voterNode) {
+        return getReplicaState(voterNode.voterKey()).orElse(new ReplicaState(voterNode.voterKey(), false, voterNode.listeners()));
     }
 
     public Optional<ReplicaState> getReplicaState(ReplicaKey replicaKey) {

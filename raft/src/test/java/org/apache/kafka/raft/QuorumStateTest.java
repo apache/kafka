@@ -76,11 +76,14 @@ public class QuorumStateTest {
             .when(mockPartitionState.lastVoterSetOffset())
             .thenReturn(kraftVersion.isReconfigSupported() ? OptionalLong.of(0) : OptionalLong.empty());
         Mockito
-            .when(mockPartitionState.lastKraftVersion())
-            .thenReturn(kraftVersion);
-        Mockito
             .when(mockPartitionState.voterSetAtOffset(anyLong()))
             .thenReturn(Optional.of(voterSet));
+        Mockito
+                .when(mockPartitionState.committedVoterSetFromLog(anyLong()))
+                .thenReturn(voterSet);
+        Mockito
+            .when(mockPartitionState.lastKraftVersion())
+            .thenReturn(kraftVersion);
 
         return new QuorumState(
             localId,

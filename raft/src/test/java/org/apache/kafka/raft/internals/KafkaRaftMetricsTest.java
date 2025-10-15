@@ -83,6 +83,9 @@ public class KafkaRaftMetricsTest {
             .when(mockPartitionState.voterSetAtOffset(anyLong()))
             .thenReturn(Optional.of(voterSet));
         Mockito
+                .when(mockPartitionState.committedVoterSetFromLog(anyLong()))
+                .thenReturn(voterSet);
+        Mockito
             .when(mockPartitionState.lastKraftVersion())
             .thenReturn(kraftVersion);
 
