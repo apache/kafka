@@ -87,6 +87,8 @@ public class RegexSourceIntegrationTest {
     private static final int NUM_BROKERS = 1;
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
+    private static final List<TopicPartition> ASSIGNED_PARTITIONS = new ArrayList<>();
+
     @BeforeAll
     public static void startCluster() throws IOException, InterruptedException {
         CLUSTER.start();
