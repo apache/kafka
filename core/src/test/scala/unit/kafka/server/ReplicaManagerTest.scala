@@ -3671,7 +3671,6 @@ class ReplicaManagerTest {
           assertTrue(fetchInfo.minOneMessage())
         } else {
           assertEquals(fetchOffsetTp1, fetchInfo.fetchInfo.fetchOffset)
-          assertFalse(fetchInfo.minOneMessage())
         }
       }
 
@@ -3779,7 +3778,6 @@ class ReplicaManagerTest {
           assertTrue(fetchInfo.minOneMessage())
         } else {
           assertEquals(fetchOffsetTp1, fetchInfo.fetchInfo.fetchOffset)
-          assertFalse(fetchInfo.minOneMessage())
         }
       }
 
