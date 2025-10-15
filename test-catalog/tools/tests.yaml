@@ -972,6 +972,10 @@ org.apache.kafka.tools.streams.StreamsGroupCommandTest:
 - testDeleteStreamsGroup
 - testDescribeStreamsGroups
 - testDescribeStreamsGroupsGetOffsets
+- testExitCodeOnExecutionException
+- testExitCodeOnIllegalArguments
+- testExitCodeOnInterruptedException
+- testExitCodeOnInvalidOption
 - testGroupStatesFromString
 - testListStreamsGroups
 - testListStreamsGroupsWithStates
