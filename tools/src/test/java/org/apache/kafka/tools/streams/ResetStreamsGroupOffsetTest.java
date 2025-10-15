@@ -152,6 +152,7 @@ public class ResetStreamsGroupOffsetTest {
             getStreamsGroupService(args);
         } finally {
             assertTrue(exited.get());
+            Exit.resetExitProcedure();
         }
     }
 
@@ -168,6 +169,7 @@ public class ResetStreamsGroupOffsetTest {
             getStreamsGroupService(args);
         } finally {
             assertTrue(exited.get());
+            Exit.resetExitProcedure();
         }
     }
 

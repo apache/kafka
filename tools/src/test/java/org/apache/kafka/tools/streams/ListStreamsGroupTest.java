@@ -56,6 +56,7 @@ import java.util.stream.Collectors;
 import joptsimple.OptionException;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(600)
 @Tag("integration")
@@ -223,7 +224,7 @@ public class ListStreamsGroupTest {
     ) throws InterruptedException {
         final AtomicReference<String> out = new AtomicReference<>("");
         TestUtils.waitForCondition(() -> {
-            String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
+            String output = ToolsTestUtils.grabConsoleOutput(() -> assertEquals(0, StreamsGroupCommand.execute(args.toArray(new String[0]))));
             out.set(output);
 
             String[] lines = output.split("\n");

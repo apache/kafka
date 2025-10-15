@@ -498,6 +498,7 @@ public class StreamsGroupTest {
 
         streamsGroup.setTopology(new StreamsTopology(1, Map.of()));
         streamsGroup.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
+        streamsGroup.setValidatedTopologyEpoch(1);
 
         assertEquals(MemberState.STABLE, member1.state());
         assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
@@ -694,6 +695,7 @@ public class StreamsGroupTest {
         );
         group.setGroupEpoch(1);
         group.setTopology(new StreamsTopology(1, Map.of()));
+        group.setValidatedTopologyEpoch(1);
         group.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
         group.setTargetAssignmentEpoch(1);
         group.updateMember(new StreamsGroupMember.Builder("member1")
@@ -760,6 +762,7 @@ public class StreamsGroupTest {
 
         streamsGroup.setTopology(new StreamsTopology(1, Map.of()));
         streamsGroup.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
+        streamsGroup.setValidatedTopologyEpoch(1);
 
         assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
         assertThrows(GroupNotEmptyException.class, streamsGroup::validateDeleteGroup);
@@ -805,6 +808,7 @@ public class StreamsGroupTest {
         group.setGroupEpoch(1);
         group.setTopology(new StreamsTopology(1, Map.of()));
         group.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
+        group.setValidatedTopologyEpoch(1);
         group.setTargetAssignmentEpoch(1);
         group.updateMember(new StreamsGroupMember.Builder("member1")
             .setMemberEpoch(1)

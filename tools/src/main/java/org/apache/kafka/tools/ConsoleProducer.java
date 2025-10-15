@@ -129,7 +129,9 @@ public class ConsoleProducer {
         private final OptionSpec<Integer> maxPartitionMemoryBytesOpt;
         private final OptionSpec<String> messageReaderOpt;
         private final OptionSpec<Integer> socketBufferSizeOpt;
+        @Deprecated(since = "4.2", forRemoval = true)
         private final OptionSpec<String> propertyOpt;
+        private OptionSpec<String> readerPropertyOpt;
         private final OptionSpec<String> readerConfigOpt;
         @Deprecated(since = "4.2", forRemoval = true)
         private final OptionSpec<String> producerPropertyOpt;
@@ -230,6 +232,28 @@ public class ConsoleProducer {
                     .ofType(Integer.class)
                     .defaultsTo(1024 * 100);
             propertyOpt = parser.accepts("property",
+                            "(DEPRECATED) A mechanism to pass user-defined properties in the form key=value to the message reader. This allows custom configuration for a user-defined message reader." +
+                                    "\nDefault properties include:" +
+                                    "\n parse.key=false" +
+                                    "\n parse.headers=false" +
+                                    "\n ignore.error=false" +
+                                    "\n key.separator=\\t" +
+                                    "\n headers.delimiter=\\t" +
+                                    "\n headers.separator=," +
+                                    "\n headers.key.separator=:" +
+                                    "\n null.marker=   When set, any fields (key, value and headers) equal to this will be replaced by null" +
+                                    "\nDefault parsing pattern when:" +
+                                    "\n parse.headers=true and parse.key=true:" +
+                                    "\n  \"h1:v1,h2:v2...\\tkey\\tvalue\"" +
+                                    "\n parse.key=true:" +
+                                    "\n  \"key\\tvalue\"" +
+                                    "\n parse.headers=true:" +
+                                    "\n  \"h1:v1,h2:v2...\\tvalue\"" +
+                                    "\n This option will be removed in a future version. Use --reader-property instead.")
+                    .withRequiredArg()
+                    .describedAs("prop")
+                    .ofType(String.class);
+            readerPropertyOpt = parser.accepts("reader-property",
                             "A mechanism to pass user-defined properties in the form key=value to the message reader. This allows custom configuration for a user-defined message reader." +
                                     "\nDefault properties include:" +
                                     "\n parse.key=false" +
@@ -250,7 +274,7 @@ public class ConsoleProducer {
                     .withRequiredArg()
                     .describedAs("prop")
                     .ofType(String.class);
-            readerConfigOpt = parser.accepts("reader-config", "Config properties file for the message reader. Note that " + propertyOpt + " takes precedence over this config.")
+            readerConfigOpt = parser.accepts("reader-config", "Config properties file for the message reader. Note that " + readerPropertyOpt + " takes precedence over this config.")
                     .withRequiredArg()
                     .describedAs("config file")
                     .ofType(String.class);
@@ -292,6 +316,9 @@ public class ConsoleProducer {
             if (options.has(commandPropertyOpt) && options.has(producerPropertyOpt)) {
                 CommandLineUtils.printUsageAndExit(parser, "Options --command-property and --producer-property cannot be specified together.");
             }
+            if (options.has(readerPropertyOpt) && options.has(propertyOpt)) {
+                CommandLineUtils.printUsageAndExit(parser, "Options --reader-property and --property cannot be specified together.");
+            }
 
             if (options.has(producerPropertyOpt)) {
                 System.out.println("Warning: --producer-property is deprecated and will be removed in a future version. Use --command-property instead.");
@@ -301,6 +328,11 @@ public class ConsoleProducer {
             if (options.has(producerConfigOpt)) {
                 System.out.println("Warning: --producer.config is deprecated and will be removed in a future version. Use --command-config instead.");
                 commandConfigOpt = producerConfigOpt;
+            }
+
+            if (options.has(propertyOpt)) {
+                System.out.println("Warning: --property is deprecated and will be removed in a future version. Use --reader-property instead.");
+                readerPropertyOpt = propertyOpt;
             }
 
             try {
@@ -336,7 +368,7 @@ public class ConsoleProducer {
             }
 
             properties.put("topic", options.valueOf(topicOpt));
-            properties.putAll(propsToStringMap(parseKeyValueArgs(options.valuesOf(propertyOpt))));
+            properties.putAll(propsToStringMap(parseKeyValueArgs(options.valuesOf(readerPropertyOpt))));
 
             return properties;
         }
