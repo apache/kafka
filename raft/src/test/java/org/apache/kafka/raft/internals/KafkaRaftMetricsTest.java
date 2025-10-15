@@ -38,6 +38,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mockito;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Random;
@@ -45,6 +46,7 @@ import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.anyLong;
 
 public class KafkaRaftMetricsTest {
 
@@ -77,6 +79,9 @@ public class KafkaRaftMetricsTest {
         Mockito
             .when(mockPartitionState.lastVoterSetOffset())
             .thenReturn(kraftVersion.isReconfigSupported() ? OptionalLong.of(0) : OptionalLong.empty());
+        Mockito
+            .when(mockPartitionState.voterSetAtOffset(anyLong()))
+            .thenReturn(Optional.of(voterSet));
         Mockito
             .when(mockPartitionState.lastKraftVersion())
             .thenReturn(kraftVersion);

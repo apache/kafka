@@ -47,6 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 
 public class LeaderStateTest {
@@ -78,6 +79,9 @@ public class LeaderStateTest {
         KRaftVersion kraftVersion,
         BatchAccumulator<?> accumulator
     ) {
+        Mockito
+            .when(partitionState.voterSetAtOffset(anyLong()))
+            .thenReturn(Optional.of(voters));
         return new LeaderState<>(
             time,
             localVoterNode,
