@@ -18,6 +18,7 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
+import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -25,8 +26,6 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
-import org.apache.kafka.clients.consumer.internals.RequestFuture;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -155,8 +154,9 @@ public class BrokerApiVersionsCommand {
                 .withClientSaslSupport();
 
         private final Time time;
-        private final ConsumerNetworkClient client;
+        private final NetworkClient client;
         private final List<Node> bootstrapBrokers;
+        private ClientResponse clientResponse;
 
         static AdminClient create(Properties props) {
             return create(new AbstractConfig(ADMIN_CONFIG_DEF, props, false));
@@ -199,32 +199,38 @@ public class BrokerApiVersionsCommand {
                     new ApiVersions(),
                     logContext,
                     MetadataRecoveryStrategy.NONE);
-            ConsumerNetworkClient highLevelClient = new ConsumerNetworkClient(
-                    logContext,
-                    networkClient,
-                    metadata,
-                    time,
-                    config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG),
-                    config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
-                    Integer.MAX_VALUE);
-            return new AdminClient(time, highLevelClient, metadata.fetch().nodes());
+
+            return new AdminClient(time, networkClient, metadata.fetch().nodes());
         }
 
-        AdminClient(Time time, ConsumerNetworkClient client, List<Node> bootstrapBrokers) {
+        AdminClient(Time time, NetworkClient client, List<Node> bootstrapBrokers) {
             this.time = time;
             this.client = client;
             this.bootstrapBrokers = bootstrapBrokers;
         }
 
         private AbstractResponse send(Node target, AbstractRequest.Builder<?> request) {
-            RequestFuture<ClientResponse> future = client.send(target, request);
-            while (!future.isDone()) {
-                client.poll(time.timer(DEFAULT_REQUEST_TIMEOUT_MS));
+            long now = time.milliseconds();
+            ClientRequest clientRequest = client.newClientRequest(target.idString(), request, now, true, DEFAULT_REQUEST_TIMEOUT_MS,
+                    response -> this.clientResponse = response
+            );
+
+            awaitConnect(target, now);
+            client.send(clientRequest, now);
+
+            while (!client.ready(target, now) || clientResponse == null) {
+                client.poll(DEFAULT_REQUEST_TIMEOUT_MS, now);
             }
-            if (future.succeeded()) {
-                return future.value().responseBody();
-            } else {
-                throw future.exception();
+
+            AbstractResponse abstractResponse = clientResponse.responseBody();
+            this.clientResponse = null;
+
+            return abstractResponse;
+        }
+
+        private void awaitConnect(Node node, long now) {
+            while (!client.ready(node, time.milliseconds())) {
+                client.poll(100, now);
             }
         }
 
@@ -286,11 +292,7 @@ public class BrokerApiVersionsCommand {
 
         @Override
         public void close() {
-            try {
-                client.close();
-            } catch (IOException e) {
-                LOGGER.error("Exception closing nioSelector:", e);
-            }
+            client.close();
         }
     }
 }
