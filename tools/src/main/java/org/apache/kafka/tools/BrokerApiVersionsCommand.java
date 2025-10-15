@@ -421,7 +421,7 @@ public class BrokerApiVersionsCommand {
 
         @Override
         public void close() {
-            // Nothing to close
+            metadataOpt.ifPresent(Metadata::close);
         }
     }
 }
