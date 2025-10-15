@@ -21,16 +21,22 @@ import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
 /**
  * {@code ClientTelemetryContext} provides context information for client telemetry requests,
- * including the push interval and authorization details.
+ * including the push interval.
  */
 public interface ClientTelemetryContext {
 
     /**
      * Returns the interval at which the client pushes telemetry metrics to the broker.
+     * This is the interval from the subscription.
+     * <p>
+     * Note that for the initial metric push and pushes following a subscription update
+     * or error, a jitter (between 0.5x and 1.5x of this interval) is applied to avoid
+     * multiple clients sending requests simultaneously.
+     * <p>
      * This value can be used by metrics exporters to determine when metrics should be
      * considered stale or expired.
      *
-     * @return the push interval in milliseconds
+     * @return the push interval in milliseconds from the subscription
      */
     int pushIntervalMs();
 

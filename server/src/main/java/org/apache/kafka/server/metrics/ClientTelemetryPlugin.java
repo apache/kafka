@@ -30,7 +30,7 @@ import java.util.List;
  * server to export client metrics to the registered receivers and exporters, supporting both the deprecated
  * {@link ClientTelemetryReceiver} and the new {@link ClientTelemetryExporter} interfaces.
  */
-@SuppressWarnings({"deprecation", "overloads"})
+@SuppressWarnings({"deprecation", "overloads", "removal"})
 public class ClientTelemetryPlugin {
 
     private final List<ClientTelemetryReceiver> receivers;
