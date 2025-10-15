@@ -883,18 +883,16 @@ public class LeaderState<T> implements EpochState {
         // high watermark is the offset will be written so we need to minus 1
         Optional<VoterSet> voters = partitionState.voterSetAtOffset(highWatermark - 1);
         if (voters.isPresent()) {
+            log.debug("Read committed voter with start offset={} from memory", highWatermark - 1);
             // if voters are present in partitionState, we read it from memory
             for (VoterSet.VoterNode voterNode : voters.get().voterNodes()) {
-                ReplicaKey key = voterNode.voterKey();
-                committedVoterStates.put(voterNode.voterKey().id(), getOrCreateReplicaState(key));
+                committedVoterStates.put(voterNode.voterKey().id(), getOrCreateReplicaState(voterNode));
             }
         } else {
-            highWatermark = Math.min(1, highWatermark);
-            log.info("Read committed voter with start offset={} from log", highWatermark - 1);
+            log.debug("Read committed voter with start offset={} from log", highWatermark);
             VoterSet committedvoterSet = partitionState.committedVoterSetFromLog(highWatermark - 1);
             for (VoterSet.VoterNode voterNode : committedvoterSet.voterNodes()) {
-                ReplicaKey key = voterNode.voterKey();
-                committedVoterStates.put(key.id(), getOrCreateReplicaState(key));
+                committedVoterStates.put(voterNode.voterKey().id(), getOrCreateReplicaState(voterNode));
             }
         }
     }
@@ -921,6 +919,17 @@ public class LeaderState<T> implements EpochState {
 
     public long epochStartOffset() {
         return epochStartOffset;
+    }
+
+    private ReplicaState getOrCreateReplicaState(VoterSet.VoterNode voterNode) {
+        ReplicaKey replicaKey = voterNode.voterKey();
+        ReplicaState voterState = voterStates.get(replicaKey.id());
+        if (voterState != null) return voterState;
+
+        ReplicaState observerState = observerStates.get(replicaKey.id());
+        if (observerState != null) return observerState;
+
+        return new ReplicaState(replicaKey, false, voterNode.listeners());
     }
 
     private ReplicaState getOrCreateReplicaState(ReplicaKey replicaKey) {
