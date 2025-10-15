@@ -96,7 +96,8 @@ public enum MetadataVersion {
     // Bootstrap metadata version for version 1 of the GroupVersion feature (KIP-848).
     IBP_4_0_IV0(22, "4.0", "IV0", false),
 
-    // Add ELR related metadata records (KIP-966). Note, ELR is for preview only in 4.0.
+    // Add ELR related metadata records (KIP-966).
+    // Note, ELR was for preview only in 4.0 which required enabling explicitly.
     // PartitionRecord and PartitionChangeRecord are updated.
     // ClearElrRecord is added.
     IBP_4_0_IV1(23, "4.0", "IV1", true),
@@ -115,7 +116,8 @@ public enum MetadataVersion {
 
     //
     // NOTE: MetadataVersions after this point are unstable and may be changed.
-    // If users attempt to use an unstable MetadataVersion, they will get an error.
+    // If users attempt to use an unstable MetadataVersion, they will get an error unless
+    // they have set the configuration unstable.feature.versions.enable=true.
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
 
