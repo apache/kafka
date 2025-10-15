@@ -31,14 +31,24 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class MetadataSchemaCheckerToolTest {
     @Test
     public void testVerifyEvolutionGit() throws Exception {
-        try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
-            Path rootKafkaDirectory = Paths.get("").toAbsolutePath();
-            while (!Files.exists(rootKafkaDirectory.resolve(".git"))) {
-                rootKafkaDirectory = rootKafkaDirectory.getParent();
-                if (rootKafkaDirectory == null) {
-                    throw new RuntimeException("Invalid directory, need to be within a Git repository");
-                }
+        // Try to find the Git root directory
+        Path rootKafkaDirectory = Paths.get("").toAbsolutePath();
+        boolean gitFound = false;
+        
+        while (rootKafkaDirectory != null) {
+            if (Files.exists(rootKafkaDirectory.resolve(".git"))) {
+                gitFound = true;
+                break;
             }
+            rootKafkaDirectory = rootKafkaDirectory.getParent();
+        }
+        
+        if (!gitFound) {
+            System.out.println("Skipping testVerifyEvolutionGit - not in a Git repository");
+            return; // Skip test when running from source release without Git
+        }
+        
+        try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
             Path schemaPath = rootKafkaDirectory.resolve("metadata/src/main/resources/common/metadata/AbortTransactionRecord.json");
             MetadataSchemaCheckerTool.run(
                 // In the CI environment because the CI fetch command only creates HEAD and refs/remotes/pull/... references.
