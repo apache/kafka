@@ -90,7 +90,7 @@ public class BrokerApiVersionsCommandTest {
     public void testAdminSendNoBlock(ClusterInstance clusterInstance) {
         Properties props = new Properties();
         props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
-        try (BrokerApiVersionsCommand.AdminClient admin = BrokerApiVersionsCommand.AdminClient.create(props)) {
+        try (BrokerApiVersionsCommand.AdminClient admin = BrokerApiVersionsCommand.AdminClient.create(props, false)) {
             int brokerId = clusterInstance.brokers().keySet().iterator().next();
             KafkaFuture<NodeApiVersions> future =  admin.getNodeApiVersions(new Node(brokerId + 1, "localhost", 9093, null));
             assertTrue(future.isCompletedExceptionally());

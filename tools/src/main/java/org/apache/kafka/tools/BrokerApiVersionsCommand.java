@@ -26,6 +26,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -56,6 +57,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -99,16 +101,24 @@ public class BrokerApiVersionsCommand {
         Properties props = opts.options.has(opts.commandConfigOpt) ?
                 Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) :
                 new Properties();
-        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt));
-        return AdminClient.create(props);
+        boolean usingBootstrapController = opts.options.has(opts.bootstrapControllerOpt);
+        if (usingBootstrapController) {
+            props.put(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, opts.options.valueOf(opts.bootstrapControllerOpt));
+        } else {
+            props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt));
+        }
+
+        return AdminClient.create(props, usingBootstrapController);
     }
 
     private static class BrokerVersionCommandOptions extends CommandDefaultOptions {
-        private static final String BOOTSTRAP_SERVER_DOC = "REQUIRED: The server to connect to.";
+        private static final String BOOTSTRAP_SERVER_DOC = "The server to connect to.";
+        private static final String BOOTSTRAP_CONTROLLER_DOC = "The controller to connect to.";
         private static final String COMMAND_CONFIG_DOC = "A property file containing configs to be passed to Admin Client.";
 
         final OptionSpec<String> commandConfigOpt;
         final OptionSpec<String> bootstrapServerOpt;
+        final OptionSpec<String> bootstrapControllerOpt;
 
         BrokerVersionCommandOptions(String[] args) {
             super(args);
@@ -120,13 +130,19 @@ public class BrokerApiVersionsCommand {
                     .withRequiredArg()
                     .describedAs("server(s) to use for bootstrapping")
                     .ofType(String.class);
+            bootstrapControllerOpt = parser.accepts("bootstrap-controller", BOOTSTRAP_CONTROLLER_DOC)
+                    .withRequiredArg()
+                    .describedAs("controller(s) to use for bootstrapping")
+                    .ofType(String.class);
             options = parser.parse(args);
             checkArgs();
         }
 
         private void checkArgs() {
             CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to retrieve broker version information.");
-            CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
+            Optional<String> bootstrapServer = Optional.ofNullable(options.valueOf(bootstrapServerOpt));
+            Optional<String> bootstrapController = Optional.ofNullable(options.valueOf(bootstrapControllerOpt));
+            CommandLineUtils.initializeBootstrapProperties(new Properties(), bootstrapServer, bootstrapController);
         }
     }
 
@@ -143,7 +159,8 @@ public class BrokerApiVersionsCommand {
 
         private static final AtomicInteger ADMIN_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
         private static final ConfigDef ADMIN_CONFIG_DEF = new ConfigDef()
-                .define(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.ValidList.anyNonDuplicateValues(false, false), ConfigDef.Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
+                .define(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, ConfigDef.Type.LIST, List.of(), ConfigDef.ValidList.anyNonDuplicateValues(true, false), ConfigDef.Importance.HIGH, AdminClientConfig.BOOTSTRAP_CONTROLLERS_DOC)
+                .define(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, ConfigDef.Type.LIST, List.of(), ConfigDef.ValidList.anyNonDuplicateValues(true, false), ConfigDef.Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                 .define(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG, ConfigDef.Type.STRING, ClientDnsLookup.USE_ALL_DNS_IPS.toString(), ConfigDef.ValidString.in(ClientDnsLookup.USE_ALL_DNS_IPS.toString(), ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()), ConfigDef.Importance.MEDIUM, CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, ConfigDef.Type.STRING, CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL, ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(SecurityProtocol.class)), ConfigDef.Importance.MEDIUM, CommonClientConfigs.SECURITY_PROTOCOL_DOC)
                 .define(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, DEFAULT_REQUEST_TIMEOUT_MS, ConfigDef.Importance.MEDIUM, CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
@@ -159,11 +176,11 @@ public class BrokerApiVersionsCommand {
         // store the sync response temperature
         private ClientResponse clientResponse;
 
-        static AdminClient create(Properties props) {
-            return create(new AbstractConfig(ADMIN_CONFIG_DEF, props, false));
+        static AdminClient create(Properties props, boolean usingBootstrapController) {
+            return create(new AbstractConfig(ADMIN_CONFIG_DEF, props, false), usingBootstrapController);
         }
 
-        static AdminClient create(AbstractConfig config) {
+        static AdminClient create(AbstractConfig config, boolean usingBootstrapController) {
             String clientId = "admin-" + ADMIN_CLIENT_ID_SEQUENCE.getAndIncrement();
             LogContext logContext = new LogContext("[LegacyAdminClient clientId=" + clientId + "] ");
             Time time = Time.SYSTEM;
