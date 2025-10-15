@@ -156,6 +156,7 @@ public class BrokerApiVersionsCommand {
         private final Time time;
         private final NetworkClient client;
         private final List<Node> bootstrapBrokers;
+        // store the sync response temperature
         private ClientResponse clientResponse;
 
         static AdminClient create(Properties props) {
@@ -209,16 +210,19 @@ public class BrokerApiVersionsCommand {
             this.bootstrapBrokers = bootstrapBrokers;
         }
 
-        private AbstractResponse send(Node target, AbstractRequest.Builder<?> request) {
+        private AbstractResponse sendSync(Node target, AbstractRequest.Builder<?> request, boolean waitConnection) {
             long now = time.milliseconds();
             ClientRequest clientRequest = client.newClientRequest(target.idString(), request, now, true, DEFAULT_REQUEST_TIMEOUT_MS,
                     response -> this.clientResponse = response
             );
 
-            awaitConnect(target, now);
+            if (waitConnection) {
+                awaitConnect(target, now);
+            }
+
             client.send(clientRequest, now);
 
-            while (!client.ready(target, now) || clientResponse == null) {
+            while (clientResponse == null) {
                 client.poll(DEFAULT_REQUEST_TIMEOUT_MS, now);
             }
 
@@ -228,8 +232,14 @@ public class BrokerApiVersionsCommand {
             return abstractResponse;
         }
 
+        private void awaitConnectAllBroker(List<Node> nodes, long now) {
+            for (Node node : nodes) {
+                awaitConnect(node, now);
+            }
+        }
+
         private void awaitConnect(Node node, long now) {
-            while (!client.ready(node, time.milliseconds())) {
+            while (!client.ready(node, now)) {
                 client.poll(100, now);
             }
         }
@@ -237,7 +247,7 @@ public class BrokerApiVersionsCommand {
         private AbstractResponse sendAnyNode(AbstractRequest.Builder<?> request) {
             for (Node broker : bootstrapBrokers) {
                 try {
-                    return send(broker, request);
+                    return sendSync(broker, request, true);
                 } catch (AuthenticationException e) {
                     throw e;
                 } catch (Exception e) {
@@ -250,7 +260,7 @@ public class BrokerApiVersionsCommand {
         protected KafkaFuture<NodeApiVersions> getNodeApiVersions(Node node) {
             final KafkaFutureImpl<NodeApiVersions> future = new KafkaFutureImpl<>();
             try {
-                ApiVersionsResponse response = (ApiVersionsResponse) send(node, new ApiVersionsRequest.Builder());
+                ApiVersionsResponse response = (ApiVersionsResponse) sendSync(node, new ApiVersionsRequest.Builder(), false);
                 Errors error = Errors.forCode(response.data().errorCode());
                 if (error.exception() != null) {
                     future.completeExceptionally(error.exception());
@@ -279,7 +289,9 @@ public class BrokerApiVersionsCommand {
             if (!response.errors().isEmpty()) {
                 LOGGER.debug("Metadata request contained errors: {}", response.errors());
             }
-            return response.buildCluster().nodes();
+            List<Node> nodes = response.buildCluster().nodes();
+            awaitConnectAllBroker(nodes, time.milliseconds());
+            return nodes;
         }
 
         public Map<Node, KafkaFuture<NodeApiVersions>> listAllBrokerVersionInfo() {
