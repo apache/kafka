@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
-import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -994,25 +993,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 }
 
                 if (isAtomic) {
-                    // Compute the estimated size of the records.
-                    int estimatedSize = AbstractRecords.estimateSizeInBytes(
-                        currentBatch.builder.magic(),
-                        compression.type(),
-                        recordsToAppend
-                    );
+                    // Compute the size of the records.
                     int estimatedSizeUpperBound = AbstractRecords.estimateSizeInBytes(
                         currentBatch.builder.magic(),
                         CompressionType.NONE,
                         recordsToAppend
                     );
-
-                    // Fail immediately when the records are too large to fit in a single batch
-                    // even when assuming an optimistic compression ratio.
-                    if (estimatedSize > currentBatch.builder.maxAllowedBytes()) {
-                        throw new RecordTooLargeException("Message batch size is " + estimatedSize +
-                            " bytes in append to partition " + tp + " which exceeds the maximum " +
-                            "configured size of " + currentBatch.maxBatchSize + ".");
-                    }
 
                     if (!currentBatch.builder.hasRoomFor(estimatedSizeUpperBound)) {
                         // Start a new batch when the total uncompressed data size would exceed
