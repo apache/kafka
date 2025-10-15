@@ -211,10 +211,10 @@ public class StreamsGroup implements Group {
     private int endpointInformationEpoch = -1;
 
     /**
-     * The assignment configurations for this streams group.
+     * The last used assignment configurations for this streams group.
      * This is used to determine when assignment configuration changes should trigger a rebalance.
      */
-    private TimelineHashMap<String, String> assignmentConfigs;
+    private TimelineHashMap<String, String> lastAssignmentConfigs;
 
     public StreamsGroup(
         LogContext logContext,
@@ -237,9 +237,9 @@ public class StreamsGroup implements Group {
         this.currentWarmupTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
-        this.assignmentConfigs = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.lastAssignmentConfigs = new TimelineHashMap<>(snapshotRegistry, 0);
         // Set default assignment configuration
-        this.assignmentConfigs.put("num.standby.replicas", "0");
+//        this.lastAssignmentConfigs.put("num.standby.replicas", "0");
     }
 
     /**
@@ -1111,17 +1111,19 @@ public class StreamsGroup implements Group {
     /**
      * @return The assignment configurations for this streams group.
      */
-    public Map<String, String> assignmentConfigs() {
-        return Collections.unmodifiableMap(assignmentConfigs);
+    public Map<String, String> lastAssignmentConfigs() {
+        return Collections.unmodifiableMap(lastAssignmentConfigs);
     }
 
     /**
-     * Sets a specific assignment configuration.
-     * 
-     * @param key The configuration key.
-     * @param value The configuration value.
+     * Sets last assignment configurations.
+     *
+     * @param lastAssignmentConfigs The last assignment configurations to set.
      */
-    public void setAssignmentConfig(String key, String value) {
-        this.assignmentConfigs.put(key, value);
+    public void setLastAssignmentConfigs(Map<String, String> lastAssignmentConfigs) {
+        this.lastAssignmentConfigs.clear();
+        if (lastAssignmentConfigs != null) {
+            this.lastAssignmentConfigs.putAll(lastAssignmentConfigs);
+        }
     }
 }

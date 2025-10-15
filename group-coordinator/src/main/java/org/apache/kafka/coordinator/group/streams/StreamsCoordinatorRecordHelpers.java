@@ -104,9 +104,10 @@ public class StreamsCoordinatorRecordHelpers {
         Map<String, String> assignmentConfigs
     ) {
         Objects.requireNonNull(groupId, "groupId should not be null here");
+        Objects.requireNonNull(assignmentConfigs, "assignmentConfigs should not be null here");
 
         List<StreamsGroupMetadataValue.AssignmentConfig> assignmentConfigList = new ArrayList<>();
-        if (assignmentConfigs != null && !assignmentConfigs.isEmpty()) {
+        if (!assignmentConfigs.isEmpty()) {
             assignmentConfigList = assignmentConfigs.entrySet().stream()
                 .map(entry -> new StreamsGroupMetadataValue.AssignmentConfig()
                     .setKey(entry.getKey())

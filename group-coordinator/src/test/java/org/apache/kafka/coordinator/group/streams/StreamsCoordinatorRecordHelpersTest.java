@@ -250,7 +250,18 @@ class StreamsCoordinatorRecordHelpersTest {
     }
 
     @Test
+    public void testNewStreamsGroupMetadataRecordWithNullAssignmentConfig() {
+        assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(GROUP_ID, 42, 43, 44, null));
+    }
+
+    @Test
     public void testNewStreamsGroupMetadataRecord() {
+        List<StreamsGroupMetadataValue.AssignmentConfig> expectedAssignmentConfigs = List.of(
+            new StreamsGroupMetadataValue.AssignmentConfig()
+                .setKey("num.standby.replicas")
+                .setValue("2")
+        );
         CoordinatorRecord expectedRecord = CoordinatorRecord.record(
             new StreamsGroupMetadataKey()
                 .setGroupId(GROUP_ID),
@@ -258,12 +269,15 @@ class StreamsCoordinatorRecordHelpersTest {
                 new StreamsGroupMetadataValue()
                     .setEpoch(42)
                     .setMetadataHash(43)
-                    .setValidatedTopologyEpoch(44),
+                    .setValidatedTopologyEpoch(44)
+                    .setAssignmentConfigs(expectedAssignmentConfigs),
                 (short) 0
             )
         );
 
-        assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(GROUP_ID, 42, 43, 44, Map.of()));
+        assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(GROUP_ID, 42, 43, 44, Map.of(
+            "num.standby.replicas", "2"
+        )));
     }
 
     @Test

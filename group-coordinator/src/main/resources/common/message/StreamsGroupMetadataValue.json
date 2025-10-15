@@ -30,7 +30,10 @@
     {
       "name": "AssignmentConfigs",
       "type": "[]AssignmentConfig",
-      "versions": "0+",
+      "taggedVersions": "0+",
+      "nullableVersions": "0+",
+      "tag": 1,
+      "default": null,
       "about": "Assignment configuration parameters as key-value pairs."
     }
   ],
