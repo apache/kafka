@@ -133,18 +133,18 @@ public class UtilsTest {
         int numTrials = 100;
         int maxLen = 1000;
         SplittableRandom random = new SplittableRandom(0xbd4458b165652255L);
-        long checkSum = 0;
+        long checksum = 0;
 
         for (int len = 0; len <= maxLen; ++len) {
             byte[] data = new byte[len];
             for (int i = 0; i < numTrials; ++i) {
                 random.nextBytes(data);
                 int hash = Utils.murmur2(data);
-                checkSum += Integer.toUnsignedLong(hash);
+                checksum += Integer.toUnsignedLong(hash);
             }
         }
 
-        assertEquals(0xc300f155ae8eL, checkSum);
+        assertEquals(0xc300f155ae8eL, checksum);
     }
 
     @ParameterizedTest
