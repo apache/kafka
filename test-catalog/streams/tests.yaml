@@ -1815,10 +1815,16 @@ org.apache.kafka.streams.processor.internals.DefaultStateUpdaterTest:
 - shouldUpdateStandbyTaskAfterAllActiveStatefulTasksRemoved
 org.apache.kafka.streams.processor.internals.DefaultStreamsRebalanceListenerTest:
 - testOnAllTasksLost
+- testOnAllTasksLostRecordsMetrics
+- testOnAllTasksLostRecordsMetricsEvenWithException
 - testOnAllTasksLostWithException
 - testOnTasksAssigned
+- testOnTasksAssignedRecordsMetrics
+- testOnTasksAssignedRecordsMetricsEvenWithException
 - testOnTasksAssignedWithException
 - testOnTasksRevoked
+- testOnTasksRevokedRecordsMetrics
+- testOnTasksRevokedRecordsMetricsEvenWithException
 - testOnTasksRevokedWithException
 org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContextTest:
 - shouldThrowOnForward
@@ -3523,6 +3529,10 @@ org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetricsTest:
 - shouldGetIdempotentUpdateSkipSensor
 - shouldGetProcessAtSourceSensor
 - shouldGetSuppressionEmitSensor
+org.apache.kafka.streams.processor.internals.metrics.RebalanceListenerMetricsTest:
+- shouldGetTasksAssignedSensor
+- shouldGetTasksLostSensor
+- shouldGetTasksRevokedSensor
 org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImplTest:
 - shouldAddAmountRate
 - shouldAddAmountRateAndSum

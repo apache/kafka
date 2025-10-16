@@ -2681,6 +2681,7 @@ kafka.server.ReplicaManagerTest:
 - testMaybeAddLogDirFetchers
 - testMaybeAddLogDirFetchersPausingCleaning
 - testMonitorableReplicaSelector
+- testMultipleRemoteFetchCountInOneFetchRequestWhenBreachingFetchMaxBytes
 - testMultipleRemoteFetchesInOneFetchRequest
 - testNotCallStopPartitionsForNonTieredTopics
 - testOffsetOutOfRangeExceptionWhenFetchMessages

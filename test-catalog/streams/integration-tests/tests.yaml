@@ -224,6 +224,7 @@ org.apache.kafka.streams.integration.RebalanceProtocolMigrationIntegrationTest:
 - shouldMigrateToAndFromStreamsRebalanceProtocol
 org.apache.kafka.streams.integration.RegexSourceIntegrationTest:
 - shouldAddStateStoreToRegexDefinedSource
+- shouldNotCrashIfPatternMatchesTopicHasNoData
 - testMultipleConsumersCanReadFromPartitionedTopic
 - testNoMessagesSentExceptionFromOverlappingPatterns
 - testRegexMatchesTopicsAWhenCreated
