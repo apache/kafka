@@ -1145,19 +1145,19 @@ public class OffsetMetadataManagerTest {
     private static void verifyOffsetCommitWithUnknownMemberId(OffsetMetadataManagerTestContext context) {
         // Verify that the request is rejected with the correct exception.
         assertThrows(UnknownMemberIdException.class, () -> context.commitOffset(
-                new OffsetCommitRequestData()
-                    .setGroupId("foo")
-                    .setMemberId("member")
-                    .setGenerationIdOrMemberEpoch(10)
-                    .setTopics(List.of(
-                        new OffsetCommitRequestData.OffsetCommitRequestTopic()
-                            .setName("bar")
-                            .setPartitions(List.of(
-                                new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                                    .setPartitionIndex(0)
-                                    .setCommittedOffset(100L)
-                            ))
-                    ))
+            new OffsetCommitRequestData()
+                .setGroupId("foo")
+                .setMemberId("member")
+                .setGenerationIdOrMemberEpoch(10)
+                .setTopics(List.of(
+                    new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                        .setName("bar")
+                        .setPartitions(List.of(
+                            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                                .setPartitionIndex(0)
+                                .setCommittedOffset(100L)
+                        ))
+                ))
             )
         );
     }
@@ -2541,7 +2541,7 @@ public class OffsetMetadataManagerTest {
                 ))
         ), context.fetchAllOffsets("group", "member", 0, Long.MAX_VALUE));
     }
-    
+
     @Test
     public void testConsumerGroupOffsetFetchFromAdminClient() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
