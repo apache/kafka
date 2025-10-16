@@ -150,9 +150,6 @@ public class LeaderState<T> implements EpochState {
                 voterNode.voterKey().id(),
                 new ReplicaState(voterNode.voterKey(), hasAcknowledgedLeader, voterNode.listeners())
             );
-            this.committedVoterStates.put(
-                voterNode.voterKey().id(), getOrBuildReplicaState(voterNode)
-            );
         }
         this.grantingVoters = Set.copyOf(grantingVoters);
         this.log = logContext.logger(LeaderState.class);
@@ -170,6 +167,12 @@ public class LeaderState<T> implements EpochState {
 
         kafkaRaftMetrics.addLeaderMetrics();
         this.kafkaRaftMetrics = kafkaRaftMetrics;
+
+        if (highWatermark.isPresent()) {
+            this.updateCommittedVoter(highWatermark.get().offset());
+        } else {
+            this.updateCommittedVoter(-1);
+        }
 
         if (!kraftVersionAtEpochStart.isReconfigSupported()) {
             var updatedVoters = voterSetAtEpochStart

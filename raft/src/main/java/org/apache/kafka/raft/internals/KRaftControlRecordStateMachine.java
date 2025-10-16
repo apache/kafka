@@ -116,7 +116,6 @@ public final class KRaftControlRecordStateMachine {
      * Must be called whenever the {@code log} has changed.
      */
     public void updateState() {
-
         maybeLoadSnapshot();
         maybeLoadLog();
     }
@@ -199,7 +198,6 @@ public final class KRaftControlRecordStateMachine {
      */
     public Optional<VoterSet> voterSetAtOffset(long offset) {
         checkOffsetIsValid(offset);
-
         return voterSetAtOffsetUnchecked(offset);
     }
 
@@ -211,6 +209,11 @@ public final class KRaftControlRecordStateMachine {
 
     public VoterSet committedVoterSetFromLog(long offset) {
         VoterSet voterSet = staticVoterSet;
+
+        if (offset < 0) {
+            return voterSet;
+        }
+
         LogFetchInfo info = log.read(offset, Isolation.COMMITTED);
         try (RecordsIterator<?> iterator = new RecordsIterator<>(
                 info.records,
