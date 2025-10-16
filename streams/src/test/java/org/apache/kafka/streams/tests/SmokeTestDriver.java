@@ -25,9 +25,11 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -92,6 +94,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     private static final int MAX_RECORD_EMPTY_RETRIES = 30;
+    private static final long MAX_IDLE_TIME_MS = 600000L;
 
     private static class ValueList {
         public final String key;
@@ -382,6 +385,24 @@ public class SmokeTestDriver extends SmokeTestUtil {
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, NumberDeserializer.class);
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+
+        // Verify all transactions are finished before proceeding with data verification
+        if (eosEnabled) {
+            final Properties txnProps = new Properties();
+            txnProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "verifier");
+            txnProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
+            txnProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+            txnProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+            txnProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString());
+
+            try (final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(txnProps)) {
+                verifyAllTransactionFinished(consumer, kafka);
+            } catch (final Exception e) {
+                e.printStackTrace(System.err);
+                System.out.println("FAILED");
+                return new VerificationResult(false, "Transaction verification failed: " + e.getMessage());
+            }
+        }
 
         final KafkaConsumer<String, Number> consumer = new KafkaConsumer<>(props);
         final List<TopicPartition> partitions = getAllPartitions(consumer, NUMERIC_VALUE_TOPICS);
@@ -730,6 +751,55 @@ public class SmokeTestDriver extends SmokeTestUtil {
             }
         }
         return partitions;
+    }
+
+    private static void verifyAllTransactionFinished(final KafkaConsumer<byte[], byte[]> consumer,
+                                                     final String kafka) {
+        // Get all output topics except "data" (which is the input topic)
+        final String[] outputTopics = Arrays.stream(NUMERIC_VALUE_TOPICS)
+                .filter(topic -> !topic.equals("data"))
+                .toArray(String[]::new);
+
+        final List<TopicPartition> partitions = getAllPartitions(consumer, outputTopics);
+        consumer.assign(partitions);
+        consumer.seekToEnd(partitions);
+        for (final TopicPartition tp : partitions) {
+            System.out.println(tp + " at position " + consumer.position(tp));
+        }
+
+        final Properties consumerProps = new Properties();
+        consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer-uncommitted");
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
+        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+
+        final long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
+        try (final KafkaConsumer<byte[], byte[]> consumerUncommitted = new KafkaConsumer<>(consumerProps)) {
+            while (!partitions.isEmpty() && System.currentTimeMillis() < maxWaitTime) {
+                consumer.seekToEnd(partitions);
+                final Map<TopicPartition, Long> topicEndOffsets = consumerUncommitted.endOffsets(partitions);
+
+                final java.util.Iterator<TopicPartition> iterator = partitions.iterator();
+                while (iterator.hasNext()) {
+                    final TopicPartition topicPartition = iterator.next();
+                    final long position = consumer.position(topicPartition);
+
+                    if (position == topicEndOffsets.get(topicPartition)) {
+                        iterator.remove();
+                        System.out.println("Removing " + topicPartition + " at position " + position);
+                    } else if (consumer.position(topicPartition) > topicEndOffsets.get(topicPartition)) {
+                        throw new IllegalStateException("Offset for partition " + topicPartition + " is larger than topic endOffset: " + position + " > " + topicEndOffsets.get(topicPartition));
+                    } else {
+                        System.out.println("Retry " + topicPartition + " at position " + position);
+                    }
+                }
+                sleep(1000L);
+            }
+        }
+
+        if (!partitions.isEmpty()) {
+            throw new RuntimeException("Could not read all verification records. Did not receive any new record within the last " + (MAX_IDLE_TIME_MS / 1000L) + " sec.");
+        }
     }
 
 }
