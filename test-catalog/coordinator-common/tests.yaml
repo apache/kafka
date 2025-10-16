@@ -46,6 +46,7 @@ org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeTest:
 - testCancelTimer
 - testClose
 - testCompleteTransactionEventCompletesOnlyOnce
+- testCompressibleRecordTriggersFlushAndSucceeds
 - testCoordinatorCompleteTransactionEventWriteTimeoutTaskIsCancelledWhenHighWatermarkIsUpdated
 - testCoordinatorDoNotRetainBufferLargeThanMaxMessageSize
 - testCoordinatorExecutor
@@ -53,6 +54,8 @@ org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeTest:
 - testEmptyBatch
 - testHighWatermarkUpdate
 - testHighWatermarkUpdateWithDeferredEventExceptions
+- testLargeCompressibleRecordTriggersFlushAndSucceeds
+- testLargeUncompressibleRecordTriggersFlushAndFails
 - testNonRetryableTimer
 - testOnNewMetadataImage
 - testPartitionLoadGeneratesSnapshotAtHighWatermark
