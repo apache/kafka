@@ -28,7 +28,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
@@ -181,44 +180,6 @@ class ActiveTaskCreator {
             );
         }
         return createdTasks;
-    }
-
-    public Task createTasks(final Consumer<byte[], byte[]> consumer,
-                                        final TaskId taskToBeCreated,
-                                        final Set<TopicPartition> partitions,
-                                        final ProcessorStateManager stateManager,
-                                        final ProcessorTopology topology) {
-        final LogContext logContext = getLogContext(taskToBeCreated);
-        final InternalProcessorContext<Object, Object> context = new ProcessorContextImpl(
-                taskToBeCreated,
-                applicationConfig,
-                stateManager,
-                streamsMetrics,
-                cache
-        );
-
-        if (topology.stateStores().isEmpty()) {
-            throw new IllegalStateException("No state stores defined for task " + taskToBeCreated);
-        }
-        for (StateStore stateStore : topology.stateStores()) {
-            if (!stateStore.isOpen()) {
-                throw new IllegalStateException("State store " + stateStore.name() + " is not open");
-            }
-            stateStore.init(context, stateStore);
-        }
-        if (stateManager.changelogPartitions().isEmpty()) {
-            throw new IllegalStateException("No partitions assigned to task " + taskToBeCreated);
-        }
-        stateManager.transitionTaskType(Task.TaskType.ACTIVE, logContext);
-        return createActiveTask(
-                taskToBeCreated,
-                stateManager.changelogPartitions(),
-                consumer,
-                logContext,
-                topology,
-                stateManager,
-                context
-        );
     }
 
     private RecordCollector createRecordCollector(final TaskId taskId,

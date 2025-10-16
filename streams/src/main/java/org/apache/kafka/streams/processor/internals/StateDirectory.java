@@ -238,7 +238,6 @@ public class StateDirectory implements AutoCloseable {
                         inputPartitions,
                         stateUpdaterEnabled
                     );
-                    stateManager.close();
                     final InitContext initContext = new InitContext(id, config, stateManager);
                     log.trace("Task id " + id + " opened for startup");
                     StateManagerUtil.registerStateStores(log, "", subTopology, stateManager, this, initContext);
