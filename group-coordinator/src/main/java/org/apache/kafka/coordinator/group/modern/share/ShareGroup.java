@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.modern.share;
 
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -35,6 +36,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * A Share Group.
@@ -217,7 +219,8 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         String groupInstanceId,
         int memberEpoch,
         boolean isTransactional,
-        int apiVersion
+        int apiVersion,
+        Supplier<List<TopicIdPartition>> topicIdPartitions
     ) {
         throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
     }

@@ -346,7 +346,7 @@ public class ShareGroupTest {
     public void testValidateOffsetCommit(short version) {
         ShareGroup shareGroup = createShareGroup("group-foo");
         assertThrows(GroupIdNotFoundException.class, () ->
-            shareGroup.validateOffsetCommit(null, null, -1, false, version));
+            shareGroup.validateOffsetCommit(null, null, -1, false, version, List::of));
     }
 
     @Test

@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.modern.consumer;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
@@ -59,6 +60,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.coordinator.group.Utils.toOptional;
 import static org.apache.kafka.coordinator.group.Utils.toTopicPartitionMap;
@@ -627,6 +629,9 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * @param isTransactional   Whether the offset commit is transactional or not. It has no
      *                          impact when a consumer group is used.
      * @param apiVersion        The api version.
+     * @param topicIdPartitions Supplier for a list of topic-partition pairs being committed.
+     *                          Topic ids may be ZERO_UUID if the request does not support them.
+     *                          Not used for consumer groups yet.
      * @throws UnknownMemberIdException     If the member is not found.
      * @throws StaleMemberEpochException    If the member uses the consumer protocol and the provided
      *                                      member epoch doesn't match the actual member epoch.
@@ -639,7 +644,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         String groupInstanceId,
         int memberEpoch,
         boolean isTransactional,
-        int apiVersion
+        int apiVersion,
+        Supplier<List<TopicIdPartition>> topicIdPartitions
     ) throws UnknownMemberIdException, StaleMemberEpochException, IllegalGenerationException {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,

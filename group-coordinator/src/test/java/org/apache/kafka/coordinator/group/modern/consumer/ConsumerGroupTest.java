@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.modern.consumer;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
@@ -64,6 +65,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -830,31 +832,32 @@ public class ConsumerGroupTest {
     public void testValidateTransactionalOffsetCommit(short version) {
         boolean isTransactional = true;
         ConsumerGroup group = createConsumerGroup("group-foo");
+        Supplier<List<TopicIdPartition>> partitions = List::of; // not used in validation yet
 
         // Simulate a call from the admin client without member id and member epoch.
         // This should pass only if the group is empty.
-        group.validateOffsetCommit("", "", -1, isTransactional, version);
+        group.validateOffsetCommit("", "", -1, isTransactional, version, partitions);
 
         // The member does not exist.
         assertThrows(UnknownMemberIdException.class, () ->
-            group.validateOffsetCommit("member-id", null, 0, isTransactional, version));
+            group.validateOffsetCommit("member-id", null, 0, isTransactional, version, partitions));
 
         // Create a member.
         group.updateMember(new ConsumerGroupMember.Builder("member-id").build());
 
         // A call from the admin client should fail as the group is not empty.
         assertThrows(UnknownMemberIdException.class, () ->
-            group.validateOffsetCommit("", "", -1, isTransactional, version));
+            group.validateOffsetCommit("", "", -1, isTransactional, version, partitions));
 
         // The member epoch is stale.
         assertThrows(StaleMemberEpochException.class, () ->
-            group.validateOffsetCommit("member-id", "", 10, isTransactional, version));
+            group.validateOffsetCommit("member-id", "", 10, isTransactional, version, partitions));
 
         // This should succeed.
-        group.validateOffsetCommit("member-id", "", 0, isTransactional, version);
+        group.validateOffsetCommit("member-id", "", 0, isTransactional, version, partitions);
 
         // This should succeed.
-        group.validateOffsetCommit("", null, -1, isTransactional, version);
+        group.validateOffsetCommit("", null, -1, isTransactional, version, partitions);
     }
 
     @ParameterizedTest
@@ -862,14 +865,15 @@ public class ConsumerGroupTest {
     public void testValidateOffsetCommit(short version) {
         boolean isTransactional = false;
         ConsumerGroup group = createConsumerGroup("group-foo");
+        Supplier<List<TopicIdPartition>> partitions = List::of; // not used in validation yet
 
         // Simulate a call from the admin client without member id and member epoch.
         // This should pass only if the group is empty.
-        group.validateOffsetCommit("", "", -1, isTransactional, version);
+        group.validateOffsetCommit("", "", -1, isTransactional, version, partitions);
 
         // The member does not exist.
         assertThrows(UnknownMemberIdException.class, () ->
-            group.validateOffsetCommit("member-id", null, 0, isTransactional, version));
+            group.validateOffsetCommit("member-id", null, 0, isTransactional, version, partitions));
 
         // Create members.
         group.updateMember(
@@ -884,27 +888,27 @@ public class ConsumerGroupTest {
 
         // A call from the admin client should fail as the group is not empty.
         assertThrows(UnknownMemberIdException.class, () ->
-            group.validateOffsetCommit("", "", -1, isTransactional, version));
+            group.validateOffsetCommit("", "", -1, isTransactional, version, partitions));
         assertThrows(UnknownMemberIdException.class, () ->
-            group.validateOffsetCommit("", null, -1, isTransactional, version));
+            group.validateOffsetCommit("", null, -1, isTransactional, version, partitions));
 
         // The member epoch is stale.
         if (version >= 9) {
             assertThrows(StaleMemberEpochException.class, () ->
-                group.validateOffsetCommit("new-protocol-member-id", "", 10, isTransactional, version));
+                group.validateOffsetCommit("new-protocol-member-id", "", 10, isTransactional, version, partitions));
         } else {
             assertThrows(UnsupportedVersionException.class, () ->
-                group.validateOffsetCommit("new-protocol-member-id", "", 10, isTransactional, version));
+                group.validateOffsetCommit("new-protocol-member-id", "", 10, isTransactional, version, partitions));
         }
         assertThrows(IllegalGenerationException.class, () ->
-            group.validateOffsetCommit("old-protocol-member-id", "", 10, isTransactional, version));
+            group.validateOffsetCommit("old-protocol-member-id", "", 10, isTransactional, version, partitions));
 
         // This should succeed.
         if (version >= 9) {
-            group.validateOffsetCommit("new-protocol-member-id", "", 0, isTransactional, version);
+            group.validateOffsetCommit("new-protocol-member-id", "", 0, isTransactional, version, partitions);
         } else {
             assertThrows(UnsupportedVersionException.class, () ->
-                group.validateOffsetCommit("new-protocol-member-id", "", 0, isTransactional, version));
+                group.validateOffsetCommit("new-protocol-member-id", "", 0, isTransactional, version, partitions));
         }
     }
 

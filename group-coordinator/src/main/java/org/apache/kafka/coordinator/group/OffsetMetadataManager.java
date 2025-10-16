@@ -483,7 +483,16 @@ public class OffsetMetadataManager {
             request.groupInstanceId(),
             request.generationIdOrMemberEpoch(),
             false,
-            context.requestVersion()
+            context.requestVersion(),
+            () -> request.topics().stream().flatMap(topic ->
+                topic.partitions().stream().map(partition ->
+                    new org.apache.kafka.common.TopicIdPartition(
+                        topic.topicId(),
+                        partition.partitionIndex(),
+                        topic.name()
+                    )
+                )
+            ).toList()
         );
 
         return group;
@@ -520,7 +529,16 @@ public class OffsetMetadataManager {
                 request.groupInstanceId(),
                 request.generationId(),
                 true,
-                context.requestVersion()
+                context.requestVersion(),
+                () -> request.topics().stream().flatMap(topic ->
+                    topic.partitions().stream().map(partition ->
+                        new org.apache.kafka.common.TopicIdPartition(
+                            org.apache.kafka.common.Uuid.ZERO_UUID, // TxnOffsetCommit doesn't have topicId
+                            partition.partitionIndex(),
+                            topic.name()
+                        )
+                    )
+                ).toList()
             );
         } catch (StaleMemberEpochException ex) {
             throw Errors.ILLEGAL_GENERATION.exception();

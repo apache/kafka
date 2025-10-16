@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.classic;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
@@ -57,6 +58,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.Utils.toConsumerProtocolAssignment;
@@ -824,6 +826,9 @@ public class ClassicGroup implements Group {
      * @param generationId      The generation id.
      * @param isTransactional   Whether the offset commit is transactional or not.
      * @param apiVersion        The api version.
+     * @param topicIdPartitions Supplier for a list of topic-partition pairs being committed.
+     *                          Topic ids may be ZERO_UUID if the request does not support them.
+     *                          Not used for classic groups.
      */
     @Override
     public void validateOffsetCommit(
@@ -831,7 +836,8 @@ public class ClassicGroup implements Group {
         String groupInstanceId,
         int generationId,
         boolean isTransactional,
-        int apiVersion
+        int apiVersion,
+        Supplier<List<TopicIdPartition>> topicIdPartitions
     ) throws CoordinatorNotAvailableException, UnknownMemberIdException, IllegalGenerationException, FencedInstanceIdException {
         if (isInState(DEAD)) {
             throw Errors.COORDINATOR_NOT_AVAILABLE.exception();
