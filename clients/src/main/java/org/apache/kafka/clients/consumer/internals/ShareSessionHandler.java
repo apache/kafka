@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.ShareAcquireMode;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -78,6 +79,11 @@ public class ShareSessionHandler {
      */
     private LinkedHashMap<TopicIdPartition, Acknowledgements> nextAcknowledgements;
 
+    /**
+     * The share acquire mode for this session.
+     */
+    private String shareAcquireMode;
+
     public ShareSessionHandler(LogContext logContext, int node, Uuid memberId) {
         this.log = logContext.logger(ShareSessionHandler.class);
         this.node = node;
@@ -111,7 +117,8 @@ public class ShareSessionHandler {
         return nextMetadata.isNewSession();
     }
 
-    public ShareFetchRequest.Builder newShareFetchBuilder(String groupId, FetchConfig fetchConfig) {
+
+    public ShareFetchRequest.Builder newShareFetchBuilder(String groupId, ShareAcquireMode shareAcquireMode, FetchConfig fetchConfig) {
         List<TopicIdPartition> added = new ArrayList<>();
         List<TopicIdPartition> removed = new ArrayList<>();
         List<TopicIdPartition> replaced = new ArrayList<>();
@@ -180,7 +187,7 @@ public class ShareSessionHandler {
         return ShareFetchRequest.Builder.forConsumer(
                 groupId, nextMetadata, fetchConfig.maxWaitMs,
                 fetchConfig.minBytes, fetchConfig.maxBytes, fetchConfig.maxPollRecords,
-                fetchConfig.maxPollRecords, added, removed, acknowledgementBatches);
+                fetchConfig.maxPollRecords, shareAcquireMode.id(), added, removed, acknowledgementBatches);
     }
 
     public ShareAcknowledgeRequest.Builder newShareAcknowledgeBuilder(String groupId, FetchConfig fetchConfig) {

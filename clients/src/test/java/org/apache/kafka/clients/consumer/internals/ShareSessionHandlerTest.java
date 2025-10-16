@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ShareAcquireMode;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -54,6 +55,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 @Timeout(120)
 public class ShareSessionHandlerTest {
     private static final LogContext LOG_CONTEXT = new LogContext("[ShareSessionHandler]=");
+    private final ShareAcquireMode shareAcquireMode = ShareAcquireMode.BATCH_OPTIMIZED;
     private final FetchConfig fetchConfig = new FetchConfig(
             ConsumerConfig.DEFAULT_FETCH_MIN_BYTES,
             ConsumerConfig.DEFAULT_FETCH_MAX_BYTES,
@@ -164,7 +166,7 @@ public class ShareSessionHandlerTest {
         TopicIdPartition foo1 = new TopicIdPartition(fooId, 1, "foo");
         handler.addPartitionToFetch(foo0, null);
         handler.addPartitionToFetch(foo1, null);
-        ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
+        ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, shareAcquireMode, fetchConfig).build().data();
         ArrayList<TopicIdPartition> expectedToSend1 = new ArrayList<>();
         expectedToSend1.add(new TopicIdPartition(fooId, 0, "foo"));
         expectedToSend1.add(new TopicIdPartition(fooId, 1, "foo"));
@@ -184,7 +186,7 @@ public class ShareSessionHandlerTest {
         handler.addPartitionToFetch(foo0, null);
         handler.addPartitionToFetch(foo1, null);
         handler.addPartitionToFetch(bar0, null);
-        ShareFetchRequestData requestData2 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
+        ShareFetchRequestData requestData2 = handler.newShareFetchBuilder(groupId, shareAcquireMode, fetchConfig).build().data();
         assertMapsEqual(reqMap(new TopicIdPartition(fooId, 0, "foo"),
                         new TopicIdPartition(fooId, 1, "foo"),
                         new TopicIdPartition(barId, 0, "bar")),
@@ -204,7 +206,7 @@ public class ShareSessionHandlerTest {
         ShareFetchResponse resp3 = ShareFetchResponse.of(error, 0, new LinkedHashMap<>(), List.of(), 0);
         handler.handleResponse(resp3, ApiKeys.SHARE_FETCH.latestVersion(true));
 
-        ShareFetchRequestData requestData4 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
+        ShareFetchRequestData requestData4 = handler.newShareFetchBuilder(groupId, shareAcquireMode, fetchConfig).build().data();
         assertEquals(requestData2.memberId(), requestData4.memberId());
         assertEquals(INITIAL_EPOCH, requestData4.shareSessionEpoch());
         assertMapsEqual(reqMap(new TopicIdPartition(fooId, 0, "foo"),
@@ -233,7 +235,7 @@ public class ShareSessionHandlerTest {
         handler.addPartitionToFetch(foo0, null);
         handler.addPartitionToFetch(foo1, null);
         handler.addPartitionToFetch(bar0, null);
-        ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
+        ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, shareAcquireMode, fetchConfig).build().data();
         assertMapsEqual(reqMap(
                         new TopicIdPartition(fooId, 0, "foo"),
                         new TopicIdPartition(fooId, 1, "foo"),
@@ -258,7 +260,7 @@ public class ShareSessionHandlerTest {
 
         // Test a fetch request which removes two partitions
         handler.addPartitionToFetch(foo1, null);
-        ShareFetchRequestData requestData2 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
+        ShareFetchRequestData requestData2 = handler.newShareFetchBuilder(groupId, shareAcquireMode, fetchConfig).build().data();
         assertEquals(memberId.toString(), requestData2.memberId());
         assertEquals(1, requestData2.shareSessionEpoch());
         assertMapsEqual(reqMap(new TopicIdPartition(fooId, 1, "foo")),
@@ -274,7 +276,7 @@ public class ShareSessionHandlerTest {
         handler.handleResponse(resp2, ApiKeys.SHARE_FETCH.latestVersion(true));
 
         handler.addPartitionToFetch(foo1, null);
-        ShareFetchRequestData requestData3 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
+        ShareFetchRequestData requestData3 = handler.newShareFetchBuilder(groupId, shareAcquireMode, fetchConfig).build().data();
         assertEquals(memberId.toString(), requestData3.memberId());
         assertEquals(INITIAL_EPOCH, requestData3.shareSessionEpoch());
         assertMapsEqual(reqMap(new TopicIdPartition(fooId, 1, "foo")),
@@ -294,7 +296,7 @@ public class ShareSessionHandlerTest {
         Uuid topicId1 = addTopicId(topicNames, "foo");
         TopicIdPartition tp = new TopicIdPartition(topicId1, 0, "foo");
         handler.addPartitionToFetch(tp, null);
-        ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
+        ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, shareAcquireMode, fetchConfig).build().data();
         assertMapsEqual(reqMap(new TopicIdPartition(topicId1, 0, "foo")),
                 handler.sessionPartitionMap());
         ArrayList<TopicIdPartition> expectedToSend1 = new ArrayList<>();
@@ -313,7 +315,7 @@ public class ShareSessionHandlerTest {
         TopicIdPartition tp2 = new TopicIdPartition(topicId2, 0, "foo");
         // Use the same data besides the topic ID
         handler.addPartitionToFetch(tp2, null);
-        ShareFetchRequestData requestData2 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
+        ShareFetchRequestData requestData2 = handler.newShareFetchBuilder(groupId, shareAcquireMode, fetchConfig).build().data();
 
         // If we started with an ID, only a new ID will count towards replaced.
         // The old topic ID partition should be forgotten, and the new one should be fetched.
@@ -338,7 +340,7 @@ public class ShareSessionHandlerTest {
         Uuid topicId = addTopicId(topicNames, "foo");
         TopicIdPartition foo0 = new TopicIdPartition(topicId, 0, "foo");
         handler.addPartitionToFetch(foo0, null);
-        ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
+        ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, shareAcquireMode, fetchConfig).build().data();
         assertMapsEqual(reqMap(foo0), handler.sessionPartitionMap());
         ArrayList<TopicIdPartition> expectedToSend1 = new ArrayList<>();
         expectedToSend1.add(new TopicIdPartition(topicId, 0, "foo"));
@@ -352,7 +354,7 @@ public class ShareSessionHandlerTest {
         handler.handleResponse(resp, ApiKeys.SHARE_FETCH.latestVersion(true));
 
         // Remove the topic from the session by setting acknowledgements only - this is not asking to fetch records
-        ShareFetchRequestData requestData2 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
+        ShareFetchRequestData requestData2 = handler.newShareFetchBuilder(groupId, shareAcquireMode, fetchConfig).build().data();
         handler.addPartitionToAcknowledgeOnly(foo0, Acknowledgements.empty());
         assertEquals(Collections.singletonList(foo0), reqForgetList(requestData2, topicNames));
 
@@ -372,7 +374,7 @@ public class ShareSessionHandlerTest {
         Uuid topicId = addTopicId(topicNames, "foo");
         TopicIdPartition foo0 = new TopicIdPartition(topicId, 0, "foo");
         handler.addPartitionToFetch(foo0, null);
-        ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
+        ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, shareAcquireMode, fetchConfig).build().data();
         assertMapsEqual(reqMap(foo0), handler.sessionPartitionMap());
         ArrayList<TopicIdPartition> expectedToSend1 = new ArrayList<>();
         expectedToSend1.add(new TopicIdPartition(topicId, 0, "foo"));
@@ -386,7 +388,7 @@ public class ShareSessionHandlerTest {
         handler.handleResponse(resp, ApiKeys.SHARE_FETCH.latestVersion(true));
 
         // Remove the topic from the session
-        ShareFetchRequestData requestData2 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
+        ShareFetchRequestData requestData2 = handler.newShareFetchBuilder(groupId, shareAcquireMode, fetchConfig).build().data();
         assertEquals(Collections.singletonList(foo0), reqForgetList(requestData2, topicNames));
 
         // Should have the same session ID, next epoch, and same ID usage
@@ -403,7 +405,7 @@ public class ShareSessionHandlerTest {
         Map<Uuid, String> topicNames = new HashMap<>();
         Uuid topicId = addTopicId(topicNames, "foo");
         handler.addPartitionToFetch(new TopicIdPartition(topicId, 0, "foo"), null);
-        ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
+        ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, shareAcquireMode, fetchConfig).build().data();
         assertMapsEqual(reqMap(new TopicIdPartition(topicId, 0, "foo")),
                 handler.sessionPartitionMap());
         ArrayList<TopicIdPartition> expectedToSend1 = new ArrayList<>();
@@ -418,7 +420,7 @@ public class ShareSessionHandlerTest {
         handler.handleResponse(resp, ApiKeys.SHARE_FETCH.latestVersion(true));
 
         // Remove the partition from the session
-        ShareFetchRequestData requestData2 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
+        ShareFetchRequestData requestData2 = handler.newShareFetchBuilder(groupId, shareAcquireMode, fetchConfig).build().data();
         assertTrue(handler.sessionPartitionMap().isEmpty());
         assertTrue(requestData2.topics().isEmpty());
         ShareFetchResponse resp2 = ShareFetchResponse.of(Errors.NONE, 0, new LinkedHashMap<>(), List.of(), 0);
@@ -427,7 +429,7 @@ public class ShareSessionHandlerTest {
         // After the topic is removed, add a recreated topic with a new ID
         Uuid topicId2 = addTopicId(topicNames, "foo");
         handler.addPartitionToFetch(new TopicIdPartition(topicId2, 0, "foo"), null);
-        ShareFetchRequestData requestData3 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
+        ShareFetchRequestData requestData3 = handler.newShareFetchBuilder(groupId, shareAcquireMode, fetchConfig).build().data();
 
         // Should have the same session ID and epoch 2.
         assertEquals(memberId.toString(), requestData3.memberId(), "Did not use same session");
@@ -455,7 +457,7 @@ public class ShareSessionHandlerTest {
         // Attempt a new ShareFetch
         TopicIdPartition foo1 = new TopicIdPartition(fooId, 1, "foo");
         handler.addPartitionToFetch(foo1, null);
-        ShareFetchRequestData requestData = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
+        ShareFetchRequestData requestData = handler.newShareFetchBuilder(groupId, shareAcquireMode, fetchConfig).build().data();
 
         // We should have cleared the unsent acknowledgements before this ShareFetch.
         assertEquals(0, requestData.topics().stream().findFirst().get().partitions().stream().findFirst().get().acknowledgementBatches().size());
