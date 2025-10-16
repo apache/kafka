@@ -143,14 +143,6 @@ public class LeaderState<T> implements EpochState {
         this.localVoterNode = localVoterNode;
         this.epoch = epoch;
         this.epochStartOffset = epochStartOffset;
-
-        for (VoterSet.VoterNode voterNode: voterSetAtEpochStart.voterNodes()) {
-            boolean hasAcknowledgedLeader = voterNode.isVoter(localVoterNode.voterKey());
-            this.voterStates.put(
-                voterNode.voterKey().id(),
-                new ReplicaState(voterNode.voterKey(), hasAcknowledgedLeader, voterNode.listeners())
-            );
-        }
         this.grantingVoters = Set.copyOf(grantingVoters);
         this.log = logContext.logger(LeaderState.class);
         this.accumulator = Objects.requireNonNull(accumulator, "accumulator must be non-null");
@@ -163,6 +155,17 @@ public class LeaderState<T> implements EpochState {
         this.offsetOfVotersAtEpochStart = offsetOfVotersAtEpochStart;
         this.kraftVersionAtEpochStart = kraftVersionAtEpochStart;
         this.partitionState = partitionState;
+
+        // When offset is empty or -1, it means the cluster is starting up.
+        boolean isInitializing = offsetOfVotersAtEpochStart.isEmpty() || offsetOfVotersAtEpochStart.getAsLong() == -1;
+        for (VoterSet.VoterNode voterNode: voterSetAtEpochStart.voterNodes()) {
+            boolean hasAcknowledgedLeader = voterNode.isVoter(localVoterNode.voterKey());
+            ReplicaState state = new ReplicaState(voterNode.voterKey(), hasAcknowledgedLeader, voterNode.listeners());
+            this.voterStates.put(voterNode.voterKey().id(), state);
+            if (isInitializing) {
+                this.committedVoterStates.put(voterNode.voterKey().id(), state);
+            }
+        }
 
         kafkaRaftMetrics.addLeaderMetrics();
         this.kafkaRaftMetrics = kafkaRaftMetrics;
@@ -717,6 +720,7 @@ public class LeaderState<T> implements EpochState {
 
         int indexOfHw = voterStates.size() / 2;
         Optional<LogOffsetMetadata> highWatermarkUpdateOpt = followersByDescendingFetchOffset.get(indexOfHw).endOffset;
+        highWatermark.ifPresent(this::updateCommittedVoter);
 
         if (highWatermarkUpdateOpt.isPresent()) {
 
@@ -738,7 +742,7 @@ public class LeaderState<T> implements EpochState {
                             !highWatermarkUpdateMetadata.metadata().equals(currentHighWatermarkMetadata.metadata()))) {
                         Optional<LogOffsetMetadata> oldHighWatermark = highWatermark;
                         highWatermark = highWatermarkUpdateOpt;
-                        highWatermark.ifPresent(highWatermark -> updateCommittedVoter(highWatermark.offset()));
+                        updateCommittedVoter(currentHighWatermarkMetadata);
                         logHighWatermarkUpdate(
                             oldHighWatermark,
                             highWatermarkUpdateMetadata,
@@ -759,7 +763,7 @@ public class LeaderState<T> implements EpochState {
                 } else {
                     Optional<LogOffsetMetadata> oldHighWatermark = highWatermark;
                     highWatermark = highWatermarkUpdateOpt;
-                    highWatermark.ifPresent(highWatermark -> updateCommittedVoter(highWatermark.offset()));
+                    updateCommittedVoter(highWatermarkUpdateMetadata);
                     logHighWatermarkUpdate(
                         oldHighWatermark,
                         highWatermarkUpdateMetadata,
@@ -874,24 +878,22 @@ public class LeaderState<T> implements EpochState {
             .collect(Collectors.toList());
     }
 
-    private void updateCommittedVoter(long highWatermark) {
-        // Relaxing the check and we can use high watermark to get voters
-        // if there is not this change, it will throw IllegalArgumentException
-        Optional<VoterSet> voters = partitionState.voterSetAtOffsetUnchecked(highWatermark);
+    private void updateCommittedVoter(LogOffsetMetadata highWatermark) {
+        log.debug("Updating committed voter states based on high watermark={} ", highWatermark);
         Map<Integer, ReplicaState> newCommittedVoterStates = new HashMap<>();
-        if (voters.isPresent()) {
-            log.debug("Read committed voter with start offset={} from memory", highWatermark);
-            for (VoterSet.VoterNode voterNode : voters.get().voterNodes()) {
+
+        // Try to retrieve the voter set at the given high watermark offset;
+        // if unavailable, fall back to the static voter set.
+        partitionState.voterSetAtOffsetUnchecked(highWatermark.offset()).ifPresentOrElse(voterSet -> {
+            for (VoterSet.VoterNode voterNode : voterSet.voterNodes()) {
                 newCommittedVoterStates.put(voterNode.voterKey().id(), getOrBuildReplicaState(voterNode));
             }
-        } else {
-            // Once there are no voters, it means we use static voter when initializing.
-            VoterSet committedvoterSet = partitionState.staticVoterSet();
-            for (VoterSet.VoterNode voterNode : committedvoterSet.voterNodes()) {
+        }, () -> {
+            for (VoterSet.VoterNode voterNode : partitionState.staticVoterSet().voterNodes()) {
                 newCommittedVoterStates.put(voterNode.voterKey().id(), getOrBuildReplicaState(voterNode));
             }
-        }
-        committedVoterStates.clear();
+        });
+
         committedVoterStates = newCommittedVoterStates;
     }
 
