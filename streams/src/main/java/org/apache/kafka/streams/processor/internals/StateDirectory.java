@@ -239,24 +239,7 @@ public class StateDirectory implements AutoCloseable {
                         stateUpdaterEnabled
                     );
                     stateManager.close();
-                    Map<String, SourceNode<?, ?>> sourceNodesByTopic = subTopology.getSourceNodesByTopic();
-                    log.warn("sourceNodesByTopic {}", sourceNodesByTopic);
                     final InitContext initContext = new InitContext(id, config, stateManager);
-//                    for (StateStore stateStore : subTopology.stateStores()) {
-//                        if (alreadyOpened.containsKey(stateStore.name())) {
-//                            continue;
-//                        }
-//                        stateStore.open(initContext);
-//                        log.warn("Task id " + id + "Store " + stateStore.name() + " opened for startup");
-//                        assert stateStore.isOpen();
-//                        alreadyOpened.put(stateStore.name(), true);
-//                    }
-
-//                    for (StateStore globalStateStore : subTopology.globalStateStores()) {
-//                        globalStateStore.open(initContext);
-//                        log.warn("Global Task id " + id + "Store " + globalStateStore.name() + " opened for startup");
-//                        assert globalStateStore.isOpen();
-//                    }
                     log.trace("Task id " + id + " opened for startup");
                     StateManagerUtil.registerStateStores(log, "", subTopology, stateManager, this, initContext);
                     for (StateStore stateStore : subTopology.stateStores()) {
