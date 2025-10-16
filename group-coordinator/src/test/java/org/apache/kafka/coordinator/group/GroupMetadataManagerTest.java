@@ -18904,10 +18904,10 @@ public class GroupMetadataManagerTest {
         assertEquals(11, metadataValue.epoch());
 
         // Verify the assignment config contains the updated value
-        List<StreamsGroupMetadataValue.AssignmentConfig> assignmentConfigs = metadataValue.assignmentConfigs();
+        List<StreamsGroupMetadataValue.LastAssignmentConfig> assignmentConfigs = metadataValue.lastAssignmentConfigs();
         assertFalse(assignmentConfigs.isEmpty(), "Expected assignment configs to be present");
 
-        StreamsGroupMetadataValue.AssignmentConfig standbyReplicasConfig = assignmentConfigs.stream()
+        StreamsGroupMetadataValue.LastAssignmentConfig standbyReplicasConfig = assignmentConfigs.stream()
             .filter(config -> "num.standby.replicas".equals(config.key()))
             .findFirst()
             .orElse(null);

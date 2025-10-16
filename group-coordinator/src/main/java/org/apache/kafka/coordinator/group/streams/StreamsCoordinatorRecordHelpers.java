@@ -106,15 +106,11 @@ public class StreamsCoordinatorRecordHelpers {
         Objects.requireNonNull(groupId, "groupId should not be null here");
         Objects.requireNonNull(assignmentConfigs, "assignmentConfigs should not be null here");
 
-        List<StreamsGroupMetadataValue.AssignmentConfig> assignmentConfigList = new ArrayList<>();
-        if (!assignmentConfigs.isEmpty()) {
-            assignmentConfigList = assignmentConfigs.entrySet().stream()
-                .map(entry -> new StreamsGroupMetadataValue.AssignmentConfig()
-                    .setKey(entry.getKey())
-                    .setValue(entry.getValue()))
-                .sorted(Comparator.comparing(StreamsGroupMetadataValue.AssignmentConfig::key))
-                .toList();
-        }
+        List<StreamsGroupMetadataValue.LastAssignmentConfig> assignmentConfigList = assignmentConfigs.entrySet().stream()
+            .map(entry -> new StreamsGroupMetadataValue.LastAssignmentConfig()
+                .setKey(entry.getKey())
+                .setValue(entry.getValue()))
+            .toList();
 
         return CoordinatorRecord.record(
             new StreamsGroupMetadataKey()
@@ -124,7 +120,7 @@ public class StreamsCoordinatorRecordHelpers {
                     .setEpoch(newGroupEpoch)
                     .setMetadataHash(metadataHash)
                     .setValidatedTopologyEpoch(validatedTopologyEpoch)
-                    .setAssignmentConfigs(assignmentConfigList),
+                    .setLastAssignmentConfigs(assignmentConfigList),
                 (short) 0
             )
         );

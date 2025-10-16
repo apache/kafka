@@ -5431,10 +5431,10 @@ public class GroupMetadataManager {
             streamsGroup.setValidatedTopologyEpoch(value.validatedTopologyEpoch());
 
             streamsGroup.setLastAssignmentConfigs(
-                value.assignmentConfigs().stream()
+                value.lastAssignmentConfigs().stream()
                     .collect(Collectors.toMap(
-                        StreamsGroupMetadataValue.AssignmentConfig::key,
-                        StreamsGroupMetadataValue.AssignmentConfig::value
+                        StreamsGroupMetadataValue.LastAssignmentConfig::key,
+                        StreamsGroupMetadataValue.LastAssignmentConfig::value
                     ))
             );
 
