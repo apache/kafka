@@ -5430,13 +5430,17 @@ public class GroupMetadataManager {
             streamsGroup.setMetadataHash(value.metadataHash());
             streamsGroup.setValidatedTopologyEpoch(value.validatedTopologyEpoch());
 
-            streamsGroup.setLastAssignmentConfigs(
-                value.lastAssignmentConfigs().stream()
-                    .collect(Collectors.toMap(
-                        StreamsGroupMetadataValue.LastAssignmentConfig::key,
-                        StreamsGroupMetadataValue.LastAssignmentConfig::value
-                    ))
-            );
+            if (value.lastAssignmentConfigs() != null) {
+                streamsGroup.setLastAssignmentConfigs(
+                    value.lastAssignmentConfigs().stream()
+                        .collect(Collectors.toMap(
+                            StreamsGroupMetadataValue.LastAssignmentConfig::key,
+                            StreamsGroupMetadataValue.LastAssignmentConfig::value
+                        ))
+                );
+            } else {
+                streamsGroup.setLastAssignmentConfigs(Map.of());
+            }
 
         } else {
             StreamsGroup streamsGroup;
