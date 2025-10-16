@@ -108,7 +108,7 @@ public class TestLinearWriteSpeed {
                 logProperties.put(TopicConfig.SEGMENT_BYTES_CONFIG, Integer.toString(segmentSize));
                 logProperties.put(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, Long.toString(flushInterval));
                 LogConfig logConfig = new LogConfig(logProperties);
-                writables[i] = new LogWritable(new File(dir, "kafka-test-" + i), logConfig, scheduler, messageSet);
+                writables[i] = new LogWritable(new File(dir, "kafka-test-" + i), logConfig, scheduler, messageSet, compression, recordsList);
             } else {
                 System.err.println("Must specify what to write to with one of --log, --channel, or --mmap");
                 Exit.exit(1);
@@ -237,10 +237,14 @@ public class TestLinearWriteSpeed {
     static class LogWritable implements Writable {
         MemoryRecords messages;
         UnifiedLog log;
+        Compression compression;
+        SimpleRecord[] records;
 
-        public LogWritable(File dir, LogConfig config, Scheduler scheduler, MemoryRecords messages) throws IOException {
+        public LogWritable(File dir, LogConfig config, Scheduler scheduler, MemoryRecords messages, Compression compression, List<SimpleRecord> recordsList) throws IOException {
             this.messages = messages;
             Utils.delete(dir);
+            this.compression = compression;
+            this.records = recordsList.toArray(new SimpleRecord[0]);
             this.log = UnifiedLog.create(
                 dir,
                 config,
@@ -262,8 +266,7 @@ public class TestLinearWriteSpeed {
         }
 
         public int write() {
-            ByteBuffer buffer = messages.buffer();
-            buffer.putLong(0, 0L);
+            this.messages = MemoryRecords.withRecords(compression, records);
             log.appendAsLeader(
                 messages,
                 0,
