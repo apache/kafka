@@ -55,7 +55,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 @Timeout(120)
 public class ShareSessionHandlerTest {
     private static final LogContext LOG_CONTEXT = new LogContext("[ShareSessionHandler]=");
-    private final ShareAcquireMode shareAcquireMode = ShareAcquireMode.BATCH_OPTIMIZED;
+    private final ShareAcquireMode shareAcquireMode = ShareAcquireMode.of("batch_optimized");
     private final FetchConfig fetchConfig = new FetchConfig(
             ConsumerConfig.DEFAULT_FETCH_MIN_BYTES,
             ConsumerConfig.DEFAULT_FETCH_MAX_BYTES,

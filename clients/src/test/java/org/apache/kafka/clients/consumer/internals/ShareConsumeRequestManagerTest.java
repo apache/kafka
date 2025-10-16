@@ -2640,7 +2640,7 @@ public class ShareConsumeRequestManagerTest {
         int maxBytes = Integer.MAX_VALUE;
         int fetchSize = 1000;
         int minBytes = 1;
-        ShareAcquireMode shareAcquireMode = ShareAcquireMode.BATCH_OPTIMIZED;
+        ShareAcquireMode shareAcquireMode = ShareAcquireMode.of("batch_optimized");
         FetchConfig fetchConfig = new FetchConfig(
                 minBytes,
                 maxBytes,
