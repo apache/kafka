@@ -82,7 +82,7 @@ public class ProduceRequestResult {
     }
 
     /**
-     * Add a dependent ProduceRequestResult that must complete before this result is considered complete.
+     * Add a dependent ProduceRequestResult.
      * This is used when a batch is split into multiple batches - in some cases like flush(), the original
      * batch's result should not complete until all split batches have completed.
      *
