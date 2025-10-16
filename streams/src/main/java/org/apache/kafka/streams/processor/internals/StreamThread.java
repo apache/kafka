@@ -346,6 +346,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     private final ChangelogReader changelogReader;
     private final ConsumerRebalanceListener rebalanceListener;
+    private final Optional<DefaultStreamsRebalanceListener> defaultStreamsRebalanceListener;
     private final Consumer<byte[], byte[]> mainConsumer;
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final Admin adminClient;
@@ -844,6 +845,17 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.logPrefix = logContext.logPrefix();
         this.log = logContext.logger(StreamThread.class);
         this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, this.assignmentErrorCode);
+        this.defaultStreamsRebalanceListener = streamsRebalanceData.map(data ->
+            new DefaultStreamsRebalanceListener(
+                this.log,
+                time,
+                data,
+                this,
+                taskManager,
+                streamsMetrics,
+                getName()
+            )
+        );
         this.taskManager = taskManager;
         this.stateUpdater = stateUpdater;
         this.restoreConsumer = restoreConsumer;
@@ -1151,24 +1163,12 @@ public class StreamThread extends Thread implements ProcessingThread {
                 if (mainConsumer instanceof ConsumerWrapper) {
                     ((ConsumerWrapper) mainConsumer).subscribe(
                         topologyMetadata.allFullSourceTopicNames(),
-                        new DefaultStreamsRebalanceListener(
-                            log,
-                            time,
-                            streamsRebalanceData.get(),
-                            this,
-                            taskManager
-                        )
+                        defaultStreamsRebalanceListener.get()
                     );
                 } else {
                     ((AsyncKafkaConsumer<byte[], byte[]>) mainConsumer).subscribe(
                         topologyMetadata.allFullSourceTopicNames(),
-                        new DefaultStreamsRebalanceListener(
-                            log,
-                            time,
-                            streamsRebalanceData.get(),
-                            this,
-                            taskManager
-                        )
+                        defaultStreamsRebalanceListener.get()
                     );
                 }
             } else {
