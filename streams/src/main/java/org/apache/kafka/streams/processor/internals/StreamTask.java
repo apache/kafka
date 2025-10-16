@@ -733,9 +733,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         if (hasPendingTxCommit) {
             // if the task has a pending TX commit, we should just retry the commit but not process any records
             // thus, the task is not processable, even if there is available data in the record queue
-            if (log.isDebugEnabled()) {
-                log.debug("Stream task {} has a pending transaction commit, skip processing it.", id());
-            }
+             log.debug("Stream task {} has a pending transaction commit, skip processing it.", id());
             return false;
         }
         final boolean readyToProcess = partitionGroup.readyToProcess(wallClockTime);
