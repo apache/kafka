@@ -882,6 +882,7 @@ public class LeaderState<T> implements EpochState {
     }
 
     private void updateCommittedVoter(long highWatermark) {
+        // The Latest set of voters can appear at offset -1 so we need to relex the check
         Optional<VoterSet> voters = partitionState.voterSetAtOffsetUnchecked(highWatermark);
         Map<Integer, ReplicaState> newCommittedVoterStates = new HashMap<>();
         if (voters.isPresent()) {
