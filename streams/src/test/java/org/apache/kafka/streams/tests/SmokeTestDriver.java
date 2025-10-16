@@ -407,60 +407,60 @@ public class SmokeTestDriver extends SmokeTestUtil {
             }
         }
 
-        final KafkaConsumer<String, Number> consumer = new KafkaConsumer<>(props);
-        final List<TopicPartition> partitions = getAllPartitions(consumer, NUMERIC_VALUE_TOPICS);
-        consumer.assign(partitions);
-        consumer.seekToBeginning(partitions);
+        try (final KafkaConsumer<String, Number> consumer = new KafkaConsumer<>(props)) {
+            final List<TopicPartition> partitions = getAllPartitions(consumer, NUMERIC_VALUE_TOPICS);
+            consumer.assign(partitions);
+            consumer.seekToBeginning(partitions);
 
-        final int recordsGenerated = inputs.size() * maxRecordsPerKey;
-        int recordsProcessed = 0;
-        final Map<String, AtomicInteger> processed =
-            Stream.of(NUMERIC_VALUE_TOPICS)
-                  .collect(Collectors.toMap(t -> t, t -> new AtomicInteger(0)));
+            final int recordsGenerated = inputs.size() * maxRecordsPerKey;
+            int recordsProcessed = 0;
+            final Map<String, AtomicInteger> processed =
+                Stream.of(NUMERIC_VALUE_TOPICS)
+                      .collect(Collectors.toMap(t -> t, t -> new AtomicInteger(0)));
 
-        final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events = new HashMap<>();
+            final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events = new HashMap<>();
 
-        VerificationResult verificationResult = new VerificationResult(false, "no results yet");
-        int retry = 0;
-        final long start = System.currentTimeMillis();
-        while (System.currentTimeMillis() - start < TimeUnit.MINUTES.toMillis(6)) {
-            final ConsumerRecords<String, Number> records = consumer.poll(Duration.ofSeconds(5));
-            if (records.isEmpty() && recordsProcessed >= recordsGenerated) {
-                verificationResult = verifyAll(inputs, events, false, eosEnabled);
-                if (verificationResult.passed()) {
-                    break;
-                } else if (retry++ > MAX_RECORD_EMPTY_RETRIES) {
-                    System.out.println(Instant.now() + " Didn't get any more results, verification hasn't passed, and out of retries.");
-                    break;
+            VerificationResult verificationResult = new VerificationResult(false, "no results yet");
+            int retry = 0;
+            final long start = System.currentTimeMillis();
+            while (System.currentTimeMillis() - start < TimeUnit.MINUTES.toMillis(6)) {
+                final ConsumerRecords<String, Number> records = consumer.poll(Duration.ofSeconds(5));
+                if (records.isEmpty() && recordsProcessed >= recordsGenerated) {
+                    verificationResult = verifyAll(inputs, events, false, eosEnabled);
+                    if (verificationResult.passed()) {
+                        break;
+                    } else if (retry++ > MAX_RECORD_EMPTY_RETRIES) {
+                        System.out.println(Instant.now() + " Didn't get any more results, verification hasn't passed, and out of retries.");
+                        break;
+                    } else {
+                        System.out.println(Instant.now() + " Didn't get any more results, but verification hasn't passed (yet). Retrying..." + retry);
+                    }
                 } else {
-                    System.out.println(Instant.now() + " Didn't get any more results, but verification hasn't passed (yet). Retrying..." + retry);
-                }
-            } else {
-                System.out.println(Instant.now() + " Get some more results from " + records.partitions() + ", resetting retry.");
+                    System.out.println(Instant.now() + " Get some more results from " + records.partitions() + ", resetting retry.");
 
-                retry = 0;
-                for (final ConsumerRecord<String, Number> record : records) {
-                    final String key = record.key();
+                    retry = 0;
+                    for (final ConsumerRecord<String, Number> record : records) {
+                        final String key = record.key();
 
-                    final String topic = record.topic();
-                    processed.get(topic).incrementAndGet();
+                        final String topic = record.topic();
+                        processed.get(topic).incrementAndGet();
 
-                    if (topic.equals("echo")) {
-                        recordsProcessed++;
-                        if (recordsProcessed % 100 == 0) {
-                            System.out.println("Echo records processed = " + recordsProcessed);
+                        if (topic.equals("echo")) {
+                            recordsProcessed++;
+                            if (recordsProcessed % 100 == 0) {
+                                System.out.println("Echo records processed = " + recordsProcessed);
+                            }
                         }
+
+                        events.computeIfAbsent(topic, t -> new HashMap<>())
+                              .computeIfAbsent(key, k -> new LinkedList<>())
+                              .add(record);
                     }
 
-                    events.computeIfAbsent(topic, t -> new HashMap<>())
-                          .computeIfAbsent(key, k -> new LinkedList<>())
-                          .add(record);
+                    System.out.println(processed);
                 }
-
-                System.out.println(processed);
             }
         }
-        consumer.close();
 
         final long finished = System.currentTimeMillis() - start;
         System.out.println("Verification time=" + finished);
