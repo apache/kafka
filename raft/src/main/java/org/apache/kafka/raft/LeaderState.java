@@ -882,18 +882,18 @@ public class LeaderState<T> implements EpochState {
     }
 
     private void updateCommittedVoter(long highWatermark) {
-        // The Latest set of voters can appear at offset -1 so we need to relex the check
+        // Relaxing the check and we can use high watermark to get voters
+        // if there is not this change, it will throw IllegalArgumentException
         Optional<VoterSet> voters = partitionState.voterSetAtOffsetUnchecked(highWatermark);
         Map<Integer, ReplicaState> newCommittedVoterStates = new HashMap<>();
         if (voters.isPresent()) {
             log.debug("Read committed voter with start offset={} from memory", highWatermark);
-            // if voters are present in partitionState, we read it from memory
             for (VoterSet.VoterNode voterNode : voters.get().voterNodes()) {
                 newCommittedVoterStates.put(voterNode.voterKey().id(), getOrBuildReplicaState(voterNode));
             }
         } else {
-            log.debug("Read committed voter with start offset={} from log", highWatermark);
-            VoterSet committedvoterSet = partitionState.committedVoterSetFromLog(highWatermark);
+            // Once there are no voters, it means we use static voter when initializing.
+            VoterSet committedvoterSet = partitionState.staticVoterSet();
             for (VoterSet.VoterNode voterNode : committedvoterSet.voterNodes()) {
                 newCommittedVoterStates.put(voterNode.voterKey().id(), getOrBuildReplicaState(voterNode));
             }
