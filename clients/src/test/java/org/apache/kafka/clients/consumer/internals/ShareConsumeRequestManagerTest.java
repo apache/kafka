@@ -24,6 +24,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ShareAcquireMode;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackEvent;
@@ -2639,6 +2640,7 @@ public class ShareConsumeRequestManagerTest {
         int maxBytes = Integer.MAX_VALUE;
         int fetchSize = 1000;
         int minBytes = 1;
+        ShareAcquireMode shareAcquireMode = ShareAcquireMode.BATCH_OPTIMIZED;
         FetchConfig fetchConfig = new FetchConfig(
                 minBytes,
                 maxBytes,
@@ -2660,6 +2662,7 @@ public class ShareConsumeRequestManagerTest {
                 metadata,
                 subscriptionState,
                 fetchConfig,
+                shareAcquireMode,
                 new ShareFetchBuffer(logContext),
                 backgroundEventHandler,
                 metricsManager,
@@ -2699,11 +2702,12 @@ public class ShareConsumeRequestManagerTest {
                                                   ShareConsumerMetadata metadata,
                                                   SubscriptionState subscriptions,
                                                   FetchConfig fetchConfig,
+                                                  ShareAcquireMode shareAcquireMode,
                                                   ShareFetchBuffer shareFetchBuffer,
                                                   BackgroundEventHandler backgroundEventHandler,
                                                   ShareFetchMetricsManager metricsManager,
                                                   ShareFetchCollector<K, V> fetchCollector) {
-            super(time, logContext, groupId, metadata, subscriptions, fetchConfig, shareFetchBuffer,
+            super(time, logContext, groupId, metadata, subscriptions, fetchConfig, shareAcquireMode, shareFetchBuffer,
                     backgroundEventHandler, metricsManager, retryBackoffMs, 1000);
             this.shareFetchCollector = fetchCollector;
             onMemberEpochUpdated(Optional.empty(), Uuid.randomUuid().toString());

@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.ShareAcquireMode;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
@@ -81,6 +82,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private final ShareConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final FetchConfig fetchConfig;
+    private final ShareAcquireMode shareAcquireMode;
     protected final ShareFetchBuffer shareFetchBuffer;
     private final BackgroundEventHandler backgroundEventHandler;
     private final Map<Integer, ShareSessionHandler> sessionHandlers;
@@ -106,6 +108,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                final ShareConsumerMetadata metadata,
                                final SubscriptionState subscriptions,
                                final FetchConfig fetchConfig,
+                               final ShareAcquireMode shareAcquireMode,
                                final ShareFetchBuffer shareFetchBuffer,
                                final BackgroundEventHandler backgroundEventHandler,
                                final ShareFetchMetricsManager metricsManager,
@@ -118,6 +121,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         this.metadata = metadata;
         this.subscriptions = subscriptions;
         this.fetchConfig = fetchConfig;
+        this.shareAcquireMode = shareAcquireMode;
         this.shareFetchBuffer = shareFetchBuffer;
         this.backgroundEventHandler = backgroundEventHandler;
         this.metricsManager = metricsManager;
@@ -244,7 +248,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             ShareSessionHandler handler = entry.getValue();
 
             log.trace("Building ShareFetch request to send to node {}", target.id());
-            ShareFetchRequest.Builder requestBuilder = handler.newShareFetchBuilder(groupId, fetchConfig);
+            ShareFetchRequest.Builder requestBuilder = handler.newShareFetchBuilder(groupId, shareAcquireMode, fetchConfig);
 
             nodesWithPendingRequests.add(target.id());
 

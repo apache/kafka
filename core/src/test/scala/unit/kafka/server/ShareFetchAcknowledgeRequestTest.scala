@@ -2471,8 +2471,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
                                       minBytes: Int = 0,
                                       maxBytes: Int = Int.MaxValue,
                                       maxRecords: Int = 500,
-                                      batchSize: Int = 500): ShareFetchRequest = {
-    ShareFetchRequest.Builder.forConsumer(groupId, metadata, maxWaitMs, minBytes, maxBytes, maxRecords, batchSize, send, forget, acknowledgementsMap)
+                                      batchSize: Int = 500,
+                                      shareAcquireMode: Byte = 0): ShareFetchRequest = {
+    ShareFetchRequest.Builder.forConsumer(groupId, metadata, maxWaitMs, minBytes, maxBytes, maxRecords, batchSize, shareAcquireMode, send, forget, acknowledgementsMap)
       .build()
   }
 
