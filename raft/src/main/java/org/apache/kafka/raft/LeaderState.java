@@ -879,7 +879,6 @@ public class LeaderState<T> implements EpochState {
     }
 
     private void updateCommittedVoter(LogOffsetMetadata highWatermark) {
-        log.debug("Updating committed voter states based on high watermark={} ", highWatermark);
         Map<Integer, ReplicaState> newCommittedVoterStates = new HashMap<>();
 
         // Try to retrieve the voter set at the given high watermark offset;
@@ -893,7 +892,7 @@ public class LeaderState<T> implements EpochState {
                 newCommittedVoterStates.put(voterNode.voterKey().id(), getOrBuildReplicaState(voterNode));
             }
         });
-
+        log.debug("Updating committed voter at high watermark={} and committedVoter={}", highWatermark, newCommittedVoterStates);
         committedVoterStates = newCommittedVoterStates;
     }
 
