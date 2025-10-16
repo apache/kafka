@@ -40,7 +40,7 @@ public enum ShareAcquireMode {
      * Case-insensitive acquire mode lookup by string name.
      */
     public static ShareAcquireMode of(final String name) {
-        return ShareAcquireMode.valueOf(name.toLowerCase(Locale.ROOT));
+        return ShareAcquireMode.valueOf(name.toUpperCase(Locale.ROOT));
     }
 
     public byte id() {
