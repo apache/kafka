@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.modern.share;
 
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -36,7 +35,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Supplier;
 
 /**
  * A Share Group.
@@ -214,13 +212,23 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
     }
 
     @Override
-    public void validateOffsetCommit(
+    public boolean validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int memberEpoch,
         boolean isTransactional,
-        int apiVersion,
-        Supplier<List<TopicIdPartition>> topicIdPartitions
+        int apiVersion
+    ) {
+        throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
+    }
+
+    @Override
+    public void validateOffsetCommitForPartition(
+        String memberId,
+        int memberEpoch,
+        String topic,
+        Uuid topicId,
+        int partition
     ) {
         throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
     }

@@ -444,12 +444,13 @@ public class OffsetMetadataManager {
     }
 
     /**
-     * Validates an OffsetCommit request.
+     * Gets the group for an OffsetCommit request.
      *
      * @param context The request context.
      * @param request The actual request.
+     * @return The group.
      */
-    private Group validateOffsetCommit(
+    private Group getGroupForOffsetCommit(
         AuthorizableRequestContext context,
         OffsetCommitRequestData request
     ) throws ApiException {
@@ -477,35 +478,16 @@ public class OffsetMetadataManager {
                 }
             }
         }
-
-        group.validateOffsetCommit(
-            request.memberId(),
-            request.groupInstanceId(),
-            request.generationIdOrMemberEpoch(),
-            false,
-            context.requestVersion(),
-            () -> request.topics().stream().flatMap(topic ->
-                topic.partitions().stream().map(partition ->
-                    new org.apache.kafka.common.TopicIdPartition(
-                        topic.topicId(),
-                        partition.partitionIndex(),
-                        topic.name()
-                    )
-                )
-            ).toList()
-        );
-
         return group;
     }
 
     /**
-     * Validates an TxnOffsetCommit request.
+     * Gets the group for a TxnOffsetCommit request.
      *
-     * @param context The request context.
      * @param request The actual request.
+     * @return The group.
      */
-    private Group validateTransactionalOffsetCommit(
-        AuthorizableRequestContext context,
+    private Group getGroupForTransactionalOffsetCommit(
         TxnOffsetCommitRequestData request
     ) throws ApiException {
         Group group;
@@ -522,28 +504,6 @@ public class OffsetMetadataManager {
                 throw Errors.ILLEGAL_GENERATION.exception();
             }
         }
-
-        try {
-            group.validateOffsetCommit(
-                request.memberId(),
-                request.groupInstanceId(),
-                request.generationId(),
-                true,
-                context.requestVersion(),
-                () -> request.topics().stream().flatMap(topic ->
-                    topic.partitions().stream().map(partition ->
-                        new org.apache.kafka.common.TopicIdPartition(
-                            org.apache.kafka.common.Uuid.ZERO_UUID, // TxnOffsetCommit doesn't have topicId
-                            partition.partitionIndex(),
-                            topic.name()
-                        )
-                    )
-                ).toList()
-            );
-        } catch (StaleMemberEpochException ex) {
-            throw Errors.ILLEGAL_GENERATION.exception();
-        }
-
         return group;
     }
 
@@ -619,7 +579,15 @@ public class OffsetMetadataManager {
         AuthorizableRequestContext context,
         OffsetCommitRequestData request
     ) throws ApiException {
-        Group group = validateOffsetCommit(context, request);
+        Group group = getGroupForOffsetCommit(context, request);
+        
+        boolean requiresPartitionValidation = group.validateOffsetCommit(
+            request.memberId(),
+            request.groupInstanceId(),
+            request.generationIdOrMemberEpoch(),
+            false,
+            context.requestVersion()
+        );
 
         // In the old consumer group protocol, the offset commits maintain the session if
         // the group is in Stable or PreparingRebalance state.
@@ -650,6 +618,17 @@ public class OffsetMetadataManager {
                         .setPartitionIndex(partition.partitionIndex())
                         .setErrorCode(Errors.OFFSET_METADATA_TOO_LARGE.code()));
                 } else {
+                    // Validate per-partition commit if needed
+                    if (requiresPartitionValidation) {
+                        group.validateOffsetCommitForPartition(
+                            request.memberId(),
+                            request.generationIdOrMemberEpoch(),
+                            topic.name(),
+                            topic.topicId(),
+                            partition.partitionIndex()
+                        );
+                    }
+
                     log.debug("[GroupId {}] Committing offsets {} for partition {}-{}-{} from member {} with leader epoch {}.",
                         request.groupId(), partition.committedOffset(), topic.topicId(), topic.name(), partition.partitionIndex(),
                         request.memberId(), partition.committedLeaderEpoch());
@@ -695,7 +674,20 @@ public class OffsetMetadataManager {
         AuthorizableRequestContext context,
         TxnOffsetCommitRequestData request
     ) throws ApiException {
-        validateTransactionalOffsetCommit(context, request);
+        Group group = getGroupForTransactionalOffsetCommit(request);
+
+        boolean requiresPartitionValidation;
+        try {
+            requiresPartitionValidation = group.validateOffsetCommit(
+                request.memberId(),
+                request.groupInstanceId(),
+                request.generationId(),
+                true,
+                context.requestVersion()
+            );
+        } catch (StaleMemberEpochException ex) {
+            throw Errors.ILLEGAL_GENERATION.exception();
+        }
 
         final TxnOffsetCommitResponseData response = new TxnOffsetCommitResponseData();
         final List<CoordinatorRecord> records = new ArrayList<>();
@@ -711,6 +703,21 @@ public class OffsetMetadataManager {
                         .setPartitionIndex(partition.partitionIndex())
                         .setErrorCode(Errors.OFFSET_METADATA_TOO_LARGE.code()));
                 } else {
+                    // Validate per-partition commit if needed
+                    if (requiresPartitionValidation) {
+                        try {
+                            group.validateOffsetCommitForPartition(
+                                request.memberId(),
+                                request.generationId(),
+                                topic.name(),
+                                org.apache.kafka.common.Uuid.ZERO_UUID,
+                                partition.partitionIndex()
+                            );
+                        } catch (StaleMemberEpochException ex) {
+                            throw Errors.ILLEGAL_GENERATION.exception();
+                        }
+                    }
+
                     log.debug("[GroupId {}] Committing transactional offsets {} for partition {}-{} from member {} with leader epoch {}.",
                         request.groupId(), partition.committedOffset(), topic.name(), partition.partitionIndex(),
                         request.memberId(), partition.committedLeaderEpoch());

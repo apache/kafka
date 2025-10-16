@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.classic;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
@@ -66,7 +65,6 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Supplier;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
@@ -997,10 +995,8 @@ public class ClassicGroupTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
     public void testValidateOffsetCommit(short version) {
-        Supplier<List<TopicIdPartition>> partitions = List::of; // not used in validation yet
-
         // A call from the admin client without any parameters should pass.
-        group.validateOffsetCommit("", "", -1, false, version, partitions);
+        group.validateOffsetCommit("", "", -1, false, version);
 
         // Add a member.
         group.add(new ClassicGroupMember(
@@ -1022,40 +1018,40 @@ public class ClassicGroupTest {
 
         // No parameters and the group is not empty.
         assertThrows(UnknownMemberIdException.class,
-            () -> group.validateOffsetCommit("", "", -1, false, version, partitions));
+            () -> group.validateOffsetCommit("", "", -1, false, version));
 
         // A transactional offset commit without any parameters
         // and a non-empty group is accepted.
-        group.validateOffsetCommit("", null, -1, true, version, partitions);
+        group.validateOffsetCommit("", null, -1, true, version);
 
         // The member id does not exist.
         assertThrows(UnknownMemberIdException.class,
-            () -> group.validateOffsetCommit("unknown", "unknown", -1, false, version, partitions));
+            () -> group.validateOffsetCommit("unknown", "unknown", -1, false, version));
 
         // The instance id does not exist.
         assertThrows(UnknownMemberIdException.class,
-            () -> group.validateOffsetCommit("member-id", "unknown", -1, false, version, partitions));
+            () -> group.validateOffsetCommit("member-id", "unknown", -1, false, version));
 
         // The generation id is invalid.
         assertThrows(IllegalGenerationException.class,
-            () -> group.validateOffsetCommit("member-id", "instance-id", 0, false, version, partitions));
+            () -> group.validateOffsetCommit("member-id", "instance-id", 0, false, version));
 
         // Group is in prepare rebalance state.
         assertThrows(RebalanceInProgressException.class,
-            () -> group.validateOffsetCommit("member-id", "instance-id", 1, false, version, partitions));
+            () -> group.validateOffsetCommit("member-id", "instance-id", 1, false, version));
 
         // Group transitions to stable.
         group.transitionTo(STABLE);
 
         // This should work.
-        group.validateOffsetCommit("member-id", "instance-id", 1, false, version, partitions);
+        group.validateOffsetCommit("member-id", "instance-id", 1, false, version);
 
         // Replace static member.
         group.replaceStaticMember("instance-id", "member-id", "new-member-id");
 
         // The old instance id should be fenced.
         assertThrows(FencedInstanceIdException.class,
-            () -> group.validateOffsetCommit("member-id", "instance-id", 1, false, version, partitions));
+            () -> group.validateOffsetCommit("member-id", "instance-id", 1, false, version));
 
         // Remove member and transitions to dead.
         group.remove("new-instance-id");
@@ -1063,7 +1059,7 @@ public class ClassicGroupTest {
 
         // This should fail with CoordinatorNotAvailableException.
         assertThrows(CoordinatorNotAvailableException.class,
-            () -> group.validateOffsetCommit("member-id", "new-instance-id", 1, false, version, partitions));
+            () -> group.validateOffsetCommit("member-id", "new-instance-id", 1, false, version));
     }
 
     @Test

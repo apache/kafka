@@ -17,7 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 
@@ -28,7 +28,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -113,16 +112,32 @@ public interface Group {
      *                                  for consumer groups.
      * @param isTransactional           Whether the offset commit is transactional or not.
      * @param apiVersion                The api version.
-     * @param topicIdPartitions         Supplier for a list of topic-partition pairs being committed.
-     *                                  Topic ids may be ZERO_UUID if the request does not support them.
+     * @return true if per-partition validation is required, false otherwise.
      */
-    void validateOffsetCommit(
+    boolean validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int generationIdOrMemberEpoch,
         boolean isTransactional,
-        int apiVersion,
-        Supplier<List<TopicIdPartition>> topicIdPartitions
+        int apiVersion
+    ) throws KafkaException;
+
+    /**
+     * Validates the OffsetCommit request for a specific partition.
+     * This is called for each partition being committed to allow per-partition validation.
+     *
+     * @param memberId    The member id.
+     * @param memberEpoch The member epoch.
+     * @param topic       The topic name.
+     * @param topicId     The topic id (may be ZERO_UUID if not available).
+     * @param partition   The partition index.
+     */
+    void validateOffsetCommitForPartition(
+        String memberId,
+        int memberEpoch,
+        String topic,
+        Uuid topicId,
+        int partition
     ) throws KafkaException;
 
     /**

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
-import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -50,7 +50,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Supplier;
 
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.DEAD;
@@ -688,31 +687,28 @@ public class StreamsGroup implements Group {
      * @param memberEpoch       The member epoch.
      * @param isTransactional   Whether the offset commit is transactional or not.
      * @param apiVersion        The api version.
-     * @param topicIdPartitions Supplier for a list of topic-partition pairs being committed.
-     *                          Topic ids may be ZERO_UUID if the request does not support them.
-     *                          Not used for streams groups yet.
+     * @return true if per-partition validation is required, false otherwise.
      * @throws UnknownMemberIdException  If the member is not found.
      * @throws StaleMemberEpochException If the provided member epoch doesn't match the actual member epoch.
      */
     @Override
-    public void validateOffsetCommit(
+    public boolean validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int memberEpoch,
         boolean isTransactional,
-        int apiVersion,
-        Supplier<List<TopicIdPartition>> topicIdPartitions
+        int apiVersion
     ) throws UnknownMemberIdException, StaleMemberEpochException {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,
         // the request can commit offsets if the group is empty.
-        if (memberEpoch < 0 && members().isEmpty()) return;
+        if (memberEpoch < 0 && members().isEmpty()) return false;
 
         // The TxnOffsetCommit API does not require the member ID, the generation ID and the group instance ID fields.
         // Hence, they are only validated if any of them is provided
         if (isTransactional && memberEpoch == JoinGroupRequest.UNKNOWN_GENERATION_ID &&
             memberId.equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) && groupInstanceId == null)
-            return;
+            return false;
 
         final StreamsGroupMember member = getMemberOrThrow(memberId);
 
@@ -724,6 +720,28 @@ public class StreamsGroup implements Group {
         }
 
         validateMemberEpoch(memberEpoch, member.memberEpoch());
+        return false;
+    }
+
+    /**
+     * Validates the OffsetCommit request for a specific partition.
+     * Not used for streams groups yet.
+     *
+     * @param memberId    The member id.
+     * @param memberEpoch The member epoch.
+     * @param topic       The topic name.
+     * @param topicId     The topic id (may be ZERO_UUID if not available).
+     * @param partition   The partition index.
+     */
+    @Override
+    public void validateOffsetCommitForPartition(
+        String memberId,
+        int memberEpoch,
+        String topic,
+        Uuid topicId,
+        int partition
+    ) {
+        // No-op for streams groups
     }
 
     /**
