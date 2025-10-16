@@ -431,9 +431,9 @@ public class GlobalStreamThread extends Thread {
         } catch (final StreamsException fatalException) {
             closeStateConsumer(stateConsumer, false);
             startupException = fatalException;
-        } catch (final Throwable throwable) {
+        } catch (final Throwable fatalException) {
             closeStateConsumer(stateConsumer, false);
-            startupException = new StreamsException("Exception caught during initialization of GlobalStreamThread", throwable);
+            startupException = new StreamsException("Exception caught during initialization of GlobalStreamThread", fatalException);
         } finally {
             initializationLatch.countDown();
         }
