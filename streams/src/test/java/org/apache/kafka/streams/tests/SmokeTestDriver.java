@@ -395,12 +395,15 @@ public class SmokeTestDriver extends SmokeTestUtil {
             txnProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
             txnProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString());
 
+            final VerificationResult txnResult;
             try (final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(txnProps)) {
-                verifyAllTransactionFinished(consumer, kafka);
-            } catch (final Exception e) {
-                e.printStackTrace(System.err);
+                txnResult = verifyAllTransactionFinished(consumer, kafka);
+            }
+
+            if (!txnResult.passed()) {
+                System.err.println("Transaction verification failed: " + txnResult.result());
                 System.out.println("FAILED");
-                return new VerificationResult(false, "Transaction verification failed: " + e.getMessage());
+                return txnResult;
             }
         }
 
@@ -510,24 +513,6 @@ public class SmokeTestDriver extends SmokeTestUtil {
                     entry.getValue().stream().map(ConsumerRecord::value).collect(Collectors.toSet()))
                 )
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)) : Collections.emptyMap();
-    }
-
-    public static class VerificationResult {
-        private final boolean passed;
-        private final String result;
-
-        VerificationResult(final boolean passed, final String result) {
-            this.passed = passed;
-            this.result = result;
-        }
-
-        public boolean passed() {
-            return passed;
-        }
-
-        public String result() {
-            return result;
-        }
     }
 
     private static VerificationResult verifyAll(final Map<String, Set<Integer>> inputs,
@@ -753,8 +738,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return partitions;
     }
 
-    private static void verifyAllTransactionFinished(final KafkaConsumer<byte[], byte[]> consumer,
-                                                     final String kafka) {
+    private static VerificationResult verifyAllTransactionFinished(final KafkaConsumer<byte[], byte[]> consumer,
+                                                                   final String kafka) {
         // Get all output topics except "data" (which is the input topic)
         final String[] outputTopics = Arrays.stream(NUMERIC_VALUE_TOPICS)
                 .filter(topic -> !topic.equals("data"))
@@ -788,7 +773,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
                         iterator.remove();
                         System.out.println("Removing " + topicPartition + " at position " + position);
                     } else if (consumer.position(topicPartition) > topicEndOffsets.get(topicPartition)) {
-                        throw new IllegalStateException("Offset for partition " + topicPartition + " is larger than topic endOffset: " + position + " > " + topicEndOffsets.get(topicPartition));
+                        return new VerificationResult(false, "Offset for partition " + topicPartition + " is larger than topic endOffset: " + position + " > " + topicEndOffsets.get(topicPartition));
                     } else {
                         System.out.println("Retry " + topicPartition + " at position " + position);
                     }
@@ -798,8 +783,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
         }
 
         if (!partitions.isEmpty()) {
-            throw new RuntimeException("Could not read all verification records. Did not receive any new record within the last " + (MAX_IDLE_TIME_MS / 1000L) + " sec.");
+            return new VerificationResult(false, "Could not read all verification records. Did not receive any new record within the last " + (MAX_IDLE_TIME_MS / 1000L) + " sec.");
         }
+        return new VerificationResult(true, "All transactions finished successfully");
     }
 
 }
