@@ -743,9 +743,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             if (timeCurrentIdlingStarted.isEmpty()) {
                 timeCurrentIdlingStarted = Optional.of(wallClockTime);
             }
-            if (log.isDebugEnabled()) {
-                log.debug("Task {} started idling at time {}", id, timeCurrentIdlingStarted.get());
-            }
+            log.debug("Task {} started idling at time {}", id, timeCurrentIdlingStarted.get());
         } else {
             timeCurrentIdlingStarted = Optional.empty();
         }
@@ -772,6 +770,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             if (record == null) {
                 log.trace("Task {} has no next record to process.", id());
                 return false;
+            } else {
+                log.trace("Task {} fetched one record {} to process.", id, record);
             }
         }
 
@@ -780,16 +780,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             if (!(record instanceof CorruptedRecord)) {
                 doProcess(wallClockTime);
+            } else {
+                log.trace("Task {} skips processing corrupted record {}", id, record);
             }
 
             // update the consumed offset map after processing is done
             consumedOffsets.put(partition, record.offset());
             commitNeeded = true;
 
-            if (log.isTraceEnabled()) {
-                log.trace("Task {} processed record: topic={}, partition={}, offset={}",
-                    id, record.topic(), record.partition(), record.offset());
-            }
+            log.trace("Task {} processed record: topic={}, partition={}, offset={}",
+                id, record.topic(), record.partition(), record.offset());
 
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
