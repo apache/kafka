@@ -2294,6 +2294,7 @@ public class ReplicationControlManager {
                                     getTopicEffectiveMinIsr(topicName)
                             )
                                     .setDirectory(brokerId, dirId)
+                                    .setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled())
                                     .setDefaultDirProvider(clusterDescriber)
                                     .build();
                             partitionChangeRecord.ifPresent(records::add);
