@@ -163,16 +163,9 @@ public class LeaderState<T> implements EpochState {
         this.offsetOfVotersAtEpochStart = offsetOfVotersAtEpochStart;
         this.kraftVersionAtEpochStart = kraftVersionAtEpochStart;
         this.partitionState = partitionState;
-        offsetOfVotersAtEpochStart.ifPresent(this::updateCommittedVoter);
 
         kafkaRaftMetrics.addLeaderMetrics();
         this.kafkaRaftMetrics = kafkaRaftMetrics;
-
-        if (highWatermark.isPresent()) {
-            this.updateCommittedVoter(highWatermark.get().offset());
-        } else {
-            this.updateCommittedVoter(-1);
-        }
 
         if (!kraftVersionAtEpochStart.isReconfigSupported()) {
             var updatedVoters = voterSetAtEpochStart
