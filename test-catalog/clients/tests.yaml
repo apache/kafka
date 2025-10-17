@@ -2950,10 +2950,12 @@ org.apache.kafka.clients.producer.internals.RecordAccumulatorTest:
 - testExponentialRetryBackoffLeaderChange
 - testFlush
 - testFull
+- testHasRoomForAllowsOversizedFirstRecordButRejectsSubsequentRecords
 - testLinger
 - testMutedPartitions
 - testNextReadyCheckDelay
 - testPartialDrain
+- testProduceRequestResultAwaitAllDependents
 - testReadyAndDrainWhenABatchIsBeingRetried
 - testRecordsDrainedWhenTransactionCompleting
 - testRetryBackoff
