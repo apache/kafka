@@ -196,10 +196,7 @@ public final class KRaftControlRecordStateMachine {
      */
     public Optional<VoterSet> voterSetAtOffset(long offset) {
         checkOffsetIsValid(offset);
-        return voterSetAtOffsetUnchecked(offset);
-    }
 
-    public Optional<VoterSet> voterSetAtOffsetUnchecked(long offset) {
         synchronized (voterSetHistory) {
             return voterSetHistory.valueAtOrBefore(offset);
         }

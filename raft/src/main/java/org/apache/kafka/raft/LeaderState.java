@@ -882,7 +882,8 @@ public class LeaderState<T> implements EpochState {
 
         // Try to retrieve the voter set at the given high watermark offset;
         // if unavailable, fall back to the static voter set.
-        partitionState.voterSetAtOffsetUnchecked(highWatermark.offset()).ifPresentOrElse(voterSet -> {
+        // Note: highWatermark is the offset will be written so it is exclusive.
+        partitionState.voterSetAtOffset(highWatermark.offset() - 1).ifPresentOrElse(voterSet -> {
             for (VoterSet.VoterNode voterNode : voterSet.voterNodes()) {
                 newCommittedVoterStates.put(voterNode.voterKey().id(), getOrBuildReplicaState(voterNode));
             }
