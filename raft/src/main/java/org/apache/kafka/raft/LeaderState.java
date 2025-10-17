@@ -720,7 +720,6 @@ public class LeaderState<T> implements EpochState {
 
         int indexOfHw = voterStates.size() / 2;
         Optional<LogOffsetMetadata> highWatermarkUpdateOpt = followersByDescendingFetchOffset.get(indexOfHw).endOffset;
-        highWatermark.ifPresent(this::updateCommittedVoter);
 
         if (highWatermarkUpdateOpt.isPresent()) {
 
