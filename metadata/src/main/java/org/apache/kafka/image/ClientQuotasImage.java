@@ -149,6 +149,9 @@ public final class ClientQuotasImage {
             String entityType = exactMatchEntry.getKey();
             String entityName = exactMatchEntry.getValue();
             for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entitiesByType.getOrDefault(entityType, Map.of()).getOrDefault(entityName, Set.of())) {
+                if (request.strict() && !entry.getKey().entries().equals(exactMatch)) {
+                    continue;
+                }
                 addEntryToResponse(response, addedEntities, entry, exactMatch.size(), typeMatch.size(), request.strict());
             }
         }
@@ -158,6 +161,12 @@ public final class ClientQuotasImage {
                 for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entrySet) {
                     addEntryToResponse(response, addedEntities, entry, typeMatch.size(), exactMatch.size(), request.strict());
                 }
+            }
+        }
+
+        if (!request.strict() && exactMatch.isEmpty() && typeMatch.isEmpty()) {
+            for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
+                addEntryToResponse(response, addedEntities, entry, 0, 0, false);
             }
         }
 
@@ -205,8 +214,6 @@ public final class ClientQuotasImage {
     public int hashCode() {
         return Objects.hash(entities);
     }
-
-
 
     @Override
     public String toString() {
