@@ -69,8 +69,7 @@ public record StreamsTopology(int topologyEpoch,
     private static Map<String, Subtopology> computeSourceTopicMap(Map<String, Subtopology> subtopologies) {
         Objects.requireNonNull(subtopologies, "Subtopologies cannot be null.");
         Map<String, Subtopology> computedMap = new HashMap<>();
-        for (Map.Entry<String, Subtopology> entry : subtopologies.entrySet()) {
-            Subtopology subtopology = entry.getValue();
+        for (Subtopology subtopology : subtopologies.values()) {
             // Add regular source topics
             for (String sourceTopic : subtopology.sourceTopics()) {
                 computedMap.put(sourceTopic, subtopology);
