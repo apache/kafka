@@ -24,6 +24,7 @@ import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.CommitPartitionValidator;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
@@ -212,23 +213,12 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
     }
 
     @Override
-    public boolean validateOffsetCommit(
+    public CommitPartitionValidator validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int memberEpoch,
         boolean isTransactional,
         int apiVersion
-    ) {
-        throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
-    }
-
-    @Override
-    public void validateOffsetCommitForPartition(
-        String memberId,
-        int memberEpoch,
-        String topic,
-        Uuid topicId,
-        int partition
     ) {
         throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
     }

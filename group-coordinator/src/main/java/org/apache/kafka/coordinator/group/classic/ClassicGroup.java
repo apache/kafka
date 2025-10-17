@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group.classic;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
@@ -36,6 +35,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.CommitPartitionValidator;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
@@ -825,10 +825,10 @@ public class ClassicGroup implements Group {
      * @param generationId      The generation id.
      * @param isTransactional   Whether the offset commit is transactional or not.
      * @param apiVersion        The api version.
-     * @return true if per-partition validation is required, false otherwise.
+     * @return A validator for per-partition validation.
      */
     @Override
-    public boolean validateOffsetCommit(
+    public CommitPartitionValidator validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int generationId,
@@ -843,7 +843,7 @@ public class ClassicGroup implements Group {
             // When the generation id is -1, the request comes from either the admin client
             // or a consumer which does not use the group management facility. In this case,
             // the request can commit offsets if the group is empty.
-            return false;
+            return CommitPartitionValidator.NO_OP;
         }
 
         if (generationId >= 0 || !memberId.isEmpty() || groupInstanceId != null) {
@@ -870,28 +870,7 @@ public class ClassicGroup implements Group {
             throw Errors.REBALANCE_IN_PROGRESS.exception();
         }
 
-        return false;
-    }
-
-    /**
-     * Validates the OffsetCommit request for a specific partition.
-     * Not used for classic groups.
-     *
-     * @param memberId    The member id.
-     * @param memberEpoch The member epoch.
-     * @param topic       The topic name.
-     * @param topicId     The topic id (may be ZERO_UUID if not available).
-     * @param partition   The partition index.
-     */
-    @Override
-    public void validateOffsetCommitForPartition(
-        String memberId,
-        int memberEpoch,
-        String topic,
-        Uuid topicId,
-        int partition
-    ) {
-        // No-op for classic groups
+        return CommitPartitionValidator.NO_OP;
     }
 
     /**

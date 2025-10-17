@@ -581,7 +581,7 @@ public class OffsetMetadataManager {
     ) throws ApiException {
         Group group = getGroupForOffsetCommit(context, request);
         
-        boolean requiresPartitionValidation = group.validateOffsetCommit(
+        CommitPartitionValidator validator = group.validateOffsetCommit(
             request.memberId(),
             request.groupInstanceId(),
             request.generationIdOrMemberEpoch(),
@@ -618,16 +618,12 @@ public class OffsetMetadataManager {
                         .setPartitionIndex(partition.partitionIndex())
                         .setErrorCode(Errors.OFFSET_METADATA_TOO_LARGE.code()));
                 } else {
-                    // Validate per-partition commit if needed
-                    if (requiresPartitionValidation) {
-                        group.validateOffsetCommitForPartition(
-                            request.memberId(),
-                            request.generationIdOrMemberEpoch(),
-                            topic.name(),
-                            topic.topicId(),
-                            partition.partitionIndex()
-                        );
-                    }
+                    // Validate per-partition commit
+                    validator.validate(
+                        topic.name(),
+                        topic.topicId(),
+                        partition.partitionIndex()
+                    );
 
                     log.debug("[GroupId {}] Committing offsets {} for partition {}-{}-{} from member {} with leader epoch {}.",
                         request.groupId(), partition.committedOffset(), topic.topicId(), topic.name(), partition.partitionIndex(),
@@ -676,9 +672,9 @@ public class OffsetMetadataManager {
     ) throws ApiException {
         Group group = getGroupForTransactionalOffsetCommit(request);
 
-        boolean requiresPartitionValidation;
+        CommitPartitionValidator validator;
         try {
-            requiresPartitionValidation = group.validateOffsetCommit(
+            validator = group.validateOffsetCommit(
                 request.memberId(),
                 request.groupInstanceId(),
                 request.generationId(),
@@ -703,19 +699,15 @@ public class OffsetMetadataManager {
                         .setPartitionIndex(partition.partitionIndex())
                         .setErrorCode(Errors.OFFSET_METADATA_TOO_LARGE.code()));
                 } else {
-                    // Validate per-partition commit if needed
-                    if (requiresPartitionValidation) {
-                        try {
-                            group.validateOffsetCommitForPartition(
-                                request.memberId(),
-                                request.generationId(),
-                                topic.name(),
-                                org.apache.kafka.common.Uuid.ZERO_UUID,
-                                partition.partitionIndex()
-                            );
-                        } catch (StaleMemberEpochException ex) {
-                            throw Errors.ILLEGAL_GENERATION.exception();
-                        }
+                    // Validate per-partition commit
+                    try {
+                        validator.validate(
+                            topic.name(),
+                            org.apache.kafka.common.Uuid.ZERO_UUID,
+                            partition.partitionIndex()
+                        );
+                    } catch (StaleMemberEpochException ex) {
+                        throw Errors.ILLEGAL_GENERATION.exception();
                     }
 
                     log.debug("[GroupId {}] Committing transactional offsets {} for partition {}-{} from member {} with leader epoch {}.",
