@@ -464,7 +464,7 @@ public class LogCleaner implements BrokerReconfigurable {
      * The cleaner threads do the actual log cleaning. Each thread processes does its cleaning repeatedly by
      * choosing the dirtiest log, cleaning it, and then swapping in the cleaned segments.
      */
-    public class CleanerThread extends ShutdownableThread {
+    public final class CleanerThread extends ShutdownableThread {
         private final Logger logger = new LogContext(logPrefix).logger(CleanerThread.class);
 
         private final Cleaner cleaner;
@@ -483,9 +483,7 @@ public class LogCleaner implements BrokerReconfigurable {
                     config.dedupeBufferLoadFactor,
                     throttler,
                     time,
-                    // Use a lambda instead of method reference to avoid `this` escape
-                    // The lambda captures `this` but doesn't evaluate it until runtime
-                    topicPartition -> checkDone(topicPartition)
+                this::checkDone
             );
 
             if (config.dedupeBufferSize / config.numThreads > Integer.MAX_VALUE) {
