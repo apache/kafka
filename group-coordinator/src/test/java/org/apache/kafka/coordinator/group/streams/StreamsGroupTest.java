@@ -613,6 +613,7 @@ public class StreamsGroupTest {
         boolean isTransactional = true;
         StreamsGroup group = createStreamsGroup("group-foo");
 
+
         // Simulate a call from the admin client without member ID and member epoch.
         // This should pass only if the group is empty.
         group.validateOffsetCommit("", "", -1, isTransactional, version);

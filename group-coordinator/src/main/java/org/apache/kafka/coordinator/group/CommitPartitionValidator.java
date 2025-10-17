@@ -26,14 +26,14 @@ public interface CommitPartitionValidator {
     /**
      * Validates an offset commit for a specific partition.
      *
-     * @param name        The topic name.
+     * @param topicName   The topic name.
      * @param topicId     The topic id (may be ZERO_UUID if not available).
      * @param partitionId The partition index.
      */
-    void validate(String name, Uuid topicId, int partitionId);
+    void validate(String topicName, Uuid topicId, int partitionId);
 
     /**
      * A no-op validator that performs no validation.
      */
-    CommitPartitionValidator NO_OP = (name, topicId, partitionId) -> { };
+    CommitPartitionValidator NO_OP = (topicName, topicId, partitionId) -> { };
 }
