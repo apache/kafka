@@ -329,13 +329,18 @@ docker_run() {
     # and mount FUSE filesystems inside the container.  We also need it to
     # run iptables inside the container.
     local memory_swappiness_option=""
+    local podman_userns_option=""
     if [[ "${container_runtime}" == "docker" ]]; then
         # Only add memory-swappiness for Docker (not supported in podman/cgroups v2)
         memory_swappiness_option="--memory-swappiness=1"
+    elif [[ "${container_runtime}" == "podman" ]]; then
+        # For Podman, preserve the user ID mapping between host and
+        # container to fix permission issues with mounted volumes
+        podman_userns_option="--userns=keep-id"
     fi
     must_do -v ${container_runtime} run --privileged \
         -d -t -h "${node}" --network ducknet "${expose_ports}" \
-        --memory=${docker_run_memory_limit} ${memory_swappiness_option} \
+        --memory=${docker_run_memory_limit} ${memory_swappiness_option} ${podman_userns_option} \
         -v "${kafka_dir}:/opt/kafka-dev" --name "${node}" -- "${image_name}"
 }
 
