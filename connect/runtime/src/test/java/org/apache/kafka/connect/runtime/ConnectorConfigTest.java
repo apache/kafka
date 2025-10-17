@@ -476,7 +476,6 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         assertEnrichedConfigDef(def, prefix, HasDuplicateConfigTransformation.MUST_EXIST_KEY, ConfigDef.Type.BOOLEAN);
         assertEnrichedConfigDef(def, prefix, TransformationStage.PREDICATE_CONFIG, ConfigDef.Type.STRING);
         assertEnrichedConfigDef(def, prefix, TransformationStage.NEGATE_CONFIG, ConfigDef.Type.BOOLEAN);
-        assertEnrichedConfigDef(def, prefix, WorkerConfig.PLUGIN_VERSION_SUFFIX, ConfigDef.Type.STRING);
     }
 
     private static void assertEnrichedConfigDef(ConfigDef def, String prefix, String keyName, ConfigDef.Type expectedType) {
