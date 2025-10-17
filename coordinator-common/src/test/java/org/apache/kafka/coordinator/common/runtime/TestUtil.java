@@ -44,13 +44,30 @@ import java.util.List;
 public class TestUtil {
     public static MemoryRecords records(
         long timestamp,
+        Compression compression,
         String... records
     ) {
-        return records(timestamp, Arrays.stream(records).toList());
+        return records(timestamp, compression, Arrays.stream(records).toList());
+    }
+
+
+    public static MemoryRecords records(
+        long timestamp,
+        String... records
+    ) {
+        return records(timestamp, Compression.NONE, Arrays.stream(records).toList());
     }
 
     public static MemoryRecords records(
         long timestamp,
+        List<String> records
+    ) {
+        return records(timestamp, Compression.NONE, records);
+    }
+
+    public static MemoryRecords records(
+        long timestamp,
+        Compression compression,
         List<String> records
     ) {
         if (records.isEmpty())
@@ -62,7 +79,7 @@ public class TestUtil {
 
         int sizeEstimate = AbstractRecords.estimateSizeInBytes(
             RecordVersion.current().value,
-            CompressionType.NONE,
+            compression.type(),
             simpleRecords
         );
 
@@ -71,7 +88,7 @@ public class TestUtil {
         MemoryRecordsBuilder builder = MemoryRecords.builder(
             buffer,
             RecordVersion.current().value,
-            Compression.NONE,
+            compression,
             TimestampType.CREATE_TIME,
             0L,
             timestamp,
