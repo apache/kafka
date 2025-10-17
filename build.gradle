@@ -1122,7 +1122,7 @@ project(':core') {
   if (userEnableTestCoverage) {
     scoverage {
       scoverageVersion = versions.scoverage
-      scoverageScalaVersion = '2.13.16' // `org.scoverage:scalac-scoverage-plugin_2.13.16:2.3.0` is the latest as of now
+      scoverageScalaVersion = versions.scala
       reportDir = file("${layout.buildDirectory.get().asFile.path}/scoverage")
       highlighting = false
       minimumRate = 0.0
