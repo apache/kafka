@@ -2934,7 +2934,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val testTopicName = "test_topic"
     val testGroupId = "test_group_id"
     val testClientId = "test_client_id"
-    val fakeGroupId = "fake_group_id"
+    val nonexistentGroupId = "nonexistent_group_id"
     val fakeTopicName = "foo"
 
     val tp1 = new TopicPartition(testTopicName, 0)
@@ -2968,12 +2968,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         assertFutureThrows(classOf[GroupNotEmptyException], offsetAlterResult.partitionResult(tp1))
         assertFutureThrows(classOf[GroupNotEmptyException], offsetAlterResult.partitionResult(tp2))
 
-        // Test the fake group ID
-        val fakeAlterResult = client.alterShareGroupOffsets(fakeGroupId, util.Map.of(tp1, 0, tp2, 0))
+        // Test the non-existent group ID
+        val nonexistentAlterResult = client.alterShareGroupOffsets(nonexistentGroupId, util.Map.of(tp1, 0, tp2, 0))
 
-        assertFutureThrows(classOf[GroupIdNotFoundException], fakeAlterResult.all())
-        assertFutureThrows(classOf[GroupIdNotFoundException], fakeAlterResult.partitionResult(tp1))
-        assertFutureThrows(classOf[GroupIdNotFoundException], fakeAlterResult.partitionResult(tp2))
+        assertFutureThrows(classOf[UnknownTopicOrPartitionException], nonexistentAlterResult.all())
+        assertNull(nonexistentAlterResult.partitionResult(tp1).get())
+        assertFutureThrows(classOf[UnknownTopicOrPartitionException], nonexistentAlterResult.partitionResult(tp2))
       }
 
       // Test offset alter when group is empty

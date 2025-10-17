@@ -404,7 +404,7 @@ public class ShareGroupCommand {
         private void resetOffsetsForInactiveGroup(String groupId) {
             try {
                 Collection<TopicPartition> partitionsToReset = getPartitionsToReset(groupId);
-                Map<TopicPartition, OffsetAndMetadata> offsetsToReset = prepareOffsetsToReset(groupId, partitionsToReset);
+                Map<TopicPartition, OffsetAndMetadata> offsetsToReset = prepareOffsetsToReset(partitionsToReset);
                 boolean dryRun = opts.options.has(opts.dryRunOpt) || !opts.options.has(opts.executeOpt);
                 if (!dryRun) {
                     adminClient.alterShareGroupOffsets(groupId,
@@ -441,7 +441,7 @@ public class ShareGroupCommand {
             return partitionsToReset;
         }
 
-        private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId, Collection<TopicPartition> partitionsToReset) {
+        private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(Collection<TopicPartition> partitionsToReset) {
             offsetsUtils.checkAllTopicPartitionsValid(partitionsToReset);
             if (opts.options.has(opts.resetToEarliestOpt)) {
                 return offsetsUtils.resetToEarliest(partitionsToReset);
