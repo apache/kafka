@@ -304,12 +304,14 @@ class SharedServer(
           new MetadataLoaderMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()),
             elapsedNs => brokerMetrics.updateBatchProcessingTime(elapsedNs),
             batchSize => brokerMetrics.updateBatchSize(batchSize),
-            brokerMetrics.lastAppliedImageProvenance)
+            brokerMetrics.lastAppliedImageProvenance,
+            time)
         } else {
           new MetadataLoaderMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()),
             _ => {},
             _ => {},
-            new AtomicReference[MetadataProvenance](MetadataProvenance.EMPTY))
+            new AtomicReference[MetadataProvenance](MetadataProvenance.EMPTY),
+            time)
         }
         val loaderBuilder = new MetadataLoader.Builder().
           setNodeId(nodeId).

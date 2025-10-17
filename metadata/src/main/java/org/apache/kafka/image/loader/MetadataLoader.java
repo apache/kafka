@@ -123,7 +123,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 metrics = new MetadataLoaderMetrics(Optional.empty(),
                     __ -> { },
                     __ -> { },
-                    new AtomicReference<>(MetadataProvenance.EMPTY));
+                    new AtomicReference<>(MetadataProvenance.EMPTY),
+                    time);
             }
             return new MetadataLoader(
                 time,
@@ -217,10 +218,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             faultHandler,
             this::maybePublishMetadata);
         this.eventQueue = new KafkaEventQueue(
-            Time.SYSTEM,
+            time,
             logContext,
             threadNamePrefix + "metadata-loader-",
-            new ShutdownEvent());
+            new ShutdownEvent(),
+            metrics::updateIdleTime);
     }
 
     // VisibleForTesting
