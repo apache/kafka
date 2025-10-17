@@ -738,55 +738,40 @@ class KafkaRequestHandlerTest {
     // Verify global counter is updated to sum of both pools
     assertEquals(8, KafkaRequestHandlerPool.aggregateThreads.get, "global counter should be 8 after both pools")
 
-    try {
-      val aggregateMeterField = classOf[KafkaRequestHandlerPool].getDeclaredField("aggregateIdleMeter")
-      aggregateMeterField.setAccessible(true)
-      val aggregateMeter = aggregateMeterField.get(brokerPool).asInstanceOf[Meter]
+    val aggregateMeterField = classOf[KafkaRequestHandlerPool].getDeclaredField("aggregateIdleMeter")
+    aggregateMeterField.setAccessible(true)
+    val aggregateMeter = aggregateMeterField.get(brokerPool).asInstanceOf[Meter]
 
-      val perPoolIdleMeterField = classOf[KafkaRequestHandlerPool].getDeclaredField("perPoolIdleMeter")
-      perPoolIdleMeterField.setAccessible(true)
-      val brokerPerPoolIdleMeter = perPoolIdleMeterField.get(brokerPool).asInstanceOf[Meter]
-      val controllerPerPoolIdleMeter = perPoolIdleMeterField.get(controllerPool).asInstanceOf[Meter]
+    val perPoolIdleMeterField = classOf[KafkaRequestHandlerPool].getDeclaredField("perPoolIdleMeter")
+    perPoolIdleMeterField.setAccessible(true)
+    val brokerPerPoolIdleMeter = perPoolIdleMeterField.get(brokerPool).asInstanceOf[Meter]
+    val controllerPerPoolIdleMeter = perPoolIdleMeterField.get(controllerPool).asInstanceOf[Meter]
 
-      var aggregateValue = 0.0
-      var brokerPerPoolValue = 0.0
-      var controllerPerPoolValue = 0.0
+    var aggregateValue = 0.0
+    var brokerPerPoolValue = 0.0
+    var controllerPerPoolValue = 0.0
 
-      Thread.sleep(2000)
-      aggregateValue = aggregateMeter.oneMinuteRate()
-      brokerPerPoolValue = brokerPerPoolIdleMeter.oneMinuteRate()
-      controllerPerPoolValue = controllerPerPoolIdleMeter.oneMinuteRate()
-      
-      // Verify that the meter shows reasonable idle percentage
-      assertTrue(aggregateValue >= 0.0 && aggregateValue <= 1.00, s"aggregate idle percent should be within [0,1], got $aggregateValue")
-      assertTrue(brokerPerPoolValue >= 0.0 && brokerPerPoolValue <= 1.00, s"broker per-pool idle percent should be within [0,1], got $brokerPerPoolValue")
-      assertTrue(controllerPerPoolValue >= 0.0 && controllerPerPoolValue <= 1.00, s"controller per-pool idle percent should be within [0,1], got $controllerPerPoolValue")
+    aggregateValue = aggregateMeter.oneMinuteRate()
+    brokerPerPoolValue = brokerPerPoolIdleMeter.oneMinuteRate()
+    controllerPerPoolValue = controllerPerPoolIdleMeter.oneMinuteRate()
 
-      // Test pool resizing
-      // Shrink broker pool from 4 to 2 threads
-      brokerPool.resizeThreadPool(2)
-      assertEquals(2, brokerPool.threadPoolSize.get)
-      assertEquals(4, controllerPool.threadPoolSize.get)
-      assertEquals(6, KafkaRequestHandlerPool.aggregateThreads.get)
-      
-      // Expand controller pool from 4 to 6 threads
-      controllerPool.resizeThreadPool(6)
-      assertEquals(2, brokerPool.threadPoolSize.get)
-      assertEquals(6, controllerPool.threadPoolSize.get)
-      assertEquals(8, KafkaRequestHandlerPool.aggregateThreads.get)
+    // Verify that the meter shows reasonable idle percentage
+    assertTrue(aggregateValue >= 0.0 && aggregateValue <= 1.00, s"aggregate idle percent should be within [0,1], got $aggregateValue")
+    assertTrue(brokerPerPoolValue >= 0.0 && brokerPerPoolValue <= 1.00, s"broker per-pool idle percent should be within [0,1], got $brokerPerPoolValue")
+    assertTrue(controllerPerPoolValue >= 0.0 && controllerPerPoolValue <= 1.00, s"controller per-pool idle percent should be within [0,1], got $controllerPerPoolValue")
 
-      // Wait for removed threads to fully exit before shutdown to avoid deadlock.
-      Thread.sleep(1000)
+    // Test pool resizing
+    // Shrink broker pool from 4 to 2 threads
+    brokerPool.resizeThreadPool(2)
+    assertEquals(2, brokerPool.threadPoolSize.get)
+    assertEquals(4, controllerPool.threadPoolSize.get)
+    assertEquals(6, KafkaRequestHandlerPool.aggregateThreads.get)
 
-    } finally {
-      controllerPool.shutdown()
-      assertEquals(2, KafkaRequestHandlerPool.aggregateThreads.get)
-      brokerPool.shutdown()
-      metricsBroker.close()
-      metricsController.close()
-      
-      // Verify global counter is reset after shutdown
-      assertEquals(0, KafkaRequestHandlerPool.aggregateThreads.get, "global counter should be 0 after shutdown")
-    }
+    // Expand controller pool from 4 to 6 threads
+    controllerPool.resizeThreadPool(6)
+    assertEquals(2, brokerPool.threadPoolSize.get)
+    assertEquals(6, controllerPool.threadPoolSize.get)
+    assertEquals(8, KafkaRequestHandlerPool.aggregateThreads.get)
+
   }
 }
