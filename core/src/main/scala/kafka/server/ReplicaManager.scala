@@ -1646,7 +1646,7 @@ class ReplicaManager(val config: KafkaConfig,
 
     // Hook to enable / disable multi-partition remote fetch feature.
     val isMultiPartitionFetchEnabled = true
-    remoteFetchInfos.asScala.forall { (topicIdPartition, remoteFetchInfo) =>
+    remoteFetchInfos.asScala.forall { case (topicIdPartition, remoteFetchInfo) =>
       val (task, result) = processRemoteFetch(remoteFetchInfo)
       remoteFetchTasks.put(topicIdPartition, task)
       remoteFetchResults.put(topicIdPartition, result)
