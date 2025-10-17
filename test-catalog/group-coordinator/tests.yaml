@@ -551,6 +551,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testStreamsGroupDescribeWithErrors
 - testStreamsGroupDynamicConfigs
 - testStreamsGroupEndpointInformationOnlyWhenEpochGreater
+- testStreamsGroupEpochIncreaseWithAssignmentConfigChanges
 - testStreamsGroupHeartbeatOnConsumerGroup
 - testStreamsGroupHeartbeatOnShareGroup
 - testStreamsGroupHeartbeatPartialResponseWhenNothingChanges
@@ -1025,7 +1026,6 @@ org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpersTest:
 - testNewStreamsGroupCurrentAssignmentTombstoneRecord
 - testNewStreamsGroupCurrentAssignmentTombstoneRecordNullGroupId
 - testNewStreamsGroupCurrentAssignmentTombstoneRecordNullMemberId
-- testNewStreamsGroupEpochRecordNullGroupId
 - testNewStreamsGroupEpochTombstoneRecord
 - testNewStreamsGroupEpochTombstoneRecordNullGroupId
 - testNewStreamsGroupMemberRecord
@@ -1038,6 +1038,8 @@ org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpersTest:
 - testNewStreamsGroupMemberTombstoneRecordNullGroupId
 - testNewStreamsGroupMemberTombstoneRecordNullMemberId
 - testNewStreamsGroupMetadataRecord
+- testNewStreamsGroupMetadataRecordNullGroupId
+- testNewStreamsGroupMetadataRecordWithNullAssignmentConfig
 - testNewStreamsGroupTargetAssignmentEpochRecord
 - testNewStreamsGroupTargetAssignmentEpochRecordNullGroupId
 - testNewStreamsGroupTargetAssignmentEpochTombstoneRecord
@@ -1108,6 +1110,8 @@ org.apache.kafka.coordinator.group.streams.StreamsTopologyTest:
 - fromHeartbeatRequestShouldCreateCorrectTopology
 - fromRecordShouldCreateCorrectTopology
 - requiredTopicsShouldBeCorrect
+- sourceTopicMapShouldBeComputedCorrectly
+- sourceTopicMapShouldBeImmutable
 - subtopologiesMapShouldBeImmutable
 - subtopologiesMapShouldNotBeNull
 - topologyEpochShouldNotBeNegative
