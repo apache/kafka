@@ -1924,6 +1924,7 @@ org.apache.kafka.streams.processor.internals.GlobalStreamThreadTest:
 - shouldStopRunningWhenClosedByUser
 - shouldThrowStreamsExceptionOnStartupIfExceptionOccurred
 - shouldThrowStreamsExceptionOnStartupIfThereIsAStreamsException
+- shouldThrowStreamsExceptionOnStartupIfThrowableOccurred
 - shouldTimeOutOnGlobalConsumerInstanceId
 - shouldTransitionToRunningOnStart
 org.apache.kafka.streams.processor.internals.HighAvailabilityStreamsPartitionAssignorTest:
