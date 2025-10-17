@@ -33,14 +33,14 @@ plugins {
   id 'idea'
   id 'jacoco'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '12.1.3'
+  id 'org.owasp.dependencycheck' version '12.1.8'
   id 'org.nosphere.apache.rat' version "0.8.1"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
   id "com.github.spotbugs" version '6.2.5' apply false
-  id 'org.scoverage' version '8.0.3' apply false
+  id 'org.scoverage' version '8.1' apply false
   id 'com.gradleup.shadow' version '8.3.9' apply false
-  id 'com.diffplug.spotless' version "7.2.1"
+  id 'com.diffplug.spotless' version "8.0.0"
 }
 
 ext {
@@ -1129,9 +1129,7 @@ project(':core') {
   if (userEnableTestCoverage) {
     scoverage {
       scoverageVersion = versions.scoverage
-      if (versions.baseScala == '2.13') {
-        scoverageScalaVersion = '2.13.9' // there's no newer 2.13 artifact, org.scoverage:scalac-scoverage-plugin_2.13.9:2.0.11 is the latest as of now
-      }
+      scoverageScalaVersion = '2.13.16' // `org.scoverage:scalac-scoverage-plugin_2.13.16:2.3.0` is the latest as of now
       reportDir = file("${layout.buildDirectory.get().asFile.path}/scoverage")
       highlighting = false
       minimumRate = 0.0
