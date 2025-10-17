@@ -444,13 +444,13 @@ public class OffsetMetadataManager {
     }
 
     /**
-     * Gets the group for an OffsetCommit request.
+     * Validates an OffsetCommit request.
      *
      * @param context The request context.
      * @param request The actual request.
-     * @return The group.
+     * @return A validator for per-partition validation.
      */
-    private Group getGroupForOffsetCommit(
+    private CommitPartitionValidator validateOffsetCommit(
         AuthorizableRequestContext context,
         OffsetCommitRequestData request
     ) throws ApiException {
@@ -478,16 +478,39 @@ public class OffsetMetadataManager {
                 }
             }
         }
-        return group;
+
+        CommitPartitionValidator validator = group.validateOffsetCommit(
+            request.memberId(),
+            request.groupInstanceId(),
+            request.generationIdOrMemberEpoch(),
+            false,
+            context.requestVersion()
+        );
+
+        // In the old consumer group protocol, the offset commits maintain the session if
+        // the group is in Stable or PreparingRebalance state.
+        if (group.type() == Group.GroupType.CLASSIC) {
+            ClassicGroup classicGroup = (ClassicGroup) group;
+            if (classicGroup.isInState(ClassicGroupState.STABLE) || classicGroup.isInState(ClassicGroupState.PREPARING_REBALANCE)) {
+                groupMetadataManager.rescheduleClassicGroupMemberHeartbeat(
+                    classicGroup,
+                    classicGroup.member(request.memberId())
+                );
+            }
+        }
+
+        return validator;
     }
 
     /**
-     * Gets the group for a TxnOffsetCommit request.
+     * Validates an TxnOffsetCommit request.
      *
+     * @param context The request context.
      * @param request The actual request.
-     * @return The group.
+     * @return A validator for per-partition validation.
      */
-    private Group getGroupForTransactionalOffsetCommit(
+    private CommitPartitionValidator validateTransactionalOffsetCommit(
+        AuthorizableRequestContext context,
         TxnOffsetCommitRequestData request
     ) throws ApiException {
         Group group;
@@ -504,7 +527,18 @@ public class OffsetMetadataManager {
                 throw Errors.ILLEGAL_GENERATION.exception();
             }
         }
-        return group;
+
+        try {
+            return group.validateOffsetCommit(
+                request.memberId(),
+                request.groupInstanceId(),
+                request.generationId(),
+                true,
+                context.requestVersion()
+            );
+        } catch (StaleMemberEpochException ex) {
+            throw Errors.ILLEGAL_GENERATION.exception();
+        }
     }
 
     /**
@@ -579,27 +613,7 @@ public class OffsetMetadataManager {
         AuthorizableRequestContext context,
         OffsetCommitRequestData request
     ) throws ApiException {
-        Group group = getGroupForOffsetCommit(context, request);
-        
-        CommitPartitionValidator validator = group.validateOffsetCommit(
-            request.memberId(),
-            request.groupInstanceId(),
-            request.generationIdOrMemberEpoch(),
-            false,
-            context.requestVersion()
-        );
-
-        // In the old consumer group protocol, the offset commits maintain the session if
-        // the group is in Stable or PreparingRebalance state.
-        if (group.type() == Group.GroupType.CLASSIC) {
-            ClassicGroup classicGroup = (ClassicGroup) group;
-            if (classicGroup.isInState(ClassicGroupState.STABLE) || classicGroup.isInState(ClassicGroupState.PREPARING_REBALANCE)) {
-                groupMetadataManager.rescheduleClassicGroupMemberHeartbeat(
-                    classicGroup,
-                    classicGroup.member(request.memberId())
-                );
-            }
-        }
+        CommitPartitionValidator validator = validateOffsetCommit(context, request);
 
         final OffsetCommitResponseData response = new OffsetCommitResponseData();
         final List<CoordinatorRecord> records = new ArrayList<>();
@@ -618,7 +632,7 @@ public class OffsetMetadataManager {
                         .setPartitionIndex(partition.partitionIndex())
                         .setErrorCode(Errors.OFFSET_METADATA_TOO_LARGE.code()));
                 } else {
-                    // Validate per-partition commit
+                    // Validate commit per-partition
                     validator.validate(
                         topic.name(),
                         topic.topicId(),
@@ -670,20 +684,7 @@ public class OffsetMetadataManager {
         AuthorizableRequestContext context,
         TxnOffsetCommitRequestData request
     ) throws ApiException {
-        Group group = getGroupForTransactionalOffsetCommit(request);
-
-        CommitPartitionValidator validator;
-        try {
-            validator = group.validateOffsetCommit(
-                request.memberId(),
-                request.groupInstanceId(),
-                request.generationId(),
-                true,
-                context.requestVersion()
-            );
-        } catch (StaleMemberEpochException ex) {
-            throw Errors.ILLEGAL_GENERATION.exception();
-        }
+        CommitPartitionValidator validator = validateTransactionalOffsetCommit(context, request);
 
         final TxnOffsetCommitResponseData response = new TxnOffsetCommitResponseData();
         final List<CoordinatorRecord> records = new ArrayList<>();
@@ -699,7 +700,7 @@ public class OffsetMetadataManager {
                         .setPartitionIndex(partition.partitionIndex())
                         .setErrorCode(Errors.OFFSET_METADATA_TOO_LARGE.code()));
                 } else {
-                    // Validate per-partition commit
+                    // Validate commit per-partition
                     try {
                         validator.validate(
                             topic.name(),
