@@ -76,7 +76,7 @@ public class ShareFetchCollectorTest {
 
     private SubscriptionState subscriptions;
     private FetchConfig fetchConfig;
-    private ConsumerMetadata metadata;
+    private ShareConsumerMetadata metadata;
     private ShareFetchBuffer fetchBuffer;
     private Deserializers<String, String> deserializers;
     private ShareFetchCollector<String, String> fetchCollector;
@@ -246,11 +246,10 @@ public class ShareFetchCollectorTest {
         subscriptions = createSubscriptionState(config, logContext);
         fetchConfig = new FetchConfig(config);
 
-        metadata = new ConsumerMetadata(
+        metadata = new ShareConsumerMetadata(
                 0,
                 1000,
                 10000,
-                false,
                 false,
                 subscriptions,
                 logContext,

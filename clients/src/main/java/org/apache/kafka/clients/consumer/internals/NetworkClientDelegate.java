@@ -445,7 +445,7 @@ public class NetworkClientDelegate implements AutoCloseable {
      */
     public static Supplier<NetworkClientDelegate> supplier(final Time time,
                                                            final LogContext logContext,
-                                                           final ConsumerMetadata metadata,
+                                                           final Metadata metadata,
                                                            final ConsumerConfig config,
                                                            final ApiVersions apiVersions,
                                                            final Metrics metrics,
