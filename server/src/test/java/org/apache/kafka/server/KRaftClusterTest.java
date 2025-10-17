@@ -148,12 +148,10 @@ public class KRaftClusterTest {
 
     private void assertFoobarValue(KafkaClusterTestKit cluster, int expected) throws InterruptedException {
         TestUtils.retryOnExceptionWithTimeout(60000, () -> {
-            // 获取控制器的值
             Object controllerAuthorizer = cluster.controllers().values().iterator().next()
                 .authorizerPlugin().get().get();
             assertEquals(expected, ((FakeConfigurableAuthorizer) controllerAuthorizer).foobar.get());
 
-            // 获取Broker的值
             Object brokerAuthorizer = cluster.brokers().values().iterator().next()
                 .authorizerPlugin().get().get();
             assertEquals(expected, ((FakeConfigurableAuthorizer) brokerAuthorizer).foobar.get());
