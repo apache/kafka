@@ -64,6 +64,12 @@ bash tests/docker/ducker-ak down -f
 ```
 REBUILD="t" bash tests/docker/run_tests.sh
 ```
+  * Set container runtime (docker or podman)
+  ```
+  CONTAINER_RUNTIME="podman" bash tests/docker/run_tests.sh 
+  ```
+By default, the test scripts will auto-detect the available container runtime (prioritizing docker over podman). 
+You can explicitly set it to `docker` or `podman` using this environment variable.
 * Run tests with Kafka in `native` mode
   - To run tests with Kafka in `native` mode, pass `{"kafka_mode": "native"}` to the ducktape globals. This will bring up ducker nodes with the native Kafka binary inside them and use it to start Kafka while running the tests.
     ```
