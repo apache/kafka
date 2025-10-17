@@ -593,7 +593,6 @@ public class ConnectorConfig extends AbstractConfig {
         private final String aliasKind;
         private final String aliasConfig;
         private final String aliasGroup;
-        private final PluginType pluginType;
         private final Class<T> baseClass;
         private final Map<String, String> props;
         private final boolean requireFullConfig;
@@ -606,7 +605,6 @@ public class ConnectorConfig extends AbstractConfig {
             this.aliasKind = aliasKind;
             this.aliasConfig = aliasConfig;
             this.aliasGroup = aliasGroup;
-            this.pluginType = pluginType;
             this.baseClass = (Class<T>) pluginType.superClass();
             this.props = props;
             this.requireFullConfig = requireFullConfig;
@@ -631,8 +629,6 @@ public class ConnectorConfig extends AbstractConfig {
 
                 final String typeConfig = prefix + "type";
                 final String versionConfig = prefix + WorkerConfig.PLUGIN_VERSION_SUFFIX;
-                final String defaultVersion = fetchPluginVersion(plugins, props.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG),
-                        props.get(ConnectorConfig.CONNECTOR_VERSION), props.get(typeConfig), pluginType);
 
                 // Add the class configuration
                 final ConfigDef.Validator typeValidator = ConfigDef.LambdaValidator.with(
@@ -640,7 +636,7 @@ public class ConnectorConfig extends AbstractConfig {
                             validateProps(prefix);
                             // The value will be null if the class couldn't be found; no point in performing follow-up validation
                             if (value != null) {
-                                getConfigDefFromPlugin(typeConfig, ((Class<?>) value).getName(), props.getOrDefault(versionConfig, defaultVersion), plugins);
+                                getConfigDefFromPlugin(typeConfig, ((Class<?>) value).getName(), props.getOrDefault(versionConfig, null), plugins);
                             }
                         },
                         () -> "valid configs for " + alias + " " + aliasKind.toLowerCase(Locale.ENGLISH));
@@ -662,7 +658,7 @@ public class ConnectorConfig extends AbstractConfig {
                         }
                     }
                 };
-                newDef.define(versionConfig, Type.STRING, defaultVersion, versionValidator, Importance.HIGH,
+                newDef.define(versionConfig, Type.STRING, null, versionValidator, Importance.HIGH,
                         "Version of the '" + alias + "' " + aliasKind.toLowerCase(Locale.ENGLISH) + ".", group, orderInGroup++, Width.LONG,
                         baseClass.getSimpleName() + " version for " + alias,
                         List.of(), versionRecommender(typeConfig));
