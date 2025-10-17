@@ -367,6 +367,10 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     if (!protocols.contains(GroupType.CLASSIC)) {
       throw new ConfigException(s"Disabling the '${GroupType.CLASSIC}' protocol is not supported.")
     }
+    if (protocols.contains(GroupType.SHARE)) {
+      warn(s"'${GroupType.SHARE}' in ${GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG} is deprecated. " +
+        s"Share groups are controlled by the 'share.version' feature; this broker config will be ignored in a future release.")
+    }
     protocols
   }
 
