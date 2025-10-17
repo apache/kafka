@@ -63,7 +63,6 @@ import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 
-import org.apache.maven.artifact.versioning.VersionRange;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -572,7 +571,8 @@ public class AbstractHerderTest {
 
         // 2 transform aliases defined -> 2 plugin lookups
         Mockito.lenient().when(plugins.transformations()).thenReturn(Set.of(transformationPluginDesc()));
-        Mockito.lenient().when(plugins.newPlugin(SampleTransformation.class.getName(), (VersionRange) null, null)).thenReturn(new SampleTransformation());
+        Mockito.lenient().when(plugins.connectorLoader(any(), any())).thenReturn(classLoader);
+        Mockito.lenient().when(plugins.newPlugin(SampleTransformation.class.getName(), null, classLoader)).thenReturn(new SampleTransformation());
 
         // Define 2 transformations. One has a class defined and so can get embedded configs, the other is missing
         // class info that should generate an error.
@@ -627,9 +627,10 @@ public class AbstractHerderTest {
 
         Mockito.lenient().when(plugins.transformations()).thenReturn(Set.of(transformationPluginDesc()));
         Mockito.lenient().when(plugins.predicates()).thenReturn(Set.of(predicatePluginDesc()));
-        Mockito.lenient().when(plugins.newPlugin(SampleTransformation.class.getName(), (VersionRange) null, null)).thenReturn(new SampleTransformation());
-        Mockito.lenient().when(plugins.newPlugin(SampleTransformation.class.getName(), (VersionRange) null, null)).thenReturn(new SampleTransformation());
-        Mockito.lenient().when(plugins.newPlugin(SamplePredicate.class.getName(), (VersionRange) null, null)).thenReturn(new SamplePredicate());
+        Mockito.lenient().when(plugins.connectorLoader(any(), any())).thenReturn(classLoader);
+        Mockito.lenient().when(plugins.newPlugin(SampleTransformation.class.getName(), null, classLoader)).thenReturn(new SampleTransformation());
+        Mockito.lenient().when(plugins.newPlugin(SampleTransformation.class.getName(), null, classLoader)).thenReturn(new SampleTransformation());
+        Mockito.lenient().when(plugins.newPlugin(SamplePredicate.class.getName(), null, classLoader)).thenReturn(new SamplePredicate());
 
         // Define 2 predicates. One has a class defined and so can get embedded configs, the other is missing
         // class info that should generate an error.
@@ -1343,12 +1344,13 @@ public class AbstractHerderTest {
         when(workerConfig.getClass(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG)).thenReturn((Class) SimpleHeaderConverter.class);
         when(worker.config()).thenReturn(workerConfig);
         when(plugins.newConnector(anyString(), any())).thenReturn(connector);
-        when(plugins.withClassLoader(null)).thenReturn(loaderSwap);
+        when(plugins.connectorLoader(any(), any())).thenReturn(classLoader);
+        when(plugins.withClassLoader(classLoader)).thenReturn(loaderSwap);
     }
 
     private void verifyValidationIsolation() {
         verify(plugins).newConnector(anyString(), any());
-        //verify(plugins).withClassLoader(classLoader);
+        verify(plugins).withClassLoader(classLoader);
         verify(loaderSwap).close();
     }
 
