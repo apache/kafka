@@ -434,7 +434,7 @@ public class StreamThreadTest {
             10 * 1000,
             "Thread never shut down.");
 
-        thread.shutdown();
+        thread.shutdown(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
         assertEquals(StreamThread.State.DEAD, thread.state());
     }
 
