@@ -96,10 +96,11 @@ public class StreamsCoordinatorRecordHelpers {
         );
     }
 
-    public static CoordinatorRecord newStreamsGroupEpochRecord(
+    public static CoordinatorRecord newStreamsGroupMetadataRecord(
         String groupId,
         int newGroupEpoch,
-        long metadataHash
+        long metadataHash,
+        int validatedTopologyEpoch
     ) {
         Objects.requireNonNull(groupId, "groupId should not be null here");
 
@@ -109,7 +110,8 @@ public class StreamsCoordinatorRecordHelpers {
             new ApiMessageAndVersion(
                 new StreamsGroupMetadataValue()
                     .setEpoch(newGroupEpoch)
-                    .setMetadataHash(metadataHash),
+                    .setMetadataHash(metadataHash)
+                    .setValidatedTopologyEpoch(validatedTopologyEpoch),
                 (short) 0
             )
         );
