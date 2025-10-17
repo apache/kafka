@@ -165,7 +165,8 @@ public class CurrentAssignmentBuilder {
                 if (member.memberEpoch() != targetAssignmentEpoch) {
                     return computeNextAssignment(
                         member.memberEpoch(),
-                        member.assignedTasks()
+                        member.assignedTasks(),
+                        member.tasksPendingRevocation()
                     );
                 } else {
                     return member;
@@ -192,7 +193,8 @@ public class CurrentAssignmentBuilder {
                 // its state towards the latest target assignment.
                 return computeNextAssignment(
                     member.memberEpoch() + 1,
-                    member.assignedTasks()
+                    member.assignedTasks(),
+                    member.tasksPendingRevocation()
                 );
 
             case UNRELEASED_TASKS:
@@ -201,7 +203,8 @@ public class CurrentAssignmentBuilder {
                 // of the unreleased tasks when they become available.
                 return computeNextAssignment(
                     member.memberEpoch(),
-                    member.assignedTasks()
+                    member.assignedTasks(),
+                    member.tasksPendingRevocation()
                 );
 
             case UNKNOWN:
@@ -217,7 +220,8 @@ public class CurrentAssignmentBuilder {
 
                 return computeNextAssignment(
                     targetAssignmentEpoch,
-                    member.assignedTasks()
+                    member.assignedTasks(),
+                    member.tasksPendingRevocation()
                 );
         }
 
@@ -307,13 +311,15 @@ public class CurrentAssignmentBuilder {
     /**
      * Computes the next assignment.
      *
-     * @param memberEpoch         The epoch of the member to use. This may be different from
-     *                            the epoch in {@link CurrentAssignmentBuilder#member}.
-     * @param memberAssignedTasks The assigned tasks of the member to use.
+     * @param memberEpoch                  The epoch of the member to use. This may be different from
+     *                                     the epoch in {@link CurrentAssignmentBuilder#member}.
+     * @param memberAssignedTasks          The assigned tasks of the member to use.
+     * @param memberTasksPendingRevocation The tasks pending revocation of the member.
      * @return A new StreamsGroupMember.
      */
     private StreamsGroupMember computeNextAssignment(int memberEpoch,
-                                                     TasksTuple memberAssignedTasks) {
+                                                     TasksTupleWithEpochs memberAssignedTasks,
+                                                     TasksTupleWithEpochs memberTasksPendingRevocation) {
         Map<String, Set<Integer>> newActiveAssignedTasks = new HashMap<>();
         Map<String, Set<Integer>> newActiveTasksPendingRevocation = new HashMap<>();
         Map<String, Set<Integer>> newActiveTasksPendingAssignment = new HashMap<>();
@@ -368,31 +374,103 @@ public class CurrentAssignmentBuilder {
                         .contains(member.processId())
         );
 
+        // Add epochs to the computed task tuples
+        // Preserve previous epochs for tasks that were already assigned or pending revocation,
+        // and use the target assignment epoch for newly assigned tasks.
+        TasksTupleWithEpochs newTasksPendingRevocationWithEpochs = new TasksTupleWithEpochs(
+            addEpochsToTasks(
+                newActiveTasksPendingRevocation,
+                memberAssignedTasks,
+                memberTasksPendingRevocation,
+                targetAssignmentEpoch
+            ),
+            newStandbyTasksPendingRevocation,
+            newWarmupTasksPendingRevocation
+        );
+        TasksTupleWithEpochs newAssignedTasksWithEpochs = new TasksTupleWithEpochs(
+            addEpochsToTasks(
+                newActiveAssignedTasks,
+                memberAssignedTasks,
+                memberTasksPendingRevocation,
+                targetAssignmentEpoch
+            ),
+            newStandbyAssignedTasks,
+            newWarmupAssignedTasks
+        );
+        TasksTupleWithEpochs newTasksPendingAssignmentWithEpochs = new TasksTupleWithEpochs(
+            addEpochsToTasks(
+                newActiveTasksPendingAssignment,
+                memberAssignedTasks,
+                memberTasksPendingRevocation,
+                targetAssignmentEpoch
+            ),
+            newStandbyTasksPendingAssignment,
+            newWarmupTasksPendingAssignment
+        );
+
         return buildNewMember(
             memberEpoch,
-            new TasksTuple(
-                newActiveTasksPendingRevocation,
-                newStandbyTasksPendingRevocation,
-                newWarmupTasksPendingRevocation
-            ),
-            new TasksTuple(
-                newActiveAssignedTasks,
-                newStandbyAssignedTasks,
-                newWarmupAssignedTasks
-            ),
-            new TasksTuple(
-                newActiveTasksPendingAssignment,
-                newStandbyTasksPendingAssignment,
-                newWarmupTasksPendingAssignment
-            ),
+            newTasksPendingRevocationWithEpochs,
+            newAssignedTasksWithEpochs,
+            newTasksPendingAssignmentWithEpochs,
             hasUnreleasedActiveTasks || hasUnreleasedStandbyTasks || hasUnreleasedWarmupTasks
         );
     }
 
+    /**
+     * Helper method to add epochs to active tasks. This method looks up epochs from existing assignments
+     * (memberAssignedTasks or memberTasksPendingRevocation) or uses the provided default epoch
+     * for newly assigned tasks.
+     *
+     * @param activeTasks                  The active tasks without epochs.
+     * @param memberAssignedTasks          The member's currently assigned tasks with epochs.
+     * @param memberTasksPendingRevocation The member's tasks pending revocation with epochs.
+     * @param defaultEpoch                 The default epoch to use for tasks not found in existing assignments.
+     * @return Active tasks with epochs attached.
+     */
+    private Map<String, Map<Integer, Integer>> addEpochsToTasks(
+        Map<String, Set<Integer>> activeTasks,
+        TasksTupleWithEpochs memberAssignedTasks,
+        TasksTupleWithEpochs memberTasksPendingRevocation,
+        int defaultEpoch
+    ) {
+        Map<String, Map<Integer, Integer>> activeTasksWithEpochs = new HashMap<>();
+
+        // For each active task, try to find its epoch from existing assignments
+        activeTasks.forEach((subtopologyId, partitions) -> {
+            Map<Integer, Integer> partitionsWithEpochs = new HashMap<>();
+            for (Integer partition : partitions) {
+                // First check in assigned tasks
+                Integer epoch = memberAssignedTasks.activeTasksWithEpochs()
+                    .getOrDefault(subtopologyId, Map.of())
+                    .get(partition);
+
+                // If not found, check in tasks pending revocation
+                if (epoch == null) {
+                    epoch = memberTasksPendingRevocation.activeTasksWithEpochs()
+                        .getOrDefault(subtopologyId, Map.of())
+                        .get(partition);
+                }
+
+                // If still not found, use the default epoch
+                if (epoch == null) {
+                    epoch = defaultEpoch;
+                }
+
+                partitionsWithEpochs.put(partition, epoch);
+            }
+            if (!partitionsWithEpochs.isEmpty()) {
+                activeTasksWithEpochs.put(subtopologyId, partitionsWithEpochs);
+            }
+        });
+
+        return activeTasksWithEpochs;
+    }
+
     private StreamsGroupMember buildNewMember(final int memberEpoch,
-                                              final TasksTuple newTasksPendingRevocation,
-                                              final TasksTuple newAssignedTasks,
-                                              final TasksTuple newTasksPendingAssignment,
+                                              final TasksTupleWithEpochs newTasksPendingRevocation,
+                                              final TasksTupleWithEpochs newAssignedTasks,
+                                              final TasksTupleWithEpochs newTasksPendingAssignment,
                                               final boolean hasUnreleasedTasks) {
 
         final boolean hasTasksToBeRevoked =
@@ -424,7 +502,7 @@ public class CurrentAssignmentBuilder {
                 .setState(newState)
                 .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedTasks(newAssignedTasks.merge(newTasksPendingAssignment))
-                .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
                 .build();
         } else if (hasUnreleasedTasks) {
             // If there are no tasks to be revoked nor to be assigned but some
@@ -434,7 +512,7 @@ public class CurrentAssignmentBuilder {
                 .setState(MemberState.UNRELEASED_TASKS)
                 .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedTasks(newAssignedTasks)
-                .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
                 .build();
         } else {
             // Otherwise, the member transitions to the target epoch and to the
@@ -443,7 +521,7 @@ public class CurrentAssignmentBuilder {
                 .setState(MemberState.STABLE)
                 .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedTasks(newAssignedTasks)
-                .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
                 .build();
         }
     }

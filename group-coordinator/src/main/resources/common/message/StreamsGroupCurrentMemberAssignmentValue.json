@@ -45,7 +45,9 @@
       { "name": "SubtopologyId", "type": "string", "versions": "0+",
         "about": "The subtopology ID." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
-        "about": "The partitions of the input topics processed by this member." }
+        "about": "The partitions of the input topics processed by this member." },
+      { "name": "AssignmentEpochs", "versions": "0+", "nullableVersions": "0+", "taggedVersions": "0+", "tag": 0, "type": "[]int32", "default": null,
+        "about": "The epoch at which the partition was assigned to the member. Used to fence zombie commits requests. Of the same length as Partitions. Only defined for active tasks." }
     ]}
   ]
 }

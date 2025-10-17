@@ -66,7 +66,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopology;
-import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTuple;
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopologyWithCommonEpoch;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -223,15 +223,15 @@ public class StreamsGroupTest {
         member = new StreamsGroupMember.Builder("member")
             .setProcessId("process")
             .setAssignedTasks(
-                new TasksTuple(
-                    mkTasksPerSubtopology(mkTasks(fooSubtopology, 1)),
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopology, 1)),
                     mkTasksPerSubtopology(mkTasks(fooSubtopology, 2)),
                     mkTasksPerSubtopology(mkTasks(fooSubtopology, 3))
                 )
             )
             .setTasksPendingRevocation(
-                new TasksTuple(
-                    mkTasksPerSubtopology(mkTasks(barSubtopology, 4)),
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(barSubtopology, 4)),
                     mkTasksPerSubtopology(mkTasks(barSubtopology, 5)),
                     mkTasksPerSubtopology(mkTasks(barSubtopology, 6))
                 )
@@ -259,15 +259,15 @@ public class StreamsGroupTest {
         member = new StreamsGroupMember.Builder(member)
             .setProcessId("process1")
             .setAssignedTasks(
-                new TasksTuple(
-                    mkTasksPerSubtopology(mkTasks(fooSubtopology, 1)),
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopology, 1)),
                     mkTasksPerSubtopology(mkTasks(fooSubtopology, 2)),
                     mkTasksPerSubtopology(mkTasks(fooSubtopology, 3))
                 )
             )
             .setTasksPendingRevocation(
-                new TasksTuple(
-                    mkTasksPerSubtopology(mkTasks(barSubtopology, 4)),
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(barSubtopology, 4)),
                     mkTasksPerSubtopology(mkTasks(barSubtopology, 5)),
                     mkTasksPerSubtopology(mkTasks(barSubtopology, 6))
                 )
@@ -302,16 +302,10 @@ public class StreamsGroupTest {
 
         member = new StreamsGroupMember.Builder("member")
             .setProcessId("process")
-            .setAssignedTasks(
-                new TasksTuple(
-                    Map.of(),
-                    Map.of(),
-                    Map.of()
-                )
-            )
+            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
             .setTasksPendingRevocation(
-                new TasksTuple(
-                    mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 1)),
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopologyId, 1)),
                     mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 2)),
                     mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 3))
                 )
@@ -325,13 +319,13 @@ public class StreamsGroupTest {
         member = new StreamsGroupMember.Builder(member)
             .setProcessId("process1")
             .setAssignedTasks(
-                new TasksTuple(
-                    mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 1)),
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopologyId, 1)),
                     mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 2)),
                     mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 3))
                 )
             )
-            .setTasksPendingRevocation(TasksTuple.EMPTY)
+            .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
             .build();
 
         streamsGroup.updateMember(member);
@@ -347,8 +341,8 @@ public class StreamsGroupTest {
         StreamsGroupMember m1 = new StreamsGroupMember.Builder("m1")
             .setProcessId("process")
             .setAssignedTasks(
-                new TasksTuple(
-                    mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 1)),
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopologyId, 1)),
                     Map.of(),
                     Map.of()
                 )
@@ -360,8 +354,8 @@ public class StreamsGroupTest {
         StreamsGroupMember m2 = new StreamsGroupMember.Builder("m2")
             .setProcessId("process")
             .setAssignedTasks(
-                new TasksTuple(
-                    mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 1)),
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopologyId, 1)),
                     Map.of(),
                     Map.of()
                 )
@@ -382,20 +376,20 @@ public class StreamsGroupTest {
 
         // Removing should fail because there is no epoch set.
         assertThrows(IllegalStateException.class, () -> streamsGroup.removeTaskProcessIds(
-            mkTasksTuple(taskRole, mkTasks(fooSubtopologyId, 1)),
+            TaskAssignmentTestUtil.mkTasksTupleWithCommonEpoch(taskRole, 10, mkTasks(fooSubtopologyId, 1)),
             "process"
         ));
 
         StreamsGroupMember m1 = new StreamsGroupMember.Builder("m1")
             .setProcessId("process")
-            .setAssignedTasks(mkTasksTuple(taskRole, mkTasks(fooSubtopologyId, 1)))
+            .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTupleWithCommonEpoch(taskRole, 10, mkTasks(fooSubtopologyId, 1)))
             .build();
 
         streamsGroup.updateMember(m1);
 
         // Removing should fail because the expected epoch is incorrect.
         assertThrows(IllegalStateException.class, () -> streamsGroup.removeTaskProcessIds(
-            mkTasksTuple(taskRole, mkTasks(fooSubtopologyId, 1)),
+            TaskAssignmentTestUtil.mkTasksTupleWithCommonEpoch(taskRole, 10, mkTasks(fooSubtopologyId, 1)),
             "process1"
         ));
     }
@@ -406,8 +400,8 @@ public class StreamsGroupTest {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
 
         streamsGroup.addTaskProcessId(
-            new TasksTuple(
-                mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 1)),
+            new TasksTupleWithEpochs(
+                mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopologyId, 1)),
                 mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 2)),
                 mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 3))
             ),
@@ -417,8 +411,8 @@ public class StreamsGroupTest {
         // Changing the epoch should fail because the owner of the partition
         // should remove it first.
         assertThrows(IllegalStateException.class, () -> streamsGroup.addTaskProcessId(
-            new TasksTuple(
-                mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 1)),
+            new TasksTupleWithEpochs(
+                mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopologyId, 1)),
                 mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 2)),
                 mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 3))
             ),
@@ -438,15 +432,15 @@ public class StreamsGroupTest {
         member = new StreamsGroupMember.Builder("member")
             .setProcessId("process")
             .setAssignedTasks(
-                new TasksTuple(
-                    mkTasksPerSubtopology(mkTasks(fooSubtopology, 1)),
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopology, 1)),
                     mkTasksPerSubtopology(mkTasks(fooSubtopology, 2)),
                     mkTasksPerSubtopology(mkTasks(fooSubtopology, 3))
                 )
             )
             .setTasksPendingRevocation(
-                new TasksTuple(
-                    mkTasksPerSubtopology(mkTasks(barSubtopology, 4)),
+                new TasksTupleWithEpochs(
+                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(barSubtopology, 4)),
                     mkTasksPerSubtopology(mkTasks(barSubtopology, 5)),
                     mkTasksPerSubtopology(mkTasks(barSubtopology, 6))
                 )
@@ -822,8 +816,8 @@ public class StreamsGroupTest {
             .setProcessId("process1")
             .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host1").setPort(9092))
             .setClientTags(Map.of("tag1", "value1"))
-            .setAssignedTasks(new TasksTuple(Map.of(), Map.of(), Map.of()))
-            .setTasksPendingRevocation(new TasksTuple(Map.of(), Map.of(), Map.of()))
+            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
+            .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
             .build());
         group.updateMember(new StreamsGroupMember.Builder("member2")
             .setMemberEpoch(1)
@@ -838,8 +832,8 @@ public class StreamsGroupTest {
             .setProcessId("process2")
             .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host2").setPort(9092))
             .setClientTags(Map.of("tag2", "value2"))
-            .setAssignedTasks(new TasksTuple(Map.of(), Map.of(), Map.of()))
-            .setTasksPendingRevocation(new TasksTuple(Map.of(), Map.of(), Map.of()))
+            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
+            .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
             .build());
         snapshotRegistry.idempotentCreateSnapshot(1);
 
@@ -1047,8 +1041,8 @@ public class StreamsGroupTest {
             .setProcessId("process1")
             .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host1").setPort(9092))
             .setClientTags(Map.of("tag1", "value1"))
-            .setAssignedTasks(new TasksTuple(Map.of(), Map.of(), Map.of()))
-            .setTasksPendingRevocation(new TasksTuple(Map.of(), Map.of(), Map.of()))
+            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
+            .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
             .build());
         snapshotRegistry.idempotentCreateSnapshot(1);
 

@@ -906,11 +906,11 @@ public class StreamsGroup implements Group {
     }
 
     void removeTaskProcessIds(
-        TasksTuple tasks,
+        TasksTupleWithEpochs tasks,
         String processId
     ) {
         if (tasks != null) {
-            removeTaskProcessIds(tasks.activeTasks(), currentActiveTaskToProcessId, processId);
+            removeTaskProcessIds(tasks.activeTasksWithEpochs(), currentActiveTaskToProcessId, processId);
             removeTaskProcessIdsFromSet(tasks.standbyTasks(), currentStandbyTaskToProcessIds, processId);
             removeTaskProcessIdsFromSet(tasks.warmupTasks(), currentWarmupTaskToProcessIds, processId);
         }
@@ -924,14 +924,14 @@ public class StreamsGroup implements Group {
      * @throws IllegalStateException if the process ID does not match the expected one. package-private for testing.
      */
     private void removeTaskProcessIds(
-        Map<String, Set<Integer>> assignment,
+        Map<String, Map<Integer, Integer>> assignment,
         TimelineHashMap<String, TimelineHashMap<Integer, String>> currentTasksProcessId,
         String expectedProcessId
     ) {
         assignment.forEach((subtopologyId, assignedPartitions) -> {
             currentTasksProcessId.compute(subtopologyId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull != null) {
-                    assignedPartitions.forEach(partitionId -> {
+                    assignedPartitions.keySet().forEach(partitionId -> {
                         String prevValue = partitionsOrNull.remove(partitionId);
                         if (!Objects.equals(prevValue, expectedProcessId)) {
                             throw new IllegalStateException(
@@ -997,27 +997,27 @@ public class StreamsGroup implements Group {
      * @throws IllegalStateException if the partition already has an epoch assigned. package-private for testing.
      */
     void addTaskProcessId(
-        TasksTuple tasks,
+        TasksTupleWithEpochs tasks,
         String processId
     ) {
         if (tasks != null && processId != null) {
-            addTaskProcessId(tasks.activeTasks(), processId, currentActiveTaskToProcessId);
+            addTaskProcessIdFromActiveTasksWithEpochs(tasks.activeTasksWithEpochs(), processId, currentActiveTaskToProcessId);
             addTaskProcessIdToSet(tasks.standbyTasks(), processId, currentStandbyTaskToProcessIds);
             addTaskProcessIdToSet(tasks.warmupTasks(), processId, currentWarmupTaskToProcessIds);
         }
     }
 
-    private void addTaskProcessId(
-        Map<String, Set<Integer>> tasks,
+    private void addTaskProcessIdFromActiveTasksWithEpochs(
+        Map<String, Map<Integer, Integer>> tasksWithEpochs,
         String processId,
         TimelineHashMap<String, TimelineHashMap<Integer, String>> currentTaskProcessId
     ) {
-        tasks.forEach((subtopologyId, assignedTaskPartitions) -> {
+        tasksWithEpochs.forEach((subtopologyId, assignedTaskPartitionsWithEpochs) -> {
             currentTaskProcessId.compute(subtopologyId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull == null) {
-                    partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, assignedTaskPartitions.size());
+                    partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, assignedTaskPartitionsWithEpochs.size());
                 }
-                for (Integer partitionId : assignedTaskPartitions) {
+                for (Integer partitionId : assignedTaskPartitionsWithEpochs.keySet()) {
                     String prevValue = partitionsOrNull.put(partitionId, processId);
                     if (prevValue != null) {
                         throw new IllegalStateException(
