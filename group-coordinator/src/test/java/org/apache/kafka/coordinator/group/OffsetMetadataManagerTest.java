@@ -59,13 +59,13 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataV
 import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
-import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
-import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
+import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -86,8 +86,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
-import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSET;
@@ -2780,17 +2778,13 @@ public class OffsetMetadataManagerTest {
         );
         StreamsGroupMember member1 = StreamsGroupMember.Builder.withDefaults("member1")
             .build();
-        SortedMap<String, ConfiguredSubtopology> subtopologies = new TreeMap<>();
-        subtopologies.put("subtopology",
-            new ConfiguredSubtopology(5, Set.of("bar"), Map.of(), Set.of(), Map.of())
-        );
-        group.setConfiguredTopology(new ConfiguredTopology(
-            0,
-            0L,
-            Optional.of(subtopologies),
-            Map.of(),
-            Optional.empty()
-        ));
+        StreamsTopology topology = new StreamsTopology(0,
+            Map.of("subtopology",
+                new StreamsGroupTopologyValue.Subtopology()
+                    .setSubtopologyId("subtopology")
+                    .setSourceTopics(List.of("bar"))
+            ));
+        group.setTopology(topology);
         group.updateMember(member1);
         verifyOffsetDeleteWithErrors(context, group);
     }
