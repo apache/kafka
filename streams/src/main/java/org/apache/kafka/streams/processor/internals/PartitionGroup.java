@@ -257,24 +257,32 @@ class PartitionGroup extends AbstractPartitionGroup {
 
             if (record != null) {
                 totalBuffered -= oldSize - queue.size();
+                logger.trace("Partition {} polling next record:, oldSize={}, newSize={}, totalBuffered={}, recordTimestamp={}",
+                    queue.partition(), oldSize, queue.size(), totalBuffered, record.timestamp);
 
                 if (queue.isEmpty()) {
                     // if a certain queue has been drained, reset the flag
                     allBuffered = false;
+                    logger.trace("Partition {} queue is now empty, allBuffered=false", queue.partition());
                 } else {
                     nonEmptyQueuesByTime.offer(queue);
                 }
 
                 // always update the stream-time to the record's timestamp yet to be processed if it is larger
                 if (record.timestamp > streamTime) {
+                    final long oldStreamTime = streamTime;
                     streamTime = record.timestamp;
                     recordLatenessSensor.record(0, wallClockTime);
+                    logger.trace("Partition {} stream time updated from {} to {}", queue.partition(), oldStreamTime, streamTime);
                 } else {
-                    recordLatenessSensor.record(streamTime - record.timestamp, wallClockTime);
+                    final long lateness = streamTime - record.timestamp;
+                    recordLatenessSensor.record(lateness, wallClockTime);
                 }
             }
+        } else {
+            logger.trace("Partition pulling nextRecord: no queue available, totalBuffered={}", totalBuffered);
         }
-
+        
         return record;
     }
 
