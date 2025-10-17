@@ -64,7 +64,7 @@ task bootstrapWrapper() {
           elif command -v shasum >/dev/null 2>&1; then
             LOCAL_WRAPPER_JAR_CHECKSUM=\$(shasum -a 256 "$wrapperJarPath" | awk '{print \$1}')
           else
-            # If no checksum tool is found, exit with an error.
+            # If no checksum tool is found, this verification is skipped .
             warn "Cannot find sha256sum or shasum to verify wrapper JAR."
             break
           fi
