@@ -1681,7 +1681,7 @@ public class PlaintextConsumerTest {
         AtomicReference<ConsumerRecords<byte[], byte[]>> result = new AtomicReference<>();
 
         TestUtils.waitForCondition(() -> {
-            var polledRecords = consumer.poll(Duration.ofSeconds(1));
+            var polledRecords = consumer.poll(Duration.ofSeconds(10));
             boolean hasRecords = !polledRecords.isEmpty();
             if (hasRecords) {
                 result.set(polledRecords);
