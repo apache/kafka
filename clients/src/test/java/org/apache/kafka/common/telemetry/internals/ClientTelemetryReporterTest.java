@@ -21,6 +21,11 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
@@ -899,6 +904,163 @@ public class ClientTelemetryReporterTest {
         clientTelemetryReporter.initiateClose();
         assertEquals(ClientTelemetryState.TERMINATED, ((ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter
             .telemetrySender()).state());
+    }
+
+    @Test
+    public void testHandleFailedGetTelemetrySubscriptionsRequestWithRetriableException() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+
+        KafkaException retriableException = new TimeoutException("Request timed out");
+        telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(retriableException);
+
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertEquals(ClientTelemetryReporter.DEFAULT_PUSH_INTERVAL_MS, telemetrySender.intervalMs());
+        assertTrue(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testHandleFailedGetTelemetrySubscriptionsRequestWithWrappedRetriableException() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+
+        KafkaException wrappedException = new KafkaException(new DisconnectException("Connection lost"));
+        telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(wrappedException);
+
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertEquals(ClientTelemetryReporter.DEFAULT_PUSH_INTERVAL_MS, telemetrySender.intervalMs());
+        assertTrue(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testHandleFailedGetTelemetrySubscriptionsRequestWithFatalException() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+
+        KafkaException fatalException = new AuthorizationException("Not authorized for telemetry");
+        telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(fatalException);
+
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertEquals(Integer.MAX_VALUE, telemetrySender.intervalMs());
+        assertFalse(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testHandleFailedGetTelemetrySubscriptionsRequestWithWrappedFatalException() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+
+        KafkaException wrappedException = new KafkaException("Version check failed", 
+            new UnsupportedVersionException("Broker doesn't support telemetry"));
+        telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(wrappedException);
+
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertEquals(Integer.MAX_VALUE, telemetrySender.intervalMs());
+        assertFalse(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testHandleFailedPushTelemetryRequestWithRetriableException() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_IN_PROGRESS));
+
+        KafkaException networkException = new NetworkException("Network failure");
+        telemetrySender.handleFailedPushTelemetryRequest(networkException);
+
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertEquals(ClientTelemetryReporter.DEFAULT_PUSH_INTERVAL_MS, telemetrySender.intervalMs());
+        assertTrue(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testHandleFailedPushTelemetryRequestWithFatalException() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_IN_PROGRESS));
+
+        KafkaException authException = new AuthorizationException("Not authorized to push telemetry");
+        telemetrySender.handleFailedPushTelemetryRequest(authException);
+
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertEquals(Integer.MAX_VALUE, telemetrySender.intervalMs());
+        assertFalse(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testHandleFailedRequestWithMultipleRetriableExceptionsInChain() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+
+        KafkaException chainedException = new TimeoutException("Outer timeout",
+            new DisconnectException("Inner disconnect"));
+        telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(chainedException);
+
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertEquals(ClientTelemetryReporter.DEFAULT_PUSH_INTERVAL_MS, telemetrySender.intervalMs());
+        assertTrue(telemetrySender.enabled());
+    }
+    
+    @Test
+    public void testHandleFailedRequestWithGenericKafkaException() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+
+        KafkaException genericException = new KafkaException("Unknown error");
+        telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(genericException);
+
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertEquals(Integer.MAX_VALUE, telemetrySender.intervalMs());
+        assertFalse(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testHandleFailedRequestDuringTermination() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_NEEDED));
+
+        KafkaException exception = new TimeoutException("Timeout");
+        telemetrySender.handleFailedPushTelemetryRequest(exception);
+
+        assertEquals(ClientTelemetryState.TERMINATING_PUSH_NEEDED, telemetrySender.state());
+        assertTrue(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testSequentialFailuresWithDifferentExceptionTypes() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(
+            new TimeoutException("Timeout 1"));
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertTrue(telemetrySender.enabled());
+
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(
+            new DisconnectException("Disconnect"));
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertTrue(telemetrySender.enabled());
+
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(
+            new UnsupportedVersionException("Version not supported"));
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertFalse(telemetrySender.enabled());
     }
 
     @AfterEach

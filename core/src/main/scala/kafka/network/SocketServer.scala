@@ -833,7 +833,7 @@ private[kafka] class Processor(
   threadName: String,
   connectionDisconnectListeners: Seq[ConnectionDisconnectListener]
 ) extends Runnable with Logging {
-  private val metricsPackage = "kafka.server"
+  private val metricsPackage = "kafka.network"
   private val metricsClassName = "Processor"
   private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
