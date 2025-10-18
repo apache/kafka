@@ -249,7 +249,7 @@ License Version 2.0:
 - plexus-utils-3.5.1
 - rocksdbjni-10.1.3
 - scala-library-2.13.17
-- scala-logging_2.13-3.9.5
+- scala-logging_2.13-3.9.6
 - scala-reflect-2.13.17
 - snappy-java-1.1.10.7
 - snakeyaml-2.4

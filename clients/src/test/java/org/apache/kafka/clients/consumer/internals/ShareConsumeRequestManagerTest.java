@@ -161,7 +161,7 @@ public class ShareConsumeRequestManagerTest {
     private final long defaultApiTimeoutMs = 60000;
     private MockTime time = new MockTime(1);
     private SubscriptionState subscriptions;
-    private ConsumerMetadata metadata;
+    private ShareConsumerMetadata metadata;
     private ShareFetchMetricsManager metricsManager;
     private MockClient client;
     private Metrics metrics;
@@ -2671,7 +2671,7 @@ public class ShareConsumeRequestManagerTest {
                                    LogContext logContext) {
         time = new MockTime(1, 0, 0);
         subscriptions = subscriptionState;
-        metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
+        metadata = new ShareConsumerMetadata(0, 0, Long.MAX_VALUE, false,
                 subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);
         metrics = new Metrics(metricConfig, time);
@@ -2696,7 +2696,7 @@ public class ShareConsumeRequestManagerTest {
 
         public TestableShareConsumeRequestManager(LogContext logContext,
                                                   String groupId,
-                                                  ConsumerMetadata metadata,
+                                                  ShareConsumerMetadata metadata,
                                                   SubscriptionState subscriptions,
                                                   FetchConfig fetchConfig,
                                                   ShareFetchBuffer shareFetchBuffer,
