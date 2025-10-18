@@ -2691,7 +2691,7 @@ public class KafkaConsumerTest {
             boolean hasListOffsetRequest = requestGenerated(client, ApiKeys.LIST_OFFSETS);
             boolean hasFetchRequest = requestGenerated(client, ApiKeys.FETCH);
             return hasListOffsetRequest && hasFetchRequest;
-        }, () -> "No list-offset & fetch request sent");
+        }, "No list-offset & fetch request sent");
 
         // no error for no end offset (so unknown lag)
         assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
