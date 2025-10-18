@@ -66,7 +66,9 @@ import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-
+/**
+ * Intended to reproduce KAFKA-19479
+ */
 @Timeout(600)
 @Tag("integration")
 public class AtLeastOnceDeliveryMessageLossIntegrationTest {
@@ -118,9 +120,8 @@ public class AtLeastOnceDeliveryMessageLossIntegrationTest {
         }
     }
 
-    // failing test
     @Test
-    public void shouldNotCommitOffsetsAndNotProduceOutputRecordsWhenProducerFailsWithMessageTooLarge() throws Exception {
+    public void shouldCommitOffsetsAndProduceOutputRecordsWhenProducerFailsWithMessageTooLarge() throws Exception {
         
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(Sender.class)) {
             produceInputData(LARGE_RECORD_COUNT);
@@ -130,20 +131,15 @@ public class AtLeastOnceDeliveryMessageLossIntegrationTest {
 
             waitForProcessingAndCommit();
 
-            // for this bug
-            // first offsets are committed, then
-            // no messages produced in output topic, then
-            // repeated retries and MESSAGE_TOO_LARGE error
-
             assertTrue(appender.getMessages().stream()
                     .anyMatch(msg -> msg.contains("MESSAGE_TOO_LARGE") && msg.contains("splitting and retrying")),
                 "Should log MESSAGE_TOO_LARGE and splitting retry messages");
 
-            final int outputRecordCount = verifyOutputRecords(0); // should not produce records
-            final boolean offsetsCommitted = verifyConsumerOffsetsCommitted(0); // should not commit offset unless records are produced
+            final int outputRecordCount = verifyOutputRecords(LARGE_RECORD_COUNT); // should produce records
+            final boolean offsetsCommitted = verifyConsumerOffsetsCommitted(LARGE_RECORD_COUNT); // should commit offset
 
-            assertEquals(0, outputRecordCount, "Output topic should not have any records");
-            assertTrue(offsetsCommitted, "Consumer offsets should not be committed");
+            assertEquals(LARGE_RECORD_COUNT, outputRecordCount, "Output topic should have " + LARGE_RECORD_COUNT + " records");
+            assertTrue(offsetsCommitted, "Consumer offsets should be committed");
         }
     }
     
@@ -156,8 +152,7 @@ public class AtLeastOnceDeliveryMessageLossIntegrationTest {
             
             waitForProcessingAndCommit();
 
-            //normal behavior
-            final int outputRecordCount = verifyOutputRecords(SMALL_RECORD_COUNT); //should produce records
+            final int outputRecordCount = verifyOutputRecords(SMALL_RECORD_COUNT); // should produce records
             final boolean offsetsCommitted = verifyConsumerOffsetsCommitted(SMALL_RECORD_COUNT); // should commit offsets
 
             assertEquals(SMALL_RECORD_COUNT, outputRecordCount, "Output topic should have " + SMALL_RECORD_COUNT + " records");
