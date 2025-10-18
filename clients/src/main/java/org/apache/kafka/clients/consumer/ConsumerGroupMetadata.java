@@ -34,7 +34,7 @@ public class ConsumerGroupMetadata {
     /**
      * @deprecated Since 4.2, please use {@link KafkaConsumer#groupMetadata()} instead. This class will be an interface in Kafka 5.0.
      */
-    @Deprecated
+    @Deprecated(since = "4.2", forRemoval = true)
     public ConsumerGroupMetadata(String groupId,
                                  int generationId,
                                  String memberId,
@@ -48,7 +48,7 @@ public class ConsumerGroupMetadata {
     /**
      * @deprecated Since 4.2, please use {@link KafkaConsumer#groupMetadata()} instead. This class will be an interface in Kafka 5.0.
      */
-    @Deprecated
+    @Deprecated(since = "4.2", forRemoval = true)
     public ConsumerGroupMetadata(String groupId) {
         this(groupId,
             JoinGroupRequest.UNKNOWN_GENERATION_ID,
