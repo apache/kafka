@@ -2700,6 +2700,7 @@ public class KafkaConsumerTest {
         // and hence next call would return correct lag result
         ClientRequest listOffsetRequest = findRequest(client, ApiKeys.LIST_OFFSETS);
         client.respondToRequest(listOffsetRequest, listOffsetsResponse(Map.of(tp0, 90L)));
+        consumer.poll(Duration.ofMillis(0));
 
         // For AsyncKafkaConsumer, subscription state is updated in background, so the result will eventually be updated.
         TestUtils.waitForCondition(() -> {
