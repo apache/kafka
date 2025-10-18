@@ -443,6 +443,32 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void testAutoCreateTopicsCannotBeOverriddenForStreamsConsumers() {
+        // User tries to override the setting
+        props.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
+        props.put(StreamsConfig.globalConsumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
+        props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
+
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        // Main consumer - verify override is ignored
+        final Map<String, Object> mainConfigs = streamsConfig.getMainConsumerConfigs("group", "client", 0);
+        assertEquals("false", mainConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
+                "Main consumer should not allow auto topic creation even with override");
+
+        // Restore consumer - verify override is ignored
+        final Map<String, Object> restoreConfigs = streamsConfig.getRestoreConsumerConfigs("client");
+        assertEquals("false", restoreConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
+                "Restore consumer should not allow auto topic creation even with override");
+
+        // Global consumer - verify override is ignored
+        final Map<String, Object> globalConfigs = streamsConfig.getGlobalConsumerConfigs("client");
+        assertEquals("false", globalConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
+                "Global consumer should not allow auto topic creation even with override");
+    }
+
+
+    @Test
     public void shouldSupportNonPrefixedAdminConfigs() {
         props.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 10);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
