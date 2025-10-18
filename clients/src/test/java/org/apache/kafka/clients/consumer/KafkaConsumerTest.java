@@ -2685,12 +2685,13 @@ public class KafkaConsumerTest {
         }
         // poll once again, which should send the list-offset request
         consumer.seek(tp0, 50L);
-        consumer.poll(Duration.ofMillis(0));
-        // requests: list-offset
-        TestUtils.waitForCondition(
-            () -> requestGenerated(client, ApiKeys.LIST_OFFSETS),
-            "No list-offset request sent"
-        );
+        // requests: list-offset, fetch
+        TestUtils.waitForCondition(() -> {
+            consumer.poll(Duration.ofMillis(0));
+            boolean hasListOffsetRequest = requestGenerated(client, ApiKeys.LIST_OFFSETS);
+            boolean hasFetchRequest = requestGenerated(client, ApiKeys.FETCH);
+            return hasListOffsetRequest && hasFetchRequest;
+        }, () -> "No list-offset & fetch request sent");
 
         // no error for no end offset (so unknown lag)
         assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
@@ -2699,12 +2700,6 @@ public class KafkaConsumerTest {
         // and hence next call would return correct lag result
         ClientRequest listOffsetRequest = findRequest(client, ApiKeys.LIST_OFFSETS);
         client.respondToRequest(listOffsetRequest, listOffsetsResponse(Map.of(tp0, 90L)));
-        consumer.poll(Duration.ofMillis(0));
-        // requests: fetch
-        TestUtils.waitForCondition(
-            () -> requestGenerated(client, ApiKeys.FETCH),
-            "No fetch request sent"
-        );
 
         // For AsyncKafkaConsumer, subscription state is updated in background, so the result will eventually be updated.
         TestUtils.waitForCondition(() -> {
