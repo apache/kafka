@@ -49,6 +49,7 @@ import org.apache.kafka.server.share.fetch.DeliveryCountOps;
 import org.apache.kafka.server.share.fetch.InFlightBatch;
 import org.apache.kafka.server.share.fetch.InFlightState;
 import org.apache.kafka.server.share.fetch.RecordState;
+import org.apache.kafka.server.share.fetch.ShareAcquireMode;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.metrics.SharePartitionMetrics;
 import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
@@ -656,6 +657,7 @@ public class SharePartition {
      * batches from fetchOffset to first base offset of the fetch response are archived.
      *
      * @param memberId           The member id of the client that is fetching the record.
+     * @param shareAcquireMode   The share acquire mode to acquire the records.
      * @param batchSize          The number of records per acquired records batch.
      * @param maxFetchRecords    The maximum number of records that should be acquired, this is a soft
      *                           limit and the method might acquire more records than the maxFetchRecords,
@@ -668,6 +670,7 @@ public class SharePartition {
     @SuppressWarnings({"cyclomaticcomplexity", "methodlength"}) // Consider refactoring to avoid suppression
     public ShareAcquiredRecords acquire(
         String memberId,
+        ShareAcquireMode shareAcquireMode,
         int batchSize,
         int maxFetchRecords,
         long fetchOffset,
@@ -2013,18 +2016,8 @@ public class SharePartition {
                 }
 
                 if (offsetState.getKey() > batch.lastOffset()) {
-                    if (isRecordLimitMode()) {
-                        // In record limit mode, there is a case that the request acknowledge batch is a subset of
-                        // the in-flight batch and the last offset of the request batch is before
-                        // the last offset of the in-flight batch. Hence, we also need to persist those
-                        // offsets which are part of the in-flight batch but not part of the request batch.
-                        persisterBatches.add(new PersisterBatch(offsetState.getValue(), new PersisterStateBatch(offsetState.getKey(),
-                            offsetState.getKey(), offsetState.getValue().state().id(), (short) offsetState.getValue().deliveryCount())));
-                        continue;
-                    } else {
-                        // No further offsets to process
-                        break;
-                    }
+                    // No further offsets to process.
+                    break;
                 }
 
                 if (offsetState.getValue().state() != RecordState.ACQUIRED) {
