@@ -5929,6 +5929,7 @@ class ReplicaManagerTest {
         Uuid.randomUuid.toString,
         future,
         topicPartitions,
+        0,
         500,
         100,
         brokerTopicStats)

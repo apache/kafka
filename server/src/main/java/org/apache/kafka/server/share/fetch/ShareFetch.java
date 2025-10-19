@@ -64,6 +64,10 @@ public class ShareFetch {
      */
     private final int batchSize;
     /**
+     * The share acquire mode for the fetch request.
+     */
+    private final byte shareAcquireMode;
+    /**
      * The maximum number of records that can be fetched for the request.
      */
     private final int maxFetchRecords;
@@ -83,6 +87,7 @@ public class ShareFetch {
         String memberId,
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
         List<TopicIdPartition> topicIdPartitions,
+        byte shareAcquireMode,
         int batchSize,
         int maxFetchRecords,
         BrokerTopicStats brokerTopicStats
@@ -92,6 +97,7 @@ public class ShareFetch {
         this.memberId = memberId;
         this.future = future;
         this.topicIdPartitions = topicIdPartitions;
+        this.shareAcquireMode = shareAcquireMode;
         this.batchSize = batchSize;
         this.maxFetchRecords = maxFetchRecords;
         this.brokerTopicStats = brokerTopicStats;
@@ -119,6 +125,10 @@ public class ShareFetch {
 
     public int maxFetchRecords() {
         return maxFetchRecords;
+    }
+
+    public byte shareAcquireMode() {
+        return shareAcquireMode;
     }
 
     /**
