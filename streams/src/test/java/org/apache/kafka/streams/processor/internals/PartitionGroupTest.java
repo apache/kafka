@@ -359,9 +359,9 @@ public class PartitionGroupTest {
 
         // get first two records from partition 1
         record = group.nextRecord(info, time.milliseconds());
-        assertEquals(record.timestamp, 1L);
+        assertEquals(1L, record.timestamp);
         record = group.nextRecord(info, time.milliseconds());
-        assertEquals(record.timestamp, 5L);
+        assertEquals(5L, record.timestamp);
 
         // add three 3 records with timestamp 2, 4, 6 to partition-2
         final List<ConsumerRecord<byte[], byte[]>> list2 = Arrays.asList(
@@ -377,13 +377,13 @@ public class PartitionGroupTest {
         record = group.nextRecord(info, time.milliseconds());
         // 1:[3]
         // 2:[4, 6]
-        assertEquals(record.timestamp, 2L);
+        assertEquals(2L, record.timestamp);
 
         // get one record, next up should have ts=3 from partition 1 (even though it has seen a larger max timestamp =5)
         record = group.nextRecord(info, time.milliseconds());
         // 1:[]
         // 2:[4, 6]
-        assertEquals(record.timestamp, 3L);
+        assertEquals(3L, record.timestamp);
     }
 
     private void verifyTimes(final StampedRecord record,
