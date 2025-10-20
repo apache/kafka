@@ -135,6 +135,14 @@ public class Timer {
     }
 
     /**
+     * Get the deadline in milliseconds.
+     * @return The deadline in milliseconds
+     */
+    public long deadlineMs() {
+        return deadlineMs;
+    }
+
+    /**
      * Use the underlying {@link Time} implementation to update the current cached time. If
      * the underlying time returns a value which is smaller than the current cached time,
      * the update will be ignored.

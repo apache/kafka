@@ -55,6 +55,8 @@
 
     <subpackage name="queue">
         <allow pkg="org.apache.kafka.test" />
+        <allow pkg="org.apache.kafka.queue.KafkaDeadlineEventQueue" />
+        <allow pkg="org.apache.kafka.server.util" />
     </subpackage>
 
     <subpackage name="metadata">
