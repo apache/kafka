@@ -605,19 +605,14 @@ Found problem:
               Seq("--release-version", "3.9-IV0"))).getMessage)
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = Array(false, true))
-  def testFormatWithNoInitialControllersSucceedsOnController(setKraftVersionFeature: Boolean): Unit = {
+  @Test
+  def testFormatWithNoInitialControllersSucceedsOnController(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
     properties.putAll(defaultDynamicQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--no-initial-controllers")
-    if (setKraftVersionFeature) {
-      arguments += "--feature"
-      arguments += "kraft.version=1"
-    }
     assertEquals(0, runFormatCommand(stream, properties, arguments.toSeq))
     assertTrue(stream.toString().
       contains("Formatting metadata directory %s".format(availableDirs.head)),
@@ -840,6 +835,16 @@ Found problem:
     })
 
     assertEquals("Invalid version format: invalid for feature metadata.version", exception.getMessage)
+  }
+
+  @Test
+  def testHandleFeatureDependenciesForInvalidFormat(): Unit = {
+    val stream = new ByteArrayOutputStream()
+
+    val exception = assertThrows(classOf[TerseFailure], () => {
+      runFeatureDependenciesCommand(stream, Seq("metadata.version"))
+    })
+    assertEquals("Invalid feature format: metadata.version. Expected format: 'feature=version' (e.g. 'group.version=1')", exception.getMessage)
   }
 
   @Test
