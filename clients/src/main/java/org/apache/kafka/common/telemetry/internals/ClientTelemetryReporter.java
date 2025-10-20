@@ -636,12 +636,6 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 (maybeFatalException.getCause() != null && maybeFatalException.getCause() instanceof RetriableException);
         }
 
-        private boolean shouldLog(final KafkaException maybeFatalException) {
-            return maybeFatalException == null ||
-                !(maybeFatalException instanceof UnsupportedVersionException ||
-                    maybeFatalException.getCause() instanceof UnsupportedVersionException);
-        }
-
         private Optional<Builder<?>> createSubscriptionRequest(ClientTelemetrySubscription localSubscription) {
             /*
              If we've previously retrieved a subscription, it will contain the client instance ID
@@ -875,12 +869,10 @@ public class ClientTelemetryReporter implements MetricsReporter {
                  again. We may disconnect from the broker and connect to a broker that supports client
                  telemetry.
                 */
-                boolean shouldWait = isRetryable(maybeFatalException);
-                if (shouldWait) {
+                if (isRetryable(maybeFatalException)) {
                     updateErrorResult(DEFAULT_PUSH_INTERVAL_MS, nowMs);
                 } else {
-                    boolean shouldLog = shouldLog(maybeFatalException);
-                    if (shouldLog) {
+                    if (!(maybeFatalException instanceof UnsupportedVersionException)) {
                         log.warn("Received unrecoverable error from broker, disabling telemetry");
                     }
                     updateErrorResult(Integer.MAX_VALUE, nowMs);
