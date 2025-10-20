@@ -483,7 +483,7 @@ public class LogCleaner implements BrokerReconfigurable {
                     config.dedupeBufferLoadFactor,
                     throttler,
                     time,
-                this::checkDone
+                    this::checkDone
             );
 
             if (config.dedupeBufferSize / config.numThreads > Integer.MAX_VALUE) {
