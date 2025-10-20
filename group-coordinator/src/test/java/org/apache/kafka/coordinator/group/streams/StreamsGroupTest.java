@@ -45,7 +45,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
-import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -970,18 +969,7 @@ public class StreamsGroupTest {
         streamsGroup.setTopology(topology);
 
         streamsGroup.updateMember(streamsGroup.getOrCreateDefaultMember("member-id"));
-
-        assertFalse(streamsGroup.isSubscribedToTopic("test-topic1"));
-        assertFalse(streamsGroup.isSubscribedToTopic("test-topic2"));
-        assertFalse(streamsGroup.isSubscribedToTopic("non-existent-topic"));
-
-        MetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(Uuid.randomUuid(), "test-topic1", 1)
-            .addTopic(Uuid.randomUuid(), "test-topic2", 1)
-            .build();
-
-        streamsGroup.setConfiguredTopology(InternalTopicManager.configureTopics(logContext, 0, topology, new KRaftCoordinatorMetadataImage(metadataImage)));
-
+        
         assertTrue(streamsGroup.isSubscribedToTopic("test-topic1"));
         assertTrue(streamsGroup.isSubscribedToTopic("test-topic2"));
         assertFalse(streamsGroup.isSubscribedToTopic("non-existent-topic"));

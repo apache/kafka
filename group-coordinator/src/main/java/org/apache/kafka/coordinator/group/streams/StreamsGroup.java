@@ -27,11 +27,11 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.CommitPartitionValidator;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Utils;
-import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -50,7 +50,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeMap;
 
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.DEAD;
@@ -210,6 +209,12 @@ public class StreamsGroup implements Group {
      */
     private int endpointInformationEpoch = -1;
 
+    /**
+     * The last used assignment configurations for this streams group.
+     * This is used to determine when assignment configuration changes should trigger a rebalance.
+     */
+    private TimelineHashMap<String, String> lastAssignmentConfigs;
+
     public StreamsGroup(
         LogContext logContext,
         SnapshotRegistry snapshotRegistry,
@@ -231,6 +236,7 @@ public class StreamsGroup implements Group {
         this.currentWarmupTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
+        this.lastAssignmentConfigs = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
     /**
@@ -688,11 +694,12 @@ public class StreamsGroup implements Group {
      * @param memberEpoch       The member epoch.
      * @param isTransactional   Whether the offset commit is transactional or not.
      * @param apiVersion        The api version.
+     * @return A validator for per-partition validation.
      * @throws UnknownMemberIdException  If the member is not found.
      * @throws StaleMemberEpochException If the provided member epoch doesn't match the actual member epoch.
      */
     @Override
-    public void validateOffsetCommit(
+    public CommitPartitionValidator validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int memberEpoch,
@@ -702,13 +709,13 @@ public class StreamsGroup implements Group {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,
         // the request can commit offsets if the group is empty.
-        if (memberEpoch < 0 && members().isEmpty()) return;
+        if (memberEpoch < 0 && members().isEmpty()) return CommitPartitionValidator.NO_OP;
 
         // The TxnOffsetCommit API does not require the member ID, the generation ID and the group instance ID fields.
         // Hence, they are only validated if any of them is provided
         if (isTransactional && memberEpoch == JoinGroupRequest.UNKNOWN_GENERATION_ID &&
             memberId.equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) && groupInstanceId == null)
-            return;
+            return CommitPartitionValidator.NO_OP;
 
         final StreamsGroupMember member = getMemberOrThrow(memberId);
 
@@ -720,6 +727,7 @@ public class StreamsGroup implements Group {
         }
 
         validateMemberEpoch(memberEpoch, member.memberEpoch());
+        return CommitPartitionValidator.NO_OP;
     }
 
     /**
@@ -774,16 +782,11 @@ public class StreamsGroup implements Group {
             // This allows offsets to expire for empty groups.
             return false;
         }
-        Optional<ConfiguredTopology> maybeConfiguredTopology = configuredTopology.get();
-        if (maybeConfiguredTopology.isEmpty() || !maybeConfiguredTopology.get().isReady()) {
+        Optional<StreamsTopology> maybeTopology = topology.get();
+        if (maybeTopology.isEmpty()) {
             return false;
         }
-        for (ConfiguredSubtopology sub : maybeConfiguredTopology.get().subtopologies().orElse(new TreeMap<>()).values()) {
-            if (sub.sourceTopics().contains(topic) || sub.repartitionSourceTopics().containsKey(topic)) {
-                return true;
-            }
-        }
-        return false;
+        return maybeTopology.get().sourceTopicMap().containsKey(topic);
     }
 
     /**
@@ -1097,5 +1100,24 @@ public class StreamsGroup implements Group {
 
     public void setEndpointInformationEpoch(int endpointInformationEpoch) {
         this.endpointInformationEpoch = endpointInformationEpoch;
+    }
+
+    /**
+     * @return The assignment configurations for this streams group.
+     */
+    public Map<String, String> lastAssignmentConfigs() {
+        return Collections.unmodifiableMap(lastAssignmentConfigs);
+    }
+
+    /**
+     * Sets last assignment configurations.
+     *
+     * @param lastAssignmentConfigs The last assignment configurations to set.
+     */
+    public void setLastAssignmentConfigs(Map<String, String> lastAssignmentConfigs) {
+        this.lastAssignmentConfigs.clear();
+        if (lastAssignmentConfigs != null) {
+            this.lastAssignmentConfigs.putAll(lastAssignmentConfigs);
+        }
     }
 }

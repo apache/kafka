@@ -7492,7 +7492,7 @@ class KafkaApisTest extends Logging {
           ).iterator))
       ).iterator))
 
-    val shareAcknowledgeRequest = new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
+    val shareAcknowledgeRequest = new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData).build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
     val topicNames = util.Map.of(topicId1, "foo1", topicId2, "foo2")
     val erroneous = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
 
@@ -7554,7 +7554,7 @@ class KafkaApisTest extends Logging {
           ).iterator))
       ).iterator))
 
-    val shareAcknowledgeRequest = new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
+    val shareAcknowledgeRequest = new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData).build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
     val topicIdNames = util.Map.of(topicId1, "foo1") // topicId2 not present in topicIdNames
     val erroneous = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
 
