@@ -17,11 +17,8 @@
 package org.apache.kafka.clients.security;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.acl.AclBinding;
-import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Monitorable;
@@ -34,21 +31,10 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.server.authorizer.AclCreateResult;
-import org.apache.kafka.server.authorizer.AclDeleteResult;
-import org.apache.kafka.server.authorizer.Action;
-import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
-import org.apache.kafka.server.authorizer.AuthorizationResult;
-import org.apache.kafka.server.authorizer.Authorizer;
-import org.apache.kafka.server.authorizer.AuthorizerServerInfo;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import javax.security.auth.Subject;
@@ -63,7 +49,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CLASS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_MECHANISM;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG;
-import static org.apache.kafka.server.config.ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG;
+import static org.apache.kafka.metadata.authorizer.StandardAuthorizer.SUPER_USERS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class LoginTest {
@@ -88,7 +74,7 @@ public class LoginTest {
             @ClusterConfigProperty(key = SASL_ENABLED_MECHANISMS_CONFIG, value = MECHANISMS),
             @ClusterConfigProperty(key = SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, value = MECHANISMS),
             @ClusterConfigProperty(key = LISTENER_PREFIX + MECHANISMS_PREFIX + SASL_JAAS_CONFIG, value = SASL_JAAS),
-            @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = "org.apache.kafka.clients.security.LoginTest$CustomerAuthorizer"),
+            @ClusterConfigProperty(key = SUPER_USERS_CONFIG, value = "User:" + USERNAME),
         }
     )
     public void testCustomLoginWithKafkaCluster(ClusterInstance cluster) {
@@ -126,7 +112,7 @@ public class LoginTest {
 
     private int assertMetricName(MetricName metricName, Map<String, String> expectedTags) {
         Map<String, String> tags = metricName.tags();
-        if (expectedTags.equals(tags)) {
+        if (metricName.group().equals("plugins") && expectedTags.equals(tags)) {
             assertEquals(CustomerLogin.METRIC_NAME, metricName.name());
             assertEquals(CustomerLogin.METRIC_DESCRIPTION, metricName.description());
             return 1;
@@ -145,19 +131,19 @@ public class LoginTest {
     private static Map<String, String> expectedTags(Map<String, String> extraTags) {
         Map<String, String> tags = new LinkedHashMap<>();
         tags.put("config", SASL_LOGIN_CLASS);
-        tags.put("class", LoginTest.CustomerLogin.class.getSimpleName());
+        tags.put("class", CustomerLogin.class.getSimpleName());
         tags.putAll(extraTags);
         return tags;
     }
 
     protected static Map<String, Object> saslConfig() {
-        Map<String, Object> config = new HashMap<>();
-        config.put(SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name);
-        config.put(CLIENT_ID_CONFIG, CLIENT_ID);
-        config.put(SASL_MECHANISM, MECHANISMS);
-        config.put(SASL_LOGIN_CLASS, LoginTest.CustomerLogin.class.getName());
-        config.put(SASL_JAAS_CONFIG, SASL_JAAS);
-        return config;
+        return Map.of(
+            SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name,
+            CLIENT_ID_CONFIG, CLIENT_ID,
+            SASL_MECHANISM, MECHANISMS,
+            SASL_LOGIN_CLASS, LoginTest.CustomerLogin.class.getName(),
+            SASL_JAAS_CONFIG, SASL_JAAS
+        );
     }
 
     public static class CustomerLogin implements Login, Monitorable {
@@ -211,57 +197,6 @@ public class LoginTest {
         @Override
         public void close() {
 
-        }
-    }
-
-    public static class CustomerAuthorizer implements Authorizer {
-
-        @Override
-        public Map<Endpoint, ? extends CompletionStage<Void>> start(AuthorizerServerInfo serverInfo) {
-            return Map.of();
-        }
-
-        @Override
-        public List<AuthorizationResult> authorize(
-            AuthorizableRequestContext requestContext,
-            List<Action> actions
-        ) {
-            return IntStream.range(0, actions.size())
-                .mapToObj(i -> AuthorizationResult.ALLOWED)
-                .toList();
-        }
-
-        @Override
-        public List<? extends CompletionStage<AclCreateResult>> createAcls(
-            AuthorizableRequestContext requestContext,
-            List<AclBinding> aclBindings
-        ) {
-            return IntStream.range(0, aclBindings.size())
-                .mapToObj(i -> CompletableFuture.completedFuture(AclCreateResult.SUCCESS))
-                .toList();
-        }
-
-        @Override
-        public List<? extends CompletionStage<AclDeleteResult>> deleteAcls(
-            AuthorizableRequestContext requestContext,
-            List<AclBindingFilter> aclBindingFilters
-        ) {
-            return IntStream.range(0, aclBindingFilters.size())
-                .mapToObj(i -> CompletableFuture.completedFuture(new AclDeleteResult(List.of())))
-                .toList();
-        }
-
-        @Override
-        public Iterable<AclBinding> acls(AclBindingFilter filter) {
-            return List.of();
-        }
-
-        @Override
-        public void close() {
-        }
-
-        @Override
-        public void configure(Map<String, ?> configs) {
         }
     }
 }

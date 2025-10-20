@@ -865,8 +865,6 @@ private[kafka] class Processor(
   metrics.addMetric(expiredConnectionsKilledCountMetricName, expiredConnectionsKilledCount)
 
   private[network] val selector = {
-    val extraTags = new util.LinkedHashMap[String, String]()
-    extraTags.putAll(metricTags)
     createSelector(
       ChannelBuilders.serverChannelBuilder(
         listenerName,
@@ -879,7 +877,7 @@ private[kafka] class Processor(
         logContext,
         version => apiVersionManager.apiVersionResponse(0, version < 4),
         metrics,
-        extraTags
+        new util.LinkedHashMap[String, String](metricTags)
       )
     )
   }
