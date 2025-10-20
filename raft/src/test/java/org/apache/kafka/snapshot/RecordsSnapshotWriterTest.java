@@ -60,7 +60,7 @@ final class RecordsSnapshotWriterTest {
             .setRawSnapshotWriter(
                 new MockRawSnapshotWriter(snapshotId, buffer::set)
             );
-        try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE)) {
+        try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE, Optional.empty())) {
             snapshot.freeze();
         }
 
@@ -114,7 +114,7 @@ final class RecordsSnapshotWriterTest {
                 new MockRawSnapshotWriter(snapshotId, buffer::set)
             );
 
-        assertThrows(IllegalStateException.class, () -> builder.build(STRING_SERDE));
+        assertThrows(IllegalStateException.class, () -> builder.build(STRING_SERDE, Optional.empty()));
     }
 
     @Test
@@ -133,7 +133,7 @@ final class RecordsSnapshotWriterTest {
             .setRawSnapshotWriter(
                 new MockRawSnapshotWriter(snapshotId, buffer::set)
             );
-        try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE)) {
+        try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE, Optional.empty())) {
             snapshot.freeze();
         }
 
@@ -191,7 +191,7 @@ final class RecordsSnapshotWriterTest {
             .setRawSnapshotWriter(
                 new MockRawSnapshotWriter(snapshotId, buffer::set)
             );
-        try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE)) {
+        try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE, Optional.empty())) {
             snapshot.freeze();
         }
 

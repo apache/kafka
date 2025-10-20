@@ -172,7 +172,7 @@ final class KRaftControlRecordStateMachineTest {
         // Create a snapshot that doesn't have any kraft.version or voter set control records
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
             .setRawSnapshotWriter(log.createNewSnapshotUnchecked(new OffsetAndEpoch(10, epoch)).get());
-        try (RecordsSnapshotWriter<?> writer = builder.build(STRING_SERDE)) {
+        try (RecordsSnapshotWriter<?> writer = builder.build(STRING_SERDE, Optional.empty())) {
             writer.freeze();
         }
         log.truncateToLatestSnapshot();
@@ -234,7 +234,7 @@ final class KRaftControlRecordStateMachineTest {
             .setRawSnapshotWriter(log.createNewSnapshotUnchecked(new OffsetAndEpoch(10, epoch)).get())
             .setKraftVersion(kraftVersion)
             .setVoterSet(Optional.of(voterSet));
-        try (RecordsSnapshotWriter<?> writer = builder.build(STRING_SERDE)) {
+        try (RecordsSnapshotWriter<?> writer = builder.build(STRING_SERDE, Optional.empty())) {
             writer.freeze();
         }
         log.truncateToLatestSnapshot();
@@ -272,7 +272,7 @@ final class KRaftControlRecordStateMachineTest {
             .setRawSnapshotWriter(log.createNewSnapshotUnchecked(snapshotId).get())
             .setKraftVersion(kraftVersion)
             .setVoterSet(Optional.of(snapshotVoterSet));
-        try (RecordsSnapshotWriter<?> writer = builder.build(STRING_SERDE)) {
+        try (RecordsSnapshotWriter<?> writer = builder.build(STRING_SERDE, Optional.empty())) {
             writer.freeze();
         }
         log.truncateToLatestSnapshot();

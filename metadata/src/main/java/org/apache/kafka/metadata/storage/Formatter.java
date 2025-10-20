@@ -437,14 +437,11 @@ public class Formatter {
                     directoryTypes.get(writeLogDir).description(), writeLogDir,
                     MetadataVersion.FEATURE_NAME, releaseVersion);
                 Files.createDirectories(Paths.get(writeLogDir));
-                BootstrapDirectory bootstrapDirectory = new BootstrapDirectory(writeLogDir);
-                bootstrapDirectory.writeBinaryFile(bootstrapMetadata);
-                if (directoryTypes.get(writeLogDir).isDynamicMetadataDirectory()) {
-                    writeDynamicQuorumSnapshot(writeLogDir,
+                writeBoostrapSnapshot(writeLogDir,
+                        bootstrapMetadata,
                         initialControllers.get(),
                         featureLevels.get(KRaftVersion.FEATURE_NAME),
                         controllerListenerName);
-                }
             });
             copier.setWriteErrorHandler((errorLogDir, e) -> {
                 throw new FormatterException("Error while writing meta.properties file " +
@@ -492,8 +489,9 @@ public class Formatter {
         }
     }
 
-    static void writeDynamicQuorumSnapshot(
+    static void writeBoostrapSnapshot(
         String writeLogDir,
+        BootstrapMetadata bootstrapMetadata,
         DynamicVoters initialControllers,
         short kraftVersion,
         String controllerListenerName
@@ -502,6 +500,7 @@ public class Formatter {
         File clusterMetadataDirectory = new File(parentDir, String.format("%s-%d",
                 CLUSTER_METADATA_TOPIC_PARTITION.topic(),
                 CLUSTER_METADATA_TOPIC_PARTITION.partition()));
+
         VoterSet voterSet = initialControllers.toVoterSet(controllerListenerName);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder().
             setLastContainedLogTimestamp(Time.SYSTEM.milliseconds()).
@@ -511,8 +510,9 @@ public class Formatter {
                 Snapshots.BOOTSTRAP_SNAPSHOT_ID)).
             setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion)).
             setVoterSet(Optional.of(voterSet));
-        try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(new MetadataRecordSerde())) {
+        try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(new MetadataRecordSerde(), Optional.of(bootstrapMetadata.records()))) {
             writer.freeze();
         }
+
     }
 }

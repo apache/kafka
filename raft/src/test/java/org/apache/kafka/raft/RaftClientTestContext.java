@@ -268,7 +268,7 @@ public final class RaftClientTestContext {
                     .setTime(time)
                     .setKraftVersion(KRaftVersion.KRAFT_VERSION_0)
                     .setRawSnapshotWriter(log.createNewSnapshotUnchecked(snapshotId).get())
-                    .build(SERDE)
+                    .build(SERDE, Optional.empty())
             ) {
                 snapshot.freeze();
             }
@@ -363,7 +363,7 @@ public final class RaftClientTestContext {
                     .setKraftVersion(kraftVersion)
                     .setVoterSet(voters);
 
-                try (RecordsSnapshotWriter<String> writer = builder.build(SERDE)) {
+                try (RecordsSnapshotWriter<String> writer = builder.build(SERDE, Optional.empty())) {
                     writer.freeze();
                 }
             } else {

@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
@@ -191,7 +192,7 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             return this;
         }
 
-        public <T> RecordsSnapshotWriter<T> build(RecordSerde<T> serde) {
+        public <T> RecordsSnapshotWriter<T> build(RecordSerde<T> serde, Optional<List<T>> bootstrapRecords) {
             if (rawSnapshotWriter.isEmpty()) {
                 throw new IllegalStateException("Builder::build called without a RawSnapshotWriter");
             } else if (rawSnapshotWriter.get().sizeInBytes() != 0) {
@@ -212,6 +213,8 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                 compression,
                 serde
             );
+
+            bootstrapRecords.ifPresent(writer::append);
 
             writer.accumulator.appendControlMessages((baseOffset, epoch, compression, buffer) -> {
                 long now = time.milliseconds();
