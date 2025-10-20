@@ -123,7 +123,7 @@ versions += [
   scoverage: "2.3.0",
   slf4j: "1.7.36",
   snappy: "1.1.10.7",
-  spotbugs: "4.9.4",
+  spotbugs: "4.9.8",
   mockOAuth2Server: "2.2.1",
   zinc: "1.11.0",
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
