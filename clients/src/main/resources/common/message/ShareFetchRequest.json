@@ -21,7 +21,9 @@
   // Version 0 was used for early access of KIP-932 in Apache Kafka 4.0 but removed in Apacke Kafka 4.1.
   //
   // Version 1 is the initial stable version (KIP-932).
-  "validVersions": "1",
+  //
+  // Version 2 introduces AcknowledgeType Renew (KIP-1222).
+  "validVersions": "1-2",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null", "entityType": "groupId",
@@ -56,7 +58,7 @@
           { "name": "LastOffset", "type": "int64", "versions": "0+",
             "about": "Last offset (inclusive) of batch of records to acknowledge."},
           { "name": "AcknowledgeTypes", "type": "[]int8", "versions": "0+",
-            "about": "Array of acknowledge types - 0:Gap,1:Accept,2:Release,3:Reject."}
+            "about": "Array of acknowledge types - 0:Gap,1:Accept,2:Release,3:Reject,4:Renew."}
         ]}
       ]}
     ]},
