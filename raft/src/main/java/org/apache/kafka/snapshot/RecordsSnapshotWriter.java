@@ -30,7 +30,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
