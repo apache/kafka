@@ -27,9 +27,12 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
+import org.apache.kafka.metadata.BrokerState;
+import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.authorizer.Action;
@@ -37,6 +40,8 @@ import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.authorizer.AuthorizerServerInfo;
+import org.apache.kafka.server.config.ReplicationConfigs;
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.quota.ClientQuotaCallback;
 import org.apache.kafka.server.quota.ClientQuotaEntity;
 import org.apache.kafka.server.quota.ClientQuotaType;
@@ -59,15 +64,116 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class KRaftClusterTest {
+
+    @Test
+    public void testCreateClusterAndClose() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .build())
+            .build()) {
+            cluster.format();
+            cluster.startup();
+        }
+    }
+
+    @Test
+    public void testCreateClusterAndRestartBrokerNode() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .build())
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            var broker = cluster.brokers().values().iterator().next();
+            broker.shutdown();
+            broker.startup();
+        }
+    }
+
+    @Test
+    public void testClusterWithLowerCaseListeners() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setBrokerListenerName(new ListenerName("external"))
+                .setNumControllerNodes(3)
+                .build())
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            cluster.brokers().forEach((brokerId, broker) -> {
+                assertEquals(List.of("external://localhost:0"), broker.config().get(SocketServerConfigs.LISTENERS_CONFIG));
+                assertEquals("external", broker.config().get(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG));
+                assertEquals("external:PLAINTEXT,CONTROLLER:PLAINTEXT", broker.config().get(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG));
+            });
+            TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
+                "Broker never made it to RUNNING state.");
+            TestUtils.waitForCondition(() -> cluster.raftManagers().get(0).client().leaderAndEpoch().leaderId().isPresent(),
+                "RaftManager was not initialized.");
+            try (Admin admin = Admin.create(cluster.clientProperties())) {
+                assertEquals(cluster.nodes().clusterId(),
+                    admin.describeCluster().clusterId().get());
+            }
+        }
+    }
+
+    @Test
+    public void testCreateClusterAndWaitForBrokerInRunningState() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .build())
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
+                "Broker never made it to RUNNING state.");
+            TestUtils.waitForCondition(() -> cluster.raftManagers().get(0).client().leaderAndEpoch().leaderId().isPresent(),
+                "RaftManager was not initialized.");
+            try (Admin admin = Admin.create(cluster.clientProperties())) {
+                assertEquals(cluster.nodes().clusterId(),
+                    admin.describeCluster().clusterId().get());
+            }
+        }
+    }
+
+    @Test
+    public void testRemoteLogManagerInstantiation() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .build())
+            .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true)
+            .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
+                "org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager")
+            .setConfigProp(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
+                "org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager")
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            cluster.brokers().forEach((brokerId, broker) -> {
+                if (broker.remoteLogManagerOpt().isEmpty())
+                    fail("RemoteLogManager should be initialized");
+            });
+        }
+    }
 
     @Test
     public void testAuthorizerFailureFoundInControllerStartup() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder().
-                setNumControllerNodes(3).build()).
-            setConfigProp("authorizer.class.name", BadAuthorizer.class.getName()).build()) {
+                setNumControllerNodes(3).build())
+            .setConfigProp("authorizer.class.name", BadAuthorizer.class.getName())
+            .build()) {
             cluster.format();
             ExecutionException exception = assertThrows(ExecutionException.class,
                 cluster::startup);

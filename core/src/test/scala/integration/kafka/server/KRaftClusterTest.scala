@@ -67,37 +67,6 @@ class KRaftClusterTest {
   val log2 = LoggerFactory.getLogger(classOf[KRaftClusterTest].getCanonicalName + "2")
 
   @Test
-  def testCreateClusterAndClose(): Unit = {
-    val cluster = new KafkaClusterTestKit.Builder(
-      new TestKitNodes.Builder().
-        setNumBrokerNodes(1).
-        setNumControllerNodes(1).build()).build()
-    try {
-      cluster.format()
-      cluster.startup()
-    } finally {
-      cluster.close()
-    }
-  }
-
-  @Test
-  def testCreateClusterAndRestartBrokerNode(): Unit = {
-    val cluster = new KafkaClusterTestKit.Builder(
-      new TestKitNodes.Builder().
-        setNumBrokerNodes(1).
-        setNumControllerNodes(1).build()).build()
-    try {
-      cluster.format()
-      cluster.startup()
-      val broker = cluster.brokers().values().iterator().next()
-      broker.shutdown()
-      broker.startup()
-    } finally {
-      cluster.close()
-    }
-  }
-
-  @Test
   def testCreateClusterAndRestartControllerNode(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
@@ -119,57 +88,6 @@ class KRaftClusterTest {
       // restart controller
       controller.startup()
       TestUtils.waitUntilTrue(() => cluster.controllers().values().iterator().asScala.exists(_.controller.isActive), "Timeout waiting for new controller election")
-    } finally {
-      cluster.close()
-    }
-  }
-
-  @Test
-  def testClusterWithLowerCaseListeners(): Unit = {
-    Using.resource(new KafkaClusterTestKit.Builder(
-      new TestKitNodes.Builder().
-        setNumBrokerNodes(1).
-        setBrokerListenerName(new ListenerName("external")).
-        setNumControllerNodes(3).
-        build()).build()
-    ) { cluster =>
-      cluster.format()
-      cluster.startup()
-      cluster.brokers().forEach((_, broker) => {
-        assertEquals(util.List.of("external://localhost:0"), broker.config.get(SocketServerConfigs.LISTENERS_CONFIG))
-        assertEquals("external", broker.config.get(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG))
-        assertEquals("external:PLAINTEXT,CONTROLLER:PLAINTEXT", broker.config.get(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG))
-      })
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
-        "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
-        "RaftManager was not initialized.")
-      Using.resource(Admin.create(cluster.clientProperties())) { admin =>
-        assertEquals(cluster.nodes().clusterId(), admin.describeCluster().clusterId().get())
-      }
-    }
-  }
-
-  @Test
-  def testCreateClusterAndWaitForBrokerInRunningState(): Unit = {
-    val cluster = new KafkaClusterTestKit.Builder(
-      new TestKitNodes.Builder().
-        setNumBrokerNodes(1).
-        setNumControllerNodes(1).build()).build()
-    try {
-      cluster.format()
-      cluster.startup()
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
-        "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
-        "RaftManager was not initialized.")
-      val admin = Admin.create(cluster.clientProperties())
-      try {
-        assertEquals(cluster.nodes().clusterId().toString,
-          admin.describeCluster().clusterId().get())
-      } finally {
-        admin.close()
-      }
     } finally {
       cluster.close()
     }
@@ -1046,32 +964,6 @@ class KRaftClusterTest {
       } finally {
         admin.close()
       }
-    } finally {
-      cluster.close()
-    }
-  }
-
-  @Test
-  def testRemoteLogManagerInstantiation(): Unit = {
-    val cluster = new KafkaClusterTestKit.Builder(
-      new TestKitNodes.Builder().
-        setNumBrokerNodes(1).
-        setNumControllerNodes(1).build())
-      .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
-      .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
-        "org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager")
-      .setConfigProp(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
-        "org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager")
-      .build()
-    try {
-      cluster.format()
-      cluster.startup()
-      cluster.brokers().forEach((_, server) => {
-        server.remoteLogManagerOpt match {
-          case Some(_) =>
-          case None => fail("RemoteLogManager should be initialized")
-        }
-      })
     } finally {
       cluster.close()
     }
