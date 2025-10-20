@@ -14,20 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer;
+package org.apache.kafka.coordinator.group;
 
-import java.util.Locale;
+import org.apache.kafka.common.Uuid;
 
 /**
- * @deprecated since 4.0; will be removed in a future release.
- * Not required by Kafka client users; no replacement is provided.
+ * Functional interface for validating offset commits on a per-partition basis.
  */
-@Deprecated
-public enum OffsetResetStrategy {
-    LATEST, EARLIEST, NONE;
+@FunctionalInterface
+public interface CommitPartitionValidator {
+    /**
+     * Validates an offset commit for a specific partition.
+     *
+     * @param topicName   The topic name.
+     * @param topicId     The topic id (may be ZERO_UUID if not available).
+     * @param partitionId The partition index.
+     */
+    void validate(String topicName, Uuid topicId, int partitionId);
 
-    @Override
-    public String toString() {
-        return super.toString().toLowerCase(Locale.ROOT);
-    }
+    /**
+     * A no-op validator that performs no validation.
+     */
+    CommitPartitionValidator NO_OP = (topicName, topicId, partitionId) -> { };
 }
