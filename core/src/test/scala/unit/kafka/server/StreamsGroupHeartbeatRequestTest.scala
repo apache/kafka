@@ -10,9 +10,9 @@ import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, 
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.server.common.Feature
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
-import java.util.Collections
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 
+import java.util.Collections
 import scala.jdk.CollectionConverters._
 
 @ClusterTestDefaults(
@@ -399,9 +399,9 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       assert(streamsGroupHeartbeatResponse2 != null, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId2, streamsGroupHeartbeatResponse2.data.memberId())
 
-      // At least one member should have active tasks (in a real scenario, tasks would be distributed)
+      // At least one member should have active tasks
       val totalActiveTasks = streamsGroupHeartbeatResponse1.data.activeTasks().size() + streamsGroupHeartbeatResponse2.data.activeTasks().size()
-      assert(totalActiveTasks > 0, "At least one member should have active tasks")
+      assertTrue(totalActiveTasks > 0, "At least one member should have active tasks")
 
     } finally {
       admin.close()
