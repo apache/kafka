@@ -439,7 +439,7 @@ public class Formatter {
                 Files.createDirectories(Paths.get(writeLogDir));
                 writeBoostrapSnapshot(writeLogDir,
                     bootstrapMetadata,
-                    initialControllers.get(),
+                    initialControllers,
                     featureLevels.get(KRaftVersion.FEATURE_NAME),
                     controllerListenerName);
             });
@@ -492,7 +492,7 @@ public class Formatter {
     static void writeBoostrapSnapshot(
         String writeLogDir,
         BootstrapMetadata bootstrapMetadata,
-        DynamicVoters initialControllers,
+        Optional<DynamicVoters> initialControllers,
         short kraftVersion,
         String controllerListenerName
     ) {
@@ -500,16 +500,19 @@ public class Formatter {
         File clusterMetadataDirectory = new File(parentDir, String.format("%s-%d",
                 CLUSTER_METADATA_TOPIC_PARTITION.topic(),
                 CLUSTER_METADATA_TOPIC_PARTITION.partition()));
-        VoterSet voterSet = initialControllers.toVoterSet(controllerListenerName);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder().
             setLastContainedLogTimestamp(Time.SYSTEM.milliseconds()).
             setMaxBatchSizeBytes(KafkaRaftClient.MAX_BATCH_SIZE_BYTES).
             setRawSnapshotWriter(FileRawSnapshotWriter.create(
                 clusterMetadataDirectory.toPath(),
                 Snapshots.BOOTSTRAP_SNAPSHOT_ID)).
-            setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion)).
-            setVoterSet(Optional.of(voterSet));
-        try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(new MetadataRecordSerde(), Optional.of(bootstrapMetadata.records()))) {
+            setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion));
+        if (initialControllers.isPresent()) {
+            VoterSet voterSet = initialControllers.get().toVoterSet(controllerListenerName);
+            builder.setVoterSet(Optional.of(voterSet));
+        }
+        try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(new MetadataRecordSerde())) {
+            writer.append(bootstrapMetadata.records());
             writer.freeze();
         }
     }

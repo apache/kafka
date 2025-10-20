@@ -729,7 +729,7 @@ public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, A
                 .setLastContainedLogTimestamp(lastContainedLogTimestamp)
                 .setTime(new MockTime())
                 .setRawSnapshotWriter(createNewSnapshot(snapshotId))
-                .build(new MetadataRecordSerde(), Optional.empty())
+                .build(new MetadataRecordSerde())
         );
     }
 

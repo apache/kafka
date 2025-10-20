@@ -171,7 +171,7 @@ public final class RecordsIteratorTest {
             .setRawSnapshotWriter(
                 new MockRawSnapshotWriter(new OffsetAndEpoch(100, 10), buffer::set)
             );
-        try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE, Optional.empty())) {
+        try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE)) {
             snapshot.append(List.of("a", "b", "c"));
             snapshot.append(List.of("d", "e", "f"));
             snapshot.append(List.of("g", "h", "i"));
@@ -221,7 +221,7 @@ public final class RecordsIteratorTest {
             .setRawSnapshotWriter(
                 new MockRawSnapshotWriter(new OffsetAndEpoch(100, 10), buffer::set)
             );
-        try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE, Optional.empty())) {
+        try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE)) {
             snapshot.append(List.of("a", "b", "c"));
             snapshot.append(List.of("d", "e", "f"));
             snapshot.append(List.of("g", "h", "i"));

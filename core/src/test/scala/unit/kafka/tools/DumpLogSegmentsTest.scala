@@ -593,7 +593,6 @@ class DumpLogSegmentsTest {
     )
 
     val lastContainedLogTimestamp = 10000
-    val emptyOptional: Optional[java.util.List[ApiMessageAndVersion]] = Optional.empty()
 
     Using.resource(
       new RecordsSnapshotWriter.Builder()
@@ -602,7 +601,7 @@ class DumpLogSegmentsTest {
         .setRawSnapshotWriter(metadataLog.createNewSnapshot(new OffsetAndEpoch(0, 0)).get)
         .setKraftVersion(KRaftVersion.KRAFT_VERSION_1)
         .setVoterSet(Optional.of(VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true))))
-        .build(MetadataRecordSerde.INSTANCE, emptyOptional)
+        .build(MetadataRecordSerde.INSTANCE)
     ) { snapshotWriter =>
       snapshotWriter.append(metadataRecords)
       snapshotWriter.freeze()

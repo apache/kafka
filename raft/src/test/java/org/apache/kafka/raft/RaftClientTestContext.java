@@ -363,7 +363,7 @@ public final class RaftClientTestContext {
                     .setKraftVersion(kraftVersion)
                     .setVoterSet(voters);
 
-                try (RecordsSnapshotWriter<String> writer = builder.build(SERDE, Optional.empty())) {
+                try (RecordsSnapshotWriter<String> writer = builder.build(SERDE)) {
                     writer.freeze();
                 }
             } else {

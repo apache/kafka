@@ -2224,7 +2224,7 @@ public final class KafkaRaftClientSnapshotTest {
         return new RecordsSnapshotWriter.Builder()
             .setTime(context.time)
             .setRawSnapshotWriter(snapshot)
-            .build(new StringSerde(), Optional.empty());
+            .build(new StringSerde());
     }
 
     private static final class MemorySnapshotWriter implements RawSnapshotWriter {

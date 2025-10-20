@@ -191,7 +191,7 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             return this;
         }
 
-        public <T> RecordsSnapshotWriter<T> build(RecordSerde<T> serde, Optional<List<T>> bootstrapRecords) {
+        public <T> RecordsSnapshotWriter<T> build(RecordSerde<T> serde) {
             if (rawSnapshotWriter.isEmpty()) {
                 throw new IllegalStateException("Builder::build called without a RawSnapshotWriter");
             } else if (rawSnapshotWriter.get().sizeInBytes() != 0) {
@@ -212,8 +212,6 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                 compression,
                 serde
             );
-
-            bootstrapRecords.ifPresent(writer::append);
 
             writer.accumulator.appendControlMessages((baseOffset, epoch, compression, buffer) -> {
                 long now = time.milliseconds();

@@ -3726,7 +3726,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 .setRawSnapshotWriter(wrappedWriter)
                 .setKraftVersion(partitionState.kraftVersionAtOffset(lastContainedLogOffset))
                 .setVoterSet(partitionState.voterSetAtOffset(lastContainedLogOffset))
-                .build(serde, Optional.empty());
+                .build(serde);
         });
     }
 
