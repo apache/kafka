@@ -922,7 +922,11 @@ org.apache.kafka.connect.runtime.isolation.DelegatingClassLoaderTest:
 - testEmptyGetResource
 - testEmptyLoadClass
 - testInitializedConnectorLoader
+- testInitializedConnectorLoaderWithVersion
 - testInitializedLoadClass
+- testInitializedPluginLoader
+- testInitializedPluginLoaderWithClassLoader
+- testInitializedPluginLoaderWithVersion
 org.apache.kafka.connect.runtime.isolation.MultiVersionTest:
 - testBundledPluginLoading
 - testCorrectVersionRange
