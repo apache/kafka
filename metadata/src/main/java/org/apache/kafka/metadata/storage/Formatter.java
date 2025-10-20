@@ -438,10 +438,10 @@ public class Formatter {
                     MetadataVersion.FEATURE_NAME, releaseVersion);
                 Files.createDirectories(Paths.get(writeLogDir));
                 writeBoostrapSnapshot(writeLogDir,
-                        bootstrapMetadata,
-                        initialControllers.get(),
-                        featureLevels.get(KRaftVersion.FEATURE_NAME),
-                        controllerListenerName);
+                    bootstrapMetadata,
+                    initialControllers.get(),
+                    featureLevels.get(KRaftVersion.FEATURE_NAME),
+                    controllerListenerName);
             });
             copier.setWriteErrorHandler((errorLogDir, e) -> {
                 throw new FormatterException("Error while writing meta.properties file " +
@@ -500,7 +500,6 @@ public class Formatter {
         File clusterMetadataDirectory = new File(parentDir, String.format("%s-%d",
                 CLUSTER_METADATA_TOPIC_PARTITION.topic(),
                 CLUSTER_METADATA_TOPIC_PARTITION.partition()));
-
         VoterSet voterSet = initialControllers.toVoterSet(controllerListenerName);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder().
             setLastContainedLogTimestamp(Time.SYSTEM.milliseconds()).
