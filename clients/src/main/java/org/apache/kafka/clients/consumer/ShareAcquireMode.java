@@ -40,7 +40,11 @@ public enum ShareAcquireMode {
      * Case-insensitive acquire mode lookup by string name.
      */
     public static ShareAcquireMode of(final String name) {
-        return ShareAcquireMode.valueOf(name.toUpperCase(Locale.ROOT));
+        try {
+            return ShareAcquireMode.valueOf(name.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid value :" + name + " for ShareAcquireMode. The value must either be 'batch_optimized' or 'record_limit'.");
+        }
     }
 
     public byte id() {
@@ -59,7 +63,7 @@ public enum ShareAcquireMode {
             try {
                 of(acquireMode);
             } catch (Exception e) {
-                throw new ConfigException(name, value, "Invalid value `" + acquireMode + "` for configuration " +
+                throw new ConfigException(name, value, "Invalid value :" + acquireMode + " for configuration " +
                     name + ". The value must either be 'batch_optimized' or 'record_limit'.");
             }
         }

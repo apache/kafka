@@ -8741,7 +8741,7 @@ public class SharePartitionTest {
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withPersister(persister)
             .build());
-        Mockito.doReturn(true).when(sharePartition).isRecordLimitMode();
+        Mockito.doReturn(true).when(sharePartition).isRecordLimitMode(Mockito.any());
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
@@ -8816,7 +8816,7 @@ public class SharePartitionTest {
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withPersister(persister)
             .build());
-        Mockito.doReturn(true).when(sharePartition).isRecordLimitMode();
+        Mockito.doReturn(true).when(sharePartition).isRecordLimitMode(Mockito.any());
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
@@ -8865,7 +8865,7 @@ public class SharePartitionTest {
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withPersister(persister)
             .build());
-        Mockito.doReturn(true).when(sharePartition).isRecordLimitMode();
+        Mockito.doReturn(true).when(sharePartition).isRecordLimitMode(Mockito.any());
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
@@ -8938,7 +8938,7 @@ public class SharePartitionTest {
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withPersister(persister)
             .build());
-        Mockito.doReturn(true).when(sharePartition).isRecordLimitMode();
+        Mockito.doReturn(true).when(sharePartition).isRecordLimitMode(Mockito.any());
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
