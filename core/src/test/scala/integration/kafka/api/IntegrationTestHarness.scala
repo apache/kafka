@@ -239,7 +239,8 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   def createStreamsGroup[K, V](configOverrides: Properties = new Properties,
                                configsToRemove: List[String] = List(),
-                               inputTopic: String,
+                               inputTopics: Set[String],
+                               changelogTopics: Set[String] = Set(),
                                streamsGroupId: String): AsyncKafkaConsumer[K, V] = {
     val props = new Properties()
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
@@ -255,10 +256,10 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       Optional.empty(),
       util.Map.of(
         "subtopology-0", new StreamsRebalanceData.Subtopology(
-          util.Set.of(inputTopic),
+          inputTopics.asJava,
           util.Set.of(),
           util.Map.of(),
-          util.Map.of(inputTopic + "-store-changelog", new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.empty(), util.Map.of())),
+          changelogTopics.map(c => (c, new StreamsRebalanceData.TopicInfo(Optional.empty(), Optional.empty(), util.Map.of()))).toMap.asJava,
           util.Set.of()
         )),
       Map.empty[String, String].asJava
@@ -270,7 +271,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       configOverrides = props,
       streamsRebalanceData = streamsRebalanceData
     )
-    consumer.subscribe(util.Set.of(inputTopic),
+    consumer.subscribe(inputTopics.asJava,
       new StreamsRebalanceListener {
         override def onTasksRevoked(tasks: util.Set[StreamsRebalanceData.TaskId]): Unit = ()
         override def onTasksAssigned(assignment: StreamsRebalanceData.Assignment): Unit = ()
