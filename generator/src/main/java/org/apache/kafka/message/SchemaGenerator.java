@@ -86,16 +86,16 @@ final class SchemaGenerator {
         // available when we generate the inline structures
         for (Iterator<StructSpec> iter = structRegistry.commonStructs(); iter.hasNext(); ) {
             StructSpec struct = iter.next();
-            generateSchemas(struct.name(), struct, message.struct().versions());
+            generateSchemas(struct.name(), struct, message.struct().versions(), Versions.NONE);
         }
 
         // Generate schemas for inline structures
         generateSchemas(message.dataClassName(), message.struct(),
-            message.struct().versions());
+            message.struct().versions(), Versions.NONE);
     }
 
     void generateSchemas(String className, StructSpec struct,
-                         Versions parentVersions) {
+                         Versions parentVersions, Versions schemaNullableVersions) {
         Versions versions = parentVersions.intersect(struct.versions());
         MessageInfo messageInfo = messages.get(className);
         if (messageInfo != null) {
@@ -107,15 +107,15 @@ final class SchemaGenerator {
         for (FieldSpec field : struct.fields()) {
             if (field.type().isStructArray()) {
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-                generateSchemas(arrayType.elementType().toString(), structRegistry.findStruct(field), versions);
+                generateSchemas(arrayType.elementType().toString(), structRegistry.findStruct(field), versions, field.nullableVersions());
             } else if (field.type().isStruct()) {
-                generateSchemas(field.type().toString(), structRegistry.findStruct(field), versions);
+                generateSchemas(field.type().toString(), structRegistry.findStruct(field), versions, field.nullableVersions());
             }
         }
         CodeBuffer prev = null;
         for (short v = versions.lowest(); v <= versions.highest(); v++) {
             CodeBuffer cur = new CodeBuffer();
-            generateSchemaForVersion(struct, v, cur);
+            generateSchemaForVersion(struct, v, cur, schemaNullableVersions.contains(v));
             // If this schema version is different from the previous one,
             // create a new map entry.
             if (!cur.equals(prev)) {
@@ -127,7 +127,8 @@ final class SchemaGenerator {
 
     private void generateSchemaForVersion(StructSpec struct,
                                           short version,
-                                          CodeBuffer buffer) {
+                                          CodeBuffer buffer,
+                                          boolean schemaNullable) {
         // Find the last valid field index.
         int lastValidIndex = struct.fields().size() - 1;
         while (true) {
@@ -147,7 +148,13 @@ final class SchemaGenerator {
         }
 
         headerGenerator.addImport(MessageGenerator.SCHEMA_CLASS);
-        buffer.printf("new Schema(%n");
+        if (schemaNullable) {
+            headerGenerator.addImport(MessageGenerator.NULLABLE_SCHEMA_CLASS);
+            buffer.printf("new NullableSchema(%n");
+        } else {
+            buffer.printf("new Schema(%n");
+        }
+
         buffer.incrementIndent();
         for (int i = 0; i <= lastValidIndex; i++) {
             FieldSpec field = struct.fields().get(i);
@@ -317,11 +324,8 @@ final class SchemaGenerator {
                         fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
             }
         } else if (type.isStruct()) {
-            if (nullable)
-                headerGenerator.addImport(MessageGenerator.NULLABLE_SCHEMA_CLASS);
-            String schemaType = String.format("%s.SCHEMA_%d", type,
+            return String.format("%s.SCHEMA_%d", type,
                 floorVersion(type.toString(), version));
-            return nullable ? String.format("new NullableSchema(%s)", schemaType) : schemaType;
         } else {
             throw new RuntimeException("Unsupported type " + type);
         }

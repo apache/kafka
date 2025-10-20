@@ -947,7 +947,7 @@ public abstract class Type {
 
         @Override
         public BaseRecords validate(Object item) {
-            if (item instanceof BaseRecords)
+            if (item instanceof MemoryRecords)
                 return (BaseRecords) item;
 
             throw new SchemaException(item + " is not an instance of " + BaseRecords.class.getName());

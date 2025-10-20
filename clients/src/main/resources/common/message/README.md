@@ -103,7 +103,7 @@ Guide](https://kafka.apache.org/protocol.html).
 
 Nullable Fields
 ---------------
-Booleans, ints, and floats can never be null.  However, fields that are strings,
+Booleans, ints, floats and uuid can never be null.  However, fields that are strings,
 bytes, records, struct, or arrays may optionally be "nullable".  When a field is 
 "nullable", that simply means that we are prepared to serialize and deserialize
 null entries for that field.

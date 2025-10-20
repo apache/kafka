@@ -35,8 +35,11 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.protocol.types.Type.BYTES;
 import static org.apache.kafka.common.protocol.types.Type.COMPACT_BYTES;
 import static org.apache.kafka.common.protocol.types.Type.COMPACT_NULLABLE_BYTES;
+import static org.apache.kafka.common.protocol.types.Type.COMPACT_NULLABLE_RECORDS;
+import static org.apache.kafka.common.protocol.types.Type.COMPACT_RECORDS;
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_BYTES;
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_RECORDS;
+import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 
 /**
  * Identifiers for all the Kafka APIs
@@ -342,8 +345,10 @@ public enum ApiKeys {
         Schema.Visitor detector = new Schema.Visitor() {
             @Override
             public void visit(Type field) {
-                if (field == BYTES || field == NULLABLE_BYTES || field == NULLABLE_RECORDS ||
-                    field == COMPACT_BYTES || field == COMPACT_NULLABLE_BYTES)
+                if (field == BYTES || field == NULLABLE_BYTES ||
+                    field == COMPACT_BYTES || field == COMPACT_NULLABLE_BYTES ||
+                    field == RECORDS || field == NULLABLE_RECORDS ||
+                    field == COMPACT_RECORDS || field == COMPACT_NULLABLE_RECORDS)
                     hasBuffer.set(true);
             }
         };
