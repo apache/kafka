@@ -512,6 +512,5 @@ public class Formatter {
         try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(new MetadataRecordSerde(), Optional.of(bootstrapMetadata.records()))) {
             writer.freeze();
         }
-
     }
 }
