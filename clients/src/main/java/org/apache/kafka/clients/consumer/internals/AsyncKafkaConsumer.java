@@ -747,6 +747,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         return Optional.empty();
     }
 
+    @SuppressWarnings("removal")
     private ConsumerGroupMetadata initializeConsumerGroupMetadata(final String groupId,
                                                                   final Optional<String> groupInstanceId) {
         return new ConsumerGroupMetadata(
@@ -757,6 +758,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         );
     }
 
+    @SuppressWarnings("removal")
     private void updateGroupMetadata(final Optional<Integer> memberEpoch, final String memberId) {
         memberEpoch.ifPresent(epoch -> groupMetadata.updateAndGet(
                 oldGroupMetadataOptional -> oldGroupMetadataOptional.map(
