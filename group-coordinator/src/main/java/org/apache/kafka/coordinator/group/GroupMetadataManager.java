@@ -1452,6 +1452,8 @@ public class GroupMetadataManager {
      * it owns any other tasks.
      *
      * @param ownedTasks    The tasks provided by the streams group member in the request.
+     *                      If this is null, it indicates that we do not know which
+     *                      tasks are owned by the member, so we return false.
      * @param assignedTasks The tasks that the member should have.
      *
      * @return A boolean indicating whether the owned partitions are a subset or not.
@@ -1477,6 +1479,8 @@ public class GroupMetadataManager {
      * Checks whether all the tasks contained in the list are included in the provided assignment with epochs.
      *
      * @param ownedTasks              The tasks provided by the streams group member in the request.
+     *                                If this is null, it indicates that we do not know which
+     *                                tasks are owned by the member, so we return false.
      * @param assignedTasksWithEpochs The tasks that the member should have (with epochs).
      * @return A boolean indicating whether the owned partitions are a subset or not.
      */
