@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals.metrics;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Measurable;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -71,19 +70,11 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
         successfulRebalanceSensor.add(rebalanceLatencyMax, new Max());
         successfulRebalanceSensor.add(rebalanceLatencyTotal, new CumulativeSum());
         successfulRebalanceSensor.add(rebalanceTotal, new CumulativeCount());
-        successfulRebalanceSensor.add(
-            rebalanceRatePerHour,
-            new Rate(TimeUnit.HOURS, new WindowedCount()),
-            new MetricConfig(successfulRebalanceSensor.metricConfig()).timeWindow(1, TimeUnit.HOURS)
-        );
+        successfulRebalanceSensor.add(rebalanceRatePerHour, new Rate(TimeUnit.HOURS, new WindowedCount(), 1));
 
         failedRebalanceSensor = metrics.sensor("failed-rebalance");
         failedRebalanceSensor.add(failedRebalanceTotal, new CumulativeSum());
-        failedRebalanceSensor.add(
-            failedRebalanceRate,
-            new Rate(TimeUnit.HOURS, new WindowedCount()),
-            new MetricConfig(failedRebalanceSensor.metricConfig()).timeWindow(1, TimeUnit.HOURS)
-        );
+        failedRebalanceSensor.add(failedRebalanceRate, new Rate(TimeUnit.HOURS, new WindowedCount(), 1));
 
         Measurable lastRebalance = (config, now) -> {
             if (lastRebalanceEndMs == -1L)

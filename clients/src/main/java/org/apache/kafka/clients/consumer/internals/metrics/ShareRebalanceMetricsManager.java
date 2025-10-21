@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals.metrics;
 
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.CumulativeCount;
@@ -46,11 +45,7 @@ public final class ShareRebalanceMetricsManager extends RebalanceMetricsManager 
 
         rebalanceSensor = metrics.sensor("rebalance-latency");
         rebalanceSensor.add(rebalanceTotal, new CumulativeCount());
-        rebalanceSensor.add(
-            rebalanceRatePerHour,
-            new Rate(TimeUnit.HOURS, new WindowedCount()),
-            new MetricConfig(rebalanceSensor.metricConfig()).timeWindow(1, TimeUnit.HOURS)
-        );
+        rebalanceSensor.add(rebalanceRatePerHour, new Rate(TimeUnit.HOURS, new WindowedCount(), 1));
     }
 
     public void recordRebalanceStarted(long nowMs) {

@@ -34,6 +34,7 @@ public class Rate implements MeasurableStat {
 
     protected final TimeUnit unit;
     protected final SampledStat stat;
+    protected final long window;
 
     public Rate() {
         this(TimeUnit.SECONDS);
@@ -48,8 +49,13 @@ public class Rate implements MeasurableStat {
     }
 
     public Rate(TimeUnit unit, SampledStat stat) {
-        this.stat = stat;
+        this(unit, stat, -1);
+    }
+
+    public Rate(TimeUnit unit, SampledStat stat, long window) {
         this.unit = unit;
+        this.stat = stat;
+        this.window = window;
     }
 
     public String unitName() {
@@ -58,11 +64,16 @@ public class Rate implements MeasurableStat {
 
     @Override
     public void record(MetricConfig config, double value, long timeMs) {
+        if (window != -1)
+            config = new MetricConfig(config).timeWindow(window, unit);
         this.stat.record(config, value, timeMs);
     }
 
     @Override
     public double measure(MetricConfig config, long now) {
+        if (window != -1)
+            config = new MetricConfig(config).timeWindow(window, unit);
+
         double value = stat.measure(config, now);
         return value / convert(windowSize(config, now), unit);
     }
