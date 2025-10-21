@@ -1364,6 +1364,7 @@ public class UnifiedLog implements AutoCloseable {
 
                     Optional<BatchMetadata> duplicateBatch = maybeLastEntry.flatMap(e -> e.findDuplicateBatch(batch));
                     if (duplicateBatch.isPresent()) {
+                        logger.info("Found duplicate batch from client, duplicateBatchMetadata={}", duplicateBatch.get());
                         return new AnalyzeAndValidateProducerStateResult(updatedProducers, completedTxns, duplicateBatch);
                     }
                 }
