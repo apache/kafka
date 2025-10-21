@@ -3966,11 +3966,13 @@ public class StreamThreadTest {
                         .setStatusDetail("Missing source topics")
         ));
 
+        streamsRebalanceData.setHeartbeatIntervalMs(5000);
+
         // First call should not throw exception (within timeout)
         thread.runOnceWithoutProcessingThreads();
 
         // Advance time beyond max.poll.interval.ms (default is 300000ms) to trigger timeout
-        mockTime.sleep(300001);
+        mockTime.sleep(10001);
 
         final MissingSourceTopicException exception = assertThrows(MissingSourceTopicException.class, () -> thread.runOnceWithoutProcessingThreads());
         assertTrue(exception.getMessage().contains("Missing source topics"));
