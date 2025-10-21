@@ -775,11 +775,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     if (error == Errors.NONE) {
                         OffsetAndMetadata offsetAndMetadata = offsets.get(tp);
                         if (offsetAndMetadata == null) {
-                            throw new IllegalStateException("Can't find metadata for topic id " + topic.topicId() +
-                                " topic name " + topic.name() + " partition " + partition.partitionIndex() + " using " + metadata.topicNames());
+                            log.debug("Can't find metadata for partition {}", tp);
+                        } else {
+                            log.debug("OffsetCommit completed successfully for offset {} partition {}", offsetAndMetadata.offset(), tp);
                         }
-                        long offset = offsetAndMetadata.offset();
-                        log.debug("OffsetCommit completed successfully for offset {} partition {}", offset, tp);
                         continue;
                     }
 
