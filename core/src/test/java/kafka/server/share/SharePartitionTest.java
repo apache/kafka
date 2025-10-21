@@ -8825,9 +8825,9 @@ public class SharePartitionTest {
 
         // Create 3 batches of records.
         ByteBuffer buffer = ByteBuffer.allocate(4096);
-        memoryRecordsBuilder(buffer, 5, 10).close();
+        memoryRecordsBuilder(buffer, 10, 5).close();
         memoryRecordsBuilder(buffer, 15, 15).close();
-        memoryRecordsBuilder(buffer, 15, 30).close();
+        memoryRecordsBuilder(buffer, 30, 15).close();
 
         buffer.flip();
 
@@ -8947,8 +8947,8 @@ public class SharePartitionTest {
 
         // Create 3 batches of records.
         ByteBuffer buffer = ByteBuffer.allocate(4096);
-        memoryRecordsBuilder(buffer, 5, 0).close();
-        memoryRecordsBuilder(buffer, 15, 5).close();
+        memoryRecordsBuilder(buffer, 0, 5).close();
+        memoryRecordsBuilder(buffer, 5, 15).close();
 
         buffer.flip();
 
