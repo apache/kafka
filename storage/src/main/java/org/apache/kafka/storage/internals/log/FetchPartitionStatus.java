@@ -30,7 +30,7 @@ public record FetchPartitionStatus(
     @Override
     public String toString() {
         return String.format(
-            "[startOffsetMetadata: %s, fetchInfo: %s]",
+            "FetchPartitionStatus(startOffsetMetadata: %s, fetchInfo: %s)",
             startOffsetMetadata,
             fetchInfo
         );

@@ -53,19 +53,6 @@ public record LogReadResult(
     Optional<Throwable> exception
 ) {
     public LogReadResult(
-            FetchDataInfo info,
-            Optional<FetchResponseData.EpochEndOffset> divergingEpoch,
-            long highWatermark,
-            long leaderLogStartOffset,
-            long leaderLogEndOffset,
-            long followerLogStartOffset,
-            long fetchTimeMs,
-            OptionalLong lastStableOffset) {
-        this(info, divergingEpoch, highWatermark, leaderLogStartOffset, leaderLogEndOffset, followerLogStartOffset,
-            fetchTimeMs, lastStableOffset, OptionalInt.empty(), Optional.empty());
-    }
-
-    public LogReadResult(
         FetchDataInfo info,
         Optional<FetchResponseData.EpochEndOffset> divergingEpoch,
         long highWatermark,
@@ -77,20 +64,6 @@ public record LogReadResult(
         Optional<Throwable> exception) {
         this(info, divergingEpoch, highWatermark, leaderLogStartOffset, leaderLogEndOffset, followerLogStartOffset,
             fetchTimeMs, lastStableOffset, OptionalInt.empty(), exception);
-    }
-
-    public LogReadResult(
-            FetchDataInfo info,
-            Optional<FetchResponseData.EpochEndOffset> divergingEpoch,
-            long highWatermark,
-            long leaderLogStartOffset,
-            long leaderLogEndOffset,
-            long followerLogStartOffset,
-            long fetchTimeMs,
-            OptionalLong lastStableOffset,
-            OptionalInt preferredReadReplica) {
-        this(info, divergingEpoch, highWatermark, leaderLogStartOffset, leaderLogEndOffset, followerLogStartOffset,
-            fetchTimeMs, lastStableOffset, preferredReadReplica, Optional.empty());
     }
 
     public LogReadResult(Throwable e) {
