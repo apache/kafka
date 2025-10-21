@@ -474,7 +474,4 @@ public class StreamsRebalanceDataTest {
         assertEquals(1000, streamsRebalanceData.heartbeatIntervalMs());
     }
 
-
-
-
 }
