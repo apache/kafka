@@ -1589,7 +1589,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private void handleMissingSourceTopicsWithTimeout(final String missingTopicsDetail) {
         // Determine the timeout: use 2 * heartbeatIntervalMs
         final int heartbeatIntervalMs = streamsRebalanceData.get().heartbeatIntervalMs();
-        final long timeoutMs = 2 * heartbeatIntervalMs;
+        final long timeoutMs = 2L * heartbeatIntervalMs;
 
         // Start timeout tracking on first encounter with missing topics
         if (topicsReadyTimer == null) {
