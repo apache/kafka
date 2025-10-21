@@ -2466,6 +2466,10 @@ public class GroupMetadataManager {
         // changed, the subscription metadata is updated and persisted by writing a ConsumerGroupPartitionMetadataValue
         // record to the __consumer_offsets partition. Finally, the group epoch is bumped if the subscriptions have
         // changed, and persisted by writing a ConsumerGroupMetadataValue record to the partition.
+
+        // We don't explicitly set empty regex subscription here because classicGroupJoinToConsumerGroup call is
+        // only from new member whose subscription is provided by JoinGroupRequest unless it replaces an existing
+        // static member, which is addressed in getOrMaybeSubscribeStaticConsumerGroupMember.
         ConsumerGroupMember updatedMember = new ConsumerGroupMember.Builder(member)
             .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
             .maybeUpdateRackId(Utils.toOptional(subscription.rackId()))
