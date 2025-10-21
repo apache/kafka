@@ -113,7 +113,7 @@ public class AtLeastOnceDeliveryMessageLossIntegrationTest {
     @AfterEach
     public void cleanUp() throws Exception {
         if (kafkaStreams != null) {
-            kafkaStreams.close(Duration.ofSeconds(30)); // need to stop due to infinite retries
+            kafkaStreams.close();
         }
         if (streamsConfiguration != null) {
             purgeLocalStreamsState(streamsConfiguration);
