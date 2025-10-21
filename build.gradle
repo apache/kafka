@@ -2900,6 +2900,7 @@ project(':streams:integration-tests') {
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
     testImplementation project(':streams:test-utils')
+    testImplementation project(':test-common:test-common-util')
 
     testRuntimeOnly runtimeTestLibs
   }
