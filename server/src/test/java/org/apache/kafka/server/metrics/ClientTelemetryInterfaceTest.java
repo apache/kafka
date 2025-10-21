@@ -32,11 +32,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ClientTelemetryInterfaceTest {
 
-    private ClientTelemetryPlugin clientTelemetryPlugin;
+    private ClientTelemetryExporterPlugin clientTelemetryExporterPlugin;
 
     @BeforeEach
     public void setUp() {
-        clientTelemetryPlugin = new ClientTelemetryPlugin();
+        clientTelemetryExporterPlugin = new ClientTelemetryExporterPlugin();
     }
 
     @Test
@@ -45,11 +45,11 @@ public class ClientTelemetryInterfaceTest {
         TestClientMetricsReceiver receiver1 = new TestClientMetricsReceiver();
         TestClientMetricsReceiver receiver2 = new TestClientMetricsReceiver();
 
-        clientTelemetryPlugin.add(receiver1);
-        clientTelemetryPlugin.add(receiver2);
+        clientTelemetryExporterPlugin.add(receiver1);
+        clientTelemetryExporterPlugin.add(receiver2);
 
         byte[] metrics = "test-metrics-multiple".getBytes(StandardCharsets.UTF_8);
-        clientTelemetryPlugin.exportMetrics(ClientMetricsTestUtils.requestContext(),
+        clientTelemetryExporterPlugin.exportMetrics(ClientMetricsTestUtils.requestContext(),
             new PushTelemetryRequest.Builder(new PushTelemetryRequestData().setMetrics(ByteBuffer.wrap(metrics)), true).build(), 5000);
 
         // Verify both receivers were called
@@ -65,12 +65,12 @@ public class ClientTelemetryInterfaceTest {
         TestClientTelemetryExporter exporter1 = new TestClientTelemetryExporter();
         TestClientTelemetryExporter exporter2 = new TestClientTelemetryExporter();
 
-        clientTelemetryPlugin.add(exporter1);
-        clientTelemetryPlugin.add(exporter2);
+        clientTelemetryExporterPlugin.add(exporter1);
+        clientTelemetryExporterPlugin.add(exporter2);
 
         byte[] metrics = "test-metrics-multiple-new".getBytes(StandardCharsets.UTF_8);
         int pushIntervalMs = 20000;
-        clientTelemetryPlugin.exportMetrics(ClientMetricsTestUtils.requestContext(),
+        clientTelemetryExporterPlugin.exportMetrics(ClientMetricsTestUtils.requestContext(),
             new PushTelemetryRequest.Builder(new PushTelemetryRequestData().setMetrics(ByteBuffer.wrap(metrics)), true).build(), pushIntervalMs);
 
         // Verify both exporters were called

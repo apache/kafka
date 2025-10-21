@@ -142,7 +142,7 @@ public class ClientMetricsTestUtils {
         }
 
         @Override
-        public ClientTelemetryExporter clientExporter() {
+        public ClientTelemetryExporter clientTelemetryExporter() {
             return exporter;
         }
 

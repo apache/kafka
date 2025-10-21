@@ -33,5 +33,5 @@ public interface ClientTelemetryExporterProvider {
      *
      * @return broker side instance of {@link ClientTelemetryExporter}
      */
-    ClientTelemetryExporter clientExporter();
+    ClientTelemetryExporter clientTelemetryExporter();
 }

@@ -31,12 +31,12 @@ import java.util.List;
  * {@link ClientTelemetryReceiver} and the new {@link ClientTelemetryExporter} interfaces.
  */
 @SuppressWarnings({"deprecation", "overloads", "removal"})
-public class ClientTelemetryPlugin {
+public class ClientTelemetryExporterPlugin {
 
     private final List<ClientTelemetryReceiver> receivers;
     private final List<ClientTelemetryExporter> exporters;
 
-    public ClientTelemetryPlugin() {
+    public ClientTelemetryExporterPlugin() {
         this.receivers = Collections.synchronizedList(new ArrayList<>());
         this.exporters = Collections.synchronizedList(new ArrayList<>());
     }

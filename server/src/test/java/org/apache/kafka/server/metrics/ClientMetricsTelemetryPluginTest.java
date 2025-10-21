@@ -35,28 +35,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ClientMetricsTelemetryPluginTest {
 
     private TestClientMetricsReceiver telemetryReceiver;
-    private ClientTelemetryPlugin clientTelemetryPlugin;
+    private ClientTelemetryExporterPlugin clientTelemetryExporterPlugin;
     private TestClientTelemetryExporter telemetryExporter;
 
     @BeforeEach
     public void setUp() {
         telemetryReceiver = new TestClientMetricsReceiver();
         telemetryExporter = new TestClientTelemetryExporter();
-        clientTelemetryPlugin = new ClientTelemetryPlugin();
+        clientTelemetryExporterPlugin = new ClientTelemetryExporterPlugin();
     }
 
     @Test
     public void testExportMetricsWithDeprecatedReceiver() throws UnknownHostException {
-        assertTrue(clientTelemetryPlugin.isEmpty());
+        assertTrue(clientTelemetryExporterPlugin.isEmpty());
 
-        clientTelemetryPlugin.add(telemetryReceiver);
-        assertFalse(clientTelemetryPlugin.isEmpty());
+        clientTelemetryExporterPlugin.add(telemetryReceiver);
+        assertFalse(clientTelemetryExporterPlugin.isEmpty());
 
         assertEquals(0, telemetryReceiver.exportMetricsInvokedCount);
         assertTrue(telemetryReceiver.metricsData.isEmpty());
 
         byte[] metrics = "test-metrics".getBytes(StandardCharsets.UTF_8);
-        clientTelemetryPlugin.exportMetrics(ClientMetricsTestUtils.requestContext(),
+        clientTelemetryExporterPlugin.exportMetrics(ClientMetricsTestUtils.requestContext(),
             new PushTelemetryRequest.Builder(new PushTelemetryRequestData().setMetrics(ByteBuffer.wrap(metrics)), true).build(), 5000);
 
         assertEquals(1, telemetryReceiver.exportMetricsInvokedCount);
@@ -66,9 +66,9 @@ public class ClientMetricsTelemetryPluginTest {
 
     @Test
     public void testExportMetricsWithNewExporter() throws UnknownHostException {
-        assertTrue(clientTelemetryPlugin.isEmpty());
-        clientTelemetryPlugin.add(telemetryExporter);
-        assertFalse(clientTelemetryPlugin.isEmpty());
+        assertTrue(clientTelemetryExporterPlugin.isEmpty());
+        clientTelemetryExporterPlugin.add(telemetryExporter);
+        assertFalse(clientTelemetryExporterPlugin.isEmpty());
 
         assertEquals(0, telemetryExporter.exportMetricsInvokedCount);
         assertTrue(telemetryExporter.metricsData.isEmpty());
@@ -76,7 +76,7 @@ public class ClientMetricsTelemetryPluginTest {
 
         byte[] metrics = "test-metrics-new".getBytes(StandardCharsets.UTF_8);
         int pushIntervalMs = 10000;
-        clientTelemetryPlugin.exportMetrics(ClientMetricsTestUtils.requestContext(),
+        clientTelemetryExporterPlugin.exportMetrics(ClientMetricsTestUtils.requestContext(),
             new PushTelemetryRequest.Builder(new PushTelemetryRequestData().setMetrics(ByteBuffer.wrap(metrics)), true).build(), pushIntervalMs);
 
         assertEquals(1, telemetryExporter.exportMetricsInvokedCount);
@@ -89,13 +89,13 @@ public class ClientMetricsTelemetryPluginTest {
     @Test
     public void testExportMetricsWithBothReceiverAndExporter() throws UnknownHostException {
         // Test with separate receiver and exporter objects - both should be called
-        clientTelemetryPlugin.add(telemetryReceiver);
-        clientTelemetryPlugin.add(telemetryExporter);
-        assertFalse(clientTelemetryPlugin.isEmpty());
+        clientTelemetryExporterPlugin.add(telemetryReceiver);
+        clientTelemetryExporterPlugin.add(telemetryExporter);
+        assertFalse(clientTelemetryExporterPlugin.isEmpty());
 
         byte[] metrics = "test-metrics-both".getBytes(StandardCharsets.UTF_8);
         int pushIntervalMs = 15000;
-        clientTelemetryPlugin.exportMetrics(ClientMetricsTestUtils.requestContext(),
+        clientTelemetryExporterPlugin.exportMetrics(ClientMetricsTestUtils.requestContext(),
             new PushTelemetryRequest.Builder(new PushTelemetryRequestData().setMetrics(ByteBuffer.wrap(metrics)), true).build(), pushIntervalMs);
 
         // Both should be called since they are separate objects
@@ -116,12 +116,12 @@ public class ClientMetricsTelemetryPluginTest {
 
         // In production (DynamicBrokerConfig.scala), when a reporter implements both interfaces,
         // only the exporter is added due to pattern matching that checks ClientTelemetryExporterProvider first
-        clientTelemetryPlugin.add(dualImpl.clientExporter());
-        assertFalse(clientTelemetryPlugin.isEmpty());
+        clientTelemetryExporterPlugin.add(dualImpl.clientTelemetryExporter());
+        assertFalse(clientTelemetryExporterPlugin.isEmpty());
 
         byte[] metrics = "test-metrics-dual".getBytes(StandardCharsets.UTF_8);
         int pushIntervalMs = 12000;
-        clientTelemetryPlugin.exportMetrics(ClientMetricsTestUtils.requestContext(),
+        clientTelemetryExporterPlugin.exportMetrics(ClientMetricsTestUtils.requestContext(),
             new PushTelemetryRequest.Builder(new PushTelemetryRequestData().setMetrics(ByteBuffer.wrap(metrics)), true).build(), pushIntervalMs);
 
         // Only the exporter should be called (receiver should not be invoked)
