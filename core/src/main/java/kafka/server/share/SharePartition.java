@@ -779,7 +779,7 @@ public class SharePartition {
                     // Thus, a new batch needs to be acquired for the gap.
                     if (maybeGapStartOffset < entry.getKey()) {
                         // It's safe to use entry.getKey() - 1 as the last offset to acquire for the
-                        // gap as th sub map should contain either the next batch or this line should
+                        // gap as the sub map should contain either the next batch or this line should
                         // not have been executed i.e. say there is a gap from 10-20 and cache contains
                         // [0-9, 21-30], when fetch returns single/multiple batches from 0-15, then
                         // first sub map entry has no gap and there exists only 1 entry in sub map.
