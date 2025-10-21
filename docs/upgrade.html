@@ -19,6 +19,17 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h4><a id="upgrade_4_1_1" href="#upgrade_4_1_0">Upgrading to 4.1.1</a></h4>
+<h5><a id="upgrade_4_1_1_notable" href="#upgrade_4_1_1_notable">Notable changes in 4.1.1</a></h5>
+    <ul>
+        <li>
+            Includes a fix for the critical Kafka Streams bug (<a href="https://issues.apache.org/jira/browse/KAFKA-19748">KAFKA-19748</a>), solving the memory leak issues that affected users of range scans and certain DSL operators (session windows, sliding windows, stream-stream joins, foreign-key joins).
+        </li>
+        <li>
+            Includes a fix for the critical Kafka Streams bug (<a href="https://issues.apache.org/jira/browse/KAFKA-19479">KAFKA-19479</a>), related to potential data loss.
+        </li>
+    </ul>
+
 <h4><a id="upgrade_4_1_0" href="#upgrade_4_1_0">Upgrading to 4.1.0</a></h4>
 
 <h5><a id="upgrade_4_1_0" href="#upgrade_4_1_0">Upgrading Servers to 4.1.0 from any version 3.3.x through 4.0.x</a></h5>
