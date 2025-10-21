@@ -21260,16 +21260,16 @@ public class GroupMetadataManagerTest {
 
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
-        Uuid barTopicId = Uuid.randomUuid();
-        String barTopicName = "bar";
 
         CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
-            .addTopic(barTopicId, barTopicName, 3)
             .buildCoordinatorMetadataImage(12345L);
 
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(new NoOpPartitionAssignor()))
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
             .withMetadataImage(metadataImage)
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
@@ -21281,7 +21281,7 @@ public class GroupMetadataManagerTest {
                     .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
                     .setRebalanceTimeoutMs(5000)
                     .setSubscribedTopicRegex("foo*")
-                    .setServerAssignorName(NoOpPartitionAssignor.NAME)
+                    .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2)))
                     .build())
@@ -21293,30 +21293,91 @@ public class GroupMetadataManagerTest {
                     .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
                     .setRebalanceTimeoutMs(5000)
                     .setSubscribedTopicRegex("foo*")
-                    .setServerAssignorName(NoOpPartitionAssignor.NAME)
+                    .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 3, 4, 5)))
                     .build())
                 .withAssignment(memberId1, mkAssignment(
-                    mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
+                    mkTopicAssignment(fooTopicId, 0, 1, 2)))
+                .withAssignment(memberId2, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 3, 4, 5)))
                 .withAssignmentEpoch(10))
             .build();
 
         // Member 1 is replaced by a classic member with the same instance id.
-        context.sendClassicGroupJoin(
-            new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
-                .withGroupId(groupId)
-                .withMemberId(UNKNOWN_MEMBER_ID)
-                .withGroupInstanceId(instanceId)
-                .withProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-                .withDefaultProtocolTypeAndProtocols()
-                .build()
+        JoinGroupRequestData joinRequest = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(groupId)
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withGroupInstanceId(instanceId)
+            .withRebalanceTimeoutMs(5000)
+            .withProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+        GroupMetadataManagerTestContext.JoinResult result = context.sendClassicGroupJoin(joinRequest);
+
+        ConsumerGroupMember newMember1 = context.groupMetadataManager.consumerGroup(groupId).staticMember(instanceId);
+
+        ConsumerGroupMember expectedCopiedMember = new ConsumerGroupMember.Builder(newMember1.memberId())
+            .setState(MemberState.STABLE)
+            .setInstanceId(instanceId)
+            .setMemberEpoch(0)
+            .setPreviousMemberEpoch(0)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setRebalanceTimeoutMs(5000)
+            .setSubscribedTopicRegex("") // empty regex subscription
+            .setServerAssignorName("range")
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2)))
+            .build();
+
+        ConsumerGroupMember expectedMember1 = new ConsumerGroupMember.Builder(newMember1.memberId())
+            .setState(MemberState.STABLE)
+            .setInstanceId(instanceId)
+            .setMemberEpoch(11)
+            .setPreviousMemberEpoch(0)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setRebalanceTimeoutMs(5000)
+            .setSubscribedTopicRegex("") // empty regex subscription
+            .setSubscribedTopicNames(List.of("foo"))
+            .setServerAssignorName("range")
+            .setAssignedPartitions(Map.of()) // empty assignment
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(500)
+                    .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(joinRequest.protocols()))
+            )
+            .build();
+
+        List<CoordinatorRecord> expectedRecords = List.of(
+            // The previous member is deleted.
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId1),
+            // The previous member is replaced by the new one.
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedCopiedMember),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, expectedCopiedMember.memberId(), mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2)
+            )),
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedCopiedMember),
+            // The member subscription is updated.
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
+            // The group epoch is bumped.
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11, computeGroupHash(Map.of(
+                fooTopicName, computeTopicHash(fooTopicName, metadataImage)
+            ))),
+            // The target assignment is updated.
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, expectedMember1.memberId(), Map.of()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, Map.of()),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11),
+            // The member assignment is updated.
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1)
         );
 
-        // The new member should have no regex subscription.
-        assertEquals(
-            "",
-            context.groupMetadataManager.consumerGroup(groupId).staticMember(instanceId).subscribedTopicRegex()
+        assertRecordsEquals(
+            expectedRecords,
+            result.records
         );
     }
 
