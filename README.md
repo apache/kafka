@@ -89,7 +89,12 @@ Generate coverage reports for the whole project:
 Generate coverage for a single module, i.e.: 
 
     ./gradlew clients:reportCoverage -PenableTestCoverage=true -Dorg.gradle.parallel=false
-    
+
+Reports are placed in the respective module's build directory, using the tool specific to the module's language (JaCoCo for Java, Scoverage for Scala).
+You can find the HTML reports at the following locations: 
+
+    <module>/build/reports/jacoco/test/html/index.html
+
 ### Building a binary release gzipped tar ball ###
     ./gradlew clean releaseTarGz
 
