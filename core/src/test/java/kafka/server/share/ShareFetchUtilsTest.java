@@ -638,7 +638,7 @@ public class ShareFetchUtilsTest {
         }
 
         private MemoryRecords createMemoryRecords(long baseOffset, int numRecords) {
-            try (MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(numRecords, baseOffset)) {
+            try (MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(baseOffset, numRecords)) {
                 return recordsBuilder.build();
             }
         }
@@ -659,7 +659,7 @@ public class ShareFetchUtilsTest {
 
         private MemoryRecords createMemoryRecords(Map<Long, Integer> recordsPerOffset) {
             ByteBuffer buffer = ByteBuffer.allocate(1024);
-            recordsPerOffset.forEach((offset, numOfRecords) -> memoryRecordsBuilder(buffer, numOfRecords, offset).close());
+            recordsPerOffset.forEach((offset, numOfRecords) -> memoryRecordsBuilder(buffer, offset, numOfRecords).close());
             buffer.flip();
 
             return MemoryRecords.readableRecords(buffer);

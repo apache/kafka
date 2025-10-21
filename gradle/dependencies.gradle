@@ -120,7 +120,7 @@ versions += [
   // has the version field as mandatory in its configuration, see
   // https://github.com/scalameta/scalafmt/releases/tag/v3.1.0.
   scalafmt: "3.10.0",
-  scoverage: "2.3.0",
+  scoverage: "2.4.0",
   slf4j: "1.7.36",
   snappy: "1.1.10.7",
   spotbugs: "4.9.8",
