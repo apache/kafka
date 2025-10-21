@@ -2466,16 +2466,13 @@ public class GroupMetadataManager {
         // changed, the subscription metadata is updated and persisted by writing a ConsumerGroupPartitionMetadataValue
         // record to the __consumer_offsets partition. Finally, the group epoch is bumped if the subscriptions have
         // changed, and persisted by writing a ConsumerGroupMetadataValue record to the partition.
-
-        // We don't explicitly set empty regex subscription here because classicGroupJoinToConsumerGroup call is
-        // only from new member whose subscription is provided by JoinGroupRequest unless it replaces an existing
-        // static member, which is addressed in getOrMaybeSubscribeStaticConsumerGroupMember.
         ConsumerGroupMember updatedMember = new ConsumerGroupMember.Builder(member)
             .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
             .maybeUpdateRackId(Utils.toOptional(subscription.rackId()))
             .maybeUpdateRebalanceTimeoutMs(ofSentinel(request.rebalanceTimeoutMs()))
             .maybeUpdateServerAssignorName(Optional.empty())
             .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscription.topics()))
+            .setSubscribedTopicRegex("") // Regex subscription is not supported for classic member.
             .setClientId(context.clientId())
             .setClientHost(context.clientAddress().toString())
             .setClassicMemberMetadata(
@@ -2486,6 +2483,16 @@ public class GroupMetadataManager {
 
         boolean bumpGroupEpoch = hasMemberSubscriptionChanged(
             groupId,
+            member,
+            updatedMember,
+            records
+        );
+
+        // Maybe create tombstone for the regex if the joining member replaces a static member
+        // with regex subscription.
+        maybeUpdateRegularExpressions(
+            context,
+            group,
             member,
             updatedMember,
             records
@@ -3082,14 +3089,10 @@ public class GroupMetadataManager {
                 }
 
                 // Copy the member but with its new member id.
-                ConsumerGroupMember.Builder memberBuilder = new ConsumerGroupMember.Builder(existingStaticMemberOrNull, memberId)
+                ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(existingStaticMemberOrNull, memberId)
                     .setMemberEpoch(0)
-                    .setPreviousMemberEpoch(0);
-                if (useClassicProtocol) {
-                    // Regex subscription is not supported for classic member.
-                    memberBuilder.setSubscribedTopicRegex("");
-                }
-                ConsumerGroupMember newMember = memberBuilder.build();
+                    .setPreviousMemberEpoch(0)
+                    .build();
 
                 // Generate the records to replace the member. We don't care about the regular expression
                 // here because it is taken care of later after the static membership replacement.

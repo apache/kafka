@@ -21268,6 +21268,8 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
 
+        // Member 1 is a static member with regex subscription and
+        // Member 2 uses topic name subscription.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
             .withMetadataImage(metadataImage)
@@ -21292,7 +21294,7 @@ public class GroupMetadataManagerTest {
                     .setClientId(DEFAULT_CLIENT_ID)
                     .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
                     .setRebalanceTimeoutMs(5000)
-                    .setSubscribedTopicRegex("foo*")
+                    .setSubscribedTopicNames(List.of(fooTopicName))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 3, 4, 5)))
@@ -21301,7 +21303,9 @@ public class GroupMetadataManagerTest {
                     mkTopicAssignment(fooTopicId, 0, 1, 2)))
                 .withAssignment(memberId2, mkAssignment(
                     mkTopicAssignment(fooTopicId, 3, 4, 5)))
-                .withAssignmentEpoch(10))
+                .withAssignmentEpoch(10)
+                .withResolvedRegularExpression("foo*", new ResolvedRegularExpression(
+                    Set.of(fooTopicName), 0L, 0L)))
             .build();
 
         // Member 1 is replaced by a classic member with the same instance id.
@@ -21325,7 +21329,7 @@ public class GroupMetadataManagerTest {
             .setClientId(DEFAULT_CLIENT_ID)
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
             .setRebalanceTimeoutMs(5000)
-            .setSubscribedTopicRegex("") // empty regex subscription
+            .setSubscribedTopicRegex("foo*") // Still uses regex subscription.
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2)))
@@ -21350,32 +21354,36 @@ public class GroupMetadataManagerTest {
             )
             .build();
 
-        List<CoordinatorRecord> expectedRecords = List.of(
+        List<List<CoordinatorRecord>> expectedRecords = List.of(
             // The previous member is deleted.
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId1),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId1),
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId1),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId1)),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId1)),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId1)),
             // The previous member is replaced by the new one.
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedCopiedMember),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, expectedCopiedMember.memberId(), mkAssignment(
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedCopiedMember)),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, expectedCopiedMember.memberId(), mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2)
-            )),
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedCopiedMember),
-            // The member subscription is updated.
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
-            // The group epoch is bumped.
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11, computeGroupHash(Map.of(
-                fooTopicName, computeTopicHash(fooTopicName, metadataImage)
             ))),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedCopiedMember)),
+            // The member subscription is updated.
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1)),
+            // The regex is tombstoned.
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone(groupId, "foo*")),
+            // The group epoch is bumped.
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11, computeGroupHash(Map.of(
+                fooTopicName, computeTopicHash(fooTopicName, metadataImage)
+            )))),
             // The target assignment is updated.
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, expectedMember1.memberId(), Map.of()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, Map.of()),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11),
+            List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, expectedMember1.memberId(), Map.of()),
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId2, Map.of())
+            ),
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11)),
             // The member assignment is updated.
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1)
+            List.of(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1))
         );
 
-        assertRecordsEquals(
+        assertUnorderedRecordsEquals(
             expectedRecords,
             result.records
         );
