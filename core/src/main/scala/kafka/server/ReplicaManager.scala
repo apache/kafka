@@ -1644,13 +1644,10 @@ class ReplicaManager(val config: KafkaConfig,
     val remoteFetchTasks = new util.HashMap[TopicIdPartition, Future[Void]]
     val remoteFetchResults = new util.HashMap[TopicIdPartition, CompletableFuture[RemoteLogReadResult]]
 
-    // Hook to enable / disable multi-partition remote fetch feature.
-    val isMultiPartitionFetchEnabled = true
-    remoteFetchInfos.asScala.forall { case (topicIdPartition, remoteFetchInfo) =>
+    remoteFetchInfos.forEach { (topicIdPartition, remoteFetchInfo) =>
       val (task, result) = processRemoteFetch(remoteFetchInfo)
       remoteFetchTasks.put(topicIdPartition, task)
       remoteFetchResults.put(topicIdPartition, result)
-      isMultiPartitionFetchEnabled
     }
 
     val remoteFetchMaxWaitMs = config.remoteLogManagerConfig.remoteFetchMaxWaitMs().toLong
