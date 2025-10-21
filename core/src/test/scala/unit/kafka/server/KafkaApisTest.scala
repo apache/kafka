@@ -11532,7 +11532,7 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(new GetTelemetrySubscriptionsRequest.Builder(
       new GetTelemetrySubscriptionsRequestData(), true).build())
 
-    when(clientMetricsManager.isTelemetryReceiverConfigured).thenReturn(true)
+    when(clientMetricsManager.isTelemetryExporterConfigured).thenReturn(true)
     when(clientMetricsManager.processGetTelemetrySubscriptionRequest(any[GetTelemetrySubscriptionsRequest](),
       any[RequestContext]())).thenReturn(new GetTelemetrySubscriptionsResponse(
       new GetTelemetrySubscriptionsResponseData()))
@@ -11552,7 +11552,7 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(new GetTelemetrySubscriptionsRequest.Builder(
       new GetTelemetrySubscriptionsRequestData(), true).build())
 
-    when(clientMetricsManager.isTelemetryReceiverConfigured).thenReturn(true)
+    when(clientMetricsManager.isTelemetryExporterConfigured).thenReturn(true)
     when(clientMetricsManager.processGetTelemetrySubscriptionRequest(any[GetTelemetrySubscriptionsRequest](),
       any[RequestContext]())).thenThrow(new RuntimeException("test"))
 
@@ -11570,7 +11570,7 @@ class KafkaApisTest extends Logging {
   def testPushTelemetry(): Unit = {
     val request = buildRequest(new PushTelemetryRequest.Builder(new PushTelemetryRequestData(), true).build())
 
-    when(clientMetricsManager.isTelemetryReceiverConfigured).thenReturn(true)
+    when(clientMetricsManager.isTelemetryExporterConfigured).thenReturn(true)
     when(clientMetricsManager.processPushTelemetryRequest(any[PushTelemetryRequest](), any[RequestContext]()))
       .thenReturn(new PushTelemetryResponse(new PushTelemetryResponseData()))
 
@@ -11587,7 +11587,7 @@ class KafkaApisTest extends Logging {
   def testPushTelemetryWithException(): Unit = {
     val request = buildRequest(new PushTelemetryRequest.Builder(new PushTelemetryRequestData(), true).build())
 
-    when(clientMetricsManager.isTelemetryReceiverConfigured).thenReturn(true)
+    when(clientMetricsManager.isTelemetryExporterConfigured).thenReturn(true)
     when(clientMetricsManager.processPushTelemetryRequest(any[PushTelemetryRequest](), any[RequestContext]()))
       .thenThrow(new RuntimeException("test"))
 

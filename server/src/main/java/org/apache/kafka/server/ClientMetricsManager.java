@@ -228,7 +228,7 @@ public class ClientMetricsManager implements AutoCloseable {
         return new PushTelemetryResponse(new PushTelemetryResponseData());
     }
 
-    public boolean isTelemetryReceiverConfigured() {
+    public boolean isTelemetryExporterConfigured() {
         return !clientTelemetryExporterPlugin.isEmpty();
     }
 
