@@ -52,7 +52,7 @@ public class TaskExecutionMetadata {
         this.hasNamedTopologies = !(allTopologyNames.size() == 1 && allTopologyNames.contains(UNNAMED_TOPOLOGY));
         this.pausedTopologies = pausedTopologies;
         this.processingMode = processingMode;
-        this.log = new LogContext("[TaskExecutionMetadata]").logger(TaskExecutionMetadata.class);
+        this.log = new LogContext("").logger(TaskExecutionMetadata.class);
     }
 
     public boolean hasNamedTopologies() {
@@ -67,16 +67,17 @@ public class TaskExecutionMetadata {
         final String topologyName = task.id().topologyName();
         if (!hasNamedTopologies) {
             // TODO implement error handling/backoff for non-named topologies (needs KIP)
-            log.debug("Task {} processing check for unnamed topology '{}'", task.id(), topologyName);
+            log.trace("Task {} processing check for unnamed topology '{}'", task.id(), topologyName);
             return !pausedTopologies.contains(UNNAMED_TOPOLOGY);
         } else {
             if (pausedTopologies.contains(topologyName)) {
                 log.debug("Task {} can't be processed: topology '{}' is paused", task.id(), topologyName);
                 return false;
             } else {
+                log.trace("Task {} processing check for named topology '{}'", task.id(), topologyName);
                 final NamedTopologyMetadata metadata = topologyNameToErrorMetadata.get(topologyName);
-                log.debug("Task {} processing check for topology '{}'", task.id(), topologyName);
                 return metadata == null || (metadata.canProcess() && metadata.canProcessTask(task, now));
+
             }
         }
     }
