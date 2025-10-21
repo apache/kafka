@@ -282,7 +282,8 @@ class ControllerServer(
         registrationsPublisher,
         apiVersionManager,
         metadataCache)
-      controllerApisHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
+      controllerApisHandlerPool = sharedServer.requestHandlerPoolFactory.createPool(
+        config.nodeId,
         socketServer.dataPlaneRequestChannel,
         controllerApis,
         time,

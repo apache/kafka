@@ -465,8 +465,11 @@ class BrokerServer(
         clientMetricsManager = clientMetricsManager,
         groupConfigManager = groupConfigManager)
 
-      dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
-        socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
+      dataPlaneRequestHandlerPool = sharedServer.requestHandlerPoolFactory.createPool(
+        config.nodeId,
+        socketServer.dataPlaneRequestChannel,
+        dataPlaneRequestProcessor,
+        time,
         config.numIoThreads)
 
       metadataPublishers.add(new MetadataVersionConfigValidator(config, sharedServer.metadataPublishingFaultHandler))
