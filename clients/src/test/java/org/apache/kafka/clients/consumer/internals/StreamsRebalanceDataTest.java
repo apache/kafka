@@ -452,7 +452,7 @@ public class StreamsRebalanceDataTest {
                 clientTags
         );
 
-        assertEquals(-1, streamsRebalanceData.getHeartbeatIntervalMs());
+        assertEquals(-1, streamsRebalanceData.heartbeatIntervalMs());
     }
 
     @Test
@@ -471,7 +471,7 @@ public class StreamsRebalanceDataTest {
         );
 
         streamsRebalanceData.setHeartbeatIntervalMs(1000);
-        assertEquals(1000, streamsRebalanceData.getHeartbeatIntervalMs());
+        assertEquals(1000, streamsRebalanceData.heartbeatIntervalMs());
     }
 
 

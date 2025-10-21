@@ -404,7 +404,7 @@ public class StreamsRebalanceData {
     }
 
     /** Returns the heartbeat interval in milliseconds, or -1 if not yet set. */
-    public int getHeartbeatIntervalMs() {
+    public int heartbeatIntervalMs() {
         return heartbeatIntervalMs.get();
     }
 

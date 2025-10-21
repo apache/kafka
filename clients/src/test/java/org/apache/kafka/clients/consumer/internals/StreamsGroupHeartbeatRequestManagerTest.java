@@ -1522,7 +1522,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
 
             // Initially, heartbeatIntervalMs should be -1
-            assertEquals(-1, streamsRebalanceData.getHeartbeatIntervalMs());
+            assertEquals(-1, streamsRebalanceData.heartbeatIntervalMs());
 
             final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
             assertEquals(1, result.unsentRequests.size());
@@ -1532,7 +1532,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             networkRequest.handler().onComplete(response);
 
             // After successful response, heartbeatIntervalMs should be updated
-            assertEquals(RECEIVED_HEARTBEAT_INTERVAL_MS, streamsRebalanceData.getHeartbeatIntervalMs());
+            assertEquals(RECEIVED_HEARTBEAT_INTERVAL_MS, streamsRebalanceData.heartbeatIntervalMs());
         }
     }
 
