@@ -45,7 +45,6 @@ import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
@@ -81,7 +80,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
 
 public class ClassicGroupTest {
     private final String protocolType = "consumer";
@@ -1383,8 +1381,7 @@ public class ClassicGroupTest {
 
         ConsumerGroup consumerGroup = new ConsumerGroup(
             new SnapshotRegistry(logContext),
-            groupId,
-            mock(GroupCoordinatorMetricsShard.class)
+            groupId
         );
         consumerGroup.setGroupEpoch(10);
         consumerGroup.setTargetAssignmentEpoch(10);
@@ -1536,8 +1533,7 @@ public class ClassicGroupTest {
 
         ConsumerGroup consumerGroup = new ConsumerGroup(
             new SnapshotRegistry(logContext),
-            groupId,
-            mock(GroupCoordinatorMetricsShard.class)
+            groupId
         );
         consumerGroup.setGroupEpoch(10);
         consumerGroup.setTargetAssignmentEpoch(10);

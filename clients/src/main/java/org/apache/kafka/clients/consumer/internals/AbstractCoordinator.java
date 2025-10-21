@@ -1170,7 +1170,7 @@ public abstract class AbstractCoordinator implements Closeable {
     public synchronized RequestFuture<Void> maybeLeaveGroup(CloseOptions.GroupMembershipOperation membershipOperation, String leaveReason) {
         RequestFuture<Void> future = null;
 
-        if (rebalanceConfig.leaveGroupOnClose && shouldSendLeaveGroupRequest(membershipOperation)) {
+        if (shouldSendLeaveGroupRequest(membershipOperation)) {
             log.info("Member {} sending LeaveGroup request to coordinator {} due to {}",
                 generation.memberId, coordinator, leaveReason);
             LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(

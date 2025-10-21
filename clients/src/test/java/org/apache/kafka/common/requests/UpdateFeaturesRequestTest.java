@@ -84,9 +84,9 @@ public class UpdateFeaturesRequestTest {
         request = UpdateFeaturesRequest.parse(readable, UpdateFeaturesRequestData.LOWEST_SUPPORTED_VERSION);
 
         List<UpdateFeaturesRequest.FeatureUpdateItem> updates = new ArrayList<>(request.featureUpdates());
-        assertEquals(updates.size(), 2);
-        assertEquals(updates.get(0).upgradeType(), FeatureUpdate.UpgradeType.SAFE_DOWNGRADE);
-        assertEquals(updates.get(1).upgradeType(), FeatureUpdate.UpgradeType.UPGRADE);
+        assertEquals(2, updates.size());
+        assertEquals(FeatureUpdate.UpgradeType.SAFE_DOWNGRADE, updates.get(0).upgradeType());
+        assertEquals(FeatureUpdate.UpgradeType.UPGRADE, updates.get(1).upgradeType());
     }
 
     @Test
@@ -114,9 +114,9 @@ public class UpdateFeaturesRequestTest {
         request = UpdateFeaturesRequest.parse(readable, UpdateFeaturesRequestData.HIGHEST_SUPPORTED_VERSION);
 
         List<UpdateFeaturesRequest.FeatureUpdateItem> updates = new ArrayList<>(request.featureUpdates());
-        assertEquals(updates.size(), 2);
-        assertEquals(updates.get(0).upgradeType(), FeatureUpdate.UpgradeType.SAFE_DOWNGRADE);
-        assertEquals(updates.get(1).upgradeType(), FeatureUpdate.UpgradeType.UPGRADE);
+        assertEquals(2, updates.size());
+        assertEquals(FeatureUpdate.UpgradeType.SAFE_DOWNGRADE, updates.get(0).upgradeType());
+        assertEquals(FeatureUpdate.UpgradeType.UPGRADE, updates.get(1).upgradeType());
 
     }
 

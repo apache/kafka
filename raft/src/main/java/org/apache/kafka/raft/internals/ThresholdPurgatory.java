@@ -71,14 +71,7 @@ public class ThresholdPurgatory<T extends Comparable<T>> implements FuturePurgat
         return thresholdMap.size();
     }
 
-    private static class ThresholdKey<T extends Comparable<T>> implements Comparable<ThresholdKey<T>> {
-        private final long id;
-        private final T threshold;
-
-        private ThresholdKey(long id, T threshold) {
-            this.id = id;
-            this.threshold = threshold;
-        }
+    private record ThresholdKey<T extends Comparable<T>>(long id, T threshold) implements Comparable<ThresholdKey<T>> {
 
         @Override
         public int compareTo(ThresholdKey<T> o) {

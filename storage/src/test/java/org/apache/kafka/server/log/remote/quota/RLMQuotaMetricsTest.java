@@ -54,14 +54,16 @@ public class RLMQuotaMetricsTest {
 
     @Test
     public void testClose() {
-        RLMQuotaMetrics quotaMetrics = new RLMQuotaMetrics(metrics, "metric", "group", "format", 5);
+        RLMQuotaMetrics quotaMetrics = new RLMQuotaMetrics(metrics, "metric", "group", "this is %s", 5);
 
         // Register the sensor
         quotaMetrics.sensor();
-        var avg = metrics.metricName("metric" + "-avg", "group", String.format("format", "average"));
+        var avg = metrics.metricName("metric" + "-avg", "group", "this is average");
 
         // Verify that metrics are created
-        assertNotNull(metrics.metric(avg));
+        var result = metrics.metric(avg);
+        assertNotNull(result);
+        assertEquals(result.metricName().description(), avg.description());
 
         // Close the quotaMetrics instance
         quotaMetrics.close();

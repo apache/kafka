@@ -33,6 +33,7 @@
     <allow pkg="javax.net.ssl" />
     <allow pkg="javax.security" />
     <allow pkg="net.jqwik.api" />
+    <allow pkg="javax.crypto" />
 
     <!-- no one depends on the server -->
     <disallow pkg="kafka" />
@@ -49,6 +50,9 @@
     <!-- persistent collection factories/non-library-specific wrappers -->
     <allow pkg="org.apache.kafka.server.immutable" exact-match="true" />
 
+    <!-- allow config classes for server package -->
+    <allow pkg="org.apache.kafka.server.config" />
+
     <subpackage name="queue">
         <allow pkg="org.apache.kafka.test" />
     </subpackage>
@@ -60,6 +64,7 @@
     </subpackage>
 
     <subpackage name="security">
+        <allow pkg="org.apache.kafka.clients.admin" />
         <allow pkg="org.apache.kafka.common.config" />
         <allow pkg="org.apache.kafka.common.config.types" />
         <allow pkg="org.apache.kafka.server.util" />

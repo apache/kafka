@@ -111,14 +111,14 @@ public interface Group {
      *                                  for consumer groups.
      * @param isTransactional           Whether the offset commit is transactional or not.
      * @param apiVersion                The api version.
+     * @return A validator for per-partition validation.
      */
-    void validateOffsetCommit(
+    CommitPartitionValidator validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int generationIdOrMemberEpoch,
         boolean isTransactional,
         int apiVersion
-
     ) throws KafkaException;
 
     /**
