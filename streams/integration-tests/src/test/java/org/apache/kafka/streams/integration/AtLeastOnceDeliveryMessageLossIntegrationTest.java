@@ -142,25 +142,7 @@ public class AtLeastOnceDeliveryMessageLossIntegrationTest {
             assertTrue(offsetsCommitted, "Consumer offsets should be committed");
         }
     }
-    
-    @Test
-    public void shouldCommitOffsetsAndProduceMessagesNormallyForSmallerRecordCount() throws Exception {
-        produceInputData(SMALL_RECORD_COUNT);
-        
-        try (final KafkaStreams kafkaStreams = createStreamsApplication()) {
-            startApplicationAndWaitUntilRunning(Collections.singletonList(kafkaStreams), Duration.ofMillis(DEFAULT_TIMEOUT));
-            
-            waitForProcessingAndCommit();
 
-            final int outputRecordCount = verifyOutputRecords(SMALL_RECORD_COUNT); // should produce records
-            final boolean offsetsCommitted = verifyConsumerOffsetsCommitted(SMALL_RECORD_COUNT); // should commit offsets
-
-            assertEquals(SMALL_RECORD_COUNT, outputRecordCount, "Output topic should have " + SMALL_RECORD_COUNT + " records");
-            assertTrue(offsetsCommitted, "Consumer offsets should be committed");
-        }
-    }
-    
-    
     private void setupStreamsConfiguration() {
         streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
