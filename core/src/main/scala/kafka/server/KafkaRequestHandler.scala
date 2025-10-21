@@ -203,7 +203,7 @@ class KafkaRequestHandler(
  */
 class KafkaRequestHandlerPoolFactory {
   val aggregateThreads = new AtomicInteger(0)
-  val requestHandlerAvgIdleMetricName = "RequestHandlerAvgIdlePercent"
+  val RequestHandlerAvgIdleMetricName = "RequestHandlerAvgIdlePercent"
   
   def createPool(
     brokerId: Int,
@@ -213,7 +213,7 @@ class KafkaRequestHandlerPoolFactory {
     numThreads: Int,
     nodeName: String = "broker"
   ): KafkaRequestHandlerPool = {
-    new KafkaRequestHandlerPool(aggregateThreads, requestHandlerAvgIdleMetricName, brokerId, requestChannel, apis, time, numThreads, nodeName)
+    new KafkaRequestHandlerPool(aggregateThreads, RequestHandlerAvgIdleMetricName, brokerId, requestChannel, apis, time, numThreads, nodeName)
   }
 }
 
