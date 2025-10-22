@@ -202,8 +202,8 @@ class KafkaRequestHandler(
  * All pools created by the same factory share the same aggregateThreads counter.
  */
 class KafkaRequestHandlerPoolFactory {
-  val aggregateThreads = new AtomicInteger(0)
-  val RequestHandlerAvgIdleMetricName = "RequestHandlerAvgIdlePercent"
+  private[this] val aggregateThreads = new AtomicInteger(0)
+  private[this] val RequestHandlerAvgIdleMetricName = "RequestHandlerAvgIdlePercent"
   
   def createPool(
     brokerId: Int,
@@ -215,6 +215,9 @@ class KafkaRequestHandlerPoolFactory {
   ): KafkaRequestHandlerPool = {
     new KafkaRequestHandlerPool(aggregateThreads, RequestHandlerAvgIdleMetricName, brokerId, requestChannel, apis, time, numThreads, nodeName)
   }
+
+  // Only used for test purpose
+  def getAggregateThreads: AtomicInteger = aggregateThreads
 }
 
 class KafkaRequestHandlerPool(
