@@ -887,7 +887,7 @@ public class SharePartition {
 
             // Some of the request offsets are not found in the fetched batches. Acquire the
             // missing records as well.
-            if (acquiredCount < maxRecordsToAcquire && subMap.lastEntry().getValue().lastOffset() < lastOffsetToAcquire && !isRecordLimitMode) {
+            if (acquiredCount < maxRecordsToAcquire && subMap.lastEntry().getValue().lastOffset() < lastOffsetToAcquire) {
                 log.trace("There exists another batch which needs to be acquired as well");
                 ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(), false,
                     subMap.lastEntry().getValue().lastOffset() + 1,
@@ -1646,8 +1646,8 @@ public class SharePartition {
         // Only acquire one single batch in record limit mode.
         AcquiredRecords records = acquiredRecords.get(0);
         InFlightBatch inFlightBatch = cachedState.get(records.firstOffset());
-        long lastOffset = records.firstOffset() + maxFetchRecords - 1;
         if (inFlightBatch != null) {
+            long lastOffset = records.firstOffset() + maxFetchRecords - 1;
             // Initialize the offset state map if not already initialized.
             inFlightBatch.maybeInitializeOffsetStateUpdate();
             List<PersisterBatch> persisterBatches = new ArrayList<>();
@@ -1675,8 +1675,10 @@ public class SharePartition {
                 }
             }
             rollbackOrProcessStateUpdates(future, null, persisterBatches);
+            records.setLastOffset(lastOffset);
+        } else {
+            log.error("In-flight batch not found for the acquired records: {} in share partition: {}-{}", records, groupId, topicIdPartition);
         }
-        records.setLastOffset(lastOffset);
         return records;
     }
 
