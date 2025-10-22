@@ -227,7 +227,7 @@ public class SubscriptionSendProcessorSupplier<KLeft, VLeft, KRight>
             }
         }
 
-        private boolean foreignKeyChanged(KRight newForeignKey, KRight oldForeignKey) {
+        private boolean foreignKeyChanged(final KRight newForeignKey, final KRight oldForeignKey) {
             return !Arrays.equals(serialize(newForeignKey), serialize(oldForeignKey));
         }
 
