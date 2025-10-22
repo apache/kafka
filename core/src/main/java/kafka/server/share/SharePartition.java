@@ -796,12 +796,12 @@ public class SharePartition {
                         // from 10-15 will be acquired later in the code. In other case, when
                         // fetch returns batches from 0-25, then the sub map will have 2 entries and
                         // gap will be computed correctly.
+                        int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
                         ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(), isRecordLimitMode,
-                            maybeGapStartOffset, entry.getKey() - 1, batchSize, maxRecordsToAcquire);
-                        if (isRecordLimitMode && shareAcquiredRecords.count() > maxRecordsToAcquire) {
-                            AcquiredRecords records = filterShareAcquiredRecordsInRecordLimitMode(maxRecordsToAcquire, shareAcquiredRecords.acquiredRecords());
-                            result.add(records);
-                            acquiredCount += maxRecordsToAcquire;
+                            maybeGapStartOffset, entry.getKey() - 1, batchSize, numRecordsRemaining);
+                        if (isRecordLimitMode && shareAcquiredRecords.count() > numRecordsRemaining) {
+                            result.add(filterShareAcquiredRecordsInRecordLimitMode(numRecordsRemaining, shareAcquiredRecords.acquiredRecords()));
+                            acquiredCount += numRecordsRemaining;
                         } else {
                             result.addAll(shareAcquiredRecords.acquiredRecords());
                             acquiredCount += shareAcquiredRecords.count();
@@ -843,7 +843,7 @@ public class SharePartition {
                     // Do not send max fetch records to acquireSubsetBatchRecords as we want to acquire
                     // all the records from the batch as the batch will anyway be part of the file-records
                     // response batch.
-                    int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, isRecordLimitMode, maxFetchRecords, firstBatch.baseOffset(), lastOffsetToAcquire, inFlightBatch, result);
+                    int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, isRecordLimitMode, maxFetchRecords - acquiredCount, firstBatch.baseOffset(), lastOffsetToAcquire, inFlightBatch, result);
                     acquiredCount += acquiredSubsetCount;
                     continue;
                 }
@@ -863,7 +863,7 @@ public class SharePartition {
                 }
                 long recordsAcquired = inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1;
                 if (isRecordLimitMode && recordsAcquired > maxRecordsToAcquire) {
-                    AcquiredRecords records = filterShareAcquiredRecordsInRecordLimitMode(maxRecordsToAcquire,
+                    AcquiredRecords records = filterShareAcquiredRecordsInRecordLimitMode((int) (maxRecordsToAcquire - recordsAcquired),
                         List.of(new AcquiredRecords()
                             .setFirstOffset(inFlightBatch.firstOffset())
                             .setLastOffset(inFlightBatch.lastOffset())
@@ -889,11 +889,17 @@ public class SharePartition {
             // missing records as well.
             if (acquiredCount < maxRecordsToAcquire && subMap.lastEntry().getValue().lastOffset() < lastOffsetToAcquire) {
                 log.trace("There exists another batch which needs to be acquired as well");
-                ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(), false,
+                int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
+                ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(), isRecordLimitMode,
                     subMap.lastEntry().getValue().lastOffset() + 1,
-                    lastOffsetToAcquire, batchSize, maxRecordsToAcquire - acquiredCount);
-                result.addAll(shareAcquiredRecords.acquiredRecords());
-                acquiredCount += shareAcquiredRecords.count();
+                    lastOffsetToAcquire, batchSize, numRecordsRemaining);
+                if (isRecordLimitMode && shareAcquiredRecords.count() > numRecordsRemaining) {
+                    result.add(filterShareAcquiredRecordsInRecordLimitMode(numRecordsRemaining, shareAcquiredRecords.acquiredRecords()));
+                    acquiredCount += numRecordsRemaining;
+                } else {
+                    result.addAll(shareAcquiredRecords.acquiredRecords());
+                    acquiredCount += shareAcquiredRecords.count();
+                }
             }
             if (!result.isEmpty()) {
                 maybeUpdatePersisterGapWindowStartOffset(result.get(result.size() - 1).lastOffset() + 1);
@@ -1670,7 +1676,7 @@ public class SharePartition {
                     persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(offsetState.getKey(),
                         offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount())));
                 } else {
-                    log.error("Unxpected record state {} for offset: {} in batch: {} in share partition: {}-{}",
+                    log.error("Unexpected record state {} for offset: {} in batch: {} in share partition: {}-{}",
                         offsetState.getValue().state(), offsetState.getKey(), inFlightBatch, groupId, topicIdPartition);
                 }
             }
@@ -1799,7 +1805,7 @@ public class SharePartition {
                     .setLastOffset(offsetState.getKey())
                     .setDeliveryCount((short) offsetState.getValue().deliveryCount()));
                 acquiredCount++;
-                if (isRecordLimitMode && acquiredCount >= maxFetchRecords) {
+                if (isRecordLimitMode && acquiredCount == maxFetchRecords) {
                     // In record_limit mode, acquire only the requested number of records.
                     break;
                 }
