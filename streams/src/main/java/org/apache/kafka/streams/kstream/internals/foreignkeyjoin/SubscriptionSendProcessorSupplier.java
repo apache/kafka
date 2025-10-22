@@ -145,9 +145,7 @@ public class SubscriptionSendProcessorSupplier<KLeft, VLeft, KRight>
                 //
                 // if FK did change, we need to explicitly delete the old subscription,
                 // because the new subscription goes to a different partition
-                final boolean foreignKeyChanged = !Arrays.equals(serialize(newForeignKey), serialize(oldForeignKey));
-
-                if (foreignKeyChanged) {
+                if (foreignKeyChanged(newForeignKey, oldForeignKey)) {
                     // this may lead to unnecessary tombstones if the old FK did not join;
                     // however, we cannot avoid it as we have no means to know if the old FK joined or not
                     forward(record, oldForeignKey, DELETE_KEY_NO_PROPAGATE);
@@ -158,7 +156,7 @@ public class SubscriptionSendProcessorSupplier<KLeft, VLeft, KRight>
             // we need to get a response back for all cases to always produce a left-join result
             //
             // note: for delete, `newForeignKey` is null, what is a "hack"
-            // no actual subscription will be added for null-FK on the right hand sice, but we still get the response back we need
+            // no actual subscription will be added for null-FK on the right hand side, but we still get the response back we need
             //
             // this may lead to unnecessary tombstones if the old FK did not join;
             // however, we cannot avoid it as we have no means to know if the old FK joined or not
@@ -191,9 +189,7 @@ public class SubscriptionSendProcessorSupplier<KLeft, VLeft, KRight>
                     if (needToUnsubscribe) {
                         // update case
 
-                        final boolean foreignKeyChanged = !Arrays.equals(serialize(newForeignKey), serialize(oldForeignKey));
-
-                        if (foreignKeyChanged) {
+                        if (foreignKeyChanged(newForeignKey, oldForeignKey)) {
                             // if FK did change, we need to explicitly delete the old subscription,
                             // because the new subscription goes to a different partition
                             //
@@ -229,6 +225,10 @@ public class SubscriptionSendProcessorSupplier<KLeft, VLeft, KRight>
                     forward(record, oldForeignKey, DELETE_KEY_AND_PROPAGATE);
                 }
             }
+        }
+
+        private boolean foreignKeyChanged(KRight newForeignKey, KRight oldForeignKey) {
+            return !Arrays.equals(serialize(newForeignKey), serialize(oldForeignKey));
         }
 
         private byte[] serialize(final KRight key) {
