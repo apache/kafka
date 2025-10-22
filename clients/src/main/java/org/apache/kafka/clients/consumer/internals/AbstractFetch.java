@@ -343,13 +343,13 @@ public abstract class AbstractFetch implements Closeable {
      * @param buffered The set of partitions we have in our buffer
      * @return {@link Set} of {@link TopicPartition topic partitions} for which we should fetch data
      */
-    private Set<TopicPartition> fetchablePartitions(Set<TopicPartition> buffered) {
+    private List<TopicPartition> fetchablePartitions(Set<TopicPartition> buffered) {
         // This is the test that returns true if the partition is *not* buffered
         Predicate<TopicPartition> isNotBuffered = tp -> !buffered.contains(tp);
 
         // Return all partitions that are in an otherwise fetchable state *and* for which we don't already have some
         // messages sitting in our buffer.
-        return new HashSet<>(subscriptions.fetchablePartitions(isNotBuffered));
+        return subscriptions.fetchablePartitions(isNotBuffered);
     }
 
     /**
@@ -430,7 +430,7 @@ public abstract class AbstractFetch implements Closeable {
         Set<TopicPartition> buffered = Collections.unmodifiableSet(fetchBuffer.bufferedPartitions());
 
         // This is the set of partitions that do not have buffered data
-        Set<TopicPartition> unbuffered = fetchablePartitions(buffered);
+        List<TopicPartition> unbuffered = fetchablePartitions(buffered);
 
         if (unbuffered.isEmpty()) {
             // If there are no partitions that don't already have data locally buffered, there's no need to issue
