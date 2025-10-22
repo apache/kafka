@@ -542,9 +542,9 @@ public class StreamsGroupCommandTest {
 
         final String[] exceptionMessage = exception.getMessage().split(" Valid states are: ");
         assertEquals("Invalid state list '" + wrongState + "'.", exceptionMessage[0]);
-        assertEquals(Arrays.stream(exceptionMessage[1].split(","))
+        assertEquals(validStates, Arrays.stream(exceptionMessage[1].split(","))
             .map(String::trim)
-            .collect(Collectors.toSet()), validStates);
+            .collect(Collectors.toSet()));
     }
 
     private DescribeStreamsGroupsResult describeStreamsResult(String groupId, GroupState groupState) {
