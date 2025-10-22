@@ -18,7 +18,6 @@ package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.server.common.BrokerReadyCallback;
 
 import java.io.Closeable;
 import java.util.Iterator;
@@ -53,7 +52,7 @@ import java.util.concurrent.CompletableFuture;
  * The following tags are automatically added to all metrics registered: <code>config</code> set to
  * <code>remote.log.metadata.manager.class.name</code>, and <code>class</code> set to the RemoteLogMetadataManager class name.
  */
-public interface RemoteLogMetadataManager extends BrokerReadyCallback, Configurable, Closeable {
+public interface RemoteLogMetadataManager extends Configurable, Closeable {
 
     /**
      * This method is used to add {@link RemoteLogSegmentMetadata} asynchronously with the containing {@link RemoteLogSegmentId} into {@link RemoteLogMetadataManager}.
@@ -243,6 +242,4 @@ public interface RemoteLogMetadataManager extends BrokerReadyCallback, Configura
     default boolean isReady(TopicIdPartition topicIdPartition) {
         return true;
     }
-
-    default void onBrokerReady() {}
 }

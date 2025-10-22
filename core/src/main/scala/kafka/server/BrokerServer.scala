@@ -286,7 +286,11 @@ class BrokerServer(
       remoteLogManagerOpt = createRemoteLogManager(listenerInfo)
 
       remoteLogManagerOpt.foreach(rlm =>
-        registerBrokerReadyCallback(rlm.remoteLogMetadataManager()))
+        rlm.remoteLogMetadataManager() match {
+          case callback: BrokerReadyCallback => registerBrokerReadyCallback(callback)
+          case _ => // Skip registration
+        }
+      )
 
       alterPartitionManager = AlterPartitionManager(
         config,
