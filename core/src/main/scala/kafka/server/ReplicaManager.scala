@@ -1627,7 +1627,7 @@ class ReplicaManager(val config: KafkaConfig,
   private def processRemoteFetches(remoteFetchInfos: util.LinkedHashMap[TopicIdPartition, RemoteStorageFetchInfo],
                                    params: FetchParams,
                                    responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit,
-                                   logReadResults: Seq[(TopicIdPartition, LogReadResult)],
+                                   logReadResults: util.LinkedHashMap[TopicIdPartition, LogReadResult],
                                    fetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)]): Unit = {
     val remoteFetchTasks = new util.HashMap[TopicIdPartition, Future[Void]]
     val remoteFetchResults = new util.HashMap[TopicIdPartition, CompletableFuture[RemoteLogReadResult]]
@@ -1645,7 +1645,7 @@ class ReplicaManager(val config: KafkaConfig,
                                              remoteFetchMaxWaitMs,
                                              fetchPartitionStatus.toMap.asJava,
                                              params,
-                                             logReadResults.toMap.asJava,
+                                             logReadResults,
                                              tp => getPartitionOrException(tp),
                                              response => responseCallback(response.asScala.toSeq))
 
@@ -1676,7 +1676,7 @@ class ReplicaManager(val config: KafkaConfig,
 
     var hasDivergingEpoch = false
     var hasPreferredReadReplica = false
-    val logReadResultMap = new mutable.HashMap[TopicIdPartition, LogReadResult]
+    val logReadResultMap = new util.LinkedHashMap[TopicIdPartition, LogReadResult]
 
     logReadResults.foreach { case (topicIdPartition, logReadResult) =>
       brokerTopicStats.topicStats(topicIdPartition.topicPartition.topic).totalFetchRequestRate.mark()
@@ -1712,14 +1712,15 @@ class ReplicaManager(val config: KafkaConfig,
       // construct the fetch results from the read results
       val fetchPartitionStatus = new mutable.ArrayBuffer[(TopicIdPartition, FetchPartitionStatus)]
       fetchInfos.foreach { case (topicIdPartition, partitionData) =>
-        logReadResultMap.get(topicIdPartition).foreach(logReadResult => {
+        val logReadResult = logReadResultMap.get(topicIdPartition)
+        if (logReadResult != null) {
           val logOffsetMetadata = logReadResult.info.fetchOffsetMetadata
           fetchPartitionStatus += (topicIdPartition -> new FetchPartitionStatus(logOffsetMetadata, partitionData))
-        })
+        }
       }
 
       if (!remoteFetchInfos.isEmpty) {
-        processRemoteFetches(remoteFetchInfos, params, responseCallback, logReadResults, fetchPartitionStatus.toSeq)
+        processRemoteFetches(remoteFetchInfos, params, responseCallback, logReadResultMap, fetchPartitionStatus.toSeq)
       } else {
         // If there is not enough data to respond and there is no remote data, we will let the fetch request
         // wait for new data.
