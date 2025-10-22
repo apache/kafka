@@ -42,6 +42,9 @@ public class ExponentialBackoff {
         this.initialInterval = Math.min(maxInterval, initialInterval);
         this.multiplier = multiplier;
         this.maxInterval = maxInterval;
+        if (jitter < 0 || jitter > 1) {
+            throw new IllegalArgumentException("jitter must be between 0 and 1");
+        }
         this.jitter = jitter;
         this.expMax = maxInterval > initialInterval ?
                 Math.log(maxInterval / (double) Math.max(initialInterval, 1)) / Math.log(multiplier) : 0;
