@@ -45,7 +45,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
-import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -498,6 +497,7 @@ public class StreamsGroupTest {
 
         streamsGroup.setTopology(new StreamsTopology(1, Map.of()));
         streamsGroup.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
+        streamsGroup.setValidatedTopologyEpoch(1);
 
         assertEquals(MemberState.STABLE, member1.state());
         assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
@@ -694,6 +694,7 @@ public class StreamsGroupTest {
         );
         group.setGroupEpoch(1);
         group.setTopology(new StreamsTopology(1, Map.of()));
+        group.setValidatedTopologyEpoch(1);
         group.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
         group.setTargetAssignmentEpoch(1);
         group.updateMember(new StreamsGroupMember.Builder("member1")
@@ -760,6 +761,7 @@ public class StreamsGroupTest {
 
         streamsGroup.setTopology(new StreamsTopology(1, Map.of()));
         streamsGroup.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
+        streamsGroup.setValidatedTopologyEpoch(1);
 
         assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
         assertThrows(GroupNotEmptyException.class, streamsGroup::validateDeleteGroup);
@@ -805,6 +807,7 @@ public class StreamsGroupTest {
         group.setGroupEpoch(1);
         group.setTopology(new StreamsTopology(1, Map.of()));
         group.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
+        group.setValidatedTopologyEpoch(1);
         group.setTargetAssignmentEpoch(1);
         group.updateMember(new StreamsGroupMember.Builder("member1")
             .setMemberEpoch(1)
@@ -966,18 +969,7 @@ public class StreamsGroupTest {
         streamsGroup.setTopology(topology);
 
         streamsGroup.updateMember(streamsGroup.getOrCreateDefaultMember("member-id"));
-
-        assertFalse(streamsGroup.isSubscribedToTopic("test-topic1"));
-        assertFalse(streamsGroup.isSubscribedToTopic("test-topic2"));
-        assertFalse(streamsGroup.isSubscribedToTopic("non-existent-topic"));
-
-        MetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(Uuid.randomUuid(), "test-topic1", 1)
-            .addTopic(Uuid.randomUuid(), "test-topic2", 1)
-            .build();
-
-        streamsGroup.setConfiguredTopology(InternalTopicManager.configureTopics(logContext, 0, topology, new KRaftCoordinatorMetadataImage(metadataImage)));
-
+        
         assertTrue(streamsGroup.isSubscribedToTopic("test-topic1"));
         assertTrue(streamsGroup.isSubscribedToTopic("test-topic2"));
         assertFalse(streamsGroup.isSubscribedToTopic("non-existent-topic"));

@@ -29,7 +29,7 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew srcJar
 
 ### Build aggregated javadoc ###
-    ./gradlew aggregatedJavadoc
+    ./gradlew aggregatedJavadoc --no-parallel
 
 ### Build javadoc and scaladoc ###
     ./gradlew javadoc

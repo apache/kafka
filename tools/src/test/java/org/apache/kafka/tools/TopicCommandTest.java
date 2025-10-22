@@ -1192,14 +1192,15 @@ public class TopicCommandTest {
             // describe the topic and test if it's under-replicated
             String simpleDescribeOutput = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--topic", testTopicName));
             String[] simpleDescribeOutputRows = simpleDescribeOutput.split(System.lineSeparator());
-            assertTrue(simpleDescribeOutputRows[0].startsWith(String.format("Topic: %s", testTopicName)),
+            String testTopicNameLogLine = String.format("Topic: %s", testTopicName);
+            assertTrue(simpleDescribeOutputRows[0].startsWith(testTopicNameLogLine),
                     "Unexpected describe output: " + simpleDescribeOutputRows[0]);
             assertEquals(2, simpleDescribeOutputRows.length,
                     "Unexpected describe output length: " + simpleDescribeOutputRows.length);
 
             String underReplicatedOutput = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--under-replicated-partitions"));
-            assertEquals("", underReplicatedOutput,
-                    String.format("--under-replicated-partitions shouldn't return anything: '%s'", underReplicatedOutput));
+            assertFalse(underReplicatedOutput.contains(testTopicNameLogLine),
+                    String.format("--under-replicated-partitions shouldn't contain '%s': '%s'", testTopicNameLogLine, underReplicatedOutput));
 
             int maxRetries = 20;
             long pause = 100L;

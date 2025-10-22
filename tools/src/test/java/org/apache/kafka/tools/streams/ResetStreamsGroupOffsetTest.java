@@ -152,6 +152,7 @@ public class ResetStreamsGroupOffsetTest {
             getStreamsGroupService(args);
         } finally {
             assertTrue(exited.get());
+            Exit.resetExitProcedure();
         }
     }
 
@@ -168,6 +169,7 @@ public class ResetStreamsGroupOffsetTest {
             getStreamsGroupService(args);
         } finally {
             assertTrue(exited.get());
+            Exit.resetExitProcedure();
         }
     }
 
@@ -688,12 +690,12 @@ public class ResetStreamsGroupOffsetTest {
 
 
         TestUtils.waitForCondition(() -> streams.state().equals(KafkaStreams.State.RUNNING),
-            "Expected RUNNING state but streams is on " + streams.state());
+                () -> "Expected RUNNING state but streams is on " + streams.state());
 
 
         try {
             TestUtils.waitForCondition(() -> recordCount.get() == numOfCommittedMessages,
-                "Expected " + numOfCommittedMessages + " records processed but only got " + recordCount.get());
+                    () -> "Expected " + numOfCommittedMessages + " records processed but only got " + recordCount.get());
         } catch (final Exception e) {
             e.printStackTrace();
         } finally {

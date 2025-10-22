@@ -204,6 +204,51 @@ public class StreamsTopologyTest {
         assertEquals(0, describeTopology.subtopologies().size());
     }
 
+    @Test
+    public void sourceTopicMapShouldBeComputedCorrectly() {
+        Map<String, Subtopology> subtopologies = mkMap(
+            mkEntry(SUBTOPOLOGY_ID_1, mkSubtopology1()),
+            mkEntry(SUBTOPOLOGY_ID_2, mkSubtopology2())
+        );
+        StreamsTopology topology = new StreamsTopology(1, subtopologies);
+        
+        // Verify sourceTopicMap contains all source topics from both subtopologies
+        Map<String, Subtopology> sourceTopicMap = topology.sourceTopicMap();
+        
+        // From subtopology 1: SOURCE_TOPIC_1, SOURCE_TOPIC_2, REPARTITION_TOPIC_1, REPARTITION_TOPIC_2
+        // From subtopology 2: SOURCE_TOPIC_3, REPARTITION_TOPIC_3
+        assertEquals(6, sourceTopicMap.size());
+        
+        // Verify regular source topics
+        assertTrue(sourceTopicMap.containsKey(SOURCE_TOPIC_1));
+        assertEquals(mkSubtopology1(), sourceTopicMap.get(SOURCE_TOPIC_1));
+        assertTrue(sourceTopicMap.containsKey(SOURCE_TOPIC_2));
+        assertEquals(mkSubtopology1(), sourceTopicMap.get(SOURCE_TOPIC_2));
+        assertTrue(sourceTopicMap.containsKey(SOURCE_TOPIC_3));
+        assertEquals(mkSubtopology2(), sourceTopicMap.get(SOURCE_TOPIC_3));
+        
+        // Verify repartition source topics
+        assertTrue(sourceTopicMap.containsKey(REPARTITION_TOPIC_1));
+        assertEquals(mkSubtopology1(), sourceTopicMap.get(REPARTITION_TOPIC_1));
+        assertTrue(sourceTopicMap.containsKey(REPARTITION_TOPIC_2));
+        assertEquals(mkSubtopology1(), sourceTopicMap.get(REPARTITION_TOPIC_2));
+        assertTrue(sourceTopicMap.containsKey(REPARTITION_TOPIC_3));
+        assertEquals(mkSubtopology2(), sourceTopicMap.get(REPARTITION_TOPIC_3));
+    }
+
+    @Test
+    public void sourceTopicMapShouldBeImmutable() {
+        Map<String, Subtopology> subtopologies = mkMap(
+            mkEntry(SUBTOPOLOGY_ID_1, mkSubtopology1())
+        );
+        StreamsTopology topology = new StreamsTopology(1, subtopologies);
+        
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> topology.sourceTopicMap().put("test-topic", mkSubtopology1())
+        );
+    }
+
     private Subtopology mkSubtopology1() {
         return new Subtopology()
             .setSubtopologyId(SUBTOPOLOGY_ID_1)
