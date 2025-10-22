@@ -1970,6 +1970,7 @@ public class KafkaProducerTest {
         }
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testSendTxnOffsetsWithGroupId() {
         Map<String, Object> configs = new HashMap<>();
@@ -2187,6 +2188,7 @@ public class KafkaProducerTest {
         }
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testSendTxnOffsetsWithGroupMetadata() {
         final short maxVersion = (short) 3;
@@ -2241,6 +2243,7 @@ public class KafkaProducerTest {
         verifyInvalidGroupMetadata(null);
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testInvalidGenerationIdAndMemberIdCombinedInSendOffsets() {
         verifyInvalidGroupMetadata(new ConsumerGroupMetadata("group", 2, JoinGroupRequest.UNKNOWN_MEMBER_ID, Optional.empty()));
