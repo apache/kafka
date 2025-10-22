@@ -282,7 +282,6 @@ class PartitionGroup extends AbstractPartitionGroup {
         } else {
             logger.trace("Partition pulling nextRecord: no queue available");
         }
-        
         return record;
     }
 
