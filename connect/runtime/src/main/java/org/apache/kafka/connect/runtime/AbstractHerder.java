@@ -843,7 +843,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         try {
             connVersion = PluginUtils.connectorVersionRequirement(connectorProps.get(CONNECTOR_VERSION));
             connector = cachedConnectors.getConnector(connType, connVersion);
-            connectorLoader = plugins().pluginLoader(connType, connVersion);
+            connectorLoader = plugins().connectorLoader(connType, connVersion);
             log.info("Validating connector {}, version {}", connType, connector.version());
         } catch (VersionedPluginLoadingException e) {
             log.warn("Failed to load connector {} with version {}, skipping additional validations (connector, converters, transformations, client overrides) ",
