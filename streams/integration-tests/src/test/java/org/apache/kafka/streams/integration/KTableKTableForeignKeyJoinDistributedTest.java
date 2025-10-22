@@ -232,7 +232,7 @@ public class KTableKTableForeignKeyJoinDistributedTest {
     private void waitUntilBothClientAreOK(final String message) throws Exception {
         TestUtils.waitForCondition(() -> client1IsOk && client2IsOk,
                 30 * 1000,
-                message + ": "
+                () -> message + ": "
                         + "Client 1 is " + (!client1IsOk ? "NOT " : "") + "OK, "
                         + "client 2 is " + (!client2IsOk ? "NOT " : "") + "OK."
         );

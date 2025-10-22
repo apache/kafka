@@ -506,7 +506,7 @@ public class DeleteStreamsGroupTest {
             "The group did not become stable as expected."
         );
         TestUtils.waitForCondition(() -> recordCount.get() == RECORD_TOTAL,
-            "Expected " + RECORD_TOTAL + " records processed but only got " + recordCount.get());
+                () -> "Expected " + RECORD_TOTAL + " records processed but only got " + recordCount.get());
 
         return streams;
     }
