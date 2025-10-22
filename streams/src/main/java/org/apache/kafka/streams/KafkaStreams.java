@@ -1376,7 +1376,7 @@ public class KafkaStreams implements AutoCloseable {
     public synchronized void start() throws IllegalStateException, StreamsException {
         if (setState(State.REBALANCING)) {
             log.debug("Initializing STANDBY tasks for existing local state");
-            stateDirectory.initializeStartupTasks(topologyMetadata, streamsMetrics, logContext);
+            stateDirectory.initializeStartupTasks(topologyMetadata, logContext);
 
             log.debug("Starting Streams client");
 

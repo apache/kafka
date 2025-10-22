@@ -4669,14 +4669,16 @@ public class TaskManagerTest {
     public void shouldRecycleStartupTasksFromStateDirectoryAsActive() {
         final Tasks taskRegistry = new Tasks(new LogContext());
         final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, taskRegistry);
+        final StateDirectory.StartupState startupState = mock(StateDirectory.StartupState.class);
         final StandbyTask startupTask = standbyTask(taskId00, taskId00ChangelogPartitions).build();
 
         final StreamTask activeTask = statefulTask(taskId00, taskId00ChangelogPartitions).build();
         when(activeTaskCreator.createActiveTaskFromStandby(eq(startupTask), eq(taskId00Partitions), any()))
                 .thenReturn(activeTask);
+        when(standbyTaskCreator.createStandbyTaskFromStartupLocalStore(eq(taskId00), eq(taskId00Partitions), any(), any())).thenReturn(startupTask);
 
         when(stateDirectory.hasStartupTasks()).thenReturn(true, false);
-        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(startupTask, (Task) null);
+        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(startupState, (StateDirectory.StartupState) null);
 
         taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
 
@@ -4707,10 +4709,13 @@ public class TaskManagerTest {
     public void shouldUseStartupTasksFromStateDirectoryAsStandby() {
         final Tasks taskRegistry = new Tasks(new LogContext());
         final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, taskRegistry);
+        final StateDirectory.StartupState startupState = mock(StateDirectory.StartupState.class);
         final StandbyTask startupTask = standbyTask(taskId00, taskId00ChangelogPartitions).build();
+        when(standbyTaskCreator.createStandbyTaskFromStartupLocalStore(eq(taskId00), eq(taskId00Partitions), any(), any())).thenReturn(startupTask);
+
 
         when(stateDirectory.hasStartupTasks()).thenReturn(true, true, false);
-        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(startupTask, (Task) null);
+        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(startupState, (StateDirectory.StartupState) null);
 
         assertFalse(taskRegistry.hasPendingTasksToInit());
 

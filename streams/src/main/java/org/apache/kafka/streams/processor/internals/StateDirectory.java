@@ -17,16 +17,24 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
+import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -47,6 +55,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -112,7 +121,7 @@ public class StateDirectory implements AutoCloseable {
     private FileLock stateDirLock;
 
     private final StreamsConfig config;
-    private final ConcurrentMap<TaskId, Task> tasksForLocalState = new ConcurrentHashMap<>();
+    private final ConcurrentMap<TaskId, StartupState> tasksForLocalState = new ConcurrentHashMap<>();
 
     /**
      * Ensures that the state base directory as well as the application's sub-directory are created.
@@ -198,11 +207,9 @@ public class StateDirectory implements AutoCloseable {
     }
 
     public void initializeStartupTasks(final TopologyMetadata topologyMetadata,
-                                       final StreamsMetricsImpl streamsMetrics,
                                        final LogContext logContext) {
         final List<TaskDirectory> nonEmptyTaskDirectories = listNonEmptyTaskDirectories();
         if (hasPersistentStores && !nonEmptyTaskDirectories.isEmpty()) {
-            final ThreadCache dummyCache = new ThreadCache(logContext, 0, streamsMetrics);
             final boolean eosEnabled = StreamsConfigUtils.eosEnabled(config);
             final boolean stateUpdaterEnabled = StreamsConfig.InternalConfig.stateUpdaterEnabled(config.originals());
 
@@ -221,44 +228,23 @@ public class StateDirectory implements AutoCloseable {
                             .map(t -> new TopicPartition(t, id.partition()))
                             .collect(Collectors.toSet());
                     final ProcessorStateManager stateManager = ProcessorStateManager.createStartupTaskStateManager(
-                        id,
-                        eosEnabled,
-                        logContext,
-                        this,
-                        subTopology.storeToChangelogTopic(),
-                        inputPartitions,
-                        stateUpdaterEnabled
+                            id,
+                            eosEnabled,
+                            logContext,
+                            this,
+                            subTopology.storeToChangelogTopic(),
+                            inputPartitions,
+                            stateUpdaterEnabled
                     );
-
-                    final InternalProcessorContext<Object, Object> context = new ProcessorContextImpl(
-                        id,
-                        config,
-                        stateManager,
-                        streamsMetrics,
-                        dummyCache
-                    );
-
-                    final Task task = new StandbyTask(
-                        id,
-                        inputPartitions,
-                        subTopology,
-                        topologyMetadata.taskConfig(id),
-                        streamsMetrics,
-                        stateManager,
-                        this,
-                        dummyCache,
-                        context
-                    );
-
-                    try {
-                        task.initializeIfNeeded();
-
-                        tasksForLocalState.put(id, task);
-                    } catch (final TaskCorruptedException e) {
-                        // Task is corrupt - wipe it out (under EOS) and don't initialize a Standby for it
-                        task.suspend();
-                        task.closeDirty();
+                    final StartupContext initContext = new StartupContext(id, config, stateManager);
+                    // TODO: we need to pass a proper logPrefix
+                    StateManagerUtil.registerStateStores(log, "", subTopology, stateManager, this, initContext);
+                    for (final StateStore stateStore : subTopology.stateStores()) {
+                        if (!stateStore.isOpen()) {
+                            throw new IllegalStateException("StateStore [" + stateStore.name() + "] is not open");
+                        }
                     }
+                    tasksForLocalState.put(id, new StartupState(id, subTopology, stateManager));
                 }
             }
         }
@@ -268,8 +254,8 @@ public class StateDirectory implements AutoCloseable {
         return !tasksForLocalState.isEmpty();
     }
 
-    public Task removeStartupTask(final TaskId taskId) {
-        final Task task = tasksForLocalState.remove(taskId);
+    public StartupState removeStartupTask(final TaskId taskId) {
+        final StartupState task = tasksForLocalState.remove(taskId);
         if (task != null) {
             lockedTasksToOwner.replace(taskId, Thread.currentThread());
         }
@@ -280,11 +266,11 @@ public class StateDirectory implements AutoCloseable {
         closeStartupTasks(t -> true);
     }
 
-    private void closeStartupTasks(final Predicate<Task> predicate) {
+    private void closeStartupTasks(final Predicate<StartupState> predicate) {
         if (!tasksForLocalState.isEmpty()) {
             // "drain" Tasks first to ensure that we don't try to close Tasks that another thread is attempting to close
-            final Set<Task> drainedTasks = new HashSet<>(tasksForLocalState.size());
-            for (final Map.Entry<TaskId, Task> entry : tasksForLocalState.entrySet()) {
+            final Set<StartupState> drainedTasks = new HashSet<>(tasksForLocalState.size());
+            for (final Map.Entry<TaskId, StartupState> entry : tasksForLocalState.entrySet()) {
                 if (predicate.test(entry.getValue()) && removeStartupTask(entry.getKey()) != null) {
                     // only add to our list of drained Tasks if we exclusively "claimed" a Task from tasksForLocalState
                     // to ensure we don't accidentally try to drain the same Task multiple times from concurrent threads
@@ -293,9 +279,8 @@ public class StateDirectory implements AutoCloseable {
             }
 
             // now that we have exclusive ownership of the drained tasks, close them
-            for (final Task task : drainedTasks) {
-                task.suspend();
-                task.closeClean();
+            for (final StartupState localState : drainedTasks) {
+                localState.close();
             }
         }
     }
@@ -624,7 +609,7 @@ public class StateDirectory implements AutoCloseable {
         );
         if (namedTopologyDirs != null) {
             for (final File namedTopologyDir : namedTopologyDirs) {
-                closeStartupTasks(task -> task.id().topologyName().equals(parseNamedTopologyFromDirectory(namedTopologyDir.getName())));
+                closeStartupTasks(localState -> localState.getTaskId().topologyName().equals(parseNamedTopologyFromDirectory(namedTopologyDir.getName())));
                 final File[] contents = namedTopologyDir.listFiles();
                 if (contents != null && contents.length == 0) {
                     try {
@@ -662,7 +647,7 @@ public class StateDirectory implements AutoCloseable {
             log.debug("Tried to clear out the local state for NamedTopology {} but none was found", topologyName);
         }
         try {
-            closeStartupTasks(task -> task.id().topologyName().equals(topologyName));
+            closeStartupTasks(localState -> localState.getTaskId().topologyName().equals(topologyName));
             Utils.delete(namedTopologyDir);
         } catch (final IOException e) {
             log.error("Hit an unexpected error while clearing local state for topology " + topologyName, e);
@@ -804,6 +789,131 @@ public class StateDirectory implements AutoCloseable {
         @Override
         public int hashCode() {
             return Objects.hash(file, namedTopology);
+        }
+    }
+
+    public class StartupState {
+        private final ProcessorTopology topology;
+        private final ProcessorStateManager stateMngr;
+        private final TaskId taskId;
+
+        public StartupState(final TaskId taskId, final ProcessorTopology topology, final ProcessorStateManager stateMngr) {
+            this.topology = topology;
+            this.stateMngr = stateMngr;
+            this.taskId = taskId;
+        }
+
+        public ProcessorStateManager getStateMngr() {
+            return stateMngr;
+        }
+
+        public ProcessorTopology getTopology() {
+            return topology;
+        }
+
+        public TaskId getTaskId() {
+            return taskId;
+        }
+
+        public void close() {
+            if (lock(taskId)) {
+                try {
+                    stateMngr.close();
+                } finally {
+                    unlock(taskId);
+                }
+            }
+        }
+    }
+
+    private static class StartupContext extends AbstractProcessorContext<Object, Object> {
+
+        private final StateManager stateManager;
+
+        public StartupContext(final TaskId taskId, final StreamsConfig config, final StateManager stateManager) {
+            super(taskId, config, null, null);
+            this.stateManager = stateManager;
+        }
+
+        @Override
+        protected StateManager stateManager() {
+            return stateManager;
+        }
+
+        @Override
+        public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public void transitionToStandby(final ThreadCache newCache) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public void registerCacheFlushListener(final String namespace, final ThreadCache.DirtyEntryFlushListener listener) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public void logChange(final String storeName, final Bytes key, final byte[] value, final long timestamp, final Position position) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public <K, V> void forward(final K key, final V value) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public <K, V> void forward(final K key, final V value, final To to) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public void commit() {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public long currentStreamTimeMs() {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public StreamsMetricsImpl metrics() {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public <S extends StateStore> S getStateStore(final String name) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+
+        @Override
+        public <K, V> void forward(final FixedKeyRecord<K, V> record) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public <K, V> void forward(final FixedKeyRecord<K, V> record, final String childName) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public <K, V> void forward(final Record<K, V> record) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public <K, V> void forward(final Record<K, V> record, final String childName) {
+            throw new IllegalStateException("Should not be called");
         }
     }
 }

@@ -208,6 +208,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         context = getProcessorContext(RecordingLevel.INFO);
 
         rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+        rocksDBStore.init(context, rocksDBStore);
 
         verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
     }
@@ -218,6 +219,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         context = getProcessorContext(RecordingLevel.DEBUG);
 
         rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+        rocksDBStore.init(context, rocksDBStore);
 
         verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), notNull());
     }
@@ -227,7 +229,9 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         try {
             context = getProcessorContext(RecordingLevel.DEBUG);
+
             rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+            rocksDBStore.init(context, rocksDBStore);
         } finally {
             rocksDBStore.close();
         }
@@ -259,6 +263,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         context = getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedStatistics.class);
 
         rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+        rocksDBStore.init(context, rocksDBStore);
 
         verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
     }
@@ -287,6 +292,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         context = getProcessorContext(RecordingLevel.DEBUG);
 
         rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+        rocksDBStore.init(context, rocksDBStore);
 
         verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), eq(getStatistics(rocksDBStore)));
     }
@@ -325,9 +331,10 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             RecordingLevel.DEBUG,
             RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig.class
         );
+        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
         assertThrows(
             ProcessorStateException.class,
-            () -> rocksDBStore.openDB(context.appConfigs(), context.stateDir()),
+            () -> rocksDBStore.init(context, rocksDBStore),
             "The used block-based table format configuration does not expose the " +
                     "block cache. Use the BlockBasedTableConfig instance provided by Options#tableFormatConfig() to configure " +
                     "the block-based table format of RocksDB. Do not provide a new instance of BlockBasedTableConfig to " +
@@ -356,6 +363,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         );
 
         rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+        rocksDBStore.init(context, rocksDBStore);
 
         verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), isNull(), notNull());
     }

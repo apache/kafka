@@ -57,6 +57,11 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
     }
 
     @Override
+    public void preInit(StateStoreContext stateStoreContext) {
+        closed = false;
+    }
+
+    @Override
     public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
         stateStoreContext.register(root, stateRestoreCallback);

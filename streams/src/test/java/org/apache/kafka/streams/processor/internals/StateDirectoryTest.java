@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -28,7 +27,6 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.TestUtils;
@@ -844,15 +842,15 @@ public class StateDirectoryTest {
     public void shouldNotAssignStartupTasksWeDontHave() {
         final TaskId taskId = new TaskId(0, 0);
         initializeStartupTasks(taskId, false);
-        final Task task = directory.removeStartupTask(taskId);
+        final StateDirectory.StartupState task = directory.removeStartupTask(taskId);
         assertNull(task);
     }
 
     private class FakeStreamThread extends Thread {
         private final TaskId taskId;
-        private final AtomicReference<Task> result;
+        private final AtomicReference<StateDirectory.StartupState> result;
 
-        private FakeStreamThread(final TaskId taskId, final AtomicReference<Task> result) {
+        private FakeStreamThread(final TaskId taskId, final AtomicReference<StateDirectory.StartupState> result) {
             this.taskId = taskId;
             this.result = result;
         }
@@ -873,14 +871,13 @@ public class StateDirectoryTest {
         assertThat(directory.lockOwner(taskId), is(Thread.currentThread()));
 
         // spawn off a "fake" StreamThread, so we can verify the lock was updated to the correct thread
-        final AtomicReference<Task> result = new AtomicReference<>();
+        final AtomicReference<StateDirectory.StartupState> result = new AtomicReference<>();
         final Thread streamThread = new FakeStreamThread(taskId, result);
         streamThread.start();
         streamThread.join();
-        final Task task = result.get();
+        final StateDirectory.StartupState localState = result.get();
 
-        assertNotNull(task);
-        assertThat(task, instanceOf(StandbyTask.class));
+        assertNotNull(localState);
 
         // verify the owner of the task directory lock has been shifted over to our assigned StreamThread
         assertThat(directory.lockOwner(taskId), is(instanceOf(FakeStreamThread.class)));
@@ -954,7 +951,7 @@ public class StateDirectoryTest {
         Mockito.when(metadata.buildSubtopology(ArgumentMatchers.any())).thenReturn(processorTopology);
         Mockito.when(metadata.taskConfig(ArgumentMatchers.any())).thenReturn(topologyConfig.getTaskConfig());
 
-        directory.initializeStartupTasks(metadata, new StreamsMetricsImpl(new Metrics(), "test", "processId", time), new LogContext("test"));
+        directory.initializeStartupTasks(metadata, new LogContext("test"));
 
         return store;
     }

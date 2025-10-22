@@ -49,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
@@ -176,6 +177,7 @@ public class ProcessorStateManager implements StateManager {
 
     // must be maintained in topological order
     private final FixedOrderMap<String, StateStoreMetadata> stores = new FixedOrderMap<>();
+    private final Map<String, StateStore> startupStores = new HashMap<>();
     private final FixedOrderMap<String, StateStore> globalStores = new FixedOrderMap<>();
 
     private final File baseDir;
@@ -185,6 +187,7 @@ public class ProcessorStateManager implements StateManager {
     private TaskType taskType;
     private Logger log;
     private Task.State taskState;
+    private final AtomicBoolean startupState;
 
     public static String storeChangelogTopic(final String prefix, final String storeName, final String namedTopology) {
         if (namedTopology == null) {
@@ -205,7 +208,8 @@ public class ProcessorStateManager implements StateManager {
                                  final ChangelogRegister changelogReader,
                                  final Map<String, String> storeToChangelogTopic,
                                  final Collection<TopicPartition> sourcePartitions,
-                                 final boolean stateUpdaterEnabled) throws ProcessorStateException {
+                                 final boolean stateUpdaterEnabled,
+                                 final boolean startupState) throws ProcessorStateException {
         this.storeToChangelogTopic = storeToChangelogTopic;
         this.log = logContext.logger(ProcessorStateManager.class);
         this.logPrefix = logContext.logPrefix();
@@ -220,6 +224,22 @@ public class ProcessorStateManager implements StateManager {
         this.checkpointFile = new OffsetCheckpoint(stateDirectory.checkpointFileFor(taskId));
 
         log.debug("Created state store manager for task {}", taskId);
+        this.startupState = new AtomicBoolean(startupState);
+    }
+
+    /**
+     * @throws ProcessorStateException if the task directory does not exist and could not be created
+     */
+    public ProcessorStateManager(final TaskId taskId,
+                                 final TaskType taskType,
+                                 final boolean eosEnabled,
+                                 final LogContext logContext,
+                                 final StateDirectory stateDirectory,
+                                 final ChangelogRegister changelogReader,
+                                 final Map<String, String> storeToChangelogTopic,
+                                 final Collection<TopicPartition> sourcePartitions,
+                                 final boolean stateUpdaterEnabled) throws ProcessorStateException {
+        this(taskId, taskType, eosEnabled, logContext, stateDirectory, changelogReader, storeToChangelogTopic, sourcePartitions, stateUpdaterEnabled, false);
     }
 
     /**
@@ -234,7 +254,7 @@ public class ProcessorStateManager implements StateManager {
                                                                final Map<String, String> storeToChangelogTopic,
                                                                final Set<TopicPartition> sourcePartitions,
                                                                final boolean stateUpdaterEnabled) {
-        return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, logContext, stateDirectory, null, storeToChangelogTopic, sourcePartitions, stateUpdaterEnabled);
+        return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, logContext, stateDirectory, null, storeToChangelogTopic, sourcePartitions, stateUpdaterEnabled, true);
     }
 
     /**
@@ -255,6 +275,10 @@ public class ProcessorStateManager implements StateManager {
         this.sourcePartitions.addAll(sourcePartitions);
     }
 
+    void reuseState() {
+        startupState.set(false);
+    }
+
     void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext<?, ?> processorContext) {
         processorContext.uninitialize();
         for (final StateStore store : allStores) {
@@ -263,7 +287,13 @@ public class ProcessorStateManager implements StateManager {
                     maybeRegisterStoreWithChangelogReader(store.name());
                 }
             } else {
-                store.init(processorContext, store);
+                if (startupState.get()) {
+                    store.preInit(processorContext);
+                    startupStores.put(store.name(), store);
+                } else {
+                    store.init(processorContext, store);
+                    startupStores.remove(store.name());
+                }
             }
             log.trace("Registered state store {}", store.name());
         }
@@ -649,8 +679,18 @@ public class ProcessorStateManager implements StateManager {
                 }
             }
 
+
             stores.clear();
         }
+
+        if (!startupStores.isEmpty()) {
+            for (final Map.Entry<String, StateStore> entry : startupStores.entrySet()) {
+                final StateStore store = entry.getValue();
+                store.close();
+            }
+            startupStores.clear();
+        }
+
 
         if (firstException != null) {
             throw firstException;

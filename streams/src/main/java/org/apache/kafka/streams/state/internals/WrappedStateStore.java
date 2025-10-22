@@ -59,6 +59,11 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
     }
 
     @Override
+    public void preInit(final StateStoreContext stateStoreContext) {
+        wrapped.preInit(stateStoreContext);
+    }
+
+    @Override
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         wrapped.init(stateStoreContext, root);
     }
