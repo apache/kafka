@@ -175,7 +175,7 @@
     <suppress checks="ClassFanOutComplexity"
               files="(WorkerSink|WorkerSource|ErrorHandling)Task(|WithTopicCreation|Mockito)Test.java"/>
     <suppress checks="ClassFanOutComplexity"
-              files="DistributedHerderTest.java"/>
+              files="(AbstractHerderTest|DistributedHerderTest).java"/>
 
     <suppress checks="MethodLength"
               files="(RequestResponse|WorkerSinkTask|WorkerSinkTaskMockito)Test.java"/>

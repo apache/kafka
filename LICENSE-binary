@@ -253,7 +253,7 @@ License Version 2.0:
 - scala-reflect-2.13.17
 - snappy-java-1.1.10.7
 - snakeyaml-2.4
-- swagger-annotations-2.2.25
+- swagger-annotations-2.2.39
 
 ===============================================================================
 This product bundles various third-party components under other open source
