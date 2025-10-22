@@ -46,16 +46,6 @@ public class BackgroundEventHandler {
     }
 
     /**
-     * Returns the current size of the queue. Used by the background thread to determine if it needs to <i>pause</i>
-     * itself to return to the application thread for processing.
-     *
-     * @return Current size of queue
-     */
-    public int size() {
-        return backgroundEventQueue.size();
-    }
-
-    /**
      * Add a {@link BackgroundEvent} to the handler.
      *
      * @param event A {@link BackgroundEvent} created by the {@link ConsumerNetworkThread network thread}
