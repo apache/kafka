@@ -26,13 +26,4 @@ public record FetchPartitionStatus(
     LogOffsetMetadata startOffsetMetadata,
     PartitionData fetchInfo
 ) {
-
-    @Override
-    public String toString() {
-        return String.format(
-            "FetchPartitionStatus(startOffsetMetadata: %s, fetchInfo: %s)",
-            startOffsetMetadata,
-            fetchInfo
-        );
-    }
 }

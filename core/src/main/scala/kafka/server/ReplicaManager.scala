@@ -188,7 +188,7 @@ object ReplicaManager {
       -1L,
       -1L,
       OptionalLong.empty(),
-      Optional.of(e))
+      Errors.forException(e));
   }
 
   private[server] def isListOffsetsTimestampUnsupported(timestamp: JLong, version: Short): Boolean = {
@@ -1807,7 +1807,7 @@ class ReplicaManager(val config: KafkaConfig,
             -1L,
             OptionalLong.of(offsetSnapshot.lastStableOffset.messageOffset),
             if (preferredReadReplica.isDefined) OptionalInt.of(preferredReadReplica.get) else OptionalInt.empty(),
-            Optional.empty())
+            Errors.NONE)
         } else {
           log = partition.localLogWithEpochOrThrow(fetchInfo.currentLeaderEpoch, params.fetchOnlyLeader())
 
@@ -1831,7 +1831,7 @@ class ReplicaManager(val config: KafkaConfig,
             fetchTimeMs,
             OptionalLong.of(readInfo.lastStableOffset),
             if (preferredReadReplica.isDefined) OptionalInt.of(preferredReadReplica.get) else OptionalInt.empty(),
-            Optional.empty()
+            Errors.NONE
           )
         }
       } catch {
@@ -1844,7 +1844,7 @@ class ReplicaManager(val config: KafkaConfig,
                  _: ReplicaNotAvailableException |
                  _: KafkaStorageException |
                  _: InconsistentTopicIdException) =>
-          new LogReadResult(e)
+          new LogReadResult(Errors.forException(e))
         case e: OffsetOutOfRangeException =>
           handleOffsetOutOfRangeError(tp, params, fetchInfo, adjustedMaxBytes, minOneMessage, log, fetchTimeMs, e)
         case e: Throwable =>
@@ -1863,7 +1863,7 @@ class ReplicaManager(val config: KafkaConfig,
             UnifiedLog.UNKNOWN_OFFSET,
             -1L,
             OptionalLong.empty(),
-            Optional.of(e)
+            Errors.forException(e)
           )
       }
     }
@@ -1944,10 +1944,10 @@ class ReplicaManager(val config: KafkaConfig,
           fetchInfo.logStartOffset,
           fetchTimeMs,
           OptionalLong.of(log.lastStableOffset),
-          Optional.empty[Throwable]())
+          Errors.NONE)
       }
     } else {
-      new LogReadResult(exception)
+      new LogReadResult(Errors.forException(exception))
     }
   }
 

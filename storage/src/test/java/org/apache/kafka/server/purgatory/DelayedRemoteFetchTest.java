@@ -469,7 +469,7 @@ public class DelayedRemoteFetchTest {
             -1L,
             -1L,
             OptionalLong.empty(),
-            error != Errors.NONE ? Optional.of(error.exception()) : Optional.empty());
+            error);
     }
 
     private RemoteLogReadResult buildRemoteReadResult(Errors error) {

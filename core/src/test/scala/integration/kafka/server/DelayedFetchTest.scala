@@ -264,7 +264,7 @@ class DelayedFetchTest {
       -1L,
       -1L,
       OptionalLong.empty(),
-      if (error != Errors.NONE) Optional.of[Throwable](error.exception) else Optional.empty[Throwable]())
+      error)
   }
 
 }

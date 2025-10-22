@@ -38,7 +38,7 @@ import java.util.OptionalLong;
  * @param fetchTimeMs The time the fetch was received
  * @param lastStableOffset Current LSO or None if the result has an exception
  * @param preferredReadReplica the preferred read replica to be used for future fetches
- * @param exception Exception if error encountered while reading from the log
+ * @param error Errors if error encountered while reading from the log
  */
 public record LogReadResult(
     FetchDataInfo info,
@@ -50,7 +50,7 @@ public record LogReadResult(
     long fetchTimeMs,
     OptionalLong lastStableOffset,
     OptionalInt preferredReadReplica,
-    Optional<Throwable> exception
+    Errors error
 ) {
     public LogReadResult(
         FetchDataInfo info,
@@ -61,12 +61,12 @@ public record LogReadResult(
         long followerLogStartOffset,
         long fetchTimeMs,
         OptionalLong lastStableOffset,
-        Optional<Throwable> exception) {
+        Errors error) {
         this(info, divergingEpoch, highWatermark, leaderLogStartOffset, leaderLogEndOffset, followerLogStartOffset,
-            fetchTimeMs, lastStableOffset, OptionalInt.empty(), exception);
+            fetchTimeMs, lastStableOffset, OptionalInt.empty(), error);
     }
 
-    public LogReadResult(Throwable e) {
+    public LogReadResult(Errors error) {
         this(new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
             Optional.empty(),
             UnifiedLog.UNKNOWN_OFFSET,
@@ -75,28 +75,7 @@ public record LogReadResult(
             UnifiedLog.UNKNOWN_OFFSET,
             -1L,
             OptionalLong.empty(),
-            Optional.of(e));
-    }
-
-    public Errors error() {
-        if (exception.isPresent()) {
-            return Errors.forException(exception.get());
-        }
-        return Errors.NONE;
-    }
-
-    @Override
-    public String toString() {
-        return "LogReadResult(info=" + info +
-               ", divergingEpoch=" + divergingEpoch +
-               ", highWatermark=" + highWatermark +
-               ", leaderLogStartOffset" + leaderLogStartOffset +
-               ", leaderLogEndOffset" + leaderLogEndOffset +
-               ", followerLogStartOffset" + followerLogStartOffset +
-               ", fetchTimeMs=" + fetchTimeMs +
-               ", preferredReadReplica=" + preferredReadReplica +
-               ", lastStableOffset=" + lastStableOffset +
-               ", error=" + error() + ")";
+            error);
     }
 
     public FetchPartitionData toFetchPartitionData(boolean isReassignmentFetch) {

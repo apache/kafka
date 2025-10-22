@@ -38,11 +38,10 @@ import com.yammer.metrics.core.Meter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -139,13 +138,11 @@ public class DelayedRemoteFetch extends DelayedOperation {
     public void onExpiration() {
         // cancel the remote storage read task, if it has not been executed yet and
         // avoid interrupting the task if it is already running as it may force closing opened/cached resources as transaction index.
-        remoteFetchTasks.forEach(((topicIdPartition, task) -> {
-            if (task != null && !task.isDone()) {
-                if (!task.cancel(false)) {
-                    LOG.debug("Remote fetch task for remoteFetchInfo: {} could not be cancelled.", remoteFetchInfos.get(topicIdPartition));
-                }
+        remoteFetchTasks.forEach((topicIdPartition, task) -> {
+            if (task != null && !task.isDone() && !task.cancel(false)) {
+                LOG.debug("Remote fetch task for remoteFetchInfo: {} could not be cancelled.", remoteFetchInfos.get(topicIdPartition));
             }
-        }));
+        });
 
         EXPIRED_REQUEST_METER.mark();
     }
@@ -155,48 +152,41 @@ public class DelayedRemoteFetch extends DelayedOperation {
      */
     @Override
     public void onComplete() {
-        Map<TopicIdPartition, FetchPartitionData> fetchPartitionData = new HashMap<>();
-        try {
-            for (Map.Entry<TopicIdPartition, LogReadResult> entry : localReadResults.entrySet()) {
-                TopicIdPartition tp = entry.getKey();
-                LogReadResult result = entry.getValue();
+        Map<TopicIdPartition, FetchPartitionData> fetchPartitionData = new LinkedHashMap<>();
+        localReadResults.forEach((tpId, result) -> {
+            CompletableFuture<RemoteLogReadResult> remoteFetchResult = remoteFetchResults.get(tpId);
+            if (remoteFetchInfos.containsKey(tpId)
+                && remoteFetchResult.isDone()
+                && result.error() == Errors.NONE
+                && result.info().delayedRemoteStorageFetch.isPresent()) {
 
-                CompletableFuture<RemoteLogReadResult> remoteFetchResult = remoteFetchResults.get(tp);
-                if (remoteFetchInfos.containsKey(tp)
-                    && remoteFetchResult.isDone()
-                    && result.error() == Errors.NONE
-                    && result.info().delayedRemoteStorageFetch.isPresent()) {
-
-                    if (remoteFetchResult.get().error().isPresent()) {
-                        fetchPartitionData.put(tp,
-                            new LogReadResult(remoteFetchResult.get().error().get()).toFetchPartitionData(false));
-                    } else {
-                        FetchDataInfo info = remoteFetchResult.get().fetchDataInfo().get();
-                        fetchPartitionData.put(tp,
-                            new FetchPartitionData(
-                                result.error(),
-                                result.highWatermark(),
-                                result.leaderLogStartOffset(),
-                                info.records,
-                                Optional.empty(),
-                                result.lastStableOffset(),
-                                info.abortedTransactions,
-                                result.preferredReadReplica(),
-                                false));
-                    }
+                if (remoteFetchResult.join().error().isPresent()) {
+                    fetchPartitionData.put(tpId,
+                        new LogReadResult(Errors.forException(remoteFetchResult.join().error().get())).toFetchPartitionData(false));
                 } else {
-                    fetchPartitionData.put(tp, result.toFetchPartitionData(false));
+                    FetchDataInfo info = remoteFetchResult.join().fetchDataInfo().get();
+                    fetchPartitionData.put(tpId,
+                        new FetchPartitionData(
+                            result.error(),
+                            result.highWatermark(),
+                            result.leaderLogStartOffset(),
+                            info.records,
+                            Optional.empty(),
+                            result.lastStableOffset(),
+                            info.abortedTransactions,
+                            result.preferredReadReplica(),
+                            false));
                 }
+            } else {
+                fetchPartitionData.put(tpId, result.toFetchPartitionData(false));
             }
-        } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException(e);
-        }
+        });
 
         responseCallback.accept(fetchPartitionData);
     }
 
     // Visible for testing
-    public static Meter expiredRequestMeter() {
-        return EXPIRED_REQUEST_METER;
+    public static long expiredRequestCount() {
+        return EXPIRED_REQUEST_METER.count();
     }
 }

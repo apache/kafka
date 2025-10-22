@@ -3575,13 +3575,13 @@ class ReplicaManagerTest {
         mock(classOf[FetchDataInfo])
       }).when(spyRLM).read(any())
 
-      val curExpiresPerSec = DelayedRemoteFetch.expiredRequestMeter().count()
+      val curExpiresPerSec = DelayedRemoteFetch.expiredRequestCount()
       replicaManager.fetchMessages(params, Seq(tidp0 -> new PartitionData(topicId, fetchOffset, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UNBOUNDED_QUOTA, fetchCallback)
       // advancing the clock to expire the delayed remote fetch
       timer.advanceClock(2000L)
 
       // verify the DelayedRemoteFetchMetrics.expiredRequestMeter.mark is called since the delayed remote fetch is expired
-      TestUtils.waitUntilTrue(() => (curExpiresPerSec + 1) == DelayedRemoteFetch.expiredRequestMeter().count(), "DelayedRemoteFetchMetrics.expiredRequestMeter.count() should be 1, but got: " + DelayedRemoteFetch.expiredRequestMeter().count(), 10000L)
+      TestUtils.waitUntilTrue(() => (curExpiresPerSec + 1) == DelayedRemoteFetch.expiredRequestCount(), "DelayedRemoteFetchMetrics.expiredRequestMeter.count() should be 1, but got: " + DelayedRemoteFetch.expiredRequestCount(), 10000L)
       latch.countDown()
     } finally {
       Utils.tryAll(util.Arrays.asList[Callable[Void]](

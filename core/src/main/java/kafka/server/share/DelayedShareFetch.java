@@ -852,13 +852,12 @@ public class DelayedShareFetch extends DelayedOperation {
                 if (remoteFetch.remoteFetchResult().isDone()) {
                     RemoteLogReadResult remoteLogReadResult = remoteFetch.remoteFetchResult().get();
                     if (remoteLogReadResult.error().isPresent()) {
-                        Throwable error = remoteLogReadResult.error().get();
                         // If there is any error for the remote fetch topic partition, we populate the error accordingly.
                         shareFetchPartitionData.add(
                             new ShareFetchPartitionData(
                                 remoteFetch.topicIdPartition(),
                                 partitionsAcquired.get(remoteFetch.topicIdPartition()),
-                                new LogReadResult(error).toFetchPartitionData(false)
+                                new LogReadResult(Errors.forException(remoteLogReadResult.error().get())).toFetchPartitionData(false)
                             )
                         );
                     } else {
