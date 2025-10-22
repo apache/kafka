@@ -16,12 +16,18 @@
  */
 package org.apache.kafka.common.header;
 
+
+/**
+ * A mutable ordered collection of {@link Header} objects. Note that multiple headers may have the same {@link Header#key() key}.
+ * <p>
+ * The order of headers is preserved in the order they were added.
+ */
 public interface Headers extends Iterable<Header> {
     
     /**
      * Adds a header (key inside), to the end, returning if the operation succeeded.
      * 
-     * @param header the Header to be added
+     * @param header the Header to be added.
      * @return this instance of the Headers, once the header is added.
      * @throws IllegalStateException is thrown if headers are in a read-only state.
      */
@@ -30,17 +36,18 @@ public interface Headers extends Iterable<Header> {
     /**
      * Creates and adds a header, to the end, returning if the operation succeeded.
      *
-     * @param key of the header to be added.
-     * @param value of the header to be added.
+     * @param key of the header to be added; must not be null.
+     * @param value of the header to be added; may be null.
      * @return this instance of the Headers, once the header is added.
      * @throws IllegalStateException is thrown if headers are in a read-only state.
      */
     Headers add(String key, byte[] value) throws IllegalStateException;
 
     /**
-     * Removes all headers for the given key returning if the operation succeeded.
+     * Removes all headers for the given key returning if the operation succeeded,
+     * while preserving the insertion order of the remaining headers.
      * 
-     * @param key to remove all headers for.
+     * @param key to remove all headers for; must not be null.
      * @return this instance of the Headers, once the header is removed.
      * @throws IllegalStateException is thrown if headers are in a read-only state.
      */
@@ -49,16 +56,17 @@ public interface Headers extends Iterable<Header> {
     /**
      * Returns just one (the very last) header for the given key, if present.
      * 
-     * @param key to get the last header for.
+     * @param key to get the last header for; must not be null.
      * @return this last header matching the given key, returns null if not present.
      */
     Header lastHeader(String key);
 
     /**
      * Returns all headers for the given key, in the order they were added in, if present.
+     * The iterator does not support {@link java.util.Iterator#remove()}.
      *
-     * @param key to return the headers for.
-     * @return all headers for the given key, in the order they were added in, if NO headers are present an empty iterable is returned. 
+     * @param key to return the headers for; must not be null.
+     * @return all headers for the given key, in the order they were added in, if NO headers are present an empty iterable is returned.
      */
     Iterable<Header> headers(String key);
 

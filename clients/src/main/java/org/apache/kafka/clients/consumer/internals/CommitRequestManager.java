@@ -181,6 +181,14 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         // poll when the coordinator node is known and fatal error is not present
         if (coordinatorRequestManager.coordinator().isEmpty()) {
             pendingRequests.maybeFailOnCoordinatorFatalError();
+
+            if (closing && pendingRequests.hasUnsentRequests()) {
+                CommitFailedException exception = new CommitFailedException(
+                        "Failed to commit offsets: Coordinator unknown and consumer is closing");
+                pendingRequests.drainPendingCommits()
+                        .forEach(request -> request.future().completeExceptionally(exception));
+            }
+
             return EMPTY;
         }
 

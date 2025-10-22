@@ -230,7 +230,10 @@ class KafkaRequestHandlerPool(
   numThreads: Int,
   nodeName: String
 ) extends Logging {
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+  private val metricsPackage = "kafka.server"
+  private val metricsClassName = "KafkaRequestHandlerPool"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   val threadPoolSize: AtomicInteger = new AtomicInteger(numThreads)
   private val perPoolIdleMeterName = if (nodeName == "broker") {
