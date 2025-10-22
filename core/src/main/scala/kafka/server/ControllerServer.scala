@@ -288,7 +288,8 @@ class ControllerServer(
         controllerApis,
         time,
         config.numIoThreads,
-        "controller")
+        "controller"
+      )
 
       // Set up the metadata cache publisher.
       metadataPublishers.add(metadataCachePublisher)

@@ -470,7 +470,9 @@ class BrokerServer(
         socketServer.dataPlaneRequestChannel,
         dataPlaneRequestProcessor,
         time,
-        config.numIoThreads)
+        config.numIoThreads,
+        "broker"
+      )
 
       metadataPublishers.add(new MetadataVersionConfigValidator(config, sharedServer.metadataPublishingFaultHandler))
       brokerMetadataPublisher = new BrokerMetadataPublisher(config,

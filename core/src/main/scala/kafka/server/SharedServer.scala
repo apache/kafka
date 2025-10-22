@@ -115,6 +115,7 @@ class SharedServer(
   
   // Factory for creating request handler pools with shared aggregate thread counter
   val requestHandlerPoolFactory = new KafkaRequestHandlerPoolFactory()
+
   @volatile var metrics: Metrics = _metrics
   @volatile var raftManager: KafkaRaftManager[ApiMessageAndVersion] = _
   @volatile var brokerMetrics: BrokerServerMetrics = _

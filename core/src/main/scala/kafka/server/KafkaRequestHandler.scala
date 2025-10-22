@@ -95,7 +95,7 @@ class KafkaRequestHandler(
   val requestChannel: RequestChannel,
   apis: ApiRequestHandler,
   time: Time,
-  nodeName: String = "broker"
+  nodeName: String
 ) extends Runnable with Logging {
   this.logIdent = s"[Kafka Request Handler $id on ${nodeName.capitalize} $brokerId] "
   private val shutdownComplete = new CountDownLatch(1)
@@ -211,7 +211,7 @@ class KafkaRequestHandlerPoolFactory {
     apis: ApiRequestHandler,
     time: Time,
     numThreads: Int,
-    nodeName: String = "broker"
+    nodeName: String
   ): KafkaRequestHandlerPool = {
     new KafkaRequestHandlerPool(aggregateThreads, RequestHandlerAvgIdleMetricName, brokerId, requestChannel, apis, time, numThreads, nodeName)
   }
@@ -225,15 +225,17 @@ class KafkaRequestHandlerPool(
   val apis: ApiRequestHandler,
   time: Time,
   numThreads: Int,
-  nodeName: String = "broker"
+  nodeName: String
 ) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   val threadPoolSize: AtomicInteger = new AtomicInteger(numThreads)
   private val perPoolIdleMeterName = if (nodeName == "broker") {
     "BrokerRequestHandlerAvgIdlePercent"
-  } else {
+  } else if (nodeName == "controller") {
     "ControllerRequestHandlerAvgIdlePercent"
+  } else {
+    throw new IllegalArgumentException("Invalid node name:" + nodeName)
   }
   /* Per-pool idle meter (broker-only or controller-only) */
   private val perPoolIdleMeter = metricsGroup.newMeter(perPoolIdleMeterName, "percent", TimeUnit.NANOSECONDS)
@@ -246,7 +248,7 @@ class KafkaRequestHandlerPool(
     createHandler(i)
   }
 
-  private def createHandler(id: Int): Unit = synchronized {
+  private def createHandler(id: Int): Unit = {
     runnables += new KafkaRequestHandler(
       id,
       brokerId,
@@ -257,13 +259,13 @@ class KafkaRequestHandlerPool(
       requestChannel,
       apis,
       time,
-      nodeName,
+      nodeName
     )
     aggregateThreads.getAndIncrement()
     KafkaThread.daemon("data-plane-kafka-request-handler-" + id, runnables(id)).start()
   }
 
-  private def deleteHandler(id: Int): Unit = synchronized {
+  private def deleteHandler(id: Int): Unit = {
     runnables.remove(id).stop()
     aggregateThreads.getAndDecrement()
   }
