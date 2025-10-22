@@ -131,7 +131,8 @@ class TestRaftServer(
       socketServer.dataPlaneRequestChannel,
       requestHandler,
       time,
-      config.numIoThreads
+      config.numIoThreads,
+      "broker"
     )
 
     workloadGenerator.start()
