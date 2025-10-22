@@ -145,7 +145,7 @@ public class ShareGroupAssignmentBuilder {
         Map<Uuid, Set<Integer>> partitions,
         Set<String> subscribedTopicNames
     ) {
-        TopicIds subscribedTopicIds = new TopicIds(member.subscribedTopicNames(), metadataImage);
+        TopicIds subscribedTopicIds = new TopicIds(subscribedTopicNames, metadataImage);
 
         // Reuse the original map if no topics need to be removed.
         Map<Uuid, Set<Integer>> filteredPartitions = partitions;

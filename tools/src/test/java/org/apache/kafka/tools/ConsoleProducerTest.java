@@ -44,11 +44,17 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConsoleProducerTest {
-    private static final String[] BOOTSTRAP_SERVER_VALID_ARGS = new String[]{
+    private static final String[] BOOTSTRAP_SERVER_VALID_ARGS_DEPRECATED = new String[]{
         "--bootstrap-server", "localhost:1003,localhost:1004",
         "--topic", "t3",
         "--property", "parse.key=true",
         "--property", "key.separator=#"
+    };
+    private static final String[] BOOTSTRAP_SERVER_VALID_ARGS = new String[]{
+        "--bootstrap-server", "localhost:1003,localhost:1004",
+        "--topic", "t3",
+        "--reader-property", "parse.key=true",
+        "--reader-property", "key.separator=#"
     };
     private static final String[] INVALID_ARGS = new String[]{
         "--t", // not a valid argument
@@ -115,8 +121,8 @@ public class ConsoleProducerTest {
     }
 
     @Test
-    public void testParseKeyProp() throws ReflectiveOperationException, IOException {
-        ConsoleProducerOptions opts = new ConsoleProducerOptions(BOOTSTRAP_SERVER_VALID_ARGS);
+    public void testParseKeyPropDeprecated() throws ReflectiveOperationException, IOException {
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(BOOTSTRAP_SERVER_VALID_ARGS_DEPRECATED);
         LineMessageReader reader = (LineMessageReader) Class.forName(opts.readerClass()).getDeclaredConstructor().newInstance();
         reader.configure(opts.readerProps());
 
@@ -125,7 +131,7 @@ public class ConsoleProducerTest {
     }
 
     @Test
-    public void testParseReaderConfigFile() throws Exception {
+    public void testParseReaderConfigFileDeprecated() throws Exception {
         File propsFile = TestUtils.tempFile();
         OutputStream propsStream = Files.newOutputStream(propsFile.toPath());
         propsStream.write("parse.key=true\n".getBytes());
@@ -170,6 +176,40 @@ public class ConsoleProducerTest {
         ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
 
         assertEquals("console-producer", producerConfig.getString(ProducerConfig.CLIENT_ID_CONFIG));
+    }
+
+    @Test
+    public void testParseKeyProp() throws ReflectiveOperationException, IOException {
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(BOOTSTRAP_SERVER_VALID_ARGS);
+        LineMessageReader reader = (LineMessageReader) Class.forName(opts.readerClass()).getDeclaredConstructor().newInstance();
+        reader.configure(opts.readerProps());
+
+        assertEquals("#", reader.keySeparator());
+        assertTrue(reader.parseKey());
+    }
+
+    @Test
+    public void testParseReaderConfigFile() throws Exception {
+        File propsFile = TestUtils.tempFile();
+        OutputStream propsStream = Files.newOutputStream(propsFile.toPath());
+        propsStream.write("parse.key=true\n".getBytes());
+        propsStream.write("key.separator=|".getBytes());
+        propsStream.close();
+
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--reader-property", "key.separator=;",
+            "--reader-property", "parse.headers=true",
+            "--reader-config", propsFile.getAbsolutePath()
+        };
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(args);
+        LineMessageReader reader = (LineMessageReader) Class.forName(opts.readerClass()).getDeclaredConstructor().newInstance();
+        reader.configure(opts.readerProps());
+
+        assertEquals(";", reader.keySeparator());
+        assertTrue(reader.parseKey());
+        assertTrue(reader.parseHeaders());
     }
 
     @Test
@@ -267,6 +307,26 @@ public class ConsoleProducerTest {
             "--topic", "test",
             "--producer.config", propsFile.getAbsolutePath(),
             "--command-config", propsFile2.getAbsolutePath()
+        };
+
+        try {
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleProducerOptions(args));
+        } finally {
+            Exit.resetExitProcedure();
+        }
+    }
+
+    @Test
+    public void shouldExitOnBothPropertyAndReaderProperty() {
+        Exit.setExitProcedure((code, message) -> {
+            throw new IllegalArgumentException(message);
+        });
+
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--property", "parse.key=true",
+            "--reader-property", "parse.headers=true"
         };
 
         try {
