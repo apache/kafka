@@ -32,6 +32,7 @@ import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Utils;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -726,8 +727,17 @@ public class StreamsGroup implements Group {
                 "by members using the streams group protocol");
         }
 
-        validateMemberEpoch(memberEpoch, member.memberEpoch());
-        return CommitPartitionValidator.NO_OP;
+        if (memberEpoch == member.memberEpoch()) {
+            return CommitPartitionValidator.NO_OP;
+        }
+
+        if (memberEpoch > member.memberEpoch()) {
+            throw new StaleMemberEpochException(String.format("Received member epoch %d is newer than " +
+                "current member epoch %d.", memberEpoch, member.memberEpoch()));
+        }
+
+        // Member epoch is older; validate against per-partition assignment epochs.
+        return createAssignmentEpochValidator(member, memberEpoch);
     }
 
     /**
@@ -1119,5 +1129,55 @@ public class StreamsGroup implements Group {
         if (lastAssignmentConfigs != null) {
             this.lastAssignmentConfigs.putAll(lastAssignmentConfigs);
         }
+    }
+
+    /**
+     * Creates a validator that checks if the received member epoch is valid for each partition's assignment epoch.
+     *
+     * @param member The member whose assignments are being validated.
+     * @param receivedMemberEpoch The received member epoch.
+     * @return A validator for per-partition validation.
+     */
+    private CommitPartitionValidator createAssignmentEpochValidator(
+        final StreamsGroupMember member,
+        int receivedMemberEpoch
+    ) {
+        // Retrieve topology once for all partitions - not per partition!
+        final StreamsTopology streamsTopology = topology.get().orElseThrow(() ->
+            new StaleMemberEpochException("Topology is not available for offset commit validation."));
+        
+        final TasksTupleWithEpochs assignedTasks = member.assignedTasks();
+        final TasksTupleWithEpochs tasksPendingRevocation = member.tasksPendingRevocation();
+
+        return (topicName, topicId, partitionId) -> {
+            final StreamsGroupTopologyValue.Subtopology subtopology = streamsTopology.sourceTopicMap().get(topicName);
+            if (subtopology == null) {
+                throw new StaleMemberEpochException("Topic " + topicName + " is not in the topology.");
+            }
+
+            final String subtopologyId = subtopology.subtopologyId();
+
+            // Search for the partition in assigned tasks, then in tasks pending revocation
+            Integer assignmentEpoch = assignedTasks.activeTasksWithEpochs()
+                .getOrDefault(subtopologyId, Collections.emptyMap())
+                .get(partitionId);
+            if (assignmentEpoch == null) {
+                assignmentEpoch = tasksPendingRevocation.activeTasksWithEpochs()
+                    .getOrDefault(subtopologyId, Collections.emptyMap())
+                    .get(partitionId);
+            }
+
+            if (assignmentEpoch == null) {
+                throw new StaleMemberEpochException(String.format(
+                    "Task %s-%d is not assigned or pending revocation for member.",
+                    subtopologyId, partitionId));
+            }
+
+            if (receivedMemberEpoch < assignmentEpoch) {
+                throw new StaleMemberEpochException(String.format(
+                    "Received member epoch %d is older than assignment epoch %d for task %s-%d.",
+                    receivedMemberEpoch, assignmentEpoch, subtopologyId, partitionId));
+            }
+        };
     }
 }

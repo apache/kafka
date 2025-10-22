@@ -31,6 +31,7 @@ import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
+import org.apache.kafka.coordinator.group.CommitPartitionValidator;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
@@ -660,7 +661,7 @@ public class StreamsGroupTest {
         assertThrows(UnknownMemberIdException.class, () ->
             group.validateOffsetCommit("", null, -1, isTransactional, version));
 
-        // The member epoch is stale.
+        // The member epoch is stale (newer than current).
         if (version >= 9) {
             assertThrows(StaleMemberEpochException.class, () ->
                 group.validateOffsetCommit("new-protocol-member-id", "", 10, isTransactional, version));
@@ -669,13 +670,119 @@ public class StreamsGroupTest {
                 group.validateOffsetCommit("new-protocol-member-id", "", 10, isTransactional, version));
         }
 
-        // This should succeed.
+        // This should succeed (matching member epoch).
         if (version >= 9) {
             group.validateOffsetCommit("new-protocol-member-id", "", 0, isTransactional, version);
         } else {
             assertThrows(UnsupportedVersionException.class, () ->
                 group.validateOffsetCommit("new-protocol-member-id", "", 0, isTransactional, version));
         }
+    }
+
+    @Test
+    public void testValidateOffsetCommitWithOlderEpoch() {
+        StreamsGroup group = createStreamsGroup("group-foo");
+        
+        group.setTopology(new StreamsTopology(1, Map.of("0", new StreamsGroupTopologyValue.Subtopology()
+            .setSubtopologyId("0")
+            .setSourceTopics(List.of("input-topic")))));
+        
+        group.updateMember(new StreamsGroupMember.Builder("member-1")
+            .setMemberEpoch(2)
+            .setAssignedTasks(new TasksTupleWithEpochs(
+                Map.of("0", Map.of(0, 2, 1, 2)),
+                Map.of(), Map.of()))
+            .build());
+        
+        CommitPartitionValidator validator = group.validateOffsetCommit(
+            "member-1", "", 1, false, ApiKeys.OFFSET_COMMIT.latestVersion());
+        
+        // Received epoch (1) < assignment epoch (2) should throw
+        assertThrows(StaleMemberEpochException.class, () ->
+            validator.validate("input-topic", Uuid.ZERO_UUID, 0));
+    }
+
+    @Test
+    public void testValidateOffsetCommitWithOlderEpochMissingTopology() {
+        StreamsGroup group = createStreamsGroup("group-foo");
+        
+        group.updateMember(new StreamsGroupMember.Builder("member-1")
+            .setMemberEpoch(2)
+            .build());
+        
+        // Topology is retrieved when creating validator, so exception is thrown here
+        assertThrows(StaleMemberEpochException.class, () ->
+            group.validateOffsetCommit("member-1", "", 1, false, ApiKeys.OFFSET_COMMIT.latestVersion()));
+    }
+
+    @Test
+    public void testValidateOffsetCommitWithOlderEpochMissingSubtopology() {
+        StreamsGroup group = createStreamsGroup("group-foo");
+        
+        group.setTopology(new StreamsTopology(1, Map.of("0", new StreamsGroupTopologyValue.Subtopology()
+            .setSubtopologyId("0")
+            .setSourceTopics(List.of("input-topic")))));
+        
+        group.updateMember(new StreamsGroupMember.Builder("member-1")
+            .setMemberEpoch(2)
+            .build());
+        
+        CommitPartitionValidator validator = group.validateOffsetCommit(
+            "member-1", "", 1, false, ApiKeys.OFFSET_COMMIT.latestVersion());
+        
+        assertThrows(StaleMemberEpochException.class, () ->
+            validator.validate("unknown-topic", Uuid.ZERO_UUID, 0));
+    }
+
+    @Test
+    public void testValidateOffsetCommitWithOlderEpochUnassignedPartition() {
+        StreamsGroup group = createStreamsGroup("group-foo");
+        
+        group.setTopology(new StreamsTopology(1, Map.of("0", new StreamsGroupTopologyValue.Subtopology()
+            .setSubtopologyId("0")
+            .setSourceTopics(List.of("input-topic")))));
+        
+        group.updateMember(new StreamsGroupMember.Builder("member-1")
+            .setMemberEpoch(2)
+            .setAssignedTasks(new TasksTupleWithEpochs(
+                Map.of("0", Map.of(0, 2)),
+                Map.of(), Map.of()))
+            .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
+            .build());
+        
+        CommitPartitionValidator validator = group.validateOffsetCommit(
+            "member-1", "", 1, false, ApiKeys.OFFSET_COMMIT.latestVersion());
+        
+        // Partition 0 assigned with epoch 2, received epoch 1 should throw
+        assertThrows(StaleMemberEpochException.class, () ->
+            validator.validate("input-topic", Uuid.ZERO_UUID, 0));
+        
+        // Partition 1 not assigned should throw
+        assertThrows(StaleMemberEpochException.class, () ->
+            validator.validate("input-topic", Uuid.ZERO_UUID, 1));
+    }
+
+    @Test
+    public void testValidateOffsetCommitWithOlderEpochValidAssignment() {
+        StreamsGroup group = createStreamsGroup("group-foo");
+        
+        group.setTopology(new StreamsTopology(1, Map.of("0", new StreamsGroupTopologyValue.Subtopology()
+            .setSubtopologyId("0")
+            .setSourceTopics(List.of("input-topic")))));
+        
+        group.updateMember(new StreamsGroupMember.Builder("member-1")
+            .setMemberEpoch(5)
+            .setAssignedTasks(new TasksTupleWithEpochs(
+                Map.of("0", Map.of(0, 2, 1, 2)),
+                Map.of(), Map.of()))
+            .build());
+        
+        CommitPartitionValidator validator = group.validateOffsetCommit(
+            "member-1", "", 2, false, ApiKeys.OFFSET_COMMIT.latestVersion());
+        
+        // Received epoch 2 == assignment epoch 2 should succeed
+        validator.validate("input-topic", Uuid.ZERO_UUID, 0);
+        validator.validate("input-topic", Uuid.ZERO_UUID, 1);
     }
 
     @Test
