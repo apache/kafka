@@ -950,7 +950,7 @@ public abstract class Type {
             if (item instanceof MemoryRecords)
                 return (BaseRecords) item;
 
-            throw new SchemaException(item + " is not an instance of " + BaseRecords.class.getName());
+            throw new SchemaException(item + " is not an instance of " + MemoryRecords.class.getName());
         }
 
         @Override

@@ -46,7 +46,9 @@ public class Protocol {
             if (type.isArray()) {
                 b.append("[");
                 b.append(field.def.name);
-                b.append("] ");
+                b.append("]");
+                b.append(((Type.DocumentedType) type).typeName());
+                b.append(" ");
                 if (!subTypes.containsKey(field.def.name)) {
                     subTypes.put(field.def.name, type.arrayElementType().get());
                 }
@@ -57,6 +59,8 @@ public class Protocol {
                         b.append("[");
                         b.append(taggedField.name);
                         b.append("]");
+                        b.append(((Type.DocumentedType) taggedField.type).typeName());
+                        b.append(" ");
                         if (!subTypes.containsKey(taggedField.name))
                             subTypes.put(taggedField.name + "&lt;tag: " + tag.toString() + "&gt;", taggedField.type.arrayElementType().get());
                     } else {

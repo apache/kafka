@@ -17,14 +17,13 @@
 package org.apache.kafka.common.protocol.types;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 
 /**
  * The nullable schema for a compound record definition
  */
 public final class NullableSchema extends Schema {
 
-    private static final String STRUCT_TYPE_NAME = "NULLABLE_STRUCT";
+    private static final String NULLABLE_STRUCT_TYPE_NAME = "NULLABLE_STRUCT";
 
     public NullableSchema(Field... fs) {
         this(false, fs);
@@ -32,10 +31,6 @@ public final class NullableSchema extends Schema {
 
     public NullableSchema(boolean tolerateMissingFieldsWithDefaults, Field... fs) {
         super(tolerateMissingFieldsWithDefaults, fs);
-    }
-
-    public NullableSchema(Schema schema) {
-        this(schema.tolerateMissingFieldsWithDefaults(), Arrays.stream(schema.fields()).map(BoundField::def).toArray(Field[]::new));
     }
 
     @Override
@@ -77,7 +72,7 @@ public final class NullableSchema extends Schema {
 
     @Override
     public String typeName() {
-        return STRUCT_TYPE_NAME;
+        return NULLABLE_STRUCT_TYPE_NAME;
     }
 
     @Override
