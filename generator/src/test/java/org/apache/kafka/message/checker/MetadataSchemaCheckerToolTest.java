@@ -27,6 +27,7 @@ import java.nio.file.Paths;
 
 import static org.apache.kafka.message.checker.CheckerTestUtils.messageSpecStringToTempFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class MetadataSchemaCheckerToolTest {
     @Test
@@ -43,10 +44,7 @@ public class MetadataSchemaCheckerToolTest {
             rootKafkaDirectory = rootKafkaDirectory.getParent();
         }
         
-        if (!gitFound) {
-            System.out.println("Skipping testVerifyEvolutionGit - not in a Git repository");
-            return; // Skip test when running from source release without Git
-        }
+        assumeTrue(gitFound, "Skipping test - not in a Git repository");
         
         try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
             Path schemaPath = rootKafkaDirectory.resolve("metadata/src/main/resources/common/metadata/AbortTransactionRecord.json");
