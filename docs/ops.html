@@ -1931,6 +1931,11 @@ The following set of metrics are available for monitoring the group coordinator:
       <td>The time that a batch took to be flushed to the local partition</td>
     </tr>
     <tr>
+      <td>Batch Flush Rate</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=batch-flush-rate</td>
+      <td>The number of batches flushed per second</td>
+    </tr>
+    <tr>
       <td>Group Count, per group type</td>
       <td>kafka.server:type=group-coordinator-metrics,name=group-count,protocol={consumer|classic}</td>
       <td>Total number of group per group type: Classic or Consumer</td>

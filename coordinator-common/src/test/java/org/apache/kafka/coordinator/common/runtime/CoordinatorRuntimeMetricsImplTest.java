@@ -84,7 +84,8 @@ public class CoordinatorRuntimeMetricsImplTest {
             kafkaMetricName(metrics, "batch-flush-time-ms-p50"),
             kafkaMetricName(metrics, "batch-flush-time-ms-p95"),
             kafkaMetricName(metrics, "batch-flush-time-ms-p99"),
-            kafkaMetricName(metrics, "batch-flush-time-ms-p999")
+            kafkaMetricName(metrics, "batch-flush-time-ms-p999"),
+            kafkaMetricName(metrics, "batch-flush-rate")
         );
 
         try (CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP)) {
@@ -349,6 +350,19 @@ public class CoordinatorRuntimeMetricsImplTest {
 
     private static void assertMetricGauge(Metrics metrics, org.apache.kafka.common.MetricName metricName, long count) {
         assertEquals(count, (long) metrics.metric(metricName).metricValue());
+    }
+
+    @Test
+    public void testFlushRateSensor() {
+        Time time = new MockTime();
+        Metrics metrics = new Metrics(time);
+
+        CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP);
+        IntStream.range(0, 3).forEach(i -> runtimeMetrics.recordFlushTime((i + 1) * 1000));
+
+        org.apache.kafka.common.MetricName metricName = kafkaMetricName(metrics, "batch-flush-rate");
+        KafkaMetric metric = metrics.metrics().get(metricName);
+        assertEquals(0.1, metric.metricValue()); // 'total / window_s'
     }
 
     private static MetricName kafkaMetricName(Metrics metrics, String name, String... keyValue) {
