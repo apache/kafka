@@ -92,7 +92,7 @@ public class Tls13SelectorTest extends SslSelectorTest {
                     received.add(receive);
             }
             return received.size() == 2;
-        }, "Expected two receives, got " + received.size());
+        }, () -> "Expected two receives, got " + received.size());
 
         assertEquals(asList("0-0", "0-1"), received.stream().map(this::asString).collect(Collectors.toList()));
     }

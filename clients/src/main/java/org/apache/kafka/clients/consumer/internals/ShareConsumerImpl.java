@@ -189,7 +189,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     private final ShareFetchCollector<K, V> fetchCollector;
 
     private final SubscriptionState subscriptions;
-    private final ConsumerMetadata metadata;
+    private final ShareConsumerMetadata metadata;
     private final Metrics metrics;
     private final int requestTimeoutMs;
     private final int defaultApiTimeoutMs;
@@ -257,7 +257,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             ClusterResourceListeners clusterResourceListeners = ClientUtils.configureClusterResourceListeners(
                     metrics.reporters(),
                     Arrays.asList(deserializers.keyDeserializer(), deserializers.valueDeserializer()));
-            this.metadata = new ConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
+            this.metadata = new ShareConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
             final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             metadata.bootstrap(addresses);
 
@@ -350,7 +350,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                       final Time time,
                       final KafkaClient client,
                       final SubscriptionState subscriptions,
-                      final ConsumerMetadata metadata) {
+                      final ShareConsumerMetadata metadata) {
         this.clientId = clientId;
         this.groupId = groupId;
         this.log = logContext.logger(getClass());
@@ -441,7 +441,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                       final CompletableEventReaper backgroundEventReaper,
                       final Metrics metrics,
                       final SubscriptionState subscriptions,
-                      final ConsumerMetadata metadata,
+                      final ShareConsumerMetadata metadata,
                       final int requestTimeoutMs,
                       final int defaultApiTimeoutMs,
                       final String groupId,
@@ -492,7 +492,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
         ShareFetchCollector<K, V> build(
                 final LogContext logContext,
-                final ConsumerMetadata metadata,
+                final ShareConsumerMetadata metadata,
                 final SubscriptionState subscriptions,
                 final FetchConfig fetchConfig,
                 final Deserializers<K, V> deserializers
