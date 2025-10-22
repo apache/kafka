@@ -71,14 +71,12 @@ public class StreamsGroupMemberTest {
     private static final List<Integer> TASKS4 = List.of(3, 2, 1);
     private static final List<Integer> TASKS5 = List.of(6, 5, 4);
     private static final List<Integer> TASKS6 = List.of(9, 7);
-    // Assignment epochs for active tasks: task 1 -> epoch 5, task 2 -> epoch 6, task 3 -> epoch 7
     private static final TasksTupleWithEpochs ASSIGNED_TASKS =
         new TasksTupleWithEpochs(
             mkMap(mkEntry(SUBTOPOLOGY1, mkMap(mkEntry(1, 5), mkEntry(2, 6), mkEntry(3, 7)))),
             mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY2, TASKS2.toArray(Integer[]::new))),
             mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY1, TASKS3.toArray(Integer[]::new)))
         );
-    // Assignment epochs for active tasks pending revocation: task 3 -> epoch 4, task 2 -> epoch 3, task 1 -> epoch 2
     private static final TasksTupleWithEpochs TASKS_PENDING_REVOCATION =
         new TasksTupleWithEpochs(
             mkMap(mkEntry(SUBTOPOLOGY2, mkMap(mkEntry(3, 4), mkEntry(2, 3), mkEntry(1, 2)))),
