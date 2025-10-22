@@ -142,6 +142,8 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         controllers = cluster.controllers().values().asScala.toSeq
       )
 
+      val topology = createMockTopology(topicName)
+
       val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequest.Builder(
         new StreamsGroupHeartbeatRequestData()
           .setGroupId(groupId)
@@ -151,18 +153,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           .setActiveTasks(java.util.Collections.emptyList())
           .setStandbyTasks(java.util.Collections.emptyList())
           .setWarmupTasks(java.util.Collections.emptyList())
-          .setTopology(
-            new StreamsGroupHeartbeatRequestData.Topology()
-              .setEpoch(1)
-              .setSubtopologies(List(
-                new StreamsGroupHeartbeatRequestData.Subtopology()
-                  .setSubtopologyId("subtopology-1")
-                  .setSourceTopics(List(topicName).asJava)
-                  .setRepartitionSinkTopics(List.empty.asJava)
-                  .setRepartitionSourceTopics(List.empty.asJava)
-                  .setStateChangelogTopics(List.empty.asJava)
-              ).asJava)
-          )
+          .setTopology(topology)
       ).build(0)
 
       // Heartbeat when topic does not exist
@@ -211,8 +202,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           .setPartitions(List(0, 1, 2).map(_.asInstanceOf[Integer]).asJava)
       ).asJava
       assertEquals(expectedActiveTasks, streamsGroupHeartbeatResponse.data.activeTasks())
-
-
     } finally {
       admin.close()
     }
@@ -248,6 +237,8 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         admin.listTopics().names().get().contains(topicName)
       }, msg = s"Topic $topicName is not available to the group coordinator")
 
+      val topology = createMockTopology(topicName)
+
       // First member joins the group
       var streamsGroupHeartbeatResponse1: StreamsGroupHeartbeatResponse = null
       TestUtils.waitUntilTrue(() => {
@@ -266,18 +257,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
             .setWarmupTasks(Option(streamsGroupHeartbeatResponse1)
               .map(r => convertTaskIds(r.data().warmupTasks()))
               .getOrElse(Collections.emptyList()))
-            .setTopology(
-              new StreamsGroupHeartbeatRequestData.Topology()
-                .setEpoch(1)
-                .setSubtopologies(List(
-                  new StreamsGroupHeartbeatRequestData.Subtopology()
-                    .setSubtopologyId("subtopology-1")
-                    .setSourceTopics(List(topicName).asJava)
-                    .setRepartitionSinkTopics(List.empty.asJava)
-                    .setRepartitionSourceTopics(List.empty.asJava)
-                    .setStateChangelogTopics(List.empty.asJava)
-                ).asJava)
-            )
+            .setTopology(topology)
         ).build(0)
 
         streamsGroupHeartbeatResponse1 = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest1)
@@ -309,18 +289,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
             .setWarmupTasks(Option(streamsGroupHeartbeatResponse2)
               .map(r => convertTaskIds(r.data().warmupTasks()))
               .getOrElse(Collections.emptyList()))
-            .setTopology(
-              new StreamsGroupHeartbeatRequestData.Topology()
-                .setEpoch(1)
-                .setSubtopologies(List(
-                  new StreamsGroupHeartbeatRequestData.Subtopology()
-                    .setSubtopologyId("subtopology-1")
-                    .setSourceTopics(List(topicName).asJava)
-                    .setRepartitionSinkTopics(List.empty.asJava)
-                    .setRepartitionSourceTopics(List.empty.asJava)
-                    .setStateChangelogTopics(List.empty.asJava)
-                ).asJava)
-            )
+            .setTopology(topology)
         ).build(0)
 
         streamsGroupHeartbeatResponse2 = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest2)
@@ -344,18 +313,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
             .setActiveTasks(convertTaskIds(streamsGroupHeartbeatResponse1.data.activeTasks()))
             .setStandbyTasks(convertTaskIds(streamsGroupHeartbeatResponse1.data.standbyTasks()))
             .setWarmupTasks(convertTaskIds(streamsGroupHeartbeatResponse1.data.warmupTasks()))
-            .setTopology(
-              new StreamsGroupHeartbeatRequestData.Topology()
-                .setEpoch(1)
-                .setSubtopologies(List(
-                  new StreamsGroupHeartbeatRequestData.Subtopology()
-                    .setSubtopologyId("subtopology-1")
-                    .setSourceTopics(List(topicName).asJava)
-                    .setRepartitionSinkTopics(List.empty.asJava)
-                    .setRepartitionSourceTopics(List.empty.asJava)
-                    .setStateChangelogTopics(List.empty.asJava)
-                ).asJava)
-            )
+            .setTopology(topology)
         ).build(0)
 
 
@@ -374,18 +332,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
             .setActiveTasks(convertTaskIds(streamsGroupHeartbeatResponse2.data.activeTasks()))
             .setStandbyTasks(convertTaskIds(streamsGroupHeartbeatResponse2.data.standbyTasks()))
             .setWarmupTasks(convertTaskIds(streamsGroupHeartbeatResponse2.data.warmupTasks()))
-            .setTopology(
-              new StreamsGroupHeartbeatRequestData.Topology()
-                .setEpoch(1)
-                .setSubtopologies(List(
-                  new StreamsGroupHeartbeatRequestData.Subtopology()
-                    .setSubtopologyId("subtopology-1")
-                    .setSourceTopics(List(topicName).asJava)
-                    .setRepartitionSinkTopics(List.empty.asJava)
-                    .setRepartitionSourceTopics(List.empty.asJava)
-                    .setStateChangelogTopics(List.empty.asJava)
-                ).asJava)
-            )
+            .setTopology(topology)
         ).build(0)
 
         streamsGroupHeartbeatResponse2 = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest2)
@@ -408,6 +355,172 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     }
   }
 
+  @ClusterTest
+  def testEmptyStreamsGroupId(): Unit = {
+    val admin = cluster.admin()
+
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      val topology = new StreamsGroupHeartbeatRequestData.Topology()
+        .setEpoch(1)
+        .setSubtopologies(java.util.Collections.emptyList())
+
+      val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequest.Builder(
+        new StreamsGroupHeartbeatRequestData()
+          .setGroupId("")  // Empty group ID
+          .setMemberId("test-member")
+          .setMemberEpoch(0)
+          .setRebalanceTimeoutMs(1000)
+          .setActiveTasks(java.util.Collections.emptyList())
+          .setStandbyTasks(java.util.Collections.emptyList())
+          .setWarmupTasks(java.util.Collections.emptyList())
+          .setTopology(topology)
+      ).build(0)
+
+      val streamsGroupHeartbeatResponse = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest)
+      val expectedResponse = new StreamsGroupHeartbeatResponseData()
+        .setErrorCode(Errors.INVALID_REQUEST.code())
+        .setErrorMessage("GroupId can't be empty.")
+      assertEquals(expectedResponse, streamsGroupHeartbeatResponse.data)
+    } finally {
+      admin.close()
+    }
+  }
+
+  @ClusterTest
+  def testInvalidTopologyAtSecondHeartbeat(): Unit = {
+    val admin = cluster.admin()
+    val topicName = "test-topic"
+
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      val topology = createMockTopology(topicName)
+
+      // First, join the group with a valid request
+      var streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequest.Builder(
+        new StreamsGroupHeartbeatRequestData()
+          .setGroupId("test-group")
+          .setMemberId("test-member")
+          .setMemberEpoch(0)
+          .setRebalanceTimeoutMs(1000)
+          .setActiveTasks(java.util.Collections.emptyList())
+          .setStandbyTasks(java.util.Collections.emptyList())
+          .setWarmupTasks(java.util.Collections.emptyList())
+          .setTopology(topology)
+      ).build(0)
+
+      var streamsGroupHeartbeatResponse: StreamsGroupHeartbeatResponse = null
+      TestUtils.waitUntilTrue(() => {
+        streamsGroupHeartbeatResponse = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest)
+        streamsGroupHeartbeatResponse.data.errorCode == Errors.NONE.code()
+      }, "StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
+
+      // Now send a request with an invalid member epoch (negative epoch)
+      streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequest.Builder(
+        new StreamsGroupHeartbeatRequestData()
+          .setGroupId("test-group")
+          .setMemberId(streamsGroupHeartbeatResponse.data.memberId())
+          .setMemberEpoch(-1)  // Invalid negative epoch
+          .setRebalanceTimeoutMs(1000)
+          .setActiveTasks(java.util.Collections.emptyList())
+          .setStandbyTasks(java.util.Collections.emptyList())
+          .setWarmupTasks(java.util.Collections.emptyList())
+          .setTopology(topology)
+      ).build(0)
+
+      streamsGroupHeartbeatResponse = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest)
+      val expectedResponse = new StreamsGroupHeartbeatResponseData()
+        .setErrorCode(Errors.INVALID_REQUEST.code())
+        .setErrorMessage("Topology can only be provided when (re-)joining.")
+      assertEquals(expectedResponse, streamsGroupHeartbeatResponse.data)
+    } finally {
+      admin.close()
+    }
+  }
+
+  @ClusterTest
+  def testInvalidMemberEpoch(): Unit = {
+    val admin = cluster.admin()
+    val topicName = "test-topic"
+
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      // Create topic
+      TestUtils.createTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq,
+        topic = topicName,
+        numPartitions = 3
+      )
+      // Wait for topic to be available
+      TestUtils.waitUntilTrue(() => {
+        admin.listTopics().names().get().contains(topicName)
+      }, msg = s"Topic $topicName is not available to the group coordinator")
+
+      val topology = createMockTopology(topicName)
+
+      // First, join the group with a valid request
+      var streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequest.Builder(
+        new StreamsGroupHeartbeatRequestData()
+          .setGroupId("test-group")
+          .setMemberId("test-member")
+          .setMemberEpoch(0)
+          .setRebalanceTimeoutMs(1000)
+          .setActiveTasks(java.util.Collections.emptyList())
+          .setStandbyTasks(java.util.Collections.emptyList())
+          .setWarmupTasks(java.util.Collections.emptyList())
+          .setTopology(topology)
+      ).build(0)
+
+      var streamsGroupHeartbeatResponse: StreamsGroupHeartbeatResponse = null
+      TestUtils.waitUntilTrue(() => {
+        streamsGroupHeartbeatResponse = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest)
+        streamsGroupHeartbeatResponse.data.errorCode == Errors.NONE.code()
+      }, "StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
+
+      streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequest.Builder(
+        new StreamsGroupHeartbeatRequestData()
+          .setGroupId("test-group")
+          .setMemberId(streamsGroupHeartbeatResponse.data.memberId())
+          .setMemberEpoch(999)  // Too high member epoch
+          .setRebalanceTimeoutMs(1000)
+          .setActiveTasks(java.util.Collections.emptyList())
+          .setStandbyTasks(java.util.Collections.emptyList())
+          .setWarmupTasks(java.util.Collections.emptyList())
+      ).build(0)
+
+      streamsGroupHeartbeatResponse = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest)
+      val expectedResponse = new StreamsGroupHeartbeatResponseData()
+        .setErrorCode(Errors.FENCED_MEMBER_EPOCH.code())
+        .setErrorMessage("The streams group member has a greater member epoch (999) than the one known by the group coordinator (1). The member must abandon all its partitions and rejoin.")
+      assertEquals(expectedResponse, streamsGroupHeartbeatResponse.data)
+    } finally {
+      admin.close()
+    }
+  }
+
   private def convertTaskIds(responseTasks: java.util.List[StreamsGroupHeartbeatResponseData.TaskIds]): java.util.List[StreamsGroupHeartbeatRequestData.TaskIds] = {
     if (responseTasks == null) {
       java.util.Collections.emptyList()
@@ -418,5 +531,18 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           .setPartitions(responseTask.partitions)
       }.asJava
     }
+  }
+
+  private def createMockTopology(topicName: String): StreamsGroupHeartbeatRequestData.Topology = {
+    new StreamsGroupHeartbeatRequestData.Topology()
+      .setEpoch(1)
+      .setSubtopologies(List(
+        new StreamsGroupHeartbeatRequestData.Subtopology()
+          .setSubtopologyId("subtopology-1")
+          .setSourceTopics(List(topicName).asJava)
+          .setRepartitionSinkTopics(List.empty.asJava)
+          .setRepartitionSourceTopics(List.empty.asJava)
+          .setStateChangelogTopics(List.empty.asJava)
+      ).asJava)
   }
 }
