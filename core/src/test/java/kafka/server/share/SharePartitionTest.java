@@ -2390,6 +2390,7 @@ public class SharePartitionTest {
         // is adjusted according to the minimum of fetched batch and endOffset.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
+                SHARE_ACQUIRE_MODE,
                 BATCH_SIZE,
                 500 /* Max fetch records */,
                 5 /* Fetch Offset */,
@@ -2444,6 +2445,7 @@ public class SharePartitionTest {
         // next batch due to incorrect calculation.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
+                SHARE_ACQUIRE_MODE,
                 BATCH_SIZE,
                 6 /* Max fetch records */,
                 5 /* Fetch Offset */,

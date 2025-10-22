@@ -752,7 +752,7 @@ public class SharePartition {
                     groupId, topicIdPartition);
                 // It's safe to use lastOffsetToAcquire instead of lastBatch.lastOffset() because there is no
                 // overlap hence the lastOffsetToAcquire is same as lastBatch.lastOffset() or before that.
-                ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
+                ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(), isRecordLimitMode,
                     firstBatch.baseOffset(), lastOffsetToAcquire, batchSize, maxRecordsToAcquire);
                 if (isRecordLimitMode && shareAcquiredRecords.count() > maxRecordsToAcquire) {
                     AcquiredRecords records = filterShareAcquiredRecordsInRecordLimitMode(maxRecordsToAcquire, shareAcquiredRecords.acquiredRecords());
@@ -845,11 +845,7 @@ public class SharePartition {
                     // response batch.
                     int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, isRecordLimitMode, maxFetchRecords, firstBatch.baseOffset(), lastOffsetToAcquire, inFlightBatch, result);
                     acquiredCount += acquiredSubsetCount;
-                    if (isRecordLimitMode) {
-                        break;
-                    } else {
-                        continue;
-                    }
+                    continue;
                 }
 
                 // The in-flight batch is a full match hence change the state of the complete batch.
@@ -1673,6 +1669,9 @@ public class SharePartition {
                     }
                     persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(offsetState.getKey(),
                         offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount())));
+                } else {
+                    log.error("Unxpected record state {} for offset: {} in batch: {} in share partition: {}-{}",
+                        offsetState.getValue().state(), offsetState.getKey(), inFlightBatch, groupId, topicIdPartition);
                 }
             }
             rollbackOrProcessStateUpdates(future, null, persisterBatches);

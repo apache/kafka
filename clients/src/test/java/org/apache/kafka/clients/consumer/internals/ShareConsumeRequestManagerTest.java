@@ -2640,8 +2640,8 @@ public class ShareConsumeRequestManagerTest {
         int maxBytes = Integer.MAX_VALUE;
         int fetchSize = 1000;
         int minBytes = 1;
-        ShareAcquireMode shareAcquireMode = ShareAcquireMode.of("batch_optimized");
-        FetchConfig fetchConfig = new FetchConfig(
+        ShareAcquireMode shareAcquireMode = ShareAcquireMode.BATCH_OPTIMIZED;
+        ShareFetchConfig shareFetchConfig = new ShareFetchConfig(
                 minBytes,
                 maxBytes,
                 maxWaitMs,
@@ -2649,11 +2649,12 @@ public class ShareConsumeRequestManagerTest {
                 Integer.MAX_VALUE,
                 true, // check crc
                 CommonClientConfigs.DEFAULT_CLIENT_RACK,
-                IsolationLevel.READ_UNCOMMITTED);
+                IsolationLevel.READ_UNCOMMITTED,
+                shareAcquireMode);
         ShareFetchCollector<K, V> shareFetchCollector = new ShareFetchCollector<>(logContext,
                 metadata,
                 subscriptions,
-                fetchConfig,
+                shareFetchConfig,
                 deserializers);
         BackgroundEventHandler backgroundEventHandler = new TestableBackgroundEventHandler(time, completedAcknowledgements);
         shareConsumeRequestManager = spy(new TestableShareConsumeRequestManager<>(
@@ -2661,8 +2662,7 @@ public class ShareConsumeRequestManagerTest {
                 groupId,
                 metadata,
                 subscriptionState,
-                fetchConfig,
-                shareAcquireMode,
+                shareFetchConfig,
                 new ShareFetchBuffer(logContext),
                 backgroundEventHandler,
                 metricsManager,
@@ -2701,13 +2701,12 @@ public class ShareConsumeRequestManagerTest {
                                                   String groupId,
                                                   ShareConsumerMetadata metadata,
                                                   SubscriptionState subscriptions,
-                                                  FetchConfig fetchConfig,
-                                                  ShareAcquireMode shareAcquireMode,
+                                                  ShareFetchConfig shareFetchConfig,
                                                   ShareFetchBuffer shareFetchBuffer,
                                                   BackgroundEventHandler backgroundEventHandler,
                                                   ShareFetchMetricsManager metricsManager,
                                                   ShareFetchCollector<K, V> fetchCollector) {
-            super(time, logContext, groupId, metadata, subscriptions, fetchConfig, shareAcquireMode, shareFetchBuffer,
+            super(time, logContext, groupId, metadata, subscriptions, shareFetchConfig, shareFetchBuffer,
                     backgroundEventHandler, metricsManager, retryBackoffMs, 1000);
             this.shareFetchCollector = fetchCollector;
             onMemberEpochUpdated(Optional.empty(), Uuid.randomUuid().toString());

@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ShareAcquireMode;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.metrics.Metrics;
@@ -333,8 +332,7 @@ public class RequestManagers implements Closeable {
             protected RequestManagers create() {
                 long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
                 long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-                ShareAcquireMode shareAcquireMode = ShareAcquireMode.of(config.getString(ConsumerConfig.SHARE_ACQUIRE_MODE_CONFIG));
-                FetchConfig fetchConfig = new FetchConfig(config);
+                ShareFetchConfig shareFetchConfig = new ShareFetchConfig(config);
 
                 CoordinatorRequestManager coordinator = new CoordinatorRequestManager(
                         logContext,
@@ -371,8 +369,7 @@ public class RequestManagers implements Closeable {
                         groupRebalanceConfig.groupId,
                         metadata,
                         subscriptions,
-                        fetchConfig,
-                        shareAcquireMode,
+                        shareFetchConfig,
                         fetchBuffer,
                         backgroundEventHandler,
                         shareFetchMetricsManager,
