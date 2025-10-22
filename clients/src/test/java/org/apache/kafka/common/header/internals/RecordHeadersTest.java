@@ -19,6 +19,7 @@ package org.apache.kafka.common.header.internals;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -272,40 +273,36 @@ public class RecordHeadersTest {
         assertArrayEquals(value.getBytes(), actual.value());
     }
 
-    @Test
+    @RepeatedTest(100)
     public void testRecordHeaderIsReadThreadSafe() throws Exception {
-        int repeats = 5000;
         int threads = 8;
+        RecordHeader header = new RecordHeader(
+            ByteBuffer.wrap("key".getBytes(StandardCharsets.UTF_8)),
+            ByteBuffer.wrap("value".getBytes(StandardCharsets.UTF_8))
+        );
 
-        for (int test = 0; test < repeats; test++) {
-            RecordHeader header = new RecordHeader(
-                ByteBuffer.wrap("key".getBytes(StandardCharsets.UTF_8)),
-                ByteBuffer.wrap("value".getBytes(StandardCharsets.UTF_8))
-            );
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        AtomicBoolean raceDetected = new AtomicBoolean(false);
 
-            ExecutorService pool = Executors.newFixedThreadPool(threads);
-            CountDownLatch startLatch = new CountDownLatch(1);
-            AtomicBoolean raceDetected = new AtomicBoolean(false);
+        Runnable task = () -> {
+            try {
+                startLatch.await();
+                header.key();
+                header.value();
+            } catch (NullPointerException e) {
+                raceDetected.set(true);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        };
 
-            Runnable task = () -> {
-                try {
-                    startLatch.await();
-                    header.key();
-                    header.value();
-                } catch (NullPointerException e) {
-                    raceDetected.set(true);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            };
+        for (int i = 0; i < threads; i++) pool.submit(task);
 
-            for (int i = 0; i < threads; i++) pool.submit(task);
+        startLatch.countDown();
+        pool.shutdown();
+        pool.awaitTermination(5, TimeUnit.SECONDS);
 
-            startLatch.countDown();
-            pool.shutdown();
-            pool.awaitTermination(5, TimeUnit.SECONDS);
-
-            assertFalse(raceDetected.get(), "Read race condition detected in RecordHeader!");
-        }
+        assertFalse(raceDetected.get(), "Read race condition detected in RecordHeader!");
     }
 }
