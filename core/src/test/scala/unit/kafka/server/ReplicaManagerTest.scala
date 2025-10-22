@@ -2965,7 +2965,7 @@ class ReplicaManagerTest {
     directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP,
     buildRemoteLogAuxState: Boolean = false,
     remoteFetchQuotaExceeded: Option[Boolean] = None,
-    remoteFetchReaperEnabled: Boolean = false,
+    remoteFetchReaperEnabled: Boolean = false
   ): ReplicaManager = {
     val props = TestUtils.createBrokerConfig(brokerId)
     val path1 = TestUtils.tempRelativeDir("data").getAbsolutePath
