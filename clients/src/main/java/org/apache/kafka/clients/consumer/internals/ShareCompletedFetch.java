@@ -100,9 +100,16 @@ public class ShareCompletedFetch {
 
     private List<OffsetAndDeliveryCount> buildAcquiredRecordList(List<ShareFetchResponseData.AcquiredRecords> partitionAcquiredRecords) {
         List<OffsetAndDeliveryCount> acquiredRecordList = new LinkedList<>();
+        // Set to find duplicates in case of overlapping acquired records
+        Set<Long> offsets = new HashSet<>();
         partitionAcquiredRecords.forEach(acquiredRecords -> {
             for (long offset = acquiredRecords.firstOffset(); offset <= acquiredRecords.lastOffset(); offset++) {
-                acquiredRecordList.add(new OffsetAndDeliveryCount(offset, acquiredRecords.deliveryCount()));
+                if (!offsets.add(offset)) {
+                    log.error("Duplicate acquired record offset {} found in share fetch response for partition {}. " +
+                            "This indicates a broker processing issue.", offset, partition.topicPartition());
+                } else {
+                    acquiredRecordList.add(new OffsetAndDeliveryCount(offset, acquiredRecords.deliveryCount()));
+                }
             }
         });
         return acquiredRecordList;
