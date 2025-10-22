@@ -212,7 +212,14 @@ object StorageTool extends Logging {
 
     // Iterate over each feature specified with --feature
     for (featureArg <- featureArgs) {
-      val Array(featureName, versionStr) = featureArg.split("=")
+      // Improved error handling for feature argument format
+      val parts = featureArg.split("=", 2)
+      if (parts.length != 2) {
+        throw new TerseFailure(s"Invalid feature format: $featureArg. Expected format: 'feature=version' (e.g. 'group.version=1')")
+      }
+
+      val featureName = parts(0).trim
+      val versionStr = parts(1).trim
 
       val featureLevel = try {
         versionStr.toShort

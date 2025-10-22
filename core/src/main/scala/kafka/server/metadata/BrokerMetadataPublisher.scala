@@ -33,7 +33,7 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta}
-import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, ScramPublisher}
+import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, ScramPublisher}
 import org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION
 import org.apache.kafka.server.common.{FinalizedFeatures, RequestLocal, ShareVersion}
 import org.apache.kafka.server.fault.FaultHandler
@@ -218,7 +218,7 @@ class BrokerMetadataPublisher(
       dynamicConfigPublisher.onMetadataUpdate(delta, newImage)
 
       // Apply client quotas delta.
-      dynamicClientQuotaPublisher.onMetadataUpdate(delta, newImage)
+      dynamicClientQuotaPublisher.onMetadataUpdate(delta, newImage, manifest)
 
       // Apply topic or cluster quotas delta.
       dynamicTopicClusterQuotaPublisher.onMetadataUpdate(delta, newImage)

@@ -24,6 +24,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.To
 
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -41,15 +42,44 @@ import java.util.stream.Stream;
  * @param topologyEpoch The epoch of the topology (must be non-negative).
  * @param subtopologies The subtopologies of the topology containing information about source topics,
  *                      repartition topics, changelog topics, co-partition groups etc. (must be non-null)
+ * @param sourceTopicMap A precomputed map of source topics to their corresponding subtopology (must be non-null)
  */
 public record StreamsTopology(int topologyEpoch,
-                              Map<String, Subtopology> subtopologies) {
+                              Map<String, Subtopology> subtopologies,
+                              Map<String, Subtopology> sourceTopicMap) {
+
+    /**
+     * Constructor that automatically computes the sourceTopicMap from subtopologies.
+     *
+     * @param topologyEpoch The epoch of the topology (must be non-negative).
+     * @param subtopologies The subtopologies of the topology.
+     */
+    public StreamsTopology(int topologyEpoch, Map<String, Subtopology> subtopologies) {
+        this(topologyEpoch, subtopologies, computeSourceTopicMap(subtopologies));
+    }
 
     public StreamsTopology {
         if (topologyEpoch < 0) {
             throw new IllegalArgumentException("Topology epoch must be non-negative.");
         }
         subtopologies = Collections.unmodifiableMap(Objects.requireNonNull(subtopologies, "Subtopologies cannot be null."));
+        sourceTopicMap = Collections.unmodifiableMap(Objects.requireNonNull(sourceTopicMap, "Source topic map cannot be null."));
+    }
+
+    private static Map<String, Subtopology> computeSourceTopicMap(Map<String, Subtopology> subtopologies) {
+        Objects.requireNonNull(subtopologies, "Subtopologies cannot be null.");
+        Map<String, Subtopology> computedMap = new HashMap<>();
+        for (Subtopology subtopology : subtopologies.values()) {
+            // Add regular source topics
+            for (String sourceTopic : subtopology.sourceTopics()) {
+                computedMap.put(sourceTopic, subtopology);
+            }
+            // Add repartition source topics
+            for (TopicInfo repartitionSourceTopic : subtopology.repartitionSourceTopics()) {
+                computedMap.put(repartitionSourceTopic.name(), subtopology);
+            }
+        }
+        return computedMap;
     }
 
     /**

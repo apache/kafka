@@ -53,6 +53,6 @@ public class RepartitionTopicConfigTest {
 
         repartitionTopicConfig.setNumberOfPartitions(4);
 
-        assertEquals(repartitionTopicConfig.numberOfPartitions(), Optional.of(4));
+        assertEquals(Optional.of(4), repartitionTopicConfig.numberOfPartitions());
     }
 }

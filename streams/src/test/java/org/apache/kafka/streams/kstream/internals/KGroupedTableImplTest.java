@@ -176,7 +176,7 @@ public class KGroupedTableImplTest {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = getReducedResults(reduced);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             assertReduced(supplier.theCapturedProcessor().lastValueAndTimestampPerKey(), topic, driver);
-            assertEquals(reduced.queryableStoreName(), "reduced");
+            assertEquals("reduced", reduced.queryableStoreName());
         }
     }
 
