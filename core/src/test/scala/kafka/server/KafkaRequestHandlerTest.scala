@@ -707,7 +707,7 @@ class KafkaRequestHandlerTest {
     val requestChannelBroker = new RequestChannel(10, time, metricsBroker)
     val requestChannelController = new RequestChannel(10, time, metricsController)
     val apiHandler = mock(classOf[ApiRequestHandler])
-    val metricsGroup = new KafkaMetricsGroup(classOf[KafkaRequestHandlerPool])
+    val metricsGroup = new KafkaMetricsGroup("kafka.server", "KafkaRequestHandlerPool")
 
     // Create a factory for this test
     val factory = new KafkaRequestHandlerPoolFactory()
