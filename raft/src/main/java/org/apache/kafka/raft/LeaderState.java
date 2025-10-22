@@ -41,7 +41,6 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -190,36 +189,26 @@ public class LeaderState<T> implements EpochState {
     }
 
     /**
-     * Identifies voter replicas that require a {@code BeginQuorumEpoch} request from the leader.
+     * Determines the set of replicas that should receive a {@code BeginQuorumEpoch} request
+     * based on the elapsed time since their last fetch.
      * <p>
-     * The leader periodically checks whether any voter replicas have fallen behind in fetching
-     * from it. This method evaluates all known voter replica states and determines which replicas
-     * should receive a {@code BeginQuorumEpoch} request.
-     * <p>
-     * A replica will be included in the returned set if:
-     * <ul>
-     *   <li>It is not the local voter (the leader itself), and</li>
-     *   <li>The time since its last fetch is greater than or equal to
-     *       {@code beginQuorumEpochTimeoutMs}.</li>
-     * </ul>
-     * <p>
-     * The {@link #beginQuorumEpochTimer} is updated with the current time before performing the check.
-     * The returned set is unmodifiable to prevent external modification.
+     * For each remote voter (excluding the local node), if the time since the last
+     * fetch exceeds the configured {@code beginQuorumEpochTimeoutMs}, the replica
+     * is considered to need a new quorum epoch request.
      *
      * @param currentTimeMs the current system time in milliseconds
      * @return an unmodifiable set of {@link ReplicaKey} objects representing replicas
      *         that need to receive a {@code BeginQuorumEpoch} request
      */
     public Set<ReplicaKey> needToSendBeginQuorumRequests(long currentTimeMs) {
-        Set<ReplicaKey> replicaKeys = new HashSet<>();
-        beginQuorumEpochTimer.update(currentTimeMs);
-        for (ReplicaState state : voterStates.values()) {
-            if (state.replicaKey.id() != localVoterNode.voterKey().id()
-                && currentTimeMs - state.lastFetchTimestamp >= beginQuorumEpochTimeoutMs) {
-                replicaKeys.add(state.replicaKey());
-            }
-        }
-        return Collections.unmodifiableSet(replicaKeys);
+        return voterStates.values()
+            .stream()
+            .filter(
+                state -> state.replicaKey.id() != localVoterNode.voterKey().id() &&
+                currentTimeMs - state.lastFetchTimestamp >= beginQuorumEpochTimeoutMs
+            )
+            .map(ReplicaState::replicaKey)
+            .collect(Collectors.toUnmodifiableSet());
     }
 
     /**
