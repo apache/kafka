@@ -105,8 +105,11 @@ public class StateDirectoryTest {
         initializeStateDirectory(createStateDirectory, hasNamedTopology, false);
     }
 
-    private void initializeStateDirectory(final boolean createStateDirectory, final boolean hasNamedTopology,
-            final boolean allowOsGroupWriteAccess) throws IOException {
+    private void initializeStateDirectory(
+            final boolean createStateDirectory,
+            final boolean hasNamedTopology,
+            final boolean allowOsGroupWriteAccess
+    ) throws IOException {
         stateDir = new File(TestUtils.IO_TMP_DIR, "kafka-" + TestUtils.randomString(5));
         if (!createStateDirectory) {
             cleanup();
@@ -141,19 +144,30 @@ public class StateDirectoryTest {
 
     @Test
     public void shouldHaveSecurePermissions() {
-        assertPermissions(stateDir);
-        assertPermissions(appDir);
+        assertPermissions(stateDir, false);
+        assertPermissions(appDir, false);
     }
 
     @Test
     public void shouldHaveSecurePermissionsIfGroupWriteAccessAllowed() throws IOException {
+        cleanup();
         initializeStateDirectory(true, false, true);
         assertPermissions(stateDir, true);
         assertPermissions(appDir, true);
     }
 
-    private void assertPermissions(final File file) {
-        assertPermissions(file, false);
+    @Test
+    public void shouldUpdateSecurePermissions() throws IOException {
+        assertPermissions(stateDir, false);
+        assertPermissions(appDir, false);
+
+        initializeStateDirectory(true, false, true);
+        assertPermissions(stateDir, true);
+        assertPermissions(appDir, true);
+
+        initializeStateDirectory(true, false, false);
+        assertPermissions(stateDir, false);
+        assertPermissions(appDir, false);
     }
 
     private void assertPermissions(final File file, final boolean allowOsGroupWriteAccess) {
