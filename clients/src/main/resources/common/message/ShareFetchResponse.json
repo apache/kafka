@@ -21,7 +21,7 @@
   //
   // Version 1 is the initial stable version (KIP-932).
   //
-  // Version 2 introduces AcknowledgeType Renew (KIP-1222).
+  // Version 2 introduces ShareAcquireMode and AcknowledgeType Renew (KIP-1206 and KIP-1222).
   "validVersions": "1-2",
   "flexibleVersions": "0+",
   // Supported errors for ErrorCode and AcknowledgeErrorCode:

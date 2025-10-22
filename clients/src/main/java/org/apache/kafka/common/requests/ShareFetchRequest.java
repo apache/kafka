@@ -139,18 +139,10 @@ public class ShareFetchRequest extends AbstractRequest {
         @Override
         public ShareFetchRequest build(short version) {
             if (version < 2) {
-                // The v1 does not support AcknowledgeType RENEW.
-                data.topics().forEach(topic ->
-                    topic.partitions().forEach(partition ->
-                        partition.acknowledgementBatches().forEach(ackBatch ->
-                            ackBatch.acknowledgeTypes().forEach(ackType -> {
-                                if (ackType == 4) {
-                                    throw new UnsupportedVersionException("The v1 ShareFetch does not support AcknowledgeType.RENEW");
-                                }
-                            })
-                        )
-                    )
-                );
+                // The v1 does not support ShareAcquireMode Renew.
+                if (data.shareAcquireMode() == (byte) 255) {
+                    throw new UnsupportedVersionException("The v1 ShareFetch does not support AcknowledgeType.RENEW");
+                }
             }
             return new ShareFetchRequest(data, version);
         }
