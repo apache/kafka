@@ -259,12 +259,12 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private[server] val reconfigurables = new CopyOnWriteArrayList[Reconfigurable]()
   private val brokerReconfigurables = new CopyOnWriteArrayList[BrokerReconfigurable]()
   private val lock = new ReentrantReadWriteLock
-  private var metricsReceiverPluginOpt: Option[ClientTelemetryExporterPlugin] = _
+  private var telemetryExporterPluginOpt: Option[ClientTelemetryExporterPlugin] = _
   private var currentConfig: KafkaConfig = _
 
-  private[server] def initialize(clientMetricsReceiverPluginOpt: Option[ClientTelemetryExporterPlugin]): Unit = {
+  private[server] def initialize(clientTelemetryExporterPluginOpt: Option[ClientTelemetryExporterPlugin]): Unit = {
     currentConfig = new KafkaConfig(kafkaConfig.props, false)
-    metricsReceiverPluginOpt = clientMetricsReceiverPluginOpt
+    telemetryExporterPluginOpt = clientTelemetryExporterPluginOpt
   }
 
   /**
@@ -374,8 +374,8 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     dynamicDefaultConfigs.clone()
   }
 
-  private[server] def clientMetricsReceiverPlugin: Option[ClientTelemetryExporterPlugin] = CoreUtils.inReadLock(lock) {
-    metricsReceiverPluginOpt
+  private[server] def clientTelemetryExporterPlugin: Option[ClientTelemetryExporterPlugin] = CoreUtils.inReadLock(lock) {
+    telemetryExporterPluginOpt
   }
 
   private[server] def updateBrokerConfig(brokerId: Int, persistentProps: Properties, doLog: Boolean = true): Unit = CoreUtils.inWriteLock(lock) {
@@ -844,14 +844,14 @@ class DynamicMetricReporterState(brokerId: Int, config: KafkaConfig, metrics: Me
 
       // Support both deprecated ClientTelemetry and new ClientTelemetryExporterProvider interfaces
       // If a class implements both, only use the new (i.e., ClientTelemetryExporterProvider interface)
-      dynamicConfig.clientMetricsReceiverPlugin match {
-        case Some(receiverPlugin) =>
+      dynamicConfig.clientTelemetryExporterPlugin match {
+        case Some(telemetryExporterPlugin) =>
           reporter match {
             case exporterProvider: ClientTelemetryExporterProvider =>
               // Use new interface (i.e., takes precedence even if class also implements deprecated interface)
-              receiverPlugin.add(exporterProvider.clientTelemetryExporter())
+              telemetryExporterPlugin.add(exporterProvider.clientTelemetryExporter())
             case telemetry: ClientTelemetry =>
-              receiverPlugin.add(telemetry.clientReceiver())
+              telemetryExporterPlugin.add(telemetry.clientReceiver())
             case _ =>
               // Reporter doesn't support client telemetry
           }
