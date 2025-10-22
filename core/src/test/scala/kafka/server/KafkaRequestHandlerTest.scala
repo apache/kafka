@@ -750,9 +750,8 @@ class KafkaRequestHandlerTest {
     // or timeout after the given duration.
     val mockTime = new MockTime()
     val startTime = mockTime.milliseconds()
-    val timeoutMs = startTime + 8000
     while(aggregateValue == 0.0 || brokerPerPoolValue == 0.0 || controllerPerPoolValue == 0.0) {
-      if (mockTime.milliseconds() - startTime > timeoutMs)
+      if (mockTime.milliseconds() - startTime > 8000)
         throw new RuntimeException("Timeout waiting for idle-percent metrics to initialize")
       aggregateValue = aggregateMeter.oneMinuteRate()
       brokerPerPoolValue = brokerPerPoolIdleMeter.oneMinuteRate()
