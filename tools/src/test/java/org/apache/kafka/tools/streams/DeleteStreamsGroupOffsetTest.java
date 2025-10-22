@@ -154,6 +154,7 @@ public class DeleteStreamsGroupOffsetTest {
             getStreamsGroupService(args);
         } finally {
             assertTrue(exited.get());
+            Exit.resetExitProcedure();
         }
     }
 

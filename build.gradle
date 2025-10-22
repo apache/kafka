@@ -33,14 +33,14 @@ plugins {
   id 'idea'
   id 'jacoco'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '12.1.3'
+  id 'org.owasp.dependencycheck' version '12.1.8'
   id 'org.nosphere.apache.rat' version "0.8.1"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
-  id "com.github.spotbugs" version '6.2.5' apply false
-  id 'org.scoverage' version '8.0.3' apply false
+  id "com.github.spotbugs" version '6.4.4' apply false
+  id 'org.scoverage' version '8.1' apply false
   id 'com.gradleup.shadow' version '8.3.9' apply false
-  id 'com.diffplug.spotless' version "7.2.1"
+  id 'com.diffplug.spotless' version "8.0.0"
 }
 
 ext {
@@ -71,13 +71,6 @@ ext {
       "--add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED"
     )
 
-  if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_25)) {
-    // Spotbugs is not compatible with Java 25+ so Gradle related tasks are disabled
-    // until version can be upgraded: https://github.com/spotbugs/spotbugs/issues/3564
-    project.gradle.startParameter.excludedTaskNames.add("spotbugsMain")
-    project.gradle.startParameter.excludedTaskNames.add("spotbugsTest")
-  }    
-
   maxTestForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : Runtime.runtime.availableProcessors()
   maxScalacThreads = project.hasProperty('maxScalacThreads') ? maxScalacThreads.toInteger() :
       Math.min(Runtime.runtime.availableProcessors(), 8)
@@ -102,7 +95,7 @@ ext {
   userKeepAliveModeString = project.hasProperty("keepAliveMode") ? keepAliveMode : "daemon"
   userKeepAliveMode = KeepAliveMode.values().find(m -> m.name().toLowerCase().equals(userKeepAliveModeString))
   if (userKeepAliveMode == null) {
-    def keepAliveValues = KeepAliveMode.values().collect(m -> m.name.toLowerCase())
+    def keepAliveValues = KeepAliveMode.values().collect(m -> m.name().toLowerCase())
     throw new GradleException("Unexpected value for keepAliveMode property. Expected one of $keepAliveValues, but received: $userKeepAliveModeString")
   }
 
@@ -136,6 +129,11 @@ ext {
       options.compilerArgs << "-Xlint:-serial"
       options.compilerArgs << "-Xlint:-try"
       options.compilerArgs << "-Werror"
+      if (userKeepAliveMode == KeepAliveMode.SESSION){
+        // Suppress warning triggered under keepAliveMode=SESSION during joint compilation
+        // Unexpected javac output: warning: [path] bad path element ".../core/build/classes/java/main": no such file or directory
+        options.compilerArgs << "-Xlint:-path"
+      }
     }
   }
 
@@ -603,6 +601,9 @@ subprojects {
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
@@ -635,6 +636,9 @@ subprojects {
   }
 
   task unitTest(type: Test, dependsOn: compileJava) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
@@ -1118,9 +1122,7 @@ project(':core') {
   if (userEnableTestCoverage) {
     scoverage {
       scoverageVersion = versions.scoverage
-      if (versions.baseScala == '2.13') {
-        scoverageScalaVersion = '2.13.9' // there's no newer 2.13 artifact, org.scoverage:scalac-scoverage-plugin_2.13.9:2.0.11 is the latest as of now
-      }
+      scoverageScalaVersion = versions.scala
       reportDir = file("${layout.buildDirectory.get().asFile.path}/scoverage")
       highlighting = false
       minimumRate = 0.0
@@ -2899,6 +2901,7 @@ project(':streams:integration-tests') {
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
     testImplementation project(':streams:test-utils')
+    testImplementation project(':test-common:test-common-util')
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -3716,8 +3719,12 @@ project(':connect:runtime') {
     buildClasspath = classpath + configurations.swagger
     outputFileName = 'connect_rest'
     outputFormat = 'YAML'
-    prettyPrint = 'TRUE'
-    sortOutput = 'TRUE'
+    prettyPrint = true
+    sortOutput = true
+    encoding = 'UTF-8'
+    alwaysResolveAppPath = false
+    skipResolveAppPath = false
+    readAllResources = true
     openApiFile = file("${layout.buildDirectory.get().asFile.path}/resources/docs/openapi.yaml")
     resourcePackages = ['org.apache.kafka.connect.runtime.rest.resources']
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
