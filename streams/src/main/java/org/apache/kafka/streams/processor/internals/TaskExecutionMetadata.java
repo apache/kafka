@@ -71,7 +71,7 @@ public class TaskExecutionMetadata {
             return !pausedTopologies.contains(UNNAMED_TOPOLOGY);
         } else {
             if (pausedTopologies.contains(topologyName)) {
-                log.debug("Task {} can't be processed: topology '{}' is paused", task.id(), topologyName);
+                log.trace("Task {} can't be processed: topology '{}' is paused", task.id(), topologyName);
                 return false;
             } else {
                 log.trace("Task {} processing check for named topology '{}'", task.id(), topologyName);
