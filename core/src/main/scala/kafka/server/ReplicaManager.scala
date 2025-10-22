@@ -1656,6 +1656,8 @@ class ReplicaManager(val config: KafkaConfig,
 
     // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
     val delayedFetchKeys = remoteFetchTasks.asScala.map { case (tp, _) => new TopicPartitionOperationKey(tp) }.toList
+    // We only guarantee eventual cleanup via the next FETCH request for the same set of partitions or
+    // using reaper-thread.
     delayedRemoteFetchPurgatory.tryCompleteElseWatch(remoteFetch, delayedFetchKeys.asJava)
   }
 
@@ -1740,8 +1742,6 @@ class ReplicaManager(val config: KafkaConfig,
         // try to complete the request immediately, otherwise put it into the purgatory;
         // this is because while the delayed fetch operation is being created, new requests
         // may arrive and hence make this operation completable.
-        // We only guarantee eventual cleanup via the next FETCH request for the same set of partitions or
-        // using reaper-thread.
         delayedFetchPurgatory.tryCompleteElseWatch(delayedFetch, delayedFetchKeys.asJava)
       }
     }
