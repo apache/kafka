@@ -155,7 +155,7 @@ public class DelayedRemoteFetch extends DelayedOperation {
         Map<TopicIdPartition, FetchPartitionData> fetchPartitionData = new LinkedHashMap<>();
         localReadResults.forEach((tpId, result) -> {
             CompletableFuture<RemoteLogReadResult> remoteFetchResult = remoteFetchResults.get(tpId);
-            if (remoteFetchInfos.containsKey(tpId)
+            if (remoteFetchResults.containsKey(tpId)
                 && remoteFetchResult.isDone()
                 && result.error() == Errors.NONE
                 && result.info().delayedRemoteStorageFetch.isPresent()) {
