@@ -253,7 +253,7 @@ public class ConnectMetrics {
             Objects.requireNonNull(groupName);
             Objects.requireNonNull(tags);
             this.groupName = groupName;
-            this.tags = Collections.unmodifiableMap(new LinkedHashMap<>(tags));
+            this.tags = Collections.unmodifiableMap(new LinkedHashMap<>(tags)); // To ensure the order of insertion, we have to use Collections.
             this.hc = Objects.hash(this.groupName, this.tags);
             StringBuilder sb = new StringBuilder(this.groupName);
             for (Map.Entry<String, String> entry : this.tags.entrySet()) {

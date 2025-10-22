@@ -63,16 +63,15 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.singleton;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
 /**
@@ -367,12 +366,12 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
 
     //VisibleForTesting
     Map<TopicPartition, OffsetAndMetadata> lastCommittedOffsets() {
-        return Collections.unmodifiableMap(lastCommittedOffsets);
+        return Map.copyOf(lastCommittedOffsets);
     }
 
     //VisibleForTesting
     Map<TopicPartition, OffsetAndMetadata> currentOffsets() {
-        return Collections.unmodifiableMap(currentOffsets);
+        return Map.copyOf(currentOffsets);
     }
 
     private void doCommitSync(Map<TopicPartition, OffsetAndMetadata> offsets, int seqno) {
@@ -613,7 +612,7 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
     private void resumeAll() {
         for (TopicPartition tp : consumer.assignment())
             if (!context.pausedPartitions().contains(tp))
-                consumer.resume(singleton(tp));
+                consumer.resume(Set.of(tp));
     }
 
     private void pauseAll() {

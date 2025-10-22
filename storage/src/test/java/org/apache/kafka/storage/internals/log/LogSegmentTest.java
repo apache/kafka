@@ -824,8 +824,8 @@ public class LogSegmentTest {
         segment.append(2L, record);
 
         assertEquals(2, segment.offsetIndex().entries());
-        assertEquals(1, segment.offsetIndex().entry(0).offset);
-        assertEquals(2, segment.offsetIndex().entry(1).offset);
+        assertEquals(1, segment.offsetIndex().entry(0).offset());
+        assertEquals(2, segment.offsetIndex().entry(1).offset());
 
         assertEquals(2, segment.timeIndex().entries());
         assertEquals(new TimestampOffset(1, 1), segment.timeIndex().entry(0));
@@ -857,8 +857,8 @@ public class LogSegmentTest {
         segment.append(2L, record);
 
         assertEquals(2, segment.offsetIndex().entries());
-        assertEquals(1, segment.offsetIndex().entry(0).offset);
-        assertEquals(2, segment.offsetIndex().entry(1).offset);
+        assertEquals(1, segment.offsetIndex().entry(0).offset());
+        assertEquals(2, segment.offsetIndex().entry(1).offset());
 
         assertEquals(2, segment.timeIndex().entries());
         assertEquals(new TimestampOffset(1, 0), segment.timeIndex().entry(0));

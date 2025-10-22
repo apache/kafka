@@ -301,8 +301,12 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     /**
-     * Get offset relative to base offset of this index
-     * @throws IndexOffsetOverflowException
+     * Gets the offset relative to the {@code baseOffset} of this index.
+     *
+     * @param offset the absolute offset to be converted into a relative offset from {@code baseOffset}
+     * @return the relative offset as an {@code int}
+     * @throws IndexOffsetOverflowException if the input offset is lesser than the base offset
+     *                                      or if the relative offset exceeds {@link Integer#MAX_VALUE}
      */
     public int relativeOffset(long offset) {
         OptionalInt relativeOffset = toRelative(offset);
@@ -503,12 +507,10 @@ public abstract class AbstractIndex implements Closeable {
 
         // check if the target offset is smaller than the least offset
         if (compareIndexEntry(parseEntry(idx, 0), target, searchEntity) > 0) {
-            switch (searchResultType) {
-                case LARGEST_LOWER_BOUND:
-                    return -1;
-                case SMALLEST_UPPER_BOUND:
-                    return 0;
-            }
+            return switch (searchResultType) {
+                case LARGEST_LOWER_BOUND -> -1;
+                case SMALLEST_UPPER_BOUND -> 0;
+            };
         }
 
         return binarySearch(idx, target, searchEntity, searchResultType, 0, firstHotEntry);
@@ -544,18 +546,10 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     private int compareIndexEntry(IndexEntry indexEntry, long target, IndexSearchType searchEntity) {
-        int result;
-        switch (searchEntity) {
-            case KEY:
-                result = Long.compare(indexEntry.indexKey(), target);
-                break;
-            case VALUE:
-                result = Long.compare(indexEntry.indexValue(), target);
-                break;
-            default:
-                throw new IllegalStateException("Unexpected IndexSearchType: " + searchEntity);
-        }
-        return result;
+        return switch (searchEntity) {
+            case KEY -> Long.compare(indexEntry.indexKey(), target);
+            case VALUE -> Long.compare(indexEntry.indexValue(), target);
+        };
     }
 
     private OptionalInt toRelative(long offset) {

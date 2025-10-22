@@ -88,8 +88,11 @@ class ConnectionQuotasTest {
     // Clean-up any metrics left around by previous tests
     TestUtils.clearYammerMetrics()
 
+    val metricsPackage = "kafka.network"
+    val metricsClassName = "ConnectionQuotasTest"
+
     listeners.keys.foreach { name =>
-        blockedPercentMeters.put(name, new KafkaMetricsGroup(this.getClass).newMeter(
+        blockedPercentMeters.put(name, new KafkaMetricsGroup(metricsPackage, metricsClassName).newMeter(
           s"${name}BlockedPercent", "blocked time", TimeUnit.NANOSECONDS, util.Map.of(ListenerMetricTag, name)))
     }
     // use system time, because ConnectionQuota causes the current thread to wait with timeout, which waits based on

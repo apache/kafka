@@ -135,12 +135,7 @@ public class AbstractCoordinatorTest {
             Optional.empty(), Optional.empty());
     }
 
-
     private void setupCoordinator(int retryBackoffMs, int retryBackoffMaxMs, int rebalanceTimeoutMs, Optional<String> groupInstanceId, Optional<Supplier<BaseHeartbeatThread>> heartbeatThreadSupplier) {
-        setupCoordinator(retryBackoffMs, retryBackoffMaxMs, rebalanceTimeoutMs, groupInstanceId, heartbeatThreadSupplier, groupInstanceId.isEmpty());
-    }
-
-    private void setupCoordinator(int retryBackoffMs, int retryBackoffMaxMs, int rebalanceTimeoutMs, Optional<String> groupInstanceId, Optional<Supplier<BaseHeartbeatThread>> heartbeatThreadSupplier, boolean leaveOnClose) {
         LogContext logContext = new LogContext();
         this.mockTime = new MockTime();
         ConsumerMetadata metadata = new ConsumerMetadata(retryBackoffMs, retryBackoffMaxMs, 60 * 60 * 1000L,
@@ -168,8 +163,7 @@ public class AbstractCoordinatorTest {
                                                                         groupInstanceId,
                                                                         null,
                                                                         retryBackoffMs,
-                                                                        retryBackoffMaxMs,
-                                                                        leaveOnClose);
+                                                                        retryBackoffMaxMs);
         this.coordinator = new DummyCoordinator(rebalanceConfig,
                                                 consumerClient,
                                                 metrics,
@@ -1109,7 +1103,7 @@ public class AbstractCoordinatorTest {
     @ParameterizedTest
     @MethodSource("groupInstanceIdAndMembershipOperationMatrix")
     public void testLeaveGroupSentWithGroupInstanceIdUnSetAndDifferentGroupMembershipOperation(Optional<String> groupInstanceId, CloseOptions.GroupMembershipOperation operation) {
-        checkLeaveGroupRequestSent(groupInstanceId, operation, Optional.empty(), true);
+        checkLeaveGroupRequestSent(groupInstanceId, operation, Optional.empty());
     }
 
     private static Stream<Arguments> groupInstanceIdAndMembershipOperationMatrix() {
@@ -1124,11 +1118,11 @@ public class AbstractCoordinatorTest {
     }
 
     private void checkLeaveGroupRequestSent(Optional<String> groupInstanceId)  {
-        checkLeaveGroupRequestSent(groupInstanceId, CloseOptions.GroupMembershipOperation.DEFAULT, Optional.empty(), groupInstanceId.isEmpty());
+        checkLeaveGroupRequestSent(groupInstanceId, CloseOptions.GroupMembershipOperation.DEFAULT, Optional.empty());
     }
 
-    private void checkLeaveGroupRequestSent(Optional<String> groupInstanceId, CloseOptions.GroupMembershipOperation operation, Optional<Supplier<BaseHeartbeatThread>> heartbeatThreadSupplier, boolean leaveOnClose) {
-        setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, Integer.MAX_VALUE, groupInstanceId, heartbeatThreadSupplier, leaveOnClose);
+    private void checkLeaveGroupRequestSent(Optional<String> groupInstanceId, CloseOptions.GroupMembershipOperation operation, Optional<Supplier<BaseHeartbeatThread>> heartbeatThreadSupplier) {
+        setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, Integer.MAX_VALUE, groupInstanceId, heartbeatThreadSupplier);
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));

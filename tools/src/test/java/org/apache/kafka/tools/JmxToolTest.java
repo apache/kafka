@@ -55,7 +55,7 @@ public class JmxToolTest {
     public static void beforeAll() throws Exception {
         int port = findRandomOpenPortOnAllLocalInterfaces();
         jmxUrl = format("service:jmx:rmi:///jndi/rmi://:%d/jmxrmi", port);
-        // explicitly set the hostname returned to the the clients in the remote stub object
+        // explicitly set the hostname returned to the clients in the remote stub object
         // when connecting to a multi-homed machine using RMI, the wrong address may be returned
         // by the RMI registry to the client, causing the connection to the RMI server to timeout
         System.setProperty("java.rmi.server.hostname", "localhost");
@@ -139,9 +139,9 @@ public class JmxToolTest {
             "--one-time"
         };
         String out = executeAndGetOut(args);
-        Arrays.stream(out.split("\\r?\\n")).forEach(line -> {
-            assertTrue(line.matches("([a-zA-Z0-9=:,.]+),\"([ -~]+)\""), line);
-        });
+        Arrays.stream(out.split("\\r?\\n")).forEach(line ->
+            assertTrue(line.matches("([a-zA-Z0-9=:,.]+),\"([ -~]+)\""), line)
+        );
     }
 
     @Test
@@ -153,9 +153,9 @@ public class JmxToolTest {
             "--one-time"
         };
         String out = executeAndGetOut(args);
-        Arrays.stream(out.split("\\r?\\n")).forEach(line -> {
-            assertTrue(line.matches("([a-zA-Z0-9=:,.]+)\\t([ -~]+)"), line);
-        });
+        Arrays.stream(out.split("\\r?\\n")).forEach(line ->
+            assertTrue(line.matches("([a-zA-Z0-9=:,.]+)\\t([ -~]+)"), line)
+        );
     }
 
     @Test

@@ -881,6 +881,7 @@ public class StreamsGroupCommand {
                 List<String> topics = opts.options.valuesOf(opts.inputTopicOpt);
 
                 List<TopicPartition> partitions = offsetsUtils.parseTopicPartitionsToReset(topics);
+                offsetsUtils.checkAllTopicPartitionsValid(partitions);
                 // if the user specified topics that do not belong to this group, we filter them out
                 partitions = filterExistingGroupTopics(groupId, partitions);
                 return partitions;

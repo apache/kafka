@@ -71,6 +71,11 @@ public interface ShareConsumer<K, V> extends Closeable {
     void acknowledge(ConsumerRecord<K, V> record, AcknowledgeType type);
 
     /**
+     * @see KafkaShareConsumer#acknowledge(String, int, long, AcknowledgeType)
+     */
+    void acknowledge(String topic, int partition, long offset, AcknowledgeType type);
+
+    /**
      * @see KafkaShareConsumer#commitSync()
      */
     Map<TopicIdPartition, Optional<KafkaException>> commitSync();

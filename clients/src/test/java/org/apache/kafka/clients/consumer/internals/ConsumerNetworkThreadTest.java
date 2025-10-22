@@ -33,6 +33,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
@@ -42,7 +43,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Supplier;
 
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -206,10 +206,11 @@ public class ConsumerNetworkThreadTest {
         verify(networkClientDelegate, times(2)).poll(anyLong(), anyLong());
     }
 
-    @Test
-    public void testRunOnceRecordTimeBetweenNetworkThreadPoll() {
+    @ParameterizedTest
+    @MethodSource("org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetricsTest#groupNameProvider")
+    public void testRunOnceRecordTimeBetweenNetworkThreadPoll(String groupName) {
         try (Metrics metrics = new Metrics();
-             AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics);
+             AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, groupName);
              ConsumerNetworkThread consumerNetworkThread = new ConsumerNetworkThread(
                      new LogContext(),
                      time,
@@ -228,22 +229,23 @@ public class ConsumerNetworkThreadTest {
             assertEquals(
                 10,
                 (double) metrics.metric(
-                    metrics.metricName("time-between-network-thread-poll-avg", CONSUMER_METRIC_GROUP)
+                    metrics.metricName("time-between-network-thread-poll-avg", groupName)
                 ).metricValue()
             );
             assertEquals(
                 10,
                 (double) metrics.metric(
-                    metrics.metricName("time-between-network-thread-poll-max", CONSUMER_METRIC_GROUP)
+                    metrics.metricName("time-between-network-thread-poll-max", groupName)
                 ).metricValue()
             );
         }
     }
 
-    @Test
-    public void testRunOnceRecordApplicationEventQueueSizeAndApplicationEventQueueTime() {
+    @ParameterizedTest
+    @MethodSource("org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetricsTest#groupNameProvider")
+    public void testRunOnceRecordApplicationEventQueueSizeAndApplicationEventQueueTime(String groupName) {
         try (Metrics metrics = new Metrics();
-             AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics);
+             AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, groupName);
              ConsumerNetworkThread consumerNetworkThread = new ConsumerNetworkThread(
                      new LogContext(),
                      time,
@@ -266,19 +268,19 @@ public class ConsumerNetworkThreadTest {
             assertEquals(
                 0,
                 (double) metrics.metric(
-                    metrics.metricName("application-event-queue-size", CONSUMER_METRIC_GROUP)
+                    metrics.metricName("application-event-queue-size", groupName)
                 ).metricValue()
             );
             assertEquals(
                 10,
                 (double) metrics.metric(
-                    metrics.metricName("application-event-queue-time-avg", CONSUMER_METRIC_GROUP)
+                    metrics.metricName("application-event-queue-time-avg", groupName)
                 ).metricValue()
             );
             assertEquals(
                 10,
                 (double) metrics.metric(
-                    metrics.metricName("application-event-queue-time-max", CONSUMER_METRIC_GROUP)
+                    metrics.metricName("application-event-queue-time-max", groupName)
                 ).metricValue()
             );
         }

@@ -211,11 +211,7 @@ public final class TopicDelta {
 
             try {
                 PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
-                if (
-                        prevPartition == null ||
-                        prevPartition.directories == null ||
-                        prevPartition.directory(brokerId) != entry.getValue().directory(brokerId)
-                ) {
+                if (prevPartition == null || prevPartition.directory(brokerId) != entry.getValue().directory(brokerId)) {
                     directoryIds.put(
                         new TopicIdPartition(id(), new TopicPartition(name(), entry.getKey())),
                         entry.getValue().directory(brokerId)

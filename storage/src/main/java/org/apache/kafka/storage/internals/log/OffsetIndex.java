@@ -30,25 +30,25 @@ import java.util.Optional;
  * An index that maps offsets to physical file locations for a particular log segment. This index may be sparse:
  * that is it may not hold an entry for all messages in the log.
  *
- * The index is stored in a file that is pre-allocated to hold a fixed maximum number of 8-byte entries.
+ * <p>The index is stored in a file that is pre-allocated to hold a fixed maximum number of 8-byte entries.
  *
- * The index supports lookups against a memory-map of this file. These lookups are done using a simple binary search variant
+ * <p>The index supports lookups against a memory-map of this file. These lookups are done using a simple binary search variant
  * to locate the offset/location pair for the greatest offset less than or equal to the target offset.
  *
- * Index files can be opened in two ways: either as an empty, mutable index that allows appends or
+ * <p>Index files can be opened in two ways: either as an empty, mutable index that allows appends or
  * an immutable read-only index file that has previously been populated. The makeReadOnly method will turn a mutable file into an
  * immutable one and truncate off any extra bytes. This is done when the index file is rolled over.
  *
- * No attempt is made to checksum the contents of this file, in the event of a crash it is rebuilt.
+ * <p>No attempt is made to checksum the contents of this file, in the event of a crash it is rebuilt.
  *
- * The file format is a series of entries. The physical format is a 4 byte "relative" offset and a 4 byte file location for the
+ * <p>The file format is a series of entries. The physical format is a 4 byte "relative" offset and a 4 byte file location for the
  * message with that offset. The offset stored is relative to the base offset of the index file. So, for example,
  * if the base offset was 50, then the offset 55 would be stored as 5. Using relative offsets in this way let's us use
  * only 4 bytes for the offset.
  *
- * The frequency of entries is up to the user of this class.
+ * <p>The frequency of entries is up to the user of this class.
  *
- * All external APIs translate from relative offsets to full offsets, so users of this class do not interact with the internal
+ * <p>All external APIs translate from relative offsets to full offsets, so users of this class do not interact with the internal
  * storage format.
  */
 public final class OffsetIndex extends AbstractIndex {
@@ -69,7 +69,7 @@ public final class OffsetIndex extends AbstractIndex {
     public OffsetIndex(File file, long baseOffset, int maxIndexSize, boolean writable) throws IOException {
         super(file, baseOffset, maxIndexSize, writable);
 
-        lastOffset = lastEntry().offset;
+        lastOffset = lastEntry().offset();
 
         log.debug("Loaded index file {} with maxEntries = {}, maxIndexSize = {}, entries = {}, lastOffset = {}, file position = {}",
             file.getAbsolutePath(), maxEntries(), maxIndexSize, entries(), lastOffset, mmap().position());
@@ -127,7 +127,7 @@ public final class OffsetIndex extends AbstractIndex {
     public Optional<OffsetPosition> fetchUpperBoundOffset(OffsetPosition fetchOffset, int fetchSize) {
         return inRemapReadLock(() -> {
             ByteBuffer idx = mmap().duplicate();
-            int slot = smallestUpperBoundSlotFor(idx, fetchOffset.position + fetchSize, IndexSearchType.VALUE);
+            int slot = smallestUpperBoundSlotFor(idx, fetchOffset.position() + fetchSize, IndexSearchType.VALUE);
             if (slot == -1)
                 return Optional.empty();
             else
@@ -214,7 +214,7 @@ public final class OffsetIndex extends AbstractIndex {
     private void truncateToEntries(int entries) {
         inLock(() -> {
             super.truncateToEntries0(entries);
-            this.lastOffset = lastEntry().offset;
+            this.lastOffset = lastEntry().offset();
             log.debug("Truncated index {} to {} entries; position is now {} and last offset is now {}",
                 file().getAbsolutePath(), entries, mmap().position(), lastOffset);
         });

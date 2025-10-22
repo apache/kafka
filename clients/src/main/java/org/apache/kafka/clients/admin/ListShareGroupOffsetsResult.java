@@ -46,7 +46,7 @@ public class ListShareGroupOffsetsResult {
     /**
      * Return the future when the requests for all groups succeed.
      *
-     * @return Future which yields all {@code Map<String, Map<TopicPartition, Long>>} objects, if requests for all the groups succeed.
+     * @return Future which yields all {@code Map<String, Map<TopicPartition, OffsetAndMetadata>>} objects, if requests for all the groups succeed.
      */
     public KafkaFuture<Map<String, Map<TopicPartition, OffsetAndMetadata>>> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0])).thenApply(

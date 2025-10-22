@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.server.share.fetch;
 
+import org.apache.kafka.common.Uuid;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,10 +27,18 @@ import java.util.Objects;
  * The InFlightState is used to track the state and delivery count of a record that has been
  * fetched from the leader. The state of the record is used to determine if the record should
  * be re-deliver or if it can be acknowledged or archived.
+ * <p>
+ * This class is not thread-safe and caller should attain locks if concurrent updates on same state
+ * is expected.
  */
 public class InFlightState {
 
     private static final Logger log = LoggerFactory.getLogger(InFlightState.class);
+
+    /**
+     * empty member id used to indicate when a record is not acquired by any member.
+     */
+    private static final String EMPTY_MEMBER_ID = Uuid.ZERO_UUID.toString();
 
     // The state of the fetch batch records.
     private RecordState state;
@@ -38,9 +48,12 @@ public class InFlightState {
     private String memberId;
     // The state of the records before the transition. In case we need to revert an in-flight state, we revert the above
     // attributes of InFlightState to this state, namely - state, deliveryCount and memberId.
-    private InFlightState rollbackState;
+    private RollbackState rollbackState;
     // The timer task for the acquisition lock timeout.
     private AcquisitionLockTimerTask acquisitionLockTimeoutTask;
+    // The boolean determines if the record has achieved a terminal state of ARCHIVED from which it cannot transition
+    // to any other state. This could happen because of LSO movement etc.
+    private boolean isTerminalState = false;
 
     // Visible for testing.
     public InFlightState(RecordState state, int deliveryCount, String memberId) {
@@ -103,8 +116,10 @@ public class InFlightState {
      * and clear the reference to it.
      */
     public void cancelAndClearAcquisitionLockTimeoutTask() {
-        acquisitionLockTimeoutTask.cancel();
-        acquisitionLockTimeoutTask = null;
+        if (acquisitionLockTimeoutTask != null) {
+            acquisitionLockTimeoutTask.cancel();
+            acquisitionLockTimeoutTask = null;
+        }
     }
 
     /**
@@ -115,12 +130,9 @@ public class InFlightState {
      * @return true if there is an ongoing state transition, false otherwise.
      */
     public boolean hasOngoingStateTransition() {
-        if (rollbackState == null) {
-            // This case could occur when the batch/offset hasn't transitioned even once or the state transitions have
-            // been committed.
-            return false;
-        }
-        return rollbackState.state != null;
+        // If batch/offset hasn't transitioned even once or the state transitions have been
+        // committed then rollbackState should always be null.
+        return rollbackState != null;
     }
 
     /**
@@ -138,6 +150,17 @@ public class InFlightState {
      */
     public InFlightState tryUpdateState(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId) {
         try {
+            // If the state transition is in progress, the state should not be updated.
+            if (hasOngoingStateTransition()) {
+                // A misbehaving client can send multiple requests to update the same records hence
+                // do not proceed if the transition is already in progress. Do not log an error here
+                // as it might not be an error rather concurrent update of same state due to multiple
+                // requests. This ideally should not happen hence log in info level, if it happens
+                // frequently then it might be an issue which needs to be investigated.
+                log.info("{} has ongoing state transition, cannot update to: {}", this, newState);
+                return null;
+            }
+
             if (newState == RecordState.AVAILABLE && ops != DeliveryCountOps.DECREASE && deliveryCount >= maxDeliveryCount) {
                 newState = RecordState.ARCHIVED;
             }
@@ -149,7 +172,6 @@ public class InFlightState {
             return this;
         } catch (IllegalStateException e) {
             log.error("Failed to update state of the records", e);
-            rollbackState = null;
             return null;
         }
     }
@@ -159,9 +181,11 @@ public class InFlightState {
      * cancelling the acquisition lock timeout task.
      * This method is used to archive the record when it is no longer needed.
      */
-    public void archive(String newMemberId) {
+    public void archive() {
+        isTerminalState = true;
         state = RecordState.ARCHIVED;
-        memberId = newMemberId;
+        memberId = EMPTY_MEMBER_ID;
+        cancelAndClearAcquisitionLockTimeoutTask();
     }
 
     /**
@@ -178,8 +202,12 @@ public class InFlightState {
      *         helps update chaining.
      */
     public InFlightState startStateTransition(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId) {
-        rollbackState = new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask);
-        return tryUpdateState(newState, ops, maxDeliveryCount, newMemberId);
+        InFlightState currentState = new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask);
+        InFlightState updatedState = tryUpdateState(newState, ops, maxDeliveryCount, newMemberId);
+        if (updatedState != null) {
+            rollbackState = new RollbackState(currentState, maxDeliveryCount);
+        }
+        return updatedState;
     }
 
     /**
@@ -190,13 +218,29 @@ public class InFlightState {
      * @param commit If true, commits the state transition, otherwise rolls back.
      */
     public void completeStateTransition(boolean commit) {
-        if (commit) {
+        if (commit || isTerminalState) {
+            // Cancel the acquisition lock timeout task for the state since it is acknowledged/released successfully.
+            cancelAndClearAcquisitionLockTimeoutTask();
             rollbackState = null;
             return;
         }
-        state = rollbackState.state;
-        deliveryCount = rollbackState.deliveryCount;
-        memberId = rollbackState.memberId;
+        InFlightState previousState = rollbackState.state();
+        // Check is acquisition lock timeout task is expired then mark the message as Available.
+        if (acquisitionLockTimeoutTask != null && acquisitionLockTimeoutTask.hasExpired()) {
+            // If the acquisition lock timeout task has expired, we should mark the record as available.
+            // However, if the delivery count has reached the maximum delivery count, we should archive the record.
+            state = previousState.deliveryCount() >= rollbackState.maxDeliveryCount ?
+                RecordState.ARCHIVED : RecordState.AVAILABLE;
+            memberId = EMPTY_MEMBER_ID;
+            cancelAndClearAcquisitionLockTimeoutTask();
+        } else {
+            state = previousState.state();
+            memberId = previousState.memberId();
+        }
+        // Do not revert the delivery count as the delivery count should not be reverted for the failed
+        // state transition. However, in the current implementation, the delivery count is only incremented
+        // when the state is updated to Acquired, hence reverting the delivery count is not needed when
+        // the state transition fails.
         rollbackState = null;
     }
 
@@ -233,5 +277,13 @@ public class InFlightState {
             ", deliveryCount=" + deliveryCount +
             ", memberId=" + memberId +
             ")";
+    }
+
+  /**
+   * This record is used to store the state before the transition. It is used to revert the state if the transition fails.
+   * @param state The state of the records before the transition.
+   * @param maxDeliveryCount The maximum delivery count for the record.
+   */
+    private record RollbackState(InFlightState state, int maxDeliveryCount) {
     }
 }

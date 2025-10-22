@@ -64,20 +64,7 @@ public class PeriodicTaskControlManagerTest {
         }
     }
 
-    static class TrackedTask {
-        final String tag;
-        final long deadlineNs;
-        final Supplier<ControllerResult<Void>> op;
-
-        TrackedTask(
-            String tag,
-            long deadlineNs,
-            Supplier<ControllerResult<Void>> op
-        ) {
-            this.tag = tag;
-            this.deadlineNs = deadlineNs;
-            this.op = op;
-        }
+    record TrackedTask(String tag, long deadlineNs, Supplier<ControllerResult<Void>> op) {
     }
 
     static class PeriodicTaskControlManagerTestEnv implements PeriodicTaskControlManager.QueueAccessor {

@@ -52,10 +52,10 @@ public final class ExpectListOffsetsAction implements TieredStorageTestAction {
                 .all()
                 .get()
                 .get(partition);
-        assertEquals(expected.startOffset, listOffsetsResult.offset());
-        if (expected.epoch != -1) {
+        assertEquals(expected.startOffset(), listOffsetsResult.offset());
+        if (expected.epoch() != -1) {
             assertTrue(listOffsetsResult.leaderEpoch().isPresent());
-            assertEquals(expected.epoch, listOffsetsResult.leaderEpoch().get());
+            assertEquals(expected.epoch(), listOffsetsResult.leaderEpoch().get());
         } else {
             assertFalse(listOffsetsResult.leaderEpoch().isPresent());
         }

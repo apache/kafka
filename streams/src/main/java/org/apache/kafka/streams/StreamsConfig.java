@@ -78,6 +78,7 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.config.ConfigDef.ListSize.atMostOfSize;
+import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 import static org.apache.kafka.common.config.ConfigDef.parseType;
@@ -287,66 +288,6 @@ public class StreamsConfig extends AbstractConfig {
         SINGLE_STORE_SELF_JOIN);
 
     /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.0.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_0100 = UpgradeFromValues.UPGRADE_FROM_0100.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.1.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_0101 = UpgradeFromValues.UPGRADE_FROM_0101.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.2.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_0102 = UpgradeFromValues.UPGRADE_FROM_0102.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.11.0.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_0110 = UpgradeFromValues.UPGRADE_FROM_0110.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 1.0.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_10 = UpgradeFromValues.UPGRADE_FROM_10.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 1.1.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_11 = UpgradeFromValues.UPGRADE_FROM_11.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.0.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_20 = UpgradeFromValues.UPGRADE_FROM_20.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.1.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_21 = UpgradeFromValues.UPGRADE_FROM_21.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.2.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_22 = UpgradeFromValues.UPGRADE_FROM_22.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.3.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_23 = UpgradeFromValues.UPGRADE_FROM_23.toString();
-
-    /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.4.x}.
      */
     @SuppressWarnings("WeakerAccess")
@@ -441,6 +382,12 @@ public class StreamsConfig extends AbstractConfig {
      */
     @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_40 = UpgradeFromValues.UPGRADE_FROM_40.toString();
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 4.1.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_41 = UpgradeFromValues.UPGRADE_FROM_41.toString();
 
 
     /**
@@ -829,13 +776,7 @@ public class StreamsConfig extends AbstractConfig {
     private static final String UPGRADE_FROM_DOC = "Allows live upgrading (and downgrading in some cases -- see upgrade guide) in a backward compatible way. Default is <code>null</code>. " +
         "Please refer to the Kafka Streams upgrade guide for instructions on how and when to use this config. " +
         "Note that when upgrading from 3.5 to a newer version it is never required to specify this config, " +
-        "while upgrading live directly to 4.0+ from 2.3 or below is no longer supported even with this config. " +
-        "Accepted values are \"" + UPGRADE_FROM_24 + "\", \"" +
-        UPGRADE_FROM_25 + "\", \"" + UPGRADE_FROM_26 + "\", \"" + UPGRADE_FROM_27 + "\", \"" +
-        UPGRADE_FROM_28 + "\", \"" + UPGRADE_FROM_30 + "\", \"" + UPGRADE_FROM_31 + "\", \"" +
-        UPGRADE_FROM_32 + "\", \"" + UPGRADE_FROM_33 + "\", \"" + UPGRADE_FROM_34 + "\", \"" +
-        UPGRADE_FROM_35 + "\", \"" + UPGRADE_FROM_36 + "\", \"" + UPGRADE_FROM_37 + "\", \"" +
-        UPGRADE_FROM_38 + "\", \"" + UPGRADE_FROM_39 + "\", \"" + "(for upgrading from the corresponding old version).";
+        "while upgrading live directly to 4.0+ from 2.3 or below is no longer supported even with this config.";
 
     /** {@code topology.optimization} */
     public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
@@ -901,6 +842,8 @@ public class StreamsConfig extends AbstractConfig {
                     APPLICATION_ID_DOC)
             .define(BOOTSTRAP_SERVERS_CONFIG, // required with no default value
                     Type.LIST,
+                    NO_DEFAULT_VALUE,
+                    ConfigDef.ValidList.anyNonDuplicateValues(false, false),
                     Importance.HIGH,
                     CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
             .define(NUM_STANDBY_REPLICAS_CONFIG,
@@ -1099,7 +1042,8 @@ public class StreamsConfig extends AbstractConfig {
             .define(CONFIG_PROVIDERS_CONFIG,
                     Type.LIST,
                     List.of(),
-                    Importance.LOW, 
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                    Importance.LOW,
                     CONFIG_PROVIDERS_DOC)
             .define(ENABLE_METRICS_PUSH_CONFIG,
                     Type.BOOLEAN,
@@ -1175,6 +1119,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(METRIC_REPORTER_CLASSES_CONFIG,
                     Type.LIST,
                     JmxReporter.class.getName(),
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                     Importance.LOW,
                     CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
             .define(METRICS_RECORDING_LEVEL_CONFIG,
@@ -1310,7 +1255,6 @@ public class StreamsConfig extends AbstractConfig {
         ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1000",
         ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
         ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
-        "internal.leave.group.on.close", false,
         ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic"
     );
 
@@ -1859,7 +1803,7 @@ public class StreamsConfig extends AbstractConfig {
 
             if (segmentSize < batchSize) {
                 throw new IllegalArgumentException(String.format(
-                    "Specified topic segment size %d is is smaller than the configured producer batch size %d, this will cause produced batch not able to be appended to the topic",
+                    "Specified topic segment size %d is smaller than the configured producer batch size %d, this will cause produced batch not able to be appended to the topic",
                     segmentSize,
                     batchSize
                 ));

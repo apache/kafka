@@ -88,6 +88,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
     final OptionSpec<Void> verboseOpt;
 
     final Set<OptionSpec<?>> allGroupSelectionScopeOpts;
+    final Set<OptionSpec<?>> allTopicSelectionScopeOpts;
     final Set<OptionSpec<?>> allShareGroupLevelOpts;
     final Set<OptionSpec<?>> allResetOffsetScenarioOpts;
     final Set<OptionSpec<?>> allDeleteOffsetsOpts;
@@ -143,6 +144,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
             .availableIf(describeOpt);
 
         allGroupSelectionScopeOpts = Set.of(groupOpt, allGroupsOpt);
+        allTopicSelectionScopeOpts = Set.of(topicOpt, allTopicsOpt);
         allShareGroupLevelOpts = Set.of(listOpt, describeOpt, deleteOpt, resetOffsetsOpt);
         allResetOffsetScenarioOpts = Set.of(resetToDatetimeOpt, resetToEarliestOpt, resetToLatestOpt);
         allDeleteOffsetsOpts = Set.of(groupOpt, topicOpt);
@@ -199,6 +201,16 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
             if (!options.has(groupOpt))
                 CommandLineUtils.printUsageAndExit(parser,
                     "Option " + resetOffsetsOpt + " takes the option: " + groupOpt);
+
+            if (!options.has(topicOpt) && !options.has(allTopicsOpt)) {
+                CommandLineUtils.printUsageAndExit(parser,
+                    "Option " + resetOffsetsOpt + " takes one of these options: " + allTopicSelectionScopeOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
+            }
+            
+            if (!options.has(resetToEarliestOpt) && !options.has(resetToLatestOpt) && !options.has(resetToDatetimeOpt)) {
+                CommandLineUtils.printUsageAndExit(parser,
+                    "Option " + resetOffsetsOpt + " takes one of these options: " + allResetOffsetScenarioOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
+            }
 
             CommandLineUtils.checkInvalidArgs(parser, options, resetToDatetimeOpt, minus(allResetOffsetScenarioOpts, resetToDatetimeOpt));
             CommandLineUtils.checkInvalidArgs(parser, options, resetToEarliestOpt, minus(allResetOffsetScenarioOpts, resetToEarliestOpt));
