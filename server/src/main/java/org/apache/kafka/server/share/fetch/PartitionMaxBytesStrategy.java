@@ -18,7 +18,11 @@ package org.apache.kafka.server.share.fetch;
 
 import org.apache.kafka.common.TopicIdPartition;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -58,7 +62,27 @@ public interface PartitionMaxBytesStrategy {
     private static LinkedHashMap<TopicIdPartition, Integer> uniformPartitionMaxBytes(int requestMaxBytes, Set<TopicIdPartition> partitions, int acquiredPartitionsSize) {
         checkValidArguments(requestMaxBytes, partitions, acquiredPartitionsSize);
         LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = new LinkedHashMap<>();
-        partitions.forEach(partition -> partitionMaxBytes.put(partition, requestMaxBytes / acquiredPartitionsSize));
+        if (requestMaxBytes >= acquiredPartitionsSize) {
+            // Case 1: requestMaxBytes can be evenly distributed within partitions.
+            partitions.forEach(partition -> partitionMaxBytes.put(partition, requestMaxBytes / acquiredPartitionsSize));
+        } else if (requestMaxBytes >= partitions.size()) {
+            // Case 2: we will be distributing requestMaxBytes greedily in this scenario to prevent any starvation.
+            partitions.forEach(partition -> partitionMaxBytes.put(partition, requestMaxBytes / partitions.size()));
+        } else {
+            // Case 3: we will distribute requestMaxBytes to as many partitions possible randomly to avoid starvation.
+            List<TopicIdPartition> partitionsList = new ArrayList<>(partitions);
+            Collections.shuffle(partitionsList);
+            Set<TopicIdPartition> nonEmptyPartitions = new HashSet<>(partitionsList.subList(0, requestMaxBytes));
+            partitions.forEach(
+                partition -> {
+                    if (nonEmptyPartitions.contains(partition)) {
+                        partitionMaxBytes.put(partition, 1);
+                    } else {
+                        partitionMaxBytes.put(partition, 0);
+                    }
+                }
+            );
+        }
         return partitionMaxBytes;
     }
 
