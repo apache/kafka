@@ -92,9 +92,9 @@ Generate coverage for a single module, i.e.:
 
 Coverage reports are located within the module's build directory, categorized by module type:
 
-Java Modules: `<module>/build/reports/jacoco/test/html/index.html`
+Core Module (:core): `core/build/reports/scoverageTest/index.html`
 
-Scala Module (:core): `core/build/reports/scoverageTest/index.html`
+Other Modules: `<module>/build/reports/jacoco/test/html/index.html`
 
 ### Building a binary release gzipped tar ball ###
     ./gradlew clean releaseTarGz
