@@ -10,7 +10,7 @@ import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, 
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.server.common.Feature
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertThrows, assertTrue}
 
 import java.util.Collections
 import scala.jdk.CollectionConverters._
@@ -47,7 +47,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       new ClusterFeature(feature = Feature.STREAMS_VERSION, version = 0)
     )
   )
-  def testStreamsGroupHeartbeatIsInaccessableWhenDisabledByFeatureConfig(): Unit = {
+  def testStreamsGroupHeartbeatIsInaccessibleWhenDisabledByFeatureConfig(): Unit = {
     // Test with streams.version = 0, the API is disabled at server level
     val topology = new StreamsGroupHeartbeatRequestData.Topology()
       .setEpoch(1)
@@ -75,7 +75,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
     )
   )
-  def testStreamsGroupHeartbeatIsInaccessableWhenDisabledByStaticGroupCoordinatorProtocolConfig(): Unit = {
+  def testStreamsGroupHeartbeatIsInaccessibleWhenDisabledByStaticGroupCoordinatorProtocolConfig(): Unit = {
     val topology = new StreamsGroupHeartbeatRequestData.Topology()
       .setEpoch(1)
       .setSubtopologies(java.util.Collections.emptyList())
@@ -127,7 +127,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
   }
 
   @ClusterTest
-  def tesStreamsGroupHeartbeatIsAccessibleWhenNewGroupCoordinatorIsEnabledTopicNotExistFirst(): Unit = {
+  def testStreamsGroupHeartbeatIsAccessibleWhenNewGroupCoordinatorIsEnabledTopicNotExistFirst(): Unit = {
     val admin = cluster.admin()
     val memberId = "test-member"
     val groupId = "test-group"
@@ -164,7 +164,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       }, "StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
       // Verify the response
-      assert(streamsGroupHeartbeatResponse != null, "StreamsGroupHeartbeatResponse should not be null")
+      assertNotNull(streamsGroupHeartbeatResponse != null, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId, streamsGroupHeartbeatResponse.data.memberId())
       assertEquals(1, streamsGroupHeartbeatResponse.data.memberEpoch())
       val expectedStatus = new StreamsGroupHeartbeatResponseData.Status()
@@ -208,7 +208,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
   }
 
   @ClusterTest
-  def tesStreamsGroupHeartbeatForMultipleMembers(): Unit = {
+  def testStreamsGroupHeartbeatForMultipleMembers(): Unit = {
     val admin = cluster.admin()
     val memberId1 = "test-member-1"
     val memberId2 = "test-member-2"
