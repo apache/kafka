@@ -179,6 +179,10 @@ public class MemberDescription {
 
     /**
      * The rack id of the group member.
+     * <p>
+     * It is only available for consumer groups using the new consumer group protocol
+     * ({@code group.protocol=consumer}).
+     * <p>
      */
     public Optional<String> rackId() {
         return rackId;
