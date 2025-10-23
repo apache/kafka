@@ -310,7 +310,7 @@ public class PartitionChangeBuilderTest {
     @ParameterizedTest
     @ValueSource(strings = {"3.6-IV0", "3.7-IV2", "4.0-IV0"})
     public void testNoLeaderEpochBumpOnIsrShrink(String metadataVersionString) {
-        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
+        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString, true);
         testTriggerLeaderEpochBumpIfNeeded(
             createFooBuilder(metadataVersion).setTargetIsrWithBrokerStates(
                 AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(List.of(2, 1))),
@@ -325,7 +325,7 @@ public class PartitionChangeBuilderTest {
     @ParameterizedTest
     @ValueSource(strings = {"3.4-IV0", "3.5-IV2"})
     public void testLeaderEpochBumpOnIsrShrink(String metadataVersionString) {
-        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
+        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString, true);
         testTriggerLeaderEpochBumpIfNeeded(
             createFooBuilder(metadataVersion).setTargetIsrWithBrokerStates(
                 AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(List.of(2, 1))),
@@ -339,7 +339,7 @@ public class PartitionChangeBuilderTest {
     @ParameterizedTest
     @ValueSource(strings = {"3.4-IV0", "3.5-IV2", "3.6-IV0", "3.7-IV2", "4.0-IV0"})
     public void testNoLeaderEpochBumpOnIsrExpansion(String metadataVersionString) {
-        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
+        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString, true);
         testTriggerLeaderEpochBumpIfNeeded(
             createFooBuilder(metadataVersion).setTargetIsrWithBrokerStates(
                 AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(List.of(2, 1, 3, 4))),
@@ -354,7 +354,7 @@ public class PartitionChangeBuilderTest {
     @ParameterizedTest
     @ValueSource(strings = {"3.4-IV0", "3.5-IV2", "3.6-IV0", "3.7-IV2", "4.0-IV0"})
     public void testLeaderEpochBumpOnNewReplicaSetDisjoint(String metadataVersionString) {
-        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
+        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString, true);
         testTriggerLeaderEpochBumpIfNeeded(
             createFooBuilder(metadataVersion).setTargetReplicas(List.of(2, 1, 4)),
             new PartitionChangeRecord(),
@@ -368,7 +368,7 @@ public class PartitionChangeBuilderTest {
     @ParameterizedTest
     @ValueSource(strings = {"3.4-IV0", "3.5-IV2", "3.6-IV0", "3.7-IV2"})
     public void testNoLeaderEpochBumpOnEmptyTargetIsr(String metadataVersionString) {
-        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
+        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString, true);
         PartitionRegistration partition = new PartitionRegistration.Builder().
             setReplicas(new int[] {2}).
             setDirectories(new Uuid[]{
@@ -821,6 +821,48 @@ public class PartitionChangeBuilderTest {
             assertEquals(0, partition.lastKnownElr.length);
         }
     }
+
+    @Test
+    public void testEligibleLeaderReplicas_lastKnownElrShouldBePopulatedWhenNoLeader() {
+        PartitionRegistration partition = new PartitionRegistration.Builder()
+            .setReplicas(new int[] {1, 2, 3})
+            .setDirectories(new Uuid[] {
+                DirectoryId.UNASSIGNED,
+                DirectoryId.UNASSIGNED,
+                DirectoryId.UNASSIGNED
+            })
+            .setIsr(new int[] {1})
+            .setElr(new int[] {2})
+            .setLeader(1)
+            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
+            .setLeaderEpoch(100)
+            .setPartitionEpoch(200)
+            .build();
+
+        short version = 2; // ELR supported
+        Uuid topicId = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
+
+        // No replica is acceptable as leader, so election yields NO_LEADER.
+        // We intentionally do not change target ISR so record.isr remains null.
+        PartitionChangeBuilder builder = new PartitionChangeBuilder(partition, topicId, 0, r -> false,
+            metadataVersionForPartitionChangeRecordVersion(version), 3)
+            .setElection(Election.PREFERRED)
+            .setEligibleLeaderReplicasEnabled(isElrEnabled(version))
+            .setDefaultDirProvider(DEFAULT_DIR_PROVIDER)
+            .setUseLastKnownLeaderInBalancedRecovery(true);
+
+        ApiMessageAndVersion change = builder.build().get();
+        PartitionChangeRecord record = (PartitionChangeRecord) change.message();
+
+        assertEquals(NO_LEADER, record.leader());
+        // There is no ISR update if we do not perform the leader verification on the ISR members.
+        assertNull(record.isr(), record.toString());
+        assertEquals(1, record.lastKnownElr().size(), record.toString());
+        assertEquals(1, record.lastKnownElr().get(0), record.toString());
+        partition = partition.merge((PartitionChangeRecord) builder.build().get().message());
+        assertArrayEquals(new int[] {1}, partition.lastKnownElr);
+    }
+
 
     @ParameterizedTest
     @MethodSource("partitionChangeRecordVersions")

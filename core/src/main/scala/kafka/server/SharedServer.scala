@@ -342,7 +342,7 @@ class SharedServer(
             throw new RuntimeException("Unable to install metadata publishers.", t)
           }
         }
-        _raftManager.register(loader)
+        _raftManager.client.register(loader)
         debug("Completed SharedServer startup.")
         started = true
       } catch {

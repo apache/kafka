@@ -63,7 +63,7 @@ public class ShareConsumerDelegateCreator {
                                                      final Time time,
                                                      final KafkaClient client,
                                                      final SubscriptionState subscriptions,
-                                                     final ConsumerMetadata metadata) {
+                                                     final ShareConsumerMetadata metadata) {
         try {
             Logger log = logContext.logger(getClass());
             log.warn("Share groups and KafkaShareConsumer are part of a preview feature introduced by KIP-932, and are not recommended for use in production.");

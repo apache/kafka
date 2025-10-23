@@ -127,7 +127,7 @@ public class RemoteIndexCacheTest {
     }
 
     @AfterEach
-    public void cleanup() {
+    public void cleanup() throws InterruptedException {
         reset(rsm);
         // the files created for the test will be deleted automatically on thread exit since we use temp dir
         Utils.closeQuietly(cache, "RemoteIndexCache created for unit test");
@@ -344,13 +344,13 @@ public class RemoteIndexCacheTest {
         }, "Failed to delete index file");
 
         // verify no index files on disk
-        assertFalse(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.INDEX_FILE_SUFFIX).isPresent(),
+        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, LogFileUtils.INDEX_FILE_SUFFIX).isEmpty(),
                 "Offset index file should not be present on disk at " + tpDir.toPath());
-        assertFalse(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TXN_INDEX_FILE_SUFFIX).isPresent(),
+        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TXN_INDEX_FILE_SUFFIX).isEmpty(),
                 "Txn index file should not be present on disk at " + tpDir.toPath());
-        assertFalse(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TIME_INDEX_FILE_SUFFIX).isPresent(),
+        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TIME_INDEX_FILE_SUFFIX).isEmpty(),
                 "Time index file should not be present on disk at " + tpDir.toPath());
-        assertFalse(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.DELETED_FILE_SUFFIX).isPresent(),
+        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, LogFileUtils.DELETED_FILE_SUFFIX).isEmpty(),
                 "Index file marked for deletion should not be present on disk at " + tpDir.toPath());
     }
 
