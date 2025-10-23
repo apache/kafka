@@ -41,9 +41,9 @@ import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Optional;
@@ -99,7 +99,7 @@ public class ShareCompletedFetch {
     }
 
     private List<OffsetAndDeliveryCount> buildAcquiredRecordList(List<ShareFetchResponseData.AcquiredRecords> partitionAcquiredRecords) {
-        List<OffsetAndDeliveryCount> acquiredRecordList = new LinkedList<>();
+        List<OffsetAndDeliveryCount> acquiredRecordList = new ArrayList<>();
         // Set to find duplicates in case of overlapping acquired records
         Set<Long> offsets = new HashSet<>();
         partitionAcquiredRecords.forEach(acquiredRecords -> {
