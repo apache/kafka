@@ -124,12 +124,7 @@ public class GlobalStreamThreadTest {
         );
 
         baseDirectoryName = TestUtils.tempDirectory().getAbsolutePath();
-        final HashMap<String, Object> properties = new HashMap<>();
-        properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "blah");
-        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "testAppId");
-        properties.put(StreamsConfig.STATE_DIR_CONFIG, baseDirectoryName);
-        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName());
-        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName());
+        final HashMap<String, Object> properties = getStreamProperties();
         config = new StreamsConfig(properties);
         globalStreamThread = new GlobalStreamThread(
             builder.rewriteTopology(config).buildGlobalStateTopology(),
@@ -405,6 +400,51 @@ public class GlobalStreamThreadTest {
             globalStreamThread.shutdown();
             globalStreamThread.join();
         }
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionOnStartupIfThrowableOccurred() throws Exception {
+        final String exceptionMessage = "Throwable occurred!";
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+            @Override
+            public List<PartitionInfo> partitionsFor(final String topic) {
+                throw new ExceptionInInitializerError(exceptionMessage);
+            }
+        };
+        final StateStore globalStore = builder.globalStateStores().get(GLOBAL_STORE_NAME);
+        globalStreamThread = new GlobalStreamThread(
+                builder.buildGlobalStateTopology(),
+                config,
+                consumer,
+                new StateDirectory(config, time, true, false),
+                0,
+                new StreamsMetricsImpl(new Metrics(), "test-client", "processId", time),
+                time,
+                "clientId",
+                stateRestoreListener,
+                e -> { }
+        );
+
+        try {
+            globalStreamThread.start();
+            fail("Should have thrown StreamsException if start up failed");
+        } catch (final StreamsException e) {
+            assertThat(e.getCause(), instanceOf(Throwable.class));
+            assertThat(e.getCause().getMessage(), equalTo(exceptionMessage));
+        }
+        globalStreamThread.join();
+        assertThat(globalStore.isOpen(), is(false));
+        assertFalse(globalStreamThread.stillRunning());
+    }
+
+    private HashMap<String, Object> getStreamProperties() {
+        final HashMap<String, Object> properties = new HashMap<>();
+        properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "blah");
+        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "testAppId");
+        properties.put(StreamsConfig.STATE_DIR_CONFIG, baseDirectoryName);
+        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName());
+        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName());
+        return properties;
     }
 
     private void initializeConsumer() {

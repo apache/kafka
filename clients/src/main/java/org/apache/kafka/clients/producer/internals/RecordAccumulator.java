@@ -1076,8 +1076,13 @@ public class RecordAccumulator {
             // We must be careful not to hold a reference to the ProduceBatch(s) so that garbage
             // collection can occur on the contents.
             // The sender will remove ProducerBatch(s) from the original incomplete collection.
+            //
+            // We use awaitAllDependents() here instead of await() to ensure that if any batch
+            // was split into multiple batches, we wait for all the split batches to complete.
+            // This is required to guarantee that all records sent before flush()
+            // must be fully complete, including records in split batches.
             for (ProduceRequestResult result : this.incomplete.requestResults())
-                result.await();
+                result.awaitAllDependents();
         } finally {
             this.flushesInProgress.decrementAndGet();
         }

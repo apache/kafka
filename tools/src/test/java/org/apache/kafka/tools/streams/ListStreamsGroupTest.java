@@ -56,6 +56,7 @@ import java.util.stream.Collectors;
 import joptsimple.OptionException;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(600)
 @Tag("integration")
@@ -108,7 +109,7 @@ public class ListStreamsGroupTest {
             TestUtils.waitForCondition(() -> {
                 foundGroups.set(new HashSet<>(service.listStreamsGroups()));
                 return Objects.equals(expectedGroups, foundGroups.get());
-            }, "Expected --list to show streams groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
+            }, () -> "Expected --list to show streams groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
 
         }
     }
@@ -135,7 +136,7 @@ public class ListStreamsGroupTest {
             TestUtils.waitForCondition(() -> {
                 foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Set.of())));
                 return Objects.equals(expectedListing, foundListing.get());
-            }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
+            }, () -> "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
     }
 
@@ -155,7 +156,7 @@ public class ListStreamsGroupTest {
             TestUtils.waitForCondition(() -> {
                 foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Set.of())));
                 return Objects.equals(expectedListing, foundListing.get());
-            }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
+            }, () -> "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
 
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "PreparingRebalance"})) {
@@ -166,7 +167,7 @@ public class ListStreamsGroupTest {
             TestUtils.waitForCondition(() -> {
                 foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Set.of(GroupState.PREPARING_REBALANCE))));
                 return Objects.equals(expectedListing, foundListing.get());
-            }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
+            }, () -> "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
     }
 
@@ -223,7 +224,7 @@ public class ListStreamsGroupTest {
     ) throws InterruptedException {
         final AtomicReference<String> out = new AtomicReference<>("");
         TestUtils.waitForCondition(() -> {
-            String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
+            String output = ToolsTestUtils.grabConsoleOutput(() -> assertEquals(0, StreamsGroupCommand.execute(args.toArray(new String[0]))));
             out.set(output);
 
             String[] lines = output.split("\n");
