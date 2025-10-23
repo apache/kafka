@@ -17,8 +17,11 @@
 
 package org.apache.kafka.common.requests;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.AlterConfigsRequestData;
+import org.apache.kafka.common.message.AlterConfigsRequestDataJsonConverter;
 import org.apache.kafka.common.message.AlterConfigsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Readable;
@@ -133,5 +136,17 @@ public class AlterConfigsRequest extends AbstractRequest {
 
     public static AlterConfigsRequest parse(Readable readable, short version) {
         return new AlterConfigsRequest(new AlterConfigsRequestData(readable, version), version);
+    }
+
+    // It is not safe to print all config values
+    @Override
+    public String toString() {
+        JsonNode json = AlterConfigsRequestDataJsonConverter.write(data, version()).deepCopy();
+        for (JsonNode resource : json.get("resources")) {
+            for (JsonNode config : resource.get("configs")) {
+                ((ObjectNode) config).put("value", "REDACTED");
+            }
+        }
+        return AlterConfigsRequestDataJsonConverter.read(json, version()).toString();
     }
 }
