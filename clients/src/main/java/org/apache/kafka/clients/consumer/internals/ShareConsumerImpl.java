@@ -615,7 +615,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             try {
                 handleCompletedAcknowledgements(false);
             } catch (Throwable t) {
-                log.warn("Failed invoking acknowledgement commit callback", t);
+                log.warn("Exception thrown in acknowledgement commit callback", t);
             }
 
             release();
