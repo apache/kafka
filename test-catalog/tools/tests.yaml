@@ -811,8 +811,9 @@ org.apache.kafka.tools.consumer.group.SaslClientsWithInvalidCredentialsTest:
 org.apache.kafka.tools.consumer.group.ShareGroupCommandTest:
 - testAlterShareGroupAllTopicsToDatetimeSuccess
 - testAlterShareGroupMultipleTopicsSuccess
+- testAlterShareGroupNonExistentGroupSuccess
 - testAlterShareGroupOffsetsArgsFailureWithoutResetOffsetsArgs
-- testAlterShareGroupOffsetsFailureWithNoneEmptyGroup
+- testAlterShareGroupOffsetsFailureWithNonEmptyGroup
 - testAlterShareGroupOffsetsFailureWithoutTopic
 - testAlterShareGroupToLatestSuccess
 - testAlterShareGroupUnsubscribedTopicSuccess
