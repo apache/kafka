@@ -42,13 +42,13 @@ public interface PartitionMaxBytesStrategy {
 
     /**
      * Returns the partition max bytes for a given partition based on the strategy type.
+     * The partitions passed for maxBytes calculation are a subset of total acquired partitions for the share fetch request.
+     * Thus, partitions for which we want to compute the max bytes <= acquired partitions.
      *
      * @param requestMaxBytes - The total max bytes available for the share fetch request
      * @param partitions - The topic partitions in the order for which we compute the partition max bytes.
      * @param acquiredPartitionsSize - The total partitions that have been acquired.
      * @return the partition max bytes for the topic partitions
-     * The partitions passed for maxBytes calculation are a subset of total acquired partitions for the share fetch request.
-     * Thus, partitions for which we want to compute the max bytes <= acquired partitions.
      */
     LinkedHashMap<TopicIdPartition, Integer> maxBytes(int requestMaxBytes, Set<TopicIdPartition> partitions, int acquiredPartitionsSize);
 
