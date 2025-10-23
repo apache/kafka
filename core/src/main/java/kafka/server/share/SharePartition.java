@@ -2504,7 +2504,7 @@ public class SharePartition {
                 .setGroupId(this.groupId)
                 .setTopicsData(List.of(new TopicData<>(topicIdPartition.topicId(),
                     List.of(PartitionFactory.newPartitionStateBatchData(
-                        topicIdPartition.partition(), stateEpoch, startOffset(), leaderEpoch, stateBatches))))
+                        topicIdPartition.partition(), stateEpoch, startOffset(), inFlightTerminalRecords(), leaderEpoch, stateBatches))))
                 ).build()).build())
             .whenComplete((result, exception) -> {
                 if (exception != null) {

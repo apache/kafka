@@ -13299,6 +13299,7 @@ class KafkaApisTest extends Logging {
               .setLeaderEpoch(1)
               .setStateEpoch(2)
               .setStartOffset(10)
+              .setDeliveryCompleteCount(5)
               .setStateBatches(util.List.of(
                 new WriteShareGroupStateRequestData.StateBatch()
                   .setFirstOffset(11)
@@ -13346,6 +13347,7 @@ class KafkaApisTest extends Logging {
               .setLeaderEpoch(1)
               .setStateEpoch(2)
               .setStartOffset(10)
+              .setDeliveryCompleteCount(5)
               .setStateBatches(util.List.of(
                 new WriteShareGroupStateRequestData.StateBatch()
                   .setFirstOffset(11)
@@ -13851,7 +13853,7 @@ class KafkaApisTest extends Logging {
   def getWriteShareGroupStateResponse(requestData: WriteShareGroupStateRequestData, configOverrides: Map[String, String] = Map.empty,
                                       verifyNoErr: Boolean = true, authorizer: Authorizer = null,
                                       writeStateResult: util.List[WriteShareGroupStateResponseData.WriteStateResult]): WriteShareGroupStateResponse = {
-    val requestChannelRequest = buildRequest(new WriteShareGroupStateRequest.Builder(requestData).build())
+    val requestChannelRequest = buildRequest(new WriteShareGroupStateRequest.Builder(requestData).build(0))
 
     val future = new CompletableFuture[WriteShareGroupStateResponseData]()
     when(shareCoordinator.writeState(
