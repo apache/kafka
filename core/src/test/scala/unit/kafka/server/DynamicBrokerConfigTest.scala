@@ -37,7 +37,8 @@ import org.apache.kafka.server.DynamicThreadPool
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
-import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
+import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics, MetricConfigs}
+import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryExporter, ClientTelemetryExporterProvider, ClientTelemetryPayload, ClientTelemetryReceiver}
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, ProducerStateManagerConfig}
 import org.apache.kafka.test.MockMetricsReporter
@@ -1065,6 +1066,45 @@ class DynamicBrokerConfigTest {
     )
     assertFalse(ctx.currentDefaultLogConfig.get().originals().containsKey(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG))
   }
+
+  @Test
+  def testClientTelemetryExporter(): Unit = {
+    val brokerId = 0
+    val origProps = TestUtils.createBrokerConfig(brokerId, port = 8181)
+    val config = KafkaConfig(origProps)
+    val metrics = mock(classOf[Metrics])
+    val telemetryPlugin = mock(classOf[ClientTelemetryExporterPlugin])
+
+    config.dynamicConfig.initialize(Some(telemetryPlugin))
+    val m = new DynamicMetricsReporters(brokerId, config, metrics, "clusterId")
+    config.dynamicConfig.addReconfigurable(m)
+
+    def updateReporter(reporterClass: Class[_]): Unit = {
+      val props = new Properties()
+      props.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, reporterClass.getName)
+      config.dynamicConfig.updateDefaultConfig(props)
+    }
+
+    // Reporter implementing only ClientTelemetryExporterProvider
+    updateReporter(classOf[TestExporterOnly])
+    verify(telemetryPlugin, Mockito.atMostOnce()).add(ArgumentMatchers.any(classOf[ClientTelemetryExporter]))
+    Mockito.reset(telemetryPlugin)
+
+    // Reporter implementing only ClientTelemetryReceiver (deprecated)
+    updateReporter(classOf[TestReceiverOnly])
+    verify(telemetryPlugin, Mockito.atMostOnce()).add(ArgumentMatchers.any(classOf[ClientTelemetryReceiver]))
+    Mockito.reset(telemetryPlugin)
+
+    // Reporter implementing both interfaces => only exporter should be used
+    updateReporter(classOf[TestReceiverAndExporter])
+    verify(telemetryPlugin, Mockito.atMostOnce()).add(ArgumentMatchers.any(classOf[ClientTelemetryExporter]))
+    verify(telemetryPlugin, Mockito.never()).add(ArgumentMatchers.any(classOf[ClientTelemetryReceiver]))
+    Mockito.reset(telemetryPlugin)
+
+    // Reporter implementing neither interface => nothing should be added
+    updateReporter(classOf[MockMetricsReporter])
+    verifyNoMoreInteractions(telemetryPlugin)
+  }
 }
 
 class TestDynamicThreadPool extends BrokerReconfigurable {
@@ -1084,5 +1124,52 @@ class TestDynamicThreadPool extends BrokerReconfigurable {
   override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     assertEquals(10, newConfig.numIoThreads)
     assertEquals(100, newConfig.backgroundThreads)
+  }
+}
+
+class TestExporterOnly extends org.apache.kafka.common.metrics.MetricsReporter with ClientTelemetryExporterProvider {
+  override def configure(configs: util.Map[String, _]): Unit = {}
+  override def init(metrics: util.List[org.apache.kafka.common.metrics.KafkaMetric]): Unit = {}
+  override def metricChange(metric: org.apache.kafka.common.metrics.KafkaMetric): Unit = {}
+  override def metricRemoval(metric: org.apache.kafka.common.metrics.KafkaMetric): Unit = {}
+  override def close(): Unit = {}
+
+  override def clientTelemetryExporter(): ClientTelemetryExporter = new ClientTelemetryExporter {
+    override def exportMetrics(context: org.apache.kafka.server.telemetry.ClientTelemetryContext,
+                               payload: ClientTelemetryPayload): Unit = {}
+  }
+}
+
+@SuppressWarnings(Array("deprecation"))
+  class TestReceiverOnly extends org.apache.kafka.common.metrics.MetricsReporter with ClientTelemetry {
+  override def configure(configs: util.Map[String, _]): Unit = {}
+  override def init(metrics: util.List[org.apache.kafka.common.metrics.KafkaMetric]): Unit = {}
+  override def metricChange(metric: org.apache.kafka.common.metrics.KafkaMetric): Unit = {}
+  override def metricRemoval(metric: org.apache.kafka.common.metrics.KafkaMetric): Unit = {}
+  override def close(): Unit = {}
+
+  override def clientReceiver(): ClientTelemetryReceiver = new ClientTelemetryReceiver {
+    override def exportMetrics(context: org.apache.kafka.server.authorizer.AuthorizableRequestContext,
+                               payload: ClientTelemetryPayload): Unit = {}
+  }
+}
+
+@SuppressWarnings(Array("deprecation"))
+class TestReceiverAndExporter extends org.apache.kafka.common.metrics.MetricsReporter
+  with ClientTelemetryExporterProvider with ClientTelemetry {
+  override def configure(configs: util.Map[String, _]): Unit = {}
+  override def init(metrics: util.List[org.apache.kafka.common.metrics.KafkaMetric]): Unit = {}
+  override def metricChange(metric: org.apache.kafka.common.metrics.KafkaMetric): Unit = {}
+  override def metricRemoval(metric: org.apache.kafka.common.metrics.KafkaMetric): Unit = {}
+  override def close(): Unit = {}
+
+  override def clientTelemetryExporter(): ClientTelemetryExporter = new ClientTelemetryExporter {
+    override def exportMetrics(context: org.apache.kafka.server.telemetry.ClientTelemetryContext,
+                               payload: ClientTelemetryPayload): Unit = {}
+  }
+
+  override def clientReceiver(): ClientTelemetryReceiver = new ClientTelemetryReceiver {
+    override def exportMetrics(context: org.apache.kafka.server.authorizer.AuthorizableRequestContext,
+                               payload: ClientTelemetryPayload): Unit = {}
   }
 }
