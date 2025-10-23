@@ -32,7 +32,7 @@ Configuration:
         - ref: STDOUT
     Logger:
       - name: org.apache.kafka.raft
-        level: ERROR
+        level: TRACE
 
       - name: org.apache.kafka.snapshot
-        level: ERROR
+        level: TRACE

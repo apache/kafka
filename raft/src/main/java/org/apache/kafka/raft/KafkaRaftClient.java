@@ -67,12 +67,14 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.queue.KafkaDeadlineEventQueue;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.internals.AddVoterHandler;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.raft.internals.BlockingMessageQueue;
 import org.apache.kafka.raft.internals.CloseListener;
+import org.apache.kafka.raft.internals.DeadlineTaskManager;
 import org.apache.kafka.raft.internals.DefaultRequestSender;
 import org.apache.kafka.raft.internals.FuturePurgatory;
 import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
@@ -194,6 +196,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private final RaftMessageQueue messageQueue;
     private final QuorumConfig quorumConfig;
     private final RaftMetadataLogCleanerManager snapshotCleaner;
+    private final KafkaDeadlineEventQueue<DeadlineTaskManager.DeferredTask> eventQueue;
 
     private final Map<Listener<T>, ListenerContext> listenerContexts = new IdentityHashMap<>();
     private final ConcurrentLinkedQueue<Registration<T>> pendingRegistrations = new ConcurrentLinkedQueue<>();
@@ -313,6 +316,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         this.random = random;
         this.quorumConfig = quorumConfig;
         this.snapshotCleaner = new RaftMetadataLogCleanerManager(logger, time, 60000, log::maybeClean);
+        this.eventQueue = new KafkaDeadlineEventQueue<>(DeadlineTaskManager.DeferredTask::onTimeout);
 
         if (!bootstrapServers.isEmpty()) {
             // generate Node objects from network addresses by using decreasing negative ids
@@ -583,7 +587,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 logContext
             ),
             time,
-            logContext
+            logContext,
+            quorumConfig.requestTimeoutMs(),
+            eventQueue
         );
 
         // Specialized remove voter handler
@@ -2297,7 +2303,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             newVoter.get(),
             newVoterEndpoints,
             data.ackWhenCommitted(),
-            currentTimeMs
+            currentTimeMs,
+            data.timeoutMs()
         );
     }
 
@@ -3168,6 +3175,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private long pollLeader(long currentTimeMs) {
         LeaderState<T> state = quorum.leaderStateOrThrow();
+        eventQueue.checkTimeout(currentTimeMs);
         maybeFireLeaderChange(state);
 
         long timeUntilCheckQuorumExpires = state.timeUntilCheckQuorumExpires(currentTimeMs);

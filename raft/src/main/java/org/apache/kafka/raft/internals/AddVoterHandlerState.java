@@ -29,10 +29,10 @@ public final class AddVoterHandlerState {
     private final ReplicaKey voterKey;
     private final Endpoints voterEndpoints;
     private final boolean ackWhenCommitted;
-    private final Timer timeout;
     private final CompletableFuture<AddRaftVoterResponseData> future = new CompletableFuture<>();
 
     private OptionalLong lastOffset = OptionalLong.empty();
+    private Timer timeout;
 
     AddVoterHandlerState(
         ReplicaKey voterKey,
@@ -89,5 +89,9 @@ public final class AddVoterHandlerState {
 
     public CompletableFuture<AddRaftVoterResponseData> future() {
         return future;
+    }
+
+    public void setTimeout(Timer timeout) {
+        this.timeout = timeout;
     }
 }
