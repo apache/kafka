@@ -3081,7 +3081,19 @@ public class RequestResponseTest {
         configs.put(new ConfigResource(ConfigResource.Type.BROKER, "0"), new AlterConfigsRequest.Config(configEntries));
         configs.put(new ConfigResource(ConfigResource.Type.TOPIC, "topic"),
                 new AlterConfigsRequest.Config(emptyList()));
-        return new AlterConfigsRequest.Builder(configs, false).build(version);
+        AlterConfigsRequest alterConfigsRequest = new AlterConfigsRequest.Builder(configs, false).build(version);
+        assertEquals(
+                "AlterConfigsRequestData(resources=[" +
+                        "AlterConfigsResource(resourceType=" + ConfigResource.Type.TOPIC.id() + ", " +
+                        "resourceName='topic', configs=[]), " +
+                        "AlterConfigsResource(resourceType=" + ConfigResource.Type.BROKER.id() + ", " +
+                        "resourceName='0', " +
+                        "configs=[AlterableConfig(name='config_name', value='REDACTED'), " +
+                        "AlterableConfig(name='another_name', value='REDACTED')])], " +
+                        "validateOnly=false)",
+                alterConfigsRequest.toString()
+        );
+        return alterConfigsRequest;
     }
 
     private AlterConfigsResponse createAlterConfigsResponse() {
