@@ -107,7 +107,7 @@ final class SchemaGenerator {
         for (FieldSpec field : struct.fields()) {
             if (field.type().isStructArray()) {
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-                generateSchemas(arrayType.elementType().toString(), structRegistry.findStruct(field), versions, field.nullableVersions());
+                generateSchemas(arrayType.elementType().toString(), structRegistry.findStruct(field), versions, Versions.NONE);
             } else if (field.type().isStruct()) {
                 generateSchemas(field.type().toString(), structRegistry.findStruct(field), versions, field.nullableVersions());
             }
