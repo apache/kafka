@@ -91,7 +91,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         .setWarmupTasks(java.util.Collections.emptyList())
         .setTopology(topology),
       true  // enableUnstableLastVersion = true
-    ).build(0)  // Explicitly use version 0
+    ).build(0)
 
     val streamsGroupHeartbeatResponse = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest)
     val expectedResponse = new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.UNSUPPORTED_VERSION.code())
@@ -119,7 +119,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         .setWarmupTasks(java.util.Collections.emptyList())
         .setTopology(topology),
       false  // enableUnstableLastVersion = false
-    ).build(0)  // Explicitly use version 0
+    ).build(0)
 
     val streamsGroupHeartbeatResponse = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest)
     val expectedResponse = new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.NOT_COORDINATOR.code())
@@ -208,7 +208,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
   }
 
   @ClusterTest
-  def tesStreamsGroupHeartbeatIsAccessibleWhenNewGroupCoordinatorIsEnabledTwoMembers(): Unit = {
+  def tesStreamsGroupHeartbeatForMultipleMembers(): Unit = {
     val admin = cluster.admin()
     val memberId1 = "test-member-1"
     val memberId2 = "test-member-2"
@@ -232,7 +232,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         topic = topicName,
         numPartitions = 3
       )
-      // Wait for topic to be available
       TestUtils.waitUntilTrue(() => {
         admin.listTopics().names().get().contains(topicName)
       }, msg = s"Topic $topicName is not available to the group coordinator")
@@ -301,8 +300,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       assertEquals(memberId2, streamsGroupHeartbeatResponse2.data.memberId())
       assertEquals(2, streamsGroupHeartbeatResponse2.data.memberEpoch())
 
-      // Now both members should send heartbeats with their assigned tasks
-      // First member should continue with its tasks
+      // Both members continue to send heartbeats with their assigned tasks
       TestUtils.waitUntilTrue(() => {
         val streamsGroupHeartbeatRequest1 = new StreamsGroupHeartbeatRequest.Builder(
           new StreamsGroupHeartbeatRequestData()
@@ -316,12 +314,10 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
             .setTopology(topology)
         ).build(0)
 
-
         streamsGroupHeartbeatResponse1 = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest1)
         streamsGroupHeartbeatResponse1.data.errorCode == Errors.NONE.code()
       }, "First member rebalance heartbeat did not succeed within the timeout period.")
 
-      // Second member should also send heartbeat with its assigned tasks
       TestUtils.waitUntilTrue(() => {
         val streamsGroupHeartbeatRequest2 = new StreamsGroupHeartbeatRequest.Builder(
           new StreamsGroupHeartbeatRequestData()
@@ -339,7 +335,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         streamsGroupHeartbeatResponse2.data.errorCode == Errors.NONE.code()
       }, "Second member rebalance heartbeat did not succeed within the timeout period.")
 
-      // Verify final state - both members should have tasks assigned
+      // Verify both members should have tasks assigned
       assert(streamsGroupHeartbeatResponse1 != null, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId1, streamsGroupHeartbeatResponse1.data.memberId())
       
@@ -359,8 +355,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
   def testEmptyStreamsGroupId(): Unit = {
     val admin = cluster.admin()
 
-    // Creates the __consumer_offsets topics because it won't be created automatically
-    // in this test because it does not use FindCoordinator API.
     try {
       TestUtils.createOffsetsTopicWithAdmin(
         admin = admin,
@@ -395,12 +389,10 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
   }
 
   @ClusterTest
-  def testInvalidTopologyAtSecondHeartbeat(): Unit = {
+  def testMemberLeaveHeartbeat(): Unit = {
     val admin = cluster.admin()
     val topicName = "test-topic"
 
-    // Creates the __consumer_offsets topics because it won't be created automatically
-    // in this test because it does not use FindCoordinator API.
     try {
       TestUtils.createOffsetsTopicWithAdmin(
         admin = admin,
@@ -408,9 +400,21 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         controllers = cluster.controllers().values().asScala.toSeq
       )
 
+      // Create topic
+      TestUtils.createTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq,
+        topic = topicName,
+        numPartitions = 3
+      )
+      TestUtils.waitUntilTrue(() => {
+        admin.listTopics().names().get().contains(topicName)
+      }, msg = s"Topic $topicName is not available to the group coordinator")
+
       val topology = createMockTopology(topicName)
 
-      // First, join the group with a valid request
+      // Join group
       var streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequest.Builder(
         new StreamsGroupHeartbeatRequestData()
           .setGroupId("test-group")
@@ -429,24 +433,30 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         streamsGroupHeartbeatResponse.data.errorCode == Errors.NONE.code()
       }, "StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
-      // Now send a request with an invalid member epoch (negative epoch)
+      // Verify the member joined successfully
+      assert(streamsGroupHeartbeatResponse != null, "StreamsGroupHeartbeatResponse should not be null")
+      assertEquals("test-member", streamsGroupHeartbeatResponse.data.memberId())
+      assertEquals(1, streamsGroupHeartbeatResponse.data.memberEpoch())
+
+      // Send a leave request
       streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequest.Builder(
         new StreamsGroupHeartbeatRequestData()
           .setGroupId("test-group")
           .setMemberId(streamsGroupHeartbeatResponse.data.memberId())
-          .setMemberEpoch(-1)  // Invalid negative epoch
+          .setMemberEpoch(-1)  // LEAVE_GROUP_MEMBER_EPOCH
           .setRebalanceTimeoutMs(1000)
           .setActiveTasks(java.util.Collections.emptyList())
           .setStandbyTasks(java.util.Collections.emptyList())
           .setWarmupTasks(java.util.Collections.emptyList())
-          .setTopology(topology)
       ).build(0)
 
       streamsGroupHeartbeatResponse = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest)
-      val expectedResponse = new StreamsGroupHeartbeatResponseData()
-        .setErrorCode(Errors.INVALID_REQUEST.code())
-        .setErrorMessage("Topology can only be provided when (re-)joining.")
-      assertEquals(expectedResponse, streamsGroupHeartbeatResponse.data)
+      
+      // Verify the leave request was successful
+      assertEquals(Errors.NONE.code(), streamsGroupHeartbeatResponse.data.errorCode())
+      assertEquals("test-member", streamsGroupHeartbeatResponse.data.memberId())
+      assertEquals(-1, streamsGroupHeartbeatResponse.data.memberEpoch())
+
     } finally {
       admin.close()
     }
@@ -457,8 +467,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     val admin = cluster.admin()
     val topicName = "test-topic"
 
-    // Creates the __consumer_offsets topics because it won't be created automatically
-    // in this test because it does not use FindCoordinator API.
     try {
       TestUtils.createOffsetsTopicWithAdmin(
         admin = admin,
@@ -474,14 +482,12 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         topic = topicName,
         numPartitions = 3
       )
-      // Wait for topic to be available
       TestUtils.waitUntilTrue(() => {
         admin.listTopics().names().get().contains(topicName)
       }, msg = s"Topic $topicName is not available to the group coordinator")
 
       val topology = createMockTopology(topicName)
 
-      // First, join the group with a valid request
       var streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequest.Builder(
         new StreamsGroupHeartbeatRequestData()
           .setGroupId("test-group")
