@@ -291,9 +291,8 @@ public class TopicBasedRemoteLogMetadataManager implements BrokerReadyCallback, 
         try {
             if (configured.compareAndSet(false, true)) {
                 TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(configs);
-                // Scheduling the initialization producer/consumer managers in a separate thread. Required resources may
-                // not yet be available now. This thread makes sure that it is retried at regular intervals until it is
-                // successful.
+                // Creates initialization thread for producer/consumer managers. It will be started when
+                // the broker is ready via onBrokerReady(). The thread retries until resources are available.
                 initializationThread = KafkaThread.nonDaemon(
                         "RLMMInitializationThread", () -> initializeResources(rlmmConfig));
                 log.info("Successfully configured topic-based RLMM with config: {}", rlmmConfig);
@@ -377,7 +376,7 @@ public class TopicBasedRemoteLogMetadataManager implements BrokerReadyCallback, 
     }
     @Override
     public void onBrokerReady() {
-        log.info("Broker is ready for requests, now initializing RLMM resources");
+        log.info("Broker is ready for requests, now initializing topic-based RLMM resources");
         initializationThread.start();
     }
 

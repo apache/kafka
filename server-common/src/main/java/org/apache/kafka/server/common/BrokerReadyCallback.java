@@ -17,11 +17,11 @@
 package org.apache.kafka.server.common;
 
 /**
- * Simple callback interface for broker ready notification.
+ * Callback interface for broker ready notification.
  */
 public interface BrokerReadyCallback {
     /**
-     * This method will be called during broker startup for the implementation
+     * This method will be called during broker startup for the implementation,
      * which needs delayed initialization until the broker can process requests.
      */
     void onBrokerReady();
