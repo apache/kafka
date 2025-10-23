@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * An immutable tuple containing active, standby and warm-up tasks with assignment epochs.
@@ -59,23 +58,6 @@ public record TasksTupleWithEpochs(Map<String, Map<Integer, Integer>> activeTask
         Map.of(),
         Map.of()
     );
-
-    /**
-     * Returns a map of active tasks (subtopology ID to partition IDs) by extracting just the keys
-     * from the activeTasksWithEpochs map, discarding epoch information.
-     * <p>
-     * This method creates a new map on each call. Consider using {@link #activeTasksWithEpochs()}
-     * directly when possible to avoid the conversion.
-     *
-     * @return A map of active task partition IDs keyed by subtopology ID.
-     */
-    public Map<String, Set<Integer>> activeTasks() {
-        return activeTasksWithEpochs.entrySet().stream()
-            .collect(Collectors.toUnmodifiableMap(
-                Map.Entry::getKey,
-                entry -> entry.getValue().keySet()
-            ));
-    }
 
     /**
      * @return true if all collections in the tuple are empty.

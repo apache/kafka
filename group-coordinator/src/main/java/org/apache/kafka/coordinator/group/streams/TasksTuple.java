@@ -21,10 +21,8 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignment
 
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -155,17 +153,27 @@ public record TasksTuple(Map<String, Set<Integer>> activeTasks,
         Map<String, Set<Integer>> assignment
     ) {
         StringBuilder builder = new StringBuilder("[");
-        Iterator<Entry<String, Set<Integer>>> subtopologyIterator = assignment.entrySet().iterator();
-        while (subtopologyIterator.hasNext()) {
-            Map.Entry<String, Set<Integer>> entry = subtopologyIterator.next();
-            Iterator<Integer> partitionsIterator = entry.getValue().iterator();
-            while (partitionsIterator.hasNext()) {
-                builder.append(entry.getKey());
-                builder.append("-");
-                builder.append(partitionsIterator.next());
-                if (partitionsIterator.hasNext() || subtopologyIterator.hasNext()) {
+        
+        // Sort subtopology IDs for deterministic output
+        String[] subtopologyIds = assignment.keySet().toArray(new String[0]);
+        java.util.Arrays.sort(subtopologyIds);
+        
+        boolean first = true;
+        for (String subtopologyId : subtopologyIds) {
+            Set<Integer> partitions = assignment.get(subtopologyId);
+            
+            // Sort partition IDs for deterministic output
+            Integer[] partitionIds = partitions.toArray(new Integer[0]);
+            java.util.Arrays.sort(partitionIds);
+            
+            for (Integer partitionId : partitionIds) {
+                if (!first) {
                     builder.append(", ");
                 }
+                builder.append(subtopologyId);
+                builder.append("-");
+                builder.append(partitionId);
+                first = false;
             }
         }
         builder.append("]");

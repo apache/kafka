@@ -340,7 +340,7 @@ public record StreamsGroupMember(String memberId,
             .setMemberId(memberId)
             .setAssignment(
                 new StreamsGroupDescribeResponseData.Assignment()
-                    .setActiveTasks(taskIdsFromMap(assignedTasks.activeTasks()))
+                    .setActiveTasks(taskIdsFromMapWithEpochs(assignedTasks.activeTasksWithEpochs()))
                     .setStandbyTasks(taskIdsFromMap(assignedTasks.standbyTasks()))
                     .setWarmupTasks(taskIdsFromMap(assignedTasks.warmupTasks())))
             .setTargetAssignment(describedTargetAssignment)
@@ -370,6 +370,16 @@ public record StreamsGroupMember(String memberId,
             taskIds.add(new StreamsGroupDescribeResponseData.TaskIds()
                 .setSubtopologyId(subtopologyId)
                 .setPartitions(tasks.get(subtopologyId).stream().sorted().toList()));
+        });
+        return taskIds;
+    }
+
+    private static List<StreamsGroupDescribeResponseData.TaskIds> taskIdsFromMapWithEpochs(Map<String, Map<Integer, Integer>> tasksWithEpochs) {
+        List<StreamsGroupDescribeResponseData.TaskIds> taskIds = new ArrayList<>();
+        tasksWithEpochs.keySet().stream().sorted().forEach(subtopologyId -> {
+            taskIds.add(new StreamsGroupDescribeResponseData.TaskIds()
+                .setSubtopologyId(subtopologyId)
+                .setPartitions(tasksWithEpochs.get(subtopologyId).keySet().stream().sorted().toList()));
         });
         return taskIds;
     }

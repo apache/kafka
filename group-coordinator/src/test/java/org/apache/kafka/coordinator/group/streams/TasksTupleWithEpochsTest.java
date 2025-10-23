@@ -67,21 +67,6 @@ public class TasksTupleWithEpochsTest {
         assertThrows(UnsupportedOperationException.class, () -> tuple.warmupTasks().put("not allowed", Set.of()));
     }
 
-    @Test
-    public void testActiveTasksMethod() {
-        Map<String, Map<Integer, Integer>> activeTasks = Map.of(
-            SUBTOPOLOGY_1, Map.of(1, 10, 2, 11, 3, 12),
-            SUBTOPOLOGY_2, Map.of(4, 20, 5, 21)
-        );
-        TasksTupleWithEpochs tuple = new TasksTupleWithEpochs(activeTasks, Map.of(), Map.of());
-
-        Map<String, Set<Integer>> expectedActiveTasks = mkTasksPerSubtopology(
-            mkTasks(SUBTOPOLOGY_1, 1, 2, 3),
-            mkTasks(SUBTOPOLOGY_2, 4, 5)
-        );
-
-        assertEquals(expectedActiveTasks, tuple.activeTasks());
-    }
 
     @Test
     public void testFromCurrentAssignmentRecord() {

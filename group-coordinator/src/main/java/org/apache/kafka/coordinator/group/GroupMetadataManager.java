@@ -2194,7 +2194,7 @@ public class GroupMetadataManager {
         }
     }
 
-    private List<StreamsGroupHeartbeatResponseData.TaskIds> createStreamsGroupHeartbeatResponseTaskIds(final Map<String, Set<Integer>> taskIds) {
+    private static List<StreamsGroupHeartbeatResponseData.TaskIds> createStreamsGroupHeartbeatResponseTaskIds(final Map<String, Set<Integer>> taskIds) {
         return taskIds.entrySet().stream()
             .map(entry -> new StreamsGroupHeartbeatResponseData.TaskIds()
                 .setSubtopologyId(entry.getKey())
@@ -2202,7 +2202,7 @@ public class GroupMetadataManager {
             .collect(Collectors.toList());
     }
 
-    private List<StreamsGroupHeartbeatResponseData.TaskIds> createStreamsGroupHeartbeatResponseTaskIdsFromEpochs(
+    private static List<StreamsGroupHeartbeatResponseData.TaskIds> createStreamsGroupHeartbeatResponseTaskIdsFromEpochs(
         final Map<String, Map<Integer, Integer>> taskIdsWithEpochs
     ) {
         return taskIdsWithEpochs.entrySet().stream()
