@@ -29,7 +29,7 @@ jobs:
         supported_image_tag: ['latest', '3.9.1', '4.0.0', '4.1.0']
     steps:
       - name: Run CVE scan
-        uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8 # v0.24.0
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
         if: always()
         with:
           image-ref: apache/kafka:${{ matrix.supported_image_tag }}

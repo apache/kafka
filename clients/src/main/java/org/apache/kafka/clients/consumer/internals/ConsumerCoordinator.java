@@ -203,6 +203,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     /**
      * Initialize the coordination manager.
      */
+    @SuppressWarnings("removal")
     public ConsumerCoordinator(GroupRebalanceConfig rebalanceConfig,
                                LogContext logContext,
                                ConsumerNetworkClient client,
@@ -376,6 +377,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return null;
     }
 
+    @SuppressWarnings("removal")
     @Override
     protected void onJoinComplete(int generation,
                                   String memberId,

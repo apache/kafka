@@ -31,6 +31,7 @@ import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.CommitPartitionValidator;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
@@ -627,6 +628,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * @param isTransactional   Whether the offset commit is transactional or not. It has no
      *                          impact when a consumer group is used.
      * @param apiVersion        The api version.
+     * @return A validator for per-partition validation.
      * @throws UnknownMemberIdException     If the member is not found.
      * @throws StaleMemberEpochException    If the member uses the consumer protocol and the provided
      *                                      member epoch doesn't match the actual member epoch.
@@ -634,7 +636,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      *                                      generation id is not equal to the member epoch.
      */
     @Override
-    public void validateOffsetCommit(
+    public CommitPartitionValidator validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int memberEpoch,
@@ -644,13 +646,13 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,
         // the request can commit offsets if the group is empty.
-        if (memberEpoch < 0 && members().isEmpty()) return;
+        if (memberEpoch < 0 && members().isEmpty()) return CommitPartitionValidator.NO_OP;
 
         // The TxnOffsetCommit API does not require the member id, the generation id and the group instance id fields.
         // Hence, they are only validated if any of them is provided
         if (isTransactional && memberEpoch == JoinGroupRequest.UNKNOWN_GENERATION_ID &&
             memberId.equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) && groupInstanceId == null)
-            return;
+            return CommitPartitionValidator.NO_OP;
 
         final ConsumerGroupMember member = getOrMaybeCreateMember(memberId, false);
 
@@ -662,6 +664,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         }
 
         validateMemberEpoch(memberEpoch, member.memberEpoch(), member.useClassicProtocol());
+        return CommitPartitionValidator.NO_OP;
     }
 
     /**

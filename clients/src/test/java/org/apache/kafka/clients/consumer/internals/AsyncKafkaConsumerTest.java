@@ -1367,6 +1367,7 @@ public class AsyncKafkaConsumerTest {
         }
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testGroupMetadataIsResetAfterUnsubscribe() {
         final String groupId = "consumerGroupA";
