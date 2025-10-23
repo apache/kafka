@@ -78,17 +78,9 @@ public class ShareAcknowledgeRequest extends AbstractRequest {
         public ShareAcknowledgeRequest build(short version) {
             if (version < 2) {
                 // The v1 does not support AcknowledgeType RENEW.
-                data.topics().forEach(topic ->
-                    topic.partitions().forEach(partition ->
-                        partition.acknowledgementBatches().forEach(ackBatch ->
-                            ackBatch.acknowledgeTypes().forEach(ackType -> {
-                                if (ackType == 4) {
-                                    throw new UnsupportedVersionException("The v1 ShareAcknowledge does not support AcknowledgeType.RENEW");
-                                }
-                            })
-                        )
-                    )
-                );
+                if (data.isRenewAck()) {
+                    throw new UnsupportedVersionException("The v1 ShareAcknowledge does not support AcknowledgeType.RENEW");
+                }
             }
             return new ShareAcknowledgeRequest(data, version);
         }

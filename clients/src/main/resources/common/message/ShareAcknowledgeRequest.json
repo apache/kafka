@@ -22,7 +22,7 @@
   //
   // Version 1 is the initial stable version (KIP-932).
   //
-  // Version 2 introduces AcknowledgeType Renew (KIP-1222).
+  // Version 2 introduces ShareAcquireMode and Renew acknowledgements (KIP-1206 and KIP-1222).
   "validVersions": "1-2",
   "flexibleVersions": "0+",
   "fields": [
@@ -32,6 +32,8 @@
       "about": "The member ID." },
     { "name": "ShareSessionEpoch", "type": "int32", "versions": "0+",
       "about": "The current share session epoch: 0 to open a share session; -1 to close it; otherwise increments for consecutive requests." },
+    { "name": "IsRenewAck", "type": "bool", "versions": "2+", "default": "false",
+      "about": "Whether Renew type acknowledgements present in AcknowledgementBatches." },
     { "name": "Topics", "type": "[]AcknowledgeTopic", "versions": "0+",
       "about": "The topics containing records to acknowledge.", "fields": [
       { "name": "TopicId", "type": "uuid", "versions": "0+", "about": "The unique topic ID.", "mapKey": true },
