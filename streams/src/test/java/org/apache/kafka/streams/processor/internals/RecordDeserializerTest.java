@@ -130,13 +130,12 @@ public class RecordDeserializerTest {
             );
 
             final StreamsException e = assertThrows(StreamsException.class, () -> recordDeserializer.deserialize(context, rawRecord));
-            assertEquals(
-                    e.getMessage(),
-                    "Deserialization exception handler is set "
+            assertEquals("Deserialization exception handler is set "
                             + "to fail upon a deserialization error. "
                             + "If you would rather have the streaming pipeline "
                             + "continue after a deserialization error, please set the "
-                            + DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately."
+                            + DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.",
+                    e.getMessage()
             );
         }
     }

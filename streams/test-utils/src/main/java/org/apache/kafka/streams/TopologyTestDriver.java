@@ -605,6 +605,7 @@ public class TopologyTestDriver implements Closeable {
         }
     }
 
+    @SuppressWarnings("removal")
     private void commit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         if (processingMode == EXACTLY_ONCE_V2) {
             testDriverProducer.commitTransaction(offsets, new ConsumerGroupMetadata("dummy-app-id"));

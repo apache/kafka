@@ -660,7 +660,7 @@ public class PlaintextConsumerPollTest {
             }
             return isPartitionAssignmentValid(assignments, subscriptions);
         }, GROUP_MAX_SESSION_TIMEOUT_MS * 3,
-            msg != null ? msg : "Did not get valid assignment for partitions " + subscriptions + ". Instead, got " + assignments
+                () -> msg != null ? msg : "Did not get valid assignment for partitions " + subscriptions + ". Instead, got " + assignments
         );
     }
 

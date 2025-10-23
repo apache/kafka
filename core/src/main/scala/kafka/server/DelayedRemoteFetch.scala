@@ -109,7 +109,7 @@ class DelayedRemoteFetch(remoteFetchTasks: util.Map[TopicIdPartition, Future[Voi
   override def onComplete(): Unit = {
     val fetchPartitionData = localReadResults.map { case (tp, result) =>
       val remoteFetchResult = remoteFetchResults.get(tp)
-      if (remoteFetchInfos.containsKey(tp)
+      if (remoteFetchResults.containsKey(tp)
         && remoteFetchResult.isDone
         && result.error == Errors.NONE
         && result.info.delayedRemoteStorageFetch.isPresent) {
