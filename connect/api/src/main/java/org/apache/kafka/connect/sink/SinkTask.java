@@ -130,6 +130,7 @@ public abstract class SinkTask implements Task {
      *                       {@link Transformation transformations} have been applied. These can be tracked by the task
      *                       through the {@link SinkRecord#originalTopic()}, {@link SinkRecord#originalKafkaPartition()}
      *                       and {@link SinkRecord#originalKafkaOffset()} methods.
+     *                       During rebalancing, this map may contain revoked partitions.
      *
      * @return an empty map if Connect-managed offset commit is not desired, otherwise a map of offsets by topic-partition that are
      *         safe to commit. Note that the returned topic-partition to offsets map should use the original Kafka
