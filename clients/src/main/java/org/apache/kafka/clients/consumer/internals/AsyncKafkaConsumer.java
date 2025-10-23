@@ -834,6 +834,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
 
+            // This distinguishes the first pass of the inner do/while loop from subsequent passes for the
+            // inflight poll event logic.
+            boolean firstPass = true;
+
             do {
                 // We must not allow wake-ups between polling for fetches and returning the records.
                 // If the polled fetches are not empty the consumed position has already been updated in the polling
@@ -841,7 +845,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 // returning the records in the fetches. Thus, we trigger a possible wake-up before we poll fetches.
                 wakeupTrigger.maybeTriggerWakeup();
 
-                checkInflightPoll(timer);
+                checkInflightPoll(timer, firstPass);
+                firstPass = false;
                 final Fetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
                     // before returning the fetched records, we can send off the next round of fetches
@@ -875,7 +880,28 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * is made during each invocation to see if the <em>inflight</em> event has completed. If it has, it will be
      * processed accordingly.
      */
-    public void checkInflightPoll(Timer timer) {
+    public void checkInflightPoll(Timer timer, boolean firstPass) {
+        // Handle the case where there's an inflight poll from the *previous* invocation of AsyncKafkaConsumer.poll().
+        if (firstPass && inflightPoll != null) {
+            if (inflightPoll.isComplete()) {
+                // If the previous inflight event is complete, check if it resulted in an error.
+                log.trace("Previous inflight event {} completed, clearing", inflightPoll);
+                Optional<KafkaException> errorOpt = inflightPoll.error();
+                inflightPoll = null;
+
+                // If there is an error, throw it without delay. If it completed without error, then proceed as usual
+                // and a new event will be enqueued below.
+                if (errorOpt.isPresent()) {
+                    throw errorOpt.get();
+                }
+            } else if (inflightPoll.deadlineMs() < time.milliseconds()) {
+                // The previous inflight is not complete, but it has expired. There's no result to check, so just
+                // clear out the event reference and a new event will be enqueued below.
+                log.trace("Previous inflight event {} incomplete and expired, clearing", inflightPoll);
+                inflightPoll = null;
+            }
+        }
+
         boolean newlySubmittedEvent = false;
 
         if (inflightPoll == null) {
@@ -884,7 +910,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             if (log.isTraceEnabled()) {
                 log.trace(
-                    "Submitting new inflight event {} with {} remaining on timer",
+                    "Inflight event {} submitted with {} remaining on timer",
                     inflightPoll,
                     timer.remainingMs()
                 );
@@ -928,9 +954,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 }
             }
         } catch (Throwable t) {
-            // If an exception is hit, bubble it up to the user but make sure to clear out the inflight request
-            // because the error effectively renders it complete.
-            log.debug("Inflight event {} failed due to {}, clearing", inflightPoll, String.valueOf(t));
+            // If an exception is hit in the offset commit callbacks, the background events, or the event result,
+            // bubble it up to the user but make sure to clear out the inflight request because the error effectively
+            // renders it complete.
+            log.trace("Inflight event {} failed due to {}, clearing", inflightPoll, String.valueOf(t));
             inflightPoll = null;
             throw ConsumerUtils.maybeWrapAsKafkaException(t);
         }
