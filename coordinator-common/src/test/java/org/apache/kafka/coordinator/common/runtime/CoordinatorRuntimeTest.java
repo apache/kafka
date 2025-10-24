@@ -4877,20 +4877,20 @@ public class CoordinatorRuntimeTest {
         MockPartitionWriter writer = new MockPartitionWriter();
 
         CoordinatorRuntime<MockCoordinatorShard, String> runtime =
-                new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
-                        .withTime(clockTimer.time())
-                        .withTimer(schedulerTimer)
-                        .withDefaultWriteTimeOut(Duration.ofMillis(20))
-                        .withLoader(new MockCoordinatorLoader())
-                        .withEventProcessor(new DirectEventProcessor())
-                        .withPartitionWriter(writer)
-                        .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                        .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
-                        .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
-                        .withSerializer(new StringSerializer())
-                        .withAppendLingerMs(10)
-                        .withExecutorService(mock(ExecutorService.class))
-                        .build();
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(clockTimer.time())
+                .withTimer(schedulerTimer)
+                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withAppendLingerMs(10)
+                .withExecutorService(mock(ExecutorService.class))
+                .build();
 
         // Schedule the loading.
         runtime.scheduleLoadOperation(TP, 10);
@@ -4901,9 +4901,8 @@ public class CoordinatorRuntimeTest {
         assertNull(ctx.currentBatch);
 
         // Write #1.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation(
-                "write#1", TP, Duration.ofMillis(20),
-                state -> new CoordinatorResult<>(List.of("record1"), "response1")
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+            state -> new CoordinatorResult<>(List.of("record1"), "response1")
         );
         assertFalse(write1.isDone());
         assertNotNull(ctx.currentBatch);
@@ -4920,9 +4919,8 @@ public class CoordinatorRuntimeTest {
         assertEquals(2, schedulerTimer.size());
 
         // Write #2.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation(
-                "write#2", TP, Duration.ofMillis(20),
-                state -> new CoordinatorResult<>(List.of("record2"), "response2")
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+            state -> new CoordinatorResult<>(List.of("record2"), "response2")
         );
 
         // The batch should have been flushed.
