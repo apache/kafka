@@ -8962,6 +8962,54 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testAcquireMultipleRecordsWithOverlapAndNewBatchInRecordLimitMode() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+        MemoryRecords records = memoryRecords(5);
+
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+            MEMBER_ID,
+            SHARE_ACQUIRE_MODE.RECORD_LIMIT,
+            BATCH_SIZE,
+            3,
+            DEFAULT_FETCH_OFFSET,
+            fetchPartitionData(records, 0),
+            FETCH_ISOLATION_HWM),
+            3);
+
+        List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(0, 2, 1));
+        assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
+        assertEquals(3, sharePartition.nextFetchOffset());
+
+        // Add records from 0-9 offsets, 3-5 should be acquired and 0-2 should be ignored.
+        records = memoryRecords(10);
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+            MEMBER_ID,
+            SHARE_ACQUIRE_MODE.RECORD_LIMIT,
+            BATCH_SIZE,
+            3,
+            DEFAULT_FETCH_OFFSET,
+            fetchPartitionData(records, 0),
+            FETCH_ISOLATION_HWM),
+            3);
+
+        expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(3, 3, 1));
+        expectedAcquiredRecords.addAll(expectedAcquiredRecord(4, 4, 1));
+        expectedAcquiredRecords.addAll(expectedAcquiredRecord(5, 5, 1));
+        assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
+        assertEquals(6, sharePartition.nextFetchOffset());
+        assertEquals(2, sharePartition.cachedState().size());
+
+        // Check cached state.
+        Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
+        expectedOffsetStateMap.put(0L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        expectedOffsetStateMap.put(1L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        expectedOffsetStateMap.put(2L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        expectedOffsetStateMap.put(3L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        expectedOffsetStateMap.put(4L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(0L).offsetState());
+    }
+
+    @Test
     public void testAcknowledgeInRecordLimitMode() {
         Persister persister = Mockito.mock(Persister.class);
         SharePartition sharePartition = Mockito.spy(SharePartitionBuilder.builder()
