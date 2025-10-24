@@ -66,7 +66,7 @@ public class ShareSessionHandlerTest {
             ConsumerConfig.DEFAULT_CLIENT_RACK,
             IsolationLevel.READ_UNCOMMITTED,
             ShareAcquireMode.BATCH_OPTIMIZED);
-    private static final ShareFetchConfig SHARE_FETCH_CONFIG_BATCH_OPTIMIZED = new ShareFetchConfig(
+    private static final ShareFetchConfig SHARE_FETCH_CONFIG_RECORD_LIMIT = new ShareFetchConfig(
             ConsumerConfig.DEFAULT_FETCH_MIN_BYTES,
             ConsumerConfig.DEFAULT_FETCH_MAX_BYTES,
             ConsumerConfig.DEFAULT_FETCH_MAX_WAIT_MS,
@@ -78,7 +78,7 @@ public class ShareSessionHandlerTest {
             ShareAcquireMode.RECORD_LIMIT);
 
     private static Stream<ShareFetchConfig> shareFetchConfigProvider() {
-        return Stream.of(DEFAULT_SHARE_FETCH_CONFIG, SHARE_FETCH_CONFIG_BATCH_OPTIMIZED);
+        return Stream.of(DEFAULT_SHARE_FETCH_CONFIG, SHARE_FETCH_CONFIG_RECORD_LIMIT);
     }
 
     private static LinkedHashMap<TopicPartition, TopicIdPartition> reqMap(TopicIdPartition... entries) {
