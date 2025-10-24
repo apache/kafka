@@ -2030,12 +2030,29 @@ public class GroupMetadataManager {
 
         // Actually bump the group epoch
         int groupEpoch = group.groupEpoch();
+        boolean isInitialRebalance = group.isEmpty();
         if (bumpGroupEpoch) {
-            groupEpoch += 1;
+            if (isInitialRebalance) {
+                groupEpoch = 2;
+            } else {
+                groupEpoch += 1;
+            }
             records.add(newStreamsGroupMetadataRecord(groupId, groupEpoch, metadataHash, validatedTopologyEpoch, currentAssignmentConfigs));
             log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {} and validated topic epoch {}.", groupId, memberId, groupEpoch, metadataHash, validatedTopologyEpoch);
             metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
+        }
+
+        // Schedule initial rebalance delay for new streams groups to coalesce joins.
+        int initialDelayMs = streamsGroupInitialRebalanceDelayMs(groupId);
+        if (isInitialRebalance & initialDelayMs > 0) {
+            timer.scheduleIfAbsent(
+                    streamsInitialRebalanceKey(groupId),
+                    initialDelayMs,
+                    TimeUnit.MILLISECONDS,
+                    false,
+                    () -> fireStreamsInitialRebalance(groupId)
+            );
         }
 
         // 4. Update the target assignment if the group epoch is larger than the target assignment epoch or a static member
@@ -2044,16 +2061,23 @@ public class GroupMetadataManager {
         int targetAssignmentEpoch;
         TasksTuple targetAssignment;
         if (groupEpoch > group.assignmentEpoch()) {
-            targetAssignment = updateStreamsTargetAssignment(
-                group,
-                groupEpoch,
-                updatedMember,
-                updatedConfiguredTopology,
-                metadataImage,
-                records,
-                currentAssignmentConfigs
-            );
-            targetAssignmentEpoch = groupEpoch;
+            boolean initialDelayActive = timer.isScheduled(streamsInitialRebalanceKey(groupId));
+            if (initialDelayActive && group.assignmentEpoch() == 0) {
+                // During initial rebalance delay, return empty assignment to first joining members.
+                targetAssignmentEpoch = group.assignmentEpoch();
+                targetAssignment = TasksTuple.EMPTY;
+            } else {
+                targetAssignment = updateStreamsTargetAssignment(
+                    group,
+                    groupEpoch,
+                    updatedMember,
+                    updatedConfiguredTopology,
+                    metadataImage,
+                    records,
+                    currentAssignmentConfigs
+                );
+                targetAssignmentEpoch = groupEpoch;
+            }
         } else {
             targetAssignmentEpoch = group.assignmentEpoch();
             targetAssignment = group.targetAssignment(updatedMember.memberId());
@@ -8652,6 +8676,10 @@ public class GroupMetadataManager {
             // Add tombstones for the previous streams group. The tombstones won't actually be
             // replayed because its coordinator result has a non-null appendFuture.
             createGroupTombstoneRecords(group, records);
+            // Cancel any pending initial rebalance timer.
+            if (timer.isScheduled(streamsInitialRebalanceKey(groupId))) {
+                timer.cancel(streamsInitialRebalanceKey(groupId));
+            }
             removeGroup(groupId);
             return true;
         }
@@ -8742,6 +8770,15 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Get the initial rebalance delay of the provided streams group.
+     */
+    private int streamsGroupInitialRebalanceDelayMs(String groupId) {
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.map(GroupConfig::streamsInitialRebalanceDelayMs)
+            .orElse(config.streamsGroupInitialRebalanceDelayMs());
+    }
+
+    /**
      * Get the assignor of the provided streams group.
      */
     private TaskAssignor streamsGroupAssignor(String groupId) {
@@ -8796,6 +8833,31 @@ public class GroupMetadataManager {
      */
     static String classicGroupSyncKey(String groupId) {
         return "sync-" + groupId;
+    }
+
+    /**
+     * Callback when the initial rebalance delay timer expires.
+     * This is a no-op as the actual assignment computation happens on the next heartbeat.
+     *
+     * @param groupId   The group id.
+     *
+     * @return An empty result.
+     */
+    private CoordinatorResult<Void, CoordinatorRecord> fireStreamsInitialRebalance(String groupId) {
+        return EMPTY_RESULT;
+    }
+
+    /**
+     * Generate a streams group initial rebalance key for the timer.
+     *
+     * Package private for testing.
+     *
+     * @param groupId   The group id.
+     *
+     * @return the initial rebalance key.
+     */
+    static String streamsInitialRebalanceKey(String groupId) {
+        return "initial-rebalance-timeout-" + groupId;
     }
 
     /**

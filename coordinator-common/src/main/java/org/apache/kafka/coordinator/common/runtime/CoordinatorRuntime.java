@@ -441,6 +441,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             if (prevTask != null) prevTask.cancel();
         }
 
+        @Override
+        public boolean isScheduled(String key) {
+            return tasks.containsKey(key);
+        }
+
         public void cancelAll() {
             Iterator<Map.Entry<String, TimerTask>> iterator = tasks.entrySet().iterator();
             while (iterator.hasNext()) {
