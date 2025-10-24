@@ -87,7 +87,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -500,7 +499,7 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testCommitSyncFailsWithUnknownOffsetAndMetadata() {
+    public void testCommitSyncShouldSucceedWithUnknownOffsetAndMetadata() {
         subscriptionState = mock(SubscriptionState.class);
         Uuid topicId = Uuid.randomUuid();
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
@@ -522,9 +521,9 @@ public class CommitRequestManagerTest {
             Errors.NONE)));
 
         verify(subscriptionState, never()).allConsumed();
-        Throwable failure = assertThrows(ExecutionException.class, future::get);
-        assertEquals(IllegalStateException.class, failure.getCause().getClass());
-        assertTrue(failure.getMessage().contains("Can't find metadata for topic id " + topicId));
+        Map<TopicPartition, OffsetAndMetadata> commitOffsets = assertDoesNotThrow(() -> future.get());
+        assertTrue(future.isDone());
+        assertEquals(offsets, commitOffsets);
     }
 
     /**
