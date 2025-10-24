@@ -19,13 +19,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.AlterConfigsRequestData;
-import org.apache.kafka.common.message.AlterConfigsRequestDataJsonConverter;
 import org.apache.kafka.common.message.AlterConfigsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Readable;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.util.Collection;
 import java.util.Map;
@@ -91,6 +87,11 @@ public class AlterConfigsRequest extends AbstractRequest {
         public AlterConfigsRequest build(short version) {
             return new AlterConfigsRequest(data, version);
         }
+
+        @Override
+        public String toString() {
+            return maskData(data);
+        }
     }
 
     private final AlterConfigsRequestData data;
@@ -140,14 +141,18 @@ public class AlterConfigsRequest extends AbstractRequest {
     }
 
     // It is not safe to print all config values
+    private static String maskData(AlterConfigsRequestData data) {
+        AlterConfigsRequestData tempData = data.duplicate();
+        tempData.resources().forEach(resource -> {
+            resource.configs().forEach(config -> {
+                config.setValue("REDACTED");
+            });
+        });
+        return tempData.toString();
+    }
+
     @Override
     public String toString() {
-        JsonNode json = AlterConfigsRequestDataJsonConverter.write(data, version()).deepCopy();
-        for (JsonNode resource : json.get("resources")) {
-            for (JsonNode config : resource.get("configs")) {
-                ((ObjectNode) config).put("value", "REDACTED");
-            }
-        }
-        return AlterConfigsRequestDataJsonConverter.read(json, version()).toString();
+        return maskData(data);
     }
 }
