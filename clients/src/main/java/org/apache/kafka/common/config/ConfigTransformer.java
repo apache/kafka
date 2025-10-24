@@ -97,7 +97,7 @@ public class ConfigTransformer {
             String providerName = entry.getKey();
             Plugin<ConfigProvider> providerPlugin = configProviderPlugins.get(providerName);
             Map<String, Set<String>> keysByPath = entry.getValue();
-            if (providerPlugin != null && keysByPath != null) {
+            if (providerPlugin != null && providerPlugin.get() != null && keysByPath != null) {
                 for (Map.Entry<String, Set<String>> pathWithKeys : keysByPath.entrySet()) {
                     String path = pathWithKeys.getKey();
                     Set<String> keys = new HashSet<>(pathWithKeys.getValue());

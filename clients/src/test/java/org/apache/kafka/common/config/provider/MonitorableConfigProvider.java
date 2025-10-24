@@ -30,7 +30,7 @@ import java.util.Set;
 public class MonitorableConfigProvider implements ConfigProvider, Monitorable {
     public static final String NAME = "name";
     public static final String DESCRIPTION = "description";
-    protected boolean configured = false;
+    public int configureCallCount = 0;
 
     @Override
     public void withPluginMetrics(PluginMetrics metrics) {
@@ -54,6 +54,6 @@ public class MonitorableConfigProvider implements ConfigProvider, Monitorable {
 
     @Override
     public void configure(Map<String, ?> configs) {
-        configured = true;
+        configureCallCount += 1;
     }
 }

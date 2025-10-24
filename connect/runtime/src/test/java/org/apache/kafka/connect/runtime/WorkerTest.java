@@ -387,9 +387,9 @@ public class WorkerTest {
             "file"
         );
         when(plugins.newConfigProvider(any(AbstractConfig.class),
-                eq("file"),
-                any(ClassLoaderUsage.class),
-                any(Metrics.class))).thenReturn(providerPlugin);
+                                       eq("file"),
+                                       any(ClassLoaderUsage.class),
+                                       any(Metrics.class))).thenReturn(providerPlugin);
     }
 
     @ParameterizedTest
@@ -3266,4 +3266,5 @@ public class WorkerTest {
         }
 
     }
+
 }

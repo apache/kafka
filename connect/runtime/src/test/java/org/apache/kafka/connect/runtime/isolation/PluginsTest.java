@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -25,7 +26,6 @@ import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.provider.MonitorableConfigProvider;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.components.Versioned;
@@ -60,6 +60,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -379,7 +380,7 @@ public class PluginsTest {
 
     @Test
     public void newConfigProviderShouldConfigureWithPluginClassLoader() {
-        String providerName = "customProvider";
+        String providerName = "monitorableProvider";
         String providerPrefix = WorkerConfig.CONFIG_PROVIDERS_CONFIG + "." + providerName;
         props.put(providerPrefix + ".class", TestPlugin.SAMPLING_CONFIG_PROVIDER.className());
 
@@ -406,10 +407,15 @@ public class PluginsTest {
     public void newConfigProviderShouldCallWithPluginMetricsAfterConfigure() {
         String providerName = "monitorable";
         String providerPrefix = WorkerConfig.CONFIG_PROVIDERS_CONFIG + "." + providerName;
-        props.put(providerPrefix + ".class", CustomMonitorableConfigProvider.class.getName());
+        props.put(providerPrefix + ".class", MonitorableConfigProvider.class.getName());
         createConfig();
-        Plugin<ConfigProvider> plugin = plugins.newConfigProvider(config, providerName, ClassLoaderUsage.PLUGINS, new Metrics());
-        assertInstanceOf(CustomMonitorableConfigProvider.class, plugin.get());
+        Metrics metrics = new Metrics();
+        Plugin<ConfigProvider> plugin = plugins.newConfigProvider(config, providerName, ClassLoaderUsage.PLUGINS, metrics);
+        assertInstanceOf(MonitorableConfigProvider.class, plugin.get());
+        assertEquals(1, ((MonitorableConfigProvider) plugin.get()).configureCallCount);
+        assertMetrics(metrics,
+                1,
+            expectedTags(WorkerConfig.CONFIG_PROVIDERS_CONFIG, MonitorableConfigProvider.class.getSimpleName(), Map.of("provider", "monitorable")));
     }
 
     @Test
@@ -706,6 +712,29 @@ public class PluginsTest {
         }
     }
 
+    private static Map<String, String> expectedTags(String config, String clazz, Map<String, String> extraTags) {
+        Map<String, String> tags = new LinkedHashMap<>();
+        tags.put("config", config);
+        tags.put("class", clazz);
+        tags.putAll(extraTags);
+        return tags;
+    }
+
+    private void assertMetrics(Metrics metrics, int expected, Map<String, String> expectedTags) {
+        int found = 0;
+        for (MetricName metricName : metrics.metrics().keySet()) {
+            if (metricName.group().equals("plugins")) {
+                Map<String, String> tags = metricName.tags();
+                if (expectedTags.equals(tags)) {
+                    assertEquals(MonitorableConfigProvider.NAME, metricName.name());
+                    assertEquals(MonitorableConfigProvider.DESCRIPTION, metricName.description());
+                    found++;
+                }
+            }
+        }
+        assertEquals(expected, found);
+    }
+
     public static class TestConverter implements Converter, Configurable, Versioned {
         public Map<String, ?> configs;
 
@@ -807,13 +836,4 @@ public class PluginsTest {
             super.configure(configs);
         }
     }
-
-    public static class CustomMonitorableConfigProvider extends MonitorableConfigProvider {
-
-        @Override
-        public void withPluginMetrics(PluginMetrics metrics) {
-            assertTrue(configured);
-        }
-    }
-
 }
