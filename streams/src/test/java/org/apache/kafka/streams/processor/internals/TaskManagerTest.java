@@ -22,7 +22,6 @@ import org.apache.kafka.clients.admin.DeletedRecords;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
@@ -103,7 +102,6 @@ import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.core.IsEqual.equalTo;
@@ -2188,72 +2186,65 @@ public class TaskManagerTest {
 
     @Test
     public void shouldReviveCorruptTasks() {
-        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RUNNING)
+            .build();
 
-        final AtomicBoolean enforcedCheckpoint = new AtomicBoolean(false);
-        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
-            @Override
-            public void postCommit(final boolean enforceCheckpoint) {
-                if (enforceCheckpoint) {
-                    enforcedCheckpoint.set(true);
-                }
-                super.postCommit(enforceCheckpoint);
-            }
-        };
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.task(taskId00)).thenReturn(task00);
+        when(tasks.allTasksPerId()).thenReturn(singletonMap(taskId00, task00));
+        when(tasks.activeTaskIds()).thenReturn(Set.of(taskId00));
 
-        // `handleAssignment`
-        when(consumer.assignment())
-            .thenReturn(assignment)
-            .thenReturn(taskId00Partitions);
-        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(task00.prepareCommit(false)).thenReturn(emptyMap());
+        doNothing().when(task00).postCommit(anyBoolean());
+        when(task00.changelogPartitions()).thenReturn(taskId00ChangelogPartitions);
 
-        taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), tp -> assertThat(tp, is(empty()))), is(true));
-        assertThat(task00.state(), is(Task.State.RUNNING));
+        when(consumer.assignment()).thenReturn(taskId00Partitions);
 
-        task00.setChangelogOffsets(singletonMap(t1p0, 0L));
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
+
         taskManager.handleCorruption(singleton(taskId00));
 
-        assertThat(task00.commitPrepared, is(true));
-        assertThat(task00.state(), is(Task.State.CREATED));
-        assertThat(task00.partitionsForOffsetReset, equalTo(taskId00Partitions));
-        assertThat(enforcedCheckpoint.get(), is(true));
-        assertThat(taskManager.activeTaskMap(), is(singletonMap(taskId00, task00)));
-        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-
-        verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
+        verify(task00).prepareCommit(false);
+        verify(task00).postCommit(true);
+        verify(task00).addPartitionsForOffsetReset(taskId00Partitions);
+        verify(task00).changelogPartitions();
+        verify(task00).closeDirty();
+        verify(task00).revive();
+        verify(tasks).removeTask(task00);
+        verify(tasks).addPendingTasksToInit(Set.of(task00));
+        verify(consumer, never()).commitSync(emptyMap());
     }
 
     @Test
     public void shouldReviveCorruptTasksEvenIfTheyCannotCloseClean() {
-        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RUNNING)
+            .build();
 
-        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
-            @Override
-            public void suspend() {
-                super.suspend();
-                throw new RuntimeException("oops");
-            }
-        };
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.task(taskId00)).thenReturn(task00);
+        when(tasks.allTasksPerId()).thenReturn(singletonMap(taskId00, task00));
+        when(tasks.activeTaskIds()).thenReturn(Set.of(taskId00));
 
-        when(consumer.assignment())
-            .thenReturn(assignment)
-            .thenReturn(taskId00Partitions);
-        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(task00.prepareCommit(false)).thenReturn(emptyMap());
+        when(task00.changelogPartitions()).thenReturn(taskId00ChangelogPartitions);
+        doThrow(new RuntimeException("oops")).when(task00).suspend();
 
-        taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), tp -> assertThat(tp, is(empty()))), is(true));
-        assertThat(task00.state(), is(Task.State.RUNNING));
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
 
-        task00.setChangelogOffsets(singletonMap(t1p0, 0L));
         taskManager.handleCorruption(singleton(taskId00));
-        assertThat(task00.commitPrepared, is(true));
-        assertThat(task00.state(), is(Task.State.CREATED));
-        assertThat(task00.partitionsForOffsetReset, equalTo(taskId00Partitions));
-        assertThat(taskManager.activeTaskMap(), is(singletonMap(taskId00, task00)));
-        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
 
-        verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
+        verify(task00).prepareCommit(false);
+        verify(task00).suspend();
+        verify(task00, never()).postCommit(anyBoolean()); // postCommit is NOT called
+        verify(task00).closeDirty();
+        verify(task00).revive();
+        verify(tasks).removeTask(task00);
+        verify(tasks).addPendingTasksToInit(Set.of(task00));
+        verify(task00).addPartitionsForOffsetReset(emptySet());
     }
 
     @Test
@@ -2326,224 +2317,162 @@ public class TaskManagerTest {
 
     @Test
     public void shouldCleanAndReviveCorruptedStandbyTasksBeforeCommittingNonCorruptedTasks() {
-        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
+        final StandbyTask corruptedStandby = standbyTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask runningNonCorruptedActive = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId01Partitions).build();
 
-        final StateMachineTask corruptedStandby = new StateMachineTask(taskId00, taskId00Partitions, false, stateManager);
-        final StateMachineTask runningNonCorruptedActive = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
-            @Override
-            public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
-                throw new TaskMigratedException("You dropped out of the group!", new RuntimeException());
-            }
-        };
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.task(taskId00)).thenReturn(corruptedStandby);
+        when(tasks.allTasksPerId()).thenReturn(mkMap(
+            mkEntry(taskId00, corruptedStandby),
+            mkEntry(taskId01, runningNonCorruptedActive)
+        ));
+        when(tasks.activeTaskIds()).thenReturn(Set.of(taskId01));
 
-        // handleAssignment
-        when(activeTaskCreator.createTasks(any(), eq(taskId01Assignment)))
-            .thenReturn(singleton(runningNonCorruptedActive));
-        when(standbyTaskCreator.createTasks(taskId00Assignment)).thenReturn(singleton(corruptedStandby));
+        when(runningNonCorruptedActive.commitNeeded()).thenReturn(true);
+        when(runningNonCorruptedActive.prepareCommit(true))
+            .thenThrow(new TaskMigratedException("You dropped out of the group!", new RuntimeException()));
 
-        when(consumer.assignment()).thenReturn(assignment);
+        when(corruptedStandby.changelogPartitions()).thenReturn(taskId00ChangelogPartitions);
+        when(corruptedStandby.prepareCommit(false)).thenReturn(emptyMap());
+        doNothing().when(corruptedStandby).suspend();
+        doNothing().when(corruptedStandby).postCommit(anyBoolean());
 
-        taskManager.handleAssignment(taskId01Assignment, taskId00Assignment);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
 
-        // make sure this will be committed and throw
-        assertThat(runningNonCorruptedActive.state(), is(Task.State.RUNNING));
-        assertThat(corruptedStandby.state(), is(Task.State.RUNNING));
-
-        runningNonCorruptedActive.setCommitNeeded();
-
-        corruptedStandby.setChangelogOffsets(singletonMap(t1p0, 0L));
         assertThrows(TaskMigratedException.class, () -> taskManager.handleCorruption(singleton(taskId00)));
 
+        // verifying the entire task lifecycle
+        final InOrder taskOrder = inOrder(corruptedStandby, runningNonCorruptedActive);
+        taskOrder.verify(corruptedStandby).prepareCommit(false);
+        taskOrder.verify(corruptedStandby).suspend();
+        taskOrder.verify(corruptedStandby).postCommit(true);
+        taskOrder.verify(corruptedStandby).closeDirty();
+        taskOrder.verify(corruptedStandby).revive();
+        taskOrder.verify(runningNonCorruptedActive).prepareCommit(true);
 
-        assertThat(corruptedStandby.commitPrepared, is(true));
-        assertThat(corruptedStandby.state(), is(Task.State.CREATED));
-        verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
+        verify(tasks).removeTask(corruptedStandby);
+        verify(tasks).addPendingTasksToInit(Set.of(corruptedStandby));
     }
 
     @Test
     public void shouldNotAttemptToCommitInHandleCorruptedDuringARebalance() {
-        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
-        when(stateDirectory.listNonEmptyTaskDirectories()).thenReturn(new ArrayList<>());
+        final StreamTask corruptedActive = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RUNNING)
+            .build();
 
-        final StateMachineTask corruptedActive = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
+        final StreamTask uncorruptedActive = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING)
+            .build();
 
-        // make sure this will attempt to be committed and throw
-        final StateMachineTask uncorruptedActive = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager);
-        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
-        uncorruptedActive.setCommitNeeded();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.task(taskId00)).thenReturn(corruptedActive);
+        when(tasks.allTasksPerId()).thenReturn(mkMap(
+            mkEntry(taskId00, corruptedActive),
+            mkEntry(taskId01, uncorruptedActive)
+        ));
+        when(tasks.activeTaskIds()).thenReturn(Set.of(taskId00, taskId01));
 
-        // handleAssignment
-        final Map<TaskId, Set<TopicPartition>> firstAssignement = new HashMap<>();
-        firstAssignement.putAll(taskId00Assignment);
-        firstAssignement.putAll(taskId01Assignment);
-        when(activeTaskCreator.createTasks(any(), eq(firstAssignement)))
-            .thenReturn(asList(corruptedActive, uncorruptedActive));
+        when(uncorruptedActive.commitNeeded()).thenReturn(true);
+        when(uncorruptedActive.prepareCommit(true)).thenReturn(emptyMap());
 
-        when(consumer.assignment())
-            .thenReturn(assignment)
-            .thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
+        when(corruptedActive.prepareCommit(false)).thenReturn(emptyMap());
+        doNothing().when(corruptedActive).postCommit(anyBoolean());
 
-        uncorruptedActive.setCommittableOffsetsAndMetadata(offsets);
+        when(consumer.assignment()).thenReturn(taskId00Partitions);
 
-        taskManager.handleAssignment(firstAssignement, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
-
-        assertThat(uncorruptedActive.state(), is(Task.State.RUNNING));
-
-        assertThat(uncorruptedActive.commitPrepared, is(false));
-        assertThat(uncorruptedActive.commitNeeded, is(true));
-        assertThat(uncorruptedActive.commitCompleted, is(false));
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
 
         taskManager.handleRebalanceStart(singleton(topic1));
         assertThat(taskManager.rebalanceInProgress(), is(true));
+
         taskManager.handleCorruption(singleton(taskId00));
 
-        assertThat(uncorruptedActive.commitPrepared, is(false));
-        assertThat(uncorruptedActive.commitNeeded, is(true));
-        assertThat(uncorruptedActive.commitCompleted, is(false));
+        verify(uncorruptedActive, never()).prepareCommit(anyBoolean());
+        verify(uncorruptedActive, never()).postCommit(anyBoolean());
 
-        assertThat(uncorruptedActive.state(), is(State.RUNNING));
+        verify(corruptedActive).changelogPartitions();
+        verify(corruptedActive).postCommit(true);
+        verify(corruptedActive).addPartitionsForOffsetReset(taskId00Partitions);
+        verify(consumer, never()).commitSync(emptyMap());
     }
 
     @Test
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitWithAlos() {
-        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
+        final StreamTask corruptedActive = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RUNNING)
+            .build();
 
-        final StateMachineTask corruptedActive = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
-        final StateMachineTask uncorruptedActive = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
-            @Override
-            public void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
-                fail("Should not try to mark changelogs as corrupted for uncorrupted task");
-            }
-        };
+        // this task will time out during commit
+        final StreamTask uncorruptedActive = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING)
+            .build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.task(taskId00)).thenReturn(corruptedActive);
+        when(tasks.allTasksPerId()).thenReturn(mkMap(
+            mkEntry(taskId00, corruptedActive),
+            mkEntry(taskId01, uncorruptedActive)
+        ));
+        when(tasks.activeTaskIds()).thenReturn(Set.of(taskId00, taskId01));
+        when(tasks.activeTasks()).thenReturn(Set.of(corruptedActive, uncorruptedActive));
+
+        // we need to mock uncorrupted task to indicate that it needs commit and will return offsets
         final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
-        uncorruptedActive.setCommittableOffsetsAndMetadata(offsets);
+        when(uncorruptedActive.commitNeeded()).thenReturn(true);
+        when(uncorruptedActive.prepareCommit(true)).thenReturn(offsets);
+        when(uncorruptedActive.changelogPartitions()).thenReturn(taskId01ChangelogPartitions);
+        doNothing().when(uncorruptedActive).suspend();
+        doNothing().when(uncorruptedActive).closeDirty();
+        doNothing().when(uncorruptedActive).revive();
 
-        // handleAssignment
-        final Map<TaskId, Set<TopicPartition>> firstAssignment = new HashMap<>();
-        firstAssignment.putAll(taskId00Assignment);
-        firstAssignment.putAll(taskId01Assignment);
-        when(activeTaskCreator.createTasks(any(), eq(firstAssignment)))
-            .thenReturn(asList(corruptedActive, uncorruptedActive));
-
-        when(consumer.assignment())
-            .thenReturn(assignment)
-            .thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
+        // corrupted task doesn't need commit
+        when(corruptedActive.commitNeeded()).thenReturn(false);
+        when(corruptedActive.prepareCommit(false)).thenReturn(emptyMap());
+        when(corruptedActive.changelogPartitions()).thenReturn(taskId00ChangelogPartitions);
+        doNothing().when(corruptedActive).suspend();
+        doNothing().when(corruptedActive).postCommit(anyBoolean());
+        doNothing().when(corruptedActive).closeDirty();
+        doNothing().when(corruptedActive).revive();
 
         doThrow(new TimeoutException()).when(consumer).commitSync(offsets);
+        when(consumer.assignment()).thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
 
-        taskManager.handleAssignment(firstAssignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
-
-        assertThat(uncorruptedActive.state(), is(Task.State.RUNNING));
-        assertThat(corruptedActive.state(), is(Task.State.RUNNING));
-
-        // make sure this will be committed and throw
-        uncorruptedActive.setCommitNeeded();
-        corruptedActive.setChangelogOffsets(singletonMap(t1p0, 0L));
-
-        assertThat(uncorruptedActive.commitPrepared, is(false));
-        assertThat(uncorruptedActive.commitNeeded, is(true));
-        assertThat(uncorruptedActive.commitCompleted, is(false));
-        assertThat(corruptedActive.commitPrepared, is(false));
-        assertThat(corruptedActive.commitNeeded, is(false));
-        assertThat(corruptedActive.commitCompleted, is(false));
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
 
         taskManager.handleCorruption(singleton(taskId00));
 
-        assertThat(uncorruptedActive.commitPrepared, is(true));
-        assertThat(uncorruptedActive.commitNeeded, is(false));
-        assertThat(uncorruptedActive.commitCompleted, is(false)); //if not corrupted, we should close dirty without committing
-        assertThat(corruptedActive.commitPrepared, is(true));
-        assertThat(corruptedActive.commitNeeded, is(false));
-        assertThat(corruptedActive.commitCompleted, is(true)); //if corrupted, should enforce checkpoint with corrupted tasks removed
+        // 1. verify corrupted task was closed dirty and revived
+        final InOrder corruptedOrder = inOrder(corruptedActive, tasks);
+        corruptedOrder.verify(corruptedActive).prepareCommit(false);
+        corruptedOrder.verify(corruptedActive).suspend();
+        corruptedOrder.verify(corruptedActive).postCommit(true);
+        corruptedOrder.verify(corruptedActive).closeDirty();
+        corruptedOrder.verify(tasks).removeTask(corruptedActive);
+        corruptedOrder.verify(corruptedActive).revive();
+        corruptedOrder.verify(tasks).addPendingTasksToInit(Set.of(corruptedActive));
 
-        assertThat(corruptedActive.state(), is(Task.State.CREATED));
-        assertThat(uncorruptedActive.state(), is(Task.State.CREATED));
-        verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
-    }
+        // 2. verify uncorrupted task attempted commit, failed with timeout, then was closed dirty and revived
+        final InOrder uncorruptedOrder = inOrder(uncorruptedActive, consumer, tasks);
+        uncorruptedOrder.verify(uncorruptedActive).prepareCommit(true);
+        uncorruptedOrder.verify(consumer).commitSync(offsets); // attempt commit, throws TimeoutException
+        uncorruptedOrder.verify(uncorruptedActive).prepareCommit(false);
+        uncorruptedOrder.verify(uncorruptedActive).suspend();
+        uncorruptedOrder.verify(uncorruptedActive).closeDirty();
+        uncorruptedOrder.verify(tasks).removeTask(uncorruptedActive);
+        uncorruptedOrder.verify(uncorruptedActive).revive();
+        uncorruptedOrder.verify(tasks).addPendingTasksToInit(Set.of(uncorruptedActive));
 
-    @SuppressWarnings("removal")
-    @Test
-    public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringHandleCorruptedWithEOS() {
-        final TaskManager taskManager = setUpTaskManagerWithoutStateUpdater(ProcessingMode.EXACTLY_ONCE_V2, null, false);
-        final StreamsProducer producer = mock(StreamsProducer.class);
-        when(activeTaskCreator.streamsProducer()).thenReturn(producer);
-        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
-
-        final AtomicBoolean corruptedTaskChangelogMarkedAsCorrupted = new AtomicBoolean(false);
-        final StateMachineTask corruptedActiveTask = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
-            @Override
-            public void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
-                super.markChangelogAsCorrupted(partitions);
-                corruptedTaskChangelogMarkedAsCorrupted.set(true);
-            }
-        };
-
-        final AtomicBoolean uncorruptedTaskChangelogMarkedAsCorrupted = new AtomicBoolean(false);
-        final StateMachineTask uncorruptedActiveTask = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
-            @Override
-            public void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
-                super.markChangelogAsCorrupted(partitions);
-                uncorruptedTaskChangelogMarkedAsCorrupted.set(true);
-            }
-        };
-        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
-        uncorruptedActiveTask.setCommittableOffsetsAndMetadata(offsets);
-
-        // handleAssignment
-        final Map<TaskId, Set<TopicPartition>> firstAssignment = new HashMap<>();
-        firstAssignment.putAll(taskId00Assignment);
-        firstAssignment.putAll(taskId01Assignment);
-        when(activeTaskCreator.createTasks(any(), eq(firstAssignment)))
-            .thenReturn(asList(corruptedActiveTask, uncorruptedActiveTask));
-
-        when(consumer.assignment())
-            .thenReturn(assignment)
-            .thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
-
-        final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
-        when(consumer.groupMetadata()).thenReturn(groupMetadata);
-
-        doThrow(new TimeoutException()).when(producer).commitTransaction(offsets, groupMetadata);
-
-        taskManager.handleAssignment(firstAssignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
-
-        assertThat(uncorruptedActiveTask.state(), is(Task.State.RUNNING));
-        assertThat(corruptedActiveTask.state(), is(Task.State.RUNNING));
-
-        // make sure this will be committed and throw
-        uncorruptedActiveTask.setCommitNeeded();
-
-        final Map<TopicPartition, Long> corruptedActiveTaskChangelogOffsets = singletonMap(t1p0changelog, 0L);
-        corruptedActiveTask.setChangelogOffsets(corruptedActiveTaskChangelogOffsets);
-        final Map<TopicPartition, Long> uncorruptedActiveTaskChangelogOffsets = singletonMap(t1p1changelog, 0L);
-        uncorruptedActiveTask.setChangelogOffsets(uncorruptedActiveTaskChangelogOffsets);
-
-        assertThat(uncorruptedActiveTask.commitPrepared, is(false));
-        assertThat(uncorruptedActiveTask.commitNeeded, is(true));
-        assertThat(uncorruptedActiveTask.commitCompleted, is(false));
-        assertThat(corruptedActiveTask.commitPrepared, is(false));
-        assertThat(corruptedActiveTask.commitNeeded, is(false));
-        assertThat(corruptedActiveTask.commitCompleted, is(false));
-
-        taskManager.handleCorruption(singleton(taskId00));
-
-        assertThat(uncorruptedActiveTask.commitPrepared, is(true));
-        assertThat(uncorruptedActiveTask.commitNeeded, is(false));
-        assertThat(uncorruptedActiveTask.commitCompleted, is(true)); //if corrupted due to timeout on commit, should enforce checkpoint with corrupted tasks removed
-        assertThat(corruptedActiveTask.commitPrepared, is(true));
-        assertThat(corruptedActiveTask.commitNeeded, is(false));
-        assertThat(corruptedActiveTask.commitCompleted, is(true)); //if corrupted, should enforce checkpoint with corrupted tasks removed
-
-        assertThat(corruptedActiveTask.state(), is(Task.State.CREATED));
-        assertThat(uncorruptedActiveTask.state(), is(Task.State.CREATED));
-        assertThat(corruptedTaskChangelogMarkedAsCorrupted.get(), is(true));
-        assertThat(uncorruptedTaskChangelogMarkedAsCorrupted.get(), is(true));
-        verify(stateManager).markChangelogAsCorrupted(taskId00ChangelogPartitions);
-        verify(stateManager).markChangelogAsCorrupted(taskId01ChangelogPartitions);
+        // verify both tasks had their input partitions reset
+        verify(corruptedActive).addPartitionsForOffsetReset(taskId00Partitions);
+        verify(uncorruptedActive).addPartitionsForOffsetReset(taskId01Partitions);
     }
 
     @Test
@@ -2595,76 +2524,6 @@ public class TaskManagerTest {
         assertThat(revokedActiveTask.state(), is(State.SUSPENDED));
         assertThat(unrevokedActiveTaskWithCommitNeeded.state(), is(State.CREATED));
         assertThat(unrevokedActiveTaskWithoutCommitNeeded.state(), is(State.RUNNING));
-    }
-
-    @SuppressWarnings("removal")
-    @Test
-    public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringRevocationWithEOS() {
-        final TaskManager taskManager = setUpTaskManagerWithoutStateUpdater(ProcessingMode.EXACTLY_ONCE_V2, null, false);
-        final StreamsProducer producer = mock(StreamsProducer.class);
-        when(activeTaskCreator.streamsProducer()).thenReturn(producer);
-        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
-
-        final StateMachineTask revokedActiveTask = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
-        final Map<TopicPartition, OffsetAndMetadata> revokedActiveTaskOffsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
-        revokedActiveTask.setCommittableOffsetsAndMetadata(revokedActiveTaskOffsets);
-        revokedActiveTask.setCommitNeeded();
-
-        final AtomicBoolean unrevokedTaskChangelogMarkedAsCorrupted = new AtomicBoolean(false);
-        final StateMachineTask unrevokedActiveTask = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
-            @Override
-            public void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
-                super.markChangelogAsCorrupted(partitions);
-                unrevokedTaskChangelogMarkedAsCorrupted.set(true);
-            }
-        };
-        final Map<TopicPartition, OffsetAndMetadata> unrevokedTaskOffsets = singletonMap(t1p1, new OffsetAndMetadata(1L, null));
-        unrevokedActiveTask.setCommittableOffsetsAndMetadata(unrevokedTaskOffsets);
-        unrevokedActiveTask.setCommitNeeded();
-
-        final StateMachineTask unrevokedActiveTaskWithoutCommitNeeded = new StateMachineTask(taskId02, taskId02Partitions, true, stateManager);
-
-        final Map<TopicPartition, OffsetAndMetadata> expectedCommittedOffsets = new HashMap<>();
-        expectedCommittedOffsets.putAll(revokedActiveTaskOffsets);
-        expectedCommittedOffsets.putAll(unrevokedTaskOffsets);
-
-        final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
-            mkEntry(taskId00, taskId00Partitions),
-            mkEntry(taskId01, taskId01Partitions),
-            mkEntry(taskId02, taskId02Partitions)
-            );
-
-        when(consumer.assignment())
-            .thenReturn(assignment)
-            .thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
-
-        when(activeTaskCreator.createTasks(any(), eq(assignmentActive)))
-            .thenReturn(asList(revokedActiveTask, unrevokedActiveTask, unrevokedActiveTaskWithoutCommitNeeded));
-
-        final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
-        when(consumer.groupMetadata()).thenReturn(groupMetadata);
-
-        doThrow(new TimeoutException()).when(producer).commitTransaction(expectedCommittedOffsets, groupMetadata);
-
-        taskManager.handleAssignment(assignmentActive, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
-        assertThat(revokedActiveTask.state(), is(Task.State.RUNNING));
-        assertThat(unrevokedActiveTask.state(), is(Task.State.RUNNING));
-        assertThat(unrevokedActiveTaskWithoutCommitNeeded.state(), is(State.RUNNING));
-
-        final Map<TopicPartition, Long> revokedActiveTaskChangelogOffsets = singletonMap(t1p0changelog, 0L);
-        revokedActiveTask.setChangelogOffsets(revokedActiveTaskChangelogOffsets);
-        final Map<TopicPartition, Long> unrevokedActiveTaskChangelogOffsets = singletonMap(t1p1changelog, 0L);
-        unrevokedActiveTask.setChangelogOffsets(unrevokedActiveTaskChangelogOffsets);
-
-        taskManager.handleRevocation(taskId00Partitions);
-
-        assertThat(unrevokedTaskChangelogMarkedAsCorrupted.get(), is(true));
-        assertThat(revokedActiveTask.state(), is(State.SUSPENDED));
-        assertThat(unrevokedActiveTask.state(), is(State.CREATED));
-        assertThat(unrevokedActiveTaskWithoutCommitNeeded.state(), is(State.RUNNING));
-        verify(stateManager).markChangelogAsCorrupted(taskId00ChangelogPartitions);
-        verify(stateManager).markChangelogAsCorrupted(taskId01ChangelogPartitions);
     }
 
     @Test
@@ -2837,75 +2696,6 @@ public class TaskManagerTest {
 
         taskManager.handleRevocation(taskId00Partitions);
         assertThat(task00.state(), is(Task.State.SUSPENDED));
-    }
-
-    @SuppressWarnings("removal")
-    @Test
-    public void shouldCommitAllActiveTasksThatNeedCommittingOnHandleRevocationWithEosV2() {
-        final StreamsProducer producer = mock(StreamsProducer.class);
-        final TaskManager taskManager = setUpTaskManagerWithoutStateUpdater(ProcessingMode.EXACTLY_ONCE_V2, null, false);
-
-        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
-        final Map<TopicPartition, OffsetAndMetadata> offsets00 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
-        task00.setCommittableOffsetsAndMetadata(offsets00);
-        task00.setCommitNeeded();
-
-        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager);
-        final Map<TopicPartition, OffsetAndMetadata> offsets01 = singletonMap(t1p1, new OffsetAndMetadata(1L, null));
-        task01.setCommittableOffsetsAndMetadata(offsets01);
-        task01.setCommitNeeded();
-
-        final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true, stateManager);
-        final Map<TopicPartition, OffsetAndMetadata> offsets02 = singletonMap(t1p2, new OffsetAndMetadata(2L, null));
-        task02.setCommittableOffsetsAndMetadata(offsets02);
-
-        final StateMachineTask task10 = new StateMachineTask(taskId10, taskId10Partitions, false, stateManager);
-
-        final Map<TopicPartition, OffsetAndMetadata> expectedCommittedOffsets = new HashMap<>();
-        expectedCommittedOffsets.putAll(offsets00);
-        expectedCommittedOffsets.putAll(offsets01);
-
-        final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
-            mkEntry(taskId00, taskId00Partitions),
-            mkEntry(taskId01, taskId01Partitions),
-            mkEntry(taskId02, taskId02Partitions)
-        );
-
-        final Map<TaskId, Set<TopicPartition>> assignmentStandby = mkMap(
-            mkEntry(taskId10, taskId10Partitions)
-        );
-        when(consumer.assignment()).thenReturn(assignment);
-
-        when(activeTaskCreator.createTasks(any(), eq(assignmentActive)))
-            .thenReturn(asList(task00, task01, task02));
-
-        when(activeTaskCreator.streamsProducer()).thenReturn(producer);
-        when(standbyTaskCreator.createTasks(assignmentStandby))
-            .thenReturn(singletonList(task10));
-
-        final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
-        when(consumer.groupMetadata()).thenReturn(groupMetadata);
-
-        task00.committedOffsets();
-        task01.committedOffsets();
-        task02.committedOffsets();
-        task10.committedOffsets();
-
-        taskManager.handleAssignment(assignmentActive, assignmentStandby);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
-        assertThat(task00.state(), is(Task.State.RUNNING));
-        assertThat(task01.state(), is(Task.State.RUNNING));
-        assertThat(task02.state(), is(Task.State.RUNNING));
-        assertThat(task10.state(), is(Task.State.RUNNING));
-
-        taskManager.handleRevocation(taskId00Partitions);
-
-        assertThat(task00.commitNeeded, is(false));
-        assertThat(task01.commitNeeded, is(false));
-        assertThat(task02.commitPrepared, is(false));
-        assertThat(task10.commitPrepared, is(false));
-
-        verify(producer).commitTransaction(expectedCommittedOffsets, groupMetadata);
     }
 
     @Test
@@ -3767,37 +3557,6 @@ public class TaskManagerTest {
         taskManager.commitAll();
 
         verify(consumer).commitSync(offsets);
-    }
-
-    @SuppressWarnings("removal")
-    @Test
-    public void shouldCommitViaProducerIfEosV2Enabled() {
-        final StreamsProducer producer = mock(StreamsProducer.class);
-        when(activeTaskCreator.streamsProducer()).thenReturn(producer);
-
-        final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
-        final Map<TopicPartition, OffsetAndMetadata> offsetsT02 = singletonMap(t1p2, new OffsetAndMetadata(1L, null));
-        final Map<TopicPartition, OffsetAndMetadata> allOffsets = new HashMap<>();
-        allOffsets.putAll(offsetsT01);
-        allOffsets.putAll(offsetsT02);
-
-        final TaskManager taskManager = setUpTaskManagerWithoutStateUpdater(ProcessingMode.EXACTLY_ONCE_V2, null, false);
-
-        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager);
-        task01.setCommittableOffsetsAndMetadata(offsetsT01);
-        task01.setCommitNeeded();
-        taskManager.addTask(task01);
-        final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true, stateManager);
-        task02.setCommittableOffsetsAndMetadata(offsetsT02);
-        task02.setCommitNeeded();
-        taskManager.addTask(task02);
-
-        when(consumer.groupMetadata()).thenReturn(new ConsumerGroupMetadata("appId"));
-
-        taskManager.commitAll();
-
-        verify(producer).commitTransaction(allOffsets, new ConsumerGroupMetadata("appId"));
-        verifyNoMoreInteractions(producer);
     }
 
     @Test
