@@ -840,9 +840,9 @@ public class SharePartition {
                         // the offsets state in the in-flight batch.
                         inFlightBatch.maybeInitializeOffsetStateUpdate();
                     }
-                    // Do not send max fetch records to acquireSubsetBatchRecords as we want to acquire
-                    // all the records from the batch as the batch will anyway be part of the file-records
-                    // response batch.
+                    // In record_limit mode, we need to ensure that we do not acquire more than
+                    // maxRecordsToAcquire. Hence, pass the remaining number of records that can
+                    // be acquired.
                     int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, isRecordLimitMode, maxFetchRecords - acquiredCount, firstBatch.baseOffset(), lastOffsetToAcquire, inFlightBatch, result);
                     acquiredCount += acquiredSubsetCount;
                     continue;
@@ -1606,10 +1606,11 @@ public class SharePartition {
             // Check how many records can be acquired from the batch.
             long lastAcquiredOffset = lastOffset;
             if (maxFetchRecords < lastAcquiredOffset - firstAcquiredOffset + 1) {
-                // The max records to acquire is less than the complete available batches hence
-                // limit the acquired records. The last offset shall be the batches last offset
-                // which falls under the max records limit. As the max fetch records is the soft
-                // limit, the last offset can be higher than the max records.
+                // The max records to acquire is less than the complete available batches, so we
+                // limit the acquired records. Although shareAcquireMode is introduced, even in
+                // record_limit mode, the last offset should still be the batch's last offset
+                // that falls under the max records limit, because filtering is done outside this method and the InFlightBatch
+                // in cachedState should still reflect the complete batch.
                 lastAcquiredOffset = lastOffsetFromBatchWithRequestOffset(batches, firstAcquiredOffset + maxFetchRecords - 1);
                 // If the initial read gap offset window is active then it's not guaranteed that the
                 // batches align on batch boundaries. Hence, reset to last offset itself if the batch's

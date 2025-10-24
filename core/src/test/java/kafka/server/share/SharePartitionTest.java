@@ -3739,8 +3739,8 @@ public class SharePartitionTest {
 
         // Acquired batches will contain the following ->
         // 1. 16-20 (gap offsets)
-        // 1. 31-40 (gap offsets)
-        // 2. 51-60 (new offsets)
+        // 2. 31-40 (gap offsets)
+        // 3. 51-60 (new offsets)
         List<AcquiredRecords> expectedAcquiredRecord = new ArrayList<>(expectedAcquiredRecord(16, 20, 1));
         expectedAcquiredRecord.addAll(expectedAcquiredRecord(31, 40, 1));
         expectedAcquiredRecord.addAll(expectedAcquiredRecord(51, 60, 1));
@@ -3786,8 +3786,8 @@ public class SharePartitionTest {
 
         // Acquired batches will contain the following ->
         // 1. 11-20 (gap offsets)
-        // 1. 31-40 (gap offsets)
-        // 2. 51-60 (new offsets)
+        // 2. 31-40 (gap offsets)
+        // 3. 51-60 (new offsets)
         // The entire gap of 31 to 40 will be acquired even when the fetched records only contain offsets 31 to 36 because
         // we rely on the client to inform the broker about these natural gaps in the partition log
         List<AcquiredRecords> expectedAcquiredRecord = new ArrayList<>(expectedAcquiredRecord(11, 20, 1));
@@ -9166,8 +9166,8 @@ public class SharePartitionTest {
 
         // Acquired batches will contain the following ->
         // 1. 16-20 (gap offsets)
-        // 1. 31-40 (gap offsets)
-        // 2. 51-55 (new offsets)
+        // 2. 31-40 (gap offsets)
+        // 3. 51-55 (new offsets)
         List<AcquiredRecords> expectedAcquiredRecord = new ArrayList<>(expectedAcquiredRecord(16, 20, 1));
         expectedAcquiredRecord.addAll(expectedAcquiredRecord(31, 40, 1));
         expectedAcquiredRecord.addAll(expectedAcquiredRecord(51, 55, 1));
@@ -9226,7 +9226,7 @@ public class SharePartitionTest {
 
         // Acquired batches will contain the following ->
         // 1. 11-20 (gap offsets)
-        // 1. 31-35 (gap offsets)
+        // 2. 31-35 (gap offsets)
         List<AcquiredRecords> expectedAcquiredRecord = new ArrayList<>(expectedAcquiredRecord(11, 20, 1));
         expectedAcquiredRecord.addAll(expectedAcquiredRecord(31, 35, 1));
         assertArrayEquals(expectedAcquiredRecord.toArray(), acquiredRecordsList.toArray());
@@ -9246,8 +9246,85 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testAcquireMultipleSubsetRecordBatchWithGapOffsetsInRecordLimitMode() {
+    public void testAcquisitionLockOnReleasingAcknowledgedMultipleSubsetRecordBatchWithGapOffsetsInRecordLimitMode() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+        MemoryRecords records1 = memoryRecords(5, 2);
+        // Untracked gap of 3 offsets from 7-9.
+        MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(10, 2);
+        // Gap from 12-13 offsets.
+        recordsBuilder.appendWithOffset(14, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
+        // Gap for 15 offset.
+        recordsBuilder.appendWithOffset(16, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
+        // Gap from 17-19 offsets.
+        recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
+        MemoryRecords records2 = recordsBuilder.build();
 
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+            MEMBER_ID,
+            ShareAcquireMode.RECORD_LIMIT,
+            BATCH_SIZE,
+            2,
+            DEFAULT_FETCH_OFFSET,
+            fetchPartitionData(records1, 0),
+            FETCH_ISOLATION_HWM),
+            2);
+        assertArrayEquals(expectedAcquiredRecords(records1, 1).toArray(), acquiredRecordsList.toArray());
+        assertEquals(7, sharePartition.nextFetchOffset());
+
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+            MEMBER_ID,
+            ShareAcquireMode.RECORD_LIMIT,
+            BATCH_SIZE,
+            5,
+            DEFAULT_FETCH_OFFSET,
+            fetchPartitionData(records2, 0),
+            FETCH_ISOLATION_HWM),
+            5);
+
+        // Acquired batches will contain the following ->
+        // 1. 10-14, including 12-13 (gap offsets)
+        List<AcquiredRecords> expectedAcquiredRecord = new ArrayList<>(expectedAcquiredRecord(10, 14, 1));
+        assertArrayEquals(expectedAcquiredRecord.toArray(), acquiredRecordsList.toArray());
+        assertEquals(15, sharePartition.nextFetchOffset());
+
+        assertThrows(IllegalStateException.class, () -> sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
+
+        // 6 timer tasks for 10-14 offsets and batch 0-1
+        assertEquals(6, sharePartition.timer().size());
+        for (int i = 10; i <= 14; i++) {
+            assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).offsetState().get((long) i).state());
+            assertEquals(MEMBER_ID, sharePartition.cachedState().get(10L).offsetState().get((long) i).memberId());
+            assertFalse(sharePartition.cachedState().get(10L).offsetState().get(10L).acquisitionLockTimeoutTask().hasExpired());
+        }
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(10L).offsetState().get(15L).state());
+
+        // Acknowledging over subset of second batch with subset of gap offsets.
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(10, 12, List.of((byte) 1, (byte) 1, (byte) 0))));
+
+
+        // Release acquired records for "member-1".
+        CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
+        assertNull(releaseResult.join());
+        assertFalse(releaseResult.isCompletedExceptionally());
+        assertEquals(5, sharePartition.nextFetchOffset());
+
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).batchState());
+        assertNull(sharePartition.cachedState().get(5L).offsetState());
+
+        // Check cached state.
+        Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
+        expectedOffsetStateMap.put(10L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(11L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(12L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(13L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(14L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(15L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(16L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(17L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(18L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
     }
 
     /**
