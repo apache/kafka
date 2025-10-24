@@ -373,7 +373,7 @@ public class SharePartition {
      *         or completes with an exception if the share partition is in non-initializable state.
      */
     public CompletableFuture<Void> maybeInitialize() {
-        log.debug("Maybe initialize share partition: {}-{}", groupId, topicIdPartition);
+        log.trace("Maybe initialize share partition: {}-{}", groupId, topicIdPartition);
         // Check if the share partition is already initialized.
         try {
             if (initializedOrThrowException()) return CompletableFuture.completedFuture(null);
@@ -487,6 +487,8 @@ public class SharePartition {
                 }
                 // Set the partition state to Active and complete the future.
                 partitionState = SharePartitionState.ACTIVE;
+                log.debug("Initialized share partition: {}-{} with persister read state: {}, cached state: {}",
+                    groupId, topicIdPartition, result.topicsData(), cachedState);
             } catch (Exception e) {
                 throwable = e;
             } finally {
@@ -738,16 +740,16 @@ public class SharePartition {
                 baseOffset = floorEntry.getKey();
             }
             // Validate if the fetch records are already part of existing batches and if available.
-            NavigableMap<Long, InFlightBatch> subMap = cachedState.subMap(baseOffset, true, lastBatch.lastOffset(), true);
+            NavigableMap<Long, InFlightBatch> subMap = cachedState.subMap(baseOffset, true, lastOffsetToAcquire, true);
             // No overlap with request offsets in the cache for in-flight records. Acquire the complete
             // batch.
             if (subMap.isEmpty()) {
                 log.trace("No cached data exists for the share partition for requested fetch batch: {}-{}",
                     groupId, topicIdPartition);
-                // Do not send the lastOffsetToAcquire as when the subMap is empty, it means that
-                // there isn't any overlap itself.
+                // It's safe to use lastOffsetToAcquire instead of lastBatch.lastOffset() because there is no
+                // overlap hence the lastOffsetToAcquire is same as lastBatch.lastOffset() or before that.
                 ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
-                    firstBatch.baseOffset(), lastBatch.lastOffset(), batchSize, maxRecordsToAcquire);
+                    firstBatch.baseOffset(), lastOffsetToAcquire, batchSize, maxRecordsToAcquire);
                 return maybeFilterAbortedTransactionalAcquiredRecords(fetchPartitionData, isolationLevel, shareAcquiredRecords);
             }
 
@@ -776,6 +778,15 @@ public class SharePartition {
                     // If nextBatchStartOffset is less than the key of the entry, this means the fetch happened for a gap in the cachedState.
                     // Thus, a new batch needs to be acquired for the gap.
                     if (maybeGapStartOffset < entry.getKey()) {
+                        // It's safe to use entry.getKey() - 1 as the last offset to acquire for the
+                        // gap as the sub map should contain either the next batch or this line should
+                        // not have been executed i.e. say there is a gap from 10-20 and cache contains
+                        // [0-9, 21-30], when fetch returns single/multiple batches from 0-15, then
+                        // first sub map entry has no gap and there exists only 1 entry in sub map.
+                        // Hence, for next batch the following code will not be executed and records
+                        // from 10-15 will be acquired later in the code. In other case, when
+                        // fetch returns batches from 0-25, then the sub map will have 2 entries and
+                        // gap will be computed correctly.
                         ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
                             maybeGapStartOffset, entry.getKey() - 1, batchSize, maxRecordsToAcquire);
                         result.addAll(shareAcquiredRecords.acquiredRecords());
@@ -791,13 +802,13 @@ public class SharePartition {
                 }
 
                 // Compute if the batch is a full match.
-                boolean fullMatch = checkForFullMatch(inFlightBatch, firstBatch.baseOffset(), lastBatch.lastOffset());
+                boolean fullMatch = checkForFullMatch(inFlightBatch, firstBatch.baseOffset(), lastOffsetToAcquire);
 
                 if (!fullMatch || inFlightBatch.offsetState() != null) {
                     log.trace("Subset or offset tracked batch record found for share partition,"
                             + " batch: {} request offsets - first: {}, last: {} for the share"
                             + " partition: {}-{}", inFlightBatch, firstBatch.baseOffset(),
-                        lastBatch.lastOffset(), groupId, topicIdPartition);
+                        lastOffsetToAcquire, groupId, topicIdPartition);
                     if (inFlightBatch.offsetState() == null) {
                         // Though the request is a subset of in-flight batch but the offset
                         // tracking has not been initialized yet which means that we could only
@@ -884,7 +895,7 @@ public class SharePartition {
 
         CompletableFuture<Void> future = new CompletableFuture<>();
         Throwable throwable = null;
-        List<PersisterBatch>  persisterBatches = new ArrayList<>();
+        List<PersisterBatch> persisterBatches = new ArrayList<>();
         lock.writeLock().lock();
         try {
             // Avoided using enhanced for loop as need to check if the last batch have offsets
@@ -1518,8 +1529,15 @@ public class SharePartition {
                     // in-flight records limit. This can happen when the fetch is happening in-between
                     // the in-flight batches and the share partition has reached the max in-flight records limit.
                     maxRecordsToAcquire = Math.min(maxFetchRecords, (int) (endOffset() - fetchOffset + 1));
-                    // Adjust the last offset to acquire to the endOffset of the share partition.
-                    lastOffsetToAcquire = endOffset();
+                    // Adjust the last offset to acquire to the minimum of fetched data's last or
+                    // endOffset of the share partition. This is required as partition fetch bytes
+                    // are dynamic and subsequent fetches can fetch lesser data i.e. lastOffset can
+                    // be lesser than endOffset.
+                    lastOffsetToAcquire = Math.min(lastOffset, endOffset());
+                    log.debug("Share partition {}-{} is at max in-flight records limit: {}. "
+                            + "However, fetch is happening in-between the in-flight batches, hence adjusting "
+                            + "last offset to: {} and max records to: {}", groupId, topicIdPartition,
+                        maxInFlightRecords, lastOffsetToAcquire, maxRecordsToAcquire);
                 } else {
                     // The share partition is already at max in-flight records, hence cannot acquire more records.
                     log.debug("Share partition {}-{} has reached max in-flight records limit: {}. Cannot acquire more records, inflight records count: {}",

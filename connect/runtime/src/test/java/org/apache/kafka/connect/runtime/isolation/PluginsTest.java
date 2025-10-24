@@ -63,6 +63,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -359,7 +360,7 @@ public class PluginsTest {
     @Test
     public void newConverterShouldConfigureWithPluginClassLoader() {
         props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestPlugin.SAMPLING_CONVERTER.className());
-        ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_CONVERTER.className());
+        ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_CONVERTER.className(), null, Optional.empty());
         try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
             createConfig();
         }
@@ -382,7 +383,7 @@ public class PluginsTest {
         String providerPrefix = WorkerConfig.CONFIG_PROVIDERS_CONFIG + "." + providerName;
         props.put(providerPrefix + ".class", TestPlugin.SAMPLING_CONFIG_PROVIDER.className());
 
-        PluginClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_CONFIG_PROVIDER.className());
+        PluginClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_CONFIG_PROVIDER.className(), null, Optional.empty());
         assertNotNull(classLoader);
         try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
             createConfig();
@@ -414,7 +415,7 @@ public class PluginsTest {
     @Test
     public void newHeaderConverterShouldConfigureWithPluginClassLoader() {
         props.put(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, TestPlugin.SAMPLING_HEADER_CONVERTER.className());
-        ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_HEADER_CONVERTER.className());
+        ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_HEADER_CONVERTER.className(), null, Optional.empty());
         try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
             createConfig();
         }
@@ -606,7 +607,7 @@ public class PluginsTest {
 
     @Test
     public void testAliasesInConverters() throws ClassNotFoundException {
-        ClassLoader connectorLoader = plugins.connectorLoader(TestPlugin.SAMPLING_CONNECTOR.className());
+        ClassLoader connectorLoader = plugins.connectorLoader(TestPlugin.SAMPLING_CONNECTOR.className(), null);
         try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
             String configKey = "config.key";
             String alias = "SamplingConverter";
