@@ -3973,6 +3973,19 @@ public class RequestResponseTest {
     }
 
     @Test
+    public void testSaslAuthenticateRequestToStringMasksSensitiveData() {
+        byte[] sensitiveAuthBytes = "sensitive-auth-token-123".getBytes(StandardCharsets.UTF_8);
+        SaslAuthenticateRequestData data = new SaslAuthenticateRequestData().setAuthBytes(sensitiveAuthBytes);
+        SaslAuthenticateRequest request = new SaslAuthenticateRequest(data, (short) 2);
+
+        String requestString = request.toString();
+
+        // Verify that the authBytes field is present but empty in the output
+        assertTrue(requestString.contains("authBytes=[]"),
+                "authBytes field should be empty in toString() output");
+    }
+
+    @Test
     public void testListConfigResourcesRequestV0FailsWithConfigResourceTypeOtherThanClientMetrics() {
         // One type which is not CLIENT_METRICS
         Arrays.stream(ConfigResource.Type.values())
