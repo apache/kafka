@@ -99,7 +99,11 @@ public class ShareCompletedFetch {
     }
 
     private List<OffsetAndDeliveryCount> buildAcquiredRecordList(List<ShareFetchResponseData.AcquiredRecords> partitionAcquiredRecords) {
-        List<OffsetAndDeliveryCount> acquiredRecordList = new ArrayList<>();
+        // Setting the size of the array to the size of the first batch of acquired records. In case there is only 1 batch acquired, resizing would not happen.
+        int initialListSize = !partitionAcquiredRecords.isEmpty() ? (int) (partitionAcquiredRecords.get(0).lastOffset() -
+                partitionAcquiredRecords.get(0).firstOffset() + 1) : 0;
+        List<OffsetAndDeliveryCount> acquiredRecordList = new ArrayList<>(initialListSize);
+
         // Set to find duplicates in case of overlapping acquired records
         Set<Long> offsets = new HashSet<>();
         partitionAcquiredRecords.forEach(acquiredRecords -> {
