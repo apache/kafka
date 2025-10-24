@@ -1652,39 +1652,44 @@ public class SharePartition {
     private AcquiredRecords filterShareAcquiredRecordsInRecordLimitMode(int maxFetchRecords, List<AcquiredRecords> acquiredRecords) {
         // Only acquire one single batch in record limit mode.
         AcquiredRecords records = acquiredRecords.get(0);
-        InFlightBatch inFlightBatch = cachedState.get(records.firstOffset());
-        if (inFlightBatch != null) {
-            long lastOffset = records.firstOffset() + maxFetchRecords - 1;
-            // Initialize the offset state map if not already initialized.
-            inFlightBatch.maybeInitializeOffsetStateUpdate();
-            List<PersisterBatch> persisterBatches = new ArrayList<>();
-            CompletableFuture<Void> future = new CompletableFuture<>();
-            NavigableMap<Long, InFlightState> offsetStateMap = inFlightBatch.offsetState();
-            for (Map.Entry<Long, InFlightState> offsetState : offsetStateMap.tailMap(lastOffset, false).entrySet()) {
-                if (offsetState.getValue().state() == RecordState.ACQUIRED) {
-                    // These records were not actually acquired so update the offset status back to available.
-                    InFlightState updateResult = offsetState.getValue().startStateTransition(
-                        RecordState.AVAILABLE,
-                        DeliveryCountOps.DECREASE,
-                        this.maxDeliveryCount,
-                        EMPTY_MEMBER_ID
-                    );
-                    if (updateResult == null) {
-                        log.error("Unable to update records status for the offset: {} in batch: {} for the share partition: {}-{}", offsetState.getKey(), inFlightBatch,
-                            groupId, topicIdPartition);
-                        continue;
+        lock.writeLock().lock();
+        try {
+            InFlightBatch inFlightBatch = cachedState.get(records.firstOffset());
+            if (inFlightBatch != null) {
+                long lastOffset = records.firstOffset() + maxFetchRecords - 1;
+                // Initialize the offset state map if not already initialized.
+                inFlightBatch.maybeInitializeOffsetStateUpdate();
+                List<PersisterBatch> persisterBatches = new ArrayList<>();
+                CompletableFuture<Void> future = new CompletableFuture<>();
+                NavigableMap<Long, InFlightState> offsetStateMap = inFlightBatch.offsetState();
+                for (Map.Entry<Long, InFlightState> offsetState : offsetStateMap.tailMap(lastOffset, false).entrySet()) {
+                    if (offsetState.getValue().state() == RecordState.ACQUIRED) {
+                        // These records were not actually acquired so update the offset status back to available.
+                        InFlightState updateResult = offsetState.getValue().startStateTransition(
+                            RecordState.AVAILABLE,
+                            DeliveryCountOps.DECREASE,
+                            this.maxDeliveryCount,
+                            EMPTY_MEMBER_ID
+                        );
+                        if (updateResult == null) {
+                            log.error("Unable to update records status for the offset: {} in batch: {} for the share partition: {}-{}", offsetState.getKey(), inFlightBatch,
+                                groupId, topicIdPartition);
+                            continue;
+                        }
+                        persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(offsetState.getKey(),
+                            offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount())));
+                    } else {
+                        log.error("Unexpected record state {} for offset: {} in batch: {} in share partition: {}-{}",
+                            offsetState.getValue().state(), offsetState.getKey(), inFlightBatch, groupId, topicIdPartition);
                     }
-                    persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(offsetState.getKey(),
-                        offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount())));
-                } else {
-                    log.error("Unexpected record state {} for offset: {} in batch: {} in share partition: {}-{}",
-                        offsetState.getValue().state(), offsetState.getKey(), inFlightBatch, groupId, topicIdPartition);
                 }
+                rollbackOrProcessStateUpdates(future, null, persisterBatches);
+                records.setLastOffset(lastOffset);
+            } else {
+                log.error("In-flight batch not found for the acquired records: {} in share partition: {}-{}", records, groupId, topicIdPartition);
             }
-            rollbackOrProcessStateUpdates(future, null, persisterBatches);
-            records.setLastOffset(lastOffset);
-        } else {
-            log.error("In-flight batch not found for the acquired records: {} in share partition: {}-{}", records, groupId, topicIdPartition);
+        } finally {
+            lock.writeLock().unlock();
         }
         return records;
     }

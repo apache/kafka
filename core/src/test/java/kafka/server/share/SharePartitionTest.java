@@ -8846,7 +8846,6 @@ public class SharePartitionTest {
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withPersister(persister)
             .build());
-        Mockito.doReturn(true).when(sharePartition).isRecordLimitMode(Mockito.any());
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
@@ -9254,7 +9253,7 @@ public class SharePartitionTest {
 
         sharePartition.maybeInitialize();
 
-        // Creating 3 batches starting from 11, such that there is a natural gap from 26 to 30
+        // Creating 3 batches starting from 11, such that there is a natural gap from 36 to 40
         ByteBuffer buffer = ByteBuffer.allocate(4096);
         memoryRecordsBuilder(buffer, 11, 10).close();
         memoryRecordsBuilder(buffer, 21, 15).close();
@@ -9288,7 +9287,7 @@ public class SharePartitionTest {
 
         GapWindow persisterReadResultGapWindow = sharePartition.persisterReadResultGapWindow();
         assertNotNull(persisterReadResultGapWindow);
-        // Gap still exists from 36 to 50
+        // Gap still exists from 36 to 40
         assertEquals(36L, persisterReadResultGapWindow.gapStartOffset());
         assertEquals(50L, persisterReadResultGapWindow.endOffset());
     }
