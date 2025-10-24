@@ -81,7 +81,7 @@ public class PartitionMaxBytesStrategyTest {
         // Case 1: requestMaxBytes is greater than acquiredPartitions, so max bytes is distributed evenly.
         LinkedHashMap<TopicIdPartition, Integer> result = partitionMaxBytesStrategy.maxBytes(
             100, partitions, 3);
-        assertEquals(List.of(33, 33, 33), result.values().stream().toList());
+        assertEquals(List.of(33, 33, 34), result.values().stream().sorted().toList());
 
         result = partitionMaxBytesStrategy.maxBytes(
             100, partitions, 5);
@@ -90,8 +90,12 @@ public class PartitionMaxBytesStrategyTest {
         // Case 2: requestMaxBytes < acquiredPartitions and requestMaxBytes >= partitions for which we want to
         // calculate the max bytes.
         result = partitionMaxBytesStrategy.maxBytes(
-            10, partitions, 12);
+            9, partitions, 12);
         assertEquals(List.of(3, 3, 3), result.values().stream().toList());
+
+        result = partitionMaxBytesStrategy.maxBytes(
+            10, partitions, 12);
+        assertEquals(List.of(3, 3, 4), result.values().stream().sorted().toList());
 
         // Case 3: requestMaxBytes < partitions for which we want to calculate the max bytes.
         result = partitionMaxBytesStrategy.maxBytes(
