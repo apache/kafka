@@ -3986,15 +3986,24 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testSaslAuthenticateRequestToStringMasksSensitiveData() {
+    public void testSaslAuthenticateRequestResponseToStringMasksSensitiveData() {
         byte[] sensitiveAuthBytes = "sensitive-auth-token-123".getBytes(StandardCharsets.UTF_8);
-        SaslAuthenticateRequestData data = new SaslAuthenticateRequestData().setAuthBytes(sensitiveAuthBytes);
-        SaslAuthenticateRequest request = new SaslAuthenticateRequest(data, (short) 2);
+        SaslAuthenticateRequestData requestData = new SaslAuthenticateRequestData().setAuthBytes(sensitiveAuthBytes);
+        SaslAuthenticateRequest request = new SaslAuthenticateRequest(requestData, (short) 2);
 
         String requestString = request.toString();
 
         // Verify that the authBytes field is present but empty in the output
         assertTrue(requestString.contains("authBytes=[]"),
+                "authBytes field should be empty in toString() output");
+
+        SaslAuthenticateResponseData responseData = new SaslAuthenticateResponseData().setAuthBytes(sensitiveAuthBytes);
+        SaslAuthenticateResponse response = new SaslAuthenticateResponse(responseData);
+
+        String responseString = response.toString();
+
+        // Verify that the authBytes field is present but empty in the output
+        assertTrue(responseString.contains("authBytes=[]"),
                 "authBytes field should be empty in toString() output");
     }
 
