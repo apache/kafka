@@ -397,7 +397,6 @@ public class DelayedShareFetchTest {
             assertTrue(delayedShareFetch.tryComplete());
             assertTrue(delayedShareFetch.isCompleted());
 
-            // Verify addErroneous was never triggered - no partitions should be marked as erroneous
             Mockito.verify(shareFetch, never()).addErroneous(any(), any());
             Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(any());
             assertTrue(delayedShareFetch.lock().tryLock());
@@ -519,7 +518,6 @@ public class DelayedShareFetchTest {
             assertFalse(delayedShareFetch.isCompleted());
             delayedShareFetch.forceComplete();
 
-            // Verify addErroneous was never triggered - no partitions should be marked as erroneous
             Mockito.verify(exceptionHandler, never()).accept(any(), any());
             // Since we can acquire records from sp0, replicaManager.readFromLog should be called once and only for sp0.
             Mockito.verify(replicaManager, times(1)).readFromLog(
