@@ -34,14 +34,13 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     val inputTopicName = "input-topic"
 
     try {
-      // Create the __consumer_offsets topic
       TestUtils.createOffsetsTopicWithAdmin(
         admin = admin,
         brokers = cluster.brokers.values().asScala.toSeq,
         controllers = cluster.controllers().values().asScala.toSeq
       )
 
-      // Create input and output topics
+      // Create input topic
       TestUtils.createTopicWithAdmin(
         admin = admin,
         brokers = cluster.brokers.values().asScala.toSeq,
@@ -117,7 +116,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       assertEquals(2, repartitionTopic.partitions().size(),
         s"Repartition topic should have 2 partitions, but has ${repartitionTopic.partitions().size()}")
 
-      // Verify replication factor (should be 1 for test environment)
+      // Verify replication factor
       assertEquals(1, changelogTopic.partitions().get(0).replicas().size(),
         s"Changelog topic should have replication factor 1")
       assertEquals(1, repartitionTopic.partitions().get(0).replicas().size(),
@@ -315,7 +314,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     }
   }
 
-
   @ClusterTest(
     types = Array(Type.KRAFT),
     serverProperties = Array(
@@ -331,8 +329,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     val groupId = "test-group"
     val topicName = "test-topic"
 
-    // Creates the __consumer_offsets topics because it won't be created automatically
-    // in this test because it does not use FindCoordinator API.
     try {
       TestUtils.createOffsetsTopicWithAdmin(
         admin = admin,
@@ -494,13 +490,13 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         streamsGroupHeartbeatResponse.data.errorCode == Errors.NONE.code()
       }, "StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
-      // Verify the response for member.
+      // Verify the response for member
       assert(streamsGroupHeartbeatResponse != null, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId, streamsGroupHeartbeatResponse.data.memberId())
       assertEquals(1, streamsGroupHeartbeatResponse.data.memberEpoch())
       assertNotNull(streamsGroupHeartbeatResponse.data().activeTasks())
 
-      // Restart the only running broker.
+      // Restart the only running broker
       val broker = cluster.brokers().values().iterator().next()
       cluster.shutdownBroker(broker.config.brokerId)
       cluster.startBroker(broker.config.brokerId)
@@ -517,14 +513,14 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           .setWarmupTasks(convertTaskIds(streamsGroupHeartbeatResponse.data.warmupTasks()))
       ).build(0)
 
-      // Should receive no error and no assignment changes.
+      // Should receive no error and no assignment changes
       TestUtils.waitUntilTrue(() => {
         streamsGroupHeartbeatResponse = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequestAfterRestart)
         streamsGroupHeartbeatResponse.data.errorCode == Errors.NONE.code()
       }, "StreamsGroupHeartbeatRequest after broker restart did not succeed within the timeout period.")
 
       // Verify the response. Epoch should not have changed and null assignments determine that no
-      // change in old assignment.
+      // change in old assignment
       assertEquals(memberId, streamsGroupHeartbeatResponse.data.memberId())
       assertEquals(1, streamsGroupHeartbeatResponse.data.memberEpoch())
       assertNull(streamsGroupHeartbeatResponse.data.activeTasks())
