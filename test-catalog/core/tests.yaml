@@ -1808,14 +1808,6 @@ kafka.server.DelayedFetchTest:
 - testDivergingEpoch
 - testFetchWithFencedEpoch
 - testNotLeaderOrFollower
-kafka.server.DelayedRemoteFetchTest:
-- testErrorLogReadInfo
-- testFetch
-- testFollowerFetch
-- testMultiplePartitions
-- testMultiplePartitionsWithFailedResults
-- testNotLeaderOrFollower
-- testRequestExpiry
 kafka.server.DelegationTokenRequestsOnPlainTextTest:
 - testDelegationTokenRequests
 kafka.server.DelegationTokenRequestsTest:

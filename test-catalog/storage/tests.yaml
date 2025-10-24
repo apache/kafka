@@ -212,6 +212,14 @@ org.apache.kafka.server.log.remote.storage.RemoteLogReaderTest:
 - testRemoteLogReaderWithoutError
 org.apache.kafka.server.log.remote.storage.RemoteTopicPartitionDirectoryTest:
 - testSubStr
+org.apache.kafka.server.purgatory.DelayedRemoteFetchTest:
+- testErrorLogReadInfo
+- testFetch
+- testFollowerFetch
+- testMultiplePartitions
+- testMultiplePartitionsWithFailedResults
+- testNotLeaderOrFollower
+- testRequestExpiry
 org.apache.kafka.server.purgatory.DelayedRemoteListOffsetsTest:
 - testPartialResponseWhenNotLeaderOrFollowerExceptionOnOnePartition
 - testResponseOnPartialError
