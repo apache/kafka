@@ -28,7 +28,7 @@ import org.apache.kafka.common.{Endpoint, Reconfigurable}
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.{ConfigException, SslConfigs}
 import org.apache.kafka.common.internals.Plugin
-import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
+import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetric, Metrics, MetricsReporter}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.raft.QuorumConfig
@@ -38,7 +38,7 @@ import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics, MetricConfigs}
-import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryExporter, ClientTelemetryExporterProvider, ClientTelemetryPayload, ClientTelemetryReceiver}
+import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryContext, ClientTelemetryExporter, ClientTelemetryExporterProvider, ClientTelemetryPayload, ClientTelemetryReceiver}
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, ProducerStateManagerConfig}
 import org.apache.kafka.test.MockMetricsReporter
@@ -1127,49 +1127,49 @@ class TestDynamicThreadPool extends BrokerReconfigurable {
   }
 }
 
-class TestExporterOnly extends org.apache.kafka.common.metrics.MetricsReporter with ClientTelemetryExporterProvider {
+class TestExporterOnly extends MetricsReporter with ClientTelemetryExporterProvider {
   override def configure(configs: util.Map[String, _]): Unit = {}
-  override def init(metrics: util.List[org.apache.kafka.common.metrics.KafkaMetric]): Unit = {}
-  override def metricChange(metric: org.apache.kafka.common.metrics.KafkaMetric): Unit = {}
-  override def metricRemoval(metric: org.apache.kafka.common.metrics.KafkaMetric): Unit = {}
+  override def init(metrics: util.List[KafkaMetric]): Unit = {}
+  override def metricChange(metric: KafkaMetric): Unit = {}
+  override def metricRemoval(metric: KafkaMetric): Unit = {}
   override def close(): Unit = {}
 
   override def clientTelemetryExporter(): ClientTelemetryExporter = new ClientTelemetryExporter {
-    override def exportMetrics(context: org.apache.kafka.server.telemetry.ClientTelemetryContext,
+    override def exportMetrics(context: ClientTelemetryContext,
                                payload: ClientTelemetryPayload): Unit = {}
   }
 }
 
 @SuppressWarnings(Array("deprecation"))
-  class TestReceiverOnly extends org.apache.kafka.common.metrics.MetricsReporter with ClientTelemetry {
+class TestReceiverOnly extends MetricsReporter with ClientTelemetry {
   override def configure(configs: util.Map[String, _]): Unit = {}
-  override def init(metrics: util.List[org.apache.kafka.common.metrics.KafkaMetric]): Unit = {}
-  override def metricChange(metric: org.apache.kafka.common.metrics.KafkaMetric): Unit = {}
-  override def metricRemoval(metric: org.apache.kafka.common.metrics.KafkaMetric): Unit = {}
+  override def init(metrics: util.List[KafkaMetric]): Unit = {}
+  override def metricChange(metric: KafkaMetric): Unit = {}
+  override def metricRemoval(metric: KafkaMetric): Unit = {}
   override def close(): Unit = {}
 
   override def clientReceiver(): ClientTelemetryReceiver = new ClientTelemetryReceiver {
-    override def exportMetrics(context: org.apache.kafka.server.authorizer.AuthorizableRequestContext,
+    override def exportMetrics(context: AuthorizableRequestContext,
                                payload: ClientTelemetryPayload): Unit = {}
   }
 }
 
 @SuppressWarnings(Array("deprecation"))
-class TestReceiverAndExporter extends org.apache.kafka.common.metrics.MetricsReporter
+class TestReceiverAndExporter extends MetricsReporter
   with ClientTelemetryExporterProvider with ClientTelemetry {
   override def configure(configs: util.Map[String, _]): Unit = {}
-  override def init(metrics: util.List[org.apache.kafka.common.metrics.KafkaMetric]): Unit = {}
-  override def metricChange(metric: org.apache.kafka.common.metrics.KafkaMetric): Unit = {}
-  override def metricRemoval(metric: org.apache.kafka.common.metrics.KafkaMetric): Unit = {}
+  override def init(metrics: util.List[KafkaMetric]): Unit = {}
+  override def metricChange(metric: KafkaMetric): Unit = {}
+  override def metricRemoval(metric: KafkaMetric): Unit = {}
   override def close(): Unit = {}
 
   override def clientTelemetryExporter(): ClientTelemetryExporter = new ClientTelemetryExporter {
-    override def exportMetrics(context: org.apache.kafka.server.telemetry.ClientTelemetryContext,
+    override def exportMetrics(context: ClientTelemetryContext,
                                payload: ClientTelemetryPayload): Unit = {}
   }
 
   override def clientReceiver(): ClientTelemetryReceiver = new ClientTelemetryReceiver {
-    override def exportMetrics(context: org.apache.kafka.server.authorizer.AuthorizableRequestContext,
+    override def exportMetrics(context: AuthorizableRequestContext,
                                payload: ClientTelemetryPayload): Unit = {}
   }
 }

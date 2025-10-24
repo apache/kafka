@@ -57,7 +57,6 @@ public class ClientTelemetryExporterPlugin {
         return new DefaultClientTelemetryPayload(request);
     }
 
-    @SuppressWarnings("deprecation")
     public void exportMetrics(RequestContext context, PushTelemetryRequest request, int pushIntervalMs) {
         DefaultClientTelemetryPayload payload = getPayLoad(request);
 
