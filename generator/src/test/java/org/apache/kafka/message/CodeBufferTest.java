@@ -44,8 +44,6 @@ public class CodeBufferTest {
             String.format("public static void main(String[] args) throws Exception {%n") +
             String.format("    System.out.println(\"hello world\");%n") +
             String.format("}%n"), stringWriter.toString());
-
-
     }
 
     @Test
