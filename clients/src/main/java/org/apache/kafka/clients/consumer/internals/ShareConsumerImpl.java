@@ -609,6 +609,15 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             throw e.cause();
         } finally {
             kafkaShareConsumerMetrics.recordPollEnd(timer.currentTimeMs());
+
+            // Handle any acknowledgements which completed while we were waiting, but do not throw
+            // the exception because the fetched records would then not be returned to the caller
+            try {
+                handleCompletedAcknowledgements(false);
+            } catch (Throwable t) {
+                log.warn("Exception thrown in acknowledgement commit callback", t);
+            }
+
             release();
         }
     }
@@ -752,8 +761,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                             result.put(tip, Optional.of(exception));
                         }
                     });
-                    return result;
 
+                    // Handle any acknowledgements which completed while we were waiting
+                    handleCompletedAcknowledgements(false);
+
+                    return result;
                 } finally {
                     wakeupTrigger.clearTask();
                 }
