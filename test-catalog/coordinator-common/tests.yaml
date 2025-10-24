@@ -56,6 +56,7 @@ org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeTest:
 - testHighWatermarkUpdateWithDeferredEventExceptions
 - testLargeCompressibleRecordTriggersFlushAndSucceeds
 - testLargeUncompressibleRecordTriggersFlushAndFails
+- testLingerTimeComparisonInMaybeFlushCurrentBatch
 - testNonRetryableTimer
 - testOnNewMetadataImage
 - testPartitionLoadGeneratesSnapshotAtHighWatermark
