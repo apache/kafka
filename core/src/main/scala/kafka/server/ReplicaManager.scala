@@ -18,7 +18,6 @@ package kafka.server
 
 import com.yammer.metrics.core.Meter
 import kafka.cluster.{Partition, PartitionListener}
-import kafka.controller.StateChangeLogger
 import kafka.log.LogManager
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
@@ -48,6 +47,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{Exit, Time, Utils}
 import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionLogConfig}
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
+import org.apache.kafka.logger.StateChangeLogger
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{DirectoryEventHandler, RequestLocal, StopPartition}
@@ -231,7 +231,10 @@ class ReplicaManager(val config: KafkaConfig,
                      val directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP,
                      val defaultActionQueue: ActionQueue = new DelayedActionQueue
                      ) extends Logging {
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+  private val metricsPackage = "kafka.server"
+  private val metricsClassName = "ReplicaManager"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
   private val addPartitionsToTxnConfig = new AddPartitionsToTxnConfig(config)
   private val shareFetchPurgatoryName = "ShareFetch"
   private val delayedShareFetchTimer = new SystemTimer(shareFetchPurgatoryName)
@@ -248,9 +251,12 @@ class ReplicaManager(val config: KafkaConfig,
     new DelayedOperationPurgatory[DelayedDeleteRecords](
       "DeleteRecords", config.brokerId,
       config.deleteRecordsPurgatoryPurgeIntervalRequests))
+  // delayedRemoteFetchPurgatory purgeInterval is set to 0 to release the references of completed DelayedRemoteFetch
+  // instances immediately for GC. The DelayedRemoteFetch instance internally holds the RemoteLogReadResult that can be
+  // up to the size of `fetch.max.bytes` which defaults to 50 MB.
   val delayedRemoteFetchPurgatory = delayedRemoteFetchPurgatoryParam.getOrElse(
     new DelayedOperationPurgatory[DelayedRemoteFetch](
-      "RemoteFetch", config.brokerId))
+      "RemoteFetch", config.brokerId, 0))
   val delayedRemoteListOffsetsPurgatory = delayedRemoteListOffsetsPurgatoryParam.getOrElse(
     new DelayedOperationPurgatory[DelayedRemoteListOffsets](
       "RemoteListOffsets", config.brokerId))
@@ -272,7 +278,7 @@ class ReplicaManager(val config: KafkaConfig,
   @volatile private var isInControlledShutdown = false
 
   this.logIdent = s"[ReplicaManager broker=$localBrokerId] "
-  protected val stateChangeLogger = new StateChangeLogger(localBrokerId, inControllerContext = false, None)
+  protected val stateChangeLogger = new StateChangeLogger(localBrokerId)
 
   private var logDirFailureHandler: LogDirFailureHandler = _
 
@@ -789,9 +795,9 @@ class ReplicaManager(val config: KafkaConfig,
             hasCustomErrorMessage = customException.isDefined
           )
       }
-      // In non-transaction paths, errorResults is typically empty, so we can 
+      // In non-transaction paths, errorResults is typically empty, so we can
       // directly use entriesPerPartition instead of creating a new filtered collection
-      val entriesWithoutErrorsPerPartition = 
+      val entriesWithoutErrorsPerPartition =
         if (errorResults.nonEmpty) entriesPerPartition.filter { case (key, _) => !errorResults.contains(key) }
         else entriesPerPartition
 
@@ -1261,11 +1267,11 @@ class ReplicaManager(val config: KafkaConfig,
         }
 
         val describeLogDirsResult = new DescribeLogDirsResponseData.DescribeLogDirsResult()
-          .setLogDir(absolutePath).setTopics(topicInfos)
+          .setLogDir(absolutePath)
+          .setTopics(topicInfos)
           .setErrorCode(Errors.NONE.code)
-          .setTotalBytes(totalBytes).setUsableBytes(usableBytes)
-        if (!topicInfos.isEmpty)
-          describeLogDirsResult.setTopics(topicInfos)
+          .setTotalBytes(totalBytes)
+          .setUsableBytes(usableBytes)
         describeLogDirsResult
 
       } catch {
@@ -1630,26 +1636,28 @@ class ReplicaManager(val config: KafkaConfig,
   /**
    * Process all remote fetches by creating async read tasks and handling them in DelayedRemoteFetch collectively.
    */
-  private def processRemoteFetches(remoteFetchInfos: util.HashMap[TopicIdPartition, RemoteStorageFetchInfo],
+  private def processRemoteFetches(remoteFetchInfos: util.LinkedHashMap[TopicIdPartition, RemoteStorageFetchInfo],
                                    params: FetchParams,
                                    responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit,
                                    logReadResults: Seq[(TopicIdPartition, LogReadResult)],
-                                   remoteFetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)]): Unit = {
+                                   fetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)]): Unit = {
     val remoteFetchTasks = new util.HashMap[TopicIdPartition, Future[Void]]
     val remoteFetchResults = new util.HashMap[TopicIdPartition, CompletableFuture[RemoteLogReadResult]]
-    
+
     remoteFetchInfos.forEach { (topicIdPartition, remoteFetchInfo) =>
       val (task, result) = processRemoteFetch(remoteFetchInfo)
       remoteFetchTasks.put(topicIdPartition, task)
       remoteFetchResults.put(topicIdPartition, result)
     }
-    
+
     val remoteFetchMaxWaitMs = config.remoteLogManagerConfig.remoteFetchMaxWaitMs().toLong
     val remoteFetch = new DelayedRemoteFetch(remoteFetchTasks, remoteFetchResults, remoteFetchInfos, remoteFetchMaxWaitMs,
-      remoteFetchPartitionStatus, params, logReadResults, this, responseCallback)
+      fetchPartitionStatus, params, logReadResults, this, responseCallback)
 
     // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
-    val delayedFetchKeys = remoteFetchPartitionStatus.map { case (tp, _) => new TopicPartitionOperationKey(tp) }.toList
+    val delayedFetchKeys = remoteFetchTasks.asScala.map { case (tp, _) => new TopicPartitionOperationKey(tp) }.toList
+    // We only guarantee eventual cleanup via the next FETCH request for the same set of partitions or
+    // using reaper-thread.
     delayedRemoteFetchPurgatory.tryCompleteElseWatch(remoteFetch, delayedFetchKeys.asJava)
   }
 
@@ -1669,7 +1677,7 @@ class ReplicaManager(val config: KafkaConfig,
     var errorReadingData = false
 
     // topic-partitions that have to be read from remote storage
-    val remoteFetchInfos = new util.HashMap[TopicIdPartition, RemoteStorageFetchInfo]()
+    val remoteFetchInfos = new util.LinkedHashMap[TopicIdPartition, RemoteStorageFetchInfo]()
 
     var hasDivergingEpoch = false
     var hasPreferredReadReplica = false
@@ -1871,13 +1879,13 @@ class ReplicaManager(val config: KafkaConfig,
     readPartitionInfo.foreach { case (tp, fetchInfo) =>
       val readResult = read(tp, fetchInfo, limitBytes, minOneMessage)
       val recordBatchSize = readResult.info.records.sizeInBytes
-      // Once we read from a non-empty partition, we stop ignoring request and partition level size limits
-      if (recordBatchSize > 0)
-        minOneMessage = false
       // Because we don't know how much data will be retrieved in remote fetch yet, and we don't want to block the API call
       // to query remoteLogMetadata, assume it will fetch the max bytes size of data to avoid to exceed the "fetch.max.bytes" setting.
       val estimatedRecordBatchSize = if (recordBatchSize == 0 && readResult.info.delayedRemoteStorageFetch.isPresent)
         readResult.info.delayedRemoteStorageFetch.get.fetchMaxBytes else recordBatchSize
+      // Once we read from a non-empty partition, we stop ignoring request and partition level size limits
+      if (estimatedRecordBatchSize > 0)
+        minOneMessage = false
       limitBytes = math.max(0, limitBytes - estimatedRecordBatchSize)
       result += (tp -> readResult)
     }
@@ -1923,11 +1931,14 @@ class ReplicaManager(val config: KafkaConfig,
             Optional.empty()
           )
         } else {
-          // For consume fetch requests, create a dummy FetchDataInfo with the remote storage fetch information.
-          // For the topic-partitions that need remote data, we will use this information to read the data in another thread.
-          new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY, false, Optional.empty(),
-            Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp,
-              fetchInfo, params.isolation)))
+          val remoteStorageFetchInfoOpt = if (adjustedMaxBytes > 0) {
+            // For consume fetch requests, create a dummy FetchDataInfo with the remote storage fetch information.
+            // For the topic-partitions that need remote data, we will use this information to read the data in another thread.
+            Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp, fetchInfo, params.isolation))
+          } else {
+            Optional.empty[RemoteStorageFetchInfo]()
+          }
+          new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY, false, Optional.empty(), remoteStorageFetchInfoOpt)
         }
 
         new LogReadResult(fetchDataInfo,

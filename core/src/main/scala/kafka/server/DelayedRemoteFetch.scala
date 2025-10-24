@@ -109,7 +109,7 @@ class DelayedRemoteFetch(remoteFetchTasks: util.Map[TopicIdPartition, Future[Voi
   override def onComplete(): Unit = {
     val fetchPartitionData = localReadResults.map { case (tp, result) =>
       val remoteFetchResult = remoteFetchResults.get(tp)
-      if (remoteFetchInfos.containsKey(tp)
+      if (remoteFetchResults.containsKey(tp)
         && remoteFetchResult.isDone
         && result.error == Errors.NONE
         && result.info.delayedRemoteStorageFetch.isPresent) {
@@ -138,6 +138,9 @@ class DelayedRemoteFetch(remoteFetchTasks: util.Map[TopicIdPartition, Future[Voi
 }
 
 object DelayedRemoteFetchMetrics {
-  private val metricsGroup = new KafkaMetricsGroup(DelayedRemoteFetchMetrics.getClass)
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+  private val metricsPackage = "kafka.server"
+  private val metricsClassName = "DelayedRemoteFetchMetrics"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
   val expiredRequestMeter: Meter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
 }

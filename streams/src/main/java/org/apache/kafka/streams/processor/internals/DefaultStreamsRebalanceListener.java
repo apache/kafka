@@ -19,14 +19,16 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
 import org.apache.kafka.clients.consumer.internals.StreamsRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.RebalanceListenerMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import org.slf4j.Logger;
 
 import java.util.Collection;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -38,71 +40,80 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
     private final StreamsRebalanceData streamsRebalanceData;
     private final TaskManager taskManager;
     private final StreamThread streamThread;
+    private final Sensor tasksRevokedSensor;
+    private final Sensor tasksAssignedSensor;
+    private final Sensor tasksLostSensor;
 
     public DefaultStreamsRebalanceListener(final Logger log,
                                            final Time time,
                                            final StreamsRebalanceData streamsRebalanceData,
                                            final StreamThread streamThread,
-                                           final TaskManager taskManager) {
+                                           final TaskManager taskManager,
+                                           final StreamsMetricsImpl streamsMetrics,
+                                           final String threadId) {
         this.log = log;
         this.time = time;
         this.streamsRebalanceData = streamsRebalanceData;
         this.streamThread = streamThread;
         this.taskManager = taskManager;
+        
+        // Create sensors for rebalance metrics
+        this.tasksRevokedSensor = RebalanceListenerMetrics.tasksRevokedSensor(threadId, streamsMetrics);
+        this.tasksAssignedSensor = RebalanceListenerMetrics.tasksAssignedSensor(threadId, streamsMetrics);
+        this.tasksLostSensor = RebalanceListenerMetrics.tasksLostSensor(threadId, streamsMetrics);
     }
 
     @Override
-    public Optional<Exception> onTasksRevoked(final Set<StreamsRebalanceData.TaskId> tasks) {
-        try {
-            final Map<TaskId, Set<TopicPartition>> activeTasksToRevokeWithPartitions =
-                pairWithTopicPartitions(tasks.stream());
-            final Set<TopicPartition> partitionsToRevoke = activeTasksToRevokeWithPartitions.values().stream()
-                .flatMap(Collection::stream)
-                .collect(Collectors.toSet());
+    public void onTasksRevoked(final Set<StreamsRebalanceData.TaskId> tasks) {
+        final Map<TaskId, Set<TopicPartition>> activeTasksToRevokeWithPartitions =
+            pairWithTopicPartitions(tasks.stream());
+        final Set<TopicPartition> partitionsToRevoke = activeTasksToRevokeWithPartitions.values().stream()
+            .flatMap(Collection::stream)
+            .collect(Collectors.toSet());
 
-            final long start = time.milliseconds();
-            try {
-                log.info("Revoking active tasks {}.", tasks);
-                taskManager.handleRevocation(partitionsToRevoke);
-            } finally {
-                log.info("partition revocation took {} ms.", time.milliseconds() - start);
-            }
-            if (streamThread.state() != StreamThread.State.PENDING_SHUTDOWN) {
-                streamThread.setState(StreamThread.State.PARTITIONS_REVOKED);
-            }
-        } catch (final Exception exception) {
-            return Optional.of(exception);
+        final long start = time.milliseconds();
+        try {
+            log.info("Revoking active tasks {}.", tasks);
+            taskManager.handleRevocation(partitionsToRevoke);
+        } finally {
+            final long latency = time.milliseconds() - start;
+            tasksRevokedSensor.record(latency);
+            log.info("partition revocation took {} ms.", latency);
         }
-        return Optional.empty();
+        if (streamThread.state() != StreamThread.State.PENDING_SHUTDOWN) {
+            streamThread.setState(StreamThread.State.PARTITIONS_REVOKED);
+        }
     }
 
     @Override
-    public Optional<Exception> onTasksAssigned(final StreamsRebalanceData.Assignment assignment) {
+    public void onTasksAssigned(final StreamsRebalanceData.Assignment assignment) {
+        final long start = time.milliseconds();
+        final Map<TaskId, Set<TopicPartition>> activeTasksWithPartitions =
+            pairWithTopicPartitions(assignment.activeTasks().stream());
+        final Map<TaskId, Set<TopicPartition>> standbyTasksWithPartitions =
+            pairWithTopicPartitions(Stream.concat(assignment.standbyTasks().stream(), assignment.warmupTasks().stream()));
+
+        log.info("Processing new assignment {} from Streams Rebalance Protocol", assignment);
+
         try {
-            final Map<TaskId, Set<TopicPartition>> activeTasksWithPartitions =
-                pairWithTopicPartitions(assignment.activeTasks().stream());
-            final Map<TaskId, Set<TopicPartition>> standbyTasksWithPartitions =
-                pairWithTopicPartitions(Stream.concat(assignment.standbyTasks().stream(), assignment.warmupTasks().stream()));
-
-            log.info("Processing new assignment {} from Streams Rebalance Protocol", assignment);
-
             taskManager.handleAssignment(activeTasksWithPartitions, standbyTasksWithPartitions);
             streamThread.setState(StreamThread.State.PARTITIONS_ASSIGNED);
             taskManager.handleRebalanceComplete();
-        } catch (final Exception exception) {
-            return Optional.of(exception);
+            streamsRebalanceData.setReconciledAssignment(assignment);
+        } finally {
+            tasksAssignedSensor.record(time.milliseconds() - start);
         }
-        return Optional.empty();
     }
 
     @Override
-    public Optional<Exception> onAllTasksLost() {
+    public void onAllTasksLost() {
+        final long start = time.milliseconds();
         try {
             taskManager.handleLostAll();
-        } catch (final Exception exception) {
-            return Optional.of(exception);
+            streamsRebalanceData.setReconciledAssignment(StreamsRebalanceData.Assignment.EMPTY);
+        } finally {
+            tasksLostSensor.record(time.milliseconds() - start);
         }
-        return Optional.empty();
     }
 
     private Map<TaskId, Set<TopicPartition>> pairWithTopicPartitions(final Stream<StreamsRebalanceData.TaskId> taskIdStream) {

@@ -245,7 +245,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         addGraphNode(root, globalStoreNode);
     }
 
-    void addGraphNode(final GraphNode parent,
+    public void addGraphNode(final GraphNode parent,
                       final GraphNode child) {
         Objects.requireNonNull(parent, "parent node can't be null");
         Objects.requireNonNull(child, "child node can't be null");
@@ -254,7 +254,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         maybeAddNodeForVersionedSemanticsMetadata(child);
     }
 
-    void addGraphNode(final Collection<GraphNode> parents,
+    public void addGraphNode(final Collection<GraphNode> parents,
                       final GraphNode child) {
         Objects.requireNonNull(parents, "parent node can't be null");
         Objects.requireNonNull(child, "child node can't be null");

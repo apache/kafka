@@ -21,7 +21,7 @@ import com.yammer.metrics.core.Metric
 import kafka.log.LogManager
 import kafka.server._
 import kafka.utils._
-import org.apache.kafka.common.errors.{ApiException, FencedLeaderEpochException, InconsistentTopicIdException, InvalidTxnStateException, NotLeaderOrFollowerException, OffsetNotAvailableException, OffsetOutOfRangeException, UnknownLeaderEpochException}
+import org.apache.kafka.common.errors.{ApiException, FencedLeaderEpochException, InconsistentTopicIdException, InvalidTxnStateException, NotLeaderOrFollowerException, OffsetNotAvailableException, OffsetOutOfRangeException, PolicyViolationException, UnknownLeaderEpochException}
 import org.apache.kafka.common.message.{AlterPartitionResponseData, FetchResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
@@ -61,7 +61,7 @@ import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, Unexpec
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, LocalLog, LogAppendInfo, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetsListener, LogReadInfo, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetsListener, LogReadInfo, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -4029,5 +4029,47 @@ class PartitionTest extends AbstractPartitionTest {
       spyLogManager,
       alterPartitionManager)
     partition.tryCompleteDelayedRequests()
+  }
+
+  @Test
+  def testDeleteRecordsOnLeaderWithEmptyPolicy(): Unit = {
+    val leaderEpoch = 5
+    val partition = setupPartitionWithMocks(leaderEpoch, isLeader = true)
+
+    val emptyPolicyConfig = new LogConfig(util.Map.of(
+      TopicConfig.CLEANUP_POLICY_CONFIG, ""
+    ))
+
+    val mockLog = mock(classOf[UnifiedLog])
+    when(mockLog.config).thenReturn(emptyPolicyConfig)
+    when(mockLog.logEndOffset).thenReturn(2L)
+    when(mockLog.logStartOffset).thenReturn(0L)
+    when(mockLog.highWatermark).thenReturn(2L)
+    when(mockLog.maybeIncrementLogStartOffset(any(), any())).thenReturn(true)
+
+    partition.setLog(mockLog, false)
+
+    val result = partition.deleteRecordsOnLeader(1L)
+    assertEquals(1L, result.requestedOffset)
+  }
+
+  @Test
+  def testDeleteRecordsOnLeaderWithCompactPolicy(): Unit = {
+    val leaderEpoch = 5
+    val partition = setupPartitionWithMocks(leaderEpoch, isLeader = true)
+
+    val emptyPolicyConfig = new LogConfig(util.Map.of(
+      TopicConfig.CLEANUP_POLICY_CONFIG, "compact"
+    ))
+
+    val mockLog = mock(classOf[UnifiedLog])
+    when(mockLog.config).thenReturn(emptyPolicyConfig)
+    when(mockLog.logEndOffset).thenReturn(2L)
+    when(mockLog.logStartOffset).thenReturn(0L)
+    when(mockLog.highWatermark).thenReturn(2L)
+    when(mockLog.maybeIncrementLogStartOffset(any(), any())).thenReturn(true)
+
+    partition.setLog(mockLog, false)
+    assertThrows(classOf[PolicyViolationException], () =>  partition.deleteRecordsOnLeader(1L))
   }
 }

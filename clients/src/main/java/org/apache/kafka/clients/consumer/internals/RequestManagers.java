@@ -318,7 +318,7 @@ public class RequestManagers implements Closeable {
     public static Supplier<RequestManagers> supplier(final Time time,
                                                      final LogContext logContext,
                                                      final BackgroundEventHandler backgroundEventHandler,
-                                                     final ConsumerMetadata metadata,
+                                                     final ShareConsumerMetadata metadata,
                                                      final SubscriptionState subscriptions,
                                                      final ShareFetchBuffer fetchBuffer,
                                                      final ConsumerConfig config,

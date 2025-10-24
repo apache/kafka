@@ -42,13 +42,13 @@ import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMeta
 public class ShareFetchCollector<K, V> {
 
     private final Logger log;
-    private final ConsumerMetadata metadata;
+    private final ShareConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final FetchConfig fetchConfig;
     private final Deserializers<K, V> deserializers;
 
     public ShareFetchCollector(final LogContext logContext,
-                               final ConsumerMetadata metadata,
+                               final ShareConsumerMetadata metadata,
                                final SubscriptionState subscriptions,
                                final FetchConfig fetchConfig,
                                final Deserializers<K, V> deserializers) {

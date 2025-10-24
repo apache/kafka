@@ -46,7 +46,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -344,13 +343,11 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         // Set up a custom exit procedure for testing
         final AtomicBoolean exitCalled = new AtomicBoolean(false);
         final AtomicInteger exitCode = new AtomicInteger(-1);
-        final AtomicReference<String> exitMessage = new AtomicReference<>();
         
         // Set custom exit procedure that won't actually exit the process
         Exit.setExitProcedure((statusCode, message) -> {
             exitCalled.set(true);
             exitCode.set(statusCode);
-            exitMessage.set(message);
         });
 
         try (TopicBasedRemoteLogMetadataManager rlmm = new TopicBasedRemoteLogMetadataManager()) {
