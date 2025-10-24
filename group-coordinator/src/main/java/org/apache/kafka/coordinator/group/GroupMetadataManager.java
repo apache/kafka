@@ -2030,10 +2030,10 @@ public class GroupMetadataManager {
 
         // Actually bump the group epoch
         int groupEpoch = group.groupEpoch();
-        boolean isInitialRebalance = group.isEmpty();
+        boolean isInitialRebalance = (group.isEmpty() && groupEpoch == 0);
         if (bumpGroupEpoch) {
             if (isInitialRebalance) {
-                groupEpoch = 2;
+                groupEpoch += 2;
             } else {
                 groupEpoch += 1;
             }
@@ -2051,7 +2051,7 @@ public class GroupMetadataManager {
                     initialDelayMs,
                     TimeUnit.MILLISECONDS,
                     false,
-                    () -> fireStreamsInitialRebalance(groupId)
+                    () -> EMPTY_RESULT
             );
         }
 
@@ -8835,17 +8835,6 @@ public class GroupMetadataManager {
         return "sync-" + groupId;
     }
 
-    /**
-     * Callback when the initial rebalance delay timer expires.
-     * This is a no-op as the actual assignment computation happens on the next heartbeat.
-     *
-     * @param groupId   The group id.
-     *
-     * @return An empty result.
-     */
-    private CoordinatorResult<Void, CoordinatorRecord> fireStreamsInitialRebalance(String groupId) {
-        return EMPTY_RESULT;
-    }
 
     /**
      * Generate a streams group initial rebalance key for the timer.
