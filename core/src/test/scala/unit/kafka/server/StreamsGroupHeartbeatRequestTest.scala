@@ -32,7 +32,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     val memberId = "test-member-1"
     val groupId = "test-group"
     val inputTopicName = "input-topic"
-    val outputTopicName = "output-topic"
 
     try {
       // Create the __consumer_offsets topic
@@ -51,19 +50,11 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         numPartitions = 2
       )
 
-      TestUtils.createTopicWithAdmin(
-        admin = admin,
-        brokers = cluster.brokers.values().asScala.toSeq,
-        controllers = cluster.controllers().values().asScala.toSeq,
-        topic = outputTopicName,
-        numPartitions = 2
-      )
-
       // Wait for topics to be available
       TestUtils.waitUntilTrue(() => {
         val topicNames = admin.listTopics().names().get()
-        topicNames.contains(inputTopicName) && topicNames.contains(outputTopicName)
-      }, msg = s"Input topic $inputTopicName or output topic $outputTopicName is not available")
+        topicNames.contains(inputTopicName)
+      }, msg = s"Input topic $inputTopicName is not available")
 
       // Create topology with internal topics (changelog and repartition topics)
       val topology = createTopologyWithInternalTopics(inputTopicName, groupId)
