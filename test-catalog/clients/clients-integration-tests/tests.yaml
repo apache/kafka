@@ -313,6 +313,7 @@ org.apache.kafka.clients.consumer.ShareConsumerTest:
 - testAcknowledgementCommitCallbackInvalidRecordStateException
 - testAcknowledgementCommitCallbackOnClose
 - testAcknowledgementCommitCallbackSuccessfulAcknowledgement
+- testAcknowledgementCommitCallbackSuccessfulAcknowledgementOnCommitSync
 - testAcknowledgementCommitCallbackThrowsException
 - testAcknowledgementSentOnSubscriptionChange
 - testAcquisitionLockTimeoutOnConsumer
