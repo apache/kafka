@@ -526,7 +526,6 @@ public class DelayedShareFetch extends DelayedOperation {
             return offsetSnapshot.highWatermark();
         else
             return offsetSnapshot.lastStableOffset();
-
     }
 
     private LinkedHashMap<TopicIdPartition, LogReadResult> readFromLog(LinkedHashMap<TopicIdPartition, Long> topicPartitionFetchOffsets,
