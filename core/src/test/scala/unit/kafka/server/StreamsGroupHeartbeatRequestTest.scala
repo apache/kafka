@@ -10,7 +10,7 @@ import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.common.config.ConfigResource
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertTrue}
 
 import java.util.Collections
 import scala.jdk.CollectionConverters._
@@ -276,11 +276,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         s"Changelog topic should have replication factor 1")
       assertEquals(1, repartitionTopic.partitions().get(0).replicas().size(),
         s"Repartition topic should have replication factor 1")
-
-//      println(s"Successfully verified internal topics creation:")
-//      println(s"  - Changelog topic: $expectedChangelogTopic (${changelogTopic.partitions().size()} partitions)")
-//      println(s"  - Repartition topic: $expectedRepartitionTopic (${repartitionTopic.partitions().size()} partitions)")
-
     } finally {
       admin.close()
     }
@@ -550,7 +545,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
 
       TestUtils.waitUntilTrue(() => {
         val expiredResponse = connectAndReceive[StreamsGroupHeartbeatResponse](expiredHeartbeatRequest)
-        println(s"Received expired StreamsGroupHeartbeatResponse: ${expiredResponse.data().errorMessage()}")
         expiredResponse.data.errorCode == Errors.UNKNOWN_MEMBER_ID.code() &&
           expiredResponse.data.memberEpoch() == 0
           expiredResponse.data.errorMessage().equals(s"Member $memberId is not a member of group $groupId.")
@@ -591,6 +585,101 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     }
   }
 
+  @ClusterTest
+  def testGroupCoordinatorChange(): Unit = {
+    val admin = cluster.admin()
+    val memberId = "test-member-1"
+    val groupId = "test-group"
+    val topicName = "test-topic"
+
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      // Create topic
+      TestUtils.createTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq,
+        topic = topicName,
+        numPartitions = 2
+      )
+      TestUtils.waitUntilTrue(() => {
+        admin.listTopics().names().get().contains(topicName)
+      }, msg = s"Topic $topicName is not available to the group coordinator")
+
+      val topology = createMockTopology(topicName)
+
+      // First member joins the group
+      var streamsGroupHeartbeatResponse: StreamsGroupHeartbeatResponse = null
+      TestUtils.waitUntilTrue(() => {
+        val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequest.Builder(
+          new StreamsGroupHeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(memberId)
+            .setMemberEpoch(0)
+            .setRebalanceTimeoutMs(1000)
+            .setActiveTasks(Option(streamsGroupHeartbeatResponse)
+              .map(r => convertTaskIds(r.data().activeTasks()))
+              .getOrElse(Collections.emptyList()))
+            .setStandbyTasks(Option(streamsGroupHeartbeatResponse)
+              .map(r => convertTaskIds(r.data().standbyTasks()))
+              .getOrElse(Collections.emptyList()))
+            .setWarmupTasks(Option(streamsGroupHeartbeatResponse)
+              .map(r => convertTaskIds(r.data().warmupTasks()))
+              .getOrElse(Collections.emptyList()))
+            .setTopology(topology)
+        ).build(0)
+
+        streamsGroupHeartbeatResponse = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest)
+        streamsGroupHeartbeatResponse.data.errorCode == Errors.NONE.code()
+      }, "StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
+
+      // Verify the response for member.
+      assert(streamsGroupHeartbeatResponse != null, "StreamsGroupHeartbeatResponse should not be null")
+      assertEquals(memberId, streamsGroupHeartbeatResponse.data.memberId())
+      assertEquals(1, streamsGroupHeartbeatResponse.data.memberEpoch())
+      assertNotNull(streamsGroupHeartbeatResponse.data().activeTasks())
+
+      // Restart the only running broker.
+      val broker = cluster.brokers().values().iterator().next()
+      cluster.shutdownBroker(broker.config.brokerId)
+      cluster.startBroker(broker.config.brokerId)
+
+      // Prepare the next heartbeat for member
+      val streamsGroupHeartbeatRequestAfterRestart = new StreamsGroupHeartbeatRequest.Builder(
+        new StreamsGroupHeartbeatRequestData()
+          .setGroupId(groupId)
+          .setMemberId(memberId)
+          .setMemberEpoch(streamsGroupHeartbeatResponse.data.memberEpoch())
+          .setRebalanceTimeoutMs(1000)
+          .setActiveTasks(convertTaskIds(streamsGroupHeartbeatResponse.data.activeTasks()))
+          .setStandbyTasks(convertTaskIds(streamsGroupHeartbeatResponse.data.standbyTasks()))
+          .setWarmupTasks(convertTaskIds(streamsGroupHeartbeatResponse.data.warmupTasks()))
+      ).build(0)
+
+      // Should receive no error and no assignment changes.
+      TestUtils.waitUntilTrue(() => {
+        streamsGroupHeartbeatResponse = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequestAfterRestart)
+        streamsGroupHeartbeatResponse.data.errorCode == Errors.NONE.code()
+      }, "StreamsGroupHeartbeatRequest after broker restart did not succeed within the timeout period.")
+
+      // Verify the response. Epoch should not have changed and null assignments determine that no
+      // change in old assignment.
+      assertEquals(memberId, streamsGroupHeartbeatResponse.data.memberId())
+      assertEquals(1, streamsGroupHeartbeatResponse.data.memberEpoch())
+      assertNull(streamsGroupHeartbeatResponse.data.activeTasks())
+      assertNull(streamsGroupHeartbeatResponse.data.standbyTasks())
+      assertNull(streamsGroupHeartbeatResponse.data.warmupTasks())
+
+    } finally {
+      admin.close()
+    }
+  }
+
   private def convertTaskIds(responseTasks: java.util.List[StreamsGroupHeartbeatResponseData.TaskIds]): java.util.List[StreamsGroupHeartbeatRequestData.TaskIds] = {
     if (responseTasks == null) {
       java.util.Collections.emptyList()
@@ -602,8 +691,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       }.asJava
     }
   }
-
-
 
   private def createMockTopology(topicName: String): StreamsGroupHeartbeatRequestData.Topology = {
     new StreamsGroupHeartbeatRequestData.Topology()
