@@ -82,7 +82,8 @@ public class SubscriptionReceiveProcessorSupplier<KLeft, KRight>
 
             @Override
             public void process(final Record<KRight, SubscriptionWrapper<KLeft>> record) {
-                if (record.key() == null && !SubscriptionWrapper.Instruction.PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE.equals(record.value().instruction())) {
+                final KRight foreignKey = record.key();
+                if (foreignKey == null && !SubscriptionWrapper.Instruction.PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE.equals(record.value().instruction())) {
                     dropRecord();
                     return;
                 }
@@ -93,7 +94,7 @@ public class SubscriptionReceiveProcessorSupplier<KLeft, KRight>
                     throw new UnsupportedVersionException("SubscriptionWrapper is of an incompatible version.");
                 }
                 context().forward(
-                    record.withKey(new CombinedKey<>(record.key(), record.value().primaryKey()))
+                    record.withKey(new CombinedKey<>(foreignKey, record.value().primaryKey()))
                         .withValue(inferChange(record))
                         .withTimestamp(record.timestamp())
                 );
