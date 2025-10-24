@@ -285,24 +285,32 @@ public class RecordHeadersTest {
         CountDownLatch startLatch = new CountDownLatch(1);
         AtomicBoolean raceDetected = new AtomicBoolean(false);
 
-        Runnable task = () -> {
-            try {
-                startLatch.await();
-                header.key();
-                header.value();
-            } catch (NullPointerException e) {
-                raceDetected.set(true);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
+        try {
+            Runnable task = () -> {
+                try {
+                    startLatch.await();
+                    header.key();
+                    header.value();
+                } catch (NullPointerException e) {
+                    raceDetected.set(true);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
+                }
+            };
+
+            for (int i = 0; i < threads; i++) pool.submit(task);
+
+            startLatch.countDown();
+
+            pool.shutdown();
+            pool.awaitTermination(5, TimeUnit.SECONDS);
+
+            assertFalse(raceDetected.get(), "Read race condition detected in RecordHeader!");
+        } finally {
+            if (!pool.isTerminated()) {
+                pool.shutdownNow();
             }
-        };
-
-        for (int i = 0; i < threads; i++) pool.submit(task);
-
-        startLatch.countDown();
-        pool.shutdown();
-        pool.awaitTermination(5, TimeUnit.SECONDS);
-
-        assertFalse(raceDetected.get(), "Read race condition detected in RecordHeader!");
+        }
     }
 }
