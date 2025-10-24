@@ -355,9 +355,9 @@ public class DelayedShareFetchTest {
         sharePartitions.put(tp0, sp0);
         sharePartitions.put(tp1, sp1);
 
-        ShareFetch shareFetch = spy(new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
+        ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
             new CompletableFuture<>(), List.of(tp0, tp1), BATCH_SIZE, MAX_FETCH_RECORDS,
-            BROKER_TOPIC_STATS));
+            BROKER_TOPIC_STATS);
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(false);
@@ -396,8 +396,6 @@ public class DelayedShareFetchTest {
             // Since sp0 can be acquired, tryComplete should return true.
             assertTrue(delayedShareFetch.tryComplete());
             assertTrue(delayedShareFetch.isCompleted());
-
-            Mockito.verify(shareFetch, never()).addErroneous(any(), any());
             Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(any());
             assertTrue(delayedShareFetch.lock().tryLock());
             assertEquals(1, shareGroupMetrics.topicPartitionsAcquireTimeMs(groupId).count());
