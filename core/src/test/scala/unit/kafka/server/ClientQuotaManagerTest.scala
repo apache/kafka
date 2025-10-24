@@ -22,7 +22,7 @@ import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.server.config.ClientQuotaManagerConfig
-import org.apache.kafka.network.Session
+import org.apache.kafka.server.network.Session
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaManager, ClientQuotaType, QuotaType}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
