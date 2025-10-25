@@ -30,6 +30,7 @@ import org.apache.kafka.server.purgatory.DelayedOperation
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.storage.internals.log.{FetchPartitionStatus, LogOffsetMetadata}
 
+import java.util
 import scala.collection._
 import scala.jdk.CollectionConverters._
 
@@ -39,7 +40,7 @@ import scala.jdk.CollectionConverters._
  */
 class DelayedFetch(
   params: FetchParams,
-  fetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)],
+  fetchPartitionStatus: util.LinkedHashMap[TopicIdPartition, FetchPartitionStatus],
   replicaManager: ReplicaManager,
   quota: ReplicaQuota,
   responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit
@@ -66,8 +67,7 @@ class DelayedFetch(
    */
   override def tryComplete(): Boolean = {
     var accumulatedSize = 0
-    fetchPartitionStatus.foreach {
-      case (topicIdPartition, fetchStatus) =>
+    fetchPartitionStatus.forEach { (topicIdPartition, fetchStatus) =>
         val fetchOffset = fetchStatus.startOffsetMetadata
         val fetchLeaderEpoch = fetchStatus.fetchInfo.currentLeaderEpoch
         try {
@@ -154,9 +154,9 @@ class DelayedFetch(
    * Upon completion, read whatever data is available and pass to the complete callback
    */
   override def onComplete(): Unit = {
-    val fetchInfos = fetchPartitionStatus.map { case (tp, status) =>
+    val fetchInfos = fetchPartitionStatus.asScala.map { case (tp, status) =>
       tp -> status.fetchInfo
-    }
+    }.toSeq
 
     val logReadResults = replicaManager.readFromLog(
       params,
