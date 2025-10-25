@@ -637,21 +637,23 @@ class KafkaRaftClientTest {
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
     public void testBeginQuorumShouldNotSendAfterFetchRequest(boolean withKip853Rpc) throws Exception {
-        ReplicaKey localId = replicaKey(randomReplicaId(), true);
-        int remoteId1 = localId.id() + 1;
-        int remoteId2 = localId.id() + 2;
+        ReplicaKey localKey = replicaKey(randomReplicaId(), true);
+        int remoteId1 = localKey.id() + 1;
+        int remoteId2 = localKey.id() + 2;
         ReplicaKey replicaKey1 = replicaKey(remoteId1, withKip853Rpc);
         ReplicaKey replicaKey2 = replicaKey(remoteId2, withKip853Rpc);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
-                localId.id(), localId.directoryId().get())
-                .withKip853Rpc(withKip853Rpc)
-                .withStartingVoters(VoterSetTest.voterSet(Stream.of(localId, replicaKey1, replicaKey2)), KRaftVersion.KRAFT_VERSION_1)
-                .build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localKey.id(), localKey.directoryId().get())
+            .withKip853Rpc(withKip853Rpc)
+            .withStartingVoters(
+                VoterSetTest.voterSet(Stream.of(localKey, replicaKey1, replicaKey2)),
+                KRaftVersion.KRAFT_VERSION_1
+            )
+            .build();
 
         context.unattachedToLeader();
         int epoch = context.currentEpoch();
-        assertEquals(OptionalInt.of(localId.id()), context.currentLeader());
+        assertEquals(OptionalInt.of(localKey.id()), context.currentLeader());
 
         // begin epoch requests sent out every beginQuorumEpochTimeoutMs if replicas have not fetched
         context.time.sleep(context.beginQuorumEpochTimeoutMs);
