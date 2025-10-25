@@ -851,11 +851,12 @@ public class SharePartition {
                         inFlightBatch, groupId, topicIdPartition);
                     continue;
                 }
-                long recordsAcquired = inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1;
-                if (isRecordLimitMode && recordsAcquired > maxRecordsToAcquire) {
-                    AcquiredRecords records = filterShareAcquiredRecordsInRecordLimitMode((int) (maxRecordsToAcquire - recordsAcquired), inFlightBatch);
+                long numRecordsAcquired = inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1;
+                int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
+                if (isRecordLimitMode && (numRecordsAcquired > numRecordsRemaining)) {
+                    AcquiredRecords records = filterShareAcquiredRecordsInRecordLimitMode(numRecordsRemaining, inFlightBatch);
                     result.add(records);
-                    acquiredCount += maxRecordsToAcquire;
+                    acquiredCount += numRecordsRemaining;
                     break;
                 } else {
                     // Schedule acquisition lock timeout for the batch.
@@ -867,7 +868,7 @@ public class SharePartition {
                         .setFirstOffset(inFlightBatch.firstOffset())
                         .setLastOffset(inFlightBatch.lastOffset())
                         .setDeliveryCount((short) inFlightBatch.batchDeliveryCount()));
-                    acquiredCount += (int) recordsAcquired;
+                    acquiredCount += (int) numRecordsAcquired;
                 }
             }
 
@@ -1590,7 +1591,7 @@ public class SharePartition {
                 // The max records to acquire is less than the complete available batches, so we
                 // limit the acquired records. Although shareAcquireMode is introduced, even in
                 // record_limit mode, the last offset should still be the batch's last offset
-                // that falls under the max records limit, because filtering is done outside this method and the InFlightBatch
+                // that falls under the max records limit, because the InFlightBatch
                 // in cachedState should still reflect the complete batch.
                 lastAcquiredOffset = lastOffsetFromBatchWithRequestOffset(batches, firstAcquiredOffset + maxFetchRecords - 1);
                 // If the initial read gap offset window is active then it's not guaranteed that the
@@ -1624,7 +1625,7 @@ public class SharePartition {
                 endOffset = lastAcquiredOffset;
             }
             // Update lastAcquireOffset to the last offset of acquired records in record_limit mode
-            // as this is required to calculate the actual record count.
+            // Since this is required to calculate the actual number of offsets acquired.
             if (isRecordLimitMode) {
                 lastAcquiredOffset = acquiredRecords.get(0).lastOffset();
             }
