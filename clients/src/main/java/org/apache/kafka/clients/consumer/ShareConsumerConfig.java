@@ -327,13 +327,13 @@ public class ShareConsumerConfig extends AbstractConfig {
                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
                 .withClientSslSupport()
                 .withClientSaslSupport()
-                .define(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG,
+                .define(CommonConsumerConfigs.METADATA_RECOVERY_STRATEGY_CONFIG,
                         ConfigDef.Type.STRING,
                         CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY,
                         ConfigDef.CaseInsensitiveValidString
                                 .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
                         ConfigDef.Importance.LOW,
-                        CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC)
+                        CommonConsumerConfigs.METADATA_RECOVERY_STRATEGY_DOC)
                 .define(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG,
                         ConfigDef.Type.LONG,
                         CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,

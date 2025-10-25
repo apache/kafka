@@ -335,4 +335,12 @@ public class CommonConsumerConfigs {
             " If set to <code>explicit</code>, the acknowledgement mode of the consumer is explicit and it must use" +
             " <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records.";
 
+    // initialize use static due to METADATA_RECOVERY_STRATEGY_DOC is too long.
+    public static final String METADATA_RECOVERY_STRATEGY_CONFIG;
+    public static final String METADATA_RECOVERY_STRATEGY_DOC;
+
+    static {
+        METADATA_RECOVERY_STRATEGY_CONFIG = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
+        METADATA_RECOVERY_STRATEGY_DOC = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC;
+    }
 }
