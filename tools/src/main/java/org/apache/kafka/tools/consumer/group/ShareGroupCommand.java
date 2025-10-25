@@ -30,6 +30,7 @@ import org.apache.kafka.clients.admin.ListShareGroupOffsetsSpec;
 import org.apache.kafka.clients.admin.ShareGroupDescription;
 import org.apache.kafka.clients.admin.ShareMemberAssignment;
 import org.apache.kafka.clients.admin.ShareMemberDescription;
+import org.apache.kafka.clients.admin.SharePartitionOffsetInfo;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
@@ -434,8 +435,8 @@ public class ShareGroupCommand {
                 partitionsToReset = offsetsUtils.parseTopicPartitionsToReset(opts.options.valuesOf(opts.topicOpt));
             } else {
                 Map<String, ListShareGroupOffsetsSpec> groupSpecs = Map.of(groupId, new ListShareGroupOffsetsSpec());
-                Map<TopicPartition, OffsetAndMetadata> offsetsByTopicPartitions = adminClient.listShareGroupOffsets(groupSpecs).all().get().get(groupId);
-                partitionsToReset = offsetsByTopicPartitions.keySet();
+                Map<TopicPartition, SharePartitionOffsetInfo> offsetInfoByTopicPartitions = adminClient.listShareGroupOffsets(groupSpecs).all().get().get(groupId);
+                partitionsToReset = offsetInfoByTopicPartitions.keySet();
             }
 
             return partitionsToReset;
@@ -488,8 +489,8 @@ public class ShareGroupCommand {
                 Map<String, ListShareGroupOffsetsSpec> groupSpecs = Map.of(groupId, new ListShareGroupOffsetsSpec());
 
                 try {
-                    Map<TopicPartition, OffsetAndMetadata> startOffsets = adminClient.listShareGroupOffsets(groupSpecs).all().get().get(groupId);
-                    Set<SharePartitionOffsetInformation> partitionOffsets = mapOffsetsToSharePartitionInformation(groupId, startOffsets);
+                    Map<TopicPartition, SharePartitionOffsetInfo> offsetInfoMap = adminClient.listShareGroupOffsets(groupSpecs).all().get().get(groupId);
+                    Set<SharePartitionOffsetInformation> partitionOffsets = mapOffsetInfoToSharePartitionInformation(groupId, offsetInfoMap);
 
                     groupOffsets.put(groupId, new SimpleImmutableEntry<>(shareGroup, partitionOffsets));
                 } catch (InterruptedException | ExecutionException e) {
@@ -500,23 +501,25 @@ public class ShareGroupCommand {
             return groupOffsets;
         }
 
-        private static Set<SharePartitionOffsetInformation> mapOffsetsToSharePartitionInformation(String groupId, Map<TopicPartition, OffsetAndMetadata> startOffsets) {
+        private static Set<SharePartitionOffsetInformation> mapOffsetInfoToSharePartitionInformation(String groupId, Map<TopicPartition, SharePartitionOffsetInfo> offsetInfoMap) {
             Set<SharePartitionOffsetInformation> partitionOffsets = new HashSet<>();
 
-            startOffsets.forEach((tp, offsetAndMetadata) -> {
-                if (offsetAndMetadata != null) {
+            offsetInfoMap.forEach((tp, offsetInfo) -> {
+                if (offsetInfo != null) {
                     partitionOffsets.add(new SharePartitionOffsetInformation(
                         groupId,
                         tp.topic(),
                         tp.partition(),
-                        Optional.of(offsetAndMetadata.offset()),
-                        offsetAndMetadata.leaderEpoch()
+                        Optional.of(offsetInfo.startOffset()),
+                        offsetInfo.leaderEpoch(),
+                        offsetInfo.lag()
                     ));
                 } else {
                     partitionOffsets.add(new SharePartitionOffsetInformation(
                         groupId,
                         tp.topic(),
                         tp.partition(),
+                        Optional.empty(),
                         Optional.empty(),
                         Optional.empty()
                     ));
@@ -536,9 +539,9 @@ public class ShareGroupCommand {
                 String fmt = printOffsetFormat(groupId, offsetsInfo, verbose);
 
                 if (verbose) {
-                    System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "LEADER-EPOCH", "START-OFFSET");
+                    System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "LEADER-EPOCH", "START-OFFSET", "LAG");
                 } else {
-                    System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "START-OFFSET");
+                    System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "START-OFFSET", "LAG");
                 }
 
                 for (SharePartitionOffsetInformation info : offsetsInfo) {
@@ -548,14 +551,16 @@ public class ShareGroupCommand {
                             info.topic,
                             info.partition,
                             info.leaderEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                            info.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE)
+                            info.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                            info.lag.map(Object::toString).orElse(MISSING_COLUMN_VALUE)
                         );
                     } else {
                         System.out.printf(fmt,
                             groupId,
                             info.topic,
                             info.partition,
-                            info.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE)
+                            info.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                            info.lag.map(Object::toString).orElse(MISSING_COLUMN_VALUE)
                         );
                     }
                 }
@@ -570,9 +575,9 @@ public class ShareGroupCommand {
                 maxTopicLen = Math.max(maxTopicLen, info.topic.length());
             }
             if (verbose) {
-                return "\n%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %-13s %s";
+                return "\n%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %-13s %-13s %s";
             } else {
-                return "\n%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %s";
+                return "\n%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %-13s %s";
             }
         }
 
@@ -665,6 +670,6 @@ public class ShareGroupCommand {
     }
 
     record SharePartitionOffsetInformation(String group, String topic, int partition, Optional<Long> offset,
-                                           Optional<Integer> leaderEpoch) {
+                                           Optional<Integer> leaderEpoch, Optional<Long> lag) {
     }
 }
