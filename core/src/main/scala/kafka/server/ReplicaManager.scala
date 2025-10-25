@@ -1628,7 +1628,7 @@ class ReplicaManager(val config: KafkaConfig,
                                    params: FetchParams,
                                    responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit,
                                    logReadResults: util.LinkedHashMap[TopicIdPartition, LogReadResult],
-                                   fetchPartitionStatus: util.Map[TopicIdPartition, FetchPartitionStatus]): Unit = {
+                                   fetchPartitionStatus: util.LinkedHashMap[TopicIdPartition, FetchPartitionStatus]): Unit = {
     val remoteFetchTasks = new util.HashMap[TopicIdPartition, Future[Void]]
     val remoteFetchResults = new util.HashMap[TopicIdPartition, CompletableFuture[RemoteLogReadResult]]
 
