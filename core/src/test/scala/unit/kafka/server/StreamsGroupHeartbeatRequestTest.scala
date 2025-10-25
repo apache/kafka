@@ -294,7 +294,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
 
         streamsGroupHeartbeatResponse1 = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest1)
         streamsGroupHeartbeatResponse1.data.errorCode == Errors.NONE.code() &&
-          streamsGroupHeartbeatResponse1.data.standbyTasks()!= null
+          streamsGroupHeartbeatResponse1.data.standbyTasks() != null
       }, "First member heartbeat after config change did not succeed within the timeout period.")
 
       TestUtils.waitUntilTrue(() => {
