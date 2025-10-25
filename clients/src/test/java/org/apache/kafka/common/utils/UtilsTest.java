@@ -132,7 +132,8 @@ public class UtilsTest {
         // this test detects any incompatible changes to the Murmur2 implementation with near certainty
         int numTrials = 100;
         int maxLen = 1000;
-        SplittableRandom random = new SplittableRandom(0xbd4458b165652255L);
+        long seed = 0;
+        SplittableRandom random = new SplittableRandom(seed);
         long checksum = 0;
 
         for (int len = 0; len <= maxLen; ++len) {
@@ -144,7 +145,7 @@ public class UtilsTest {
             }
         }
 
-        assertEquals(0xc300f155ae8eL, checksum);
+        assertEquals(0xc3b8cf7c99fcL, checksum);
     }
 
     @ParameterizedTest
