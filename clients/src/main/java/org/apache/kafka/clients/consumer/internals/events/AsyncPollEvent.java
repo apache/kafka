@@ -45,6 +45,7 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
     private final long pollTimeMs;
     private volatile KafkaException error;
     private volatile boolean isComplete;
+    private volatile boolean isValidatePositionsComplete;
 
     /**
      * Creates a new event to signify a multi-stage processing of {@link Consumer#poll(Duration)} logic.
@@ -71,6 +72,14 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
         return Optional.ofNullable(error);
     }
 
+    public boolean isValidatePositionsComplete() {
+        return isValidatePositionsComplete;
+    }
+
+    public void markValidatePositionsComplete() {
+        this.isValidatePositionsComplete = true;
+    }
+
     public boolean isComplete() {
         return isComplete;
     }
@@ -95,6 +104,7 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
             ", deadlineMs=" + deadlineMs +
             ", pollTimeMs=" + pollTimeMs +
             ", error=" + error +
-            ", isComplete=" + isComplete;
+            ", isComplete=" + isComplete +
+            ", isValidatePositionsComplete=" + isValidatePositionsComplete;
     }
 }

@@ -884,19 +884,33 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // Handle the case where there's an inflight poll from the *previous* invocation of AsyncKafkaConsumer.poll().
         if (firstPass && inflightPoll != null) {
             if (inflightPoll.isComplete()) {
-                // If the previous inflight event is complete, check if it resulted in an error.
-                log.trace("Previous inflight event {} completed, clearing", inflightPoll);
                 Optional<KafkaException> errorOpt = inflightPoll.error();
-                inflightPoll = null;
 
-                // If there is an error, throw it without delay. If it completed without error, then proceed as usual
-                // and a new event will be enqueued below.
                 if (errorOpt.isPresent()) {
+                    // If the previous inflight event is complete, check if it resulted in an error. If there was
+                    // an error, throw it without delay.
+                    log.trace("Previous inflight event {} completed with an error, clearing", inflightPoll);
+                    inflightPoll = null;
                     throw errorOpt.get();
+                } else {
+                    if (fetchBuffer.isEmpty()) {
+                        // If it completed without error, but without populating the fetch buffer, clear the event
+                        // so that a new event will be enqueued below.
+                        log.trace("Previous inflight event {} completed without filling the buffer, clearing", inflightPoll);
+                        inflightPoll = null;
+                    } else {
+                        // However, if the event completed, and it populated the buffer, *don't* create a new event.
+                        // This is to prevent an edge case of starvation when poll() is called with a timeout of 0.
+                        // If a new event was created on *every* poll, each time the event would have to complete the
+                        // validate positions stage before the data in the fetch buffer is used. Because there is
+                        // no blocking, and effectively a 0 wait, the data in the fetch buffer is continuously ignored
+                        // leading to no data ever being returned from poll().
+                        log.trace("Previous inflight event {} completed and filled the buffer, not clearing", inflightPoll);
+                    }
                 }
-            } else if (inflightPoll.deadlineMs() < time.milliseconds()) {
-                // The previous inflight is not complete, but it has expired. There's no result to check, so just
-                // clear out the event reference and a new event will be enqueued below.
+            } else if (time.milliseconds() > inflightPoll.deadlineMs() && inflightPoll.isValidatePositionsComplete()) {
+                // Although the previous event passed the validate positions stage, it has expired. Since there's no
+                // result to check, clear out the event so that a new one will be enqueued below.
                 log.trace("Previous inflight event {} incomplete and expired, clearing", inflightPoll);
                 inflightPoll = null;
             }
@@ -939,8 +953,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             } else if (!newlySubmittedEvent) {
                 timer.update();
 
-                if (timer.isExpired()) {
-                    // The inflight event is expired...
+                if (timer.isExpired() && inflightPoll.isValidatePositionsComplete()) {
+                    // The inflight event inflight validated positions, but it has expired.
                     log.trace("Inflight event {} expired without completing, clearing", inflightPoll);
                     inflightPoll = null;
                 } else {
@@ -1909,6 +1923,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * for returning.
      */
     private Fetch<K, V> collectFetch() {
+        // With the non-blocking async poll, it's critical that the application thread wait until the background
+        // thread has completed the stage of validating positions. This prevents a race condition where both
+        // threads may attempt to update the SubscriptionState.position() for a given partition. So if the background
+        // thread has not completed that stage for the inflight event, don't attempt to collect data from the fetch
+        // buffer. If the inflight event was nulled out by checkInflightPoll(), that implies that it is safe to
+        // attempt to collect data from the fetch buffer.
+        if (inflightPoll != null && !inflightPoll.isValidatePositionsComplete()) {
+            return Fetch.empty();
+        }
+
         return fetchCollector.collectFetch(fetchBuffer);
     }
 
