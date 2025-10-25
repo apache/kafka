@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ShareConsumerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.internals.Plugin;
@@ -46,6 +47,27 @@ public class Deserializers<K, V> implements AutoCloseable {
 
     @SuppressWarnings("unchecked")
     public Deserializers(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer, Metrics metrics) {
+        String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
+
+        if (keyDeserializer == null) {
+            keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
+            keyDeserializer.configure(config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId)), true);
+        } else {
+            config.ignore(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG);
+        }
+        this.keyDeserializerPlugin = Plugin.wrapInstance(keyDeserializer, metrics, ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG);
+
+        if (valueDeserializer == null) {
+            valueDeserializer = config.getConfiguredInstance(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
+            valueDeserializer.configure(config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId)), false);
+        } else {
+            config.ignore(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
+        }
+        this.valueDeserializerPlugin = Plugin.wrapInstance(valueDeserializer, metrics, ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
+    }
+
+    @SuppressWarnings("unchecked")
+    public Deserializers(ShareConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer, Metrics metrics) {
         String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
 
         if (keyDeserializer == null) {

@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.ShareConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
@@ -131,11 +132,11 @@ public class ShareConsumerImplTest {
     }
 
     private ShareConsumerImpl<String, String> newConsumer(Properties props) {
-        final ConsumerConfig config = new ConsumerConfig(props);
+        final ShareConsumerConfig config = new ShareConsumerConfig(props);
         return newConsumer(config);
     }
 
-    private ShareConsumerImpl<String, String> newConsumer(ConsumerConfig config) {
+    private ShareConsumerImpl<String, String> newConsumer(ShareConsumerConfig config) {
         return new ShareConsumerImpl<>(
                 config,
                 new StringDeserializer(),
@@ -211,7 +212,7 @@ public class ShareConsumerImplTest {
         final Properties props = requiredConsumerProperties();
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-id");
         props.put(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "an.invalid.class");
-        final ConsumerConfig config = new ConsumerConfig(props);
+        final ShareConsumerConfig config = new ShareConsumerConfig(props);
 
         try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             KafkaException ce = assertThrows(
@@ -594,7 +595,7 @@ public class ShareConsumerImplTest {
     @Test
     public void testBackgroundError() {
         final String groupId = "shareGroupA";
-        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
+        final ShareConsumerConfig config = new ShareConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
         consumer = newConsumer(config);
 
         final KafkaException expectedException = new KafkaException("Nobody expects the Spanish Inquisition");
@@ -609,7 +610,7 @@ public class ShareConsumerImplTest {
     @Test
     public void testMultipleBackgroundErrors() {
         final String groupId = "shareGroupA";
-        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
+        final ShareConsumerConfig config = new ShareConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
         consumer = newConsumer(config);
 
         final KafkaException expectedException1 = new KafkaException("Nobody expects the Spanish Inquisition");
@@ -628,7 +629,7 @@ public class ShareConsumerImplTest {
     @Test
     public void testGroupIdNull() {
         final Properties props = requiredConsumerProperties();
-        final ConsumerConfig config = new ConsumerConfig(props);
+        final ShareConsumerConfig config = new ShareConsumerConfig(props);
 
         final Exception exception = assertThrows(
                 KafkaException.class,
@@ -650,7 +651,7 @@ public class ShareConsumerImplTest {
 
     private void testInvalidGroupId(final String groupId) {
         final Properties props = requiredConsumerPropertiesAndGroupId(groupId);
-        final ConsumerConfig config = new ConsumerConfig(props);
+        final ShareConsumerConfig config = new ShareConsumerConfig(props);
 
         final Exception exception = assertThrows(
                 KafkaException.class,

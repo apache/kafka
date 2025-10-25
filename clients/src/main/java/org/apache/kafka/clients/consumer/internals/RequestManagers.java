@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ShareConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.metrics.Metrics;
@@ -314,14 +315,13 @@ public class RequestManagers implements Closeable {
      * Creates a {@link Supplier} for deferred creation during invocation by
      * {@link ShareConsumerImpl}.
      */
-    @SuppressWarnings({"checkstyle:ParameterNumber"})
     public static Supplier<RequestManagers> supplier(final Time time,
                                                      final LogContext logContext,
                                                      final BackgroundEventHandler backgroundEventHandler,
                                                      final ShareConsumerMetadata metadata,
                                                      final SubscriptionState subscriptions,
                                                      final ShareFetchBuffer fetchBuffer,
-                                                     final ConsumerConfig config,
+                                                     final ShareConsumerConfig config,
                                                      final GroupRebalanceConfig groupRebalanceConfig,
                                                      final ShareFetchMetricsManager shareFetchMetricsManager,
                                                      final Optional<ClientTelemetryReporter> clientTelemetryReporter,

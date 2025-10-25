@@ -25,6 +25,7 @@ import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.ShareConsumerConfig;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -130,7 +131,18 @@ public final class ConsumerUtils {
         return IsolationLevel.valueOf(s);
     }
 
+    public static IsolationLevel configuredIsolationLevel(ShareConsumerConfig config) {
+        String s = config.getString(ConsumerConfig.ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT);
+        return IsolationLevel.valueOf(s);
+    }
+
     public static SubscriptionState createSubscriptionState(ConsumerConfig config, LogContext logContext) {
+        String s = config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
+        AutoOffsetResetStrategy strategy = AutoOffsetResetStrategy.fromString(s);
+        return new SubscriptionState(logContext, strategy);
+    }
+
+    public static SubscriptionState createSubscriptionState(ShareConsumerConfig config, LogContext logContext) {
         String s = config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
         AutoOffsetResetStrategy strategy = AutoOffsetResetStrategy.fromString(s);
         return new SubscriptionState(logContext, strategy);
@@ -142,6 +154,19 @@ public final class ConsumerUtils {
     }
 
     public static Metrics createMetrics(ConsumerConfig config, Time time, List<MetricsReporter> reporters) {
+        String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
+        Map<String, String> metricsTags = Collections.singletonMap(CONSUMER_CLIENT_ID_METRIC_TAG, clientId);
+        MetricConfig metricConfig = new MetricConfig()
+                .samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
+                .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
+                .recordLevel(Sensor.RecordingLevel.forName(config.getString(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
+                .tags(metricsTags);
+        MetricsContext metricsContext = new KafkaMetricsContext(CONSUMER_JMX_PREFIX,
+                config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
+        return new Metrics(metricConfig, reporters, time, metricsContext);
+    }
+
+    public static Metrics createMetrics(ShareConsumerConfig config, Time time, List<MetricsReporter> reporters) {
         String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
         Map<String, String> metricsTags = Collections.singletonMap(CONSUMER_CLIENT_ID_METRIC_TAG, clientId);
         MetricConfig metricConfig = new MetricConfig()

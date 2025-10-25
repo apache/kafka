@@ -17,9 +17,9 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.KafkaClient;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
 import org.apache.kafka.clients.consumer.ShareConsumer;
+import org.apache.kafka.clients.consumer.ShareConsumerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -39,7 +39,7 @@ import org.slf4j.Logger;
  * the {@link ShareConsumer} API contract that should serve as the caller's interface.
  */
 public class ShareConsumerDelegateCreator {
-    public <K, V> ShareConsumerDelegate<K, V> create(final ConsumerConfig config,
+    public <K, V> ShareConsumerDelegate<K, V> create(final ShareConsumerConfig config,
                                                      final Deserializer<K> keyDeserializer,
                                                      final Deserializer<V> valueDeserializer) {
         try {
@@ -57,7 +57,7 @@ public class ShareConsumerDelegateCreator {
     public <K, V> ShareConsumerDelegate<K, V> create(final LogContext logContext,
                                                      final String clientId,
                                                      final String groupId,
-                                                     final ConsumerConfig config,
+                                                     final ShareConsumerConfig config,
                                                      final Deserializer<K> keyDeserializer,
                                                      final Deserializer<V> valueDeserializer,
                                                      final Time time,

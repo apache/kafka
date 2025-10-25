@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ShareConsumerConfig;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.utils.LogContext;
@@ -41,7 +42,7 @@ public class ShareConsumerMetadata extends Metadata {
         this.subscription = subscription;
     }
 
-    public ShareConsumerMetadata(ConsumerConfig config,
+    public ShareConsumerMetadata(ShareConsumerConfig config,
                                  SubscriptionState subscriptions,
                                  LogContext logContext,
                                  ClusterResourceListeners clusterResourceListeners) {

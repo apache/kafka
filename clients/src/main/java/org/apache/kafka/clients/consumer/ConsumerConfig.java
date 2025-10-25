@@ -76,14 +76,14 @@ public class ConsumerConfig extends AbstractConfig {
     /**
      * <code>group.id</code>
      */
-    public static final String GROUP_ID_CONFIG = CommonClientConfigs.GROUP_ID_CONFIG;
-    private static final String GROUP_ID_DOC = CommonClientConfigs.GROUP_ID_DOC;
+    public static final String GROUP_ID_CONFIG = CommonConsumerConfigs.GROUP_ID_CONFIG;
+    private static final String GROUP_ID_DOC = CommonConsumerConfigs.GROUP_ID_DOC;
 
     /**
      * <code>group.instance.id</code>
      */
-    public static final String GROUP_INSTANCE_ID_CONFIG = CommonClientConfigs.GROUP_INSTANCE_ID_CONFIG;
-    private static final String GROUP_INSTANCE_ID_DOC = CommonClientConfigs.GROUP_INSTANCE_ID_DOC;
+    public static final String GROUP_INSTANCE_ID_CONFIG = CommonConsumerConfigs.GROUP_INSTANCE_ID_CONFIG;
+    private static final String GROUP_INSTANCE_ID_DOC = CommonConsumerConfigs.GROUP_INSTANCE_ID_DOC;
 
     /** <code>max.poll.records</code> */
     public static final String MAX_POLL_RECORDS_CONFIG = "max.poll.records";
@@ -93,19 +93,19 @@ public class ConsumerConfig extends AbstractConfig {
     public static final int DEFAULT_MAX_POLL_RECORDS = 500;
 
     /** <code>max.poll.interval.ms</code> */
-    public static final String MAX_POLL_INTERVAL_MS_CONFIG = CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG;
-    private static final String MAX_POLL_INTERVAL_MS_DOC = CommonClientConfigs.MAX_POLL_INTERVAL_MS_DOC;
+    public static final String MAX_POLL_INTERVAL_MS_CONFIG = CommonConsumerConfigs.MAX_POLL_INTERVAL_MS_CONFIG;
+    private static final String MAX_POLL_INTERVAL_MS_DOC = CommonConsumerConfigs.MAX_POLL_INTERVAL_MS_DOC;
     /**
      * <code>session.timeout.ms</code>
      */
-    public static final String SESSION_TIMEOUT_MS_CONFIG = CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG;
-    private static final String SESSION_TIMEOUT_MS_DOC = CommonClientConfigs.SESSION_TIMEOUT_MS_DOC;
+    public static final String SESSION_TIMEOUT_MS_CONFIG = CommonConsumerConfigs.SESSION_TIMEOUT_MS_CONFIG;
+    private static final String SESSION_TIMEOUT_MS_DOC = CommonConsumerConfigs.SESSION_TIMEOUT_MS_DOC;
 
     /**
      * <code>heartbeat.interval.ms</code>
      */
-    public static final String HEARTBEAT_INTERVAL_MS_CONFIG = CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG;
-    private static final String HEARTBEAT_INTERVAL_MS_DOC = CommonClientConfigs.HEARTBEAT_INTERVAL_MS_DOC;
+    public static final String HEARTBEAT_INTERVAL_MS_CONFIG = CommonConsumerConfigs.HEARTBEAT_INTERVAL_MS_CONFIG;
+    private static final String HEARTBEAT_INTERVAL_MS_DOC = CommonConsumerConfigs.HEARTBEAT_INTERVAL_MS_DOC;
 
     /**
      * <code>group.protocol</code>
@@ -128,10 +128,10 @@ public class ConsumerConfig extends AbstractConfig {
     /**
      * <code>bootstrap.servers</code>
      */
-    public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
+    public static final String BOOTSTRAP_SERVERS_CONFIG = CommonConsumerConfigs.BOOTSTRAP_SERVERS_CONFIG;
 
     /** <code>client.dns.lookup</code> */
-    public static final String CLIENT_DNS_LOOKUP_CONFIG = CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG;
+    public static final String CLIENT_DNS_LOOKUP_CONFIG = CommonConsumerConfigs.CLIENT_DNS_LOOKUP_CONFIG;
 
     /**
      * <code>enable.auto.commit</code>
@@ -210,7 +210,7 @@ public class ConsumerConfig extends AbstractConfig {
     public static final int DEFAULT_FETCH_MAX_WAIT_MS = 500;
 
     /** <code>metadata.max.age.ms</code> */
-    public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
+    public static final String METADATA_MAX_AGE_CONFIG = CommonConsumerConfigs.METADATA_MAX_AGE_CONFIG;
 
     /**
      * <code>max.partition.fetch.bytes</code>
@@ -225,67 +225,67 @@ public class ConsumerConfig extends AbstractConfig {
     public static final int DEFAULT_MAX_PARTITION_FETCH_BYTES = 1 * 1024 * 1024;
 
     /** <code>send.buffer.bytes</code> */
-    public static final String SEND_BUFFER_CONFIG = CommonClientConfigs.SEND_BUFFER_CONFIG;
+    public static final String SEND_BUFFER_CONFIG = CommonConsumerConfigs.SEND_BUFFER_CONFIG;
 
     /** <code>receive.buffer.bytes</code> */
-    public static final String RECEIVE_BUFFER_CONFIG = CommonClientConfigs.RECEIVE_BUFFER_CONFIG;
+    public static final String RECEIVE_BUFFER_CONFIG = CommonConsumerConfigs.RECEIVE_BUFFER_CONFIG;
 
     /**
      * <code>client.id</code>
      */
-    public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
+    public static final String CLIENT_ID_CONFIG = CommonConsumerConfigs.CLIENT_ID_CONFIG;
 
     /**
      * <code>client.rack</code>
      */
-    public static final String CLIENT_RACK_CONFIG = CommonClientConfigs.CLIENT_RACK_CONFIG;
-    public static final String DEFAULT_CLIENT_RACK = CommonClientConfigs.DEFAULT_CLIENT_RACK;
+    public static final String CLIENT_RACK_CONFIG = CommonConsumerConfigs.CLIENT_RACK_CONFIG;
+    public static final String DEFAULT_CLIENT_RACK = CommonConsumerConfigs.DEFAULT_CLIENT_RACK;
 
     /**
      * <code>reconnect.backoff.ms</code>
      */
-    public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
+    public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonConsumerConfigs.RECONNECT_BACKOFF_MS_CONFIG;
 
     /**
      * <code>reconnect.backoff.max.ms</code>
      */
-    public static final String RECONNECT_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG;
+    public static final String RECONNECT_BACKOFF_MAX_MS_CONFIG = CommonConsumerConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG;
 
     /**
      * <code>retry.backoff.ms</code>
      */
-    public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
+    public static final String RETRY_BACKOFF_MS_CONFIG = CommonConsumerConfigs.RETRY_BACKOFF_MS_CONFIG;
 
     /**
      * <code>enable.metrics.push</code>
      */
-    public static final String ENABLE_METRICS_PUSH_CONFIG = CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG;
-    public static final String ENABLE_METRICS_PUSH_DOC = CommonClientConfigs.ENABLE_METRICS_PUSH_DOC;
+    public static final String ENABLE_METRICS_PUSH_CONFIG = CommonConsumerConfigs.ENABLE_METRICS_PUSH_CONFIG;
+    public static final String ENABLE_METRICS_PUSH_DOC = CommonConsumerConfigs.ENABLE_METRICS_PUSH_DOC;
 
     /**
      * <code>retry.backoff.max.ms</code>
      */
-    public static final String RETRY_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG;
+    public static final String RETRY_BACKOFF_MAX_MS_CONFIG = CommonConsumerConfigs.RETRY_BACKOFF_MAX_MS_CONFIG;
 
     /**
      * <code>metrics.sample.window.ms</code>
      */
-    public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
+    public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonConsumerConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
 
     /**
      * <code>metrics.num.samples</code>
      */
-    public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
+    public static final String METRICS_NUM_SAMPLES_CONFIG = CommonConsumerConfigs.METRICS_NUM_SAMPLES_CONFIG;
 
     /**
      * <code>metrics.log.level</code>
      */
-    public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
+    public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonConsumerConfigs.METRICS_RECORDING_LEVEL_CONFIG;
 
     /**
      * <code>metric.reporters</code>
      */
-    public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
+    public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonConsumerConfigs.METRIC_REPORTER_CLASSES_CONFIG;
 
     /**
      * <code>check.crcs</code>
@@ -302,20 +302,20 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String VALUE_DESERIALIZER_CLASS_DOC = "Deserializer class for value that implements the <code>org.apache.kafka.common.serialization.Deserializer</code> interface.";
 
     /** <code>socket.connection.setup.timeout.ms</code> */
-    public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG;
+    public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG = CommonConsumerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG;
 
     /** <code>socket.connection.setup.timeout.max.ms</code> */
-    public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG;
+    public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG = CommonConsumerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG;
 
     /** <code>connections.max.idle.ms</code> */
-    public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
+    public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonConsumerConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
 
     /** <code>request.timeout.ms</code> */
-    public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
-    private static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
+    public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonConsumerConfigs.REQUEST_TIMEOUT_MS_CONFIG;
+    private static final String REQUEST_TIMEOUT_MS_DOC = CommonConsumerConfigs.REQUEST_TIMEOUT_MS_DOC;
 
     /** <code>default.api.timeout.ms</code> */
-    public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG;
+    public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonConsumerConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG;
 
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
@@ -733,7 +733,7 @@ public class ConsumerConfig extends AbstractConfig {
     }
 
     private void maybeOverrideEnableAutoCommit(Map<String, Object> configs) {
-        Optional<String> groupId = Optional.ofNullable(getString(CommonClientConfigs.GROUP_ID_CONFIG));
+        Optional<String> groupId = Optional.ofNullable(getString(CommonConsumerConfigs.GROUP_ID_CONFIG));
         Map<String, Object> originals = originals();
         boolean enableAutoCommit = originals.containsKey(ENABLE_AUTO_COMMIT_CONFIG) ? getBoolean(ENABLE_AUTO_COMMIT_CONFIG) : false;
         if (groupId.isEmpty()) { // overwrite in case of default group id where the config is not explicitly provided
@@ -745,7 +745,7 @@ public class ConsumerConfig extends AbstractConfig {
         }
     }
 
-    protected void checkUnsupportedConfigsPostProcess() {
+    private void checkUnsupportedConfigsPostProcess() {
         String groupProtocol = getString(GROUP_PROTOCOL_CONFIG);
         if (GroupProtocol.CLASSIC.name().equalsIgnoreCase(groupProtocol)) {
             checkUnsupportedConfigsPostProcess(GroupProtocol.CLASSIC, CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS);

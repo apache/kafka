@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ShareConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -60,7 +60,7 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
     public ShareHeartbeatRequestManager(
             final LogContext logContext,
             final Time time,
-            final ConsumerConfig config,
+            final ShareConsumerConfig config,
             final CoordinatorRequestManager coordinatorRequestManager,
             final SubscriptionState subscriptions,
             final ShareMembershipManager membershipManager,
@@ -76,7 +76,7 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
     ShareHeartbeatRequestManager(
             final LogContext logContext,
             final Timer timer,
-            final ConsumerConfig config,
+            final ShareConsumerConfig config,
             final CoordinatorRequestManager coordinatorRequestManager,
             final ShareMembershipManager membershipManager,
             final HeartbeatState heartbeatState,

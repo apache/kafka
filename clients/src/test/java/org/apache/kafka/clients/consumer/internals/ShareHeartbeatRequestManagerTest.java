@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ShareConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.KafkaException;
@@ -113,7 +114,7 @@ public class ShareHeartbeatRequestManagerTest {
         metadata = mock(ConsumerMetadata.class);
         metrics = new Metrics(time);
         logContext = new LogContext();
-        ConsumerConfig config = mock(ConsumerConfig.class);
+        ShareConsumerConfig config = mock(ShareConsumerConfig.class);
 
         heartbeatRequestState = spy(new HeartbeatRequestState(
                 logContext,
@@ -711,7 +712,7 @@ public class ShareHeartbeatRequestManagerTest {
                 response);
     }
 
-    private ConsumerConfig config() {
+    private ShareConsumerConfig ShareConsumerConfig() {
         Properties prop = new Properties();
         prop.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         prop.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
@@ -720,7 +721,7 @@ public class ShareHeartbeatRequestManagerTest {
         prop.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(DEFAULT_MAX_POLL_INTERVAL_MS));
         prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(DEFAULT_RETRY_BACKOFF_MS));
         prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG, String.valueOf(DEFAULT_RETRY_BACKOFF_MAX_MS));
-        return new ConsumerConfig(prop);
+        return new ShareConsumerConfig(prop);
     }
 
     private KafkaMetric getMetric(final String name) {
@@ -738,7 +739,7 @@ public class ShareHeartbeatRequestManagerTest {
         return new ShareHeartbeatRequestManager(
                 logContext,
                 pollTimer,
-                config(),
+                ShareConsumerConfig(),
                 coordinatorRequestManager,
                 membershipManager,
                 heartbeatState,
