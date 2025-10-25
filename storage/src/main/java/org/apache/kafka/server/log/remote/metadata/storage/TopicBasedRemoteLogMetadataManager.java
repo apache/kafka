@@ -374,6 +374,21 @@ public class TopicBasedRemoteLogMetadataManager implements BrokerReadyCallback, 
             }
         }
     }
+
+    /**
+     * Invoked when the broker is ready to handle requests. This triggers the initialization of
+     * resources including Kafka clients that operate on the remote log metadata topic.
+     * <p>
+     * The target cluster for the topic is determined by configuration and can be either:
+     * <ol>
+     *   <li>The local cluster (most common) - the initialization is deferred until the broker is ready
+     *       to handle requests. Early initialization would lead to connection failures.</li>
+     *   <li>A remote cluster - the delay is not necessary but causes no harm.</li>
+     * </ol>
+     * <p>
+     * By using the broker ready state as the initialization trigger, the implementation optimally handles
+     * the typical case while remaining correct for alternative configurations.
+     */
     @Override
     public void onBrokerReady() {
         log.info("Broker is ready for requests, now initializing topic-based RLMM resources");
