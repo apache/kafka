@@ -993,8 +993,8 @@ public class TaskManagerTest {
             )
         );
 
-        assertEquals(illegalStateException.getMessage(), "Standby tasks should only be managed by the state updater, " +
-            "but standby task " + taskId03 + " is managed by the stream thread");
+        assertEquals("Standby tasks should only be managed by the state updater, " +
+            "but standby task " + taskId03 + " is managed by the stream thread", illegalStateException.getMessage());
         verifyNoInteractions(activeTaskCreator);
     }
 
@@ -1030,8 +1030,8 @@ public class TaskManagerTest {
             () -> taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap())
         );
 
-        assertEquals(illegalStateException.getMessage(), "Standby tasks should only be managed by the state updater, " +
-            "but standby task " + taskId03 + " is managed by the stream thread");
+        assertEquals("Standby tasks should only be managed by the state updater, " +
+            "but standby task " + taskId03 + " is managed by the stream thread", illegalStateException.getMessage());
         verifyNoInteractions(activeTaskCreator);
     }
 
@@ -1113,8 +1113,8 @@ public class TaskManagerTest {
             )
         );
 
-        assertEquals(illegalStateException.getMessage(), "Standby tasks should only be managed by the state updater, " +
-            "but standby task " + taskId02 + " is managed by the stream thread");
+        assertEquals("Standby tasks should only be managed by the state updater, " +
+            "but standby task " + taskId02 + " is managed by the stream thread", illegalStateException.getMessage());
         verifyNoInteractions(activeTaskCreator);
     }
 
@@ -2464,6 +2464,7 @@ public class TaskManagerTest {
         verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringHandleCorruptedWithEOS() {
         final TaskManager taskManager = setUpTaskManagerWithoutStateUpdater(ProcessingMode.EXACTLY_ONCE_V2, null, false);
@@ -2596,6 +2597,7 @@ public class TaskManagerTest {
         assertThat(unrevokedActiveTaskWithoutCommitNeeded.state(), is(State.RUNNING));
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringRevocationWithEOS() {
         final TaskManager taskManager = setUpTaskManagerWithoutStateUpdater(ProcessingMode.EXACTLY_ONCE_V2, null, false);
@@ -2837,6 +2839,7 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.SUSPENDED));
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void shouldCommitAllActiveTasksThatNeedCommittingOnHandleRevocationWithEosV2() {
         final StreamsProducer producer = mock(StreamsProducer.class);
@@ -3766,6 +3769,7 @@ public class TaskManagerTest {
         verify(consumer).commitSync(offsets);
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void shouldCommitViaProducerIfEosV2Enabled() {
         final StreamsProducer producer = mock(StreamsProducer.class);
@@ -4654,11 +4658,11 @@ public class TaskManagerTest {
     public void shouldListNotPausedTasks() {
         handleAssignment(taskId00Assignment, taskId01Assignment, emptyMap());
 
-        assertEquals(taskManager.notPausedTasks().size(), 2);
+        assertEquals(2, taskManager.notPausedTasks().size());
 
         topologyMetadata.pauseTopology(UNNAMED_TOPOLOGY);
 
-        assertEquals(taskManager.notPausedTasks().size(), 0);
+        assertEquals(0, taskManager.notPausedTasks().size());
     }
 
     @Test
