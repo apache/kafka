@@ -445,6 +445,7 @@ public class StreamsConfigTest {
     @Test
     public void testAutoCreateTopicsCannotBeOverriddenForStreamsConsumers() {
         // User tries to override the setting
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
         props.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
         props.put(StreamsConfig.globalConsumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
         props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
@@ -465,6 +466,24 @@ public class StreamsConfigTest {
         final Map<String, Object> globalConfigs = streamsConfig.getGlobalConsumerConfigs("client");
         assertEquals("false", globalConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
                 "Global consumer should not allow auto topic creation even with override");
+    }
+
+    @Test
+    public void shouldLogErrorWhenUserTriesToOverrideAutoCreateTopics() {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.ERROR);
+            
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            // Trigger the warning by getting consumer configs
+            streamsConfig.getMainConsumerConfigs("group", "client", 0);
+
+            assertTrue(appender.getMessages().stream()
+                .anyMatch(msg -> msg.contains("Unexpected user-specified consumer config 'allow.auto.create.topics' found") 
+                    && msg.contains("User setting (true) will be ignored and the Streams default setting (false) will be used")),
+                "Should log error when user tries to override allow.auto.create.topics");
+        }
     }
 
 
