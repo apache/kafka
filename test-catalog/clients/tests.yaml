@@ -4433,6 +4433,7 @@ org.apache.kafka.common.requests.RequestResponseTest:
 - testListGroupRequestV3FailsWithStates
 - testProduceRequestPartitionSize
 - testResponseHeader
+- testSaslAuthenticateRequestResponseToStringMasksSensitiveData
 - testSerialization
 - testSerializationSpecialCases
 - testSerializeWithHeader
