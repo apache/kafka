@@ -106,6 +106,16 @@ public class CompactArrayOf extends DocumentedType {
     }
 
     @Override
+    public String leftBracket() {
+        return "(";
+    }
+
+    @Override
+    public String rightBracket() {
+        return nullable ? ")?" : ")";
+    }
+
+    @Override
     public String toString() {
         String name = nullable ? COMPACT_NULLABLE_ARRAY_TYPE_NAME : COMPACT_ARRAY_TYPE_NAME;
         return name + "(" + type + ")";
@@ -139,12 +149,12 @@ public class CompactArrayOf extends DocumentedType {
                 "Type T can be either a primitive type (e.g. " + STRING + ") or a structure. " +
                 "First, the length N + 1 is given as an UNSIGNED_VARINT. Then N instances of type T follow. " +
                 "A null array is represented with a length of 0. " +
-                "In protocol documentation an array of T instances is referred to as [T].";
+                "In protocol documentation a compact nullable array of T instances is referred to as (T)?.";
         } else {
             doc = "Represents a sequence of objects of a given type T. " +
                 "Type T can be either a primitive type (e.g. " + STRING + ") or a structure. " +
                 "First, the length N + 1 is given as an UNSIGNED_VARINT. Then N instances of type T follow. " +
-                "In protocol documentation an array of T instances is referred to as [T].";
+                "In protocol documentation a compact array of T instances is referred to as (T).";
         }
         return doc;
     }

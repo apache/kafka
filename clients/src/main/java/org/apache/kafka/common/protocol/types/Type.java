@@ -79,6 +79,14 @@ public abstract class Type {
         return arrayElementType().isPresent();
     }
 
+    public String leftBracket() {
+        return "";
+    }
+
+    public String rightBracket() {
+        return "";
+    }
+
     /**
      * A Type that can return its description for documentation purposes.
      */
