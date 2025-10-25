@@ -290,16 +290,16 @@ public class ConsumerConfig extends AbstractConfig {
     /**
      * <code>check.crcs</code>
      */
-    public static final String CHECK_CRCS_CONFIG = "check.crcs";
-    private static final String CHECK_CRCS_DOC = "Automatically check the CRC32 of the records consumed. This ensures no on-the-wire or on-disk corruption to the messages occurred. This check adds some overhead, so it may be disabled in cases seeking extreme performance.";
+    public static final String CHECK_CRCS_CONFIG = CommonConsumerConfigs.CHECK_CRCS_CONFIG;
+    private static final String CHECK_CRCS_DOC = CommonConsumerConfigs.CHECK_CRCS_DOC;
 
     /** <code>key.deserializer</code> */
-    public static final String KEY_DESERIALIZER_CLASS_CONFIG = "key.deserializer";
-    public static final String KEY_DESERIALIZER_CLASS_DOC = "Deserializer class for key that implements the <code>org.apache.kafka.common.serialization.Deserializer</code> interface.";
+    public static final String KEY_DESERIALIZER_CLASS_CONFIG = CommonConsumerConfigs.KEY_DESERIALIZER_CLASS_CONFIG;
+    public static final String KEY_DESERIALIZER_CLASS_DOC = CommonConsumerConfigs.KEY_DESERIALIZER_CLASS_DOC;
 
     /** <code>value.deserializer</code> */
-    public static final String VALUE_DESERIALIZER_CLASS_CONFIG = "value.deserializer";
-    public static final String VALUE_DESERIALIZER_CLASS_DOC = "Deserializer class for value that implements the <code>org.apache.kafka.common.serialization.Deserializer</code> interface.";
+    public static final String VALUE_DESERIALIZER_CLASS_CONFIG = CommonConsumerConfigs.VALUE_DESERIALIZER_CLASS_CONFIG;
+    public static final String VALUE_DESERIALIZER_CLASS_DOC = CommonConsumerConfigs.VALUE_DESERIALIZER_CLASS_DOC;
 
     /** <code>socket.connection.setup.timeout.ms</code> */
     public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG = CommonConsumerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG;
@@ -318,16 +318,13 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonConsumerConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG;
 
     /** <code>interceptor.classes</code> */
-    public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
-    public static final String INTERCEPTOR_CLASSES_DOC = "A list of classes to use as interceptors. "
-                                                        + "Implementing the <code>org.apache.kafka.clients.consumer.ConsumerInterceptor</code> interface allows you to intercept (and possibly mutate) records "
-                                                        + "received by the consumer. By default, there are no interceptors.";
+    public static final String INTERCEPTOR_CLASSES_CONFIG = CommonConsumerConfigs.INTERCEPTOR_CLASSES_CONFIG;
+    public static final String INTERCEPTOR_CLASSES_DOC = CommonConsumerConfigs.INTERCEPTOR_CLASSES_DOC;
 
 
     /** <code>exclude.internal.topics</code> */
-    public static final String EXCLUDE_INTERNAL_TOPICS_CONFIG = "exclude.internal.topics";
-    private static final String EXCLUDE_INTERNAL_TOPICS_DOC = "Whether internal topics matching a subscribed pattern should " +
-            "be excluded from the subscription. It is always possible to explicitly subscribe to an internal topic.";
+    public static final String EXCLUDE_INTERNAL_TOPICS_CONFIG = CommonConsumerConfigs.EXCLUDE_INTERNAL_TOPICS_CONFIG;
+    private static final String EXCLUDE_INTERNAL_TOPICS_DOC = CommonConsumerConfigs.EXCLUDE_INTERNAL_TOPICS_DOC;
     public static final boolean DEFAULT_EXCLUDE_INTERNAL_TOPICS = true;
 
     /**
@@ -342,25 +339,17 @@ public class ConsumerConfig extends AbstractConfig {
      * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
      *
      */
-    static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
+    static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = CommonConsumerConfigs.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED;
 
     /** <code>isolation.level</code> */
-    public static final String ISOLATION_LEVEL_CONFIG = "isolation.level";
-    public static final String ISOLATION_LEVEL_DOC = "Controls how to read messages written transactionally. If set to <code>read_committed</code>, consumer.poll() will only return" +
-            " transactional messages which have been committed. If set to <code>read_uncommitted</code> (the default), consumer.poll() will return all messages, even transactional messages" +
-            " which have been aborted. Non-transactional messages will be returned unconditionally in either mode. <p>Messages will always be returned in offset order. Hence, in " +
-            " <code>read_committed</code> mode, consumer.poll() will only return messages up to the last stable offset (LSO), which is the one less than the offset of the first open transaction." +
-            " In particular any messages appearing after messages belonging to ongoing transactions will be withheld until the relevant transaction has been completed. As a result, <code>read_committed</code>" +
-            " consumers will not be able to read up to the high watermark when there are in flight transactions.</p><p> Further, when in <code>read_committed</code> the seekToEnd method will" +
-            " return the LSO</p>";
+    public static final String ISOLATION_LEVEL_CONFIG = CommonConsumerConfigs.ISOLATION_LEVEL_CONFIG;
+    public static final String ISOLATION_LEVEL_DOC = CommonConsumerConfigs.ISOLATION_LEVEL_DOC;
 
     public static final String DEFAULT_ISOLATION_LEVEL = IsolationLevel.READ_UNCOMMITTED.toString();
 
     /** <code>allow.auto.create.topics</code> */
-    public static final String ALLOW_AUTO_CREATE_TOPICS_CONFIG = "allow.auto.create.topics";
-    private static final String ALLOW_AUTO_CREATE_TOPICS_DOC = "Allow automatic topic creation on the broker when" +
-            " subscribing to or assigning a topic. A topic being subscribed to will be automatically created only if the" +
-            " broker allows for it using <code>auto.create.topics.enable</code> broker configuration.";
+    public static final String ALLOW_AUTO_CREATE_TOPICS_CONFIG = CommonConsumerConfigs.ALLOW_AUTO_CREATE_TOPICS_CONFIG;
+    private static final String ALLOW_AUTO_CREATE_TOPICS_DOC = CommonConsumerConfigs.ALLOW_AUTO_CREATE_TOPICS_DOC;
     public static final boolean DEFAULT_ALLOW_AUTO_CREATE_TOPICS = true;
 
     /**
@@ -372,13 +361,8 @@ public class ConsumerConfig extends AbstractConfig {
     /**
      * <code>share.acknowledgement.mode</code>
      */
-    public static final String SHARE_ACKNOWLEDGEMENT_MODE_CONFIG = "share.acknowledgement.mode";
-    private static final String SHARE_ACKNOWLEDGEMENT_MODE_DOC = "Controls the acknowledgement mode for a share consumer." +
-            " If set to <code>implicit</code>, the acknowledgement mode of the consumer is implicit and it must not" +
-            " use <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records. Instead," +
-            " delivery is acknowledged implicitly on the next call to poll or commit." +
-            " If set to <code>explicit</code>, the acknowledgement mode of the consumer is explicit and it must use" +
-            " <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records.";
+    public static final String SHARE_ACKNOWLEDGEMENT_MODE_CONFIG = CommonConsumerConfigs.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG;
+    private static final String SHARE_ACKNOWLEDGEMENT_MODE_DOC = CommonConsumerConfigs.SHARE_ACKNOWLEDGEMENT_MODE_DOC;
 
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
