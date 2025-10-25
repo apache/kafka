@@ -22,6 +22,7 @@ import kafka.server.ReplicaQuota;
 import kafka.server.share.SharePartitionManager.SharePartitionListener;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
+import org.apache.kafka.clients.consumer.ShareAcquireMode;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -65,7 +66,6 @@ import org.apache.kafka.server.share.context.ShareSessionContext;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchKey;
 import org.apache.kafka.server.share.fetch.PartitionMaxBytesStrategy;
-import org.apache.kafka.server.share.fetch.ShareAcquireMode;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetch;
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics;

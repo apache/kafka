@@ -31,7 +31,7 @@ public enum ShareAcquireMode {
 
     public final byte id;
 
-    ShareAcquireMode(final String name, byte id) {
+    ShareAcquireMode(final String name, final byte id) {
         this.name = name;
         this.id = id;
     }
@@ -51,9 +51,23 @@ public enum ShareAcquireMode {
         return id;
     }
 
+    public static ShareAcquireMode forId(byte id) {
+        switch (id) {
+            case 0:
+                return BATCH_OPTIMIZED;
+            case 1:
+                return RECORD_LIMIT;
+            default:
+                throw new IllegalArgumentException("Unknown share acquire mode id: " + id);
+        }
+    }
+
     @Override
     public String toString() {
-        return super.toString().toLowerCase(Locale.ROOT);
+        return "ShareAcquireMode{"  +
+                "name=" + name +
+                ", id=" + id +
+                "}";
     }
 
     public static class Validator implements ConfigDef.Validator {

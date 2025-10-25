@@ -18,6 +18,7 @@ package kafka.server.share;
 
 import kafka.server.ReplicaManager;
 
+import org.apache.kafka.clients.consumer.ShareAcquireMode;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -34,7 +35,6 @@ import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.share.SharePartitionKey;
-import org.apache.kafka.server.share.fetch.ShareAcquireMode;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetch;
 import org.apache.kafka.server.share.fetch.ShareFetchPartitionData;

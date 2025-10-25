@@ -22,6 +22,7 @@ import kafka.server.share.SharePartition.SharePartitionState;
 import kafka.server.share.SharePartitionManager.SharePartitionListener;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
+import org.apache.kafka.clients.consumer.ShareAcquireMode;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -58,7 +59,6 @@ import org.apache.kafka.server.share.fetch.AcquisitionLockTimerTask;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
 import org.apache.kafka.server.share.fetch.InFlightState;
 import org.apache.kafka.server.share.fetch.RecordState;
-import org.apache.kafka.server.share.fetch.ShareAcquireMode;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.metrics.SharePartitionMetrics;
 import org.apache.kafka.server.share.persister.NoOpStatePersister;
@@ -8856,7 +8856,7 @@ public class SharePartitionTest {
         MemoryRecords records = memoryRecords(10);
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
-            SHARE_ACQUIRE_MODE,
+            ShareAcquireMode.RECORD_LIMIT,
             2,
             5,
             DEFAULT_FETCH_OFFSET,
@@ -8886,7 +8886,7 @@ public class SharePartitionTest {
         // Acquire the same batch with member-2. 5 records will be acquired.
         acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             "member-2",
-            SHARE_ACQUIRE_MODE,
+            ShareAcquireMode.RECORD_LIMIT,
             2,
             5,
             DEFAULT_FETCH_OFFSET,
@@ -8938,7 +8938,7 @@ public class SharePartitionTest {
         // Acquire 10 records.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
-            SHARE_ACQUIRE_MODE.RECORD_LIMIT,
+            ShareAcquireMode.RECORD_LIMIT,
             BATCH_SIZE,
             10,
             DEFAULT_FETCH_OFFSET,
@@ -8967,7 +8967,7 @@ public class SharePartitionTest {
 
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
-            SHARE_ACQUIRE_MODE.RECORD_LIMIT,
+            ShareAcquireMode.RECORD_LIMIT,
             BATCH_SIZE,
             3,
             DEFAULT_FETCH_OFFSET,
@@ -8983,7 +8983,7 @@ public class SharePartitionTest {
         records = memoryRecords(10);
         acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
-            SHARE_ACQUIRE_MODE.RECORD_LIMIT,
+            ShareAcquireMode.RECORD_LIMIT,
             BATCH_SIZE,
             3,
             DEFAULT_FETCH_OFFSET,
