@@ -337,6 +337,8 @@
     <!-- coordinator-common -->
     <suppress checks="NPathComplexity"
               files="CoordinatorRuntime.java"/>
+    <suppress checks="JavaNCSS"
+              files="CoordinatorRuntimeTest.java"/>
 
     <!-- share coordinator -->
     <suppress checks="NPathComplexity"
