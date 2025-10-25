@@ -48,6 +48,7 @@ import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.tools.OffsetsUtils;
@@ -83,8 +84,14 @@ public class StreamsGroupCommand {
     static final String MISSING_COLUMN_VALUE = "-";
 
     public static void main(String[] args) {
-        StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(args);
+        Exit.exit(execute(args));
+    }
+
+    public static int execute(String[] args) {
+        StreamsGroupCommandOptions opts = null;
+        int exitCode = 0;
         try {
+            opts = new StreamsGroupCommandOptions(args);
             opts.checkArgs();
             // should have exactly one action
             long numberOfActions = Stream.of(
@@ -95,15 +102,28 @@ public class StreamsGroupCommand {
                 opts.deleteOffsetsOpt
             ).filter(opts.options::has).count();
             if (numberOfActions != 1)
-                CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, or --delete-offsets.");
+                throw new IllegalArgumentException("Command must include exactly one action: --list, --describe, --delete, --reset-offsets, or --delete-offsets.");
 
             run(opts);
-        } catch (OptionException e) {
-            CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage());
+        } catch (IllegalArgumentException | OptionException e) {
+            System.err.println(e.getMessage());
+            if (opts != null) {
+                try {
+                    opts.parser.printHelpOn(System.err);
+                } catch (IOException ex) {
+                    printError(e.getMessage(), Optional.of(ex));
+                }
+            }
+            exitCode = 1;
+        } catch (Throwable e) {
+            printError("Executing streams group command failed due to " + e.getMessage(), Optional.of(e));
+            exitCode = 1;
         }
+
+        return exitCode;
     }
 
-    public static void run(StreamsGroupCommandOptions opts) {
+    public static void run(StreamsGroupCommandOptions opts) throws ExecutionException, InterruptedException {
         try (StreamsGroupService streamsGroupService = new StreamsGroupService(opts, Map.of())) {
             if (opts.options.has(opts.listOpt)) {
                 streamsGroupService.listGroups();
@@ -123,10 +143,6 @@ public class StreamsGroupCommand {
             } else {
                 throw new IllegalArgumentException("Unknown action!");
             }
-        } catch (IllegalArgumentException e) {
-            CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage());
-        } catch (Throwable e) {
-            printError("Executing streams group command failed due to " + e.getMessage(), Optional.of(e));
         }
     }
 

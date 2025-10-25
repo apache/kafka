@@ -39,11 +39,13 @@ task bootstrapWrapper() {
         // github.com servers deprecated TLSv1/TLSv1.1 support some time ago, so older versions
         // of curl (built against OpenSSL library that doesn't support TLSv1.2) would fail to
         // fetch the jar.
-        def wrapperBaseUrl = "https://raw.githubusercontent.com/gradle/gradle/v$versions.gradle/gradle/wrapper"
-        def wrapperJarUrl = wrapperBaseUrl + "/gradle-wrapper.jar"
+        // IMPORTANT: This checksum **must** be updated whenever the Gradle version changes.
+        String wrapperChecksum = "76805e32c009c0cf0dd5d206bddc9fb22ea42e84db904b764f3047de095493f3"
+        def wrapperJarUrl = "https://raw.githubusercontent.com/gradle/gradle/v$versions.gradle/gradle/wrapper/gradle-wrapper.jar"
 
         def bootstrapString = """
       # Loop in case we encounter an error.
+      REQUIRED_WRAPPER_JAR_CHECKSUM="$wrapperChecksum"
       for attempt in 1 2 3; do
         if [ ! -e "$wrapperJarPath" ]; then
           if ! curl -s -S --retry 3 -L -o "$wrapperJarPath" "$wrapperJarUrl"; then
@@ -51,6 +53,26 @@ task bootstrapWrapper() {
             # Pause for a bit before looping in case the server throttled us.
             sleep 5
             continue
+          fi
+        else
+          # Verify checksum of existing wrapper JAR. 
+          # This prevents developers from running into incompatibility issues when using an outdated wrapper JAR after a Gradle upgrade.
+          # Use sha256sum or shasum, whichever is available.
+          if command -v sha256sum >/dev/null 2>&1; then
+            LOCAL_WRAPPER_JAR_CHECKSUM=\$(sha256sum "$wrapperJarPath" | awk '{print \$1}')
+          elif command -v shasum >/dev/null 2>&1; then
+            LOCAL_WRAPPER_JAR_CHECKSUM=\$(shasum -a 256 "$wrapperJarPath" | awk '{print \$1}')
+          else
+            # If no checksum tool is found, this verification is skipped .
+            warn "Cannot find sha256sum or shasum to verify wrapper JAR."
+            break
+          fi
+
+          # If the local checksum does not match the required checksum, delete the JAR to force re-download.
+          if [ "\$LOCAL_WRAPPER_JAR_CHECKSUM" != "\$REQUIRED_WRAPPER_JAR_CHECKSUM" ] ; then
+            rm -f "$wrapperJarPath"
+          else
+            break
           fi
         fi
       done

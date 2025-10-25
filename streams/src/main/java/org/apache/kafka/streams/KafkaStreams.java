@@ -469,11 +469,6 @@ public class KafkaStreams implements AutoCloseable {
                 }
                 processStreamThread(thread -> thread.setUncaughtExceptionHandler((t, e) -> { }
                 ));
-
-                if (globalStreamThread != null) {
-                    globalStreamThread.setUncaughtExceptionHandler((t, e) -> { }
-                    );
-                }
             } else {
                 throw new IllegalStateException("Can only set UncaughtExceptionHandler before calling start(). " +
                     "Current state is: " + state);

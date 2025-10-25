@@ -20,6 +20,10 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.RecordBatch;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -34,6 +38,14 @@ public class ProduceRequestResult {
     private final CountDownLatch latch = new CountDownLatch(1);
     private final TopicPartition topicPartition;
 
+    /**
+     * List of dependent ProduceRequestResults created when this batch is split.
+     * When a batch is too large to send, it's split into multiple smaller batches.
+     * The original batch's ProduceRequestResult tracks all the split batches here
+     * so that flush() can wait for all splits to complete via awaitAllDependents().
+     */
+    private final List<ProduceRequestResult> dependentResults = new ArrayList<>();
+
     private volatile Long baseOffset = null;
     private volatile long logAppendTime = RecordBatch.NO_TIMESTAMP;
     private volatile Function<Integer, RuntimeException> errorsByIndex;
@@ -41,7 +53,7 @@ public class ProduceRequestResult {
     /**
      * Create an instance of this class.
      *
-     * @param topicPartition The topic and partition to which this record set was sent was sent
+     * @param topicPartition The topic and partition to which this record set was sent
      */
     public ProduceRequestResult(TopicPartition topicPartition) {
         this.topicPartition = topicPartition;
@@ -70,7 +82,29 @@ public class ProduceRequestResult {
     }
 
     /**
-     * Await the completion of this request
+     * Add a dependent ProduceRequestResult.
+     * This is used when a batch is split into multiple batches - in some cases like flush(), the original
+     * batch's result should not complete until all split batches have completed.
+     *
+     * @param dependentResult The dependent result to wait for
+     */
+    public void addDependent(ProduceRequestResult dependentResult) {
+        synchronized (dependentResults) {
+            dependentResults.add(dependentResult);
+        }
+    }
+
+    /**
+     * Await the completion of this request.
+     *
+     * This only waits for THIS request's latch and not dependent results.
+     * When a batch is split into multiple batches, dependent results are created and tracked
+     * separately, but this method does not wait for them. Individual record futures automatically
+     * handle waiting for their respective split batch via {@link FutureRecordMetadata#chain(FutureRecordMetadata)},
+     * which redirects the future to point to the correct split batch's result.
+     *
+     * For flush() semantics that require waiting for all dependent results, use
+     * {@link #awaitAllDependents()}.
      */
     public void await() throws InterruptedException {
         latch.await();
@@ -84,6 +118,34 @@ public class ProduceRequestResult {
      */
     public boolean await(long timeout, TimeUnit unit) throws InterruptedException {
         return latch.await(timeout, unit);
+    }
+
+    /**
+     * Await the completion of this request and all the dependent requests.
+     *
+     * This method is used by flush() to ensure all split batches have completed before
+     * returning. This method waits for all dependent {@link ProduceRequestResult}s that
+     * were created when the batch was split.
+     *
+     * @throws InterruptedException if the thread is interrupted while waiting
+     */
+    public void awaitAllDependents() throws InterruptedException {
+        Queue<ProduceRequestResult> toWait = new ArrayDeque<>();
+        toWait.add(this);
+
+        while (!toWait.isEmpty()) {
+            ProduceRequestResult current = toWait.poll();
+
+            // first wait for THIS result's latch to be released
+            current.latch.await();
+
+            // add all dependent split batches to the queue.
+            // we synchronize to get a consistent snapshot, then release the lock
+            // before continuing but the actual waiting happens outside the lock.
+            synchronized (current.dependentResults) {
+                toWait.addAll(current.dependentResults);
+            }
+        }
     }
 
     /**
@@ -127,6 +189,15 @@ public class ProduceRequestResult {
 
     /**
      * Has the request completed?
+     *
+     * This method only checks if THIS request has completed and not its dependent results.
+     * When a batch is split into multiple batches, the dependent split batches are tracked
+     * separately. Individual record futures handle waiting for their respective split
+     * batch via {@link FutureRecordMetadata#chain(FutureRecordMetadata)}, which updates the
+     * {@code nextRecordMetadata} pointer to follow the correct split batch.
+     *
+     * For flush() semantics that require waiting for all dependent results, use
+     * {@link #awaitAllDependents()}.
      */
     public boolean completed() {
         return this.latch.getCount() == 0L;
