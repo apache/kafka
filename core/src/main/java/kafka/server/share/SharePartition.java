@@ -1623,7 +1623,7 @@ public class SharePartition {
             if (lastAcquiredOffset > endOffset) {
                 endOffset = lastAcquiredOffset;
             }
-            // Update lastAcquireOffset to the final offset of acquired records in record-limit mode
+            // Update lastAcquireOffset to the last offset of acquired records in record_limit mode
             // as this is required to calculate the actual record count.
             if (isRecordLimitMode) {
                 lastAcquiredOffset = acquiredRecords.get(0).lastOffset();
@@ -1638,6 +1638,7 @@ public class SharePartition {
     private AcquiredRecords filterShareAcquiredRecordsInRecordLimitMode(int maxFetchRecords, InFlightBatch inFlightBatch) {
         lock.writeLock().lock();
         try {
+            // Get the delivery count from the batch before initializing offset state.
             int deliveryCount = inFlightBatch.batchDeliveryCount();
             // Initialize the offset state map if not already initialized.
             inFlightBatch.maybeInitializeOffsetStateUpdate();
@@ -1730,6 +1731,8 @@ public class SharePartition {
                         sharePartitionMetrics);
                     cachedState.put(acquiredRecords.firstOffset(), inFlightBatch);
                     acquiredRecords = filterShareAcquiredRecordsInRecordLimitMode(maxFetchRecords, inFlightBatch);
+                    sharePartitionMetrics.recordInFlightBatchMessageCount(
+                        acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1);
                     return List.of(acquiredRecords);
                 } else {
                     addBatches(memberId, result);
