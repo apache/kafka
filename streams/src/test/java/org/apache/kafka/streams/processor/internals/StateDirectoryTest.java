@@ -57,6 +57,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
@@ -101,17 +102,24 @@ public class StateDirectoryTest {
     private File appDir;
 
     private void initializeStateDirectory(final boolean createStateDirectory, final boolean hasNamedTopology) throws IOException {
+        initializeStateDirectory(createStateDirectory, hasNamedTopology, false);
+    }
+
+    private void initializeStateDirectory(
+            final boolean createStateDirectory,
+            final boolean hasNamedTopology,
+            final boolean allowOsGroupWriteAccess
+    ) throws IOException {
         stateDir = new File(TestUtils.IO_TMP_DIR, "kafka-" + TestUtils.randomString(5));
         if (!createStateDirectory) {
             cleanup();
         }
-        config = new StreamsConfig(new Properties() {
-            {
-                put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
-                put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
-                put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
-            }
-        });
+        config = new StreamsConfig(Map.of(
+                StreamsConfig.APPLICATION_ID_CONFIG, applicationId,
+                StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234",
+                StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath(),
+                StreamsConfig.ALLOW_OS_GROUP_WRITE_ACCESS_CONFIG, allowOsGroupWriteAccess
+        ));
         directory = new StateDirectory(config, time, createStateDirectory, hasNamedTopology);
         appDir = new File(stateDir, applicationId);
     }
@@ -136,11 +144,33 @@ public class StateDirectoryTest {
 
     @Test
     public void shouldHaveSecurePermissions() {
-        assertPermissions(stateDir);
-        assertPermissions(appDir);
+        assertPermissions(stateDir, false);
+        assertPermissions(appDir, false);
     }
 
-    private void assertPermissions(final File file) {
+    @Test
+    public void shouldHaveSecurePermissionsIfGroupWriteAccessAllowed() throws IOException {
+        cleanup();
+        initializeStateDirectory(true, false, true);
+        assertPermissions(stateDir, true);
+        assertPermissions(appDir, true);
+    }
+
+    @Test
+    public void shouldUpdateSecurePermissions() throws IOException {
+        assertPermissions(stateDir, false);
+        assertPermissions(appDir, false);
+
+        initializeStateDirectory(true, false, true);
+        assertPermissions(stateDir, true);
+        assertPermissions(appDir, true);
+
+        initializeStateDirectory(true, false, false);
+        assertPermissions(stateDir, false);
+        assertPermissions(appDir, false);
+    }
+
+    private void assertPermissions(final File file, final boolean allowOsGroupWriteAccess) {
         final Path path = file.toPath();
         if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
             final Set<PosixFilePermission> expectedPermissions = EnumSet.of(
@@ -149,9 +179,12 @@ public class StateDirectoryTest {
                     PosixFilePermission.OWNER_WRITE,
                     PosixFilePermission.GROUP_EXECUTE,
                     PosixFilePermission.OWNER_READ);
+            if (allowOsGroupWriteAccess) {
+                expectedPermissions.add(PosixFilePermission.GROUP_WRITE);
+            }
             try {
                 final Set<PosixFilePermission> filePermissions = Files.getPosixFilePermissions(path);
-                assertThat(expectedPermissions, equalTo(filePermissions));
+                assertThat(filePermissions, equalTo(expectedPermissions));
             } catch (final IOException e) {
                 fail("Should create correct files and set correct permissions");
             }
