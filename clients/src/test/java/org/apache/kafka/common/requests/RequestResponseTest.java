@@ -3074,7 +3074,7 @@ public class RequestResponseTest {
     }
 
     private AlterConfigsRequest createAlterConfigsRequest(short version) {
-        Map<ConfigResource, AlterConfigsRequest.Config> configs = new HashMap<>();
+        Map<ConfigResource, AlterConfigsRequest.Config> configs = new LinkedHashMap<>();
         List<AlterConfigsRequest.ConfigEntry> configEntries = asList(
                 new AlterConfigsRequest.ConfigEntry("config_name", "config_value"),
                 new AlterConfigsRequest.ConfigEntry("another_name", "another value")
@@ -3085,12 +3085,12 @@ public class RequestResponseTest {
         AlterConfigsRequest alterConfigsRequest = new AlterConfigsRequest.Builder(configs, false).build(version);
         assertEquals(
                 "AlterConfigsRequestData(resources=[" +
-                        "AlterConfigsResource(resourceType=" + ConfigResource.Type.TOPIC.id() + ", " +
-                        "resourceName='topic', configs=[]), " +
                         "AlterConfigsResource(resourceType=" + ConfigResource.Type.BROKER.id() + ", " +
                         "resourceName='0', " +
                         "configs=[AlterableConfig(name='config_name', value='REDACTED'), " +
-                        "AlterableConfig(name='another_name', value='REDACTED')])], " +
+                        "AlterableConfig(name='another_name', value='REDACTED')]), " +
+                        "AlterConfigsResource(resourceType=" + ConfigResource.Type.TOPIC.id() + ", " +
+                        "resourceName='topic', configs=[])], " +
                         "validateOnly=false)",
                 alterConfigsRequest.toString()
         );
