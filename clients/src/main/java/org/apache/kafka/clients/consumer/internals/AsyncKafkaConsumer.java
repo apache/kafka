@@ -880,6 +880,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * is made during each invocation to see if the <em>inflight</em> event has completed. If it has, it will be
      * processed accordingly.
      */
+    @SuppressWarnings({"CyclomaticComplexity"})
     public void checkInflightPoll(Timer timer, boolean firstPass) {
         // Handle the case where there's an inflight poll from the *previous* invocation of AsyncKafkaConsumer.poll().
         if (firstPass && inflightPoll != null) {
