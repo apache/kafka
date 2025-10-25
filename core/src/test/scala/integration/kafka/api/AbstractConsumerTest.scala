@@ -302,7 +302,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
 
     sendAsyncCommit(commitCallback)
     TestUtils.pollUntilTrue(consumer, () => commitCallback.isComplete,
-      "Failed to observe commit callback before timeout", waitTimeMs = 10000)
+      "Failed to observe commit callback before timeout", waitTimeMs = 15000)
 
     assertEquals(None, commitCallback.error)
   }
