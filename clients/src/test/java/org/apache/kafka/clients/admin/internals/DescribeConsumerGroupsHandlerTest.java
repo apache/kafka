@@ -158,7 +158,7 @@ public class DescribeConsumerGroupsHandlerTest {
             new MemberDescription(
                 "memberId",
                 Optional.of("instanceId"),
-                Optional.of("rackid"),
+                Optional.of("rackId"),
                 "clientId",
                 "host",
                 new MemberAssignment(Set.of(
@@ -173,7 +173,7 @@ public class DescribeConsumerGroupsHandlerTest {
             new MemberDescription(
                 "memberId-classic",
                 Optional.of("instanceId-classic"),
-                Optional.of("rackid"),
+                Optional.empty(),
                 "clientId-classic",
                 "host",
                 new MemberAssignment(Set.of(

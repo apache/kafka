@@ -62,7 +62,7 @@ public class MemberDescription {
     /**
      * @deprecated Since 4.2. Use {@link #MemberDescription(String, Optional, Optional, String, String, MemberAssignment, Optional, Optional, Optional)} instead.
      */
-    @Deprecated
+    @Deprecated(since = "4.2", forRemoval = true)
     public MemberDescription(
         String memberId,
         Optional<String> groupInstanceId,
@@ -87,9 +87,9 @@ public class MemberDescription {
     }
 
     /**
-     * @deprecated Since 4.2. Use {@link #MemberDescription(String, Optional, Optional, String, String, MemberAssignment, Optional, Optional, Optional)} instead.
+     * @deprecated Since 4.0. Use {@link #MemberDescription(String, Optional, Optional, String, String, MemberAssignment, Optional, Optional, Optional)} instead.
      */
-    @Deprecated
+    @Deprecated(since = "4.0", forRemoval = true)
     public MemberDescription(
         String memberId,
         Optional<String> groupInstanceId,
@@ -111,9 +111,9 @@ public class MemberDescription {
     }
 
     /**
-     * @deprecated Since 4.2. Use {@link #MemberDescription(String, Optional, Optional, String, String, MemberAssignment, Optional, Optional, Optional)} instead.
+     * @deprecated Since 4.0. Use {@link #MemberDescription(String, Optional, Optional, String, String, MemberAssignment, Optional, Optional, Optional)} instead.
      */
-    @Deprecated
+    @Deprecated(since = "4.0", forRemoval = true)
     public MemberDescription(
         String memberId,
         Optional<String> groupInstanceId,
@@ -132,9 +132,9 @@ public class MemberDescription {
     }
 
     /**
-     * @deprecated Since 4.2. Use {@link #MemberDescription(String, Optional, Optional, String, String, MemberAssignment, Optional, Optional, Optional)} instead.
+     * @deprecated Since 4.0. Use {@link #MemberDescription(String, Optional, Optional, String, String, MemberAssignment, Optional, Optional, Optional)} instead.
      */
-    @Deprecated
+    @Deprecated(since = "4.0", forRemoval = true)
     public MemberDescription(String memberId,
                              String clientId,
                              String host,

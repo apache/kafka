@@ -4758,7 +4758,7 @@ public class KafkaAdminClientTest {
                     new MemberDescription(
                         "memberId",
                         Optional.of("instanceId"),
-                        Optional.of("rackid"),
+                        Optional.of("rackId"),
                         "clientId",
                         "host",
                         new MemberAssignment(
