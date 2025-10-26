@@ -245,7 +245,7 @@ public class ShareGroupCommandTest {
             DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
             ShareGroupDescription exp = new ShareGroupDescription(
                 firstGroup,
-                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.empty(), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0))
                 ), 0)),
                 GroupState.STABLE,
