@@ -299,18 +299,18 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       }, "Second member heartbeat after config change did not succeed within the timeout period.")
 
       // Verify that at least one member has active tasks
-      val member1HasActiveTasks = streamsGroupHeartbeatResponse1.activeTasks().size()
-      val member2HasActiveTasks = streamsGroupHeartbeatResponse2.activeTasks().size()
-      assertTrue(member1HasActiveTasks + member2HasActiveTasks > 0, "At least one member should have active tasks after config change")
+      val member1ActiveTasksNum = streamsGroupHeartbeatResponse1.activeTasks().size()
+      val member2ActiveTasksNum = streamsGroupHeartbeatResponse2.activeTasks().size()
+      assertTrue(member1ActiveTasksNum + member2ActiveTasksNum > 0, "At least one member should have active tasks after config change")
 
       // Verify that at least one member has standby tasks
-      val member1HasStandbyTasks = streamsGroupHeartbeatResponse1.standbyTasks().size()
-      val member2HasStandbyTasks = streamsGroupHeartbeatResponse2.standbyTasks().size()
-      assertTrue(member1HasStandbyTasks + member2HasStandbyTasks > 0, "At least one member should have standby tasks after config change")
+      val member1StandbyTasksNum = streamsGroupHeartbeatResponse1.standbyTasks().size()
+      val member2StandbyTasksNum = streamsGroupHeartbeatResponse2.standbyTasks().size()
+      assertTrue(member1StandbyTasksNum + member2StandbyTasksNum > 0, "At least one member should have standby tasks after config change")
 
       // With 2 members and streams.num.standby.replicas=1, each active task should have 1 standby task
-      val totalActiveTasks = member1HasActiveTasks + member2HasActiveTasks
-      val totalStandbyTasks = member1HasStandbyTasks + member2HasStandbyTasks
+      val totalActiveTasks = member1ActiveTasksNum + member2ActiveTasksNum
+      val totalStandbyTasks = member1StandbyTasksNum + member2StandbyTasksNum
       assertEquals(totalActiveTasks, totalStandbyTasks, "Each active task should have one standby task")
 
     } finally {
