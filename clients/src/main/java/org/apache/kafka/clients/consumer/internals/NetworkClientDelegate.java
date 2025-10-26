@@ -25,11 +25,11 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ShareConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -77,29 +77,7 @@ public class NetworkClientDelegate implements AutoCloseable {
 
     public NetworkClientDelegate(
             final Time time,
-            final ConsumerConfig config,
-            final LogContext logContext,
-            final KafkaClient client,
-            final Metadata metadata,
-            final BackgroundEventHandler backgroundEventHandler,
-            final boolean notifyMetadataErrorsViaErrorQueue,
-            final AsyncConsumerMetrics asyncConsumerMetrics) {
-        this.time = time;
-        this.client = client;
-        this.metadata = metadata;
-        this.backgroundEventHandler = backgroundEventHandler;
-        this.log = logContext.logger(getClass());
-        this.unsentRequests = new ArrayDeque<>();
-        this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
-        this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        this.metadataError = Optional.empty();
-        this.notifyMetadataErrorsViaErrorQueue = notifyMetadataErrorsViaErrorQueue;
-        this.asyncConsumerMetrics = asyncConsumerMetrics;
-    }
-
-    public NetworkClientDelegate(
-            final Time time,
-            final ShareConsumerConfig config,
+            final AbstractConfig config,
             final LogContext logContext,
             final KafkaClient client,
             final Metadata metadata,
@@ -469,36 +447,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     public static Supplier<NetworkClientDelegate> supplier(final Time time,
                                                            final LogContext logContext,
                                                            final Metadata metadata,
-                                                           final ConsumerConfig config,
-                                                           final ApiVersions apiVersions,
-                                                           final Metrics metrics,
-                                                           final Sensor throttleTimeSensor,
-                                                           final ClientTelemetrySender clientTelemetrySender,
-                                                           final BackgroundEventHandler backgroundEventHandler,
-                                                           final boolean notifyMetadataErrorsViaErrorQueue,
-                                                           final AsyncConsumerMetrics asyncConsumerMetrics) {
-        return new CachedSupplier<>() {
-            @Override
-            protected NetworkClientDelegate create() {
-                KafkaClient client = ClientUtils.createNetworkClient(config,
-                        metrics,
-                        CONSUMER_METRIC_GROUP_PREFIX,
-                        logContext,
-                        apiVersions,
-                        time,
-                        CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
-                        metadata,
-                        throttleTimeSensor,
-                        clientTelemetrySender);
-                return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, asyncConsumerMetrics);
-            }
-        };
-    }
-
-    public static Supplier<NetworkClientDelegate> supplier(final Time time,
-                                                           final LogContext logContext,
-                                                           final Metadata metadata,
-                                                           final ShareConsumerConfig config,
+                                                           final AbstractConfig config,
                                                            final ApiVersions apiVersions,
                                                            final Metrics metrics,
                                                            final Sensor throttleTimeSensor,

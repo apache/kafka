@@ -18,12 +18,12 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ShareConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.protocol.Errors;
@@ -103,26 +103,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
     AbstractHeartbeatRequestManager(
             final LogContext logContext,
             final Time time,
-            final ConsumerConfig config,
-            final CoordinatorRequestManager coordinatorRequestManager,
-            final BackgroundEventHandler backgroundEventHandler,
-            final HeartbeatMetricsManager metricsManager) {
-        this.coordinatorRequestManager = coordinatorRequestManager;
-        this.logger = logContext.logger(getClass());
-        this.backgroundEventHandler = backgroundEventHandler;
-        this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
-        long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-        this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
-                retryBackoffMaxMs, maxPollIntervalMs);
-        this.pollTimer = time.timer(maxPollIntervalMs);
-        this.metricsManager = metricsManager;
-    }
-
-    AbstractHeartbeatRequestManager(
-            final LogContext logContext,
-            final Time time,
-            final ShareConsumerConfig config,
+            final AbstractConfig config,
             final CoordinatorRequestManager coordinatorRequestManager,
             final BackgroundEventHandler backgroundEventHandler,
             final HeartbeatMetricsManager metricsManager) {
@@ -141,7 +122,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
     AbstractHeartbeatRequestManager(
             final LogContext logContext,
             final Timer timer,
-            final ConsumerConfig config,
+            final AbstractConfig config,
             final CoordinatorRequestManager coordinatorRequestManager,
             final HeartbeatRequestState heartbeatRequestState,
             final BackgroundEventHandler backgroundEventHandler,
@@ -154,24 +135,6 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         this.pollTimer = timer;
         this.metricsManager = metricsManager;
     }
-
-    AbstractHeartbeatRequestManager(
-            final LogContext logContext,
-            final Timer timer,
-            final ShareConsumerConfig config,
-            final CoordinatorRequestManager coordinatorRequestManager,
-            final HeartbeatRequestState heartbeatRequestState,
-            final BackgroundEventHandler backgroundEventHandler,
-            final HeartbeatMetricsManager metricsManager) {
-        this.logger = logContext.logger(this.getClass());
-        this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
-        this.coordinatorRequestManager = coordinatorRequestManager;
-        this.heartbeatRequestState = heartbeatRequestState;
-        this.backgroundEventHandler = backgroundEventHandler;
-        this.pollTimer = timer;
-        this.metricsManager = metricsManager;
-    }
-
 
     /**
      * This will build a heartbeat request if one must be sent, determined based on the member

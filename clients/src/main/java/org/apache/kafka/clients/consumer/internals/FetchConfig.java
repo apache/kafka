@@ -18,8 +18,8 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ShareConsumerConfig;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.config.AbstractConfig;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredIsolationLevel;
 
@@ -79,18 +79,7 @@ public class FetchConfig {
      *
      * @param config Consumer configuration
      */
-    public FetchConfig(ConsumerConfig config) {
-        this.minBytes = config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG);
-        this.maxBytes = config.getInt(ConsumerConfig.FETCH_MAX_BYTES_CONFIG);
-        this.maxWaitMs = config.getInt(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG);
-        this.fetchSize = config.getInt(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG);
-        this.maxPollRecords = config.getInt(ConsumerConfig.MAX_POLL_RECORDS_CONFIG);
-        this.checkCrcs = config.getBoolean(ConsumerConfig.CHECK_CRCS_CONFIG);
-        this.clientRackId = config.getString(ConsumerConfig.CLIENT_RACK_CONFIG);
-        this.isolationLevel = configuredIsolationLevel(config);
-    }
-
-    public FetchConfig(ShareConsumerConfig config) {
+    public FetchConfig(AbstractConfig config) {
         this.minBytes = config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG);
         this.maxBytes = config.getInt(ConsumerConfig.FETCH_MAX_BYTES_CONFIG);
         this.maxWaitMs = config.getInt(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG);
