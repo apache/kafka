@@ -86,10 +86,8 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String GROUP_INSTANCE_ID_DOC = CommonConsumerConfigs.GROUP_INSTANCE_ID_DOC;
 
     /** <code>max.poll.records</code> */
-    public static final String MAX_POLL_RECORDS_CONFIG = "max.poll.records";
-    private static final String MAX_POLL_RECORDS_DOC = "The maximum number of records returned in a single call to poll()."
-        + " Note, that <code>" + MAX_POLL_RECORDS_CONFIG + "</code> does not impact the underlying fetching behavior."
-        + " The consumer will cache the records from each fetch request and returns them incrementally from each poll.";
+    public static final String MAX_POLL_RECORDS_CONFIG = CommonConsumerConfigs.MAX_POLL_RECORDS_CONFIG;
+    private static final String MAX_POLL_RECORDS_DOC = CommonConsumerConfigs.MAX_POLL_RECORDS_DOC;
     public static final int DEFAULT_MAX_POLL_RECORDS = 500;
 
     /** <code>max.poll.interval.ms</code> */
@@ -110,20 +108,16 @@ public class ConsumerConfig extends AbstractConfig {
     /**
      * <code>group.protocol</code>
      */
-    public static final String GROUP_PROTOCOL_CONFIG = "group.protocol";
+    public static final String GROUP_PROTOCOL_CONFIG = CommonConsumerConfigs.GROUP_PROTOCOL_CONFIG;
     public static final String DEFAULT_GROUP_PROTOCOL = GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT);
-    public static final String GROUP_PROTOCOL_DOC = "The group protocol consumer should use. We currently " +
-        "support \"classic\" or \"consumer\". If \"consumer\" is specified, then the consumer group protocol will be " +
-        "used. Otherwise, the classic group protocol will be used.";
+    public static final String GROUP_PROTOCOL_DOC = CommonConsumerConfigs.GROUP_PROTOCOL_DOC;
 
     /**
     * <code>group.remote.assignor</code>
     */
-    public static final String GROUP_REMOTE_ASSIGNOR_CONFIG = "group.remote.assignor";
+    public static final String GROUP_REMOTE_ASSIGNOR_CONFIG = CommonConsumerConfigs.GROUP_REMOTE_ASSIGNOR_CONFIG;
     public static final String DEFAULT_GROUP_REMOTE_ASSIGNOR = null;
-    public static final String GROUP_REMOTE_ASSIGNOR_DOC = "The name of the server-side assignor to use. " +
-        "If not specified, the group coordinator will pick the first assignor defined in the broker config group.consumer.assignors." +
-        "This configuration is applied only if <code>group.protocol</code> is set to \"consumer\".";
+    public static final String GROUP_REMOTE_ASSIGNOR_DOC = CommonConsumerConfigs.GROUP_REMOTE_ASSIGNOR_DOC;
 
     /**
      * <code>bootstrap.servers</code>
@@ -136,77 +130,45 @@ public class ConsumerConfig extends AbstractConfig {
     /**
      * <code>enable.auto.commit</code>
      */
-    public static final String ENABLE_AUTO_COMMIT_CONFIG = "enable.auto.commit";
-    private static final String ENABLE_AUTO_COMMIT_DOC = "If true the consumer's offset will be periodically committed in the background.";
+    public static final String ENABLE_AUTO_COMMIT_CONFIG = CommonConsumerConfigs.ENABLE_AUTO_COMMIT_CONFIG;
+    private static final String ENABLE_AUTO_COMMIT_DOC = CommonConsumerConfigs.ENABLE_AUTO_COMMIT_DOC;
 
     /**
      * <code>auto.commit.interval.ms</code>
      */
-    public static final String AUTO_COMMIT_INTERVAL_MS_CONFIG = "auto.commit.interval.ms";
-    private static final String AUTO_COMMIT_INTERVAL_MS_DOC = "The frequency in milliseconds that the consumer offsets are auto-committed to Kafka if <code>enable.auto.commit</code> is set to <code>true</code>.";
+    public static final String AUTO_COMMIT_INTERVAL_MS_CONFIG = CommonConsumerConfigs.AUTO_COMMIT_INTERVAL_MS_CONFIG;
+    private static final String AUTO_COMMIT_INTERVAL_MS_DOC = CommonConsumerConfigs.AUTO_COMMIT_INTERVAL_MS_DOC;
 
     /**
      * <code>partition.assignment.strategy</code>
      */
-    public static final String PARTITION_ASSIGNMENT_STRATEGY_CONFIG = "partition.assignment.strategy";
-    private static final String PARTITION_ASSIGNMENT_STRATEGY_DOC = "A list of class names or class types, " +
-        "ordered by preference, of supported partition assignment strategies that the client will use to distribute " +
-        "partition ownership amongst consumer instances when group management is used. Available options are:" +
-        "<ul>" +
-        "<li><code>org.apache.kafka.clients.consumer.RangeAssignor</code>: Assigns partitions on a per-topic basis.</li>" +
-        "<li><code>org.apache.kafka.clients.consumer.RoundRobinAssignor</code>: Assigns partitions to consumers in a round-robin fashion.</li>" +
-        "<li><code>org.apache.kafka.clients.consumer.StickyAssignor</code>: Guarantees an assignment that is " +
-        "maximally balanced while preserving as many existing partition assignments as possible.</li>" +
-        "<li><code>org.apache.kafka.clients.consumer.CooperativeStickyAssignor</code>: Follows the same StickyAssignor " +
-        "logic, but allows for cooperative rebalancing.</li>" +
-        "</ul>" +
-        "<p>The default assignor is [RangeAssignor, CooperativeStickyAssignor], which will use the RangeAssignor by default, " +
-        "but allows upgrading to the CooperativeStickyAssignor with just a single rolling bounce that removes the RangeAssignor from the list.</p>" +
-        "<p>Implementing the <code>org.apache.kafka.clients.consumer.ConsumerPartitionAssignor</code> " +
-        "interface allows you to plug in a custom assignment strategy.</p>";
-
+    public static final String PARTITION_ASSIGNMENT_STRATEGY_CONFIG = CommonConsumerConfigs.PARTITION_ASSIGNMENT_STRATEGY_CONFIG;
+    private static final String PARTITION_ASSIGNMENT_STRATEGY_DOC = CommonConsumerConfigs.PARTITION_ASSIGNMENT_STRATEGY_DOC;
     /**
      * <code>auto.offset.reset</code>
      */
-    public static final String AUTO_OFFSET_RESET_CONFIG = "auto.offset.reset";
-    public static final String AUTO_OFFSET_RESET_DOC = "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server " +
-            "(e.g. because that data has been deleted): " +
-            "<ul><li>earliest: automatically reset the offset to the earliest offset</li>" +
-            "<li>latest: automatically reset the offset to the latest offset</li>" +
-            "<li>by_duration:&lt;duration&gt;: automatically reset the offset to a configured &lt;duration&gt; from the current timestamp. &lt;duration&gt; must be specified in ISO8601 format (PnDTnHnMn.nS). " +
-            "Negative duration is not allowed.</li>" +
-            "<li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li>" +
-            "<li>anything else: throw exception to the consumer.</li></ul>" +
-            "<p>Note that altering partition numbers while setting this config to latest may cause message delivery loss since " +
-            "producers could start to send messages to newly added partitions (i.e. no initial offsets exist yet) before consumers reset their offsets.";
+    public static final String AUTO_OFFSET_RESET_CONFIG = CommonConsumerConfigs.AUTO_OFFSET_RESET_CONFIG;
+    public static final String AUTO_OFFSET_RESET_DOC = CommonConsumerConfigs.AUTO_OFFSET_RESET_DOC;
 
     /**
      * <code>fetch.min.bytes</code>
      */
-    public static final String FETCH_MIN_BYTES_CONFIG = "fetch.min.bytes";
+    public static final String FETCH_MIN_BYTES_CONFIG = CommonConsumerConfigs.FETCH_MIN_BYTES_CONFIG;
     public static final int DEFAULT_FETCH_MIN_BYTES = 1;
-    private static final String FETCH_MIN_BYTES_DOC = "The minimum amount of data the server should return for a fetch request. If insufficient data is available the request will wait for that much data to accumulate before answering the request. The default setting of " + DEFAULT_FETCH_MIN_BYTES + " byte means that fetch requests are answered as soon as that many byte(s) of data is available or the fetch request times out waiting for data to arrive. Setting this to a larger value will cause the server to wait for larger amounts of data to accumulate which can improve server throughput a bit at the cost of some additional latency. Even if the total data available in the broker exceeds fetch.min.bytes, the actual returned size may still be less than this value due to per-partition limits max.partition.fetch.bytes and max returned limits fetch.max.bytes.";
+    private static final String FETCH_MIN_BYTES_DOC = CommonConsumerConfigs.FETCH_MIN_BYTES_DOC;
 
     /**
      * <code>fetch.max.bytes</code>
      */
-    public static final String FETCH_MAX_BYTES_CONFIG = "fetch.max.bytes";
-    private static final String FETCH_MAX_BYTES_DOC = "The maximum amount of data the server should return for a fetch request. " +
-            "Records are fetched in batches by the consumer, and if the first record batch in the first non-empty partition of the fetch is larger than " +
-            "this value, the record batch will still be returned to ensure that the consumer can make progress. As such, this is not a absolute maximum. " +
-            "The maximum record batch size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
-            "<code>max.message.bytes</code> (topic config). A fetch request consists of many partitions, and there is another setting that controls how much " +
-            "data is returned for each partition in a fetch request - see <code>max.partition.fetch.bytes</code>. Note that the consumer performs multiple fetches in parallel.";
+    public static final String FETCH_MAX_BYTES_CONFIG = CommonConsumerConfigs.FETCH_MAX_BYTES_CONFIG;
+    private static final String FETCH_MAX_BYTES_DOC = CommonConsumerConfigs.FETCH_MAX_BYTES_DOC;
     public static final int DEFAULT_FETCH_MAX_BYTES = 50 * 1024 * 1024;
 
     /**
      * <code>fetch.max.wait.ms</code>
      */
-    public static final String FETCH_MAX_WAIT_MS_CONFIG = "fetch.max.wait.ms";
-    private static final String FETCH_MAX_WAIT_MS_DOC = "The maximum amount of time the server will block before " +
-            "answering the fetch request there isn't sufficient data to immediately satisfy the requirement given by " +
-            "fetch.min.bytes. This config is used only for local log fetch. To tune the remote fetch maximum wait " +
-            "time, please refer to 'remote.fetch.max.wait.ms' broker config";
+    public static final String FETCH_MAX_WAIT_MS_CONFIG = CommonConsumerConfigs.FETCH_MAX_WAIT_MS_CONFIG;
+    private static final String FETCH_MAX_WAIT_MS_DOC = CommonConsumerConfigs.FETCH_MAX_WAIT_MS_DOC;
     public static final int DEFAULT_FETCH_MAX_WAIT_MS = 500;
 
     /** <code>metadata.max.age.ms</code> */
@@ -215,13 +177,8 @@ public class ConsumerConfig extends AbstractConfig {
     /**
      * <code>max.partition.fetch.bytes</code>
      */
-    public static final String MAX_PARTITION_FETCH_BYTES_CONFIG = "max.partition.fetch.bytes";
-    private static final String MAX_PARTITION_FETCH_BYTES_DOC = "The maximum amount of data per-partition the server " +
-            "will return. Records are fetched in batches by the consumer. If the first record batch in the first non-empty " +
-            "partition of the fetch is larger than this limit, the " +
-            "batch will still be returned to ensure that the consumer can make progress. The maximum record batch size " +
-            "accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
-            "<code>max.message.bytes</code> (topic config). See " + FETCH_MAX_BYTES_CONFIG + " for limiting the consumer request size.";
+    public static final String MAX_PARTITION_FETCH_BYTES_CONFIG = CommonConsumerConfigs.MAX_PARTITION_FETCH_BYTES_CONFIG;
+    private static final String MAX_PARTITION_FETCH_BYTES_DOC = CommonConsumerConfigs.MAX_PARTITION_FETCH_BYTES_DOC;
     public static final int DEFAULT_MAX_PARTITION_FETCH_BYTES = 1 * 1024 * 1024;
 
     /** <code>send.buffer.bytes</code> */
