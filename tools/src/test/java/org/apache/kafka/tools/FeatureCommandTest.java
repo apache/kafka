@@ -134,7 +134,7 @@ public class FeatureCommandTest {
 
         );
         assertEquals(format("`metadata` flag is deprecated and may be removed in a future release.%nCould not downgrade metadata.version to 7." +
-                " The update failed for all features since the following feature had an error: Invalid metadata.version 7." +
+                " The update failed for all features since the following feature had an error: Unsupported metadata.version downgrade from 8 to 7." +
                 " Refusing to perform the requested downgrade because it might delete metadata information."), commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
@@ -143,7 +143,7 @@ public class FeatureCommandTest {
 
         );
         assertEquals(format("`metadata` flag is deprecated and may be removed in a future release.%nCould not downgrade metadata.version to 7." +
-                " The update failed for all features since the following feature had an error: Invalid metadata.version 7." +
+                " The update failed for all features since the following feature had an error: Unsupported metadata.version downgrade from 8 to 7." +
                 " Unsafe metadata downgrade is not supported in this version."), commandOutput);
     }
 

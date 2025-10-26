@@ -779,10 +779,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Make the following checks to make sure the AlterShareGroupOffsetsRequest request is valid:
-     * 1. Checks whether the provided group is empty
-     * 2. Checks the requested topics are presented in the metadataImage
-     * 3. Checks the corresponding share partitions in AlterShareGroupOffsetsRequest are existing
+     * Alters the offsets for a share group.
      *
      * @param groupId - The group ID
      * @param alterShareGroupOffsetsRequestData - The request data for AlterShareGroupOffsetsRequestData
@@ -793,19 +790,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         String groupId,
         AlterShareGroupOffsetsRequestData alterShareGroupOffsetsRequestData
     ) {
-        List<CoordinatorRecord> records = new ArrayList<>();
-        ShareGroup group = groupMetadataManager.shareGroup(groupId);
-        group.validateOffsetsAlterable();
-
-        Map.Entry<AlterShareGroupOffsetsResponseData, InitializeShareGroupStateParameters> response = groupMetadataManager.completeAlterShareGroupOffsets(
-            groupId,
-            alterShareGroupOffsetsRequestData,
-            records
-        );
-        return new CoordinatorResult<>(
-            records,
-            response
-        );
+        return groupMetadataManager.alterShareGroupOffsets(groupId, alterShareGroupOffsetsRequestData.topics());
     }
 
     /**

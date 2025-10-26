@@ -19,6 +19,7 @@ package org.apache.kafka.controller.metrics;
 
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+import org.apache.kafka.server.metrics.TimeRatio;
 
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Histogram;
@@ -48,6 +49,8 @@ public class QuorumControllerMetrics implements AutoCloseable {
         "ControllerEventManager", "EventQueueTimeMs");
     private static final MetricName EVENT_QUEUE_PROCESSING_TIME_MS = getMetricName(
         "ControllerEventManager", "EventQueueProcessingTimeMs");
+    private static final MetricName AVERAGE_IDLE_RATIO = getMetricName(
+        "ControllerEventManager", "AvgIdleRatio");
     private static final MetricName LAST_APPLIED_RECORD_OFFSET = getMetricName(
         "KafkaController", "LastAppliedRecordOffset");
     private static final MetricName LAST_COMMITTED_RECORD_OFFSET = getMetricName(
@@ -64,6 +67,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
         "KafkaController", "EventQueueOperationsTimedOutCount");
     private static final MetricName NEW_ACTIVE_CONTROLLERS_COUNT = getMetricName(
         "KafkaController", "NewActiveControllersCount");
+
     private static final String TIME_SINCE_LAST_HEARTBEAT_RECEIVED_METRIC_NAME = "TimeSinceLastHeartbeatReceivedMs";
     private static final String BROKER_ID_TAG = "broker";
 
@@ -75,6 +79,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private final AtomicLong lastAppliedRecordTimestamp = new AtomicLong(0);
     private final Consumer<Long> eventQueueTimeUpdater;
     private final Consumer<Long> eventQueueProcessingTimeUpdater;
+    private final TimeRatio avgIdleTimeRatio;
 
     private final AtomicLong timedOutHeartbeats = new AtomicLong(0);
     private final AtomicLong operationsStarted = new AtomicLong(0);
@@ -109,6 +114,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
         this.eventQueueTimeUpdater = newHistogram(EVENT_QUEUE_TIME_MS, true);
         this.eventQueueProcessingTimeUpdater = newHistogram(EVENT_QUEUE_PROCESSING_TIME_MS, true);
         this.sessionTimeoutMs = sessionTimeoutMs;
+        this.avgIdleTimeRatio = new TimeRatio(1);
         registry.ifPresent(r -> r.newGauge(LAST_APPLIED_RECORD_OFFSET, new Gauge<Long>() {
             @Override
             public Long value() {
@@ -157,6 +163,20 @@ public class QuorumControllerMetrics implements AutoCloseable {
                 return newActiveControllers();
             }
         }));
+        registry.ifPresent(r -> r.newGauge(AVERAGE_IDLE_RATIO, new Gauge<Double>() {
+            @Override
+            public Double value() {
+                synchronized (avgIdleTimeRatio) {
+                    return avgIdleTimeRatio.measure();
+                }
+            }
+        }));
+    }
+
+    public void updateIdleTime(long idleDurationMs) {
+        synchronized (avgIdleTimeRatio) {
+            avgIdleTimeRatio.record((double) idleDurationMs, time.milliseconds());
+        }
     }
 
     public void addTimeSinceLastHeartbeatMetric(int brokerId) {
@@ -291,7 +311,8 @@ public class QuorumControllerMetrics implements AutoCloseable {
             TIMED_OUT_BROKER_HEARTBEAT_COUNT,
             EVENT_QUEUE_OPERATIONS_STARTED_COUNT,
             EVENT_QUEUE_OPERATIONS_TIMED_OUT_COUNT,
-            NEW_ACTIVE_CONTROLLERS_COUNT
+            NEW_ACTIVE_CONTROLLERS_COUNT,
+            AVERAGE_IDLE_RATIO
         ).forEach(r::removeMetric));
         removeTimeSinceLastHeartbeatMetrics();
     }
