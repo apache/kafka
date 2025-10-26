@@ -520,7 +520,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
 
   private def convertTaskIds(responseTasks: java.util.List[StreamsGroupHeartbeatResponseData.TaskIds]): java.util.List[StreamsGroupHeartbeatRequestData.TaskIds] = {
     if (responseTasks == null) {
-      java.util.Collections.emptyList()
+      List().asJava
     } else {
       responseTasks.asScala.map { responseTask =>
         new StreamsGroupHeartbeatRequestData.TaskIds()
