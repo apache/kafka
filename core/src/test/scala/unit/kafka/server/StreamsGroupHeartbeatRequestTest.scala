@@ -423,8 +423,8 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           .setPartitions(List(0, 1).map(_.asInstanceOf[Integer]).asJava)
       ).asJava
       assertEquals(expectedActiveTasks, rejoinHeartbeatResponse.activeTasks())
-      assertEquals(0, Option(rejoinHeartbeatResponse.standbyTasks()).map(_.size()).getOrElse(0))
-      assertEquals(0, Option(rejoinHeartbeatResponse.warmupTasks()).map(_.size()).getOrElse(0))
+      assertEquals(0, rejoinHeartbeatResponse.standbyTasks().size(), "There should be no standby tasks assigned")
+      assertEquals(0, rejoinHeartbeatResponse.warmupTasks().size(), "There should be no warmup tasks assigned")
 
     } finally {
       admin.close()
