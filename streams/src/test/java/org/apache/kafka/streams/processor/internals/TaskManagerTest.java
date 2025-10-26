@@ -2528,67 +2528,101 @@ public class TaskManagerTest {
 
     @Test
     public void shouldCloseStandbyUnassignedTasksWhenCreatingNewTasks() {
-        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, false, stateManager);
+        final StandbyTask task00 = standbyTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions)
+            .build();
 
-        when(consumer.assignment()).thenReturn(assignment);
-        when(standbyTaskCreator.createTasks(taskId00Assignment)).thenReturn(singletonList(task00));
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.drainPendingTasksToInit()).thenReturn(emptySet());
 
-        taskManager.handleAssignment(emptyMap(), taskId00Assignment);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
-        assertThat(task00.state(), is(Task.State.RUNNING));
+        taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        when(stateUpdater.tasks()).thenReturn(Set.of(task00));
+
+        // mock future for removing task from StateUpdater
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
+        when(stateUpdater.remove(task00.id())).thenReturn(future);
+        future.complete(new StateUpdater.RemovedTaskResult(task00));
 
         taskManager.handleAssignment(emptyMap(), emptyMap());
-        assertThat(task00.state(), is(Task.State.CLOSED));
-        assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
-        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
+
+        verify(stateUpdater).remove(task00.id());
+        verify(task00).suspend();
+        verify(task00).closeClean();
+
+        verify(activeTaskCreator).createTasks(any(), eq(emptyMap()));
+        verify(standbyTaskCreator).createTasks(emptyMap());
     }
 
     @Test
     public void shouldAddNonResumedSuspendedTasks() {
-        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
-        final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, false, stateManager);
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RUNNING)
+            .build();
+        final StandbyTask task01 = standbyTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING)
+            .build();
 
-        when(consumer.assignment()).thenReturn(assignment);
-        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
-        when(standbyTaskCreator.createTasks(taskId01Assignment)).thenReturn(singletonList(task01));
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+
+        when(tasks.allNonFailedTasks()).thenReturn(Set.of(task00));
+
+        when(tasks.drainPendingTasksToInit()).thenReturn(emptySet());
+        when(tasks.hasPendingTasksToInit()).thenReturn(false);
+
+        taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        when(stateUpdater.tasks()).thenReturn(Set.of(task01));
+        when(stateUpdater.restoresActiveTasks()).thenReturn(false);
+        when(stateUpdater.hasExceptionsAndFailedTasks()).thenReturn(false);
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
-        assertThat(task00.state(), is(Task.State.RUNNING));
-        assertThat(task01.state(), is(Task.State.RUNNING));
 
-        taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
-        assertThat(task00.state(), is(Task.State.RUNNING));
-        assertThat(task01.state(), is(Task.State.RUNNING));
+        // checkStateUpdater should return true (all tasks ready, no pending work)
+        assertTrue(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
 
-        // expect these calls twice (because we're going to tryToCompleteRestoration twice)
+        verify(stateUpdater, never()).add(any(Task.class));
         verify(activeTaskCreator).createTasks(any(), eq(emptyMap()));
-        verify(consumer, times(2)).assignment();
-        verify(consumer, times(2)).resume(assignment);
+        verify(standbyTaskCreator).createTasks(emptyMap());
+
+        // verify idempotence
+        taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
+        assertTrue(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
+        verify(stateUpdater, never()).add(any(Task.class));
     }
 
     @Test
     public void shouldUpdateInputPartitionsAfterRebalance() {
-        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RUNNING)
+            .build();
 
-        when(consumer.assignment()).thenReturn(assignment);
-        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
-
-        taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
-        assertThat(task00.state(), is(Task.State.RUNNING));
-
+        final TasksRegistry tasks = mock(TasksRegistry.class);
         final Set<TopicPartition> newPartitionsSet = Set.of(t1p1);
+
+        when(tasks.allNonFailedTasks()).thenReturn(Set.of(task00));
+        when(tasks.drainPendingTasksToInit()).thenReturn(emptySet());
+        when(tasks.hasPendingTasksToInit()).thenReturn(false);
+        when(tasks.updateActiveTaskInputPartitions(task00, newPartitionsSet)).thenReturn(true);
+
+        taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        when(stateUpdater.tasks()).thenReturn(emptySet());
+        when(stateUpdater.restoresActiveTasks()).thenReturn(false);
+        when(stateUpdater.hasExceptionsAndFailedTasks()).thenReturn(false);
+
         final Map<TaskId, Set<TopicPartition>> taskIdSetMap = singletonMap(taskId00, newPartitionsSet);
         taskManager.handleAssignment(taskIdSetMap, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
+
+        verify(task00).updateInputPartitions(eq(newPartitionsSet), any());
+        assertTrue(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
         assertThat(task00.state(), is(Task.State.RUNNING));
-        assertEquals(newPartitionsSet, task00.inputPartitions());
-        // expect these calls twice (because we're going to tryToCompleteRestoration twice)
-        verify(consumer, times(2)).resume(assignment);
-        verify(consumer, times(2)).assignment();
         verify(activeTaskCreator).createTasks(any(), eq(emptyMap()));
+        verify(standbyTaskCreator).createTasks(emptyMap());
     }
 
     @Test
