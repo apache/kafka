@@ -77,7 +77,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
           groupId = groupId,
           memberId = memberId,
-          memberEpoch = 0,
           rebalanceTimeoutMs = 1000,
           activeTasks = Option(streamsGroupHeartbeatResponse)
             .map(r => convertTaskIds(r.activeTasks()).asScala.toList)
@@ -172,7 +171,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         streamsGroupHeartbeatResponse1 = streamsGroupHeartbeat(
           groupId = groupId,
           memberId = memberId1,
-          memberEpoch = 0,
           rebalanceTimeoutMs = 1000,
           activeTasks = Option(streamsGroupHeartbeatResponse1)
             .map(r => convertTaskIds(r.activeTasks()).asScala.toList)
@@ -202,7 +200,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       streamsGroupHeartbeatResponse2 = streamsGroupHeartbeat(
         groupId = groupId,
         memberId = memberId2,
-        memberEpoch = 0,
         rebalanceTimeoutMs = 1000,
         activeTasks = Option(streamsGroupHeartbeatResponse2)
           .map(r => convertTaskIds(r.activeTasks()).asScala.toList)
@@ -363,7 +360,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
           groupId = groupId,
           memberId = memberId,
-          memberEpoch = 0,
           rebalanceTimeoutMs = 1000,
           activeTasks = List.empty,
           standbyTasks = List.empty,
@@ -402,7 +398,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         rejoinHeartbeatResponse = streamsGroupHeartbeat(
           groupId = groupId,
           memberId = memberId,
-          memberEpoch = 0,
           rebalanceTimeoutMs = 1000,
           activeTasks = Option(rejoinHeartbeatResponse)
             .map(r => convertTaskIds(r.activeTasks()).asScala.toList)
@@ -470,7 +465,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
           groupId = groupId,
           memberId = memberId,
-          memberEpoch = 0,
           rebalanceTimeoutMs = 1000,
           activeTasks = Option(streamsGroupHeartbeatResponse)
             .map(r => convertTaskIds(r.activeTasks()).asScala.toList)
