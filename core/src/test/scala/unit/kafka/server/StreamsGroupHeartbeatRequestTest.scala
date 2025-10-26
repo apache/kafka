@@ -65,7 +65,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     // Test with streams.version = 0, the API is disabled at server level
     val topology = new StreamsGroupHeartbeatRequestData.Topology()
       .setEpoch(1)
-      .setSubtopologies(java.util.Collections.emptyList())
+      .setSubtopologies(List().asJava)
     
     val streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
       groupId = "test-group",
@@ -90,7 +90,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
   def testStreamsGroupHeartbeatIsInaccessibleWhenDisabledByStaticGroupCoordinatorProtocolConfig(): Unit = {
     val topology = new StreamsGroupHeartbeatRequestData.Topology()
       .setEpoch(1)
-      .setSubtopologies(java.util.Collections.emptyList())
+      .setSubtopologies(List().asJava)
     
     val streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
       groupId = "test-group",
@@ -115,7 +115,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
   def testStreamsGroupHeartbeatIsInaccessibleWhenUnstableLatestVersionNotEnabled(): Unit = {
     val topology = new StreamsGroupHeartbeatRequestData.Topology()
       .setEpoch(1)
-      .setSubtopologies(java.util.Collections.emptyList())
+      .setSubtopologies(List().asJava)
     
     val streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
       groupId = "test-group",
@@ -362,7 +362,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
 
       val topology = new StreamsGroupHeartbeatRequestData.Topology()
         .setEpoch(1)
-        .setSubtopologies(java.util.Collections.emptyList())
+        .setSubtopologies(List().asJava)
 
       val streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
         groupId = "",  // Empty group ID
