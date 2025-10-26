@@ -1095,7 +1095,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * Initializes the acknowledgement mode based on the configuration.
      */
     private static ShareAcknowledgementMode initializeAcknowledgementMode(ShareConsumerConfig config, Logger log) {
-        String s = config.getString(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG);
+        String s = config.getString(ShareConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG);
         return ShareAcknowledgementMode.fromString(s);
     }
 

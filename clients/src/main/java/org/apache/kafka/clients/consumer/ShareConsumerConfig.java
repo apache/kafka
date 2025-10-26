@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
-import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.ShareAcknowledgementMode;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -35,7 +34,6 @@ import org.apache.kafka.common.utils.Utils;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -56,6 +54,7 @@ public class ShareConsumerConfig extends AbstractConfig {
     private static final List<String> SHARE_GROUP_UNSUPPORTED_CONFIGS = List.of(
             ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
             ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,
+            ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG,
             ConsumerConfig.GROUP_INSTANCE_ID_CONFIG,
             ConsumerConfig.ISOLATION_LEVEL_CONFIG,
             ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
@@ -77,11 +76,6 @@ public class ShareConsumerConfig extends AbstractConfig {
     public static final String GROUP_ID_CONFIG = CommonConsumerConfigs.GROUP_ID_CONFIG;
     private static final String GROUP_ID_DOC = CommonConsumerConfigs.GROUP_ID_DOC;
 
-    /**
-     * <code>group.instance.id</code>
-     */
-    public static final String GROUP_INSTANCE_ID_CONFIG = CommonConsumerConfigs.GROUP_INSTANCE_ID_CONFIG;
-    private static final String GROUP_INSTANCE_ID_DOC = CommonConsumerConfigs.GROUP_INSTANCE_ID_DOC;
 
     /** <code>max.poll.records</code> */
     public static final String MAX_POLL_RECORDS_CONFIG = CommonConsumerConfigs.MAX_POLL_RECORDS_CONFIG;
@@ -91,31 +85,6 @@ public class ShareConsumerConfig extends AbstractConfig {
     /** <code>max.poll.interval.ms</code> */
     public static final String MAX_POLL_INTERVAL_MS_CONFIG = CommonConsumerConfigs.MAX_POLL_INTERVAL_MS_CONFIG;
     private static final String MAX_POLL_INTERVAL_MS_DOC = CommonConsumerConfigs.MAX_POLL_INTERVAL_MS_DOC;
-    /**
-     * <code>session.timeout.ms</code>
-     */
-    public static final String SESSION_TIMEOUT_MS_CONFIG = CommonConsumerConfigs.SESSION_TIMEOUT_MS_CONFIG;
-    private static final String SESSION_TIMEOUT_MS_DOC = CommonConsumerConfigs.SESSION_TIMEOUT_MS_DOC;
-
-    /**
-     * <code>heartbeat.interval.ms</code>
-     */
-    public static final String HEARTBEAT_INTERVAL_MS_CONFIG = CommonConsumerConfigs.HEARTBEAT_INTERVAL_MS_CONFIG;
-    private static final String HEARTBEAT_INTERVAL_MS_DOC = CommonConsumerConfigs.HEARTBEAT_INTERVAL_MS_DOC;
-
-    /**
-     * <code>group.protocol</code>
-     */
-    public static final String GROUP_PROTOCOL_CONFIG = CommonConsumerConfigs.GROUP_PROTOCOL_CONFIG;
-    public static final String DEFAULT_GROUP_PROTOCOL = GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT);
-    public static final String GROUP_PROTOCOL_DOC = CommonConsumerConfigs.GROUP_PROTOCOL_DOC;
-
-    /**
-     * <code>group.remote.assignor</code>
-     */
-    public static final String GROUP_REMOTE_ASSIGNOR_CONFIG = CommonConsumerConfigs.GROUP_REMOTE_ASSIGNOR_CONFIG;
-    public static final String DEFAULT_GROUP_REMOTE_ASSIGNOR = null;
-    public static final String GROUP_REMOTE_ASSIGNOR_DOC = CommonConsumerConfigs.GROUP_REMOTE_ASSIGNOR_DOC;
 
     /**
      * <code>bootstrap.servers</code>
@@ -124,29 +93,6 @@ public class ShareConsumerConfig extends AbstractConfig {
 
     /** <code>client.dns.lookup</code> */
     public static final String CLIENT_DNS_LOOKUP_CONFIG = CommonConsumerConfigs.CLIENT_DNS_LOOKUP_CONFIG;
-
-    /**
-     * <code>enable.auto.commit</code>
-     */
-    public static final String ENABLE_AUTO_COMMIT_CONFIG = CommonConsumerConfigs.ENABLE_AUTO_COMMIT_CONFIG;
-    private static final String ENABLE_AUTO_COMMIT_DOC = CommonConsumerConfigs.ENABLE_AUTO_COMMIT_DOC;
-
-    /**
-     * <code>auto.commit.interval.ms</code>
-     */
-    public static final String AUTO_COMMIT_INTERVAL_MS_CONFIG = CommonConsumerConfigs.AUTO_COMMIT_INTERVAL_MS_CONFIG;
-    private static final String AUTO_COMMIT_INTERVAL_MS_DOC = CommonConsumerConfigs.AUTO_COMMIT_INTERVAL_MS_DOC;
-
-    /**
-     * <code>partition.assignment.strategy</code>
-     */
-    public static final String PARTITION_ASSIGNMENT_STRATEGY_CONFIG = CommonConsumerConfigs.PARTITION_ASSIGNMENT_STRATEGY_CONFIG;
-    private static final String PARTITION_ASSIGNMENT_STRATEGY_DOC = CommonConsumerConfigs.PARTITION_ASSIGNMENT_STRATEGY_DOC;
-    /**
-     * <code>auto.offset.reset</code>
-     */
-    public static final String AUTO_OFFSET_RESET_CONFIG = CommonConsumerConfigs.AUTO_OFFSET_RESET_CONFIG;
-    public static final String AUTO_OFFSET_RESET_DOC = CommonConsumerConfigs.AUTO_OFFSET_RESET_DOC;
 
     /**
      * <code>fetch.min.bytes</code>
@@ -272,11 +218,6 @@ public class ShareConsumerConfig extends AbstractConfig {
     /** <code>default.api.timeout.ms</code> */
     public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonConsumerConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG;
 
-    /** <code>interceptor.classes</code> */
-    public static final String INTERCEPTOR_CLASSES_CONFIG = CommonConsumerConfigs.INTERCEPTOR_CLASSES_CONFIG;
-    public static final String INTERCEPTOR_CLASSES_DOC = CommonConsumerConfigs.INTERCEPTOR_CLASSES_DOC;
-
-
     /** <code>exclude.internal.topics</code> */
     public static final String EXCLUDE_INTERNAL_TOPICS_CONFIG = CommonConsumerConfigs.EXCLUDE_INTERNAL_TOPICS_CONFIG;
     private static final String EXCLUDE_INTERNAL_TOPICS_DOC = CommonConsumerConfigs.EXCLUDE_INTERNAL_TOPICS_DOC;
@@ -295,10 +236,6 @@ public class ShareConsumerConfig extends AbstractConfig {
      *
      */
     static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = CommonConsumerConfigs.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED;
-
-    /** <code>isolation.level</code> */
-    public static final String ISOLATION_LEVEL_CONFIG = CommonConsumerConfigs.ISOLATION_LEVEL_CONFIG;
-    public static final String ISOLATION_LEVEL_DOC = CommonConsumerConfigs.ISOLATION_LEVEL_DOC;
 
     public static final String DEFAULT_ISOLATION_LEVEL = IsolationLevel.READ_UNCOMMITTED.toString();
 
@@ -336,46 +273,17 @@ public class ShareConsumerConfig extends AbstractConfig {
                                 ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
                         ConfigDef.Importance.MEDIUM,
                         CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
-                .define(GROUP_ID_CONFIG, ConfigDef.Type.STRING, null, ConfigDef.Importance.HIGH, CommonConsumerConfigs.GROUP_ID_DOC)
-                .define(GROUP_INSTANCE_ID_CONFIG,
+                .define(GROUP_ID_CONFIG,
                         ConfigDef.Type.STRING,
                         null,
-                        new ConfigDef.NonEmptyString(),
-                        ConfigDef.Importance.MEDIUM,
-                        GROUP_INSTANCE_ID_DOC)
-                .define(SESSION_TIMEOUT_MS_CONFIG,
-                        ConfigDef.Type.INT,
-                        45000,
                         ConfigDef.Importance.HIGH,
-                        SESSION_TIMEOUT_MS_DOC)
-                .define(HEARTBEAT_INTERVAL_MS_CONFIG,
-                        ConfigDef.Type.INT,
-                        3000,
-                        ConfigDef.Importance.HIGH,
-                        HEARTBEAT_INTERVAL_MS_DOC)
-                .define(PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
-                        ConfigDef.Type.LIST,
-                        List.of(RangeAssignor.class, CooperativeStickyAssignor.class),
-                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                        ConfigDef.Importance.MEDIUM,
-                        PARTITION_ASSIGNMENT_STRATEGY_DOC)
+                        CommonConsumerConfigs.GROUP_ID_DOC)
                 .define(METADATA_MAX_AGE_CONFIG,
                         ConfigDef.Type.LONG,
                         5 * 60 * 1000,
                         atLeast(0),
                         ConfigDef.Importance.LOW,
                         CommonClientConfigs.METADATA_MAX_AGE_DOC)
-                .define(ENABLE_AUTO_COMMIT_CONFIG,
-                        ConfigDef.Type.BOOLEAN,
-                        true,
-                        ConfigDef.Importance.MEDIUM,
-                        ENABLE_AUTO_COMMIT_DOC)
-                .define(AUTO_COMMIT_INTERVAL_MS_CONFIG,
-                        ConfigDef.Type.INT,
-                        5000,
-                        atLeast(0),
-                        ConfigDef.Importance.LOW,
-                        AUTO_COMMIT_INTERVAL_MS_DOC)
                 .define(CLIENT_ID_CONFIG,
                         ConfigDef.Type.STRING,
                         "",
@@ -451,12 +359,6 @@ public class ShareConsumerConfig extends AbstractConfig {
                         true,
                         ConfigDef.Importance.LOW,
                         ENABLE_METRICS_PUSH_DOC)
-                .define(AUTO_OFFSET_RESET_CONFIG,
-                        ConfigDef.Type.STRING,
-                        AutoOffsetResetStrategy.LATEST.name(),
-                        new AutoOffsetResetStrategy.Validator(),
-                        ConfigDef.Importance.MEDIUM,
-                        AUTO_OFFSET_RESET_DOC)
                 .define(CHECK_CRCS_CONFIG,
                         ConfigDef.Type.BOOLEAN,
                         true,
@@ -522,12 +424,6 @@ public class ShareConsumerConfig extends AbstractConfig {
                         9 * 60 * 1000,
                         ConfigDef.Importance.MEDIUM,
                         CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
-                .define(INTERCEPTOR_CLASSES_CONFIG,
-                        ConfigDef.Type.LIST,
-                        List.of(),
-                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                        ConfigDef.Importance.LOW,
-                        INTERCEPTOR_CLASSES_DOC)
                 .define(MAX_POLL_RECORDS_CONFIG,
                         ConfigDef.Type.INT,
                         DEFAULT_MAX_POLL_RECORDS,
@@ -549,28 +445,11 @@ public class ShareConsumerConfig extends AbstractConfig {
                         ConfigDef.Type.BOOLEAN,
                         false,
                         ConfigDef.Importance.LOW)
-                .define(ISOLATION_LEVEL_CONFIG,
-                        ConfigDef.Type.STRING,
-                        DEFAULT_ISOLATION_LEVEL,
-                        in(IsolationLevel.READ_COMMITTED.toString(), IsolationLevel.READ_UNCOMMITTED.toString()),
-                        ConfigDef.Importance.MEDIUM,
-                        ISOLATION_LEVEL_DOC)
                 .define(ALLOW_AUTO_CREATE_TOPICS_CONFIG,
                         ConfigDef.Type.BOOLEAN,
                         DEFAULT_ALLOW_AUTO_CREATE_TOPICS,
                         ConfigDef.Importance.MEDIUM,
                         ALLOW_AUTO_CREATE_TOPICS_DOC)
-                .define(GROUP_PROTOCOL_CONFIG,
-                        ConfigDef.Type.STRING,
-                        DEFAULT_GROUP_PROTOCOL,
-                        ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(GroupProtocol.class)),
-                        ConfigDef.Importance.HIGH,
-                        GROUP_PROTOCOL_DOC)
-                .define(GROUP_REMOTE_ASSIGNOR_CONFIG,
-                        ConfigDef.Type.STRING,
-                        DEFAULT_GROUP_REMOTE_ASSIGNOR,
-                        ConfigDef.Importance.MEDIUM,
-                        GROUP_REMOTE_ASSIGNOR_DOC)
                 // security support
                 .define(SECURITY_PROVIDERS_CONFIG,
                         ConfigDef.Type.STRING,
@@ -599,7 +478,7 @@ public class ShareConsumerConfig extends AbstractConfig {
                         atLeast(0),
                         ConfigDef.Importance.LOW,
                         CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
-                .define(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
+                .define(SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
                         ConfigDef.Type.STRING,
                         ShareAcknowledgementMode.IMPLICIT.name(),
                         new ShareAcknowledgementMode.Validator(),
