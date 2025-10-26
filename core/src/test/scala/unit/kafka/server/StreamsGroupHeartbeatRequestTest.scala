@@ -308,10 +308,10 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       val member2HasStandbyTasks = streamsGroupHeartbeatResponse2.standbyTasks().size()
       assertTrue(member1HasStandbyTasks + member2HasStandbyTasks > 0, "At least one member should have standby tasks after config change")
 
-      // With 2 members and streams.num.standby.replicas=1, each active task should have 1 standby
+      // With 2 members and streams.num.standby.replicas=1, each active task should have 1 standby task
       val totalActiveTasks = member1HasActiveTasks + member2HasActiveTasks
       val totalStandbyTasks = member1HasStandbyTasks + member2HasStandbyTasks
-      assertEquals(totalActiveTasks, totalStandbyTasks, "Each active task should have one standby")
+      assertEquals(totalActiveTasks, totalStandbyTasks, "Each active task should have one standby task")
 
     } finally {
       admin.close()
