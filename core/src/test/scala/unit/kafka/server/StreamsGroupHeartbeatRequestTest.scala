@@ -20,14 +20,12 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.message.{StreamsGroupHeartbeatRequestData, StreamsGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{StreamsGroupHeartbeatRequest, StreamsGroupHeartbeatResponse}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.common.config.ConfigResource
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertTrue}
 
-import java.util.Collections
 import scala.jdk.CollectionConverters._
 
 @ClusterTestDefaults(
@@ -74,34 +72,31 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       val topology = createTopologyWithInternalTopics(inputTopicName, groupId)
 
       // Send heartbeat with topology containing internal topics
-      var streamsGroupHeartbeatResponse: StreamsGroupHeartbeatResponse = null
+      var streamsGroupHeartbeatResponse: StreamsGroupHeartbeatResponseData = null
       TestUtils.waitUntilTrue(() => {
-        val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequest.Builder(
-          new StreamsGroupHeartbeatRequestData()
-            .setGroupId(groupId)
-            .setMemberId(memberId)
-            .setMemberEpoch(0)
-            .setRebalanceTimeoutMs(1000)
-            .setActiveTasks(Option(streamsGroupHeartbeatResponse)
-              .map(r => convertTaskIds(r.data().activeTasks()))
-              .getOrElse(Collections.emptyList()))
-            .setStandbyTasks(Option(streamsGroupHeartbeatResponse)
-              .map(r => convertTaskIds(r.data().standbyTasks()))
-              .getOrElse(Collections.emptyList()))
-            .setWarmupTasks(Option(streamsGroupHeartbeatResponse)
-              .map(r => convertTaskIds(r.data().warmupTasks()))
-              .getOrElse(Collections.emptyList()))
-            .setTopology(topology)
-        ).build(0)
-
-        streamsGroupHeartbeatResponse = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest)
-        streamsGroupHeartbeatResponse.data.errorCode == Errors.NONE.code()
+        streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId,
+          memberEpoch = 0,
+          rebalanceTimeoutMs = 1000,
+          activeTasks = Option(streamsGroupHeartbeatResponse)
+            .map(r => convertTaskIds(r.activeTasks()).asScala.toList)
+            .getOrElse(List.empty),
+          standbyTasks = Option(streamsGroupHeartbeatResponse)
+            .map(r => convertTaskIds(r.standbyTasks()).asScala.toList)
+            .getOrElse(List.empty),
+          warmupTasks = Option(streamsGroupHeartbeatResponse)
+            .map(r => convertTaskIds(r.warmupTasks()).asScala.toList)
+            .getOrElse(List.empty),
+          topology = topology
+        )
+        streamsGroupHeartbeatResponse.errorCode == Errors.NONE.code()
       }, "StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
       // Verify the heartbeat was successful
       assert(streamsGroupHeartbeatResponse != null, "StreamsGroupHeartbeatResponse should not be null")
-      assertEquals(memberId, streamsGroupHeartbeatResponse.data.memberId())
-      assertEquals(1, streamsGroupHeartbeatResponse.data.memberEpoch())
+      assertEquals(memberId, streamsGroupHeartbeatResponse.memberId())
+      assertEquals(1, streamsGroupHeartbeatResponse.memberEpoch())
 
       // Wait for internal topics to be created
       val expectedChangelogTopic = s"$groupId-subtopology-1-changelog"
@@ -172,29 +167,26 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       val topology = createTopologyWithInternalTopics(topicName, groupId)
 
       // First member joins the group
-      var streamsGroupHeartbeatResponse1: StreamsGroupHeartbeatResponse = null
+      var streamsGroupHeartbeatResponse1: StreamsGroupHeartbeatResponseData = null
       TestUtils.waitUntilTrue(() => {
-        val streamsGroupHeartbeatRequest1 = new StreamsGroupHeartbeatRequest.Builder(
-          new StreamsGroupHeartbeatRequestData()
-            .setGroupId(groupId)
-            .setMemberId(memberId1)
-            .setMemberEpoch(0)
-            .setRebalanceTimeoutMs(1000)
-            .setProcessId("process-1")
-            .setActiveTasks(Option(streamsGroupHeartbeatResponse1)
-              .map(r => convertTaskIds(r.data().activeTasks()))
-              .getOrElse(Collections.emptyList()))
-            .setStandbyTasks(Option(streamsGroupHeartbeatResponse1)
-              .map(r => convertTaskIds(r.data().standbyTasks()))
-              .getOrElse(Collections.emptyList()))
-            .setWarmupTasks(Option(streamsGroupHeartbeatResponse1)
-              .map(r => convertTaskIds(r.data().warmupTasks()))
-              .getOrElse(Collections.emptyList()))
-            .setTopology(topology)
-        ).build(0)
-
-        streamsGroupHeartbeatResponse1 = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest1)
-        streamsGroupHeartbeatResponse1.data.errorCode == Errors.NONE.code()
+        streamsGroupHeartbeatResponse1 = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId1,
+          memberEpoch = 0,
+          rebalanceTimeoutMs = 1000,
+          activeTasks = Option(streamsGroupHeartbeatResponse1)
+            .map(r => convertTaskIds(r.activeTasks()).asScala.toList)
+            .getOrElse(List.empty),
+          standbyTasks = Option(streamsGroupHeartbeatResponse1)
+            .map(r => convertTaskIds(r.standbyTasks()).asScala.toList)
+            .getOrElse(List.empty),
+          warmupTasks = Option(streamsGroupHeartbeatResponse1)
+            .map(r => convertTaskIds(r.warmupTasks()).asScala.toList)
+            .getOrElse(List.empty),
+          topology = topology,
+          processId = "process-1"
+        )
+        streamsGroupHeartbeatResponse1.errorCode == Errors.NONE.code()
       }, "First StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
       val expectedChangelogTopic = s"$groupId-subtopology-1-changelog"
@@ -205,69 +197,70 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       }, msg = s"Internal topics $expectedChangelogTopic or $expectedRepartitionTopic were not created")
 
     // Second member joins the group
-    var streamsGroupHeartbeatResponse2: StreamsGroupHeartbeatResponse = null
+    var streamsGroupHeartbeatResponse2: StreamsGroupHeartbeatResponseData = null
     TestUtils.waitUntilTrue(() => {
-      val streamsGroupHeartbeatRequest2 = new StreamsGroupHeartbeatRequest.Builder(
-        new StreamsGroupHeartbeatRequestData()
-          .setGroupId(groupId)
-          .setMemberId(memberId2)
-          .setMemberEpoch(0)
-          .setRebalanceTimeoutMs(1000)
-          .setProcessId("process-2")
-          .setActiveTasks(Option(streamsGroupHeartbeatResponse2)
-            .map(r => convertTaskIds(r.data().activeTasks()))
-            .getOrElse(Collections.emptyList()))
-          .setStandbyTasks(Option(streamsGroupHeartbeatResponse2)
-            .map(r => convertTaskIds(r.data().standbyTasks()))
-            .getOrElse(Collections.emptyList()))
-          .setWarmupTasks(Option(streamsGroupHeartbeatResponse2)
-            .map(r => convertTaskIds(r.data().warmupTasks()))
-            .getOrElse(Collections.emptyList()))
-          .setTopology(topology)
-      ).build(0)
-
-      streamsGroupHeartbeatResponse2 = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest2)
-      streamsGroupHeartbeatResponse2.data.errorCode == Errors.NONE.code()
+      streamsGroupHeartbeatResponse2 = streamsGroupHeartbeat(
+        groupId = groupId,
+        memberId = memberId2,
+        memberEpoch = 0,
+        rebalanceTimeoutMs = 1000,
+        activeTasks = Option(streamsGroupHeartbeatResponse2)
+          .map(r => convertTaskIds(r.activeTasks()).asScala.toList)
+          .getOrElse(List.empty),
+        standbyTasks = Option(streamsGroupHeartbeatResponse2)
+          .map(r => convertTaskIds(r.standbyTasks()).asScala.toList)
+          .getOrElse(List.empty),
+        warmupTasks = Option(streamsGroupHeartbeatResponse2)
+          .map(r => convertTaskIds(r.warmupTasks()).asScala.toList)
+          .getOrElse(List.empty),
+        topology = topology,
+        processId = "process-2"
+      )
+      streamsGroupHeartbeatResponse2.errorCode == Errors.NONE.code()
     }, "Second StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
       // Both members continue to send heartbeats with their assigned tasks
       TestUtils.waitUntilTrue(() => {
-        val streamsGroupHeartbeatRequest1 = new StreamsGroupHeartbeatRequest.Builder(
-          new StreamsGroupHeartbeatRequestData()
-            .setGroupId(groupId)
-            .setMemberId(memberId1)
-            .setMemberEpoch(streamsGroupHeartbeatResponse1.data.memberEpoch())
-            .setRebalanceTimeoutMs(1000)
-            .setActiveTasks(convertTaskIds(streamsGroupHeartbeatResponse1.data.activeTasks()))
-            .setStandbyTasks(convertTaskIds(streamsGroupHeartbeatResponse1.data.standbyTasks()))
-            .setWarmupTasks(convertTaskIds(streamsGroupHeartbeatResponse1.data.warmupTasks()))
-            .setTopology(topology)
-        ).build(0)
-
-        streamsGroupHeartbeatResponse1 = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest1)
-        streamsGroupHeartbeatResponse1.data.errorCode == Errors.NONE.code()
+        streamsGroupHeartbeatResponse1 = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId1,
+          memberEpoch = streamsGroupHeartbeatResponse1.memberEpoch(),
+          rebalanceTimeoutMs = 1000,
+          activeTasks = Option(streamsGroupHeartbeatResponse1)
+            .map(r => convertTaskIds(r.activeTasks()).asScala.toList)
+            .getOrElse(List.empty),
+          standbyTasks = Option(streamsGroupHeartbeatResponse1)
+            .map(r => convertTaskIds(r.standbyTasks()).asScala.toList)
+            .getOrElse(List.empty),
+          warmupTasks = Option(streamsGroupHeartbeatResponse1)
+            .map(r => convertTaskIds(r.warmupTasks()).asScala.toList)
+            .getOrElse(List.empty),
+        )
+        streamsGroupHeartbeatResponse1.errorCode == Errors.NONE.code()
       }, "First member rebalance heartbeat did not succeed within the timeout period.")
 
       TestUtils.waitUntilTrue(() => {
-        val streamsGroupHeartbeatRequest2 = new StreamsGroupHeartbeatRequest.Builder(
-          new StreamsGroupHeartbeatRequestData()
-            .setGroupId(groupId)
-            .setMemberId(memberId2)
-            .setMemberEpoch(streamsGroupHeartbeatResponse2.data.memberEpoch())
-            .setRebalanceTimeoutMs(1000)
-            .setActiveTasks(convertTaskIds(streamsGroupHeartbeatResponse2.data.activeTasks()))
-            .setStandbyTasks(convertTaskIds(streamsGroupHeartbeatResponse2.data.standbyTasks()))
-            .setWarmupTasks(convertTaskIds(streamsGroupHeartbeatResponse2.data.warmupTasks()))
-            .setTopology(topology)
-        ).build(0)
-
-        streamsGroupHeartbeatResponse2 = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest2)
-        streamsGroupHeartbeatResponse2.data.errorCode == Errors.NONE.code()
+        streamsGroupHeartbeatResponse2 = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId2,
+          memberEpoch = streamsGroupHeartbeatResponse2.memberEpoch(),
+          rebalanceTimeoutMs = 1000,
+          activeTasks = Option(streamsGroupHeartbeatResponse1)
+            .map(r => convertTaskIds(r.activeTasks()).asScala.toList)
+            .getOrElse(List.empty),
+          standbyTasks = Option(streamsGroupHeartbeatResponse1)
+            .map(r => convertTaskIds(r.standbyTasks()).asScala.toList)
+            .getOrElse(List.empty),
+          warmupTasks = Option(streamsGroupHeartbeatResponse1)
+            .map(r => convertTaskIds(r.warmupTasks()).asScala.toList)
+            .getOrElse(List.empty)
+        )
+        streamsGroupHeartbeatResponse2.errorCode == Errors.NONE.code()
       }, "Second member rebalance heartbeat did not succeed within the timeout period.")
 
-    // Verify initial state with no standby tasks
-    assertEquals(0, streamsGroupHeartbeatResponse1.data.standbyTasks().size(), "Member 1 should have no standby tasks initially")
-    assertEquals(0, streamsGroupHeartbeatResponse2.data.standbyTasks().size(), "Member 2 should have no standby tasks initially")
+      // Verify initial state with no standby tasks
+      assertEquals(0, streamsGroupHeartbeatResponse1.standbyTasks().size(), "Member 1 should have no standby tasks initially")
+      assertEquals(0, streamsGroupHeartbeatResponse1.standbyTasks().size(), "Member 2 should have no standby tasks initially")
 
       // Change streams.num.standby.replicas = 1
       val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
@@ -281,48 +274,47 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
 
       // Send heartbeats to trigger rebalance after config change
       TestUtils.waitUntilTrue(() => {
-        val streamsGroupHeartbeatRequest1 = new StreamsGroupHeartbeatRequest.Builder(
-          new StreamsGroupHeartbeatRequestData()
-            .setGroupId(groupId)
-            .setMemberId(memberId1)
-            .setMemberEpoch(streamsGroupHeartbeatResponse1.data.memberEpoch())
-            .setRebalanceTimeoutMs(1000)
-            .setActiveTasks(Collections.emptyList())
-            .setStandbyTasks(Collections.emptyList())
-            .setWarmupTasks(Collections.emptyList())
-        ).build(0)
-
-        streamsGroupHeartbeatResponse1 = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest1)
-        streamsGroupHeartbeatResponse1.data.errorCode == Errors.NONE.code() &&
-          streamsGroupHeartbeatResponse1.data.standbyTasks()!= null
+        streamsGroupHeartbeatResponse1 = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId1,
+          memberEpoch = streamsGroupHeartbeatResponse1.memberEpoch(),
+          rebalanceTimeoutMs = 1000,
+          activeTasks = List.empty,
+          standbyTasks = List.empty,
+          warmupTasks = List.empty
+        )
+        streamsGroupHeartbeatResponse1.errorCode == Errors.NONE.code() &&
+          streamsGroupHeartbeatResponse1.standbyTasks()!= null
       }, "First member heartbeat after config change did not succeed within the timeout period.")
 
       TestUtils.waitUntilTrue(() => {
-        val streamsGroupHeartbeatRequest2 = new StreamsGroupHeartbeatRequest.Builder(
-          new StreamsGroupHeartbeatRequestData()
-            .setGroupId(groupId)
-            .setMemberId(memberId2)
-            .setMemberEpoch(streamsGroupHeartbeatResponse2.data.memberEpoch())
-            .setRebalanceTimeoutMs(1000)
-            .setActiveTasks(Collections.emptyList())
-            .setStandbyTasks(Collections.emptyList())
-            .setWarmupTasks(Collections.emptyList())
-        ).build(0)
-
-        streamsGroupHeartbeatResponse2 = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest2)
-        streamsGroupHeartbeatResponse2.data.errorCode == Errors.NONE.code() &&
-          streamsGroupHeartbeatResponse2.data.standbyTasks() != null
+        streamsGroupHeartbeatResponse2 = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId2,
+          memberEpoch = streamsGroupHeartbeatResponse2.memberEpoch(),
+          rebalanceTimeoutMs = 1000,
+          activeTasks = List.empty,
+          standbyTasks = List.empty,
+          warmupTasks = List.empty
+        )
+        streamsGroupHeartbeatResponse2.errorCode == Errors.NONE.code() &&
+          streamsGroupHeartbeatResponse2.standbyTasks() != null
       }, "Second member heartbeat after config change did not succeed within the timeout period.")
 
       // Verify that at least one member has active tasks
-      val member1HasActive = streamsGroupHeartbeatResponse1.data.activeTasks().size() > 0
-      val member2HasActive = streamsGroupHeartbeatResponse2.data.activeTasks().size() > 0
-      assertTrue(member1HasActive || member2HasActive, "At least one member should have active tasks after config change")
+      val member1HasActiveTasks = streamsGroupHeartbeatResponse1.activeTasks().size()
+      val member2HasActiveTasks = streamsGroupHeartbeatResponse2.activeTasks().size()
+      assertTrue(member1HasActiveTasks + member2HasActiveTasks > 0, "At least one member should have active tasks after config change")
 
       // Verify that at least one member has standby tasks
-      val member1HasStandby = streamsGroupHeartbeatResponse1.data.standbyTasks().size() > 0
-      val member2HasStandby = streamsGroupHeartbeatResponse2.data.standbyTasks().size() > 0
-      assertTrue(member1HasStandby || member2HasStandby, "At least one member should have standby tasks after config change")
+      val member1HasStandbyTasks = streamsGroupHeartbeatResponse1.standbyTasks().size()
+      val member2HasStandbyTasks = streamsGroupHeartbeatResponse2.standbyTasks().size()
+      assertTrue(member1HasStandbyTasks + member2HasStandbyTasks > 0, "At least one member should have standby tasks after config change")
+
+      // With 2 members and streams.num.standby.replicas=1, each active task should have 1 standby
+      val totalActiveTasks = member1HasActiveTasks + member2HasActiveTasks
+      val totalStandbyTasks = member1HasStandbyTasks + member2HasStandbyTasks
+      assertEquals(totalActiveTasks, totalStandbyTasks, "Each active task should have one standby")
 
     } finally {
       admin.close()
@@ -366,86 +358,78 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       val topology = createMockTopology(topicName)
 
       // First member joins the group
-      val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequest.Builder(
-        new StreamsGroupHeartbeatRequestData()
-          .setGroupId(groupId)
-          .setMemberId(memberId)
-          .setMemberEpoch(0)
-          .setRebalanceTimeoutMs(1000)
-          .setActiveTasks(java.util.Collections.emptyList())
-          .setStandbyTasks(java.util.Collections.emptyList())
-          .setWarmupTasks(java.util.Collections.emptyList())
-          .setTopology(topology)
-      ).build(0)
-
-      var streamsGroupHeartbeatResponse: StreamsGroupHeartbeatResponse = null
+      var streamsGroupHeartbeatResponse: StreamsGroupHeartbeatResponseData = null
       TestUtils.waitUntilTrue(() => {
-        streamsGroupHeartbeatResponse = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest)
-        streamsGroupHeartbeatResponse.data.errorCode == Errors.NONE.code()
+        streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId,
+          memberEpoch = 0,
+          rebalanceTimeoutMs = 1000,
+          activeTasks = List.empty,
+          standbyTasks = List.empty,
+          warmupTasks = List.empty,
+          topology = topology
+        )
+        streamsGroupHeartbeatResponse.errorCode == Errors.NONE.code()
       }, "StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
-      val memberEpoch = streamsGroupHeartbeatResponse.data.memberEpoch()
+      val memberEpoch = streamsGroupHeartbeatResponse.memberEpoch()
       assertEquals(1, memberEpoch)
 
       // Blocking the thread for 1 sec so that the session times out and the member needs to rejoin
       Thread.sleep(1000)
 
       // Prepare the next heartbeat which should fail due to member expiration
-      val expiredHeartbeatRequest = new StreamsGroupHeartbeatRequest.Builder(
-        new StreamsGroupHeartbeatRequestData()
-          .setGroupId(groupId)
-          .setMemberId(memberId)
-          .setMemberEpoch(memberEpoch)
-          .setRebalanceTimeoutMs(1000)
-          .setActiveTasks(convertTaskIds(streamsGroupHeartbeatResponse.data.activeTasks()))
-          .setStandbyTasks(convertTaskIds(streamsGroupHeartbeatResponse.data.standbyTasks()))
-          .setWarmupTasks(convertTaskIds(streamsGroupHeartbeatResponse.data.warmupTasks()))
-      ).build(0)
-
       TestUtils.waitUntilTrue(() => {
-        val expiredResponse = connectAndReceive[StreamsGroupHeartbeatResponse](expiredHeartbeatRequest)
-        expiredResponse.data.errorCode == Errors.UNKNOWN_MEMBER_ID.code() &&
-          expiredResponse.data.memberEpoch() == 0
-          expiredResponse.data.errorMessage().equals(s"Member $memberId is not a member of group $groupId.")
+        val expiredResponse = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId,
+          memberEpoch = memberEpoch,
+          rebalanceTimeoutMs = 1000,
+          activeTasks = convertTaskIds(streamsGroupHeartbeatResponse.activeTasks()).asScala.toList,
+          standbyTasks = convertTaskIds(streamsGroupHeartbeatResponse.standbyTasks()).asScala.toList,
+          warmupTasks = convertTaskIds(streamsGroupHeartbeatResponse.warmupTasks()).asScala.toList,
+          expectedError = Errors.UNKNOWN_MEMBER_ID
+        )
+        expiredResponse.errorCode == Errors.UNKNOWN_MEMBER_ID.code() &&
+          expiredResponse.memberEpoch() == 0 &&
+          expiredResponse.errorMessage().equals(s"Member $memberId is not a member of group $groupId.")
       }, "Member should have been expired because of the timeout.")
 
       // Member sends heartbeat again to join the streams group
-      var rejoinHeartbeatResponse: StreamsGroupHeartbeatResponse = null
+      var rejoinHeartbeatResponse: StreamsGroupHeartbeatResponseData = null
       TestUtils.waitUntilTrue(() => {
-        val rejoinRequest = new StreamsGroupHeartbeatRequest.Builder(
-          new StreamsGroupHeartbeatRequestData()
-            .setGroupId(groupId)
-            .setMemberId(memberId)
-            .setMemberEpoch(0)
-            .setRebalanceTimeoutMs(1000)
-            .setActiveTasks(Option(rejoinHeartbeatResponse)
-              .map(r => convertTaskIds(r.data().activeTasks()))
-              .getOrElse(Collections.emptyList()))
-            .setStandbyTasks(Option(rejoinHeartbeatResponse)
-              .map(r => convertTaskIds(r.data().standbyTasks()))
-              .getOrElse(Collections.emptyList()))
-            .setWarmupTasks(Option(rejoinHeartbeatResponse)
-              .map(r => convertTaskIds(r.data().warmupTasks()))
-              .getOrElse(Collections.emptyList()))
-            .setTopology(topology)
-        ).build(0)
-
-        rejoinHeartbeatResponse = connectAndReceive[StreamsGroupHeartbeatResponse](rejoinRequest)
-        rejoinHeartbeatResponse.data.errorCode == Errors.NONE.code()
+        rejoinHeartbeatResponse = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId,
+          memberEpoch = 0,
+          rebalanceTimeoutMs = 1000,
+          activeTasks = Option(rejoinHeartbeatResponse)
+            .map(r => convertTaskIds(r.activeTasks()).asScala.toList)
+            .getOrElse(List.empty),
+          standbyTasks = Option(rejoinHeartbeatResponse)
+            .map(r => convertTaskIds(r.standbyTasks()).asScala.toList)
+            .getOrElse(List.empty),
+          warmupTasks = Option(rejoinHeartbeatResponse)
+            .map(r => convertTaskIds(r.warmupTasks()).asScala.toList)
+            .getOrElse(List.empty),
+          topology = topology
+        )
+        rejoinHeartbeatResponse.errorCode == Errors.NONE.code()
       }, "Member rejoin did not succeed within the timeout period.")
 
       // Verify the response for rejoined member
       assert(rejoinHeartbeatResponse != null, "Rejoin StreamsGroupHeartbeatResponse should not be null")
-      assertEquals(memberId, rejoinHeartbeatResponse.data.memberId())
-      assertTrue(rejoinHeartbeatResponse.data.memberEpoch() > memberEpoch, "Epoch should have been bumped when member rejoined")
+      assertEquals(memberId, rejoinHeartbeatResponse.memberId())
+      assertTrue(rejoinHeartbeatResponse.memberEpoch() > memberEpoch, "Epoch should have been bumped when member rejoined")
       val expectedActiveTasks = List(
         new StreamsGroupHeartbeatResponseData.TaskIds()
           .setSubtopologyId("subtopology-1")
           .setPartitions(List(0, 1).map(_.asInstanceOf[Integer]).asJava)
       ).asJava
-      assertEquals(expectedActiveTasks, rejoinHeartbeatResponse.data().activeTasks())
-      assertEquals(0, rejoinHeartbeatResponse.data.standbyTasks().size())
-      assertEquals(0, rejoinHeartbeatResponse.data.warmupTasks().size())
+      assertEquals(expectedActiveTasks, rejoinHeartbeatResponse.activeTasks())
+      assertEquals(0, Option(rejoinHeartbeatResponse.standbyTasks()).map(_.size()).getOrElse(0))
+      assertEquals(0, Option(rejoinHeartbeatResponse.warmupTasks()).map(_.size()).getOrElse(0))
 
     } finally {
       admin.close()
@@ -481,66 +465,59 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       val topology = createMockTopology(topicName)
 
       // First member joins the group
-      var streamsGroupHeartbeatResponse: StreamsGroupHeartbeatResponse = null
+      var streamsGroupHeartbeatResponse: StreamsGroupHeartbeatResponseData = null
       TestUtils.waitUntilTrue(() => {
-        val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequest.Builder(
-          new StreamsGroupHeartbeatRequestData()
-            .setGroupId(groupId)
-            .setMemberId(memberId)
-            .setMemberEpoch(0)
-            .setRebalanceTimeoutMs(1000)
-            .setActiveTasks(Option(streamsGroupHeartbeatResponse)
-              .map(r => convertTaskIds(r.data().activeTasks()))
-              .getOrElse(Collections.emptyList()))
-            .setStandbyTasks(Option(streamsGroupHeartbeatResponse)
-              .map(r => convertTaskIds(r.data().standbyTasks()))
-              .getOrElse(Collections.emptyList()))
-            .setWarmupTasks(Option(streamsGroupHeartbeatResponse)
-              .map(r => convertTaskIds(r.data().warmupTasks()))
-              .getOrElse(Collections.emptyList()))
-            .setTopology(topology)
-        ).build(0)
-
-        streamsGroupHeartbeatResponse = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequest)
-        streamsGroupHeartbeatResponse.data.errorCode == Errors.NONE.code()
+        streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId,
+          memberEpoch = 0,
+          rebalanceTimeoutMs = 1000,
+          activeTasks = Option(streamsGroupHeartbeatResponse)
+            .map(r => convertTaskIds(r.activeTasks()).asScala.toList)
+            .getOrElse(List.empty),
+          standbyTasks = Option(streamsGroupHeartbeatResponse)
+            .map(r => convertTaskIds(r.standbyTasks()).asScala.toList)
+            .getOrElse(List.empty),
+          warmupTasks = Option(streamsGroupHeartbeatResponse)
+            .map(r => convertTaskIds(r.warmupTasks()).asScala.toList)
+            .getOrElse(List.empty),
+          topology = topology
+        )
+        streamsGroupHeartbeatResponse.errorCode == Errors.NONE.code()
       }, "StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
       // Verify the response for member
       assert(streamsGroupHeartbeatResponse != null, "StreamsGroupHeartbeatResponse should not be null")
-      assertEquals(memberId, streamsGroupHeartbeatResponse.data.memberId())
-      assertEquals(1, streamsGroupHeartbeatResponse.data.memberEpoch())
-      assertNotNull(streamsGroupHeartbeatResponse.data().activeTasks())
+      assertEquals(memberId, streamsGroupHeartbeatResponse.memberId())
+      assertEquals(1, streamsGroupHeartbeatResponse.memberEpoch())
+      assertNotNull(streamsGroupHeartbeatResponse.activeTasks())
 
       // Restart the only running broker
       val broker = cluster.brokers().values().iterator().next()
       cluster.shutdownBroker(broker.config.brokerId)
       cluster.startBroker(broker.config.brokerId)
 
-      // Prepare the next heartbeat for member
-      val streamsGroupHeartbeatRequestAfterRestart = new StreamsGroupHeartbeatRequest.Builder(
-        new StreamsGroupHeartbeatRequestData()
-          .setGroupId(groupId)
-          .setMemberId(memberId)
-          .setMemberEpoch(streamsGroupHeartbeatResponse.data.memberEpoch())
-          .setRebalanceTimeoutMs(1000)
-          .setActiveTasks(convertTaskIds(streamsGroupHeartbeatResponse.data.activeTasks()))
-          .setStandbyTasks(convertTaskIds(streamsGroupHeartbeatResponse.data.standbyTasks()))
-          .setWarmupTasks(convertTaskIds(streamsGroupHeartbeatResponse.data.warmupTasks()))
-      ).build(0)
-
       // Should receive no error and no assignment changes
       TestUtils.waitUntilTrue(() => {
-        streamsGroupHeartbeatResponse = connectAndReceive[StreamsGroupHeartbeatResponse](streamsGroupHeartbeatRequestAfterRestart)
-        streamsGroupHeartbeatResponse.data.errorCode == Errors.NONE.code()
+        streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId,
+          memberEpoch = streamsGroupHeartbeatResponse.memberEpoch(),
+          rebalanceTimeoutMs = 1000,
+          activeTasks = convertTaskIds(streamsGroupHeartbeatResponse.activeTasks()).asScala.toList,
+          standbyTasks = convertTaskIds(streamsGroupHeartbeatResponse.standbyTasks()).asScala.toList,
+          warmupTasks = convertTaskIds(streamsGroupHeartbeatResponse.warmupTasks()).asScala.toList
+        )
+        streamsGroupHeartbeatResponse.errorCode == Errors.NONE.code()
       }, "StreamsGroupHeartbeatRequest after broker restart did not succeed within the timeout period.")
 
       // Verify the response. Epoch should not have changed and null assignments determine that no
       // change in old assignment
-      assertEquals(memberId, streamsGroupHeartbeatResponse.data.memberId())
-      assertEquals(1, streamsGroupHeartbeatResponse.data.memberEpoch())
-      assertNull(streamsGroupHeartbeatResponse.data.activeTasks())
-      assertNull(streamsGroupHeartbeatResponse.data.standbyTasks())
-      assertNull(streamsGroupHeartbeatResponse.data.warmupTasks())
+      assertEquals(memberId, streamsGroupHeartbeatResponse.memberId())
+      assertEquals(1, streamsGroupHeartbeatResponse.memberEpoch())
+      assertNull(streamsGroupHeartbeatResponse.activeTasks())
+      assertNull(streamsGroupHeartbeatResponse.standbyTasks())
+      assertNull(streamsGroupHeartbeatResponse.warmupTasks())
 
     } finally {
       admin.close()
