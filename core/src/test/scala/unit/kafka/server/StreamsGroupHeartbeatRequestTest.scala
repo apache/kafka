@@ -19,7 +19,6 @@ package kafka.server
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.{StreamsGroupHeartbeatRequestData, StreamsGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
@@ -46,11 +45,12 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
   )
   def testStreamsGroupHeartbeatWithInvalidAPIVersion(): Unit = {
     // Test that invalid API version throws UnsupportedVersionException
-    assertThrows(classOf[UnsupportedVersionException], () => {
-      new StreamsGroupHeartbeatRequest.Builder(
-        new StreamsGroupHeartbeatRequestData()
-      ).build(-1)
-    })
+    assertThrows(classOf[UnsupportedVersionException], () =>
+      streamsGroupHeartbeat(
+        groupId = "test-group",
+        expectedError = Errors.UNSUPPORTED_VERSION,
+        version = -1)
+    )
   }
 
   @ClusterTest(
@@ -70,7 +70,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     val streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
       groupId = "test-group",
       memberId = "test-member",
-      memberEpoch = 0,
       rebalanceTimeoutMs = 1000,
       activeTasks = List.empty,
       standbyTasks = List.empty,
@@ -96,7 +95,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     val streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
       groupId = "test-group",
       memberId = "test-member",
-      memberEpoch = 0,
       rebalanceTimeoutMs = 1000,
       activeTasks = List.empty,
       standbyTasks = List.empty,
@@ -122,7 +120,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     val streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
       groupId = "test-group",
       memberId = "test-member",
-      memberEpoch = 0,
       rebalanceTimeoutMs = 1000,
       activeTasks = List.empty,
       standbyTasks = List.empty,
@@ -159,7 +156,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
           groupId = groupId,
           memberId = memberId,
-          memberEpoch = 0,
           rebalanceTimeoutMs = 1000,
           activeTasks = List.empty,
           standbyTasks = List.empty,
@@ -196,7 +192,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
           groupId = groupId,
           memberId = memberId,
-          memberEpoch = 0,
           rebalanceTimeoutMs = 1000,
           activeTasks = List.empty,
           standbyTasks = List.empty,
@@ -259,7 +254,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         streamsGroupHeartbeatResponse1 = streamsGroupHeartbeat(
           groupId = groupId,
           memberId = memberId1,
-          memberEpoch = 0,
           rebalanceTimeoutMs = 1000,
           activeTasks = Option(streamsGroupHeartbeatResponse1)
             .map(r => convertTaskIds(r.activeTasks()))
@@ -288,7 +282,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         streamsGroupHeartbeatResponse2 = streamsGroupHeartbeat(
           groupId = groupId,
           memberId = memberId2,
-          memberEpoch = 0,
           rebalanceTimeoutMs = 1000,
           activeTasks = Option(streamsGroupHeartbeatResponse2)
             .map(r => convertTaskIds(r.activeTasks()))
@@ -374,7 +367,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       val streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
         groupId = "",  // Empty group ID
         memberId = "test-member",
-        memberEpoch = 0,
         rebalanceTimeoutMs = 1000,
         activeTasks = List.empty,
         standbyTasks = List.empty,
@@ -424,7 +416,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
           groupId = "test-group",
           memberId = "test-member",
-          memberEpoch = 0,
           rebalanceTimeoutMs = 1000,
           activeTasks = List.empty,
           standbyTasks = List.empty,
@@ -491,7 +482,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
           groupId = "test-group",
           memberId = "test-member",
-          memberEpoch = 0,
           rebalanceTimeoutMs = 1000,
           activeTasks = List.empty,
           standbyTasks = List.empty,
