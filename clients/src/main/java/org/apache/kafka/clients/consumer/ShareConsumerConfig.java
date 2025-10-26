@@ -54,7 +54,6 @@ public class ShareConsumerConfig extends AbstractConfig {
     private static final List<String> SHARE_GROUP_UNSUPPORTED_CONFIGS = List.of(
             ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
             ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,
-            ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG,
             ConsumerConfig.GROUP_INSTANCE_ID_CONFIG,
             ConsumerConfig.ISOLATION_LEVEL_CONFIG,
             ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,

@@ -30,7 +30,6 @@ public class ShareConsumerConfigTest {
 
     @Test
     public void testUnsupportedShareConsumerConfigs() {
-
         verifyUnsupportedShareConsumerConfig(Map.of(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"));
         verifyUnsupportedShareConsumerConfig(Map.of(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true"));
         verifyUnsupportedShareConsumerConfig(Map.of(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "1"));
