@@ -278,14 +278,14 @@ public class MetadataLoaderMetricsTest {
 
             // The first updateIdleTime call is ignored by the TimeRatio sensor.
             // This establishes the baseline timestamp for subsequent measurements.
-            fakeMetrics.metrics.updateIdleTime(10);
+            fakeMetrics.metrics.updateIdleTime(10, fakeMetrics.time.milliseconds());
             fakeMetrics.time.sleep(40);
-            fakeMetrics.metrics.updateIdleTime(20);
+            fakeMetrics.metrics.updateIdleTime(20, fakeMetrics.time.milliseconds());
             // avgIdleRatio = (20ms idle) / (40ms interval) = 0.5
             assertEquals(0.5, avgIdleRatio.value(), delta);
 
             fakeMetrics.time.sleep(20);
-            fakeMetrics.metrics.updateIdleTime(1);
+            fakeMetrics.metrics.updateIdleTime(1, fakeMetrics.time.milliseconds());
             // avgIdleRatio = (1ms idle) / (20ms interval) = 0.05
             assertEquals(0.05, avgIdleRatio.value(), delta);
         } finally {

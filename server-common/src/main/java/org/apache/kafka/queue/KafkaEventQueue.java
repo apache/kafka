@@ -33,7 +33,7 @@ import java.util.TreeMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
@@ -294,7 +294,8 @@ public final class KafkaEventQueue implements EventQueue {
                         );
                         interrupted = true;
                     } finally {
-                        idleTimeCallback.accept(Math.max(time.milliseconds() - startIdleMs, 0));
+                        long currentTimeMs = time.milliseconds();
+                        idleTimeCallback.accept(Math.max(currentTimeMs - startIdleMs, 0), currentTimeMs);
                     }
                 } finally {
                     lock.unlock();
@@ -444,7 +445,7 @@ public final class KafkaEventQueue implements EventQueue {
     /**
      * Optional callback for queue idle time tracking.
      */
-    private final Consumer<Long> idleTimeCallback;
+    private final BiConsumer<Long, Long> idleTimeCallback;
 
 
     public KafkaEventQueue(
@@ -452,7 +453,7 @@ public final class KafkaEventQueue implements EventQueue {
         LogContext logContext,
         String threadNamePrefix
     ) {
-        this(time, logContext, threadNamePrefix, VoidEvent.INSTANCE, __ -> { });
+        this(time, logContext, threadNamePrefix, VoidEvent.INSTANCE, (__, ___) -> { });
     }
 
     public KafkaEventQueue(
@@ -461,7 +462,7 @@ public final class KafkaEventQueue implements EventQueue {
         String threadNamePrefix,
         Event cleanupEvent
     ) {
-        this(time, logContext, threadNamePrefix, cleanupEvent, __ -> { });
+        this(time, logContext, threadNamePrefix, cleanupEvent, (__, ___) -> { });
     }
 
     public KafkaEventQueue(
@@ -469,7 +470,7 @@ public final class KafkaEventQueue implements EventQueue {
         LogContext logContext,
         String threadNamePrefix,
         Event cleanupEvent,
-        Consumer<Long> idleTimeCallback
+        BiConsumer<Long, Long> idleTimeCallback
     ) {
         this.time = time;
         this.cleanupEvent = Objects.requireNonNull(cleanupEvent);

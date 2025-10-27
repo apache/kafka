@@ -121,11 +121,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             }
             if (metrics == null) {
                 metrics = new MetadataLoaderMetrics(
-                        Optional.empty(),
-                        time,
-                        __ -> { },
-                        __ -> { },
-                        new AtomicReference<>(MetadataProvenance.EMPTY));
+                    Optional.empty(),
+                    time,
+                    __ -> { },
+                    __ -> { },
+                    new AtomicReference<>(MetadataProvenance.EMPTY));
             }
             return new MetadataLoader(
                 time,
