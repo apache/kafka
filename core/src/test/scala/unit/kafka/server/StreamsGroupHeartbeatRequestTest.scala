@@ -426,7 +426,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       }, "StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
       // Verify the member joined successfully
-      assert(streamsGroupHeartbeatResponse != null, "StreamsGroupHeartbeatResponse should not be null")
+      assertNotNull(streamsGroupHeartbeatResponse, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals("test-member", streamsGroupHeartbeatResponse.memberId())
       assertEquals(1, streamsGroupHeartbeatResponse.memberEpoch())
 
