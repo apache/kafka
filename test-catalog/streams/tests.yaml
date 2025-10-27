@@ -2531,6 +2531,7 @@ org.apache.kafka.streams.processor.internals.StateDirectoryTest:
 - shouldGetFreshProcessIdIfJsonUnreadable
 - shouldGetFreshProcessIdIfProcessFileDeleted
 - shouldHaveSecurePermissions
+- shouldHaveSecurePermissionsIfGroupWriteAccessAllowed
 - shouldInitializeStandbyTasksForLocalState
 - shouldLockMultipleTaskDirectories
 - shouldLockTaskStateDirectoryWhenDirectoryCreationDisabled
@@ -2568,6 +2569,7 @@ org.apache.kafka.streams.processor.internals.StateDirectoryTest:
 - shouldThrowProcessorStateExceptionIfStateDirOccupied
 - shouldThrowProcessorStateExceptionIfTestDirOccupied
 - shouldUnlockStartupTasksOnClose
+- shouldUpdateSecurePermissions
 org.apache.kafka.streams.processor.internals.StateManagerUtilTest:
 - shouldNotCloseStateManagerIfUnableToLockTaskDirectory
 - shouldNotWipeStateStoresIfUnableToLockTaskDirectory
