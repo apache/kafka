@@ -809,7 +809,7 @@ public class AbstractHerderTest {
         ConfigInfos result = herder.validateConnectorConfig(config, s -> null, false);
         assertEquals(ConnectorType.SOURCE, herder.connectorType(config));
 
-        // We expect there to be errors due to sasl.jaas.config not being allowed Note that these assertions depend heavily on
+        // We expect there to be errors due to sasl.jaas.config not being allowed. Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
         assertEquals(SampleSourceConnector.class.getName(), result.name());
         // Each transform also gets its own group
