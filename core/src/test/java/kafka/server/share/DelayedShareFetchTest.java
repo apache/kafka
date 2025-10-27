@@ -816,7 +816,7 @@ public class DelayedShareFetchTest {
 
         Mockito.verify(exceptionHandler, times(1)).accept(any(), any());
         Mockito.verify(replicaManager, times(1)).readFromLog(
-                any(), any(), any(ReplicaQuota.class), anyBoolean());
+            any(), any(), any(ReplicaQuota.class), anyBoolean());
         Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(any());
         Mockito.verify(sp0, times(1)).releaseFetchLock(fetchId);
 
@@ -827,7 +827,7 @@ public class DelayedShareFetchTest {
 
         // Read from log and release partition locks should not be called as the request is errored out.
         Mockito.verify(replicaManager, times(1)).readFromLog(
-                any(), any(), any(ReplicaQuota.class), anyBoolean());
+            any(), any(), any(ReplicaQuota.class), anyBoolean());
         Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(any());
         assertTrue(delayedShareFetch.lock().tryLock());
         assertEquals(2, shareGroupMetrics.topicPartitionsAcquireTimeMs(groupId).count());
