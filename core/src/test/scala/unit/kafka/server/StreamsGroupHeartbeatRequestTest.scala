@@ -298,7 +298,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       }, "Second StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
       // Verify second member gets assigned
-      assert(streamsGroupHeartbeatResponse2 != null, "StreamsGroupHeartbeatResponse should not be null")
+      assertNotNull(streamsGroupHeartbeatResponse2, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId2, streamsGroupHeartbeatResponse2.memberId())
       assertEquals(2, streamsGroupHeartbeatResponse2.memberEpoch())
 
