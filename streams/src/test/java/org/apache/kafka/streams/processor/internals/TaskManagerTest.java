@@ -3855,6 +3855,19 @@ public class TaskManagerTest {
     @SuppressWarnings("removal")
     @Test
     public void shouldCommitViaProducerIfEosV2Enabled() {
+        final StreamTask task01 = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING)
+            .build();
+
+        final StreamTask task02 = statefulTask(taskId02, taskId02ChangelogPartitions)
+            .withInputPartitions(taskId02Partitions)
+            .inState(State.RUNNING)
+            .build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.allTasks()).thenReturn(Set.of(task01, task02));
+
         final StreamsProducer producer = mock(StreamsProducer.class);
         when(activeTaskCreator.streamsProducer()).thenReturn(producer);
 
@@ -3864,22 +3877,27 @@ public class TaskManagerTest {
         allOffsets.putAll(offsetsT01);
         allOffsets.putAll(offsetsT02);
 
-        final TaskManager taskManager = setUpTaskManagerWithoutStateUpdater(ProcessingMode.EXACTLY_ONCE_V2, null, false);
+        when(task01.commitNeeded()).thenReturn(true);
+        when(task01.prepareCommit(true)).thenReturn(offsetsT01);
+        doNothing().when(task01).postCommit(false);
 
-        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager);
-        task01.setCommittableOffsetsAndMetadata(offsetsT01);
-        task01.setCommitNeeded();
-        taskManager.addTask(task01);
-        final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true, stateManager);
-        task02.setCommittableOffsetsAndMetadata(offsetsT02);
-        task02.setCommitNeeded();
-        taskManager.addTask(task02);
+        when(task02.commitNeeded()).thenReturn(true);
+        when(task02.prepareCommit(true)).thenReturn(offsetsT02);
+        doNothing().when(task02).postCommit(false);
 
         when(consumer.groupMetadata()).thenReturn(new ConsumerGroupMetadata("appId"));
+
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.EXACTLY_ONCE_V2, tasks);
 
         taskManager.commitAll();
 
         verify(producer).commitTransaction(allOffsets, new ConsumerGroupMetadata("appId"));
+        verify(task01, times(2)).commitNeeded();
+        verify(task01).prepareCommit(true);
+        verify(task01).postCommit(false);
+        verify(task02, times(2)).commitNeeded();
+        verify(task02).prepareCommit(true);
+        verify(task02).postCommit(false);
         verifyNoMoreInteractions(producer);
     }
 
