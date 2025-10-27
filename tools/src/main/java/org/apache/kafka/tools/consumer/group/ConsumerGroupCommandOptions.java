@@ -19,9 +19,6 @@ package org.apache.kafka.tools.consumer.group;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -31,7 +28,6 @@ import joptsimple.OptionSpec;
 import static org.apache.kafka.tools.ToolsUtils.minus;
 
 public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ConsumerGroupCommandOptions.class);
 
     private static final String BOOTSTRAP_SERVER_DOC = "The server(s) to connect to. REQUIRED for all options except for --validate-regex.";
     private static final String GROUP_DOC = "The consumer group we wish to act on.";
@@ -230,9 +226,6 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
             if (options.has(stateOpt) && options.valueOf(stateOpt) != null)
                 CommandLineUtils.printUsageAndExit(parser,
                     "Option " + describeOpt + " does not take a value for " + stateOpt);
-        } else {
-            if (options.has(timeoutMsOpt))
-                LOGGER.debug("Option " + timeoutMsOpt + " is applicable only when " + describeOpt + " is used.");
         }
 
         if (options.has(deleteOpt)) {
