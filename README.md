@@ -89,7 +89,13 @@ Generate coverage reports for the whole project:
 Generate coverage for a single module, i.e.: 
 
     ./gradlew clients:reportCoverage -PenableTestCoverage=true -Dorg.gradle.parallel=false
-    
+
+Coverage reports are located within the module's build directory, categorized by module type:
+
+Core Module (:core): `core/build/reports/scoverageTest/index.html`
+
+Other Modules: `<module>/build/reports/jacoco/test/html/index.html`
+
 ### Building a binary release gzipped tar ball ###
     ./gradlew clean releaseTarGz
 

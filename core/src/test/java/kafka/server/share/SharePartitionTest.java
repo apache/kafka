@@ -2324,6 +2324,109 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testAcquireWithMaxInFlightRecordsReleaseBatchAndAcquireSubsetRecords() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .withMaxInflightRecords(20)
+            .build();
+
+        // Acquire records, should be acquired till maxInFlightRecords i.e. 25 records till 24 offset.
+        fetchAcquiredRecords(sharePartition, memoryRecords(5), 5);
+        fetchAcquiredRecords(sharePartition, memoryRecords(5, 10), 10);
+        fetchAcquiredRecords(sharePartition, memoryRecords(15, 10), 10);
+
+        // Validate 3 batches are fetched and fourth batch should be skipped. Max in-flight records
+        // limit is reached.
+        assertEquals(3, sharePartition.cachedState().size());
+        assertEquals(0, sharePartition.cachedState().get(0L).firstOffset());
+        assertEquals(4, sharePartition.cachedState().get(0L).lastOffset());
+        assertEquals(5, sharePartition.cachedState().get(5L).firstOffset());
+        assertEquals(14, sharePartition.cachedState().get(5L).lastOffset());
+        assertEquals(15, sharePartition.cachedState().get(15L).firstOffset());
+        assertEquals(24, sharePartition.cachedState().get(15L).lastOffset());
+        assertEquals(25, sharePartition.nextFetchOffset());
+
+        // Release middle batch.
+        CompletableFuture<Void> ackResult = sharePartition.acknowledge(
+            MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(5, 14, List.of((byte) 2))));
+        assertNull(ackResult.join());
+        assertFalse(ackResult.isCompletedExceptionally());
+        // Validate the nextFetchOffset is updated to 5.
+        assertEquals(5, sharePartition.nextFetchOffset());
+
+        // The complete released batch should be acquired but not any other batch as the lastOffset
+        // is adjusted according to the minimum of fetched batch and endOffset.
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+                MEMBER_ID,
+                BATCH_SIZE,
+                500 /* Max fetch records */,
+                5 /* Fetch Offset */,
+                fetchPartitionData(memoryRecords(5, 10), 0),
+                FETCH_ISOLATION_HWM),
+            10);
+
+        // Validate 1 batch is fetched, with 10 records till end of batch.
+        assertArrayEquals(expectedAcquiredRecord(5, 14, 2).toArray(), acquiredRecordsList.toArray());
+        assertEquals(25, sharePartition.nextFetchOffset());
+    }
+
+    @Test
+    public void testAcquireWithMaxInFlightRecordsReleaseBatchAndAcquireSubsetRecordsOverlap() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .withMaxInflightRecords(20)
+            .build();
+
+        // Acquire records, should be acquired till maxInFlightRecords i.e. 25 records till 24 offset.
+        fetchAcquiredRecords(sharePartition, memoryRecords(5), 5);
+        fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
+        fetchAcquiredRecords(sharePartition, memoryRecords(15, 10), 10);
+
+        // Validate 4 batches are fetched and fourth batch should be skipped. Max in-flight records
+        // limit is reached.
+        assertEquals(4, sharePartition.cachedState().size());
+        assertEquals(0, sharePartition.cachedState().get(0L).firstOffset());
+        assertEquals(4, sharePartition.cachedState().get(0L).lastOffset());
+        assertEquals(5, sharePartition.cachedState().get(5L).firstOffset());
+        assertEquals(9, sharePartition.cachedState().get(5L).lastOffset());
+        assertEquals(10, sharePartition.cachedState().get(10L).firstOffset());
+        assertEquals(14, sharePartition.cachedState().get(10L).lastOffset());
+        assertEquals(15, sharePartition.cachedState().get(15L).firstOffset());
+        assertEquals(24, sharePartition.cachedState().get(15L).lastOffset());
+        assertEquals(25, sharePartition.nextFetchOffset());
+
+        // Release only 1 middle batch.
+        CompletableFuture<Void> ackResult = sharePartition.acknowledge(
+            MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(5, 9, List.of((byte) 2))));
+        assertNull(ackResult.join());
+        assertFalse(ackResult.isCompletedExceptionally());
+        // Validate the nextFetchOffset is updated to 5.
+        assertEquals(5, sharePartition.nextFetchOffset());
+
+        // Adjust the max fetch records to 6 so it's just 1 record more than the released batch size.
+        // This shall not impact the acquired records as only the released batch should be acquired.
+        // However, this previously caused an issue where the subset of records were acquired from the
+        // next batch due to incorrect calculation.
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+                MEMBER_ID,
+                BATCH_SIZE,
+                6 /* Max fetch records */,
+                5 /* Fetch Offset */,
+                fetchPartitionData(memoryRecords(5, 5), 0),
+                FETCH_ISOLATION_HWM),
+            5);
+
+        // Validate 1 batch is fetched, with 5 records till end of batch.
+        assertArrayEquals(expectedAcquiredRecord(5, 9, 2).toArray(), acquiredRecordsList.toArray());
+        assertEquals(25, sharePartition.nextFetchOffset());
+    }
+
+    @Test
     public void testNextFetchOffsetInitialState() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         assertEquals(0, sharePartition.nextFetchOffset());
