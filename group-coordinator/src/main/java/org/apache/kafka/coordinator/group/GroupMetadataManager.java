@@ -2045,13 +2045,13 @@ public class GroupMetadataManager {
 
         // Schedule initial rebalance delay for new streams groups to coalesce joins.
         int initialDelayMs = streamsGroupInitialRebalanceDelayMs(groupId);
-        if (isInitialRebalance & initialDelayMs > 0) {
+        if (isInitialRebalance && initialDelayMs > 0) {
             timer.scheduleIfAbsent(
                     streamsInitialRebalanceKey(groupId),
                     initialDelayMs,
                     TimeUnit.MILLISECONDS,
                     false,
-                    () -> EMPTY_RESULT
+                    () -> fireStreamsInitialRebalance(groupId)
             );
         }
 
@@ -4085,6 +4085,72 @@ public class GroupMetadataManager {
                 groupEpoch, ex.getMessage());
             log.error("[GroupId {}] {}.", group.groupId(), msg, ex);
             throw new UnknownServerException(msg, ex);
+        }
+    }
+
+    /**
+     * Fires the initial rebalance for a streams group when the delay timer expires.
+     * Computes and persists target assignment for all members if conditions are met.
+     *
+     * @param groupId The group id.
+     * @return A CoordinatorResult with records to persist the target assignment, or EMPTY_RESULT.
+     */
+    private CoordinatorResult<Void, CoordinatorRecord> fireStreamsInitialRebalance(
+        String groupId
+    ) {
+        try {
+            StreamsGroup group = streamsGroup(groupId);
+
+            if (group.groupEpoch() <= group.assignmentEpoch()) {
+                return EMPTY_RESULT;
+            }
+
+            if (!group.configuredTopology().isPresent()) {
+                return EMPTY_RESULT;
+            }
+
+            List<CoordinatorRecord> records = new ArrayList<>();
+            TaskAssignor assignor = streamsGroupAssignor(group.groupId());
+
+            try {
+                org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
+                    new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(
+                        group.groupId(),
+                        group.groupEpoch(),
+                        assignor,
+                        group.lastAssignmentConfigs()
+                    )
+                    .withMembers(group.members())
+                    .withTopology(group.configuredTopology().get())
+                    .withStaticMembers(group.staticMembers())
+                    .withMetadataImage(metadataImage)
+                    .withTargetAssignment(group.targetAssignment());
+
+                long startTimeMs = time.milliseconds();
+                org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
+                    assignmentResultBuilder.build();
+                long assignorTimeMs = time.milliseconds() - startTimeMs;
+
+                if (log.isDebugEnabled()) {
+                    log.debug("[GroupId {}] Initial rebalance: Computed target assignment for epoch {} with '{}' assignor in {}ms: {}.",
+                        group.groupId(), group.groupEpoch(), assignor, assignorTimeMs, assignmentResult.targetAssignment());
+                } else {
+                    log.info("[GroupId {}] Initial rebalance: Computed target assignment for epoch {} with '{}' assignor in {}ms.",
+                        group.groupId(), group.groupEpoch(), assignor, assignorTimeMs);
+                }
+
+                records.addAll(assignmentResult.records());
+
+                return new CoordinatorResult<>(records, null);
+            } catch (TaskAssignorException ex) {
+                String msg = String.format("Failed to compute target assignment for initial rebalance at epoch %d: %s",
+                    group.groupEpoch(), ex.getMessage());
+                log.error("[GroupId {}] {}.", group.groupId(), msg);
+                throw new UnknownServerException(msg, ex);
+            }
+        } catch (GroupIdNotFoundException ex) {
+            log.warn("[GroupId {}] Group not found during initial rebalance.", groupId);
+            return EMPTY_RESULT;
         }
     }
 
