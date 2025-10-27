@@ -2559,53 +2559,88 @@ public class TaskManagerTest {
 
     @Test
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringRevocationWithAlos() {
-        final StateMachineTask revokedActiveTask = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
-        final Map<TopicPartition, OffsetAndMetadata> offsets00 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
-        revokedActiveTask.setCommittableOffsetsAndMetadata(offsets00);
-        revokedActiveTask.setCommitNeeded();
+        // task being revoked - needs commit
+        final StreamTask revokedActiveTask = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RUNNING)
+            .build();
 
-        final StateMachineTask unrevokedActiveTaskWithCommitNeeded = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
-            @Override
-            public void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
-                fail("Should not try to mark changelogs as corrupted for uncorrupted task");
-            }
-        };
-        final Map<TopicPartition, OffsetAndMetadata> offsets01 = singletonMap(t1p1, new OffsetAndMetadata(1L, null));
-        unrevokedActiveTaskWithCommitNeeded.setCommittableOffsetsAndMetadata(offsets01);
-        unrevokedActiveTaskWithCommitNeeded.setCommitNeeded();
+        // unrevoked task that needs commit - this will also be affected by timeout
+        final StreamTask unrevokedActiveTaskWithCommit = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING)
+            .build();
 
-        final StateMachineTask unrevokedActiveTaskWithoutCommitNeeded = new StateMachineTask(taskId02, taskId02Partitions, true, stateManager);
+        // unrevoked task without commit needed - this should stay RUNNING
+        final StreamTask unrevokedActiveTaskWithoutCommit = statefulTask(taskId02, taskId02ChangelogPartitions)
+            .withInputPartitions(taskId02Partitions)
+            .inState(State.RUNNING)
+            .build();
 
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.allTasks()).thenReturn(Set.of(revokedActiveTask, unrevokedActiveTaskWithCommit, unrevokedActiveTaskWithoutCommit));
+
+        when(consumer.assignment()).thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
+
+        // revoked task needs commit
+        final Map<TopicPartition, OffsetAndMetadata> revokedTaskOffsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        when(revokedActiveTask.commitNeeded()).thenReturn(true);
+        when(revokedActiveTask.prepareCommit(true)).thenReturn(revokedTaskOffsets);
+        when(revokedActiveTask.changelogPartitions()).thenReturn(taskId00ChangelogPartitions);
+        doNothing().when(revokedActiveTask).suspend();
+        doNothing().when(revokedActiveTask).closeDirty();
+        doNothing().when(revokedActiveTask).revive();
+
+        // unrevoked task with commit also takes part in commit
+        final Map<TopicPartition, OffsetAndMetadata> unrevokedTaskOffsets = singletonMap(t1p1, new OffsetAndMetadata(1L, null));
+        when(unrevokedActiveTaskWithCommit.commitNeeded()).thenReturn(true);
+        when(unrevokedActiveTaskWithCommit.prepareCommit(true)).thenReturn(unrevokedTaskOffsets);
+        when(unrevokedActiveTaskWithCommit.changelogPartitions()).thenReturn(taskId01ChangelogPartitions);
+        doNothing().when(unrevokedActiveTaskWithCommit).suspend();
+        doNothing().when(unrevokedActiveTaskWithCommit).closeDirty();
+        doNothing().when(unrevokedActiveTaskWithCommit).revive();
+
+        // unrevoked task without commit needed
+        when(unrevokedActiveTaskWithoutCommit.commitNeeded()).thenReturn(false);
+
+        // mock timeout during commit - all offsets from tasks needing commit
         final Map<TopicPartition, OffsetAndMetadata> expectedCommittedOffsets = new HashMap<>();
-        expectedCommittedOffsets.putAll(offsets00);
-        expectedCommittedOffsets.putAll(offsets01);
-
-        final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
-            mkEntry(taskId00, taskId00Partitions),
-            mkEntry(taskId01, taskId01Partitions),
-            mkEntry(taskId02, taskId02Partitions)
-        );
-
-        when(consumer.assignment())
-            .thenReturn(assignment)
-            .thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
-
-        when(activeTaskCreator.createTasks(any(), eq(assignmentActive)))
-            .thenReturn(asList(revokedActiveTask, unrevokedActiveTaskWithCommitNeeded, unrevokedActiveTaskWithoutCommitNeeded));
-
+        expectedCommittedOffsets.putAll(revokedTaskOffsets);
+        expectedCommittedOffsets.putAll(unrevokedTaskOffsets);
         doThrow(new TimeoutException()).when(consumer).commitSync(expectedCommittedOffsets);
 
-        taskManager.handleAssignment(assignmentActive, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
-        assertThat(revokedActiveTask.state(), is(Task.State.RUNNING));
-        assertThat(unrevokedActiveTaskWithCommitNeeded.state(), is(State.RUNNING));
-        assertThat(unrevokedActiveTaskWithoutCommitNeeded.state(), is(Task.State.RUNNING));
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
 
         taskManager.handleRevocation(taskId00Partitions);
 
-        assertThat(revokedActiveTask.state(), is(State.SUSPENDED));
-        assertThat(unrevokedActiveTaskWithCommitNeeded.state(), is(State.CREATED));
-        assertThat(unrevokedActiveTaskWithoutCommitNeeded.state(), is(State.RUNNING));
+        // 1. verify that the revoked task was suspended, closed dirty, and revived
+        final InOrder revokedOrder = inOrder(revokedActiveTask, tasks);
+        revokedOrder.verify(revokedActiveTask).prepareCommit(true);
+        revokedOrder.verify(revokedActiveTask).suspend();
+        revokedOrder.verify(revokedActiveTask).closeDirty();
+        revokedOrder.verify(tasks).removeTask(revokedActiveTask);
+        revokedOrder.verify(revokedActiveTask).revive();
+        revokedOrder.verify(tasks).addPendingTasksToInit(argThat(set -> set.contains(revokedActiveTask)));
+
+        // 2. verify that the unrevoked task with commit also tried to commit and was closed dirty due to timeout
+        final InOrder unrevokedOrder = inOrder(unrevokedActiveTaskWithCommit, consumer, tasks);
+        unrevokedOrder.verify(unrevokedActiveTaskWithCommit).prepareCommit(true);
+        unrevokedOrder.verify(consumer).commitSync(expectedCommittedOffsets); // timeout thrown here
+        unrevokedOrder.verify(unrevokedActiveTaskWithCommit).suspend();
+        unrevokedOrder.verify(unrevokedActiveTaskWithCommit).closeDirty();
+        unrevokedOrder.verify(tasks).removeTask(unrevokedActiveTaskWithCommit);
+        unrevokedOrder.verify(unrevokedActiveTaskWithCommit).revive();
+        unrevokedOrder.verify(tasks).addPendingTasksToInit(argThat(set -> set.contains(unrevokedActiveTaskWithCommit)));
+
+        // 3. verify that the unrevoked task without commit needed was not affected
+        verify(unrevokedActiveTaskWithoutCommit, never()).prepareCommit(anyBoolean());
+        verify(unrevokedActiveTaskWithoutCommit, never()).suspend();
+        verify(unrevokedActiveTaskWithoutCommit, never()).closeDirty();
+
+        // input partitions were reset for affected tasks
+        verify(revokedActiveTask).addPartitionsForOffsetReset(taskId00Partitions);
+        verify(unrevokedActiveTaskWithCommit).addPartitionsForOffsetReset(taskId01Partitions);
+        verify(unrevokedActiveTaskWithoutCommit, never()).addPartitionsForOffsetReset(any());
     }
 
     @SuppressWarnings("removal")
