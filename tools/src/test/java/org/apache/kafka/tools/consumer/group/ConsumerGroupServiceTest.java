@@ -142,7 +142,7 @@ public class ConsumerGroupServiceTest {
                 true,
                 Set.of(
                     new MemberDescription(
-                        "member1", Optional.of("instance1"), "client1", "host1", new MemberAssignment(assignedTopicPartitions),
+                        "member1", Optional.of("instance1"), Optional.of("rackId1"), "client1", "host1", new MemberAssignment(assignedTopicPartitions),
                         Optional.empty(), Optional.empty(), Optional.empty()
                     )
                 ),
@@ -259,7 +259,7 @@ public class ConsumerGroupServiceTest {
     @SuppressWarnings("deprecation")
     private DescribeConsumerGroupsResult describeGroupsResult(GroupState groupState) {
         MemberDescription member1 = new MemberDescription(
-            "member1", Optional.of("instance1"), "client1", "host1", null,
+            "member1", Optional.of("instance1"), Optional.of("rackId1"), "client1", "host1", null,
             Optional.empty(), Optional.empty(), Optional.empty());
         ConsumerGroupDescription description = new ConsumerGroupDescription(GROUP,
                 true,
