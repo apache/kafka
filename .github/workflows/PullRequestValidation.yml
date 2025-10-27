@@ -1,0 +1,17 @@
+name: Pull Request Validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # Leverage the existing comprehensive build and test workflow
+  validate:
+    uses: ./.github/workflows/build.yml
+    with:
+      is-trunk: false  # This is a PR, not trunk
+      is-public-fork: true  # Assume public fork for safety (disables build scans)
+    secrets: inherit

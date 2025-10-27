@@ -1,0 +1,56 @@
+name: Build and Publish NuGet
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # Leverage the existing build workflow for compilation and testing
+  build-and-validate:
+    uses: ./.github/workflows/build.yml
+    with:
+      is-trunk: true
+      is-public-fork: false
+    secrets: inherit
+
+  # Publish NuGet packages after successful build
+  publish-nuget:
+    needs: build-and-validate
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Retrieve current year
+      run: echo "YEAR=$(date +%Y)" >> $GITHUB_ENV
+
+    - name: Install Mono
+      run: sudo apt-get install -y mono-complete
+
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v1
+
+    - name: Add private NuGet source
+      run: nuget sources Add -Username ${{ github.actor }} -Password ${{ secrets.GITHUB_TOKEN }} -StorePasswordInClearText -Name github -Source "https://nuget.pkg.github.com/etn-utilities/index.json"
+
+    - name: Setup Gradle (for extracting build artifacts)
+      uses: ./.github/actions/setup-gradle
+      with:
+        java-version: 23
+
+    - name: Build release tarball
+      run: ./gradlew releaseTarGz
+
+    - name: Find and extract Kafka package
+      run: |
+        ARCHIVE_PATH=$(find . -name "kafka_2.13-*.tgz" | head -n 1)
+        echo "Found archive: $ARCHIVE_PATH"
+        mkdir -p ./extract/kafka
+        tar -xvf $ARCHIVE_PATH -C ./extract/kafka --strip-components=1
+
+    - name: Generate and publish NuGet packages
+      run: |
+        nuget pack ./nupkg/kafka.nuspec -noninteractive -basepath .
+        nuget push *.nupkg -Source github -ApiKey ${{ secrets.GITHUB_TOKEN }} -SkipDuplicate -NonInteractive
