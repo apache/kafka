@@ -851,9 +851,9 @@ public class SharePartition {
                         inFlightBatch, groupId, topicIdPartition);
                     continue;
                 }
-                long numRecordsAcquired = inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1;
+                long recordsToAcquiredCount = inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1;
                 int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
-                if (isRecordLimitMode && (numRecordsAcquired > numRecordsRemaining)) {
+                if (isRecordLimitMode && (recordsToAcquiredCount > numRecordsRemaining)) {
                     AcquiredRecords records = filterShareAcquiredRecordsInRecordLimitMode(numRecordsRemaining, inFlightBatch);
                     result.add(records);
                     acquiredCount += numRecordsRemaining;
@@ -868,7 +868,7 @@ public class SharePartition {
                         .setFirstOffset(inFlightBatch.firstOffset())
                         .setLastOffset(inFlightBatch.lastOffset())
                         .setDeliveryCount((short) inFlightBatch.batchDeliveryCount()));
-                    acquiredCount += (int) numRecordsAcquired;
+                    acquiredCount += (int) recordsToAcquiredCount;
                 }
             }
 
@@ -1715,10 +1715,6 @@ public class SharePartition {
             if (isRecordLimitMode) {
                 AcquiredRecords acquiredRecords = result.get(0);
                 if (acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1 > maxFetchRecords) {
-                    // Initialize the timeout task, as the offset-level acquisition lock timeout task needs to be set up via
-                    // batch-level acquisition lock timeout task
-                    AcquisitionLockTimerTask timerTask = scheduleAcquisitionLockTimeout(
-                        memberId, acquiredRecords.firstOffset(), acquiredRecords.lastOffset());
                     InFlightBatch inFlightBatch = new InFlightBatch(
                         timer,
                         time,
@@ -1727,11 +1723,17 @@ public class SharePartition {
                         acquiredRecords.lastOffset(),
                         RecordState.ACQUIRED,
                         1,
-                        timerTask,
+                        null,
                         timeoutHandler,
                         sharePartitionMetrics);
+
+                    int delayMs = recordLockDurationMsOrDefault(groupConfigManager, groupId, defaultRecordLockDurationMs);
+                    long lastOffset = acquiredRecords.firstOffset() + maxFetchRecords - 1;
+                    acquiredRecords.setLastOffset(lastOffset);
+                    inFlightBatch.maybeInitializeOffsetStateUpdate(lastOffset, delayMs);
+                    updateFindNextFetchOffset(true);
+
                     cachedState.put(acquiredRecords.firstOffset(), inFlightBatch);
-                    acquiredRecords = filterShareAcquiredRecordsInRecordLimitMode(maxFetchRecords, inFlightBatch);
                     sharePartitionMetrics.recordInFlightBatchMessageCount(
                         acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1);
                     return List.of(acquiredRecords);

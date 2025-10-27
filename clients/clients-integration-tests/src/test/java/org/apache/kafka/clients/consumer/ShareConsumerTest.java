@@ -2790,7 +2790,6 @@ public class ShareConsumerTest {
             }
             shareConsumer.commitSync();
 
-            // Poll again to get the next set of records
             records = waitedPoll(shareConsumer, 2500L, 5);
             assertEquals(5, records.count());
             verifyShareGroupStateTopicRecordsProduced();
@@ -2815,6 +2814,7 @@ public class ShareConsumerTest {
             shareConsumer.subscribe(List.of(tp2.topic()));
             ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 10);
             assertEquals(10, records.count());
+
             int count = 0;
             Map<TopicIdPartition, Optional<KafkaException>> result;
             for (ConsumerRecord<byte[], byte[]> record : records) {
@@ -2828,16 +2828,16 @@ public class ShareConsumerTest {
                 count++;
             }
 
-            // Poll again to get the released records
+            // Poll again to get 10 records.
             records = waitedPoll(shareConsumer, 2500L, 10);
             assertEquals(10, records.count());
-            Set<String> finalMessages = new HashSet<>();
             for (ConsumerRecord<byte[], byte[]> record : records) {
-                finalMessages.add(new String(record.value()));
+                shareConsumer.acknowledge(record, AcknowledgeType.ACCEPT);
             }
-            // unfinish
-            Set<String> expected = Set.of("Message 1", "Message 3", "Message 5", "Message 7", "Message 9", "Message 11", "Message 13", "Message 15", "Message 17", "Message 19");
-            assertEquals(expected, finalMessages);
+
+            // Get the rest of all 5 records.
+            records = waitedPoll(shareConsumer, 2500L, 5);
+            assertEquals(5, records.count());
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
