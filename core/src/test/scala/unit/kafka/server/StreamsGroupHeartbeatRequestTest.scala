@@ -270,7 +270,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       }, "First StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
       // Verify first member gets all tasks initially
-      assert(streamsGroupHeartbeatResponse1 != null, "StreamsGroupHeartbeatResponse should not be null")
+      assertNotNull(streamsGroupHeartbeatResponse1, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId1, streamsGroupHeartbeatResponse1.memberId())
       assertEquals(1, streamsGroupHeartbeatResponse1.memberEpoch())
       assertEquals(1, streamsGroupHeartbeatResponse1.activeTasks().size())
