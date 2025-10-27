@@ -55,10 +55,10 @@ public class MetadataLoaderMetricsTest {
         FakeMetadataLoaderMetrics(Optional<MetricsRegistry> registry) {
             metrics = new MetadataLoaderMetrics(
                 registry,
+                time,
                 batchProcessingTimeNs::set,
                 batchSize::set,
-                provenance,
-                time);
+                provenance);
         }
 
         @Override

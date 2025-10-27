@@ -301,17 +301,19 @@ class SharedServer(
 
         nodeMetrics = new NodeMetrics(metrics, controllerConfig.unstableFeatureVersionsEnabled)
         metadataLoaderMetrics = if (brokerMetrics != null) {
-          new MetadataLoaderMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()),
+          new MetadataLoaderMetrics(
+            Optional.of(KafkaYammerMetrics.defaultRegistry()),
+            time,
             elapsedNs => brokerMetrics.updateBatchProcessingTime(elapsedNs),
             batchSize => brokerMetrics.updateBatchSize(batchSize),
-            brokerMetrics.lastAppliedImageProvenance,
-            time)
+            brokerMetrics.lastAppliedImageProvenance)
         } else {
-          new MetadataLoaderMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()),
+          new MetadataLoaderMetrics(
+            Optional.of(KafkaYammerMetrics.defaultRegistry()),
+            time,
             _ => {},
             _ => {},
-            new AtomicReference[MetadataProvenance](MetadataProvenance.EMPTY),
-            time)
+            new AtomicReference[MetadataProvenance](MetadataProvenance.EMPTY))
         }
         val loaderBuilder = new MetadataLoader.Builder().
           setNodeId(nodeId).

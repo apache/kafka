@@ -71,16 +71,16 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
      *
      * @param registry                      The metrics registry, or Optional.empty if this is a
      *                                      test and we don't have one.
+     * @param time                          The time object to use.
      * @param batchProcessingTimeNsUpdater  Updates the batch processing time histogram.
      * @param batchSizesUpdater             Updates the batch sizes histogram.
-     * @param time                          The time object to use.
      */
     public MetadataLoaderMetrics(
         Optional<MetricsRegistry> registry,
+        Time time,
         Consumer<Long> batchProcessingTimeNsUpdater,
         Consumer<Integer> batchSizesUpdater,
-        AtomicReference<MetadataProvenance> lastAppliedProvenance,
-        Time time
+        AtomicReference<MetadataProvenance> lastAppliedProvenance
     ) {
         this.registry = registry;
         this.time = time;
