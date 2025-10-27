@@ -334,7 +334,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
 
 
       // Verify both members should have tasks assigned
-      assert(streamsGroupHeartbeatResponse1 != null, "StreamsGroupHeartbeatResponse should not be null")
+      assertNotNull(streamsGroupHeartbeatResponse1, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId1, streamsGroupHeartbeatResponse1.memberId())
       
       assert(streamsGroupHeartbeatResponse2 != null, "StreamsGroupHeartbeatResponse should not be null")
