@@ -18,9 +18,8 @@ package org.apache.kafka.server.share.fetch;
 
 import org.apache.kafka.common.TopicIdPartition;
 
-import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Random;
 import java.util.Set;
@@ -74,14 +73,15 @@ public interface PartitionMaxBytesStrategy {
             // Case 3: we will distribute requestMaxBytes to as many partitions possible randomly to avoid starvation.
             LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = new LinkedHashMap<>();
             partitions.forEach(partition -> partitionMaxBytes.put(partition, 0));
-            List<TopicIdPartition> partitionsList = new ArrayList<>(partitions);
-            int index = RANDOM.nextInt(partitionsList.size());
-            int count = 0;
-            while (count < requestMaxBytes) {
-                partitionMaxBytes.put(partitionsList.get(index), 1);
-                count += 1;
-                index = (index + 1) % partitionsList.size();
+            int randomIndex = RANDOM.nextInt(partitions.size());
+            int nonEmptyPartitionsCount = 0;
+            Set<Integer> nonEmptyPartitionIndexes = new HashSet<>();
+            while (nonEmptyPartitionsCount < requestMaxBytes) {
+                nonEmptyPartitionIndexes.add(randomIndex);
+                nonEmptyPartitionsCount += 1;
+                randomIndex = (randomIndex + 1) % partitions.size();
             }
+            allotBytesByPartitionIndex(1, partitions, partitionMaxBytes, nonEmptyPartitionIndexes);
             return partitionMaxBytes;
         }
     }
@@ -89,17 +89,38 @@ public interface PartitionMaxBytesStrategy {
     private static LinkedHashMap<TopicIdPartition, Integer> allotUniformBytesToPartitions(
         Set<TopicIdPartition> partitions,
         int requestMaxBytes,
-        int partitionsSize) {
+        int partitionsSize
+    ) {
         LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = new LinkedHashMap<>();
         int uniformPartitionBytes = requestMaxBytes / partitionsSize;
         int remainingBytes = requestMaxBytes % partitionsSize;
         partitions.forEach(partition -> partitionMaxBytes.put(partition, uniformPartitionBytes));
         if (remainingBytes != 0) {
-            List<TopicIdPartition> partitionsList = new ArrayList<>(partitionMaxBytes.keySet());
-            TopicIdPartition randomPartition = partitionsList.get(RANDOM.nextInt(partitionsList.size()));
-            partitionMaxBytes.put(randomPartition, uniformPartitionBytes + remainingBytes);
+            int randomPartitionIndex = RANDOM.nextInt(partitionMaxBytes.keySet().size());
+            allotBytesByPartitionIndex(uniformPartitionBytes + remainingBytes, partitions,
+                partitionMaxBytes, Set.of(randomPartitionIndex));
         }
         return partitionMaxBytes;
+    }
+
+    private static void allotBytesByPartitionIndex(
+        int bytes,
+        Set<TopicIdPartition> partitions,
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes,
+        Set<Integer> partitionIndexesToAllot
+    ) {
+        int index = 0;
+        int count = 0;
+        for (TopicIdPartition partition : partitions) {
+            if (partitionIndexesToAllot.contains(index)) {
+                partitionMaxBytes.put(partition, bytes);
+                count += 1;
+                if (count == partitionIndexesToAllot.size()) {
+                    break;
+                }
+            }
+            index += 1;
+        }
     }
 
     // Visible for testing.
