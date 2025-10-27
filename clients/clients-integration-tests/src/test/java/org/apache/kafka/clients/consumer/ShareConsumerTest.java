@@ -2768,6 +2768,35 @@ public class ShareConsumerTest {
     }
 
     @ClusterTest
+    public void testPollAndExplicitAcknowledgeSingleMessageInRecordLimitMode() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                 "group1",
+                 Map.of(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1,
+                     ConsumerConfig.SHARE_ACQUIRE_MODE_CONFIG, RECORD_LIMIT,
+                     ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))
+        ) {
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            for (int i = 0; i < 10; i++) {
+                producer.send(record);
+            }
+            producer.flush();
+            shareConsumer.subscribe(List.of(tp.topic()));
+
+            for (int i = 0; i < 10; i++) {
+                ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+                assertEquals(1, records.count());
+                for (ConsumerRecord<byte[], byte[]> rec : records) {
+                    shareConsumer.acknowledge(rec, AcknowledgeType.ACCEPT);
+                }
+                shareConsumer.commitSync();
+            }
+            verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
+    @ClusterTest
     public void testExplicitAcknowledgeSuccessInRecordLimitMode() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();

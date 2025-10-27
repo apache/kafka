@@ -8961,6 +8961,50 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testAcquireWhenInsufficientRecords() {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = Mockito.spy(SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withPersister(persister)
+            .build());
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        // Create 3 batches of records.
+        ByteBuffer buffer = ByteBuffer.allocate(4096);
+        memoryRecordsBuilder(buffer, 10, 5).close();
+        memoryRecordsBuilder(buffer, 15, 5).close();
+        memoryRecordsBuilder(buffer, 20, 5).close();
+
+        buffer.flip();
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+
+        // Requested 20 records, but only 15 available.
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+            MEMBER_ID,
+            ShareAcquireMode.RECORD_LIMIT,
+            2,
+            20,
+            DEFAULT_FETCH_OFFSET,
+            fetchPartitionData(records),
+            FETCH_ISOLATION_HWM),
+            15);
+        assertArrayEquals(expectedAcquiredRecord(10, 24, 1).toArray(), acquiredRecordsList.toArray());
+        assertEquals(25, sharePartition.nextFetchOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(10, sharePartition.cachedState().get(10L).firstOffset());
+        assertEquals(24, sharePartition.cachedState().get(10L).lastOffset());
+
+        // Since all the records in 3 batches are acquired, the offset state of the InFlight batch should be null and batch state should be ACQUIRED.
+        assertNull(sharePartition.cachedState().get(10L).offsetState());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
+    }
+
+    @Test
     public void testAcquireMultipleRecordsWithOverlapAndNewBatchInRecordLimitMode() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         MemoryRecords records = memoryRecords(5);
