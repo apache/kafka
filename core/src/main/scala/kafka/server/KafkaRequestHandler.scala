@@ -217,7 +217,7 @@ class KafkaRequestHandlerPoolFactory {
   }
 
   // Only used for test purpose
-  def getAggregateThreads: AtomicInteger = aggregateThreads
+  def aggregateThreadCount: Int = aggregateThreads.get()
 }
 
 class KafkaRequestHandlerPool(

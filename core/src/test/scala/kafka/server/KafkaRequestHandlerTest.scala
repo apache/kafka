@@ -700,10 +700,10 @@ class KafkaRequestHandlerTest {
   }
 
   @Test
-  def testRequestThreadMetrics(): Unit = {
+  def testMetricsForMultipleRequestPools(): Unit = {
     val time = Time.SYSTEM
-    val metricsBroker = new RequestChannelMetrics(java.util.Set.of[ApiKeys])
-    val metricsController = new RequestChannelMetrics(java.util.Set.of[ApiKeys])
+    val metricsBroker = mock(classOf[RequestChannelMetrics])
+    val metricsController = mock(classOf[RequestChannelMetrics])
     val requestChannelBroker = new RequestChannel(10, time, metricsBroker)
     val requestChannelController = new RequestChannel(10, time, metricsController)
     val apiHandler = mock(classOf[ApiRequestHandler])
@@ -723,7 +723,7 @@ class KafkaRequestHandlerTest {
     )
 
     // Verify global counter is updated
-    assertEquals(4, factory.getAggregateThreads.get(), "global counter should be 4 after broker pool")
+    assertEquals(4, factory.aggregateThreadCount, "global counter should be 4 after broker pool")
 
     // Create controller pool with 4 threads
     val controllerPool = factory.createPool(
@@ -736,7 +736,7 @@ class KafkaRequestHandlerTest {
     )
 
     // Verify global counter is updated to sum of both pools
-    assertEquals(8, factory.getAggregateThreads.get, "global counter should be 8 after both pools")
+    assertEquals(8, factory.aggregateThreadCount, "global counter should be 8 after both pools")
 
     val aggregateMeter = metricsGroup.newMeter("RequestHandlerAvgIdlePercent", "percent", TimeUnit.NANOSECONDS)
     val brokerPerPoolIdleMeter = metricsGroup.newMeter("BrokerRequestHandlerAvgIdlePercent", "percent", TimeUnit.NANOSECONDS)
@@ -748,13 +748,15 @@ class KafkaRequestHandlerTest {
 
     // Wait until all idle-percent meters have been initialized with non-zero rates,
     // or timeout after the given duration.
-    val startTime = time.milliseconds()
+    val mockTime = new MockTime()
+    val startTime = mockTime.milliseconds()
     while(aggregateValue == 0.0 || brokerPerPoolValue == 0.0 || controllerPerPoolValue == 0.0) {
-      if (time.milliseconds() - startTime > 8000)
+      if (mockTime.milliseconds() - startTime > 2e9)
         throw new RuntimeException("Timeout waiting for idle-percent metrics to initialize")
       aggregateValue = aggregateMeter.oneMinuteRate()
       brokerPerPoolValue = brokerPerPoolIdleMeter.oneMinuteRate()
       controllerPerPoolValue = controllerPerPoolIdleMeter.oneMinuteRate()
+      mockTime.sleep(1)
     }
 
     // Verify that the meter shows reasonable idle percentage
@@ -767,12 +769,12 @@ class KafkaRequestHandlerTest {
     brokerPool.resizeThreadPool(2)
     assertEquals(2, brokerPool.threadPoolSize.get)
     assertEquals(4, controllerPool.threadPoolSize.get)
-    assertEquals(6, factory.getAggregateThreads.get)
+    assertEquals(6, factory.aggregateThreadCount)
 
     // Expand controller pool from 4 to 6 threads
     controllerPool.resizeThreadPool(6)
     assertEquals(2, brokerPool.threadPoolSize.get)
     assertEquals(6, controllerPool.threadPoolSize.get)
-    assertEquals(8, factory.getAggregateThreads.get)
+    assertEquals(8, factory.aggregateThreadCount)
   }
 }
