@@ -32,7 +32,7 @@ Configuration:
         - ref: STDOUT
     Logger:
       - name: kafka
-        level: DEBUG
+        level: WARN
 
       - name: org.apache.kafka
-        level: DEBUG
+        level: WARN
