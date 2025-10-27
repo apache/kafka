@@ -1773,9 +1773,8 @@ public class SharePartition {
                     timerTask,
                     timeoutHandler,
                     sharePartitionMetrics));
-
-                sharePartitionMetrics.recordInFlightBatchMessageCount(
-                    acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1);
+                // Update the in-flight batch message count metrics for the share partition.
+                sharePartitionMetrics.recordInFlightBatchMessageCount(acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1);
             });
         } finally {
             lock.writeLock().unlock();
@@ -2937,8 +2936,7 @@ public class SharePartition {
         }
     }
 
-    // Visible for testing.
-    boolean isRecordLimitMode(ShareAcquireMode shareAcquireMode) {
+    private boolean isRecordLimitMode(ShareAcquireMode shareAcquireMode) {
         return ShareAcquireMode.RECORD_LIMIT.equals(shareAcquireMode);
     }
 
