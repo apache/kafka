@@ -2838,23 +2838,38 @@ public class TaskManagerTest {
 
     @Test
     public void shouldAddNewActiveTasks() {
-        final Map<TaskId, Set<TopicPartition>> assignment = taskId00Assignment;
-        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
+        // task in created state
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.CREATED)
+            .withInputPartitions(taskId00Partitions)
+            .build();
 
+        final Map<TaskId, Set<TopicPartition>> assignment = taskId00Assignment;
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        // first, we need to handle assignment -- creates tasks and adds to pending initialization
         when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(singletonList(task00));
 
         taskManager.handleAssignment(assignment, emptyMap());
 
-        assertThat(task00.state(), is(Task.State.CREATED));
+        verify(tasks).addPendingTasksToInit(singletonList(task00));
 
-        taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter -> { });
+        // next, drain pending tasks, initialize them, and then add to stateupdater
+        when(tasks.drainPendingTasksToInit()).thenReturn(Set.of(task00));
 
-        assertThat(task00.state(), is(Task.State.RUNNING));
-        assertThat(taskManager.activeTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
-        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-        verify(changeLogReader).enforceRestoreActive();
-        verify(consumer).assignment();
-        verify(consumer).resume(eq(emptySet()));
+        taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
+
+        verify(task00).initializeIfNeeded();
+        verify(stateUpdater).add(task00);
+
+        // last, drain the restored tasks from stateupdater and transition to running
+        when(stateUpdater.restoresActiveTasks()).thenReturn(true);
+        when(stateUpdater.drainRestoredActiveTasks(any(Duration.class))).thenReturn(Set.of(task00));
+
+        taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
+
+        verifyTransitionToRunningOfRestoredTask(Set.of(task00), tasks);
     }
 
     @Test
