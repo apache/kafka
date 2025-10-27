@@ -368,6 +368,7 @@ public class GroupCoordinatorConfigTest {
 
     @Test
     public void testStreamsGroupInitialRebalanceDelayDefaultValue() {
+        Map<String, Object> configs = new HashMap<>();
         GroupCoordinatorConfig config = createConfig(configs);
         assertEquals(3000, config.streamsGroupInitialRebalanceDelayMs());
         assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT,

@@ -24265,4 +24265,168 @@ public class GroupMetadataManagerTest {
         // Use the same default value as GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT
         return Map.of("num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT));
     }
+
+    @Test
+    public void testStreamsInitialDelaySchedulesTimerOnFirstJoin() {
+        String groupId = "test-group";
+        String memberId = Uuid.randomUuid().toString();
+        String topicName = "test-topic";
+        Uuid topicId = Uuid.randomUuid();
+        String subtopologyId = "subtopology-1";
+
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopologyId).setSourceTopics(List.of(topicName))
+        ));
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(topicId, topicName, 3)
+                .buildCoordinatorMetadataImage())
+            .build();
+
+        context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setTopology(topology)
+                .setProcessId(DEFAULT_PROCESS_ID)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+        String timerKey = GroupMetadataManager.streamsInitialRebalanceKey(groupId);
+
+        assertTrue(context.timer.isScheduled(timerKey));
+        assertNotNull(context.timer.timeout(timerKey));
+        assertEquals(2, group.groupEpoch());
+        assertEquals(0, group.assignmentEpoch());
+    }
+
+    @Test
+    public void testStreamsEmptyAssignmentDuringInitialDelay() {
+        String groupId = "test-group";
+        String memberId = Uuid.randomUuid().toString();
+        String topicName = "test-topic";
+        Uuid topicId = Uuid.randomUuid();
+        String subtopologyId = "subtopology-1";
+
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopologyId).setSourceTopics(List.of(topicName))
+        ));
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(topicId, topicName, 3)
+                .buildCoordinatorMetadataImage())
+            .build();
+
+        context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setTopology(topology)
+                .setProcessId(DEFAULT_PROCESS_ID)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> secondHeartbeat = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(2)
+                .setRebalanceTimeoutMs(5000)
+                .setTopology(topology)
+                .setProcessId(DEFAULT_PROCESS_ID)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+
+        assertEquals(TasksTuple.EMPTY, group.targetAssignment(memberId));
+        assertEquals(0, group.assignmentEpoch());
+        assertEquals(List.of(), secondHeartbeat.response().data().activeTasks());
+        assertEquals(List.of(), secondHeartbeat.response().data().standbyTasks());
+    }
+
+    @Test
+    public void testStreamsNoDelayForNonInitialRebalances() {
+        String groupId = "test-group";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String topicName = "test-topic";
+        Uuid topicId = Uuid.randomUuid();
+        String subtopologyId = "subtopology-1";
+
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopologyId).setSourceTopics(List.of(topicName))
+        ));
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(topicId, topicName, 3)
+                .buildCoordinatorMetadataImage())
+            .build();
+
+        context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setTopology(topology)
+                .setProcessId(DEFAULT_PROCESS_ID)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        context.sleep(3000);
+
+        assignor.prepareGroupAssignment(Map.of(
+            memberId1, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                TaskAssignmentTestUtil.mkTasks(subtopologyId, 0, 1)),
+            memberId2, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                TaskAssignmentTestUtil.mkTasks(subtopologyId, 2))
+        ));
+
+        context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setMemberEpoch(2)
+                .setRebalanceTimeoutMs(5000)
+                .setTopology(topology)
+                .setProcessId(DEFAULT_PROCESS_ID)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+        assertTrue(group.assignmentEpoch() > 0);
+
+        String timerKey = GroupMetadataManager.streamsInitialRebalanceKey(groupId);
+        assertFalse(context.timer.isScheduled(timerKey));
+
+        context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setTopology(topology)
+                .setProcessId(DEFAULT_PROCESS_ID)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        assertFalse(context.timer.isScheduled(timerKey));
+    }
 }
