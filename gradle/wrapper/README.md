@@ -30,8 +30,6 @@ When upgrading the Gradle version used by the Kafka project, update the followin
     doLast {
         ...
         String wrapperChecksum = "<wrapper-jar-sha256-checksum>"
-     ```groovy
-     String wrapperChecksum = "<wrapper-jar-sha256-checksum>"
      ```
    - Verify the wrapper JAR URL is accessible at:
      `https://raw.githubusercontent.com/gradle/gradle/v<VERSION>/gradle/wrapper/gradle-wrapper.jar`
