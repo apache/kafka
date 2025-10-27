@@ -4109,7 +4109,6 @@ public class GroupMetadataManager {
                 return EMPTY_RESULT;
             }
 
-            List<CoordinatorRecord> records = new ArrayList<>();
             TaskAssignor assignor = streamsGroupAssignor(group.groupId());
 
             try {
@@ -4139,9 +4138,7 @@ public class GroupMetadataManager {
                         group.groupId(), group.groupEpoch(), assignor, assignorTimeMs);
                 }
 
-                records.addAll(assignmentResult.records());
-
-                return new CoordinatorResult<>(records, null);
+                return new CoordinatorResult<>(assignmentResult.records(), null);
             } catch (TaskAssignorException ex) {
                 String msg = String.format("Failed to compute target assignment for initial rebalance at epoch %d: %s",
                     group.groupEpoch(), ex.getMessage());
