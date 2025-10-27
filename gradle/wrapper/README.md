@@ -14,7 +14,7 @@ When upgrading the Gradle version used by the Kafka project, update the followin
 2. **Update distribution checksums** in `gradle/wrapper/gradle-wrapper.properties`:
    - Find the SHA256 checksum for the binary distribution at https://gradle.org/release-checksums/
    - Update `distributionSha256Sum` with the Binary-only (-bin) ZIP Checksum
-   - Update `distributionUrl` to point to the new version:
+   - Update `distributionUrl` to use the latest version from `https://services.gradle.org/distributions/`:
      ```properties
      distributionSha256Sum=<sha256-checksum-from-release-page>
      distributionUrl=https\://services.gradle.org/distributions/gradle-9.2.0-bin.zip
@@ -23,7 +23,13 @@ When upgrading the Gradle version used by the Kafka project, update the followin
 
 3. **Update wrapper JAR checksum** in `wrapper.gradle`:
    - Find the Wrapper JAR Checksum at https://gradle.org/release-checksums/
-   - Update the `wrapperChecksum` variable (line 42):
+   - Update the `wrapperChecksum` variable:
+   ```groovy
+   task bootstrapWrapper() {
+    ...
+    doLast {
+        ...
+        String wrapperChecksum = "<wrapper-jar-sha256-checksum>"
      ```groovy
      String wrapperChecksum = "<wrapper-jar-sha256-checksum>"
      ```
