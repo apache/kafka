@@ -54,6 +54,9 @@ public class PrincipalConnectorClientConfigOverridePolicy extends AbstractConnec
 
     @Override
     public void configure(Map<String, ?> configs) {
+        log.warn("The Principal ConnectorClientConfigOverridePolicy is deprecated, use the Allowlist policy instead. "
+                 + "To replicate the Principal policy behavior, set the connector.client.config.override.allowlist configuration to \"{}\"",
+                 String.join(",", ALLOWED_CONFIG));
         log.info("Setting up Principal policy for ConnectorClientConfigOverride. This will allow `sasl` client configuration to be "
                  + "overridden.");
     }
