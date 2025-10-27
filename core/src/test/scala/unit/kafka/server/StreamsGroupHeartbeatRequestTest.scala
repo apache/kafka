@@ -337,7 +337,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       assertNotNull(streamsGroupHeartbeatResponse1, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId1, streamsGroupHeartbeatResponse1.memberId())
       
-      assert(streamsGroupHeartbeatResponse2 != null, "StreamsGroupHeartbeatResponse should not be null")
+      assertNotNull(streamsGroupHeartbeatResponse2, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId2, streamsGroupHeartbeatResponse2.memberId())
 
       // At least one member should have active tasks
