@@ -9151,6 +9151,12 @@ public class SharePartitionTest {
         assertArrayEquals(expectedAcquiredRecord(0, 0, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(1, sharePartition.nextFetchOffset());
 
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             MEMBER_ID,
             List.of(new ShareAcknowledgementBatch(0, 0, List.of((byte) 1))));
@@ -9221,6 +9227,12 @@ public class SharePartitionTest {
             fetchPartitionData(records, 10),
             FETCH_ISOLATION_HWM),
             2);
+
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
 
         assertArrayEquals(expectedAcquiredRecord(0, 1, 1).toArray(), acquiredRecordsList.toArray());
         assertThrows(IllegalStateException.class, () -> sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
