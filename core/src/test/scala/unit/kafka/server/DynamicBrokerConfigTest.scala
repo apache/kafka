@@ -1087,17 +1087,17 @@ class DynamicBrokerConfigTest {
 
     // Reporter implementing only ClientTelemetryExporterProvider
     updateReporter(classOf[TestExporterOnly])
-    verify(telemetryPlugin, Mockito.atMostOnce()).add(ArgumentMatchers.any(classOf[ClientTelemetryExporter]))
+    verify(telemetryPlugin, Mockito.times(1)).add(ArgumentMatchers.any(classOf[ClientTelemetryExporter]))
     Mockito.reset(telemetryPlugin)
 
     // Reporter implementing only ClientTelemetryReceiver (deprecated)
     updateReporter(classOf[TestReceiverOnly])
-    verify(telemetryPlugin, Mockito.atMostOnce()).add(ArgumentMatchers.any(classOf[ClientTelemetryReceiver]))
+    verify(telemetryPlugin, Mockito.times(1)).add(ArgumentMatchers.any(classOf[ClientTelemetryReceiver]))
     Mockito.reset(telemetryPlugin)
 
     // Reporter implementing both interfaces => only exporter should be used
     updateReporter(classOf[TestReceiverAndExporter])
-    verify(telemetryPlugin, Mockito.atMostOnce()).add(ArgumentMatchers.any(classOf[ClientTelemetryExporter]))
+    verify(telemetryPlugin, Mockito.times(1)).add(ArgumentMatchers.any(classOf[ClientTelemetryExporter]))
     verify(telemetryPlugin, Mockito.never()).add(ArgumentMatchers.any(classOf[ClientTelemetryReceiver]))
     Mockito.reset(telemetryPlugin)
 
