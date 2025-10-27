@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.DeletedRecords;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
@@ -2910,70 +2911,84 @@ public class TaskManagerTest {
     @SuppressWarnings("removal")
     @Test
     public void shouldCommitAllActiveTasksThatNeedCommittingOnHandleRevocationWithEosV2() {
+        // task being revoked, needs commit
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RUNNING)
+            .build();
+
+        // unrevoked task that needs commit, this should also be committed with EOS-v2
+        final StreamTask task01 = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING)
+            .build();
+
+        // unrevoked task that doesn't need commit, should not be committed
+        final StreamTask task02 = statefulTask(taskId02, taskId02ChangelogPartitions)
+            .withInputPartitions(taskId02Partitions)
+            .inState(State.RUNNING)
+            .build();
+
+        // standby task should not be committed
+        final StandbyTask task10 = standbyTask(taskId10, emptySet())
+            .withInputPartitions(taskId10Partitions)
+            .inState(State.RUNNING)
+            .build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+
+        when(tasks.allTasks()).thenReturn(Set.of(task00, task01, task02, task10));
+
         final StreamsProducer producer = mock(StreamsProducer.class);
-        final TaskManager taskManager = setUpTaskManagerWithoutStateUpdater(ProcessingMode.EXACTLY_ONCE_V2, null, false);
+        when(activeTaskCreator.streamsProducer()).thenReturn(producer);
+        final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
+        when(consumer.groupMetadata()).thenReturn(groupMetadata);
 
-        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
         final Map<TopicPartition, OffsetAndMetadata> offsets00 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
-        task00.setCommittableOffsetsAndMetadata(offsets00);
-        task00.setCommitNeeded();
+        when(task00.commitNeeded()).thenReturn(true);
+        when(task00.prepareCommit(true)).thenReturn(offsets00);
+        doNothing().when(task00).postCommit(anyBoolean());
+        doNothing().when(task00).suspend();
 
-        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager);
         final Map<TopicPartition, OffsetAndMetadata> offsets01 = singletonMap(t1p1, new OffsetAndMetadata(1L, null));
-        task01.setCommittableOffsetsAndMetadata(offsets01);
-        task01.setCommitNeeded();
+        when(task01.commitNeeded()).thenReturn(true);
+        when(task01.prepareCommit(true)).thenReturn(offsets01);
+        doNothing().when(task01).postCommit(anyBoolean());
 
-        final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true, stateManager);
-        final Map<TopicPartition, OffsetAndMetadata> offsets02 = singletonMap(t1p2, new OffsetAndMetadata(2L, null));
-        task02.setCommittableOffsetsAndMetadata(offsets02);
+        // task02 does not need commit
+        when(task02.commitNeeded()).thenReturn(false);
 
-        final StateMachineTask task10 = new StateMachineTask(taskId10, taskId10Partitions, false, stateManager);
+        // standby task should not take part in commit
+        when(task10.commitNeeded()).thenReturn(false);
 
+        // expected committed offsets, only task00 and task01 (both need commit)
         final Map<TopicPartition, OffsetAndMetadata> expectedCommittedOffsets = new HashMap<>();
         expectedCommittedOffsets.putAll(offsets00);
         expectedCommittedOffsets.putAll(offsets01);
 
-        final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
-            mkEntry(taskId00, taskId00Partitions),
-            mkEntry(taskId01, taskId01Partitions),
-            mkEntry(taskId02, taskId02Partitions)
-        );
-
-        final Map<TaskId, Set<TopicPartition>> assignmentStandby = mkMap(
-            mkEntry(taskId10, taskId10Partitions)
-        );
-        when(consumer.assignment()).thenReturn(assignment);
-
-        when(activeTaskCreator.createTasks(any(), eq(assignmentActive)))
-            .thenReturn(asList(task00, task01, task02));
-
-        when(activeTaskCreator.streamsProducer()).thenReturn(producer);
-        when(standbyTaskCreator.createTasks(assignmentStandby))
-            .thenReturn(singletonList(task10));
-
-        final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
-        when(consumer.groupMetadata()).thenReturn(groupMetadata);
-
-        task00.committedOffsets();
-        task01.committedOffsets();
-        task02.committedOffsets();
-        task10.committedOffsets();
-
-        taskManager.handleAssignment(assignmentActive, assignmentStandby);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
-        assertThat(task00.state(), is(Task.State.RUNNING));
-        assertThat(task01.state(), is(Task.State.RUNNING));
-        assertThat(task02.state(), is(Task.State.RUNNING));
-        assertThat(task10.state(), is(Task.State.RUNNING));
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.EXACTLY_ONCE_V2, tasks);
 
         taskManager.handleRevocation(taskId00Partitions);
 
-        assertThat(task00.commitNeeded, is(false));
-        assertThat(task01.commitNeeded, is(false));
-        assertThat(task02.commitPrepared, is(false));
-        assertThat(task10.commitPrepared, is(false));
-
+        // Verify the commit transaction was called with offsets from task00 and task01
         verify(producer).commitTransaction(expectedCommittedOffsets, groupMetadata);
+
+        // Verify task00 (revoked) was suspended and committed
+        verify(task00).prepareCommit(true);
+        verify(task00).postCommit(true);
+        verify(task00).suspend();
+
+        // Verify task01 (unrevoked but needs commit) was also committed
+        verify(task01).prepareCommit(true);
+        verify(task01).postCommit(false);
+
+        // Verify task02 (doesn't need commit) was not committed
+        verify(task02, never()).prepareCommit(anyBoolean());
+        verify(task02, never()).postCommit(anyBoolean());
+
+        // Verify standby task10 was not committed
+        verify(task10, never()).prepareCommit(anyBoolean());
+        verify(task10, never()).postCommit(anyBoolean());
     }
 
     @Test
