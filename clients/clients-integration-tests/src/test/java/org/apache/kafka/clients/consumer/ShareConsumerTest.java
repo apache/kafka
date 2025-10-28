@@ -66,6 +66,7 @@ import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
 
@@ -2333,6 +2334,7 @@ public class ShareConsumerTest {
         verifyShareGroupStateTopicRecordsProduced();
     }
 
+    @Disabled("KAFKA-19840") // https://issues.apache.org/jira/browse/KAFKA-19840
     @ClusterTest(
         brokers = 1,
         serverProperties = {
