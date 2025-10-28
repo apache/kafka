@@ -909,7 +909,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                         log.trace("Previous inflight event {} completed and filled the buffer, not clearing", inflightPoll);
                     }
                 }
-            } else if (time.milliseconds() > inflightPoll.deadlineMs() && inflightPoll.isValidatePositionsComplete()) {
+            } else if (time.milliseconds() >= inflightPoll.deadlineMs() && inflightPoll.isValidatePositionsComplete()) {
                 // Although the previous event passed the validate positions stage, it has expired. Since there's no
                 // result to check, clear out the event so that a new one will be enqueued below.
                 log.trace("Previous inflight event {} incomplete and expired, clearing", inflightPoll);
@@ -952,9 +952,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     throw errorOpt.get();
                 }
             } else if (!newlySubmittedEvent) {
-                timer.update();
-
-                if (timer.isExpired() && inflightPoll.isValidatePositionsComplete()) {
+                if (time.milliseconds() >= inflightPoll.deadlineMs() && inflightPoll.isValidatePositionsComplete()) {
                     // The inflight event inflight validated positions, but it has expired.
                     log.trace("Inflight event {} expired without completing, clearing", inflightPoll);
                     inflightPoll = null;
