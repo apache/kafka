@@ -39,7 +39,8 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * Utility class that serves as a common abstraction point
+ * Utility class that serves as a common abstraction point for consumers to create and register their
+ * metrics, and to ensure they're removed on {@link #close()}.
  */
 public abstract class AbstractConsumerMetricsManager implements AutoCloseable {
 
