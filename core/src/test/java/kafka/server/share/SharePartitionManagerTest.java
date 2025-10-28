@@ -52,7 +52,6 @@ import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
-import org.apache.kafka.server.LogReadResult;
 import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.purgatory.DelayedOperationKey;
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
@@ -85,6 +84,7 @@ import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
+import org.apache.kafka.storage.internals.log.LogReadResult;
 import org.apache.kafka.storage.internals.log.OffsetResultHolder;
 import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
@@ -3232,7 +3232,7 @@ public class SharePartitionManagerTest {
             -1L,
             OptionalLong.empty(),
             OptionalInt.empty(),
-            Optional.empty()
+            Errors.NONE
         ))));
         return CollectionConverters.asScala(logReadResults).toSeq();
     }

@@ -33,7 +33,6 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.LogReadResult;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
 import org.apache.kafka.server.purgatory.DelayedOperationKey;
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
@@ -53,6 +52,7 @@ import org.apache.kafka.server.util.timer.TimerTask;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.LogOffsetSnapshot;
+import org.apache.kafka.storage.internals.log.LogReadResult;
 import org.apache.kafka.storage.internals.log.RemoteLogReadResult;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
@@ -1029,9 +1029,11 @@ public class DelayedShareFetchTest {
         sharePartitions.put(tp3, sp3);
         sharePartitions.put(tp4, sp4);
 
-        ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), List.of(tp0, tp1, tp2, tp3, tp4), SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS,
-            BROKER_TOPIC_STATS);
+        ShareFetch shareFetch = new ShareFetch(new FetchParams(
+            FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS, 1, 1024 * 1020,
+            FetchIsolation.HIGH_WATERMARK, Optional.empty(), true), groupId,
+            Uuid.randomUuid().toString(), new CompletableFuture<>(), List.of(tp0, tp1, tp2, tp3, tp4), SHARE_ACQUIRE_MODE, BATCH_SIZE,
+            MAX_FETCH_RECORDS, BROKER_TOPIC_STATS);
 
         when(sp0.acquire(anyString(), any(ShareAcquireMode.class), anyInt(), anyInt(), anyLong(), any(FetchPartitionData.class), any())).thenReturn(
             createShareAcquiredRecords(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
@@ -1077,8 +1079,8 @@ public class DelayedShareFetchTest {
         assertTrue(delayedShareFetch.tryComplete());
         assertTrue(delayedShareFetch.isCompleted());
 
-        // Since all partitions are acquirable, maxbytes per partition = requestMaxBytes(i.e. 1024*1024) / acquiredTopicPartitions(i.e. 5)
-        int expectedPartitionMaxBytes = 1024 * 1024 / 5;
+        // Since all partitions are acquirable, maxbytes per partition = requestMaxBytes(i.e. 1024*1020) / acquiredTopicPartitions(i.e. 5)
+        int expectedPartitionMaxBytes = 1024 * 1020 / 5;
         LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> expectedReadPartitionInfo = new LinkedHashMap<>();
         sharePartitions.keySet().forEach(topicIdPartition -> expectedReadPartitionInfo.put(topicIdPartition,
             new FetchRequest.PartitionData(
@@ -1208,7 +1210,7 @@ public class DelayedShareFetchTest {
 
         ShareFetch shareFetch = new ShareFetch(
             new FetchParams(FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
-                1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
+                1, 1024 * 1020, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
             new CompletableFuture<>(), List.of(tp0, tp1, tp2), SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS,
             BROKER_TOPIC_STATS);
 
@@ -1241,8 +1243,8 @@ public class DelayedShareFetchTest {
         LinkedHashMap<TopicIdPartition, LogReadResult> combinedLogReadResponse = delayedShareFetch.combineLogReadResponse(topicPartitionData, logReadResponse);
 
         assertEquals(topicPartitionData.keySet(), combinedLogReadResponse.keySet());
-        // Since only 2 partitions are fetchable but the third one has already been fetched, maxbytes per partition = requestMaxBytes(i.e. 1024*1024) / acquiredTopicPartitions(i.e. 3)
-        int expectedPartitionMaxBytes = 1024 * 1024 / 3;
+        // Since only 2 partitions are fetchable but the third one has already been fetched, maxbytes per partition = requestMaxBytes(i.e. 1024*1020) / acquiredTopicPartitions(i.e. 3)
+        int expectedPartitionMaxBytes = 1024 * 1020 / 3;
         LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> expectedReadPartitionInfo = new LinkedHashMap<>();
         fetchableTopicPartitions.forEach(topicIdPartition -> expectedReadPartitionInfo.put(topicIdPartition,
             new FetchRequest.PartitionData(
@@ -2025,7 +2027,7 @@ public class DelayedShareFetchTest {
             -1L,
             OptionalLong.empty(),
             OptionalInt.empty(),
-            Optional.empty()
+            Errors.NONE
         ));
         when(pendingRemoteFetches.remoteFetches()).thenReturn(List.of(remoteFetch));
         when(pendingRemoteFetches.isDone()).thenReturn(false);
@@ -2106,7 +2108,7 @@ public class DelayedShareFetchTest {
             -1L,
             OptionalLong.empty(),
             OptionalInt.empty(),
-            Optional.empty()
+            Errors.NONE
         ));
         when(pendingRemoteFetches.remoteFetches()).thenReturn(List.of(remoteFetch));
         when(pendingRemoteFetches.isDone()).thenReturn(false);
@@ -2181,7 +2183,7 @@ public class DelayedShareFetchTest {
             -1L,
             OptionalLong.empty(),
             OptionalInt.empty(),
-            Optional.empty()
+            Errors.NONE
         ))));
         remoteReadTopicIdPartitions.forEach(topicIdPartition -> logReadResults.add(new Tuple2<>(topicIdPartition, new LogReadResult(
             REMOTE_FETCH_INFO,
@@ -2193,7 +2195,7 @@ public class DelayedShareFetchTest {
             -1L,
             OptionalLong.empty(),
             OptionalInt.empty(),
-            Optional.empty()
+            Errors.NONE
         ))));
         return CollectionConverters.asScala(logReadResults).toSeq();
     }

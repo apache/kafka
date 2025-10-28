@@ -983,6 +983,7 @@ public class KafkaStreams implements AutoCloseable {
             metrics,
             clientId,
             processId.toString(),
+            applicationId,
             time
         );
 

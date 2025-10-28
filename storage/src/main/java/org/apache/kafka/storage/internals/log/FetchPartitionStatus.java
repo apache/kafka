@@ -14,15 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+package org.apache.kafka.storage.internals.log;
 
-public class MockStreamsMetrics extends StreamsMetricsImpl {
+import org.apache.kafka.common.requests.FetchRequest.PartitionData;
 
-    public MockStreamsMetrics(final Metrics metrics) {
-        super(metrics, "test", "processId", "applicationId", new MockTime());
-    }
+/**
+ * A class containing log offset metadata and fetch info for a topic partition.
+ */
+public record FetchPartitionStatus(
+    LogOffsetMetadata startOffsetMetadata,
+    PartitionData fetchInfo
+) {
 }

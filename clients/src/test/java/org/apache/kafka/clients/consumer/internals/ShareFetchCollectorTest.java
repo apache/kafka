@@ -95,7 +95,7 @@ public class ShareFetchCollectorTest {
 
         // Validate that the buffer is empty until after we add the fetch data.
         assertTrue(fetchBuffer.isEmpty());
-        fetchBuffer.add(completedFetch);
+        fetchBuffer.add(List.of(completedFetch));
         assertFalse(fetchBuffer.isEmpty());
 
         // Validate that the completed fetch isn't initialized just because we add it to the buffer.
@@ -153,7 +153,7 @@ public class ShareFetchCollectorTest {
         ShareCompletedFetch completedFetch = completedFetchBuilder
                 .recordCount(10)
                 .build();
-        fetchBuffer.add(completedFetch);
+        fetchBuffer.add(List.of(completedFetch));
 
         // At first, the queue is populated
         assertFalse(fetchBuffer.isEmpty());
@@ -170,7 +170,7 @@ public class ShareFetchCollectorTest {
         ShareCompletedFetch completedFetch = completedFetchBuilder
                 .error(Errors.TOPIC_AUTHORIZATION_FAILED)
                 .build();
-        fetchBuffer.add(completedFetch);
+        fetchBuffer.add(List.of(completedFetch));
         assertThrows(TopicAuthorizationException.class, () -> fetchCollector.collect(fetchBuffer));
     }
 
@@ -182,7 +182,7 @@ public class ShareFetchCollectorTest {
         ShareCompletedFetch completedFetch = completedFetchBuilder
                 .error(Errors.UNKNOWN_LEADER_EPOCH)
                 .build();
-        fetchBuffer.add(completedFetch);
+        fetchBuffer.add(List.of(completedFetch));
         ShareFetch<String, String> fetch = fetchCollector.collect(fetchBuffer);
         assertTrue(fetch.isEmpty());
     }
@@ -195,7 +195,7 @@ public class ShareFetchCollectorTest {
         ShareCompletedFetch completedFetch = completedFetchBuilder
                 .error(Errors.UNKNOWN_SERVER_ERROR)
                 .build();
-        fetchBuffer.add(completedFetch);
+        fetchBuffer.add(List.of(completedFetch));
         ShareFetch<String, String> fetch = fetchCollector.collect(fetchBuffer);
         assertTrue(fetch.isEmpty());
     }
@@ -208,7 +208,7 @@ public class ShareFetchCollectorTest {
         ShareCompletedFetch completedFetch = completedFetchBuilder
                 .error(Errors.CORRUPT_MESSAGE)
                 .build();
-        fetchBuffer.add(completedFetch);
+        fetchBuffer.add(List.of(completedFetch));
         assertThrows(KafkaException.class, () -> fetchCollector.collect(fetchBuffer));
     }
 
@@ -221,7 +221,7 @@ public class ShareFetchCollectorTest {
         ShareCompletedFetch completedFetch = completedFetchBuilder
                 .error(error)
                 .build();
-        fetchBuffer.add(completedFetch);
+        fetchBuffer.add(List.of(completedFetch));
         assertThrows(IllegalStateException.class, () -> fetchCollector.collect(fetchBuffer));
     }
 
