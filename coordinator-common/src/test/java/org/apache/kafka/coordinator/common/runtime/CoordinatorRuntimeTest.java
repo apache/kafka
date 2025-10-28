@@ -2352,6 +2352,57 @@ public class CoordinatorRuntimeTest {
     }
 
     @Test
+    public void testTimerIsScheduled() throws InterruptedException {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .build();
+
+        runtime.scheduleLoadOperation(TP, 10);
+
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0, ctx.timer.size());
+
+        assertFalse(ctx.timer.isScheduled("timer-1"));
+
+        ctx.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, false,
+            () -> new CoordinatorResult<>(List.of("record1"), null));
+
+        assertTrue(ctx.timer.isScheduled("timer-1"));
+        assertFalse(ctx.timer.isScheduled("timer-2"));
+        assertEquals(1, ctx.timer.size());
+
+        ctx.timer.schedule("timer-2", 20, TimeUnit.MILLISECONDS, false,
+            () -> new CoordinatorResult<>(List.of("record2"), null));
+
+        assertTrue(ctx.timer.isScheduled("timer-1"));
+        assertTrue(ctx.timer.isScheduled("timer-2"));
+        assertEquals(2, ctx.timer.size());
+
+        ctx.timer.cancel("timer-1");
+
+        assertFalse(ctx.timer.isScheduled("timer-1"));
+        assertTrue(ctx.timer.isScheduled("timer-2"));
+        assertEquals(1, ctx.timer.size());
+
+        timer.advanceClock(21);
+
+        assertFalse(ctx.timer.isScheduled("timer-2"));
+        assertEquals(0, ctx.timer.size());
+    }
+
+    @Test
     public void testStateChanges() throws Exception {
         MockTimer timer = new MockTimer();
         MockPartitionWriter writer = mock(MockPartitionWriter.class);
