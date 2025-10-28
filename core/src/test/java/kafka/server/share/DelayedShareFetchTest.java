@@ -384,7 +384,7 @@ public class DelayedShareFetchTest {
 
         try (MockedStatic<ShareFetchUtils> mockedShareFetchUtils = Mockito.mockStatic(ShareFetchUtils.class, Mockito.CALLS_REAL_METHODS)) {
             mockedShareFetchUtils.when(() -> ShareFetchUtils.processFetchResponse(any(), any(), any(), any(), any()))
-                    .thenReturn(Map.of(tp0, mock(ShareFetchResponseData.PartitionData.class)));
+                .thenReturn(Map.of(tp0, mock(ShareFetchResponseData.PartitionData.class)));
 
             // Since sp0 can be acquired, tryComplete should return true.
             assertTrue(delayedShareFetch.tryComplete());
@@ -504,7 +504,7 @@ public class DelayedShareFetchTest {
 
         try (MockedStatic<ShareFetchUtils> mockedShareFetchUtils = Mockito.mockStatic(ShareFetchUtils.class, Mockito.CALLS_REAL_METHODS)) {
             mockedShareFetchUtils.when(() -> ShareFetchUtils.processFetchResponse(any(), any(), any(), any(), any()))
-                    .thenReturn(Map.of(tp0, mock(ShareFetchResponseData.PartitionData.class)));
+                .thenReturn(Map.of(tp0, mock(ShareFetchResponseData.PartitionData.class)));
 
             assertFalse(delayedShareFetch.isCompleted());
             delayedShareFetch.forceComplete();
@@ -512,7 +512,7 @@ public class DelayedShareFetchTest {
             Mockito.verify(exceptionHandler, never()).accept(any(), any());
             // Since we can acquire records from sp0, replicaManager.readFromLog should be called once and only for sp0.
             Mockito.verify(replicaManager, times(1)).readFromLog(
-                    any(), any(), any(ReplicaQuota.class), anyBoolean());
+                any(), any(), any(ReplicaQuota.class), anyBoolean());
             Mockito.verify(sp0, times(1)).nextFetchOffset();
             Mockito.verify(sp1, times(0)).nextFetchOffset();
             assertTrue(delayedShareFetch.isCompleted());
@@ -679,7 +679,7 @@ public class DelayedShareFetchTest {
         when(sp1.canAcquireRecords()).thenReturn(true);
         try (MockedStatic<ShareFetchUtils> mockedShareFetchUtils = Mockito.mockStatic(ShareFetchUtils.class, Mockito.CALLS_REAL_METHODS)) {
             mockedShareFetchUtils.when(() -> ShareFetchUtils.processFetchResponse(any(), any(), any(), any(), any()))
-                    .thenReturn(Map.of(tp0, mock(ShareFetchResponseData.PartitionData.class)));
+                .thenReturn(Map.of(tp0, mock(ShareFetchResponseData.PartitionData.class)));
 
             // when forceComplete is called for delayedShareFetch2, since tp1 is common in between delayed share fetch
             // requests, it should add a "check and complete" action for request key tp1 on the purgatory.
@@ -688,7 +688,7 @@ public class DelayedShareFetchTest {
             assertTrue(shareFetch2.isCompleted());
             Mockito.verify(exceptionHandler, never()).accept(any(), any());
             Mockito.verify(replicaManager, times(1)).readFromLog(
-                    any(), any(), any(ReplicaQuota.class), anyBoolean());
+                any(), any(), any(ReplicaQuota.class), anyBoolean());
             assertFalse(delayedShareFetch1.isCompleted());
             Mockito.verify(replicaManager, times(1)).addToActionQueue(any());
             Mockito.verify(replicaManager, times(0)).tryCompleteActions();
@@ -1074,12 +1074,12 @@ public class DelayedShareFetchTest {
 
         try (MockedStatic<ShareFetchUtils> mockedShareFetchUtils = Mockito.mockStatic(ShareFetchUtils.class, Mockito.CALLS_REAL_METHODS)) {
             mockedShareFetchUtils.when(() -> ShareFetchUtils.processFetchResponse(any(), any(), any(), any(), any()))
-                    .thenReturn(Map.of(
-                            tp0, mock(ShareFetchResponseData.PartitionData.class),
-                            tp1, mock(ShareFetchResponseData.PartitionData.class),
-                            tp2, mock(ShareFetchResponseData.PartitionData.class),
-                            tp3, mock(ShareFetchResponseData.PartitionData.class),
-                            tp4, mock(ShareFetchResponseData.PartitionData.class)));
+                .thenReturn(Map.of(
+                    tp0, mock(ShareFetchResponseData.PartitionData.class),
+                    tp1, mock(ShareFetchResponseData.PartitionData.class),
+                    tp2, mock(ShareFetchResponseData.PartitionData.class),
+                    tp3, mock(ShareFetchResponseData.PartitionData.class),
+                    tp4, mock(ShareFetchResponseData.PartitionData.class)));
 
             assertTrue(delayedShareFetch.tryComplete());
             assertTrue(delayedShareFetch.isCompleted());
@@ -1088,23 +1088,23 @@ public class DelayedShareFetchTest {
             int expectedPartitionMaxBytes = 1024 * 1024 / 5;
             LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> expectedReadPartitionInfo = new LinkedHashMap<>();
             sharePartitions.keySet().forEach(topicIdPartition -> expectedReadPartitionInfo.put(topicIdPartition,
-                    new FetchRequest.PartitionData(
-                            topicIdPartition.topicId(),
-                            0,
-                            0,
-                            expectedPartitionMaxBytes,
-                            Optional.empty()
-                    )));
+                new FetchRequest.PartitionData(
+                    topicIdPartition.topicId(),
+                    0,
+                    0,
+                    expectedPartitionMaxBytes,
+                    Optional.empty()
+                )));
 
             Mockito.verify(exceptionHandler, never()).accept(any(), any());
             Mockito.verify(replicaManager, times(1)).readFromLog(
-                    shareFetch.fetchParams(),
-                    CollectionConverters.asScala(
-                            sharePartitions.keySet().stream().map(topicIdPartition ->
-                                    new Tuple2<>(topicIdPartition, expectedReadPartitionInfo.get(topicIdPartition))).collect(Collectors.toList())
-                    ),
-                    QuotaFactory.UNBOUNDED_QUOTA,
-                    true);
+                shareFetch.fetchParams(),
+                CollectionConverters.asScala(
+                    sharePartitions.keySet().stream().map(topicIdPartition ->
+                        new Tuple2<>(topicIdPartition, expectedReadPartitionInfo.get(topicIdPartition))).collect(Collectors.toList())
+                ),
+                QuotaFactory.UNBOUNDED_QUOTA,
+                true);
         }
     }
 
@@ -1172,9 +1172,9 @@ public class DelayedShareFetchTest {
 
         try (MockedStatic<ShareFetchUtils> mockedShareFetchUtils = Mockito.mockStatic(ShareFetchUtils.class, Mockito.CALLS_REAL_METHODS)) {
             mockedShareFetchUtils.when(() -> ShareFetchUtils.processFetchResponse(any(), any(), any(), any(), any()))
-                    .thenReturn(Map.of(
-                            tp0, mock(ShareFetchResponseData.PartitionData.class),
-                            tp1, mock(ShareFetchResponseData.PartitionData.class)));
+                .thenReturn(Map.of(
+                    tp0, mock(ShareFetchResponseData.PartitionData.class),
+                    tp1, mock(ShareFetchResponseData.PartitionData.class)));
 
             assertTrue(delayedShareFetch.tryComplete());
             assertTrue(delayedShareFetch.isCompleted());
@@ -1183,22 +1183,22 @@ public class DelayedShareFetchTest {
             int expectedPartitionMaxBytes = 1024 * 1024 / 2;
             LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> expectedReadPartitionInfo = new LinkedHashMap<>();
             acquirableTopicPartitions.forEach(topicIdPartition -> expectedReadPartitionInfo.put(topicIdPartition,
-                    new FetchRequest.PartitionData(
-                            topicIdPartition.topicId(),
-                            0,
-                            0,
-                            expectedPartitionMaxBytes,
-                            Optional.empty()
-                    )));
+                new FetchRequest.PartitionData(
+                    topicIdPartition.topicId(),
+                    0,
+                    0,
+                    expectedPartitionMaxBytes,
+                    Optional.empty()
+                )));
 
             Mockito.verify(replicaManager, times(1)).readFromLog(
-                    shareFetch.fetchParams(),
-                    CollectionConverters.asScala(
-                            acquirableTopicPartitions.stream().map(topicIdPartition ->
-                                    new Tuple2<>(topicIdPartition, expectedReadPartitionInfo.get(topicIdPartition))).collect(Collectors.toList())
-                    ),
-                    QuotaFactory.UNBOUNDED_QUOTA,
-                    true);
+                shareFetch.fetchParams(),
+                CollectionConverters.asScala(
+                    acquirableTopicPartitions.stream().map(topicIdPartition ->
+                        new Tuple2<>(topicIdPartition, expectedReadPartitionInfo.get(topicIdPartition))).collect(Collectors.toList())
+                ),
+                QuotaFactory.UNBOUNDED_QUOTA,
+                true);
             Mockito.verify(exceptionHandler, never()).accept(any(), any());
         }
     }
@@ -1695,7 +1695,7 @@ public class DelayedShareFetchTest {
 
         try (MockedStatic<ShareFetchUtils> mockedShareFetchUtils = Mockito.mockStatic(ShareFetchUtils.class, Mockito.CALLS_REAL_METHODS)) {
             mockedShareFetchUtils.when(() -> ShareFetchUtils.processFetchResponse(any(), any(), any(), any(), any()))
-                    .thenReturn(Map.of(tp0, new ShareFetchResponseData.PartitionData().setErrorCode(Errors.REQUEST_TIMED_OUT.code())));
+                .thenReturn(Map.of(tp0, new ShareFetchResponseData.PartitionData().setErrorCode(Errors.REQUEST_TIMED_OUT.code())));
 
             assertFalse(delayedShareFetch.isCompleted());
             assertTrue(delayedShareFetch.tryComplete());
@@ -2171,7 +2171,7 @@ public class DelayedShareFetchTest {
 
     private void mockTopicIdPartitionFetchBytes(LogOffsetMetadata hwmOffsetMetadata, Partition partition) {
         LogOffsetSnapshot endOffsetSnapshot = new LogOffsetSnapshot(1, mock(LogOffsetMetadata.class),
-                hwmOffsetMetadata, mock(LogOffsetMetadata.class));
+            hwmOffsetMetadata, mock(LogOffsetMetadata.class));
         when(partition.fetchOffsetSnapshot(any(), anyBoolean())).thenReturn(endOffsetSnapshot);
     }
 
