@@ -58,6 +58,7 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
@@ -1620,6 +1621,7 @@ public class ShareConsumerTest {
      * Test to verify that the acknowledgement commit callback can throw an exception, and it is propagated
      * to the caller of poll().
      */
+    @Flaky("KAFKA-19840") // https://issues.apache.org/jira/browse/KAFKA-19840
     @ClusterTest
     public void testAcknowledgementCommitCallbackThrowsException() throws InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
