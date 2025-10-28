@@ -3588,6 +3588,17 @@ public class SenderTest {
         }
     }
 
+    @Test
+    public void testBatchesSentAfterForceClose() throws InterruptedException {
+        FutureRecordMetadata future = appendToAccumulator(tp0, 0L, "key", "value");
+        sender.forceClose();
+        assertTrue(sender.inFlightBatches(tp0).isEmpty());
+        sender.runOnce();
+        assertTrue(sender.inFlightBatches(tp0).isEmpty());
+        sender.run();
+        TestUtils.assertFutureThrows(KafkaException.class, future);
+    }
+
 
     private void verifyErrorMessage(ProduceResponse response, String expectedMessage) throws Exception {
         Future<RecordMetadata> future = appendToAccumulator(tp0, 0L, "key", "value");
