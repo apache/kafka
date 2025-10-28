@@ -1138,7 +1138,7 @@ public class SubscriptionStateTest {
             predicateEvaluated.set(true);
             return true;
         };
-        List<TopicPartition> fetchablePartitions = state.fetchablePartitions(isBuffered);
+        Set<TopicPartition> fetchablePartitions = state.fetchablePartitions(isBuffered);
         assertTrue(fetchablePartitions.isEmpty());
         assertFalse(predicateEvaluated.get(), "Custom predicate should not be evaluated when partitions are not fetchable");
 
@@ -1147,6 +1147,6 @@ public class SubscriptionStateTest {
         predicateEvaluated.set(false);
         fetchablePartitions = state.fetchablePartitions(isBuffered);
         assertTrue(predicateEvaluated.get());
-        assertEquals(tp0, fetchablePartitions.get(0));
+        assertTrue(fetchablePartitions.contains(tp0));
     }
 }

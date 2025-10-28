@@ -1072,7 +1072,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         return new TopicIdPartition(topicId, partitionIndex, topicName);
     }
 
-    private List<TopicPartition> partitionsToFetch() {
+    private Set<TopicPartition> partitionsToFetch() {
         return subscriptions.fetchablePartitions(tp -> true);
     }
 
