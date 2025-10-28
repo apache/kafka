@@ -64,10 +64,7 @@ public enum ShareAcquireMode {
 
     @Override
     public String toString() {
-        return "ShareAcquireMode{"  +
-                "name=" + name +
-                ", id=" + id +
-                "}";
+        return "ShareAcquireMode(" + name + " (" + id + "))";
     }
 
     public static class Validator implements ConfigDef.Validator {
