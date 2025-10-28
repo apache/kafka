@@ -262,6 +262,7 @@ org.apache.kafka.raft.KafkaRaftClientTest:
 - testAppendFailedWithRecordBatchTooLargeException
 - testBeginQuorumEpochHeartbeat
 - testBeginQuorumEpochRequestClusterIdValidation
+- testBeginQuorumShouldNotSendAfterFetchRequest
 - testCandidateElectionTimeout
 - testCandidateIgnoreVoteRequestOnSameEpoch
 - testCandidateWaitsRestOfElectionTimeoutAfterElectionLoss
