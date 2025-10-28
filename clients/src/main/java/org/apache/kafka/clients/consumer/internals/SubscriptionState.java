@@ -482,9 +482,9 @@ public class SubscriptionState {
     }
 
     // Visible for testing
-    public synchronized Set<TopicPartition> fetchablePartitions(Predicate<TopicPartition> isAvailable) {
+    public synchronized List<TopicPartition> fetchablePartitions(Predicate<TopicPartition> isAvailable) {
         // Since this is in the hot-path for fetching, we do this instead of using java.util.stream API
-        Set<TopicPartition> result = new HashSet<>();
+        List<TopicPartition> result = new ArrayList<>();
         assignment.forEach((topicPartition, topicPartitionState) -> {
             // Cheap check is first to avoid evaluating the predicate if possible
             if ((subscriptionType.equals(SubscriptionType.AUTO_TOPICS_SHARE) || isFetchableAndSubscribed(topicPartition, topicPartitionState))
