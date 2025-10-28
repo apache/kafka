@@ -9541,7 +9541,7 @@ public class SharePartitionTest {
         assertEquals(2, sharePartition.cachedState().size());
         assertEquals(2, sharePartition.timer().size());
 
-        // Return a future which will be completed later.
+        // Return 2 future which will be completed later.
         CompletableFuture<WriteShareGroupStateResult> future1 = new CompletableFuture<>();
         CompletableFuture<WriteShareGroupStateResult> future2 = new CompletableFuture<>();
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(future1).thenReturn(future2);
@@ -9582,7 +9582,7 @@ public class SharePartitionTest {
         TimerTask timerTaskOffsetState2 = sharePartition.cachedState().get(0L).offsetState().get(1L).acquisitionLockTimeoutTask();
         TimerTask timerTaskOffsetState3 = sharePartition.cachedState().get(0L).offsetState().get(2L).acquisitionLockTimeoutTask();
 
-        // Complete future.
+        // Complete futures.
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
