@@ -1036,9 +1036,11 @@ public class DelayedShareFetchTest {
         sharePartitions.put(tp3, sp3);
         sharePartitions.put(tp4, sp4);
 
-        ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), List.of(tp0, tp1, tp2, tp3, tp4), BATCH_SIZE, MAX_FETCH_RECORDS,
-            BROKER_TOPIC_STATS);
+        ShareFetch shareFetch = new ShareFetch(new FetchParams(
+            FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS, 1, 1024 * 1020,
+            FetchIsolation.HIGH_WATERMARK, Optional.empty(), true), groupId,
+            Uuid.randomUuid().toString(), new CompletableFuture<>(), List.of(tp0, tp1, tp2, tp3, tp4), BATCH_SIZE,
+            MAX_FETCH_RECORDS, BROKER_TOPIC_STATS);
 
         // All 5 partitions are acquirable.
         doAnswer(invocation -> buildLogReadResult(sharePartitions.keySet().stream().toList())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
@@ -1084,8 +1086,8 @@ public class DelayedShareFetchTest {
             assertTrue(delayedShareFetch.tryComplete());
             assertTrue(delayedShareFetch.isCompleted());
 
-            // Since all partitions are acquirable, maxbytes per partition = requestMaxBytes(i.e. 1024*1024) / acquiredTopicPartitions(i.e. 5)
-            int expectedPartitionMaxBytes = 1024 * 1024 / 5;
+            // Since all partitions are acquirable, maxbytes per partition = requestMaxBytes(i.e. 1024*1020) / acquiredTopicPartitions(i.e. 5)
+            int expectedPartitionMaxBytes = 1024 * 1020 / 5;
             LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> expectedReadPartitionInfo = new LinkedHashMap<>();
             sharePartitions.keySet().forEach(topicIdPartition -> expectedReadPartitionInfo.put(topicIdPartition,
                 new FetchRequest.PartitionData(
@@ -1222,7 +1224,7 @@ public class DelayedShareFetchTest {
 
         ShareFetch shareFetch = new ShareFetch(
             new FetchParams(FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
-                1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
+                1, 1024 * 1020, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
             new CompletableFuture<>(), List.of(tp0, tp1, tp2), BATCH_SIZE, MAX_FETCH_RECORDS,
             BROKER_TOPIC_STATS);
 
@@ -1255,8 +1257,8 @@ public class DelayedShareFetchTest {
         LinkedHashMap<TopicIdPartition, LogReadResult> combinedLogReadResponse = delayedShareFetch.combineLogReadResponse(topicPartitionData, logReadResponse);
 
         assertEquals(topicPartitionData.keySet(), combinedLogReadResponse.keySet());
-        // Since only 2 partitions are fetchable but the third one has already been fetched, maxbytes per partition = requestMaxBytes(i.e. 1024*1024) / acquiredTopicPartitions(i.e. 3)
-        int expectedPartitionMaxBytes = 1024 * 1024 / 3;
+        // Since only 2 partitions are fetchable but the third one has already been fetched, maxbytes per partition = requestMaxBytes(i.e. 1024*1020) / acquiredTopicPartitions(i.e. 3)
+        int expectedPartitionMaxBytes = 1024 * 1020 / 3;
         LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> expectedReadPartitionInfo = new LinkedHashMap<>();
         fetchableTopicPartitions.forEach(topicIdPartition -> expectedReadPartitionInfo.put(topicIdPartition,
             new FetchRequest.PartitionData(
