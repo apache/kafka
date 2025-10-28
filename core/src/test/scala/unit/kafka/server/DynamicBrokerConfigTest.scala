@@ -1134,10 +1134,7 @@ class TestExporterOnly extends MetricsReporter with ClientTelemetryExporterProvi
   override def metricRemoval(metric: KafkaMetric): Unit = {}
   override def close(): Unit = {}
 
-  override def clientTelemetryExporter(): ClientTelemetryExporter = new ClientTelemetryExporter {
-    override def exportMetrics(context: ClientTelemetryContext,
-                               payload: ClientTelemetryPayload): Unit = {}
-  }
+  override def clientTelemetryExporter(): ClientTelemetryExporter = (_: ClientTelemetryContext, _: ClientTelemetryPayload) => {}
 }
 
 @SuppressWarnings(Array("deprecation"))
@@ -1148,10 +1145,7 @@ class TestReceiverOnly extends MetricsReporter with ClientTelemetry {
   override def metricRemoval(metric: KafkaMetric): Unit = {}
   override def close(): Unit = {}
 
-  override def clientReceiver(): ClientTelemetryReceiver = new ClientTelemetryReceiver {
-    override def exportMetrics(context: AuthorizableRequestContext,
-                               payload: ClientTelemetryPayload): Unit = {}
-  }
+  override def clientReceiver(): ClientTelemetryReceiver = (_: AuthorizableRequestContext, _: ClientTelemetryPayload) => {}
 }
 
 @SuppressWarnings(Array("deprecation"))
@@ -1163,13 +1157,7 @@ class TestReceiverAndExporter extends MetricsReporter
   override def metricRemoval(metric: KafkaMetric): Unit = {}
   override def close(): Unit = {}
 
-  override def clientTelemetryExporter(): ClientTelemetryExporter = new ClientTelemetryExporter {
-    override def exportMetrics(context: ClientTelemetryContext,
-                               payload: ClientTelemetryPayload): Unit = {}
-  }
+  override def clientTelemetryExporter(): ClientTelemetryExporter = (_: ClientTelemetryContext, _: ClientTelemetryPayload) => {}
 
-  override def clientReceiver(): ClientTelemetryReceiver = new ClientTelemetryReceiver {
-    override def exportMetrics(context: AuthorizableRequestContext,
-                               payload: ClientTelemetryPayload): Unit = {}
-  }
+  override def clientReceiver(): ClientTelemetryReceiver = (_: AuthorizableRequestContext, _: ClientTelemetryPayload) => {}
 }
