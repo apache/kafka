@@ -443,7 +443,10 @@ public final class KafkaEventQueue implements EventQueue {
     private boolean interrupted;
 
     /**
-     * Optional callback for queue idle time tracking.
+     * Optional callback for tracking queue idle time. The BiConsumer accepts two parameters:
+     * the first Long is the idle duration in milliseconds, and the second Long is the current
+     * time in milliseconds when the idle period ended. Both values are captured at the same
+     * moment to ensure timing consistency for metric calculations.
      */
     private final BiConsumer<Long, Long> idleTimeCallback;
 

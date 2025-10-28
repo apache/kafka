@@ -17,7 +17,6 @@
 
 package org.apache.kafka.image.loader.metrics;
 
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -55,7 +54,6 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
     private static final String FEATURE_NAME_TAG = "featureName";
 
     private final Optional<MetricsRegistry> registry;
-    private final Time time;
     private final AtomicReference<MetadataVersion> currentMetadataVersion =
             new AtomicReference<>(MetadataVersion.MINIMUM_VERSION);
     private final Map<String, Short> finalizedFeatureLevels = new ConcurrentHashMap<>();
@@ -71,19 +69,16 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
      *
      * @param registry                      The metrics registry, or Optional.empty if this is a
      *                                      test and we don't have one.
-     * @param time                          The time object to use.
      * @param batchProcessingTimeNsUpdater  Updates the batch processing time histogram.
      * @param batchSizesUpdater             Updates the batch sizes histogram.
      */
     public MetadataLoaderMetrics(
         Optional<MetricsRegistry> registry,
-        Time time,
         Consumer<Long> batchProcessingTimeNsUpdater,
         Consumer<Integer> batchSizesUpdater,
         AtomicReference<MetadataProvenance> lastAppliedProvenance
     ) {
         this.registry = registry;
-        this.time = time;
         this.batchProcessingTimeNsUpdater = batchProcessingTimeNsUpdater;
         this.batchSizesUpdater = batchSizesUpdater;
         this.lastAppliedProvenance = lastAppliedProvenance;

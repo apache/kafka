@@ -303,14 +303,12 @@ class SharedServer(
         metadataLoaderMetrics = if (brokerMetrics != null) {
           new MetadataLoaderMetrics(
             Optional.of(KafkaYammerMetrics.defaultRegistry()),
-            time,
             elapsedNs => brokerMetrics.updateBatchProcessingTime(elapsedNs),
             batchSize => brokerMetrics.updateBatchSize(batchSize),
             brokerMetrics.lastAppliedImageProvenance)
         } else {
           new MetadataLoaderMetrics(
             Optional.of(KafkaYammerMetrics.defaultRegistry()),
-            time,
             _ => {},
             _ => {},
             new AtomicReference[MetadataProvenance](MetadataProvenance.EMPTY))
