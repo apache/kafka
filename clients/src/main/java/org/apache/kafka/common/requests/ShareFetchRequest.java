@@ -139,7 +139,7 @@ public class ShareFetchRequest extends AbstractRequest {
         @Override
         public ShareFetchRequest build(short version) {
             if (version < 2) {
-                // The v1 does not support ShareAcquireMode Renew.
+                // The v1 does not support AcknowledgeType RENEW.
                 if (data.isRenewAck()) {
                     throw new UnsupportedVersionException("The v1 ShareFetch does not support AcknowledgeType.RENEW");
                 }
