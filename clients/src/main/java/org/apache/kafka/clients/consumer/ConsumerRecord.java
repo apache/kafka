@@ -40,9 +40,8 @@ import java.util.Optional;
  * </ul>
  *
  * <p>
- * In particular, the {@link #headers()} method returns a mutable collection of headers. If multiple
- * threads access or modify these headers concurrently, it may lead to race conditions or inconsistent
- * states. It is the responsibility of the user to ensure that multi-threaded access is properly synchronized.
+ * However, the {@link #headers()} collection and individual header instances are
+ * <b>read thread-safe</b>, allowing concurrent access for reading without additional synchronization.
  *
  * <p>
  * Refer to the {@link KafkaConsumer} documentation for more details on multi-threaded consumption and processing strategies.

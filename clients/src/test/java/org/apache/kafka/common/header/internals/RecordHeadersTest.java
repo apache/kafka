@@ -273,18 +273,12 @@ public class RecordHeadersTest {
         assertArrayEquals(value.getBytes(), actual.value());
     }
 
-    @RepeatedTest(100)
-    public void testRecordHeaderIsReadThreadSafe() throws Exception {
-        int threads = 32;
-        RecordHeader header = new RecordHeader(
-            ByteBuffer.wrap("key".getBytes(StandardCharsets.UTF_8)),
-            ByteBuffer.wrap("value".getBytes(StandardCharsets.UTF_8))
-        );
-
+    private void assertRecordHeaderReadThreadSafe(RecordHeader header) throws Exception {
+        int threadCount = 32;
         CountDownLatch startLatch = new CountDownLatch(1);
         AtomicBoolean raceDetected = new AtomicBoolean(false);
 
-        var fs = IntStream.range(0, threads)
+        var futures = IntStream.range(0, threadCount)
             .mapToObj(i -> CompletableFuture.runAsync(() -> {
                 try {
                     startLatch.await();
@@ -299,39 +293,26 @@ public class RecordHeadersTest {
             })).collect(Collectors.toUnmodifiableList());
 
         startLatch.countDown();
-        fs.forEach(CompletableFuture::join);
+        futures.forEach(CompletableFuture::join);
 
-        assertFalse(raceDetected.get(), "Read race condition detected in RecordHeader!");
+        assertFalse(raceDetected.get());
+    }
+
+    @RepeatedTest(100)
+    public void testRecordHeaderIsReadThreadSafe() throws Exception {
+        RecordHeader header = new RecordHeader(
+            ByteBuffer.wrap("key".getBytes(StandardCharsets.UTF_8)),
+            ByteBuffer.wrap("value".getBytes(StandardCharsets.UTF_8))
+        );
+        assertRecordHeaderReadThreadSafe(header);
     }
 
     @RepeatedTest(100)
     public void testRecordHeaderWithNullValueIsReadThreadSafe() throws Exception {
-        int threadCount = 32;
         RecordHeader header = new RecordHeader(
             ByteBuffer.wrap("key".getBytes(StandardCharsets.UTF_8)),
             null
         );
-
-        CountDownLatch startLatch = new CountDownLatch(1);
-        AtomicBoolean raceDetected = new AtomicBoolean(false);
-
-        var fs = IntStream.range(0, threadCount)
-            .mapToObj(i -> CompletableFuture.runAsync(() -> {
-                try {
-                    startLatch.await();
-                    header.key();
-                    header.value(); // may be null, should not throw
-                } catch (NullPointerException e) {
-                    raceDetected.set(true);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new RuntimeException(e);
-                }
-            })).collect(Collectors.toUnmodifiableList());
-
-        startLatch.countDown();
-        fs.forEach(CompletableFuture::join);
-
-        assertFalse(raceDetected.get(), "Read race condition detected when value is null in RecordHeader!");
+        assertRecordHeaderReadThreadSafe(header);
     }
 }
