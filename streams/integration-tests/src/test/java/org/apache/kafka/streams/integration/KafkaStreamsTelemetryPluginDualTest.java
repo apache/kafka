@@ -14,23 +14,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.streams.integration;
 
-package org.apache.kafka.server.telemetry;
-
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.MetricsReporter;
 
-/**
- * A {@link MetricsReporter} may implement this interface to indicate support for collecting client
- * telemetry on the server side using the new exporter API.
- */
-public interface ClientTelemetryExporterProvider {
+import java.util.List;
+import java.util.Map;
 
-    /**
-     * Called by the broker to fetch instance of {@link ClientTelemetryExporter}.
-     * <p>
-     * This instance may be cached by the broker.
-     *
-     * @return broker side instance of {@link ClientTelemetryExporter}
-     */
-    ClientTelemetryExporter clientTelemetryExporter();
+/**
+ * Concrete test implementation using TelemetryPluginDual (both deprecated and new API).
+ */
+public class KafkaStreamsTelemetryPluginDualTest extends KafkaStreamsTelemetryBase {
+
+    @Override
+    protected Class<? extends MetricsReporter> getTelemetryPluginClass() {
+        return TelemetryPluginDual.class;
+    }
+
+    @Override
+    protected Map<Uuid, List<String>> getSubscribedMetricsMap() {
+        return TelemetryPluginDual.SUBSCRIBED_METRICS_EXPORTER;
+    }
+
+    @Override
+    protected String getProcessId() {
+        return TelemetryPluginDual.processId;
+    }
+
+    @Override
+    protected Map<Uuid, List<Long>> getPushTimestampsMap() {
+        return TelemetryPluginDual.PUSH_TIMESTAMPS;
+    }
 }

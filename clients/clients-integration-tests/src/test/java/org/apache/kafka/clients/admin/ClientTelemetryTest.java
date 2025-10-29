@@ -39,8 +39,11 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.telemetry.ClientTelemetry;
+import org.apache.kafka.server.telemetry.ClientTelemetryExporter;
+import org.apache.kafka.server.telemetry.ClientTelemetryExporterProvider;
 import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
 
 import java.time.Duration;
@@ -53,6 +56,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -66,12 +70,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientTelemetryTest {
 
-    @ClusterTest(
-            types = Type.KRAFT, 
-            brokers = 3,
-            serverProperties = {
-                @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.clients.admin.ClientTelemetryTest$GetIdClientTelemetry"),
-            })
+    @ClusterTests({
+        @ClusterTest(
+                types = Type.KRAFT,
+                brokers = 3,
+                serverProperties = {
+                    @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.clients.admin.ClientTelemetryTest$GetIdClientTelemetry"),
+                }),
+        @ClusterTest(
+                types = Type.KRAFT,
+                brokers = 3,
+                serverProperties = {
+                    @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.clients.admin.ClientTelemetryTest$TelemetryExporter"),
+                }),
+        @ClusterTest(
+                types = Type.KRAFT,
+                brokers = 3,
+                serverProperties = {
+                    @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG,
+                        value = "org.apache.kafka.clients.admin.ClientTelemetryTest$GetIdClientTelemetry,org.apache.kafka.clients.admin.ClientTelemetryTest$TelemetryExporter"),
+                })
+    })
     public void testClientInstanceId(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         Map<String, Object> configs = new HashMap<>();
         configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
@@ -135,6 +154,51 @@ public class ClientTelemetryTest {
         }
     }
 
+    @ClusterTest(types = Type.KRAFT,
+            brokers = 3,
+            serverProperties = {
+                @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.clients.admin.ClientTelemetryTest$TelemetryExporter")
+            })
+    public void testPushInterval(ClusterInstance clusterInstance) throws Exception {
+        final int expectedIntervalMs = 1000;
+        List<String> alterOpts = asList("--bootstrap-server", clusterInstance.bootstrapServers(),
+                "--alter", "--entity-type", "client-metrics", "--entity-name", "test-interval",
+                "--add-config", "interval.ms=" + expectedIntervalMs + ",metrics=org.apache.kafka.admin");
+
+        try (Admin adminForConfig = clusterInstance.admin()) {
+            ConfigCommand.ConfigCommandOptions addOpts = new ConfigCommand.ConfigCommandOptions(toArray(Set.of(alterOpts)));
+            ConfigCommand.alterConfig(adminForConfig, addOpts);
+        }
+
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
+        configs.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true);
+
+        try (Admin admin = Admin.create(configs)) {
+            Uuid uuid = admin.clientInstanceId(Duration.ofSeconds(10));
+            assertNotNull(uuid);
+
+            long startTime = System.currentTimeMillis();
+            // Wait for at least 2 more pushes to verify metrics are being pushed at the expected interval
+            while (TelemetryExporter.PUSH_TIMESTAMPS.getOrDefault(uuid, Collections.emptyList()).size() < 3
+                    && System.currentTimeMillis() - startTime < 5000) {
+                Thread.sleep(100);
+            }
+
+            List<Long> timestamps = TelemetryExporter.PUSH_TIMESTAMPS.get(uuid);
+
+            assertNotNull(timestamps, "Should have captured push timestamps");
+            assertTrue(timestamps.size() >= 2, "Should have received at least 2 metric pushes, got: " + timestamps.size());
+
+            // Verify the interval between pushes is approximately 1 second
+            for (int i = 1; i < timestamps.size(); i++) {
+                long intervalMs = timestamps.get(i) - timestamps.get(i - 1);
+                assertTrue(intervalMs >= 800 && intervalMs <= 1200,
+                        "Interval between pushes should be approximately " + expectedIntervalMs + "ms (allowing for jitter), but was: " + intervalMs + "ms");
+            }
+        }
+    }
+
     @ClusterTest(types = Type.KRAFT)
     public void testMetrics(ClusterInstance clusterInstance) {
         Map<String, Object> configs = new HashMap<>();
@@ -188,6 +252,40 @@ public class ClientTelemetryTest {
         @Override
         public ClientTelemetryReceiver clientReceiver() {
             return (context, payload) -> {
+            };
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public static class TelemetryExporter implements ClientTelemetryExporterProvider, MetricsReporter {
+
+        public static final Map<Uuid, List<Long>> PUSH_TIMESTAMPS = new ConcurrentHashMap<>();
+
+        @Override
+        public void init(List<KafkaMetric> metrics) {
+        }
+
+        @Override
+        public void metricChange(KafkaMetric metric) {
+        }
+
+        @Override
+        public void metricRemoval(KafkaMetric metric) {
+        }
+
+        @Override
+        public void close() {
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+        }
+
+        @Override
+        public ClientTelemetryExporter clientTelemetryExporter() {
+            return (context, payload) -> {
+                Uuid clientId = payload.clientInstanceId();
+                PUSH_TIMESTAMPS.computeIfAbsent(clientId, k -> new ArrayList<>()).add(System.currentTimeMillis());
             };
         }
     }

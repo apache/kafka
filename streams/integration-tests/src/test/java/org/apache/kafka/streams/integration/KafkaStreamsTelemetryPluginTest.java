@@ -14,15 +14,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.metrics;
+package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
-import org.apache.kafka.server.telemetry.ClientTelemetryContext;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metrics.MetricsReporter;
+
+import java.util.List;
+import java.util.Map;
 
 /**
- * Default implementation of {@link ClientTelemetryContext}.
+ * Concrete test implementation using the deprecated TelemetryPlugin (ClientTelemetry API).
  */
-public record DefaultClientTelemetryContext(int pushIntervalMs,
-                                            AuthorizableRequestContext authorizableRequestContext) implements ClientTelemetryContext {
+public class KafkaStreamsTelemetryPluginTest extends KafkaStreamsTelemetryBase {
 
+    @Override
+    protected Class<? extends MetricsReporter> getTelemetryPluginClass() {
+        return TelemetryPlugin.class;
+    }
+
+    @Override
+    protected Map<Uuid, List<String>> getSubscribedMetricsMap() {
+        return TelemetryPlugin.SUBSCRIBED_METRICS;
+    }
+
+    @Override
+    protected String getProcessId() {
+        return TelemetryPlugin.processId;
+    }
 }
