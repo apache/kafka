@@ -2147,6 +2147,7 @@ org.apache.kafka.clients.consumer.internals.ShareCompletedFetchTest:
 - testCorruptedMessage
 - testNegativeFetchCount
 - testNoRecordsInFetch
+- testOverlappingAcquiredRecordsLogsErrorAndRetainsFirstOccurrence
 - testSimple
 - testSoftMaxPollRecordLimit
 - testUnaligned
