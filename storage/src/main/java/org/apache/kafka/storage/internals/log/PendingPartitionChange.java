@@ -14,15 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.metadata.LeaderAndIsr;
 
-public class MockStreamsMetrics extends StreamsMetricsImpl {
-
-    public MockStreamsMetrics(final Metrics metrics) {
-        super(metrics, "test", "processId", "applicationId", new MockTime());
-    }
+/**
+ * Represents a partition state currently undergoing a change, such as an ISR expansion or shrinking.
+ */
+public interface PendingPartitionChange extends PartitionState {
+    /**
+     * Returns the last committed partition state before this pending change.
+     */
+    CommittedPartitionState lastCommittedState();
+    /**
+     * Returns the LeaderAndIsr object sent to the controller for this pending change.
+     */
+    LeaderAndIsr sentLeaderAndIsr();
 }

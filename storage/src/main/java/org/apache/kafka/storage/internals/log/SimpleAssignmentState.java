@@ -14,15 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import java.util.List;
 
-public class MockStreamsMetrics extends StreamsMetricsImpl {
+public record SimpleAssignmentState(List<Integer> replicas) implements AssignmentState {
+    public SimpleAssignmentState {
+        replicas = List.copyOf(replicas);
+    }
 
-    public MockStreamsMetrics(final Metrics metrics) {
-        super(metrics, "test", "processId", "applicationId", new MockTime());
+    @Override
+    public int replicationFactor() {
+        return replicas().size();
+    }
+
+    @Override
+    public boolean isAddingReplica(int brokerId) {
+        return false;
     }
 }

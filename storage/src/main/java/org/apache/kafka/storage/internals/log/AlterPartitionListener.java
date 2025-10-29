@@ -14,15 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+/**
+ * A listener that is invoked when the ISR of a partition is altered. Implementations of this
+ * interface can be used to track metrics related to ISR changes.
+ */
+public interface AlterPartitionListener {
+    /**
+     * Callback invoked when the ISR is expanded.
+     */
+    void markIsrExpand();
 
-public class MockStreamsMetrics extends StreamsMetricsImpl {
+    /**
+     * Callback invoked when the ISR is shrunk.
+     */
+    void markIsrShrink();
 
-    public MockStreamsMetrics(final Metrics metrics) {
-        super(metrics, "test", "processId", "applicationId", new MockTime());
-    }
+    /**
+     * Callback invoked when an AlterPartition request fails.
+     */
+    void markFailed();
 }
