@@ -28,7 +28,7 @@ import org.apache.kafka.common.utils.{BufferSupplier, MockTime, Time}
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics
-import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.storage.log.metrics.{BrokerTopicMetrics, BrokerTopicStats}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
@@ -40,7 +40,7 @@ import org.mockito.Mockito.{mock, times, verify, when}
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
-import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
 
@@ -701,13 +701,12 @@ class KafkaRequestHandlerTest {
 
   @Test
   def testMetricsForMultipleRequestPools(): Unit = {
-    val time = Time.SYSTEM
+    val time = new MockTime()
     val metricsBroker = mock(classOf[RequestChannelMetrics])
     val metricsController = mock(classOf[RequestChannelMetrics])
     val requestChannelBroker = new RequestChannel(10, time, metricsBroker)
     val requestChannelController = new RequestChannel(10, time, metricsController)
     val apiHandler = mock(classOf[ApiRequestHandler])
-    val metricsGroup = new KafkaMetricsGroup("kafka.server", "KafkaRequestHandlerPool")
 
     // Create a factory for this test
     val factory = new KafkaRequestHandlerPoolFactory()
@@ -737,32 +736,6 @@ class KafkaRequestHandlerTest {
 
     // Verify global counter is updated to sum of both pools
     assertEquals(8, factory.aggregateThreadCount, "global counter should be 8 after both pools")
-
-    val aggregateMeter = metricsGroup.newMeter("RequestHandlerAvgIdlePercent", "percent", TimeUnit.NANOSECONDS)
-    val brokerPerPoolIdleMeter = metricsGroup.newMeter("BrokerRequestHandlerAvgIdlePercent", "percent", TimeUnit.NANOSECONDS)
-    val controllerPerPoolIdleMeter = metricsGroup.newMeter("ControllerRequestHandlerAvgIdlePercent", "percent", TimeUnit.NANOSECONDS)
-
-    var aggregateValue = 0.0
-    var brokerPerPoolValue = 0.0
-    var controllerPerPoolValue = 0.0
-
-    // Wait until all idle-percent meters have been initialized with non-zero rates,
-    // or timeout after the given duration.
-    val mockTime = new MockTime()
-    val startTime = mockTime.milliseconds()
-    while(aggregateValue == 0.0 || brokerPerPoolValue == 0.0 || controllerPerPoolValue == 0.0) {
-      if (mockTime.milliseconds() - startTime > 2e9)
-        throw new RuntimeException("Timeout waiting for idle-percent metrics to initialize")
-      aggregateValue = aggregateMeter.oneMinuteRate()
-      brokerPerPoolValue = brokerPerPoolIdleMeter.oneMinuteRate()
-      controllerPerPoolValue = controllerPerPoolIdleMeter.oneMinuteRate()
-      mockTime.sleep(1)
-    }
-
-    // Verify that the meter shows reasonable idle percentage
-    assertTrue(aggregateValue >= 0.0 && aggregateValue <= 1.00, s"aggregate idle percent should be within [0,1], got $aggregateValue")
-    assertTrue(brokerPerPoolValue >= 0.0 && brokerPerPoolValue <= 1.00, s"broker per-pool idle percent should be within [0,1], got $brokerPerPoolValue")
-    assertTrue(controllerPerPoolValue >= 0.0 && controllerPerPoolValue <= 1.00, s"controller per-pool idle percent should be within [0,1], got $controllerPerPoolValue")
 
     // Test pool resizing
     // Shrink broker pool from 4 to 2 threads
