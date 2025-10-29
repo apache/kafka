@@ -208,7 +208,8 @@ public class ShareGroupCommandTest {
             ListShareGroupOffsetsResult listShareGroupOffsetsResult = AdminClientTestUtils.createListShareGroupOffsetsResult(
                 Map.of(
                     firstGroup,
-                    KafkaFuture.completedFuture(Map.of(new TopicPartition("topic1", 0), new SharePartitionOffsetInfo(0L, Optional.of(1), Optional.empty())))
+                    KafkaFuture.completedFuture(
+                            Map.of(new TopicPartition("topic1", 0), new SharePartitionOffsetInfo(0L, Optional.of(1), Optional.of(0L))))
                 )
             );
 
@@ -225,9 +226,9 @@ public class ShareGroupCommandTest {
 
                     List<String> expectedValues;
                     if (describeType.contains("--verbose")) {
-                        expectedValues = List.of(firstGroup, "topic1", "0", "1", "0", "-");
+                        expectedValues = List.of(firstGroup, "topic1", "0", "1", "0", "0");
                     } else {
-                        expectedValues = List.of(firstGroup, "topic1", "0", "0", "-");
+                        expectedValues = List.of(firstGroup, "topic1", "0", "0", "0");
                     }
                     return checkArgsHeaderOutput(cgcArgs, lines[0]) &&
                         Arrays.stream(lines[1].trim().split("\\s+")).toList().equals(expectedValues);
@@ -322,7 +323,7 @@ public class ShareGroupCommandTest {
             ListShareGroupOffsetsResult listShareGroupOffsetsResult2 = AdminClientTestUtils.createListShareGroupOffsetsResult(
                 Map.of(
                     secondGroup,
-                    KafkaFuture.completedFuture(Map.of(new TopicPartition("topic1", 0), new SharePartitionOffsetInfo(0, Optional.of(1), Optional.empty())))
+                    KafkaFuture.completedFuture(Map.of(new TopicPartition("topic1", 0), new SharePartitionOffsetInfo(0, Optional.of(1), Optional.of(0L))))
                 )
             );
 
@@ -351,10 +352,10 @@ public class ShareGroupCommandTest {
                     List<String> expectedValues1, expectedValues2;
                     if (describeType.contains("--verbose")) {
                         expectedValues1 = List.of(firstGroup, "topic1", "0", "1", "0", "-");
-                        expectedValues2 = List.of(secondGroup, "topic1", "0", "1", "0", "-");
+                        expectedValues2 = List.of(secondGroup, "topic1", "0", "1", "0", "0");
                     } else {
                         expectedValues1 = List.of(firstGroup, "topic1", "0", "0", "-");
-                        expectedValues2 = List.of(secondGroup, "topic1", "0", "0", "-");
+                        expectedValues2 = List.of(secondGroup, "topic1", "0", "0", "0");
                     }
                     return checkArgsHeaderOutput(cgcArgs, lines[0]) && checkArgsHeaderOutput(cgcArgs, lines[3]) &&
                         Arrays.stream(lines[1].trim().split("\\s+")).toList().equals(expectedValues1) &&
@@ -1523,8 +1524,8 @@ public class ShareGroupCommandTest {
 
     private boolean checkOffsetsArgsHeaderOutput(String output, boolean verbose) {
         List<String> expectedKeys = verbose ?
-            List.of("GROUP", "TOPIC", "PARTITION", "LEADER-EPOCH", "START-OFFSET") :
-            List.of("GROUP", "TOPIC", "PARTITION", "START-OFFSET");
+            List.of("GROUP", "TOPIC", "PARTITION", "LEADER-EPOCH", "START-OFFSET", "LAG") :
+            List.of("GROUP", "TOPIC", "PARTITION", "START-OFFSET", "LAG");
         return Arrays.stream(output.trim().split("\\s+")).toList().equals(expectedKeys);
     }
 
