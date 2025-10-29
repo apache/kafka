@@ -137,7 +137,6 @@ class ReplicaManagerTest {
   // Constants defined for readability
   private val partitionEpoch = 0
   private val brokerEpoch = 0L
-  private val batchOptimized = ShareAcquireMode.BATCH_OPTIMIZED.id();
 
   // These metrics are static and once we remove them after each test, they won't be created and verified anymore
   private val metricsToBeDeletedInTheEnd = Set("kafka.server:type=DelayedRemoteFetchMetrics,name=ExpiresPerSec")
@@ -5931,7 +5930,7 @@ class ReplicaManagerTest {
         Uuid.randomUuid.toString,
         future,
         topicPartitions,
-        batchOptimized,
+        ShareAcquireMode.BATCH_OPTIMIZED.id(),
         500,
         100,
         brokerTopicStats)
