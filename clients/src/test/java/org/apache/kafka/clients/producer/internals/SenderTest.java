@@ -141,6 +141,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockingDetails;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -3590,11 +3592,22 @@ public class SenderTest {
 
     @Test
     public void testBatchesSentAfterForceClose() throws InterruptedException {
+        MockClient spy = spy(client);
+        Metrics m = new Metrics();
+        SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
+        sender = new Sender(logContext, spy, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
+                10, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null);
+
         FutureRecordMetadata future = appendToAccumulator(tp0, 0L, "key", "value");
         sender.forceClose();
         assertTrue(sender.inFlightBatches(tp0).isEmpty());
+        reset(spy);
         sender.runOnce();
-        assertTrue(sender.inFlightBatches(tp0).isEmpty());
+        // Either the request is not sent, or the send request is not processed by poll
+        long sendInvocations = mockingDetails(spy).getInvocations().stream().filter(invocation -> invocation.getMethod().getName().equals("send")).count();
+        long pollInvocations = mockingDetails(spy).getInvocations().stream().filter(invocation -> invocation.getMethod().getName().equals("poll")).count();
+        assertTrue(sendInvocations == 0 || pollInvocations == 0, "Message cannot be sent or processed after Sender is forced close");
+
         sender.run();
         TestUtils.assertFutureThrows(KafkaException.class, future);
     }
