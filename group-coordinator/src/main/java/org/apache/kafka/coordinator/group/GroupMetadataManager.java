@@ -2030,9 +2030,9 @@ public class GroupMetadataManager {
 
         // Actually bump the group epoch
         int groupEpoch = group.groupEpoch();
-        boolean isInitialRebalance = (group.isEmpty() && groupEpoch == 0);
+        boolean isInitialRebalance = (bumpGroupEpoch && groupEpoch == 0);
         if (bumpGroupEpoch) {
-            if (isInitialRebalance) {
+            if (groupEpoch == 0) {
                 groupEpoch += 2;
             } else {
                 groupEpoch += 1;
@@ -2064,7 +2064,7 @@ public class GroupMetadataManager {
             boolean initialDelayActive = timer.isScheduled(streamsInitialRebalanceKey(groupId));
             if (initialDelayActive && group.assignmentEpoch() == 0) {
                 // During initial rebalance delay, return empty assignment to first joining members.
-                targetAssignmentEpoch = group.assignmentEpoch();
+                targetAssignmentEpoch = groupEpoch;
                 targetAssignment = TasksTuple.EMPTY;
             } else {
                 targetAssignment = updateStreamsTargetAssignment(
