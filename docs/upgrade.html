@@ -190,8 +190,8 @@
         For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/6oqMEw">KIP-1100</a>.
     </li>
     <li>
-        A new metric <code>AvgIdleRatio</code> has been added to the <code>ControllerEventManager</code> group. This metric measures the average idle ratio of the controller event queue thread,
-        providing visibility into how much time the controller spends waiting for events versus processing them. The metric value ranges from 0.0 (always busy) to 1.0 (always idle).
+        A new metric <code>AvgIdleRatio</code> has been added to the <code>ControllerEventManager</code> and <code>MetadataLoader</code> groups. These metrics measure the average idle ratio of their respective event queue threads,
+        providing visibility into how much time each component spends waiting for events versus processing them. The metric value ranges from 0.0 (always busy) to 1.0 (always idle).
     </li>
     <li>
         Deprecated <code>org.apache.kafka.streams.KafkaStreams$CloseOptions</code> and its related methods, such as
