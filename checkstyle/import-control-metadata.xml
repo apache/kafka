@@ -82,7 +82,6 @@
         <allow pkg="org.apache.kafka.image.writer" />
         <allow pkg="org.apache.kafka.metadata" />
         <allow pkg="org.apache.kafka.metadata.authorizer" />
-        <allow pkg="org.apache.kafka.metadata.migration" />
         <allow pkg="org.apache.kafka.deferred" />
         <allow pkg="org.apache.kafka.queue" />
         <allow pkg="org.apache.kafka.raft" />
@@ -182,12 +181,6 @@
         </subpackage>
         <subpackage name="bootstrap">
             <allow pkg="org.apache.kafka.snapshot" />
-        </subpackage>
-        <subpackage name="fault">
-            <allow pkg="org.apache.kafka.server.fault" />
-        </subpackage>
-        <subpackage name="migration">
-            <allow pkg="org.apache.kafka.controller" />
         </subpackage>
         <subpackage name="storage">
             <allow pkg="org.apache.kafka.common.internals" />
