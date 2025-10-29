@@ -38,8 +38,7 @@ public class SharePartitionOffsetInfo {
      * @param leaderEpoch The optional leader epoch of the start offset
      * @param lag         The optional lag for the share-partition
      */
-    public SharePartitionOffsetInfo(long startOffset, Optional<Integer> leaderEpoch, Optional<Long> lag)
-    {
+    public SharePartitionOffsetInfo(long startOffset, Optional<Integer> leaderEpoch, Optional<Long> lag) {
         this.startOffset = startOffset;
         this.leaderEpoch = leaderEpoch;
         this.lag = lag;
