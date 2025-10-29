@@ -30,6 +30,7 @@ import kafka.server.share.{DelayedShareFetch, SharePartition}
 import kafka.utils.TestUtils.waitUntilTrue
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.FetchSessionHandler
+import org.apache.kafka.clients.consumer.ShareAcquireMode
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
@@ -136,6 +137,7 @@ class ReplicaManagerTest {
   // Constants defined for readability
   private val partitionEpoch = 0
   private val brokerEpoch = 0L
+  private val batchOptimized = ShareAcquireMode.BATCH_OPTIMIZED.id();
 
   // These metrics are static and once we remove them after each test, they won't be created and verified anymore
   private val metricsToBeDeletedInTheEnd = Set("kafka.server:type=DelayedRemoteFetchMetrics,name=ExpiresPerSec")
@@ -5929,7 +5931,7 @@ class ReplicaManagerTest {
         Uuid.randomUuid.toString,
         future,
         topicPartitions,
-        0,
+        batchOptimized,
         500,
         100,
         brokerTopicStats)

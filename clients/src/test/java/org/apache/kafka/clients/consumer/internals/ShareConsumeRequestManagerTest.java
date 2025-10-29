@@ -2640,7 +2640,6 @@ public class ShareConsumeRequestManagerTest {
         int maxBytes = Integer.MAX_VALUE;
         int fetchSize = 1000;
         int minBytes = 1;
-        ShareAcquireMode shareAcquireMode = ShareAcquireMode.BATCH_OPTIMIZED;
         ShareFetchConfig shareFetchConfig = new ShareFetchConfig(
                 minBytes,
                 maxBytes,
@@ -2650,7 +2649,7 @@ public class ShareConsumeRequestManagerTest {
                 true, // check crc
                 CommonClientConfigs.DEFAULT_CLIENT_RACK,
                 IsolationLevel.READ_UNCOMMITTED,
-                shareAcquireMode);
+                ShareAcquireMode.BATCH_OPTIMIZED);
         ShareFetchCollector<K, V> shareFetchCollector = new ShareFetchCollector<>(logContext,
                 metadata,
                 subscriptions,

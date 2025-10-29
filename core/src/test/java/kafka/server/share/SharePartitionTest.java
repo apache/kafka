@@ -125,7 +125,6 @@ public class SharePartitionTest {
     private static final int DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS = 120;
     private static final int BATCH_SIZE = 500;
     private static final int DEFAULT_FETCH_OFFSET = 0;
-    private static final ShareAcquireMode SHARE_ACQUIRE_MODE = ShareAcquireMode.BATCH_OPTIMIZED;
     private static final int MAX_FETCH_RECORDS = Integer.MAX_VALUE;
     private static final byte ACKNOWLEDGE_TYPE_GAP_ID = 0;
     private static final FetchIsolation FETCH_ISOLATION_HWM = FetchIsolation.HIGH_WATERMARK;
@@ -1130,7 +1129,7 @@ public class SharePartitionTest {
         // Set max fetch records to 1, records will be acquired till the first gap is encountered.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 1,
                 10,
@@ -1155,7 +1154,7 @@ public class SharePartitionTest {
         // Send the same batch again to acquire the next set of records.
         acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 10,
                 15,
@@ -1190,7 +1189,7 @@ public class SharePartitionTest {
         // Now initial read gap is filled, so the complete batch can be acquired despite max fetch records being 1.
         acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 1,
                 31,
@@ -1249,7 +1248,7 @@ public class SharePartitionTest {
         // Set max fetch records to 500, all records should be acquired.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 500,
                 10,
@@ -1328,7 +1327,7 @@ public class SharePartitionTest {
         // Set max fetch records to 500, records should be acquired till the last offset of the fetched batch.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 500,
                 10,
@@ -1407,7 +1406,7 @@ public class SharePartitionTest {
         // Set max fetch records to 500, records should be acquired till the last offset of the fetched batch.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 500,
                 10,
@@ -1486,7 +1485,7 @@ public class SharePartitionTest {
         // Set max fetch records to 1, records will be acquired till the first gap is encountered.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 1,
                 5L,
@@ -1514,7 +1513,7 @@ public class SharePartitionTest {
         // Send the batch again to acquire the next set of records.
         acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 3,
                 7L,
@@ -1543,7 +1542,7 @@ public class SharePartitionTest {
         // Send the records with 8 as max fetch records to acquire new and existing cached batches.
         acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 8,
                 12,
@@ -1583,7 +1582,7 @@ public class SharePartitionTest {
         // fetched data.
         acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 10,
                 26,
@@ -1653,7 +1652,7 @@ public class SharePartitionTest {
         // Set max fetch records to 500, records should be acquired till the last offset of the fetched batch.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 500,
                 5,
@@ -1738,7 +1737,7 @@ public class SharePartitionTest {
         // Set max fetch records to 500, records should be acquired till the last offset of the fetched batch.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 500,
                 10,
@@ -1829,7 +1828,7 @@ public class SharePartitionTest {
         MemoryRecords records = memoryRecords(5);
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
-            SHARE_ACQUIRE_MODE,
+            ShareAcquireMode.BATCH_OPTIMIZED,
             BATCH_SIZE,
             10,
             DEFAULT_FETCH_OFFSET,
@@ -1852,7 +1851,7 @@ public class SharePartitionTest {
         records = memoryRecords(25);
         acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
-            SHARE_ACQUIRE_MODE,
+            ShareAcquireMode.BATCH_OPTIMIZED,
             BATCH_SIZE,
             10,
             DEFAULT_FETCH_OFFSET,
@@ -1891,7 +1890,7 @@ public class SharePartitionTest {
         // Acquire 10 records.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
-            SHARE_ACQUIRE_MODE,
+            ShareAcquireMode.BATCH_OPTIMIZED,
             BATCH_SIZE,
             10,
             DEFAULT_FETCH_OFFSET,
@@ -1970,7 +1969,7 @@ public class SharePartitionTest {
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(
             sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 MAX_FETCH_RECORDS,
                 DEFAULT_FETCH_OFFSET,
@@ -1991,7 +1990,7 @@ public class SharePartitionTest {
         MemoryRecords records = memoryRecords(5);
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
-            SHARE_ACQUIRE_MODE,
+            ShareAcquireMode.BATCH_OPTIMIZED,
             2 /* Batch size */,
             10,
             DEFAULT_FETCH_OFFSET,
@@ -2024,7 +2023,7 @@ public class SharePartitionTest {
 
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
-            SHARE_ACQUIRE_MODE,
+            ShareAcquireMode.BATCH_OPTIMIZED,
             5 /* Batch size */,
             100,
             DEFAULT_FETCH_OFFSET,
@@ -2074,7 +2073,7 @@ public class SharePartitionTest {
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 2 /* Batch size */,
                 10,
                 DEFAULT_FETCH_OFFSET,
@@ -2111,7 +2110,7 @@ public class SharePartitionTest {
         MemoryRecords records = memoryRecords(5, 10);
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 5 /* Batch size */,
                 100,
                 DEFAULT_FETCH_OFFSET,
@@ -2144,7 +2143,7 @@ public class SharePartitionTest {
 
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 5 /* Batch size */,
                 100,
                 DEFAULT_FETCH_OFFSET,
@@ -2187,7 +2186,7 @@ public class SharePartitionTest {
 
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 5 /* Batch size */,
                 100,
                 DEFAULT_FETCH_OFFSET,
@@ -2214,7 +2213,7 @@ public class SharePartitionTest {
         // Acquire records, all 10 records should be acquired as within maxInflightRecords limit.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 500 /* Max fetch records */,
                 DEFAULT_FETCH_OFFSET,
@@ -2240,7 +2239,7 @@ public class SharePartitionTest {
         // is ending at 24 offset, hence additional 15 records will be acquired.
         acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 500 /* Max fetch records */,
                 DEFAULT_FETCH_OFFSET,
@@ -2257,7 +2256,7 @@ public class SharePartitionTest {
         // the end offset.
         fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 500 /* Max fetch records */,
                 25 /* Fetch Offset */,
@@ -2289,7 +2288,7 @@ public class SharePartitionTest {
         // Acquire records, should be acquired till maxInFlightRecords i.e. 20 records till 29 offset.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 500 /* Max fetch records */,
                 DEFAULT_FETCH_OFFSET,
@@ -2315,7 +2314,7 @@ public class SharePartitionTest {
         // as the lastOffset is adjusted according to the endOffset.
         acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 500 /* Max fetch records */,
                 15 /* Fetch Offset */,
@@ -2340,7 +2339,7 @@ public class SharePartitionTest {
         // Only the last record of the acquired batch should be acquired again.
         acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 500 /* Max fetch records */,
                 29 /* Fetch Offset */,
@@ -2390,7 +2389,7 @@ public class SharePartitionTest {
         // is adjusted according to the minimum of fetched batch and endOffset.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 500 /* Max fetch records */,
                 5 /* Fetch Offset */,
@@ -2445,7 +2444,7 @@ public class SharePartitionTest {
         // next batch due to incorrect calculation.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 6 /* Max fetch records */,
                 5 /* Fetch Offset */,
@@ -3493,7 +3492,7 @@ public class SharePartitionTest {
 
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 6, // maxFetchRecords is less than the number of records fetched
                 DEFAULT_FETCH_OFFSET,
@@ -3544,7 +3543,7 @@ public class SharePartitionTest {
 
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 8, // maxFetchRecords is less than the number of records fetched
                 DEFAULT_FETCH_OFFSET,
@@ -3594,7 +3593,7 @@ public class SharePartitionTest {
 
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 BATCH_SIZE,
                 8, // maxFetchRecords is less than the number of records fetched
                 DEFAULT_FETCH_OFFSET,
@@ -4739,8 +4738,8 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire("member-2", SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 5, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
-        sharePartition.acquire(MEMBER_ID, SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(records2), FETCH_ISOLATION_HWM);
+        sharePartition.acquire("member-2", ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 5, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
+        sharePartition.acquire(MEMBER_ID, ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(records2), FETCH_ISOLATION_HWM);
 
         // Acknowledging over subset of second batch with subset of gap offsets.
         sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(10, 18, List.of(
@@ -4809,8 +4808,8 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire("member-2", SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 5, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
-        sharePartition.acquire(MEMBER_ID, SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(records2), FETCH_ISOLATION_HWM);
+        sharePartition.acquire("member-2", ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 5, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
+        sharePartition.acquire(MEMBER_ID, ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(records2), FETCH_ISOLATION_HWM);
 
         // Acknowledging over subset of second batch with subset of gap offsets.
         sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(10, 18, List.of(
@@ -5858,7 +5857,7 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
 
-        sharePartition.acquire("member-2", SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 15, fetchPartitionData(memoryRecords(15, 5)), FETCH_ISOLATION_HWM);
+        sharePartition.acquire("member-2", ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 15, fetchPartitionData(memoryRecords(15, 5)), FETCH_ISOLATION_HWM);
 
         fetchAcquiredRecords(sharePartition, memoryRecords(20, 5), 5);
         fetchAcquiredRecords(sharePartition, memoryRecords(25, 5), 5);
@@ -6042,7 +6041,7 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
 
-        sharePartition.acquire("member-2", SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 15, fetchPartitionData(memoryRecords(15, 5)), FETCH_ISOLATION_HWM);
+        sharePartition.acquire("member-2", ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 15, fetchPartitionData(memoryRecords(15, 5)), FETCH_ISOLATION_HWM);
 
         fetchAcquiredRecords(sharePartition, memoryRecords(20, 5), 5);
         fetchAcquiredRecords(sharePartition, memoryRecords(25, 5), 5);
@@ -7123,7 +7122,7 @@ public class SharePartitionTest {
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
 
-        sharePartition.acquire("member-2", SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(memoryRecords(10, 5)), FETCH_ISOLATION_HWM);
+        sharePartition.acquire("member-2", ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(memoryRecords(10, 5)), FETCH_ISOLATION_HWM);
 
         fetchAcquiredRecords(sharePartition, memoryRecords(15, 5), 5);
 
@@ -7154,7 +7153,7 @@ public class SharePartitionTest {
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
-        sharePartition.acquire("member-2", SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 15, fetchPartitionData(memoryRecords(15, 5)), FETCH_ISOLATION_HWM);
+        sharePartition.acquire("member-2", ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 15, fetchPartitionData(memoryRecords(15, 5)), FETCH_ISOLATION_HWM);
 
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(MEMBER_ID, List.of(
                 new ShareAcknowledgementBatch(5, 9, List.of((byte) 2)),
@@ -7271,12 +7270,12 @@ public class SharePartitionTest {
         String memberId1 = "memberId-1";
         String memberId2 = "memberId-2";
 
-        sharePartition.acquire(memberId1, SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
+        sharePartition.acquire(memberId1, ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
 
         assertFalse(sharePartition.findNextFetchOffset());
         assertEquals(10, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId2, SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(memoryRecords(10, 10)), FETCH_ISOLATION_HWM);
+        sharePartition.acquire(memberId2, ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(memoryRecords(10, 10)), FETCH_ISOLATION_HWM);
 
         assertFalse(sharePartition.findNextFetchOffset());
         assertEquals(20, sharePartition.nextFetchOffset());
@@ -7287,7 +7286,7 @@ public class SharePartitionTest {
         assertTrue(sharePartition.findNextFetchOffset());
         assertEquals(5, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId1, SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
+        sharePartition.acquire(memberId1, ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
 
         assertTrue(sharePartition.findNextFetchOffset());
         assertEquals(20, sharePartition.nextFetchOffset());
@@ -7304,17 +7303,17 @@ public class SharePartitionTest {
         String memberId1 = MEMBER_ID;
         String memberId2 = "member-2";
 
-        sharePartition.acquire(memberId1, SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
+        sharePartition.acquire(memberId1, ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
         assertEquals(3, sharePartition.nextFetchOffset());
 
         sharePartition.acknowledge(memberId1, List.of(
                 new ShareAcknowledgementBatch(0, 2, List.of((byte) 2))));
         assertEquals(0, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId2, SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 3, fetchPartitionData(memoryRecords(3, 2)), FETCH_ISOLATION_HWM);
+        sharePartition.acquire(memberId2, ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 3, fetchPartitionData(memoryRecords(3, 2)), FETCH_ISOLATION_HWM);
         assertEquals(0, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId1, SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
+        sharePartition.acquire(memberId1, ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
         assertEquals(5, sharePartition.nextFetchOffset());
 
         sharePartition.acknowledge(memberId2, List.of(
@@ -7355,11 +7354,11 @@ public class SharePartitionTest {
                 new ShareAcknowledgementBatch(17, 20, List.of((byte) 2))));
 
         // Reacquire with another member.
-        sharePartition.acquire("member-2", SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 5, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
+        sharePartition.acquire("member-2", ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 5, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
         assertEquals(10, sharePartition.nextFetchOffset());
 
         // Reacquire with another member.
-        sharePartition.acquire("member-2", SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(memoryRecords(10, 7)), FETCH_ISOLATION_HWM);
+        sharePartition.acquire("member-2", ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(memoryRecords(10, 7)), FETCH_ISOLATION_HWM);
         assertEquals(17, sharePartition.nextFetchOffset());
 
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());
@@ -7518,7 +7517,7 @@ public class SharePartitionTest {
             .build();
         // Acquire a single batch.
         fetchAcquiredRecords(
-            sharePartition.acquire(MEMBER_ID, SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 21,
+            sharePartition.acquire(MEMBER_ID, ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 21,
                 fetchPartitionData(memoryRecords(21, 10)), FETCH_ISOLATION_HWM
             ), 10
         );
@@ -7562,7 +7561,7 @@ public class SharePartitionTest {
             .build();
         // Acquire a single batch.
         fetchAcquiredRecords(
-            sharePartition.acquire(MEMBER_ID, SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 21,
+            sharePartition.acquire(MEMBER_ID, ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 21,
                 fetchPartitionData(memoryRecords(21, 10)), FETCH_ISOLATION_HWM
             ), 10
         );
@@ -8023,7 +8022,7 @@ public class SharePartitionTest {
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(
             sharePartition.acquire(
                 MEMBER_ID,
-                SHARE_ACQUIRE_MODE,
+                ShareAcquireMode.BATCH_OPTIMIZED,
                 10 /* Batch size */,
                 100,
                 DEFAULT_FETCH_OFFSET,
@@ -8337,7 +8336,7 @@ public class SharePartitionTest {
             .build();
         // Acquire a single batch with member-1.
         fetchAcquiredRecords(
-            sharePartition.acquire(MEMBER_ID, SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 21,
+            sharePartition.acquire(MEMBER_ID, ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 21,
                 fetchPartitionData(memoryRecords(21, 10)), FETCH_ISOLATION_HWM
             ), 10
         );
@@ -8360,7 +8359,7 @@ public class SharePartitionTest {
         // Acquire the same batch with member-2. This function call will return with 0 records since there is an ongoing
         // transition for this batch.
         fetchAcquiredRecords(
-            sharePartition.acquire("member-2", SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 21,
+            sharePartition.acquire("member-2", ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 21,
                 fetchPartitionData(memoryRecords(21, 10)), FETCH_ISOLATION_HWM
             ), 0
         );
@@ -8377,7 +8376,7 @@ public class SharePartitionTest {
 
         // Acquire the same batch with member-2. 10 records will be acquired.
         fetchAcquiredRecords(
-            sharePartition.acquire("member-2", SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 21,
+            sharePartition.acquire("member-2", ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 21,
                 fetchPartitionData(memoryRecords(21, 10)), FETCH_ISOLATION_HWM
             ), 10
         );
@@ -8396,14 +8395,14 @@ public class SharePartitionTest {
 
         // Acquire a single batch 0-9 with member-1.
         fetchAcquiredRecords(
-            sharePartition.acquire(MEMBER_ID, SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 0,
+            sharePartition.acquire(MEMBER_ID, ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 0,
                 fetchPartitionData(memoryRecords(10)), FETCH_ISOLATION_HWM
             ), 10
         );
 
         // Acquire a single batch 10-19 with member-1.
         fetchAcquiredRecords(
-            sharePartition.acquire(MEMBER_ID, SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 10,
+            sharePartition.acquire(MEMBER_ID, ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 10,
                 fetchPartitionData(memoryRecords(10, 10)), FETCH_ISOLATION_HWM
             ), 10
         );
@@ -8454,7 +8453,7 @@ public class SharePartitionTest {
 
         // Acquire a single batch 0-50 with member-1.
         fetchAcquiredRecords(
-            sharePartition.acquire(MEMBER_ID, SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 0,
+            sharePartition.acquire(MEMBER_ID, ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 0,
                 fetchPartitionData(memoryRecords(50)), FETCH_ISOLATION_HWM
             ), 50
         );
@@ -8518,7 +8517,7 @@ public class SharePartitionTest {
         // Acquire 10 records.
         fetchAcquiredRecords(sharePartition.acquire(
               MEMBER_ID,
-              SHARE_ACQUIRE_MODE,
+              ShareAcquireMode.BATCH_OPTIMIZED,
               5, /* Batch size of 5 so cache can have 2 entries */
               10,
               DEFAULT_FETCH_OFFSET,
@@ -8685,7 +8684,7 @@ public class SharePartitionTest {
             .build();
 
         fetchAcquiredRecords(
-            sharePartition.acquire(MEMBER_ID, SHARE_ACQUIRE_MODE, BATCH_SIZE, MAX_FETCH_RECORDS, 0,
+            sharePartition.acquire(MEMBER_ID, ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 0,
                 fetchPartitionData(memoryRecords(2)), FETCH_ISOLATION_HWM
             ), 2
         );
@@ -9547,7 +9546,7 @@ public class SharePartitionTest {
     private List<AcquiredRecords> fetchAcquiredRecords(SharePartition sharePartition, Records records, long fetchOffset, long logStartOffset, int expectedOffsetCount) {
         ShareAcquiredRecords shareAcquiredRecords = sharePartition.acquire(
             MEMBER_ID,
-            SHARE_ACQUIRE_MODE,
+            ShareAcquireMode.BATCH_OPTIMIZED,
             BATCH_SIZE,
             MAX_FETCH_RECORDS,
             fetchOffset,
@@ -9559,7 +9558,7 @@ public class SharePartitionTest {
     private List<AcquiredRecords> fetchAcquiredRecords(SharePartition sharePartition, Records records, int expectedOffsetCount) {
         ShareAcquiredRecords shareAcquiredRecords = sharePartition.acquire(
             MEMBER_ID,
-            SHARE_ACQUIRE_MODE,
+            ShareAcquireMode.BATCH_OPTIMIZED,
             BATCH_SIZE,
             MAX_FETCH_RECORDS,
             records.batches().iterator().next().baseOffset(),

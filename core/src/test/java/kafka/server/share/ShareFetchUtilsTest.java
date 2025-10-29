@@ -87,7 +87,7 @@ public class ShareFetchUtilsTest {
         FetchRequest.ORDINARY_CONSUMER_ID, -1, 0, 1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK,
         Optional.empty(), true);
     private static final int BATCH_SIZE = 500;
-    private static final byte SHARE_ACQUIRE_MODE = 0;
+    private static final byte BATCH_OPTIMIZED = ShareAcquireMode.BATCH_OPTIMIZED.id();
     private static final BiConsumer<SharePartitionKey, Throwable> EXCEPTION_HANDLER = (key, exception) -> {
         // No-op
     };
@@ -118,7 +118,7 @@ public class ShareFetchUtilsTest {
         sharePartitions.put(tp1, sp1);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, memberId,
-            new CompletableFuture<>(), List.of(tp0, tp1), SHARE_ACQUIRE_MODE, BATCH_SIZE, 100, BROKER_TOPIC_STATS);
+            new CompletableFuture<>(), List.of(tp0, tp1), BATCH_OPTIMIZED, BATCH_SIZE, 100, BROKER_TOPIC_STATS);
 
         MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
             new SimpleRecord("0".getBytes(), "v".getBytes()),
@@ -179,7 +179,7 @@ public class ShareFetchUtilsTest {
         sharePartitions.put(tp1, sp1);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, memberId,
-            new CompletableFuture<>(), List.of(tp0, tp1), SHARE_ACQUIRE_MODE, BATCH_SIZE, 100, BROKER_TOPIC_STATS);
+            new CompletableFuture<>(), List.of(tp0, tp1), BATCH_OPTIMIZED, BATCH_SIZE, 100, BROKER_TOPIC_STATS);
 
         List<ShareFetchPartitionData> responseData = List.of(
             new ShareFetchPartitionData(tp0, 0, new FetchPartitionData(Errors.NONE, 0L, 0L,
@@ -218,7 +218,7 @@ public class ShareFetchUtilsTest {
         sharePartitions.put(tp1, sp1);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), List.of(tp0, tp1), SHARE_ACQUIRE_MODE, BATCH_SIZE, 100, BROKER_TOPIC_STATS);
+            new CompletableFuture<>(), List.of(tp0, tp1), BATCH_OPTIMIZED, BATCH_SIZE, 100, BROKER_TOPIC_STATS);
 
         ReplicaManager replicaManager = mock(ReplicaManager.class);
 
@@ -310,7 +310,7 @@ public class ShareFetchUtilsTest {
         sharePartitions.put(tp0, sp0);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), List.of(tp0), SHARE_ACQUIRE_MODE, BATCH_SIZE, 100, BROKER_TOPIC_STATS);
+            new CompletableFuture<>(), List.of(tp0), BATCH_OPTIMIZED, BATCH_SIZE, 100, BROKER_TOPIC_STATS);
 
         ReplicaManager replicaManager = mock(ReplicaManager.class);
 
@@ -378,7 +378,7 @@ public class ShareFetchUtilsTest {
         Uuid memberId = Uuid.randomUuid();
         // Set max fetch records to 10
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, memberId.toString(),
-            new CompletableFuture<>(), List.of(tp0, tp1), SHARE_ACQUIRE_MODE, BATCH_SIZE, 10, BROKER_TOPIC_STATS);
+            new CompletableFuture<>(), List.of(tp0, tp1), BATCH_OPTIMIZED, BATCH_SIZE, 10, BROKER_TOPIC_STATS);
 
         LinkedHashMap<Long, Integer> recordsPerOffset = new LinkedHashMap<>();
         recordsPerOffset.put(0L, 1);
