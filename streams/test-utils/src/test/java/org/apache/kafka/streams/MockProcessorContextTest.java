@@ -291,6 +291,7 @@ public class MockProcessorContextTest {
             new Metrics(new MetricConfig()),
             Thread.currentThread().getName(),
             "processId",
+            "applicationId",
             Time.SYSTEM
         ));
         when(mockInternalProcessorContext.taskId()).thenReturn(new TaskId(1, 1));

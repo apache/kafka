@@ -18,6 +18,7 @@ package org.apache.kafka.tools.consumer.group;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
+import org.apache.kafka.clients.admin.AlterShareGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.AlterShareGroupOffsetsResult;
 import org.apache.kafka.clients.admin.DeleteShareGroupOffsetsResult;
 import org.apache.kafka.clients.admin.DeleteShareGroupsResult;
@@ -31,6 +32,7 @@ import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.clients.admin.ListGroupsResult;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
+import org.apache.kafka.clients.admin.ListShareGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListShareGroupOffsetsResult;
 import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.MockAdminClient;
@@ -198,7 +200,7 @@ public class ShareGroupCommandTest {
             DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
             ShareGroupDescription exp = new ShareGroupDescription(
                 firstGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0))
                 ), 0)),
                 GroupState.STABLE,
@@ -212,7 +214,7 @@ public class ShareGroupCommandTest {
 
             when(describeShareGroupsResult.describedGroups()).thenReturn(Map.of(firstGroup, KafkaFuture.completedFuture(exp)));
             when(adminClient.describeShareGroups(ArgumentMatchers.anyCollection(), any(DescribeShareGroupsOptions.class))).thenReturn(describeShareGroupsResult);
-            when(adminClient.listShareGroupOffsets(ArgumentMatchers.anyMap())).thenReturn(listShareGroupOffsetsResult);
+            when(adminClient.listShareGroupOffsets(ArgumentMatchers.anyMap(), any(ListShareGroupOffsetsOptions.class))).thenReturn(listShareGroupOffsetsResult);
             try (ShareGroupService service = getShareGroupService(cgcArgs.toArray(new String[0]), adminClient)) {
                 TestUtils.waitForCondition(() -> {
                     Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
@@ -246,7 +248,7 @@ public class ShareGroupCommandTest {
             DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
             ShareGroupDescription exp = new ShareGroupDescription(
                 firstGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.empty(), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0))
                 ), 0)),
                 GroupState.STABLE,
@@ -261,7 +263,7 @@ public class ShareGroupCommandTest {
 
             when(describeShareGroupsResult.describedGroups()).thenReturn(Map.of(firstGroup, KafkaFuture.completedFuture(exp)));
             when(adminClient.describeShareGroups(ArgumentMatchers.anyCollection(), any(DescribeShareGroupsOptions.class))).thenReturn(describeShareGroupsResult);
-            when(adminClient.listShareGroupOffsets(ArgumentMatchers.anyMap())).thenReturn(listShareGroupOffsetsResult);
+            when(adminClient.listShareGroupOffsets(ArgumentMatchers.anyMap(), any(ListShareGroupOffsetsOptions.class))).thenReturn(listShareGroupOffsetsResult);
             try (ShareGroupService service = getShareGroupService(cgcArgs.toArray(new String[0]), adminClient)) {
                 TestUtils.waitForCondition(() -> {
                     Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
@@ -299,14 +301,14 @@ public class ShareGroupCommandTest {
             DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
             ShareGroupDescription exp1 = new ShareGroupDescription(
                 firstGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0))
                 ), 0)),
                 GroupState.STABLE,
                 new Node(0, "host1", 9090), 0, 0);
             ShareGroupDescription exp2 = new ShareGroupDescription(
                 secondGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0))
                 ), 0)),
                 GroupState.STABLE,
@@ -328,7 +330,7 @@ public class ShareGroupCommandTest {
             when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(listGroupsResult);
             when(describeShareGroupsResult.describedGroups()).thenReturn(Map.of(firstGroup, KafkaFuture.completedFuture(exp1), secondGroup, KafkaFuture.completedFuture(exp2)));
             when(adminClient.describeShareGroups(ArgumentMatchers.anyCollection(), any(DescribeShareGroupsOptions.class))).thenReturn(describeShareGroupsResult);
-            when(adminClient.listShareGroupOffsets(ArgumentMatchers.anyMap())).thenAnswer(
+            when(adminClient.listShareGroupOffsets(ArgumentMatchers.anyMap(), any(ListShareGroupOffsetsOptions.class))).thenAnswer(
                 invocation -> {
                     Map<String, Object> argument = invocation.getArgument(0);
                     if (argument.containsKey(firstGroup)) {
@@ -374,7 +376,7 @@ public class ShareGroupCommandTest {
             DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
             ShareGroupDescription exp1 = new ShareGroupDescription(
                 firstGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0))
                 ), 0)),
                 GroupState.STABLE,
@@ -420,14 +422,14 @@ public class ShareGroupCommandTest {
             DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
             ShareGroupDescription exp1 = new ShareGroupDescription(
                 firstGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0))
                 ), 0)),
                 GroupState.STABLE,
                 new Node(0, "host1", 9090), 0, 0);
             ShareGroupDescription exp2 = new ShareGroupDescription(
                 secondGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0))
                 ), 0)),
                 GroupState.STABLE,
@@ -475,7 +477,7 @@ public class ShareGroupCommandTest {
             DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
             ShareGroupDescription exp1 = new ShareGroupDescription(
                 firstGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0), new TopicPartition("topic1", 1), new TopicPartition("topic2", 0))
                 ), 0)),
                 GroupState.STABLE,
@@ -521,14 +523,14 @@ public class ShareGroupCommandTest {
             DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
             ShareGroupDescription exp1 = new ShareGroupDescription(
                 firstGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0), new TopicPartition("topic1", 1), new TopicPartition("topic2", 0))
                 ), 0)),
                 GroupState.STABLE,
                 new Node(0, "host1", 9090), 0, 0);
             ShareGroupDescription exp2 = new ShareGroupDescription(
                 secondGroup,
-                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                List.of(new ShareMemberDescription("memid1", Optional.of("rackId1"), "clId1", "host1", new ShareMemberAssignment(
                     Set.of(new TopicPartition("topic1", 0))
                 ), 0)),
                 GroupState.STABLE,
@@ -1085,7 +1087,7 @@ public class ShareGroupCommandTest {
                     new TopicPartition(topic2, 0), new SharePartitionOffsetInfo(0L, Optional.empty(), Optional.empty())))
             )
         );
-        when(adminClient.listShareGroupOffsets(any())).thenReturn(listShareGroupOffsetsResult);
+        when(adminClient.listShareGroupOffsets(any(), any(ListShareGroupOffsetsOptions.class))).thenReturn(listShareGroupOffsetsResult);
         
         AlterShareGroupOffsetsResult alterShareGroupOffsetsResult = mockAlterShareGroupOffsets(adminClient, group);
         TopicPartition tp0 = new TopicPartition(topic1, 0);
@@ -1104,25 +1106,22 @@ public class ShareGroupCommandTest {
         DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
         when(describeShareGroupsResult.describedGroups()).thenReturn(Map.of(group, KafkaFuture.completedFuture(exp)));
         when(adminClient.describeShareGroups(ArgumentMatchers.anyCollection(), any(DescribeShareGroupsOptions.class))).thenReturn(describeShareGroupsResult);
-        Map<String, TopicDescription> d1 = Map.of(
+        Map<String, TopicDescription> descriptions = Map.of(
             topic1, new TopicDescription(topic1, false, List.of(
                 new TopicPartitionInfo(0, Node.noNode(), List.of(), List.of()),
                 new TopicPartitionInfo(1, Node.noNode(), List.of(), List.of()))
-        ));
-        Map<String, TopicDescription> d2 = Map.of(
+            ),
             topic2, new TopicDescription(topic2, false, List.of(
                 new TopicPartitionInfo(0, Node.noNode(), List.of(), List.of())
         )));
-        DescribeTopicsResult topicsResult1 = mock(DescribeTopicsResult.class);
-        DescribeTopicsResult topicsResult2 = mock(DescribeTopicsResult.class);
-        when(topicsResult1.allTopicNames()).thenReturn(completedFuture(d1));
-        when(topicsResult2.allTopicNames()).thenReturn(completedFuture(d2));
-        when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class))).thenReturn(topicsResult1, topicsResult2);
-        when(adminClient.describeTopics(anyCollection())).thenReturn(topicsResult1, topicsResult2);
+        DescribeTopicsResult topicsResult = mock(DescribeTopicsResult.class);
+        when(topicsResult.allTopicNames()).thenReturn(completedFuture(descriptions));
+        when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class))).thenReturn(topicsResult);
+        when(adminClient.describeTopics(anyCollection())).thenReturn(topicsResult);
         try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
             service.resetOffsets();
-            verify(adminClient).alterShareGroupOffsets(eq(group), anyMap());
-            verify(adminClient).describeTopics(anyCollection(), any(DescribeTopicsOptions.class));
+            verify(adminClient).alterShareGroupOffsets(eq(group), anyMap(), any(AlterShareGroupOffsetsOptions.class));
+            verify(adminClient, times(3)).describeTopics(anyCollection(), any(DescribeTopicsOptions.class));
             verify(alterShareGroupOffsetsResult, times(1)).all();
             verify(adminClient).describeShareGroups(ArgumentMatchers.anyCollection(), any(DescribeShareGroupsOptions.class));
         }
@@ -1154,7 +1153,7 @@ public class ShareGroupCommandTest {
         when(describeTopicResult.allTopicNames()).thenReturn(completedFuture(descriptions));
         when(adminClient.describeTopics(anyCollection())).thenReturn(describeTopicResult);
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class))).thenReturn(describeTopicResult);
-        when(adminClient.listShareGroupOffsets(any())).thenReturn(listShareGroupOffsetsResult);
+        when(adminClient.listShareGroupOffsets(any(), any(ListShareGroupOffsetsOptions.class))).thenReturn(listShareGroupOffsetsResult);
 
         AlterShareGroupOffsetsResult alterShareGroupOffsetsResult = mockAlterShareGroupOffsets(adminClient, group);
         Map<TopicPartition, OffsetAndMetadata> partitionOffsets = Map.of(t1, new OffsetAndMetadata(40L), t2, new OffsetAndMetadata(40L));
@@ -1174,7 +1173,7 @@ public class ShareGroupCommandTest {
                 topicPartitionOffsets.values().stream().allMatch(offsetSpec -> offsetSpec instanceof OffsetSpec.LatestSpec);
         try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
             service.resetOffsets();
-            verify(adminClient).alterShareGroupOffsets(eq(group), anyMap());
+            verify(adminClient).alterShareGroupOffsets(eq(group), anyMap(), any(AlterShareGroupOffsetsOptions.class));
             verify(adminClient, times(1)).listOffsets(ArgumentMatchers.argThat(offsetsArgMatcher.apply(Set.of(t1, t2))), any());
             verify(alterShareGroupOffsetsResult, times(1)).all();
             verify(adminClient).describeShareGroups(ArgumentMatchers.anyCollection(), any(DescribeShareGroupsOptions.class));
@@ -1201,7 +1200,7 @@ public class ShareGroupCommandTest {
                     new TopicPartition(topic3, 0), new SharePartitionOffsetInfo(10L, Optional.empty(), Optional.empty())))
             )
         );
-        when(adminClient.listShareGroupOffsets(any())).thenReturn(listShareGroupOffsetsResult);
+        when(adminClient.listShareGroupOffsets(any(), any(ListShareGroupOffsetsOptions.class))).thenReturn(listShareGroupOffsetsResult);
         ListTopicsResult listTopicsResult = mock(ListTopicsResult.class);
         Set<String> topics = Set.of(topic1, topic2, topic3);
         when(listTopicsResult.names()).thenReturn(completedFuture(topics));
@@ -1246,7 +1245,7 @@ public class ShareGroupCommandTest {
                 topicPartitionOffsets.values().stream().allMatch(offsetSpec -> offsetSpec instanceof OffsetSpec.TimestampSpec);
         try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
             service.resetOffsets();
-            verify(adminClient).alterShareGroupOffsets(eq(group), anyMap());
+            verify(adminClient).alterShareGroupOffsets(eq(group), anyMap(), any(AlterShareGroupOffsetsOptions.class));
             verify(adminClient, times(1)).listOffsets(ArgumentMatchers.argThat(offsetsArgMatcher.apply(Set.of(tp1, tp2, tp3, tp4))), any());
             verify(alterShareGroupOffsetsResult, times(1)).all();
             verify(adminClient).describeShareGroups(ArgumentMatchers.anyCollection(), any(DescribeShareGroupsOptions.class));
@@ -1267,7 +1266,7 @@ public class ShareGroupCommandTest {
                 KafkaFuture.completedFuture(Map.of(new TopicPartition(topic, 0), new SharePartitionOffsetInfo(10L, Optional.empty(), Optional.empty())))
             )
         );
-        when(adminClient.listShareGroupOffsets(any())).thenReturn(listShareGroupOffsetsResult);
+        when(adminClient.listShareGroupOffsets(any(), any(ListShareGroupOffsetsOptions.class))).thenReturn(listShareGroupOffsetsResult);
 
         Map<TopicPartition, OffsetAndMetadata> partitionOffsets = Map.of(new TopicPartition(topic, 0), new OffsetAndMetadata(0L));
         ListOffsetsResult listOffsetsResult = AdminClientTestUtils.createListOffsetsResult(partitionOffsets);
@@ -1296,7 +1295,7 @@ public class ShareGroupCommandTest {
 
         try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
             service.resetOffsets();
-            verify(adminClient, times(0)).alterShareGroupOffsets(any(), any());
+            verify(adminClient, times(0)).alterShareGroupOffsets(any(), any(), any(AlterShareGroupOffsetsOptions.class));
         }
     }
 
@@ -1334,7 +1333,7 @@ public class ShareGroupCommandTest {
                 KafkaFuture.completedFuture(Map.of(new TopicPartition("topic", 0), new SharePartitionOffsetInfo(10L, Optional.empty(), Optional.empty())))
             )
         );
-        when(adminClient.listShareGroupOffsets(any())).thenReturn(listShareGroupOffsetsResult);
+        when(adminClient.listShareGroupOffsets(any(), any(ListShareGroupOffsetsOptions.class))).thenReturn(listShareGroupOffsetsResult);
         ListTopicsResult listTopicsResult = mock(ListTopicsResult.class);
         Set<String> topics = Set.of("topic");
         when(listTopicsResult.names()).thenReturn(completedFuture(topics));
@@ -1342,7 +1341,7 @@ public class ShareGroupCommandTest {
 
         ShareGroupDescription exp = new ShareGroupDescription(
             group,
-            List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+            List.of(new ShareMemberDescription("memid1", Optional.empty(), "clId1", "host1", new ShareMemberAssignment(
                 Set.of(new TopicPartition("topic", 0))
             ), 0)),
             GroupState.STABLE,
@@ -1393,7 +1392,7 @@ public class ShareGroupCommandTest {
                 KafkaFuture.completedFuture(Map.of(new TopicPartition("topic", 0), new SharePartitionOffsetInfo(10L, Optional.empty(), Optional.empty())))
             )
         );
-        when(adminClient.listShareGroupOffsets(any())).thenReturn(listShareGroupOffsetsResult);
+        when(adminClient.listShareGroupOffsets(any(), any(ListShareGroupOffsetsOptions.class))).thenReturn(listShareGroupOffsetsResult);
 
         AlterShareGroupOffsetsResult alterShareGroupOffsetsResult = mockAlterShareGroupOffsets(adminClient, group);
         TopicPartition tp0 = new TopicPartition(topic, 0);
@@ -1419,8 +1418,8 @@ public class ShareGroupCommandTest {
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class))).thenReturn(describeTopicResult);
         try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
             service.resetOffsets();
-            verify(adminClient).alterShareGroupOffsets(eq(group), anyMap());
-            verify(adminClient).describeTopics(anyCollection(), any(DescribeTopicsOptions.class));
+            verify(adminClient).alterShareGroupOffsets(eq(group), anyMap(), any(AlterShareGroupOffsetsOptions.class));
+            verify(adminClient, times(3)).describeTopics(anyCollection(), any(DescribeTopicsOptions.class));
             verify(alterShareGroupOffsetsResult, times(1)).all();
             verify(adminClient).describeShareGroups(ArgumentMatchers.anyCollection(), any(DescribeShareGroupsOptions.class));
         }
@@ -1440,7 +1439,7 @@ public class ShareGroupCommandTest {
                 KafkaFuture.completedFuture(Map.of(new TopicPartition("topic", 0), new SharePartitionOffsetInfo(10L, Optional.empty(), Optional.empty())))
             )
         );
-        when(adminClient.listShareGroupOffsets(any())).thenReturn(listShareGroupOffsetsResult);
+        when(adminClient.listShareGroupOffsets(any(), any(ListShareGroupOffsetsOptions.class))).thenReturn(listShareGroupOffsetsResult);
 
         AlterShareGroupOffsetsResult alterShareGroupOffsetsResult = mockAlterShareGroupOffsets(adminClient, group);
         TopicPartition tp0 = new TopicPartition(topic, 0);
@@ -1463,8 +1462,8 @@ public class ShareGroupCommandTest {
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class))).thenReturn(describeTopicResult);
         try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
             service.resetOffsets();
-            verify(adminClient).alterShareGroupOffsets(eq(group), anyMap());
-            verify(adminClient).describeTopics(anyCollection(), any(DescribeTopicsOptions.class));
+            verify(adminClient).alterShareGroupOffsets(eq(group), anyMap(), any(AlterShareGroupOffsetsOptions.class));
+            verify(adminClient, times(3)).describeTopics(anyCollection(), any(DescribeTopicsOptions.class));
             verify(alterShareGroupOffsetsResult, times(1)).all();
             verify(adminClient).describeShareGroups(ArgumentMatchers.anyCollection(), any(DescribeShareGroupsOptions.class));
         }
@@ -1475,7 +1474,7 @@ public class ShareGroupCommandTest {
         KafkaFutureImpl<Void> resultFuture = new KafkaFutureImpl<>();
         resultFuture.complete(null);
         when(alterShareGroupOffsetsResult.all()).thenReturn(resultFuture);
-        when(client.alterShareGroupOffsets(eq(groupId), any())).thenReturn(alterShareGroupOffsetsResult);
+        when(client.alterShareGroupOffsets(eq(groupId), any(), any(AlterShareGroupOffsetsOptions.class))).thenReturn(alterShareGroupOffsetsResult);
         return alterShareGroupOffsetsResult;
     }
 
