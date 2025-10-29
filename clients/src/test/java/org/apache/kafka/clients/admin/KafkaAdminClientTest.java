@@ -4694,7 +4694,7 @@ public class KafkaAdminClientTest {
                                     .setClientHost("host")
                                     .setClientId("clientId")
                                     .setMemberEpoch(10)
-                                    .setRackId("rackid")
+                                    .setRackId("rackId")
                                     .setSubscribedTopicNames(singletonList("foo"))
                                     .setSubscribedTopicRegex("regex")
                                     .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
@@ -4758,6 +4758,7 @@ public class KafkaAdminClientTest {
                     new MemberDescription(
                         "memberId",
                         Optional.of("instanceId"),
+                        Optional.of("rackId"),
                         "clientId",
                         "host",
                         new MemberAssignment(
@@ -4784,6 +4785,7 @@ public class KafkaAdminClientTest {
                 Collections.singletonList(
                     new MemberDescription(
                         "0",
+                        Optional.empty(),
                         Optional.empty(),
                         "clientId0",
                         "clientHost",
@@ -10673,6 +10675,7 @@ public class KafkaAdminClientTest {
                                                                  MemberAssignment assignment) {
         return new MemberDescription(member.memberId(),
                                      Optional.ofNullable(member.groupInstanceId()),
+                                     Optional.empty(),
                                      member.clientId(),
                                      member.clientHost(),
                                      assignment,
@@ -10684,6 +10687,7 @@ public class KafkaAdminClientTest {
     private static ShareMemberDescription convertToShareMemberDescriptions(ShareGroupDescribeResponseData.Member member,
                                                                            ShareMemberAssignment assignment) {
         return new ShareMemberDescription(member.memberId(),
+                                          Optional.ofNullable(member.rackId()),
                                           member.clientId(),
                                           member.clientHost(),
                                           assignment,

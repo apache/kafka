@@ -420,6 +420,11 @@ public class StreamsConfig extends AbstractConfig {
                                                                   " before processing. To avoid a pause in processing during rebalances, this config" +
                                                                   " should correspond to a recovery time of well under a minute for a given workload. Must be at least 0.";
 
+    /** {@code allow.os.group.write.access} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String ALLOW_OS_GROUP_WRITE_ACCESS_CONFIG = "allow.os.group.write.access";
+    private static final String ALLOW_OS_GROUP_WRITE_ACCESS_DOC = "Allows state store directories created by Kafka Streams to have write access for the OS group. Default is false";
+
     /** {@code application.id} */
     @SuppressWarnings("WeakerAccess")
     public static final String APPLICATION_ID_CONFIG = "application.id";
@@ -1015,6 +1020,11 @@ public class StreamsConfig extends AbstractConfig {
 
             // LOW
 
+            .define(ALLOW_OS_GROUP_WRITE_ACCESS_CONFIG,
+                    Type.BOOLEAN,
+                    false,
+                    Importance.LOW,
+                    ALLOW_OS_GROUP_WRITE_ACCESS_DOC)
             .define(APPLICATION_SERVER_CONFIG,
                     Type.STRING,
                     "",

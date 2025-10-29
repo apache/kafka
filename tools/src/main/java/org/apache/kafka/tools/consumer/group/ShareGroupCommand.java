@@ -19,6 +19,7 @@ package org.apache.kafka.tools.consumer.group;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AbstractOptions;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AlterShareGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.DeleteShareGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.DeleteShareGroupOffsetsResult;
 import org.apache.kafka.clients.admin.DeleteShareGroupsOptions;
@@ -26,6 +27,7 @@ import org.apache.kafka.clients.admin.DescribeShareGroupsOptions;
 import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.clients.admin.ListGroupsResult;
+import org.apache.kafka.clients.admin.ListShareGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListShareGroupOffsetsSpec;
 import org.apache.kafka.clients.admin.ShareGroupDescription;
 import org.apache.kafka.clients.admin.ShareMemberAssignment;
@@ -411,7 +413,8 @@ public class ShareGroupCommand {
                         offsetsToReset.entrySet().stream()
                             .collect(Collectors.toMap(
                                 Entry::getKey, entry -> entry.getValue().offset()
-                            ))
+                            )),
+                        withTimeoutMs(new AlterShareGroupOffsetsOptions())
                     ).all().get();
                 }
                 OffsetsUtils.printOffsetsToReset(Map.of(groupId, offsetsToReset));
@@ -434,7 +437,10 @@ public class ShareGroupCommand {
                 partitionsToReset = offsetsUtils.parseTopicPartitionsToReset(opts.options.valuesOf(opts.topicOpt));
             } else {
                 Map<String, ListShareGroupOffsetsSpec> groupSpecs = Map.of(groupId, new ListShareGroupOffsetsSpec());
-                Map<TopicPartition, OffsetAndMetadata> offsetsByTopicPartitions = adminClient.listShareGroupOffsets(groupSpecs).all().get().get(groupId);
+                Map<TopicPartition, OffsetAndMetadata> offsetsByTopicPartitions = adminClient.listShareGroupOffsets(
+                    groupSpecs,
+                    withTimeoutMs(new ListShareGroupOffsetsOptions())
+                ).all().get().get(groupId);
                 partitionsToReset = offsetsByTopicPartitions.keySet();
             }
 
@@ -488,7 +494,10 @@ public class ShareGroupCommand {
                 Map<String, ListShareGroupOffsetsSpec> groupSpecs = Map.of(groupId, new ListShareGroupOffsetsSpec());
 
                 try {
-                    Map<TopicPartition, OffsetAndMetadata> startOffsets = adminClient.listShareGroupOffsets(groupSpecs).all().get().get(groupId);
+                    Map<TopicPartition, OffsetAndMetadata> startOffsets = adminClient.listShareGroupOffsets(
+                        groupSpecs,
+                        withTimeoutMs(new ListShareGroupOffsetsOptions())
+                    ).all().get().get(groupId);
                     Set<SharePartitionOffsetInformation> partitionOffsets = mapOffsetsToSharePartitionInformation(groupId, startOffsets);
 
                     groupOffsets.put(groupId, new SimpleImmutableEntry<>(shareGroup, partitionOffsets));
