@@ -513,6 +513,7 @@ org.apache.kafka.image.loader.MetadataLoaderTest:
 - testRemovePublisher
 - testSnapshotDuringTransaction
 org.apache.kafka.image.loader.metrics.MetadataLoaderMetricsTest:
+- testAvgIdleRatio
 - testFinalizedFeatureLevelMetrics
 - testInitialValueOfCurrentControllerId
 - testManagedMetrics
