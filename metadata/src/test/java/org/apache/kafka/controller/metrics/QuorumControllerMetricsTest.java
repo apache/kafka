@@ -203,14 +203,14 @@ public class QuorumControllerMetricsTest {
 
             // First recording is dropped to establish the interval start time
             // This is because TimeRatio needs an initial timestamp to measure intervals from
-            metrics.updateIdleTime(10);
+            metrics.updateIdleTime(10, time.milliseconds());
             time.sleep(40);
-            metrics.updateIdleTime(20);
+            metrics.updateIdleTime(20, time.milliseconds());
             // avgIdleRatio = (20ms idle) / (40ms interval) = 0.5
             assertEquals(0.5, avgIdleRatio.value(), delta);
 
             time.sleep(20);
-            metrics.updateIdleTime(1);
+            metrics.updateIdleTime(1, time.milliseconds());
             // avgIdleRatio = (1ms idle) / (20ms interval) = 0.05
             assertEquals(0.05, avgIdleRatio.value(), delta);
 

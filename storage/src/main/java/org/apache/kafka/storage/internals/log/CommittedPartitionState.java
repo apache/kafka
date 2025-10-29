@@ -14,15 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.metadata.LeaderRecoveryState;
 
-public class MockStreamsMetrics extends StreamsMetricsImpl {
+import java.util.Set;
 
-    public MockStreamsMetrics(final Metrics metrics) {
-        super(metrics, "test", "processId", "applicationId", new MockTime());
+public record CommittedPartitionState(Set<Integer> isr, LeaderRecoveryState leaderRecoveryState) implements PartitionState {
+
+    public CommittedPartitionState {
+        isr = Set.copyOf(isr);
     }
+
+    @Override
+    public Set<Integer> maximalIsr() {
+        return isr;
+    }
+
+    @Override
+    public boolean isInflight() {
+        return false;
+    }
+
 }
