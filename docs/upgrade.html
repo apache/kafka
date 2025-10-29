@@ -61,6 +61,10 @@
                 which is used to specify the properties for the formatter is deprecated in favor of <code>--formatter-property</code>.
             </li>
             <li>
+                In <code>kafka-console-producer.sh</code>, the option <code>--property</code> which is used to specify properties
+                in the form key=value to the message reader is deprecated in favor of <code>--reader-property</code>.
+            </li>
+            <li>
                 In <code>kafka-consumer-perf-test.sh</code> and <code>kafka-share-consumer-perf-test.sh</code>, the option <code>--messages</code>
                 is deprecated in favor of <code>--num-records</code> to bring all performance testing tools in line.
             </li>
@@ -195,6 +199,13 @@
         As a replacement, please use <code>org.apache.kafka.streams.CloseOptions</code> and
         <code>KafkaStreams#close(org.apache.kafka.streams.CloseOptions)</code>.
         For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/QAq9F">KIP-1153</a>.
+    </li>
+    <li>
+        A new implementation of <code>ConnectorClientConfigOverridePolicy</code>, <code>AllowlistConnectorClientConfigOverridePolicy</code>,
+        has been added. This enables specifying the configurations that connectors can override via <code>connector.client.config.override.allowlist</code>.
+        From Kafka 5.0.0, this will be the default <a href="documentation/#connectconfigs_connector.client.config.override.policy">connector.client.config.override.policy</a>
+        policy. The <code>PrincipalConnectorClientConfigOverridePolicy</code> policy is now deprecated and will be removed in Kafka 5.0.0.
+        For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/2IkvFg">KIP-1188</a>.
     </li>
 </ul>
 
