@@ -105,6 +105,11 @@
             <allow pkg="com.yammer.metrics.core" />
         </subpackage>
 
+        <subpackage name="quota">
+            <allow pkg="org.apache.kafka.server.network" />
+            <allow pkg="org.apache.kafka.server.util" />
+        </subpackage>
+
         <subpackage name="share">
           <allow pkg="org.apache.kafka.server.share" />
           <subpackage name="persister">
