@@ -200,6 +200,13 @@
         <code>KafkaStreams#close(org.apache.kafka.streams.CloseOptions)</code>.
         For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/QAq9F">KIP-1153</a>.
     </li>
+    <li>
+        A new implementation of <code>ConnectorClientConfigOverridePolicy</code>, <code>AllowlistConnectorClientConfigOverridePolicy</code>,
+        has been added. This enables specifying the configurations that connectors can override via <code>connector.client.config.override.allowlist</code>.
+        From Kafka 5.0.0, this will be the default <a href="documentation/#connectconfigs_connector.client.config.override.policy">connector.client.config.override.policy</a>
+        policy. The <code>PrincipalConnectorClientConfigOverridePolicy</code> policy is now deprecated and will be removed in Kafka 5.0.0.
+        For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/2IkvFg">KIP-1188</a>.
+    </li>
 </ul>
 
 <h4><a id="upgrade_4_1_0" href="#upgrade_4_1_0">Upgrading to 4.1.0</a></h4>

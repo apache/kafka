@@ -1520,6 +1520,7 @@ public class KafkaProducerTest {
         }
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testSendOffsetsNotAllowedInPreparedTransactionState() throws Exception {
         StringSerializer serializer = new StringSerializer();
@@ -1969,6 +1970,7 @@ public class KafkaProducerTest {
         }
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testSendTxnOffsetsWithGroupId() {
         Map<String, Object> configs = new HashMap<>();
@@ -2006,6 +2008,7 @@ public class KafkaProducerTest {
         }
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testSendTxnOffsetsWithGroupIdTransactionV2() {
         Properties properties = new Properties();
@@ -2132,6 +2135,7 @@ public class KafkaProducerTest {
         return value;
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testMeasureTransactionDurations() {
         Map<String, Object> configs = new HashMap<>();
@@ -2184,6 +2188,7 @@ public class KafkaProducerTest {
         }
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testSendTxnOffsetsWithGroupMetadata() {
         final short maxVersion = (short) 3;
@@ -2238,6 +2243,7 @@ public class KafkaProducerTest {
         verifyInvalidGroupMetadata(null);
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testInvalidGenerationIdAndMemberIdCombinedInSendOffsets() {
         verifyInvalidGroupMetadata(new ConsumerGroupMetadata("group", 2, JoinGroupRequest.UNKNOWN_MEMBER_ID, Optional.empty()));

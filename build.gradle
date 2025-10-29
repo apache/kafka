@@ -37,7 +37,7 @@ plugins {
   id 'org.nosphere.apache.rat' version "0.8.1"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
-  id "com.github.spotbugs" version '6.2.5' apply false
+  id "com.github.spotbugs" version '6.4.4' apply false
   id 'org.scoverage' version '8.1' apply false
   id 'com.gradleup.shadow' version '8.3.9' apply false
   id 'com.diffplug.spotless' version "8.0.0"
@@ -70,13 +70,6 @@ ext {
       "--add-opens=java.base/java.time=ALL-UNNAMED",
       "--add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED"
     )
-
-  if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_25)) {
-    // Spotbugs is not compatible with Java 25+ so Gradle related tasks are disabled
-    // until version can be upgraded: https://github.com/spotbugs/spotbugs/issues/3564
-    project.gradle.startParameter.excludedTaskNames.add("spotbugsMain")
-    project.gradle.startParameter.excludedTaskNames.add("spotbugsTest")
-  }    
 
   maxTestForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : Runtime.runtime.availableProcessors()
   maxScalacThreads = project.hasProperty('maxScalacThreads') ? maxScalacThreads.toInteger() :
@@ -1129,7 +1122,7 @@ project(':core') {
   if (userEnableTestCoverage) {
     scoverage {
       scoverageVersion = versions.scoverage
-      scoverageScalaVersion = '2.13.16' // `org.scoverage:scalac-scoverage-plugin_2.13.16:2.3.0` is the latest as of now
+      scoverageScalaVersion = versions.scala
       reportDir = file("${layout.buildDirectory.get().asFile.path}/scoverage")
       highlighting = false
       minimumRate = 0.0
@@ -2907,6 +2900,7 @@ project(':streams:integration-tests') {
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
     testImplementation project(':streams:test-utils')
+    testImplementation project(':test-common:test-common-util')
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -3724,8 +3718,12 @@ project(':connect:runtime') {
     buildClasspath = classpath + configurations.swagger
     outputFileName = 'connect_rest'
     outputFormat = 'YAML'
-    prettyPrint = 'TRUE'
-    sortOutput = 'TRUE'
+    prettyPrint = true
+    sortOutput = true
+    encoding = 'UTF-8'
+    alwaysResolveAppPath = false
+    skipResolveAppPath = false
+    readAllResources = true
     openApiFile = file("${layout.buildDirectory.get().asFile.path}/resources/docs/openapi.yaml")
     resourcePackages = ['org.apache.kafka.connect.runtime.rest.resources']
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }

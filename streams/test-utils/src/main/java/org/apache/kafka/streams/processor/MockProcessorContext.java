@@ -238,6 +238,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
                 new Metrics(metricConfig),
                 threadId,
                 "processId",
+                "applicationId",
                 Time.SYSTEM
         );
         TaskMetrics.droppedRecordsSensor(threadId, taskId.toString(), metrics);

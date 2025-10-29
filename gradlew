@@ -201,6 +201,7 @@ fi
 
 
 # Loop in case we encounter an error.
+REQUIRED_WRAPPER_JAR_CHECKSUM="76805e32c009c0cf0dd5d206bddc9fb22ea42e84db904b764f3047de095493f3"
 for attempt in 1 2 3; do
   if [ ! -e "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" ]; then
     if ! curl -s -S --retry 3 -L -o "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" "https://raw.githubusercontent.com/gradle/gradle/v9.1.0/gradle/wrapper/gradle-wrapper.jar"; then
@@ -208,6 +209,26 @@ for attempt in 1 2 3; do
       # Pause for a bit before looping in case the server throttled us.
       sleep 5
       continue
+    fi
+  else
+    # Verify checksum of existing wrapper JAR. 
+    # This prevents developers from running into incompatibility issues when using an outdated wrapper JAR after a Gradle upgrade.
+    # Use sha256sum or shasum, whichever is available.
+    if command -v sha256sum >/dev/null 2>&1; then
+      LOCAL_WRAPPER_JAR_CHECKSUM=$(sha256sum "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" | awk '{print $1}')
+    elif command -v shasum >/dev/null 2>&1; then
+      LOCAL_WRAPPER_JAR_CHECKSUM=$(shasum -a 256 "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" | awk '{print $1}')
+    else
+      # If no checksum tool is found, this verification is skipped .
+      warn "Cannot find sha256sum or shasum to verify wrapper JAR."
+      break
+    fi
+
+    # If the local checksum does not match the required checksum, delete the JAR to force re-download.
+    if [ "$LOCAL_WRAPPER_JAR_CHECKSUM" != "$REQUIRED_WRAPPER_JAR_CHECKSUM" ] ; then
+      rm -f "$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
+    else
+      break
     fi
   fi
 done
