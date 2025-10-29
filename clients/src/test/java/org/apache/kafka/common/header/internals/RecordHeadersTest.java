@@ -26,11 +26,11 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -275,18 +275,17 @@ public class RecordHeadersTest {
 
     @RepeatedTest(100)
     public void testRecordHeaderIsReadThreadSafe() throws Exception {
-        int threads = 8;
+        int threads = 32;
         RecordHeader header = new RecordHeader(
             ByteBuffer.wrap("key".getBytes(StandardCharsets.UTF_8)),
             ByteBuffer.wrap("value".getBytes(StandardCharsets.UTF_8))
         );
 
-        ExecutorService pool = Executors.newFixedThreadPool(threads);
         CountDownLatch startLatch = new CountDownLatch(1);
         AtomicBoolean raceDetected = new AtomicBoolean(false);
 
-        try {
-            Runnable task = () -> {
+        var fs = IntStream.range(0, threads)
+            .mapToObj(i -> CompletableFuture.runAsync(() -> {
                 try {
                     startLatch.await();
                     header.key();
@@ -297,20 +296,42 @@ public class RecordHeadersTest {
                     Thread.currentThread().interrupt();
                     throw new RuntimeException(e);
                 }
-            };
+            })).collect(Collectors.toUnmodifiableList());
 
-            for (int i = 0; i < threads; i++) pool.submit(task);
+        startLatch.countDown();
+        fs.forEach(CompletableFuture::join);
 
-            startLatch.countDown();
+        assertFalse(raceDetected.get(), "Read race condition detected in RecordHeader!");
+    }
 
-            pool.shutdown();
-            pool.awaitTermination(5, TimeUnit.SECONDS);
+    @RepeatedTest(100)
+    public void testRecordHeaderWithNullValueIsReadThreadSafe() throws Exception {
+        int threadCount = 32;
+        RecordHeader header = new RecordHeader(
+            ByteBuffer.wrap("key".getBytes(StandardCharsets.UTF_8)),
+            null
+        );
 
-            assertFalse(raceDetected.get(), "Read race condition detected in RecordHeader!");
-        } finally {
-            if (!pool.isTerminated()) {
-                pool.shutdownNow();
-            }
-        }
+        CountDownLatch startLatch = new CountDownLatch(1);
+        AtomicBoolean raceDetected = new AtomicBoolean(false);
+
+        var fs = IntStream.range(0, threadCount)
+            .mapToObj(i -> CompletableFuture.runAsync(() -> {
+                try {
+                    startLatch.await();
+                    header.key();
+                    header.value(); // may be null, should not throw
+                } catch (NullPointerException e) {
+                    raceDetected.set(true);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
+                }
+            })).collect(Collectors.toUnmodifiableList());
+
+        startLatch.countDown();
+        fs.forEach(CompletableFuture::join);
+
+        assertFalse(raceDetected.get(), "Read race condition detected when value is null in RecordHeader!");
     }
 }
