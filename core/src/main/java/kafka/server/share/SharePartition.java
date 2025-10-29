@@ -851,9 +851,9 @@ public class SharePartition {
                         inFlightBatch, groupId, topicIdPartition);
                     continue;
                 }
-                long numRecordsToAcquire = inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1;
+                long recordsToAcquiredCount = inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1;
                 int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
-                if (isRecordLimitMode && (numRecordsToAcquire > numRecordsRemaining)) {
+                if (isRecordLimitMode && (recordsToAcquiredCount > numRecordsRemaining)) {
                     AcquiredRecords records = filterShareAcquiredRecordsInRecordLimitMode(numRecordsRemaining, inFlightBatch);
                     result.add(records);
                     acquiredCount += numRecordsRemaining;
@@ -868,7 +868,7 @@ public class SharePartition {
                         .setFirstOffset(inFlightBatch.firstOffset())
                         .setLastOffset(inFlightBatch.lastOffset())
                         .setDeliveryCount((short) inFlightBatch.batchDeliveryCount()));
-                    acquiredCount += (int) numRecordsToAcquire;
+                    acquiredCount += (int) recordsToAcquiredCount;
                 }
             }
 

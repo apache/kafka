@@ -9044,7 +9044,7 @@ public class SharePartitionTest {
             7);
 
         // Acquired batches will contain the following ->
-        // 1. 10-10 (rejected offsets)
+        // 1. 10-10 (released offsets)
         // 2. 15-20 (new records)
         assertEquals(1, sharePartition.cachedState().size());
         List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(10, 10, 2));
@@ -9200,7 +9200,48 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testAcquisitionLockTimeoutInRecordLimitMode() throws InterruptedException {
+    public void testAcquisitionLockSingleRecordBatchInRecordLimitMode() throws InterruptedException {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
+
+        // Allowing acquisition lock to expire.
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> sharePartition.timer().size() == 0 &&
+                sharePartition.nextFetchOffset() == 10 &&
+                sharePartition.cachedState().get(10L).batchState() == RecordState.AVAILABLE,
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> assertionFailedMessage(sharePartition, Map.of(10L, List.of())));
+
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+            MEMBER_ID,
+            ShareAcquireMode.RECORD_LIMIT,
+            BATCH_SIZE,
+            2,
+            DEFAULT_FETCH_OFFSET,
+            fetchPartitionData(memoryRecords(10, 5), 10),
+            FETCH_ISOLATION_HWM),
+            2);
+
+        List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(10, 11, 2));
+        assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
+        assertEquals(12, sharePartition.nextFetchOffset());
+
+        // Check cached state.
+        Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
+        expectedOffsetStateMap.put(10L, new InFlightState(RecordState.ACQUIRED, (short) 2, MEMBER_ID));
+        expectedOffsetStateMap.put(11L, new InFlightState(RecordState.ACQUIRED, (short) 2, MEMBER_ID));
+        expectedOffsetStateMap.put(12L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(13L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(14L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
+    }
+
+    @Test
+    public void testAcquisitionLockTimeoutMultipleRecordBatchInRecordLimitMode() throws InterruptedException {
         Persister persister = Mockito.mock(Persister.class);
         SharePartition sharePartition = Mockito.spy(SharePartitionBuilder.builder()
             .withState(SharePartitionState.ACTIVE)
@@ -9285,7 +9326,6 @@ public class SharePartitionTest {
                 sharePartition.timer().size() == 0,
             DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
             () -> assertionFailedMessage(sharePartition, Map.of(0L, List.of(0L, 1L))));
-
 
         assertEquals(0, sharePartition.nextFetchOffset());
     }
@@ -9479,6 +9519,76 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
+    }
+
+    @Test
+    public void testMultipleMemberAcquireInDifferentAcquireModes() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+        // Create 3 batches of records.
+        ByteBuffer buffer = ByteBuffer.allocate(4096);
+        memoryRecordsBuilder(buffer, 10, 5).close();
+        memoryRecordsBuilder(buffer, 15, 15).close();
+        memoryRecordsBuilder(buffer, 30, 15).close();
+
+        buffer.flip();
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+
+        // Member-1 acquires two full batches in batch_optimized mode.
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+            MEMBER_ID,
+            ShareAcquireMode.BATCH_OPTIMIZED,
+            BATCH_SIZE,
+            10,
+            5,
+            fetchPartitionData(records),
+            FETCH_ISOLATION_HWM),
+            20);
+
+        // Acknowledge a subset of records from member-1.
+        sharePartition.acknowledge(MEMBER_ID, List.of(
+            new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.RELEASE.id)),
+            new ShareAcknowledgementBatch(15, 20, List.of(AcknowledgeType.ACCEPT.id)),
+            new ShareAcknowledgementBatch(21, 22, List.of(AcknowledgeType.RELEASE.id)),
+            new ShareAcknowledgementBatch(23, 28, List.of(AcknowledgeType.ACCEPT.id))));
+
+        // Member-2 acquires records in record_limit mode.
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+            "member-2",
+            ShareAcquireMode.RECORD_LIMIT,
+            BATCH_SIZE,
+            2,
+            5,
+            fetchPartitionData(records),
+            FETCH_ISOLATION_HWM),
+            2);
+        List<AcquiredRecords> expectedAcquiredRecord = new ArrayList<>(expectedAcquiredRecord(10, 10, 2));
+        expectedAcquiredRecord.addAll(expectedAcquiredRecord(11, 11, 2));
+        assertArrayEquals(expectedAcquiredRecord.toArray(), acquiredRecordsList.toArray());
+        assertEquals(12, sharePartition.nextFetchOffset());
+
+        // Member-3 acquires records in batch_optimized mode.
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+            "member-3",
+            ShareAcquireMode.BATCH_OPTIMIZED,
+            BATCH_SIZE,
+            10,
+            5,
+            fetchPartitionData(records),
+            FETCH_ISOLATION_HWM),
+            20);
+
+        // Acquired batches will contain the following ->
+        // 1. 12-14 (released offsets)
+        // 2. 21-22 (released offsets)
+        // 3. 30-44 (new offsets)
+        expectedAcquiredRecord = new ArrayList<>(expectedAcquiredRecord(12, 12, 2));
+        expectedAcquiredRecord.addAll(expectedAcquiredRecord(13, 13, 2));
+        expectedAcquiredRecord.addAll(expectedAcquiredRecord(14, 14, 2));
+        expectedAcquiredRecord.addAll(expectedAcquiredRecord(21, 21, 2));
+        expectedAcquiredRecord.addAll(expectedAcquiredRecord(22, 22, 2));
+        expectedAcquiredRecord.addAll(expectedAcquiredRecord(30, 44, 1));
+        assertArrayEquals(expectedAcquiredRecord.toArray(), acquiredRecordsList.toArray());
+        assertEquals(45, sharePartition.nextFetchOffset());
     }
 
     /**
