@@ -146,6 +146,11 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
     }
 
     @Override
+    public Optional<Integer> acquisitionLockTimeoutMs() {
+        return Optional.empty();
+    }
+
+    @Override
     public void registerMetricForSubscription(KafkaMetric metric) {
     }
 
