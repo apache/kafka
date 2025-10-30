@@ -256,7 +256,7 @@ public class ShareGroupOffset {
             ", stateEpoch=" + stateEpoch +
             ", leaderEpoch=" + leaderEpoch +
             ", startOffset=" + startOffset +
-            ", inFlightRecordCount=" + deliveryCompleteCount +
+            ", deliveryCompleteCount=" + deliveryCompleteCount +
             ", createTimestamp=" + createTimestamp +
             ", writeTimestamp=" + writeTimestamp +
             ", stateBatches=" + stateBatches +
