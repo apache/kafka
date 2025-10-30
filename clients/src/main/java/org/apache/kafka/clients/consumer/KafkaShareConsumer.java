@@ -633,6 +633,16 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     }
 
     /**
+     * Returns the acquisition lock timeout for the last set of records fetched from the cluster.
+     *
+     * @return The acquisition lock timeout in milliseconds, or {@code Optional.empty()} if the timeout is not known.
+     */
+    @Override
+    public Optional<Integer> acquisitionLockTimeoutMs() {
+        return delegate.acquisitionLockTimeoutMs();
+    }
+
+    /**
      * Get the metrics kept by the consumer
      */
     @Override

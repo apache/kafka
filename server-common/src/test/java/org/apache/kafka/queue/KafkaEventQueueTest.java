@@ -435,7 +435,7 @@ public class KafkaEventQueueTest {
                 logContext,
                 "testIdleTimeCallback",
                 EventQueue.VoidEvent.INSTANCE,
-                lastIdleTimeMs::set)) {
+                (idleDuration, currentTime) -> lastIdleTimeMs.set(idleDuration))) {
             time.sleep(2);
             assertEquals(0, lastIdleTimeMs.get(), "Last idle time should be 0ms");
 

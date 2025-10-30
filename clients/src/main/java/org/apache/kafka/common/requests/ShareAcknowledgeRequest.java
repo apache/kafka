@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ShareAcknowledgeRequestData;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -75,6 +76,12 @@ public class ShareAcknowledgeRequest extends AbstractRequest {
 
         @Override
         public ShareAcknowledgeRequest build(short version) {
+            if (version < 2) {
+                // The v1 does not support AcknowledgeType RENEW.
+                if (data.isRenewAck()) {
+                    throw new UnsupportedVersionException("The v1 ShareAcknowledge does not support AcknowledgeType.RENEW");
+                }
+            }
             return new ShareAcknowledgeRequest(data, version);
         }
 

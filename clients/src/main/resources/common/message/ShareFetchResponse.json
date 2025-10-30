@@ -20,7 +20,9 @@
   // Version 0 was used for early access of KIP-932 in Apache Kafka 4.0 but removed in Apacke Kafka 4.1.
   //
   // Version 1 is the initial stable version (KIP-932).
-  "validVersions": "1",
+  //
+  // Version 2 introduces ShareAcquireMode and Renew acknowledgements (KIP-1206 and KIP-1222).
+  "validVersions": "1-2",
   "flexibleVersions": "0+",
   // Supported errors for ErrorCode and AcknowledgeErrorCode:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
@@ -68,8 +70,8 @@
             "about": "The latest known leader epoch." }
         ]},
         { "name": "Records", "type": "records", "versions": "0+", "nullableVersions": "0", "about": "The record data." },
-        { "name": "AcquiredRecords", "type": "[]AcquiredRecords", "versions": "0+", "about": "The acquired records.", "fields":  [
-          { "name": "FirstOffset", "type":  "int64", "versions": "0+", "about": "The earliest offset in this batch of acquired records." },
+        { "name": "AcquiredRecords", "type": "[]AcquiredRecords", "versions": "0+", "about": "The acquired records.", "fields": [
+          { "name": "FirstOffset", "type": "int64", "versions": "0+", "about": "The earliest offset in this batch of acquired records." },
           { "name": "LastOffset", "type": "int64", "versions": "0+", "about": "The last offset of this batch of acquired records." },
           { "name": "DeliveryCount", "type": "int16", "versions": "0+", "about": "The delivery count of this batch of acquired records." }
         ]}

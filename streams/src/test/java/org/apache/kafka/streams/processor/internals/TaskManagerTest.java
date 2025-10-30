@@ -2464,6 +2464,7 @@ public class TaskManagerTest {
         verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringHandleCorruptedWithEOS() {
         final TaskManager taskManager = setUpTaskManagerWithoutStateUpdater(ProcessingMode.EXACTLY_ONCE_V2, null, false);
@@ -2596,6 +2597,7 @@ public class TaskManagerTest {
         assertThat(unrevokedActiveTaskWithoutCommitNeeded.state(), is(State.RUNNING));
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringRevocationWithEOS() {
         final TaskManager taskManager = setUpTaskManagerWithoutStateUpdater(ProcessingMode.EXACTLY_ONCE_V2, null, false);
@@ -2837,6 +2839,7 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.SUSPENDED));
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void shouldCommitAllActiveTasksThatNeedCommittingOnHandleRevocationWithEosV2() {
         final StreamsProducer producer = mock(StreamsProducer.class);
@@ -3766,6 +3769,7 @@ public class TaskManagerTest {
         verify(consumer).commitSync(offsets);
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void shouldCommitViaProducerIfEosV2Enabled() {
         final StreamsProducer producer = mock(StreamsProducer.class);
