@@ -2789,8 +2789,12 @@ kafka.server.StreamsGroupDescribeRequestTest:
 - testStreamsGroupDescribeGroupsWithNewGroupCoordinator
 - testStreamsGroupDescribeWhenFeatureFlagNotEnabled
 kafka.server.StreamsGroupHeartbeatRequestTest:
+- testDynamicGroupConfig
 - testEmptyStreamsGroupId
+- testGroupCoordinatorChange
+- testInternalTopicsCreation
 - testInvalidMemberEpoch
+- testMemberJoiningAndExpiring
 - testMemberLeaveHeartbeat
 - testStreamsGroupHeartbeatForMultipleMembers
 - testStreamsGroupHeartbeatIsAccessibleWhenNewGroupCoordinatorIsEnabledTopicNotExistFirst
