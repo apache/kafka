@@ -9226,7 +9226,8 @@ public class SharePartitionTest {
             FETCH_ISOLATION_HWM),
             2);
 
-        List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(10, 11, 2));
+        List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(10, 10, 2));
+        expectedAcquiredRecords.addAll(expectedAcquiredRecord(11, 11, 2));
         assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
         assertEquals(12, sharePartition.nextFetchOffset());
 

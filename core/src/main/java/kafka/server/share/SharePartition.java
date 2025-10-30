@@ -808,8 +808,9 @@ public class SharePartition {
 
                 // Compute if the batch is a full match.
                 boolean fullMatch = checkForFullMatch(inFlightBatch, firstBatch.baseOffset(), lastOffsetToAcquire);
-
-                if (!fullMatch || inFlightBatch.offsetState() != null) {
+                long numRecordsToAcquire = inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1;
+                int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
+                if (!fullMatch || inFlightBatch.offsetState() != null || (isRecordLimitMode && (numRecordsToAcquire > numRecordsRemaining))) {
                     log.trace("Subset or offset tracked batch record found for share partition,"
                             + " batch: {} request offsets - first: {}, last: {} for the share"
                             + " partition: {}-{}", inFlightBatch, firstBatch.baseOffset(),
@@ -833,7 +834,7 @@ public class SharePartition {
                     // In record_limit mode, we need to ensure that we do not acquire more than
                     // maxRecordsToAcquire. Hence, pass the remaining number of records that can
                     // be acquired.
-                    int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, isRecordLimitMode, maxFetchRecords - acquiredCount, firstBatch.baseOffset(), lastOffsetToAcquire, inFlightBatch, result);
+                    int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, isRecordLimitMode, numRecordsRemaining, firstBatch.baseOffset(), lastOffsetToAcquire, inFlightBatch, result);
                     acquiredCount += acquiredSubsetCount;
                     continue;
                 }
@@ -851,25 +852,16 @@ public class SharePartition {
                         inFlightBatch, groupId, topicIdPartition);
                     continue;
                 }
-                long numRecordsToAcquire = inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1;
-                int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
-                if (isRecordLimitMode && (numRecordsToAcquire > numRecordsRemaining)) {
-                    AcquiredRecords records = filterShareAcquiredRecordsInRecordLimitMode(numRecordsRemaining, inFlightBatch);
-                    result.add(records);
-                    acquiredCount += numRecordsRemaining;
-                    break;
-                } else {
-                    // Schedule acquisition lock timeout for the batch.
-                    AcquisitionLockTimerTask acquisitionLockTimeoutTask = scheduleAcquisitionLockTimeout(memberId, inFlightBatch.firstOffset(), inFlightBatch.lastOffset());
-                    // Set the acquisition lock timeout task for the batch.
-                    inFlightBatch.updateAcquisitionLockTimeout(acquisitionLockTimeoutTask);
+                // Schedule acquisition lock timeout for the batch.
+                AcquisitionLockTimerTask acquisitionLockTimeoutTask = scheduleAcquisitionLockTimeout(memberId, inFlightBatch.firstOffset(), inFlightBatch.lastOffset());
+                // Set the acquisition lock timeout task for the batch.
+                inFlightBatch.updateAcquisitionLockTimeout(acquisitionLockTimeoutTask);
 
-                    result.add(new AcquiredRecords()
-                        .setFirstOffset(inFlightBatch.firstOffset())
-                        .setLastOffset(inFlightBatch.lastOffset())
-                        .setDeliveryCount((short) inFlightBatch.batchDeliveryCount()));
-                    acquiredCount += (int) numRecordsToAcquire;
-                }
+                result.add(new AcquiredRecords()
+                    .setFirstOffset(inFlightBatch.firstOffset())
+                    .setLastOffset(inFlightBatch.lastOffset())
+                    .setDeliveryCount((short) inFlightBatch.batchDeliveryCount()));
+                acquiredCount += (int) numRecordsToAcquire;
             }
 
             // Some of the request offsets are not found in the fetched batches. Acquire the
