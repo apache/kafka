@@ -2445,6 +2445,7 @@ kafka.server.KafkaRequestHandlerTest:
 - testLogSizeBytesMetricWithPartitionExpansion
 - testLogSizeBytesMetricWithPartitionShrinking
 - testLogSizeBytesMetricWithRemovingNonexistentPartitions
+- testMetricsForMultipleRequestPools
 - testMultipleCopyLagBytesMetrics
 - testMultipleCopyLagSegmentsMetrics
 - testMultipleDeleteLagBytesMetrics
@@ -2787,6 +2788,16 @@ kafka.server.ShareGroupHeartbeatRequestTest:
 kafka.server.StreamsGroupDescribeRequestTest:
 - testStreamsGroupDescribeGroupsWithNewGroupCoordinator
 - testStreamsGroupDescribeWhenFeatureFlagNotEnabled
+kafka.server.StreamsGroupHeartbeatRequestTest:
+- testEmptyStreamsGroupId
+- testInvalidMemberEpoch
+- testMemberLeaveHeartbeat
+- testStreamsGroupHeartbeatForMultipleMembers
+- testStreamsGroupHeartbeatIsAccessibleWhenNewGroupCoordinatorIsEnabledTopicNotExistFirst
+- testStreamsGroupHeartbeatIsInaccessibleWhenDisabledByFeatureConfig
+- testStreamsGroupHeartbeatIsInaccessibleWhenDisabledByStaticGroupCoordinatorProtocolConfig
+- testStreamsGroupHeartbeatIsInaccessibleWhenUnstableLatestVersionNotEnabled
+- testStreamsGroupHeartbeatWithInvalidAPIVersion
 kafka.server.StrictControllerMutationQuotaTest:
 - testControllerMutationQuotaViolation
 kafka.server.SyncGroupRequestTest:
