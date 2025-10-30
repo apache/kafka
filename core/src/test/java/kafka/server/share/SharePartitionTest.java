@@ -1526,7 +1526,6 @@ public class SharePartitionTest {
         assertEquals(6, sharePartition.cachedState().get(5L).lastOffset());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());
         assertEquals(1, sharePartition.cachedState().get(5L).batchDeliveryCount());
-        assertNull(sharePartition.cachedState().get(5L).offsetState());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(15L).batchState());
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(20L).batchState());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(26L).batchState());
@@ -1555,7 +1554,6 @@ public class SharePartitionTest {
         assertEquals(11, sharePartition.cachedState().get(8L).lastOffset());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(8L).batchState());
         assertEquals(1, sharePartition.cachedState().get(8L).batchDeliveryCount());
-        assertNull(sharePartition.cachedState().get(8L).offsetState());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(15L).batchState());
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(20L).batchState());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(26L).batchState());
@@ -5597,6 +5595,7 @@ public class SharePartitionTest {
         // during the acquire operation.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            ShareAcquireMode.BATCH_OPTIMIZED,
             BATCH_SIZE,
             MAX_FETCH_RECORDS,
             11,
@@ -5639,6 +5638,7 @@ public class SharePartitionTest {
         // during the acquire operation.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            ShareAcquireMode.BATCH_OPTIMIZED,
             BATCH_SIZE,
             MAX_FETCH_RECORDS,
             11,
@@ -6471,6 +6471,7 @@ public class SharePartitionTest {
         // A member acquired the available records 11 -> 20.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            ShareAcquireMode.BATCH_OPTIMIZED,
             BATCH_SIZE,
             MAX_FETCH_RECORDS,
             records.batches().iterator().next().baseOffset(),
@@ -6538,6 +6539,7 @@ public class SharePartitionTest {
         // A member acquired the available records 11 -> 20.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            ShareAcquireMode.BATCH_OPTIMIZED,
             BATCH_SIZE,
             MAX_FETCH_RECORDS,
             records.batches().iterator().next().baseOffset(),
@@ -6604,6 +6606,7 @@ public class SharePartitionTest {
         // A member acquired the available records 11 -> 20.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
+            ShareAcquireMode.BATCH_OPTIMIZED,
             BATCH_SIZE,
             MAX_FETCH_RECORDS,
             records.batches().iterator().next().baseOffset(),
@@ -9264,7 +9267,7 @@ public class SharePartitionTest {
         // marker. During the acquire methodology, initially all 30 records will be acquired. But when the aborted transactions
         // are filtered, records 10 -> 18 will be filtered out of acquired records, leaving the acquired records count to be 21.
         ShareAcquiredRecords shareAcquiredRecords = sharePartition.acquire(
-            MEMBER_ID, 1, MAX_FETCH_RECORDS, 0, fetchPartitionData, FetchIsolation.TXN_COMMITTED
+            MEMBER_ID, ShareAcquireMode.BATCH_OPTIMIZED, 1, MAX_FETCH_RECORDS, 0, fetchPartitionData, FetchIsolation.TXN_COMMITTED
         );
 
         // Verify that 21 records were acquired.
@@ -9314,7 +9317,7 @@ public class SharePartitionTest {
         // 9 records will be acquired. But when the aborted transactions are filtered, records 3 -> 4 will be filtered
         // out of acquired records, leaving the acquired records count to be 7.
         ShareAcquiredRecords shareAcquiredRecords = sharePartition.acquire(
-            MEMBER_ID, BATCH_SIZE, MAX_FETCH_RECORDS, 0, fetchPartitionData, FetchIsolation.TXN_COMMITTED
+            MEMBER_ID, ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, 0, fetchPartitionData, FetchIsolation.TXN_COMMITTED
         );
 
         // Verify that 7 records were acquired.
