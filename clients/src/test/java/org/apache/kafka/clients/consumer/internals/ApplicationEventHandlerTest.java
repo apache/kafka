@@ -61,7 +61,7 @@ public class ApplicationEventHandlerTest {
              ApplicationEventHandler applicationEventHandler = new ApplicationEventHandler(
                      new LogContext(),
                      time,
-                     10000,
+                     initializationTimeoutMs,
                      applicationEventsQueue,
                      applicationEventReaper,
                      () -> applicationEventProcessor,
