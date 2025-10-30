@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ClientsTestUtils;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
@@ -46,6 +47,7 @@ import static org.apache.kafka.common.test.JaasUtils.KAFKA_PLAIN_ADMIN;
 import static org.apache.kafka.common.test.JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ClusterTestDefaults(
     types = {Type.KRAFT},
@@ -152,5 +154,39 @@ public class SaslPlainPlaintextConsumerTest {
             MAX_POLL_INTERVAL_MS_CONFIG, 15000
         );
         testCoordinatorFailover(cluster, config);
+    }
+
+    @ClusterTest(
+        brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
+    )
+    public void testClassicConsumeInvalidJaas() {
+        assertThrows(KafkaException.class, () ->
+            testSimpleConsumption(
+                cluster,
+                Map.of(
+                    SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name,
+                    SASL_MECHANISM, MECHANISMS,
+                    SASL_JAAS_CONFIG, "org.example.InvalidLoginModule required ;",
+                    GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)
+                )
+            )
+        );
+    }
+
+    @ClusterTest(
+        brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
+    )
+    public void testAsyncConsumeInvalidJaas() {
+        assertThrows(KafkaException.class, () ->
+            testSimpleConsumption(
+                cluster,
+                Map.of(
+                    SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name,
+                    SASL_MECHANISM, MECHANISMS,
+                    SASL_JAAS_CONFIG, "org.example.InvalidLoginModule required ;",
+                    GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
+                )
+            )
+        );
     }
 }

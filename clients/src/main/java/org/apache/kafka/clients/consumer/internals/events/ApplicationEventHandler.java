@@ -69,7 +69,15 @@ public class ApplicationEventHandler implements Closeable {
                 networkClientDelegateSupplier,
                 requestManagersSupplier,
                 asyncConsumerMetrics);
+
+        // Start the network thread and let it complete its initialization before proceeding.
+        //
+        // Certain error cases (e.g. an invalid javax.security.auth.spi.LoginModule in sasl.jaas.config) will
+        // cause errors during ConsumerNetworkThread.initializeResources(), causing the ConsumerNetworkThread.run()
+        // method to exit. At that point, any enqueued events are never processed, which means that the consumer
+        // effectively hangs.
         this.networkThread.start();
+        this.networkThread.awaitInitialization();
     }
 
     /**
