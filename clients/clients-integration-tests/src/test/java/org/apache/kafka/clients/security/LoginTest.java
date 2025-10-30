@@ -20,7 +20,6 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Gauge;
-import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Monitorable;
 import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
@@ -54,8 +53,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class LoginTest {
 
-    private static final String CONTROLLER_USERNAME = "userA";
-    private static final String CONTROLLER_PASSWORD = "pwdA";
+    private static final String INTER_BROKER_USERNAME = "userA";
+    private static final String INTER_BROKER_PASSWORD = "pwdA";
     private static final String EXTERNAL_USERNAME = "userB";
     private static final String EXTERNAL_PASSWORD = "pwdB";
     private static final String CLIENT_ID = "test-login-client";
@@ -63,8 +62,8 @@ public class LoginTest {
     private static final String EXTERNAL_PREFIX = "listener.name.external.";
     private static final String MECHANISMS = "PLAIN";
     private static final String MECHANISMS_PREFIX = "plain.";
-    private static final String CONTROLLER_SASL_JAAS = "org.apache.kafka.common.security.plain.PlainLoginModule required "
-        + "user_" + CONTROLLER_USERNAME + "=\"" + CONTROLLER_PASSWORD + "\";";
+    private static final String INTER_BROKER_SASL_JAAS = "org.apache.kafka.common.security.plain.PlainLoginModule required "
+        + "user_" + INTER_BROKER_USERNAME + "=\"" + INTER_BROKER_PASSWORD + "\";";
     private static final String EXTERNAL_SASL_JAAS = "org.apache.kafka.common.security.plain.PlainLoginModule required "
         + "user_" + EXTERNAL_USERNAME + "=\"" + EXTERNAL_PASSWORD + "\";";
 
@@ -73,32 +72,34 @@ public class LoginTest {
         controllerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT,
         brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT,
         serverProperties = {
-            @ClusterConfigProperty(key = LISTENER_PREFIX + MECHANISMS_PREFIX + SASL_LOGIN_CLASS, value = "org.apache.kafka.clients.security.LoginTest$ControllerCustomerLogin"),
+            @ClusterConfigProperty(key = LISTENER_PREFIX + MECHANISMS_PREFIX + SASL_LOGIN_CLASS, value = "org.apache.kafka.clients.security.LoginTest$InterBrokerCustomerLogin"),
             @ClusterConfigProperty(key = EXTERNAL_PREFIX + MECHANISMS_PREFIX + SASL_LOGIN_CLASS, value = "org.apache.kafka.clients.security.LoginTest$ExternalCustomerLogin"),
             @ClusterConfigProperty(key = SASL_ENABLED_MECHANISMS_CONFIG, value = MECHANISMS),
             @ClusterConfigProperty(key = SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, value = MECHANISMS),
-            @ClusterConfigProperty(key = LISTENER_PREFIX + MECHANISMS_PREFIX + SASL_JAAS_CONFIG, value = CONTROLLER_SASL_JAAS),
+            @ClusterConfigProperty(key = LISTENER_PREFIX + MECHANISMS_PREFIX + SASL_JAAS_CONFIG, value = INTER_BROKER_SASL_JAAS),
             @ClusterConfigProperty(key = EXTERNAL_PREFIX + MECHANISMS_PREFIX + SASL_JAAS_CONFIG, value = EXTERNAL_SASL_JAAS),
-            @ClusterConfigProperty(key = SUPER_USERS_CONFIG, value = "User:" + CONTROLLER_USERNAME + ";User:" + EXTERNAL_USERNAME),
+            @ClusterConfigProperty(key = SUPER_USERS_CONFIG, value = "User:" + INTER_BROKER_USERNAME + ";User:" + EXTERNAL_USERNAME),
         }
     )
     public void testCustomLoginWithKafkaCluster(ClusterInstance cluster) {
-        try (Admin admin = cluster.admin(saslConfig())) {
-            int found = 0;
-            for (Metric metric : admin.metrics().values()) {
-                found += assertMetricName(
-                    metric.metricName(),
-                    ExternalCustomerLogin.METRIC_NAME,
-                    ExternalCustomerLogin.METRIC_DESCRIPTION,
-                    expectedTags(Map.of(
-                        "class", ExternalCustomerLogin.class.getSimpleName(),
-                        "client-id", CLIENT_ID
-                    ))
-                );
-            }
-            assertEquals(1, found, "Expected to find 1 metric");
+        try (Admin admin = cluster.admin(Map.of(
+                SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name,
+                CLIENT_ID_CONFIG, CLIENT_ID,
+                SASL_MECHANISM, MECHANISMS,
+                SASL_LOGIN_CLASS, LoginTest.ExternalCustomerLogin.class.getName(),
+                SASL_JAAS_CONFIG, INTER_BROKER_SASL_JAAS))
+        ) {
+            assertMetrics(
+                admin.metrics(),
+                ExternalCustomerLogin.METRIC_NAME,
+                ExternalCustomerLogin.METRIC_DESCRIPTION,
+                expectedTags(Map.of(
+                    "class", ExternalCustomerLogin.class.getSimpleName(),
+                    "client-id", CLIENT_ID
+                ))
+            );
 
-            Map<MetricName, KafkaMetric> allMetrics = Stream.of(
+            Map<MetricName, Metric> allMetrics = Stream.of(
                 cluster.controllers().get(0).metrics().metrics(),
                 cluster.brokers().get(0).metrics().metrics()
             ).collect(HashMap::new, Map::putAll, Map::putAll);
@@ -115,12 +116,12 @@ public class LoginTest {
             );
             assertMetrics(
                 allMetrics,
-                ControllerCustomerLogin.METRIC_NAME,
-                ControllerCustomerLogin.METRIC_DESCRIPTION,
+                InterBrokerCustomerLogin.METRIC_NAME,
+                InterBrokerCustomerLogin.METRIC_DESCRIPTION,
                 expectedTags(Map.of(
                     "node-id", "0",
                     "component", "raft-channel",
-                    "class", ControllerCustomerLogin.class.getSimpleName()
+                    "class", InterBrokerCustomerLogin.class.getSimpleName()
                 ))
             );
         }
@@ -142,7 +143,7 @@ public class LoginTest {
     }
 
     private void assertMetrics(
-        Map<MetricName, KafkaMetric> metrics,
+        Map<MetricName, ? extends Metric> metrics,
         String expectedName,
         String expectedDescription,
         Map<String, String> expectedTags
@@ -161,20 +162,10 @@ public class LoginTest {
         return tags;
     }
 
-    protected static Map<String, Object> saslConfig() {
-        return Map.of(
-            SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name,
-            CLIENT_ID_CONFIG, CLIENT_ID,
-            SASL_MECHANISM, MECHANISMS,
-            SASL_LOGIN_CLASS, LoginTest.ExternalCustomerLogin.class.getName(),
-            SASL_JAAS_CONFIG, CONTROLLER_SASL_JAAS
-        );
-    }
+    public static class InterBrokerCustomerLogin implements Login, Monitorable {
 
-    public static class ControllerCustomerLogin implements Login, Monitorable {
-
-        private static final String METRIC_NAME = "monitorable-controller-custom-login-name";
-        private static final String METRIC_DESCRIPTION = "monitorable-controller-custom-login-description";
+        private static final String METRIC_NAME = "monitorable-inter-broker-custom-login-name";
+        private static final String METRIC_DESCRIPTION = "monitorable-inter-broker-custom-login-description";
 
         private String contextName;
         private Configuration configuration;
@@ -204,8 +195,8 @@ public class LoginTest {
             subject = context.getSubject();
             subject.getPublicCredentials().clear();
             subject.getPrivateCredentials().clear();
-            subject.getPublicCredentials().add(CONTROLLER_USERNAME);
-            subject.getPrivateCredentials().add(CONTROLLER_PASSWORD);
+            subject.getPublicCredentials().add(INTER_BROKER_USERNAME);
+            subject.getPrivateCredentials().add(INTER_BROKER_PASSWORD);
             return context;
         }
 
@@ -216,7 +207,7 @@ public class LoginTest {
 
         @Override
         public String serviceName() {
-            return "controller customer login";
+            return "inter broker customer login";
         }
 
         @Override
