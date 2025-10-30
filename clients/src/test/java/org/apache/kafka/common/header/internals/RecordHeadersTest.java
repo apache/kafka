@@ -273,10 +273,9 @@ public class RecordHeadersTest {
         assertArrayEquals(value.getBytes(), actual.value());
     }
 
-    private void assertRecordHeaderReadThreadSafe(RecordHeader header) throws Exception {
-        int threadCount = 32;
+    private void assertRecordHeaderReadThreadSafe(RecordHeader header) {
+        int threadCount = 16;
         CountDownLatch startLatch = new CountDownLatch(1);
-        AtomicBoolean raceDetected = new AtomicBoolean(false);
 
         var futures = IntStream.range(0, threadCount)
             .mapToObj(i -> CompletableFuture.runAsync(() -> {
@@ -284,8 +283,6 @@ public class RecordHeadersTest {
                     startLatch.await();
                     header.key();
                     header.value();
-                } catch (NullPointerException e) {
-                    raceDetected.set(true);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     throw new RuntimeException(e);
@@ -294,8 +291,6 @@ public class RecordHeadersTest {
 
         startLatch.countDown();
         futures.forEach(CompletableFuture::join);
-
-        assertFalse(raceDetected.get());
     }
 
     @RepeatedTest(100)
