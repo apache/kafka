@@ -8897,8 +8897,7 @@ public class GroupMetadataManager {
     static String classicGroupSyncKey(String groupId) {
         return "sync-" + groupId;
     }
-
-
+    
     /**
      * Generate a streams group initial rebalance key for the timer.
      *
