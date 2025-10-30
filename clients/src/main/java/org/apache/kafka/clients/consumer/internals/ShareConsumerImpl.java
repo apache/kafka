@@ -841,6 +841,15 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * {@inheritDoc}
      */
     @Override
+    public Optional<Integer> acquisitionLockTimeoutMs() {
+        // To be implemented
+        return Optional.empty();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public Map<MetricName, ? extends Metric> metrics() {
         return Collections.unmodifiableMap(metrics.metrics());
     }
