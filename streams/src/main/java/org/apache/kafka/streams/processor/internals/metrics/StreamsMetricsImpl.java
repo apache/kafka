@@ -90,6 +90,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private final Map<Sensor, Sensor> parentSensors;
     private final String clientId;
     private final String processId;
+    private final String applicationId;
 
     private final Version version;
     private final Deque<MetricName> clientLevelMetrics = new LinkedList<>();
@@ -118,6 +119,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static final String CLIENT_ID_TAG = "client-id";
     public static final String PROCESS_ID_TAG = "process-id";
+    public static final String APPLICATION_ID_TAG = "application-id";
     public static final String THREAD_ID_TAG = "thread-id";
     public static final String TASK_ID_TAG = "task-id";
     public static final String PROCESSOR_NODE_ID_TAG = "processor-node-id";
@@ -168,11 +170,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public StreamsMetricsImpl(final Metrics metrics,
                               final String clientId,
                               final String processId,
+                              final String applicationId,
                               final Time time) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
         this.metrics = metrics;
         this.clientId = clientId;
         this.processId = processId;
+        this.applicationId = applicationId;
         version = Version.LATEST;
         rocksDBMetricsRecordingTrigger = new RocksDBMetricsRecordingTrigger(time);
 
@@ -284,6 +288,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         final Map<String, String> tagMap = new LinkedHashMap<>();
         tagMap.put(CLIENT_ID_TAG, clientId);
         tagMap.put(PROCESS_ID_TAG, processId);
+        tagMap.put(APPLICATION_ID_TAG, applicationId);
         return tagMap;
     }
 

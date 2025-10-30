@@ -261,10 +261,15 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           </tr>
           </thead>
           <tbody valign="top">
-          <tr class="row-even"><td>acceptable.recovery.lag</td>
+          <tr class="row-odd"><td>acceptable.recovery.lag</td>
             <td>Medium</td>
             <td colspan="2">The maximum acceptable lag (number of offsets to catch up) for an instance to be considered caught-up and ready for the active task.</td>
             <td><code class="docutils literal"><span class="pre">10000</span></code></td>
+          </tr>
+          <tr class="row-even"><td>allow.os.group.write.access</td>
+              <td>Low</td>
+              <td colspan="2">Allows state store directories created by Kafka Streams to have write access for the OS group.</td>
+              <td><code class="docutils literal"><span class="pre">false</span></code></td>
           </tr>
           <tr class="row-odd"><td>application.server</td>
             <td>Low</td>

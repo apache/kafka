@@ -465,9 +465,14 @@ class BrokerServer(
         clientMetricsManager = clientMetricsManager,
         groupConfigManager = groupConfigManager)
 
-      dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
-        socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
-        config.numIoThreads, "RequestHandlerAvgIdlePercent")
+      dataPlaneRequestHandlerPool = sharedServer.requestHandlerPoolFactory.createPool(
+        config.nodeId,
+        socketServer.dataPlaneRequestChannel,
+        dataPlaneRequestProcessor,
+        time,
+        config.numIoThreads,
+        "broker"
+      )
 
       metadataPublishers.add(new MetadataVersionConfigValidator(config.brokerId,
         () => config.processRoles.contains(ProcessRole.BrokerRole) && config.logDirs().size() > 1,
