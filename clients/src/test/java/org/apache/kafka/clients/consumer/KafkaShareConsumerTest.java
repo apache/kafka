@@ -141,9 +141,6 @@ public class KafkaShareConsumerTest {
         }
     }
 
-    // This test is proving sufficiently flaky that it has been disabled pending investigation
-    @Disabled
-    // @Flaky("KAFKA-18488")
     @Test
     public void testVerifyFetchAndCommitSyncImplicit() {
         ShareConsumerMetadata metadata = new ShareConsumerMetadata(0, 0, Long.MAX_VALUE, false,
@@ -218,9 +215,6 @@ public class KafkaShareConsumerTest {
         }
     }
 
-    // This test is proving sufficiently flaky that it has been disabled pending investigation
-    @Disabled
-    //@Flaky("KAFKA-18794")
     @Test
     public void testVerifyFetchAndCloseImplicit() {
         ShareConsumerMetadata metadata = new ShareConsumerMetadata(0, 0, Long.MAX_VALUE, false,

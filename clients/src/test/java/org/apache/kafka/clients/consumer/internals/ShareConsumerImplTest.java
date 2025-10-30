@@ -347,6 +347,32 @@ public class ShareConsumerImplTest {
     }
 
     @Test
+    public void shouldSendOneShareFetchEventPerPoll() {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        // Setup test data
+        String topic = "test-topic";
+        // Setup an empty fetch.
+        ShareFetch<String, String> firstFetch = ShareFetch.empty();
+
+        doReturn(firstFetch)
+                .doReturn(ShareFetch.empty())
+                .when(fetchCollector)
+                .collect(any(ShareFetchBuffer.class));
+
+        // Setup subscription
+        List<String> topics = Collections.singletonList(topic);
+        completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, topics);
+        consumer.subscribe(topics);
+
+        doReturn(0L).when(applicationEventHandler).maximumTimeToWait();
+        // Check that only 1 ShareFetchEvent is sent per poll
+        consumer.poll(Duration.ofMillis(100));
+        verify(applicationEventHandler, times(1)).add(argThat(event -> event instanceof ShareFetchEvent));
+    }
+
+    @Test
     public void testUnsubscribeWithTopicAuthorizationException() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(subscriptions);

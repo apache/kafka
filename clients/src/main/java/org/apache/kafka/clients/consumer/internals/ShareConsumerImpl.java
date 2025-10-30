@@ -203,6 +203,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     // and is used to prevent multithreaded access
     private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
     private final AtomicInteger refCount = new AtomicInteger(0);
+    private boolean shouldSendShareFetchEvent = false;
 
     ShareConsumerImpl(final ConsumerConfig config,
                       final Deserializer<K> keyDeserializer,
@@ -581,6 +582,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics.");
             }
 
+            shouldSendShareFetchEvent = true;
+
             do {
                 // Make sure the network thread can tell the application is actively polling
                 applicationEventHandler.add(new PollEvent(timer.currentTimeMs()));
@@ -653,9 +656,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     private ShareFetch<K, V> collect(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
         if (currentFetch.isEmpty()) {
             final ShareFetch<K, V> fetch = fetchCollector.collect(fetchBuffer);
-            if (fetch.isEmpty()) {
+            if (fetch.isEmpty() && shouldSendShareFetchEvent) {
                 // Check for any acknowledgements which could have come from control records (GAP) and include them.
                 applicationEventHandler.add(new ShareFetchEvent(acknowledgementsMap, fetch.takeAcknowledgedRecords()));
+                shouldSendShareFetchEvent = false;
 
                 // Notify the network thread to wake up and start the next round of fetching
                 applicationEventHandler.wakeupNetworkThread();
