@@ -1723,37 +1723,6 @@ public class SharePartition {
         }
     }
 
-    private AcquiredRecords filterShareAcquiredRecordsInRecordLimitMode(int maxFetchRecords, InFlightBatch inFlightBatch) {
-        lock.writeLock().lock();
-        try {
-            // Get the delivery count from the batch before initializing offset state.
-            int deliveryCount = inFlightBatch.batchDeliveryCount();
-            // Initialize the offset state map if not already initialized.
-            inFlightBatch.maybeInitializeOffsetStateUpdate();
-            long lastOffset = inFlightBatch.firstOffset() + maxFetchRecords - 1;
-            NavigableMap<Long, InFlightState> offsetStateMap = inFlightBatch.offsetState();
-            for (Map.Entry<Long, InFlightState> offsetState : offsetStateMap.tailMap(lastOffset, false).entrySet()) {
-                InFlightState updateResult = offsetState.getValue().tryUpdateState(
-                    RecordState.AVAILABLE,
-                    DeliveryCountOps.DECREASE,
-                    maxDeliveryCount,
-                    EMPTY_MEMBER_ID);
-                if (updateResult == null) {
-                    log.error("Unable to update records status for the offset: {} in batch: {} for the share partition: {}-{}", offsetState.getKey(), inFlightBatch,
-                        groupId, topicIdPartition);
-                }
-                updateFindNextFetchOffset(true);
-                offsetState.getValue().cancelAndClearAcquisitionLockTimeoutTask();
-            }
-            return new AcquiredRecords()
-                .setFirstOffset(inFlightBatch.firstOffset())
-                .setLastOffset(lastOffset)
-                .setDeliveryCount((short) deliveryCount);
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
     private List<AcquiredRecords> createBatches(
         String memberId,
         Iterable<? extends RecordBatch> batches,
