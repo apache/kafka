@@ -608,7 +608,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     private GraphNode getKeyChangingParentNode(final GraphNode repartitionNode) {
-        final GraphNode shouldBeKeyChangingNode = findParentNodeMatching(repartitionNode, n -> n.isKeyChangingOperation() || n.isValueChangingOperation());
+        final GraphNode shouldBeKeyChangingNode = findParentNodeMatching(repartitionNode, n -> n.isKeyChangingOperation() || n.isValueChangingOperation()); /// todo: remove isValueChangingOperation() condition
 
         final GraphNode keyChangingNode = findParentNodeMatching(repartitionNode, GraphNode::isKeyChangingOperation);
         if (shouldBeKeyChangingNode != null && shouldBeKeyChangingNode.equals(keyChangingNode)) {
@@ -623,6 +623,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     @SuppressWarnings("unchecked")
     private <K, V> GroupedInternal<K, V> getRepartitionSerdes(final Collection<OptimizableRepartitionNode<?, ?>> repartitionNodes) {
+    /// guang: instead of getting the repartition node's serde, determine the serde as:
+    /// between this repartition node and it's key changing parent:
+    /// - the earliest value changing operation's input serde, if any, or
+    /// - the key value changing operation serde, which is equal to the repartition node's 
         Serde<K> keySerde = null;
         Serde<V> valueSerde = null;
 
@@ -635,9 +639,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 valueSerde = (Serde<V>) repartitionNode.valueSerde();
             }
 
-            if (keySerde != null && valueSerde != null) {
-                break;
-            }
         }
 
         return new GroupedInternal<>(Grouped.with(keySerde, valueSerde));
