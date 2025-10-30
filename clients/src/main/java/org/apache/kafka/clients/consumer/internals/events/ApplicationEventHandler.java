@@ -51,6 +51,7 @@ public class ApplicationEventHandler implements Closeable {
 
     public ApplicationEventHandler(final LogContext logContext,
                                    final Time time,
+                                   final int initializationTimeoutMs,
                                    final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                    final CompletableEventReaper applicationEventReaper,
                                    final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
@@ -78,7 +79,7 @@ public class ApplicationEventHandler implements Closeable {
         // ConsumerNetworkThread.run() method exiting, no longer able to process events, which means that the consumer
         // effectively hangs.
         this.networkThread.start();
-        this.networkThread.awaitInitialization();
+        this.networkThread.awaitInitialization(initializationTimeoutMs);
     }
 
     /**

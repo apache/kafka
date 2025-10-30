@@ -25,6 +25,8 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -43,6 +45,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
@@ -97,16 +100,17 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         this.asyncConsumerMetrics = asyncConsumerMetrics;
     }
 
-    public void awaitInitialization() {
+    public void awaitInitialization(int timeoutMs) {
         try {
-            // It's a bit of a code smell to have an unbounded wait
-            initializationLatch.await();
+            if (!initializationLatch.await(timeoutMs, TimeUnit.MILLISECONDS)) {
+                maybeSetInitializationError(
+                    new TimeoutException("Consumer network thread resource initialization timed out after " + timeoutMs + " ms")
+                );
+            }
         } catch (InterruptedException e) {
-            initializationError.compareAndSet(
-                null,
-                new KafkaException("An interruption occurred during consumer network thread initialization", e)
+            maybeSetInitializationError(
+                new InterruptException("Consumer network thread resource initialization was interrupted", e)
             );
-            log.error("Interrupted while waiting to initialize resources for consumer network thread", e);
         }
 
         KafkaException e = initializationError.get();
@@ -124,11 +128,9 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             try {
                 initializeResources();
             } catch (Throwable t) {
-                initializationError.compareAndSet(
-                    null,
-                    new KafkaException("An error occurred during consumer network thread initialization", t)
+                maybeSetInitializationError(
+                    new KafkaException("Consumer network thread resource initialization failed", t)
                 );
-                log.error("Failed to initialize resources for consumer network thread", t);
                 return;
             } finally {
                 initializationLatch.countDown();
@@ -147,6 +149,13 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         } finally {
             cleanup();
         }
+    }
+
+    private void maybeSetInitializationError(KafkaException error) {
+        if (initializationError.compareAndSet(null, error))
+            return;
+
+        log.error("Consumer network thread resource initialization error ({}) will be suppressed as an error was already set", error.getMessage(), error);
     }
 
     void initializeResources() {

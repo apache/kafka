@@ -468,6 +468,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.applicationEventHandler = applicationEventHandlerFactory.build(
                     logContext,
                     time,
+                    config.getInt(CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG),
                     applicationEventQueue,
                     new CompletableEventReaper(logContext),
                     applicationEventProcessorSupplier,
@@ -660,6 +661,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         );
         this.applicationEventHandler = new ApplicationEventHandler(logContext,
                 time,
+                config.getInt(CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG),
                 applicationEventQueue,
                 new CompletableEventReaper(logContext),
                 applicationEventProcessorSupplier,
@@ -677,6 +679,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         ApplicationEventHandler build(
             final LogContext logContext,
             final Time time,
+            final int initializationTimeoutMs,
             final BlockingQueue<ApplicationEvent> applicationEventQueue,
             final CompletableEventReaper applicationEventReaper,
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
