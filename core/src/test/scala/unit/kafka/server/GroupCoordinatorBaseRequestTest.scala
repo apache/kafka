@@ -882,7 +882,6 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     expectedError: Errors = Errors.NONE,
     processId: String = null,
     version: Short = ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion(isUnstableApiEnabled)
-
   ): StreamsGroupHeartbeatResponseData = {
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequest.Builder(
       new StreamsGroupHeartbeatRequestData()

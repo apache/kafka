@@ -69,7 +69,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     val topology = new StreamsGroupHeartbeatRequestData.Topology()
       .setEpoch(1)
       .setSubtopologies(List().asJava)
-
+    
     val streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
       groupId = "test-group",
       memberId = "test-member",
@@ -80,7 +80,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       topology = topology,
       expectedError = Errors.UNSUPPORTED_VERSION,
     )
-
+    
     val expectedResponse = new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.UNSUPPORTED_VERSION.code())
     assertEquals(expectedResponse, streamsGroupHeartbeatResponse)
   }
@@ -94,7 +94,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     val topology = new StreamsGroupHeartbeatRequestData.Topology()
       .setEpoch(1)
       .setSubtopologies(List().asJava)
-
+    
     val streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
       groupId = "test-group",
       memberId = "test-member",
@@ -119,7 +119,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     val topology = new StreamsGroupHeartbeatRequestData.Topology()
       .setEpoch(1)
       .setSubtopologies(List().asJava)
-
+    
     val streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
       groupId = "test-group",
       memberId = "test-member",
@@ -317,8 +317,8 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           standbyTasks = convertTaskIds(streamsGroupHeartbeatResponse1.standbyTasks()),
           warmupTasks = convertTaskIds(streamsGroupHeartbeatResponse1.warmupTasks())
         )
-        streamsGroupHeartbeatResponse1.errorCode == Errors.NONE.code() &&
-          streamsGroupHeartbeatResponse1.activeTasks() != null
+        streamsGroupHeartbeatResponse1.errorCode == Errors.NONE.code() && 
+        streamsGroupHeartbeatResponse1.activeTasks() != null
       }, "First member did not get task assignment within the timeout period.")
 
       TestUtils.waitUntilTrue(() => {
@@ -339,7 +339,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       // Verify both members should have tasks assigned
       assertNotNull(streamsGroupHeartbeatResponse1, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId1, streamsGroupHeartbeatResponse1.memberId())
-
+      
       assertNotNull(streamsGroupHeartbeatResponse2, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId2, streamsGroupHeartbeatResponse2.memberId())
 
@@ -377,7 +377,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         topology = topology,
         expectedError = Errors.INVALID_REQUEST
       )
-
+      
       val expectedResponse = new StreamsGroupHeartbeatResponseData()
         .setErrorCode(Errors.INVALID_REQUEST.code())
         .setErrorMessage("GroupId can't be empty.")
@@ -443,7 +443,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         standbyTasks = List.empty,
         warmupTasks = List.empty
       )
-
+      
       // Verify the leave request was successful
       assertEquals(Errors.NONE.code(), streamsGroupHeartbeatResponse.errorCode())
       assertEquals("test-member", streamsGroupHeartbeatResponse.memberId())
@@ -505,7 +505,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         topology = null,
         expectedError = Errors.FENCED_MEMBER_EPOCH
       )
-
+      
       val expectedResponse = new StreamsGroupHeartbeatResponseData()
         .setErrorCode(Errors.FENCED_MEMBER_EPOCH.code())
         .setErrorMessage("The streams group member has a greater member epoch (999) than the one known by the group coordinator (1). The member must abandon all its partitions and rejoin.")
