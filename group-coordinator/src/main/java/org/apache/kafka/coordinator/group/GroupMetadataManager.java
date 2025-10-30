@@ -3778,7 +3778,7 @@ public class GroupMetadataManager {
         List<StreamsGroupHeartbeatRequestData.TaskIds> ownedWarmupTasks,
         List<CoordinatorRecord> records
     ) {
-        if (member.isReconciledTo(targetAssignmentEpoch)) {
+        if (member.isReconciledTo(targetAssignmentEpoch) && member.assignedTasks().equals(targetAssignment)) {
             return member;
         }
 

@@ -17409,6 +17409,81 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsInitialRebalanceDelay_EmptyDuringDelay_AssignsAfterTimer() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 2)
+                .buildCoordinatorMetadataImage())
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 1000)
+            .build();
+
+        assignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result;
+
+        result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        assertResponseEquals(
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(2)
+                .setHeartbeatIntervalMs(5000)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setPartitionsByUserEndpoint(null)
+                .setEndpointInformationEpoch(-1),
+            result.response().data()
+        );
+
+        context.sleep(10000);
+
+        result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(2)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        assertResponseEquals(
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(2)
+                .setHeartbeatIntervalMs(5000)
+                .setActiveTasks(List.of(
+                    new StreamsGroupHeartbeatResponseData.TaskIds()
+                        .setSubtopologyId(subtopology1)
+                        .setPartitions(List.of(0, 1))))
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()),
+            result.response().data()
+        );
+    }
+
+    @Test
     public void testStreamsReconciliationProcess() {
         String groupId = "fooup";
         String memberId1 = Uuid.randomUuid().toString();
@@ -18621,12 +18696,12 @@ public class GroupMetadataManagerTest {
             new StreamsGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId1)
-                .setMemberEpoch(1));
+                .setMemberEpoch(2));
 
         assertResponseEquals(
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
-                .setMemberEpoch(1)
+                .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
                 .setActiveTasks(List.of(
                     new StreamsGroupHeartbeatResponseData.TaskIds()
@@ -18649,7 +18724,7 @@ public class GroupMetadataManagerTest {
                         StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, memberId1),
                         StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, memberId1),
                         StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, memberId1),
-                        StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 3, groupMetadataHash, 0, Map.of("num.standby.replicas", "0"))
+                        StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 4, groupMetadataHash, 0, Map.of("num.standby.replicas", "0"))
                     )
                 )
             )),
