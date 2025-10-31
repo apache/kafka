@@ -18,6 +18,7 @@ from ducktape.utils.util import wait_until
 from ducktape.mark.resource import cluster
 
 from kafkatest.tests.verifiable_consumer_test import VerifiableConsumerTest
+from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.kafka import TopicPartition, quorum, consumer_group
 
 import signal
@@ -73,6 +74,14 @@ class OffsetValidationTest(VerifiableConsumerTest):
         consumer = super(OffsetValidationTest, self).setup_consumer(topic, **kwargs)
         self.mark_for_collect(consumer, 'verifiable_consumer_stdout')
         return consumer
+
+    def await_conflict_consumers_fenced(self, conflict_consumer):
+        # Rely on explicit shutdown_complete events from the verifiable consumer to guarantee each conflict member
+        # reached the fenced path rather than remaining in the default DEAD state prior to startup.
+        wait_until(lambda: len(conflict_consumer.shutdown_complete_nodes()) == len(conflict_consumer.nodes) and
+                           len(conflict_consumer.dead_nodes()) == len(conflict_consumer.nodes),
+                   timeout_sec=60,
+                   err_msg="Timed out waiting for conflict consumers to report shutdown completion after fencing")
 
     @cluster(num_nodes=7)
     @matrix(
@@ -331,6 +340,10 @@ class OffsetValidationTest(VerifiableConsumerTest):
                                       " ".join(self.kafka.describe_consumer_group_members(self.group_id)))
                     raise
                 assert len(conflict_consumer.joined_nodes()) == 0
+
+                # Conflict consumers will terminate due to a fatal UnreleasedInstanceIdException error.
+                # Wait for termination to complete to prevent conflict consumers from immediately re-joining the group while existing nodes are shutting down.
+                self.await_conflict_consumers_fenced(conflict_consumer)
 
                 # Stop existing nodes, so conflicting ones should be able to join.
                 consumer.stop_all()
