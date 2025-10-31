@@ -43,7 +43,8 @@ public enum ShareAcquireMode {
         try {
             return ShareAcquireMode.valueOf(name.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid value :" + name + " for ShareAcquireMode. The value must either be 'batch_optimized' or 'record_limit'.");
+            throw new IllegalArgumentException("Invalid value `" + name + "` for configuration " +
+                name + ". The value must either be 'batch_optimized' or 'record_limit'.");
         }
     }
 
