@@ -5722,7 +5722,7 @@ public class SharePartitionTest {
 
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-            new ShareAcknowledgementBatch(2, 6, List.of((byte) 2)),
+            new ShareAcknowledgementBatch(2, 6, List.of(AcknowledgeType.RELEASE.id)),
             new ShareAcknowledgementBatch(12, 16, List.of(AcknowledgeType.REJECT.id)),
             new ShareAcknowledgementBatch(22, 26, List.of(AcknowledgeType.RELEASE.id)),
             new ShareAcknowledgementBatch(27, 31, List.of(AcknowledgeType.REJECT.id))
