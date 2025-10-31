@@ -41,9 +41,9 @@ import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Optional;
@@ -99,10 +99,23 @@ public class ShareCompletedFetch {
     }
 
     private List<OffsetAndDeliveryCount> buildAcquiredRecordList(List<ShareFetchResponseData.AcquiredRecords> partitionAcquiredRecords) {
-        List<OffsetAndDeliveryCount> acquiredRecordList = new LinkedList<>();
+        // Setting the size of the array to the size of the first batch of acquired records. In case there is only 1 batch acquired, resizing would not happen.
+        if (partitionAcquiredRecords.isEmpty()) {
+            return List.of();
+        }
+        int initialListSize = (int) (partitionAcquiredRecords.get(0).lastOffset() - partitionAcquiredRecords.get(0).firstOffset() + 1);
+        List<OffsetAndDeliveryCount> acquiredRecordList = new ArrayList<>(initialListSize);
+
+        // Set to find duplicates in case of overlapping acquired records
+        Set<Long> offsets = new HashSet<>();
         partitionAcquiredRecords.forEach(acquiredRecords -> {
             for (long offset = acquiredRecords.firstOffset(); offset <= acquiredRecords.lastOffset(); offset++) {
-                acquiredRecordList.add(new OffsetAndDeliveryCount(offset, acquiredRecords.deliveryCount()));
+                if (!offsets.add(offset)) {
+                    log.error("Duplicate acquired record offset {} found in share fetch response for partition {}. " +
+                            "This indicates a broker processing issue.", offset, partition.topicPartition());
+                } else {
+                    acquiredRecordList.add(new OffsetAndDeliveryCount(offset, acquiredRecords.deliveryCount()));
+                }
             }
         });
         return acquiredRecordList;
@@ -154,7 +167,7 @@ public class ShareCompletedFetch {
      * @param maxRecords The number of records to return; the number returned may be {@code 0 <= maxRecords}
      * @param checkCrcs Whether to check the CRC of fetched records
      *
-     * @return {@link ShareInFlightBatch The ShareInFlightBatch containing records and their acknowledgments}
+     * @return {@link ShareInFlightBatch The ShareInFlightBatch containing records and their acknowledgements}
      */
     <K, V> ShareInFlightBatch<K, V> fetchRecords(final Deserializers<K, V> deserializers,
                                                  final int maxRecords,

@@ -17,9 +17,9 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.KafkaClient;
-import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerDelegate;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerDelegateCreator;
+import org.apache.kafka.clients.consumer.internals.ShareConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaShareConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
@@ -195,7 +195,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * </pre>
  *
  * <h4>Per-record acknowledgement (explicit acknowledgement)</h4>
- * This example demonstrates using different acknowledgement types depending on the outcome of processing the records.
+ * This example demonstrates using different acknowledge types depending on the outcome of processing the records.
  * Here the {@code share.acknowledgement.mode} property is set to "explicit" so the consumer must explicitly acknowledge each record.
  * <pre>
  *     Properties props = new Properties();
@@ -239,8 +239,8 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * In <code>read_uncommitted</code> isolation level, the share group consumes all non-transactional and transactional
  * records. The consumption is bounded by the high-water mark.
  * <p>
- * In <code>read_committed</code> isolation level (not yet supported), the share group only consumes non-transactional
- * records and committed transactional records. The set of records which are eligible to become in-flight records are
+ * In <code>read_committed</code> isolation level, the share group only consumes non-transactional records and
+ * committed transactional records. The set of records which are eligible to become in-flight records are
  * non-transactional records and committed transactional records only. The consumption is bounded by the last stable
  * offset, so an open transaction blocks the progress of the share group with read_committed isolation level.
  *
@@ -392,7 +392,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
                        final Time time,
                        final KafkaClient client,
                        final SubscriptionState subscriptions,
-                       final ConsumerMetadata metadata) {
+                       final ShareConsumerMetadata metadata) {
         delegate = CREATOR.create(
                 logContext, clientId, groupId, config, keyDeserializer, valueDeserializer,
                 time, client, subscriptions, metadata);
@@ -497,7 +497,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * <p>This method can only be used if the consumer is using <b>explicit acknowledgement</b>.
      *
      * @param record The record to acknowledge
-     * @param type The acknowledgement type which indicates whether it was processed successfully
+     * @param type The acknowledge type which indicates whether it was processed successfully
      *
      * @throws IllegalStateException if the record is not waiting to be acknowledged, or the consumer is not using
      *                               explicit acknowledgement
@@ -633,6 +633,16 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     }
 
     /**
+     * Returns the acquisition lock timeout for the last set of records fetched from the cluster.
+     *
+     * @return The acquisition lock timeout in milliseconds, or {@code Optional.empty()} if the timeout is not known.
+     */
+    @Override
+    public Optional<Integer> acquisitionLockTimeoutMs() {
+        return delegate.acquisitionLockTimeoutMs();
+    }
+
+    /**
      * Get the metrics kept by the consumer
      */
     @Override
@@ -679,10 +689,13 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * Close the consumer, waiting for up to the default timeout of 30 seconds for any needed cleanup.
      * This will commit acknowledgements if possible within the default timeout.
      * See {@link #close(Duration)} for details. Note that {@link #wakeup()} cannot be used to interrupt close.
+     * <p>
+     * This close operation will attempt all shutdown steps even if one of them fails.
+     * It logs all encountered errors, continues to execute the next steps, and finally throws the first error found.
      *
-     * @throws WakeupException if {@link #wakeup()} is called before or while this method is called
+     * @throws WakeupException    if {@link #wakeup()} is called before or while this method is called
      * @throws InterruptException if the thread is interrupted before or while this method is called
-     * @throws KafkaException for any other error during close
+     * @throws KafkaException     for any other error during close
      */
     @Override
     public void close() {
@@ -701,14 +714,16 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * Even if a larger timeout is specified, the consumer will not wait longer than
      * {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} for these requests to complete during the close operation.
      * Note that the execution time of callbacks (such as {@link AcknowledgementCommitCallback}) do not consume time from the close timeout.
+     * <p>
+     * This close operation will attempt all shutdown steps even if one of them fails.
+     * It logs all encountered errors, continues to execute the next steps, and finally throws the first error found.
      *
      * @param timeout The maximum time to wait for consumer to close gracefully. The value must be
      *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.
-     *
      * @throws IllegalArgumentException if the {@code timeout} is negative
-     * @throws WakeupException if {@link #wakeup()} is called before or while this method is called
-     * @throws InterruptException if the thread is interrupted before or while this method is called
-     * @throws KafkaException for any other error during close
+     * @throws WakeupException          if {@link #wakeup()} is called before or while this method is called
+     * @throws InterruptException       if the thread is interrupted before or while this method is called
+     * @throws KafkaException           for any other error during close
      */
     @Override
     public void close(Duration timeout) {

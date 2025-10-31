@@ -20,49 +20,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Objects;
 
-public class LoggerLevel {
-
-    private final String level;
-    private final Long lastModified;
-
-    public LoggerLevel(
-            @JsonProperty("level") String level,
-            @JsonProperty("last_modified") Long lastModified
-    ) {
-        this.level = Objects.requireNonNull(level, "level may not be null");
-        this.lastModified = lastModified;
-    }
-
-    @JsonProperty
-    public String level() {
-        return level;
-    }
-
-    @JsonProperty("last_modified")
-    public Long lastModified() {
-        return lastModified;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
-        LoggerLevel that = (LoggerLevel) o;
-        return level.equals(that.level) && Objects.equals(lastModified, that.lastModified);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(level, lastModified);
-    }
-
-    @Override
-    public String toString() {
-        return "LoggerLevel{"
-                + "level='" + level + '\''
-                + ", lastModified=" + lastModified
-                + '}';
+public record LoggerLevel(
+    @JsonProperty String level,
+    @JsonProperty("last_modified") Long lastModified
+) {
+    public LoggerLevel {
+        Objects.requireNonNull(level, "level may not be null");
     }
 }

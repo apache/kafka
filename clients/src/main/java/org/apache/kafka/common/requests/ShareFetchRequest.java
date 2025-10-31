@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ShareFetchRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -137,6 +138,12 @@ public class ShareFetchRequest extends AbstractRequest {
 
         @Override
         public ShareFetchRequest build(short version) {
+            if (version < 2) {
+                // The v1 does not support AcknowledgeType RENEW.
+                if (data.isRenewAck()) {
+                    throw new UnsupportedVersionException("The v1 ShareFetch does not support AcknowledgeType.RENEW");
+                }
+            }
             return new ShareFetchRequest(data, version);
         }
 

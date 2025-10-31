@@ -61,9 +61,7 @@ import org.mockito.stubbing.Answer;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -71,7 +69,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 
-import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -174,6 +171,7 @@ public class WorkerSinkTaskThreadedTest {
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
+        workerProps.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         WorkerConfig workerConfig = new StandaloneConfig(workerProps);
         Plugin<Converter> keyConverterPlugin = metrics.wrap(keyConverter, taskId,  true);
         Plugin<Converter> valueConverterPlugin = metrics.wrap(valueConverter, taskId,  false);
@@ -182,7 +180,7 @@ public class WorkerSinkTaskThreadedTest {
                 taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics, keyConverterPlugin,
                 valueConverterPlugin, errorHandlingMetrics, headerConverterPlugin, transformationChain,
                 consumer, pluginLoader, time, RetryWithToleranceOperatorTest.noneOperator(), null, statusBackingStore,
-                Collections::emptyList, null, TestPlugins.noOpLoaderSwap());
+                List::of, null, TestPlugins.noOpLoaderSwap());
         recordsReturned = 0;
     }
 
@@ -460,11 +458,11 @@ public class WorkerSinkTaskThreadedTest {
             return null;
         }).when(sinkTask).put(any(Collection.class));
 
-        doThrow(new IllegalStateException("unassigned topic partition")).when(consumer).pause(singletonList(UNASSIGNED_TOPIC_PARTITION));
-        doAnswer(invocation -> null).when(consumer).pause(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2));
+        doThrow(new IllegalStateException("unassigned topic partition")).when(consumer).pause(List.of(UNASSIGNED_TOPIC_PARTITION));
+        doAnswer(invocation -> null).when(consumer).pause(List.of(TOPIC_PARTITION, TOPIC_PARTITION2));
 
-        doThrow(new IllegalStateException("unassigned topic partition")).when(consumer).resume(singletonList(UNASSIGNED_TOPIC_PARTITION));
-        doAnswer(invocation -> null).when(consumer).resume(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2));
+        doThrow(new IllegalStateException("unassigned topic partition")).when(consumer).resume(List.of(UNASSIGNED_TOPIC_PARTITION));
+        doAnswer(invocation -> null).when(consumer).resume(List.of(TOPIC_PARTITION, TOPIC_PARTITION2));
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
@@ -481,8 +479,8 @@ public class WorkerSinkTaskThreadedTest {
         verifyStopTask();
         verifyTaskGetTopic(3);
 
-        verify(consumer, atLeastOnce()).pause(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2));
-        verify(consumer, atLeastOnce()).resume(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2));
+        verify(consumer, atLeastOnce()).pause(List.of(TOPIC_PARTITION, TOPIC_PARTITION2));
+        verify(consumer, atLeastOnce()).resume(List.of(TOPIC_PARTITION, TOPIC_PARTITION2));
     }
 
     @Test
@@ -557,7 +555,7 @@ public class WorkerSinkTaskThreadedTest {
     }
 
     private void verifyInitializeTask() {
-        verify(consumer).subscribe(eq(singletonList(TOPIC)), rebalanceListener.capture());
+        verify(consumer).subscribe(eq(List.of(TOPIC)), rebalanceListener.capture());
         verify(sinkTask).initialize(sinkTaskContext.capture());
         verify(sinkTask).start(TASK_PROPS);
     }
@@ -570,7 +568,7 @@ public class WorkerSinkTaskThreadedTest {
 
     private void verifyInitialAssignment() {
         verify(sinkTask).open(INITIAL_ASSIGNMENT);
-        verify(sinkTask).put(Collections.emptyList());
+        verify(sinkTask).put(List.of());
     }
 
     private void verifyStopTask() {
@@ -614,7 +612,7 @@ public class WorkerSinkTaskThreadedTest {
 
     @SuppressWarnings("SameParameterValue")
     private void expectRebalanceDuringPoll(long startOffset) {
-        final List<TopicPartition> partitions = Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3);
+        final List<TopicPartition> partitions = List.of(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3);
 
         final Map<TopicPartition, Long> offsets = new HashMap<>();
         offsets.put(TOPIC_PARTITION, startOffset);
@@ -651,7 +649,7 @@ public class WorkerSinkTaskThreadedTest {
             @Override
             public Object answer(InvocationOnMock invocation) {
                 ExpectOffsetCommitCommand commitCommand = commands[index++];
-                // All assigned partitions will have offsets committed, but we've only processed messages/updated 
+                // All assigned partitions will have offsets committed, but we've only processed messages/updated
                 // offsets for one
                 final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit =
                         offsetsToCommitFn.apply(commitCommand.expectedMessages);
@@ -664,7 +662,7 @@ public class WorkerSinkTaskThreadedTest {
             }
         }).when(sinkTask).preCommit(anyMap());
     }
-    
+
     private void expectOffsetCommit(ExpectOffsetCommitCommand... commands) {
         doAnswer(new Answer<>() {
             int index = 0;
@@ -722,19 +720,8 @@ public class WorkerSinkTaskThreadedTest {
     private abstract static class TestSinkTask extends SinkTask {
     }
 
-    private static class ExpectOffsetCommitCommand {
-        final long expectedMessages;
-        final RuntimeException error;
-        final Exception consumerCommitError;
-        final long consumerCommitDelayMs;
-        final boolean invokeCallback;
-
-        private ExpectOffsetCommitCommand(long expectedMessages, RuntimeException error, Exception consumerCommitError, long consumerCommitDelayMs, boolean invokeCallback) {
-            this.expectedMessages = expectedMessages;
-            this.error = error;
-            this.consumerCommitError = consumerCommitError;
-            this.consumerCommitDelayMs = consumerCommitDelayMs;
-            this.invokeCallback = invokeCallback;
-        }
+    private record ExpectOffsetCommitCommand(long expectedMessages, RuntimeException error,
+                                             Exception consumerCommitError, long consumerCommitDelayMs,
+                                             boolean invokeCallback) {
     }
 }

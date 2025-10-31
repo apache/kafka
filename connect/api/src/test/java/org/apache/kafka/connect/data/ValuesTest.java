@@ -30,7 +30,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -903,7 +902,7 @@ public class ValuesTest {
 
         // ISO8601 strings - accept a string matching pattern "yyyy-MM-dd"
         LocalDateTime localTimeTruncated = localTime.truncatedTo(ChronoUnit.DAYS);
-        java.util.Date d3 = Values.convertToDate(Date.SCHEMA, LocalDate.ofEpochDay(days).format(DateTimeFormatter.ISO_LOCAL_DATE));
+        java.util.Date d3 = Values.convertToDate(Date.SCHEMA, localTime.format(DateTimeFormatter.ISO_LOCAL_DATE));
         LocalDateTime date3 = LocalDateTime.ofInstant(Instant.ofEpochMilli(d3.getTime()), ZoneId.systemDefault());
         assertEquals(localTimeTruncated, date3);
 

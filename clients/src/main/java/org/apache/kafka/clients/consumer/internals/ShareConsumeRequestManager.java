@@ -78,7 +78,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private final Logger log;
     private final LogContext logContext;
     private final String groupId;
-    private final ConsumerMetadata metadata;
+    private final ShareConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final FetchConfig fetchConfig;
     protected final ShareFetchBuffer shareFetchBuffer;
@@ -103,7 +103,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     ShareConsumeRequestManager(final Time time,
                                final LogContext logContext,
                                final String groupId,
-                               final ConsumerMetadata metadata,
+                               final ShareConsumerMetadata metadata,
                                final SubscriptionState subscriptions,
                                final FetchConfig fetchConfig,
                                final ShareFetchBuffer shareFetchBuffer,
@@ -758,6 +758,16 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 if (response.error() == Errors.UNKNOWN_TOPIC_ID) {
                     metadata.requestUpdate(false);
                 }
+                // Complete any inFlight acknowledgements with the error code from the response.
+                Map<TopicIdPartition, Acknowledgements> nodeAcknowledgementsInFlight = fetchAcknowledgementsInFlight.get(fetchTarget.id());
+                if (nodeAcknowledgementsInFlight != null) {
+                    nodeAcknowledgementsInFlight.forEach((tip, acks) -> {
+                        acks.complete(Errors.forCode(response.error().code()).exception());
+                        metricsManager.recordFailedAcknowledgements(acks.size());
+                    });
+                    maybeSendShareAcknowledgeCommitCallbackEvent(nodeAcknowledgementsInFlight);
+                    nodeAcknowledgementsInFlight.clear();
+                }
                 return;
             }
 
@@ -775,6 +785,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             final Set<TopicPartition> partitions = responseData.keySet().stream().map(TopicIdPartition::topicPartition).collect(Collectors.toSet());
             final ShareFetchMetricsAggregator shareFetchMetricsAggregator = new ShareFetchMetricsAggregator(metricsManager, partitions);
 
+            List<ShareCompletedFetch> completedFetches = new ArrayList<>(responseData.size());
             Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo = new HashMap<>();
             for (Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData> entry : responseData.entrySet()) {
                 TopicIdPartition tip = entry.getKey();
@@ -805,19 +816,24 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     }
                 }
 
-                ShareCompletedFetch completedFetch = new ShareCompletedFetch(
+                completedFetches.add(
+                    new ShareCompletedFetch(
                         logContext,
                         BufferSupplier.create(),
                         fetchTarget.id(),
                         tip,
                         partitionData,
                         shareFetchMetricsAggregator,
-                        requestVersion);
-                shareFetchBuffer.add(completedFetch);
+                        requestVersion)
+                );
 
                 if (!partitionData.acquiredRecords().isEmpty()) {
                     fetchMoreRecords = false;
                 }
+            }
+
+            if (!completedFetches.isEmpty()) {
+                shareFetchBuffer.add(completedFetches);
             }
 
             // Handle any acknowledgements which were not received in the response for this node.

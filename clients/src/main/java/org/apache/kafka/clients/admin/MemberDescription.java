@@ -28,6 +28,7 @@ import java.util.Optional;
 public class MemberDescription {
     private final String memberId;
     private final Optional<String> groupInstanceId;
+    private final Optional<String> rackId;
     private final String clientId;
     private final String host;
     private final MemberAssignment assignment;
@@ -38,6 +39,7 @@ public class MemberDescription {
     public MemberDescription(
         String memberId,
         Optional<String> groupInstanceId,
+        Optional<String> rackId,
         String clientId,
         String host,
         MemberAssignment assignment,
@@ -47,6 +49,7 @@ public class MemberDescription {
     ) {
         this.memberId = memberId == null ? "" : memberId;
         this.groupInstanceId = groupInstanceId;
+        this.rackId = rackId;
         this.clientId = clientId == null ? "" : clientId;
         this.host = host == null ? "" : host;
         this.assignment = assignment == null ?
@@ -57,9 +60,36 @@ public class MemberDescription {
     }
 
     /**
-     * @deprecated Since 4.0. Use {@link #MemberDescription(String, Optional, String, String, MemberAssignment, Optional, Optional, Optional)} instead.
+     * @deprecated Since 4.2. Use {@link #MemberDescription(String, Optional, Optional, String, String, MemberAssignment, Optional, Optional, Optional)} instead.
      */
-    @Deprecated
+    @Deprecated(since = "4.2", forRemoval = true)
+    public MemberDescription(
+        String memberId,
+        Optional<String> groupInstanceId,
+        String clientId,
+        String host,
+        MemberAssignment assignment,
+        Optional<MemberAssignment> targetAssignment,
+        Optional<Integer> memberEpoch,
+        Optional<Boolean> upgraded
+    ) {
+        this(
+            memberId,
+            groupInstanceId,
+            Optional.empty(),
+            clientId,
+            host,
+            assignment,
+            targetAssignment,
+            memberEpoch,
+            upgraded
+        );
+    }
+
+    /**
+     * @deprecated Since 4.0. Use {@link #MemberDescription(String, Optional, Optional, String, String, MemberAssignment, Optional, Optional, Optional)} instead.
+     */
+    @Deprecated(since = "4.0", forRemoval = true)
     public MemberDescription(
         String memberId,
         Optional<String> groupInstanceId,
@@ -81,9 +111,9 @@ public class MemberDescription {
     }
 
     /**
-     * @deprecated Since 4.0. Use {@link #MemberDescription(String, Optional, String, String, MemberAssignment, Optional, Optional, Optional)} instead.
+     * @deprecated Since 4.0. Use {@link #MemberDescription(String, Optional, Optional, String, String, MemberAssignment, Optional, Optional, Optional)} instead.
      */
-    @Deprecated
+    @Deprecated(since = "4.0", forRemoval = true)
     public MemberDescription(
         String memberId,
         Optional<String> groupInstanceId,
@@ -102,9 +132,9 @@ public class MemberDescription {
     }
 
     /**
-     * @deprecated Since 4.0. Use {@link #MemberDescription(String, Optional, String, String, MemberAssignment, Optional, Optional, Optional)} instead.
+     * @deprecated Since 4.0. Use {@link #MemberDescription(String, Optional, Optional, String, String, MemberAssignment, Optional, Optional, Optional)} instead.
      */
-    @Deprecated
+    @Deprecated(since = "4.0", forRemoval = true)
     public MemberDescription(String memberId,
                              String clientId,
                              String host,
@@ -119,6 +149,7 @@ public class MemberDescription {
         MemberDescription that = (MemberDescription) o;
         return memberId.equals(that.memberId) &&
             groupInstanceId.equals(that.groupInstanceId) &&
+            rackId.equals(that.rackId) &&
             clientId.equals(that.clientId) &&
             host.equals(that.host) &&
             assignment.equals(that.assignment) &&
@@ -129,7 +160,7 @@ public class MemberDescription {
 
     @Override
     public int hashCode() {
-        return Objects.hash(memberId, groupInstanceId, clientId, host, assignment, targetAssignment, memberEpoch, upgraded);
+        return Objects.hash(memberId, groupInstanceId, rackId, clientId, host, assignment, targetAssignment, memberEpoch, upgraded);
     }
 
     /**
@@ -144,6 +175,17 @@ public class MemberDescription {
      */
     public Optional<String> groupInstanceId() {
         return groupInstanceId;
+    }
+
+    /**
+     * The rack id of the group member.
+     * <p>
+     * It is only available for consumer groups using the new consumer group protocol
+     * ({@code group.protocol=consumer}).
+     * <p>
+     */
+    public Optional<String> rackId() {
+        return rackId;
     }
 
     /**
@@ -197,6 +239,7 @@ public class MemberDescription {
     public String toString() {
         return "(memberId=" + memberId +
             ", groupInstanceId=" + groupInstanceId.orElse("null") +
+            ", rackId=" + rackId.orElse("null") +
             ", clientId=" + clientId +
             ", host=" + host +
             ", assignment=" + assignment +

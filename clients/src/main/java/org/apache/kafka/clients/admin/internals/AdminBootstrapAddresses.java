@@ -95,7 +95,7 @@ public final class AdminBootstrapAddresses {
     public String toString() {
         StringBuilder bld = new StringBuilder();
         bld.append("AdminBootstrapAddresses");
-        bld.append("(usingBoostrapControllers=").append(usingBootstrapControllers);
+        bld.append("(usingBootstrapControllers=").append(usingBootstrapControllers);
         bld.append(", addresses=[");
         String prefix = "";
         for (InetSocketAddress address : addresses) {

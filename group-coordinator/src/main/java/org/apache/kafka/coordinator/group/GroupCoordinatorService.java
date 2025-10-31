@@ -1301,7 +1301,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "share-group-offsets-alter",
             request,
             exception,
-            (error, message) -> AlterShareGroupOffsetsRequest.getErrorResponseData(error, message),
+            AlterShareGroupOffsetsRequest::getErrorResponseData,
             log
         ));
     }
@@ -1891,7 +1891,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "initiate-delete-share-group-offsets",
             groupId,
             exception,
-            (error, message) -> DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(error, message),
+            DeleteShareGroupOffsetsRequest::getErrorDeleteResponseData,
             log
         ));
     }
@@ -2332,27 +2332,23 @@ public class GroupCoordinatorService implements GroupCoordinator {
     ) {
         ApiError apiError = ApiError.fromThrowable(exception);
 
-        switch (apiError.error()) {
-            case UNKNOWN_TOPIC_OR_PARTITION:
-            case NOT_ENOUGH_REPLICAS:
-            case REQUEST_TIMED_OUT:
-                // Remap REQUEST_TIMED_OUT to NOT_COORDINATOR, since consumers on versions prior
-                // to 3.9 do not expect the error and won't retry the request. NOT_COORDINATOR
-                // additionally triggers coordinator re-lookup, which is necessary if the client is
-                // talking to a zombie coordinator.
-                //
-                // While handleOperationException does remap UNKNOWN_TOPIC_OR_PARTITION,
-                // NOT_ENOUGH_REPLICAS and REQUEST_TIMED_OUT to COORDINATOR_NOT_AVAILABLE,
-                // COORDINATOR_NOT_AVAILABLE is also not handled by consumers on versions prior to
-                // 3.9.
-                return OffsetFetchResponse.groupError(
-                    request,
-                    Errors.NOT_COORDINATOR,
-                    context.requestVersion()
-                );
-
-            default:
-                return handleOperationException(
+        return switch (apiError.error()) {
+            case UNKNOWN_TOPIC_OR_PARTITION, NOT_ENOUGH_REPLICAS, REQUEST_TIMED_OUT ->
+                    // Remap REQUEST_TIMED_OUT to NOT_COORDINATOR, since consumers on versions prior
+                    // to 3.9 do not expect the error and won't retry the request. NOT_COORDINATOR
+                    // additionally triggers coordinator re-lookup, which is necessary if the client is
+                    // talking to a zombie coordinator.
+                    //
+                    // While handleOperationException does remap UNKNOWN_TOPIC_OR_PARTITION,
+                    // NOT_ENOUGH_REPLICAS and REQUEST_TIMED_OUT to COORDINATOR_NOT_AVAILABLE,
+                    // COORDINATOR_NOT_AVAILABLE is also not handled by consumers on versions prior to
+                    // 3.9.
+                    OffsetFetchResponse.groupError(
+                            request,
+                            Errors.NOT_COORDINATOR,
+                            context.requestVersion()
+                    );
+            default -> handleOperationException(
                     operationName,
                     request,
                     exception,
@@ -2362,8 +2358,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         context.requestVersion()
                     ),
                     log
-                );
-        }
+            );
+        };
     }
 
     private static void requireNonNull(Object obj, String msg) {

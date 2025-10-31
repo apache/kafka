@@ -385,6 +385,7 @@ public class TopologyTestDriver implements Closeable {
                 metrics,
                 "test-client",
                 "processId",
+                "applicationId",
                 mockWallClockTime
         );
         TaskMetrics.droppedRecordsSensor(threadId, TASK_ID.toString(), streamsMetrics);
@@ -605,6 +606,7 @@ public class TopologyTestDriver implements Closeable {
         }
     }
 
+    @SuppressWarnings("removal")
     private void commit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         if (processingMode == EXACTLY_ONCE_V2) {
             testDriverProducer.commitTransaction(offsets, new ConsumerGroupMetadata("dummy-app-id"));

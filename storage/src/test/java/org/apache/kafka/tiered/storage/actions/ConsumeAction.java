@@ -25,6 +25,7 @@ import org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageHistory;
 import org.apache.kafka.tiered.storage.TieredStorageTestAction;
 import org.apache.kafka.tiered.storage.TieredStorageTestContext;
+import org.apache.kafka.tiered.storage.specs.FetchCountAndOp;
 import org.apache.kafka.tiered.storage.specs.RemoteFetchCount;
 import org.apache.kafka.tiered.storage.specs.RemoteFetchSpec;
 
@@ -141,16 +142,16 @@ public final class ConsumeAction implements TieredStorageTestAction {
                     .orElse(events);
 
             RemoteFetchCount remoteFetchCount = remoteFetchSpec.remoteFetchCount();
-            RemoteFetchCount.FetchCountAndOp expectedCountAndOp = switch (eventType) {
+            FetchCountAndOp expectedCountAndOp = switch (eventType) {
                 case FETCH_SEGMENT -> remoteFetchCount.getSegmentFetchCountAndOp();
                 case FETCH_OFFSET_INDEX -> remoteFetchCount.getOffsetIdxFetchCountAndOp();
                 case FETCH_TIME_INDEX -> remoteFetchCount.getTimeIdxFetchCountAndOp();
                 case FETCH_TRANSACTION_INDEX -> remoteFetchCount.getTxnIdxFetchCountAndOp();
-                default -> new RemoteFetchCount.FetchCountAndOp(-1, RemoteFetchCount.OperationType.EQUALS_TO);
+                default -> new FetchCountAndOp(-1, RemoteFetchCount.OperationType.EQUALS_TO);
             };
 
-            RemoteFetchCount.OperationType exceptedOperationType = expectedCountAndOp.getOperationType();
-            int exceptedCount = expectedCountAndOp.getCount();
+            RemoteFetchCount.OperationType exceptedOperationType = expectedCountAndOp.operationType();
+            int exceptedCount = expectedCountAndOp.count();
             int actualCount = eventsInScope.size();
             String message = errorMessage(eventType, actualCount, exceptedOperationType, exceptedCount);
             if (exceptedCount != -1) {

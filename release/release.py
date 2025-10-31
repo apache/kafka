@@ -89,7 +89,7 @@ def get_jdk(version):
     else: jdk_java_home = jdk_env["JAVA_HOME"]
     java_version = execute(f"{jdk_java_home}/bin/java -version", env=jdk_env)
     if (version == 8 and "1.8.0" not in java_version) or \
-       (f"{version}.0" not in java_version and '"{version}"' not in java_version):
+       (f"{version}.0" not in java_version and f'"{version}"' not in java_version):
         preferences.unset(key)
         fail(f"JDK {version} is required")
     return jdk_env
@@ -127,14 +127,17 @@ def command_stage_docs():
     if not os.path.exists(kafka_site_repo_path) or not os.path.exists(os.path.join(kafka_site_repo_path, "powered-by.html")):
         fail("{kafka_site_repo_path} doesn't exist or does not appear to be the kafka-site repository")
 
-    jdk21_env = get_jdk(21)
+    jdk25_env = get_jdk(25)
 
     # We explicitly override the version of the project that we normally get from gradle.properties since we want to be
     # able to run this from a release branch where we made some updates, but the build would show an incorrect SNAPSHOT
     # version due to already having bumped the bugfix version number.
     gradle_version_override = detect_docs_release_version(project_version)
 
-    cmd("Building docs", f"./gradlew -Pversion={gradle_version_override} clean siteDocsTar aggregatedJavadoc", cwd=repo_dir, env=jdk21_env)
+    cmd("Building docs",f"./gradlew -Pversion={gradle_version_override} clean siteDocsTar", cwd=repo_dir, env=jdk25_env,)
+    # Disable parallel execution for aggregatedJavadoc due to Gradle 9 issues
+    cmd("Building docs", f"./gradlew -Pversion={gradle_version_override} aggregatedJavadoc --no-parallel", cwd=repo_dir, env=jdk25_env,)
+
 
     docs_tar = os.path.join(repo_dir, "core", "build", "distributions", f"kafka_2.13-{gradle_version_override}-site-docs.tgz")
 
@@ -218,7 +221,7 @@ def verify_gpg_key():
     if not gpg.key_exists(gpg_key_id):
         fail(f"GPG key {gpg_key_id} not found")
     if not gpg.valid_passphrase(gpg_key_id, gpg_passphrase):
-        fail(f"GPG passprase not valid for key {gpg_key_id}")
+        fail(f"GPG passphrase not valid for key {gpg_key_id}")
 
 
 preferences.once("verify_requirements", lambda: confirm_or_fail(templates.requirements_instructions(preferences.FILE, preferences.as_json())))
@@ -229,15 +232,15 @@ gpg_key_pass_id = gpg.key_pass_id(gpg_key_id, gpg_passphrase)
 preferences.once(f"verify_gpg_key_{gpg_key_pass_id}", verify_gpg_key)
 
 apache_id = preferences.get('apache_id', lambda: prompt("Please enter your apache-id: "))
-jdk21_env = get_jdk(21)
+jdk25_env = get_jdk(25)
 
 
-def verify_prerequeisites():
+def verify_prerequisites():
     print("Begin to check if you have met all the pre-requisites for the release process")
     def prereq(name, soft_check):
         try:
             result = soft_check()
-            if result == False:
+            if not result:
                 fail(f"Pre-requisite not met: {name}")
             else:
                 print(f"Pre-requisite met: {name}")
@@ -245,12 +248,12 @@ def verify_prerequeisites():
             fail(f"Pre-requisite not met: {name}. Error: {e}")
     prereq('Apache Maven CLI (mvn) in PATH', lambda: "Apache Maven" in execute("mvn -v"))
     prereq("svn CLI in PATH", lambda: "svn" in execute("svn --version"))
-    prereq("Verifying that you have no unstaged git changes", lambda: git.has_unstaged_changes())
-    prereq("Verifying that you have no staged git changes", lambda: git.has_staged_changes())
+    prereq("Verifying that you have no unstaged git changes", lambda: git.ensure_no_unstaged_changes())
+    prereq("Verifying that you have no staged git changes", lambda: git.ensure_no_staged_changes())
     return True
 
 
-preferences.once(f"verify_prerequeisites", verify_prerequeisites)
+preferences.once(f"verify_prerequisites", verify_prerequisites)
 
 # Validate that the release doesn't already exist
 git.fetch_tags()
@@ -328,9 +331,9 @@ except Exception as e:
 
 
 git.targz(rc_tag, f"kafka-{release_version}-src/", f"{artifacts_dir}/kafka-{release_version}-src.tgz")
-cmd("Building artifacts", "./gradlew clean && ./gradlew releaseTarGz -PscalaVersion=2.13", cwd=kafka_dir, env=jdk21_env, shell=True)
+cmd("Building artifacts", "./gradlew clean && ./gradlew releaseTarGz -PscalaVersion=2.13", cwd=kafka_dir, env=jdk25_env, shell=True)
 cmd("Copying artifacts", f"cp {kafka_dir}/core/build/distributions/* {artifacts_dir}", shell=True)
-cmd("Building docs", "./gradlew clean aggregatedJavadoc", cwd=kafka_dir, env=jdk21_env)
+cmd("Building docs", "./gradlew clean aggregatedJavadoc --no-parallel", cwd=kafka_dir, env=jdk25_env)
 cmd("Copying docs", f"cp -R {kafka_dir}/build/docs/javadoc {artifacts_dir}")
 
 for filename in os.listdir(artifacts_dir):
@@ -355,12 +358,12 @@ confirm_or_fail(f"Going to check in artifacts to svn under {SVN_DEV_URL}/{rc_tag
 svn.commit_artifacts(rc_tag, artifacts_dir, work_dir)
 
 confirm_or_fail("Going to build and upload mvn artifacts based on these settings:\n" + textfiles.read(global_gradle_props) + '\nOK?')
-cmd("Building and uploading archives", "./gradlew publish -PscalaVersion=2.13", cwd=kafka_dir, env=jdk21_env, shell=True)
-cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=os.path.join(kafka_dir, "streams/quickstart"), env=jdk21_env, shell=True)
+cmd("Building and uploading archives", "./gradlew publish -PscalaVersion=2.13", cwd=kafka_dir, env=jdk25_env, shell=True)
+cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=os.path.join(kafka_dir, "streams/quickstart"), env=jdk25_env, shell=True)
 
 # TODO: Many of these suggested validation steps could be automated
 # and would help pre-validate a lot of the stuff voters test
-print(templates.sanity_check_instructions(release_version, rc_tag, apache_id))
+print(templates.sanity_check_instructions(release_version, rc_tag))
 confirm_or_fail("Have you sufficiently verified the release artifacts?")
 
 # TODO: Can we close the staging repository via a REST API since we
@@ -376,6 +379,5 @@ git.reset_hard_head()
 git.switch_branch(starting_branch)
 git.delete_branch(release_version)
 
-rc_vote_email_text = templates.rc_vote_email_text(release_version, rc, rc_tag, dev_branch, docs_release_version, apache_id)
+rc_vote_email_text = templates.rc_vote_email_text(release_version, rc, rc_tag, dev_branch, docs_release_version)
 print(templates.rc_email_instructions(rc_vote_email_text))
-
