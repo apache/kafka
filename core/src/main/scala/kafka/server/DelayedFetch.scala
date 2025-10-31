@@ -154,9 +154,9 @@ class DelayedFetch(
    * Upon completion, read whatever data is available and pass to the complete callback
    */
   override def onComplete(): Unit = {
-    val fetchInfos = fetchPartitionStatus.asScala.map { case (tp, status) =>
+    val fetchInfos = fetchPartitionStatus.asScala.iterator.map { case (tp, status) =>
       tp -> status.fetchInfo
-    }.toSeq
+    }.toBuffer
 
     val logReadResults = replicaManager.readFromLog(
       params,
