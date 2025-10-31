@@ -65,7 +65,7 @@ import java.util
 import java.util.Optional
 import java.util.concurrent.locks.{Condition, ReentrantLock}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
-import scala.collection.{Map, mutable}
+import scala.collection.Map
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
 
@@ -163,7 +163,7 @@ class BrokerServer(
 
   var persister: Persister = _
 
-  private val brokerReadyCallbacks = new mutable.ListBuffer[BrokerReadyCallback]()
+  private val brokerReadyCallbacks: util.List[BrokerReadyCallback] = new util.ArrayList[BrokerReadyCallback]()
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -601,7 +601,7 @@ class BrokerServer(
         "all of the SocketServer Acceptors to be started",
         enableRequestProcessingFuture, startupDeadline, time)
 
-      brokerReadyCallbacks.foreach { callback =>
+      brokerReadyCallbacks.forEach { callback =>
         try {
           callback.onBrokerReady()
         } catch {
@@ -621,7 +621,7 @@ class BrokerServer(
   }
 
   def registerBrokerReadyCallback(callback: BrokerReadyCallback): Unit = {
-    brokerReadyCallbacks += callback
+    brokerReadyCallbacks.add(callback)
   }
 
   private def createGroupCoordinator(): GroupCoordinator = {
