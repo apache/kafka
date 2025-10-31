@@ -60,12 +60,12 @@ class DockerSanityTest(unittest.TestCase):
         return False
         
     def produce_message(self, topic, producer_config, key, value):
-        command = ["echo", f'"{key}:{value}"', "|", f"{self.FIXTURES_DIR}/{constants.KAFKA_CONSOLE_PRODUCER}", "--topic", topic, "--property", "'parse.key=true'", "--property", "'key.separator=:'", "--timeout", f"{constants.CLIENT_TIMEOUT}"]
+        command = ["echo", f'"{key}:{value}"', "|", f"{self.FIXTURES_DIR}/{constants.KAFKA_CONSOLE_PRODUCER}", "--topic", topic, "--reader-property", "'parse.key=true'", "--reader-property", "'key.separator=:'", "--timeout", f"{constants.CLIENT_TIMEOUT}"]
         command.extend(producer_config)
         subprocess.run(["bash", "-c", " ".join(command)])
     
     def consume_message(self, topic, consumer_config):
-        command = [f"{self.FIXTURES_DIR}/{constants.KAFKA_CONSOLE_CONSUMER}", "--topic", topic, "--property", "'print.key=true'", "--property", "'key.separator=:'", "--from-beginning", "--max-messages", "1", "--timeout-ms", f"{constants.CLIENT_TIMEOUT}"]
+        command = [f"{self.FIXTURES_DIR}/{constants.KAFKA_CONSOLE_CONSUMER}", "--topic", topic, "--formatter-property", "'print.key=true'", "--formatter-property", "'key.separator=:'", "--from-beginning", "--max-messages", "1", "--timeout-ms", f"{constants.CLIENT_TIMEOUT}"]
         command.extend(consumer_config)
         message = subprocess.check_output(["bash", "-c", " ".join(command)])
         return message.decode("utf-8").strip()
@@ -93,9 +93,9 @@ class DockerSanityTest(unittest.TestCase):
             errors.append(constants.BROKER_METRICS_ERROR_PREFIX + str(e))
             return errors
 
-        producer_config = ["--bootstrap-server", "localhost:9092", "--property", "client.id=host"]
+        producer_config = ["--bootstrap-server", "localhost:9092", "--command-property", "client.id=host"]
         self.produce_message(constants.BROKER_METRICS_TEST_TOPIC, producer_config, "key", "message")
-        consumer_config = ["--bootstrap-server", "localhost:9092", "--property", "auto.offset.reset=earliest"]
+        consumer_config = ["--bootstrap-server", "localhost:9092", "--command-property", "auto.offset.reset=earliest"]
         message = self.consume_message(constants.BROKER_METRICS_TEST_TOPIC, consumer_config)
         try:
             self.assertEqual(message, "key:message")
@@ -129,13 +129,13 @@ class DockerSanityTest(unittest.TestCase):
             return errors
 
         producer_config = ["--bootstrap-server", ssl_broker_port,
-                           "--producer.config", f"{self.FIXTURES_DIR}/{constants.SSL_CLIENT_CONFIG}"]
+                           "--command-config", f"{self.FIXTURES_DIR}/{constants.SSL_CLIENT_CONFIG}"]
         self.produce_message(topic, producer_config, "key", "message")
 
         consumer_config = [
             "--bootstrap-server", ssl_broker_port,
-            "--property", "auto.offset.reset=earliest",
-            "--consumer.config", f"{self.FIXTURES_DIR}/{constants.SSL_CLIENT_CONFIG}",
+            "--command-property", "auto.offset.reset=earliest",
+            "--command-config", f"{self.FIXTURES_DIR}/{constants.SSL_CLIENT_CONFIG}",
         ]
         message = self.consume_message(topic, consumer_config)
         try:
@@ -155,7 +155,7 @@ class DockerSanityTest(unittest.TestCase):
             errors.append(constants.BROKER_RESTART_ERROR_PREFIX + str(e))
             return errors
         
-        producer_config = ["--bootstrap-server", "localhost:9092", "--property", "client.id=host"]
+        producer_config = ["--bootstrap-server", "localhost:9092", "--command-property", "client.id=host"]
         self.produce_message(constants.BROKER_RESTART_TEST_TOPIC, producer_config, "key", "message")
 
         print("Stopping Container")
@@ -163,7 +163,7 @@ class DockerSanityTest(unittest.TestCase):
         print("Resuming Container")
         self.resume_container()
 
-        consumer_config = ["--bootstrap-server", "localhost:9092", "--property", "auto.offset.reset=earliest"]
+        consumer_config = ["--bootstrap-server", "localhost:9092", "--command-property", "auto.offset.reset=earliest"]
         message = self.consume_message(constants.BROKER_RESTART_TEST_TOPIC, consumer_config)
         try:
             self.assertEqual(message, "key:message")

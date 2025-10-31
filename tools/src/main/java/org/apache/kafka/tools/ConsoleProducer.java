@@ -129,10 +129,16 @@ public class ConsoleProducer {
         private final OptionSpec<Integer> maxPartitionMemoryBytesOpt;
         private final OptionSpec<String> messageReaderOpt;
         private final OptionSpec<Integer> socketBufferSizeOpt;
+        @Deprecated(since = "4.2", forRemoval = true)
         private final OptionSpec<String> propertyOpt;
+        private OptionSpec<String> readerPropertyOpt;
         private final OptionSpec<String> readerConfigOpt;
+        @Deprecated(since = "4.2", forRemoval = true)
         private final OptionSpec<String> producerPropertyOpt;
+        private OptionSpec<String> commandPropertyOpt;
+        @Deprecated(since = "4.2", forRemoval = true)
         private final OptionSpec<String> producerConfigOpt;
+        private OptionSpec<String> commandConfigOpt;
 
         public ConsoleProducerOptions(String[] args) {
             super(args);
@@ -226,6 +232,28 @@ public class ConsoleProducer {
                     .ofType(Integer.class)
                     .defaultsTo(1024 * 100);
             propertyOpt = parser.accepts("property",
+                            "(DEPRECATED) A mechanism to pass user-defined properties in the form key=value to the message reader. This allows custom configuration for a user-defined message reader." +
+                                    "\nDefault properties include:" +
+                                    "\n parse.key=false" +
+                                    "\n parse.headers=false" +
+                                    "\n ignore.error=false" +
+                                    "\n key.separator=\\t" +
+                                    "\n headers.delimiter=\\t" +
+                                    "\n headers.separator=," +
+                                    "\n headers.key.separator=:" +
+                                    "\n null.marker=   When set, any fields (key, value and headers) equal to this will be replaced by null" +
+                                    "\nDefault parsing pattern when:" +
+                                    "\n parse.headers=true and parse.key=true:" +
+                                    "\n  \"h1:v1,h2:v2...\\tkey\\tvalue\"" +
+                                    "\n parse.key=true:" +
+                                    "\n  \"key\\tvalue\"" +
+                                    "\n parse.headers=true:" +
+                                    "\n  \"h1:v1,h2:v2...\\tvalue\"" +
+                                    "\n This option will be removed in a future version. Use --reader-property instead.")
+                    .withRequiredArg()
+                    .describedAs("prop")
+                    .ofType(String.class);
+            readerPropertyOpt = parser.accepts("reader-property",
                             "A mechanism to pass user-defined properties in the form key=value to the message reader. This allows custom configuration for a user-defined message reader." +
                                     "\nDefault properties include:" +
                                     "\n parse.key=false" +
@@ -246,15 +274,24 @@ public class ConsoleProducer {
                     .withRequiredArg()
                     .describedAs("prop")
                     .ofType(String.class);
-            readerConfigOpt = parser.accepts("reader-config", "Config properties file for the message reader. Note that " + propertyOpt + " takes precedence over this config.")
+            readerConfigOpt = parser.accepts("reader-config", "Config properties file for the message reader. Note that " + readerPropertyOpt + " takes precedence over this config.")
                     .withRequiredArg()
                     .describedAs("config file")
                     .ofType(String.class);
-            producerPropertyOpt = parser.accepts("producer-property", "A mechanism to pass user-defined properties in the form key=value to the producer. ")
+            producerPropertyOpt = parser.accepts("producer-property", "(DEPRECATED) Producer config properties in the form key=value. " +
+                            "This option will be removed in a future version. Use --command-property instead.")
                     .withRequiredArg()
                     .describedAs("producer_prop")
                     .ofType(String.class);
-            producerConfigOpt = parser.accepts("producer.config", "Producer config properties file. Note that " + producerPropertyOpt + " takes precedence over this config.")
+            commandPropertyOpt = parser.accepts("command-property", "Producer config properties in the form key=value.")
+                    .withRequiredArg()
+                    .describedAs("producer_prop")
+                    .ofType(String.class);
+            producerConfigOpt = parser.accepts("producer.config", "(DEPRECATED) Producer config properties file. Note that " + commandPropertyOpt + " takes precedence over this config. This option will be removed in a future version. Use --command-config instead.")
+                    .withRequiredArg()
+                    .describedAs("config file")
+                    .ofType(String.class);
+            commandConfigOpt = parser.accepts("command-config", "Producer config properties file. Note that " + commandPropertyOpt + " takes precedence over this config.")
                     .withRequiredArg()
                     .describedAs("config file")
                     .ofType(String.class);
@@ -272,6 +309,31 @@ public class ConsoleProducer {
             CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to read data from standard input and publish it to Kafka.");
 
             CommandLineUtils.checkRequiredArgs(parser, options, topicOpt);
+
+            if (options.has(commandConfigOpt) && options.has(producerConfigOpt)) {
+                CommandLineUtils.printUsageAndExit(parser, "Options --command-config and --producer.config cannot be specified together.");
+            }
+            if (options.has(commandPropertyOpt) && options.has(producerPropertyOpt)) {
+                CommandLineUtils.printUsageAndExit(parser, "Options --command-property and --producer-property cannot be specified together.");
+            }
+            if (options.has(readerPropertyOpt) && options.has(propertyOpt)) {
+                CommandLineUtils.printUsageAndExit(parser, "Options --reader-property and --property cannot be specified together.");
+            }
+
+            if (options.has(producerPropertyOpt)) {
+                System.out.println("Warning: --producer-property is deprecated and will be removed in a future version. Use --command-property instead.");
+                commandPropertyOpt = producerPropertyOpt;
+            }
+
+            if (options.has(producerConfigOpt)) {
+                System.out.println("Warning: --producer.config is deprecated and will be removed in a future version. Use --command-config instead.");
+                commandConfigOpt = producerConfigOpt;
+            }
+
+            if (options.has(propertyOpt)) {
+                System.out.println("Warning: --property is deprecated and will be removed in a future version. Use --reader-property instead.");
+                readerPropertyOpt = propertyOpt;
+            }
 
             try {
                 ToolsUtils.validateBootstrapServer(options.valueOf(bootstrapServerOpt));
@@ -306,7 +368,7 @@ public class ConsoleProducer {
             }
 
             properties.put("topic", options.valueOf(topicOpt));
-            properties.putAll(propsToStringMap(parseKeyValueArgs(options.valuesOf(propertyOpt))));
+            properties.putAll(propsToStringMap(parseKeyValueArgs(options.valuesOf(readerPropertyOpt))));
 
             return properties;
         }
@@ -314,11 +376,11 @@ public class ConsoleProducer {
         Properties producerProps() throws IOException {
             Properties props = new Properties();
 
-            if (options.has(producerConfigOpt)) {
-                props.putAll(loadProps(options.valueOf(producerConfigOpt)));
+            if (options.has(commandConfigOpt)) {
+                props.putAll(loadProps(options.valueOf(commandConfigOpt)));
             }
 
-            props.putAll(parseKeyValueArgs(options.valuesOf(producerPropertyOpt)));
+            props.putAll(parseKeyValueArgs(options.valuesOf(commandPropertyOpt)));
             props.put(BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOpt));
             props.put(COMPRESSION_TYPE_CONFIG, compressionCodec());
 

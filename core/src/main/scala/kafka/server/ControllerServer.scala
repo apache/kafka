@@ -20,13 +20,13 @@ package kafka.server
 import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicConfigPublisher, DynamicTopicClusterQuotaPublisher, KRaftMetadataCachePublisher}
 
 import scala.collection.immutable
-import kafka.server.metadata.{ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, DynamicTopicClusterQuotaPublisher, KRaftMetadataCachePublisher, ScramPublisher}
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.internals.Plugin
-import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
@@ -38,14 +38,15 @@ import org.apache.kafka.image.publisher.{ControllerRegistrationsPublisher, Metad
 import org.apache.kafka.metadata.{KafkaConfigSchema, KRaftMetadataCache, ListenerInfo}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
-import org.apache.kafka.metadata.publisher.{AclPublisher, FeaturesPublisher}
+import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, FeaturesPublisher, ScramPublisher}
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.security.CredentialProvider
-import org.apache.kafka.server.{DelegationTokenManager, ProcessRole, SimpleApiVersionManager}
+import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
+import org.apache.kafka.server.{ProcessRole, SimpleApiVersionManager}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.config.ServerLogConfigs.{ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion, NodeToControllerChannelManager}
-import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
+import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.server.config.DelegationTokenManagerConfigs
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
@@ -70,7 +71,10 @@ class ControllerServer(
 
   import kafka.server.Server._
 
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+  private val metricsPackage = "kafka.server"
+  private val metricsClassName = "ControllerServer"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   val config = sharedServer.controllerConfig
   val logContext = new LogContext(s"[ControllerServer id=${config.nodeId}] ")
@@ -145,7 +149,7 @@ class ControllerServer(
 
       metadataCachePublisher = new KRaftMetadataCachePublisher(metadataCache)
 
-      featuresPublisher = new FeaturesPublisher(logContext)
+      featuresPublisher = new FeaturesPublisher(logContext, sharedServer.metadataPublishingFaultHandler)
 
       registrationsPublisher = new ControllerRegistrationsPublisher()
 
@@ -282,13 +286,14 @@ class ControllerServer(
         registrationsPublisher,
         apiVersionManager,
         metadataCache)
-      controllerApisHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
+      controllerApisHandlerPool = sharedServer.requestHandlerPoolFactory.createPool(
+        config.nodeId,
         socketServer.dataPlaneRequestChannel,
         controllerApis,
         time,
         config.numIoThreads,
-        "RequestHandlerAvgIdlePercent",
-        "controller")
+        "controller"
+      )
 
       // Set up the metadata cache publisher.
       metadataPublishers.add(metadataCachePublisher)
@@ -333,7 +338,7 @@ class ControllerServer(
       // Set up the client quotas publisher. This will enable controller mutation quotas and any
       // other quotas which are applicable.
       metadataPublishers.add(new DynamicClientQuotaPublisher(
-        config,
+        config.nodeId,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
         clientQuotaMetadataManager
@@ -350,7 +355,7 @@ class ControllerServer(
 
       // Set up the SCRAM publisher.
       metadataPublishers.add(new ScramPublisher(
-        config,
+        config.nodeId,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
         credentialProvider
@@ -360,7 +365,7 @@ class ControllerServer(
       // We need a tokenManager for the Publisher
       // The tokenCache in the tokenManager is the same used in DelegationTokenControlManager
       metadataPublishers.add(new DelegationTokenPublisher(
-          config,
+          config.nodeId,
           sharedServer.metadataPublishingFaultHandler,
           "controller",
           new DelegationTokenManager(delegationTokenManagerConfigs, tokenCache)

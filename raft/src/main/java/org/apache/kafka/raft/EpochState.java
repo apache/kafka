@@ -59,4 +59,11 @@ public interface EpochState extends Closeable {
      * User-friendly description of the state
      */
     String name();
+
+    /**
+     * Since all subclasses implement the Closeable interface while none throw any IOException,
+     * this implementation is provided to eliminate the need for exception handling in the close operation.
+     */
+    @Override
+    void close();
 }

@@ -58,6 +58,7 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
@@ -66,6 +67,7 @@ import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
 
@@ -357,10 +359,41 @@ public class ShareConsumerTest {
             TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
                 DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records for share consumer");
 
-            TestUtils.waitForCondition(() -> {
-                shareConsumer.poll(Duration.ofMillis(500));
-                return partitionOffsetsMap.containsKey(tp);
-            }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to receive call to callback");
+            // The callback should be called before the return of the poll, even when there are no more records.
+            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2000));
+            assertEquals(0, records.count());
+            assertTrue(partitionOffsetsMap.containsKey(tp));
+
+            // We expect no exception as the acknowledgement error code is null.
+            assertFalse(partitionExceptionMap.containsKey(tp));
+            verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
+    @ClusterTest
+    public void testAcknowledgementCommitCallbackSuccessfulAcknowledgementOnCommitSync() throws Exception {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
+
+            Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
+            Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+
+            producer.send(record);
+            producer.flush();
+
+            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, partitionExceptionMap));
+            shareConsumer.subscribe(Set.of(tp.topic()));
+
+            TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
+                DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records for share consumer");
+
+            // The acknowledgement commit callback should be called before the commitSync returns
+            // once the records have been confirmed to have been acknowledged.
+            Map<TopicIdPartition, Optional<KafkaException>> result = shareConsumer.commitSync();
+            assertEquals(1, result.size());
+            assertTrue(partitionOffsetsMap.containsKey(tp));
 
             // We expect no exception as the acknowledgement error code is null.
             assertFalse(partitionExceptionMap.containsKey(tp));
@@ -467,6 +500,8 @@ public class ShareConsumerTest {
             int numRecords = 1;
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             record.headers().add("headerKey", "headerValue".getBytes());
+            record.headers().add("headerKey2", "headerValue2".getBytes());
+            record.headers().add("headerKey3", "headerValue3".getBytes());
             producer.send(record);
             producer.flush();
 
@@ -475,11 +510,15 @@ public class ShareConsumerTest {
             List<ConsumerRecord<byte[], byte[]>> records = consumeRecords(shareConsumer, numRecords);
             assertEquals(numRecords, records.size());
 
-            for (ConsumerRecord<byte[], byte[]> consumerRecord : records) {
-                Header header = consumerRecord.headers().lastHeader("headerKey");
-                if (header != null)
-                    assertEquals("headerValue", new String(header.value()));
-            }
+            Header header = records.get(0).headers().lastHeader("headerKey");
+            assertEquals("headerValue", new String(header.value()));
+
+            // Test the order of headers in a record is preserved when producing and consuming
+            Header[] headers = records.get(0).headers().toArray();
+            assertEquals("headerKey", headers[0].key());
+            assertEquals("headerKey2", headers[1].key());
+            assertEquals("headerKey3", headers[2].key());
+
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
@@ -1582,6 +1621,7 @@ public class ShareConsumerTest {
      * Test to verify that the acknowledgement commit callback can throw an exception, and it is propagated
      * to the caller of poll().
      */
+    @Flaky("KAFKA-19840") // https://issues.apache.org/jira/browse/KAFKA-19840
     @ClusterTest
     public void testAcknowledgementCommitCallbackThrowsException() throws InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
@@ -2296,6 +2336,7 @@ public class ShareConsumerTest {
         verifyShareGroupStateTopicRecordsProduced();
     }
 
+    @Disabled("KAFKA-19840") // https://issues.apache.org/jira/browse/KAFKA-19840
     @ClusterTest(
         brokers = 1,
         serverProperties = {
