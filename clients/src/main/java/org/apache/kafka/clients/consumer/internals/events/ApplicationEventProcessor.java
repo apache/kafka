@@ -514,7 +514,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * Process event that tells the share consume request manager to fetch more records.
      */
     private void process(final ShareFetchEvent event) {
-        requestManagers.shareConsumeRequestManager.ifPresent(scrm -> scrm.fetch(event.acknowledgementsMap(), event.controlRecordAcknowledgements()));
+        requestManagers.shareConsumeRequestManager.ifPresent(scrm -> scrm.fetch(event.acknowledgementsMap()));
     }
 
     /**

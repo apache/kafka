@@ -656,30 +656,30 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     private ShareFetch<K, V> collect(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
         if (currentFetch.isEmpty()) {
             final ShareFetch<K, V> fetch = fetchCollector.collect(fetchBuffer);
-            if (fetch.isEmpty() && shouldSendShareFetchEvent) {
-                // Check for any acknowledgements which could have come from control records (GAP) and include them.
-                applicationEventHandler.add(new ShareFetchEvent(acknowledgementsMap, fetch.takeAcknowledgedRecords()));
-                shouldSendShareFetchEvent = false;
+            if (fetch.isEmpty()) {
+                Map<TopicIdPartition, NodeAcknowledgements> controlRecordAcknowledgements = fetch.takeAcknowledgedRecords();
 
-                // Notify the network thread to wake up and start the next round of fetching
-                applicationEventHandler.wakeupNetworkThread();
+                if (!controlRecordAcknowledgements.isEmpty()) {
+                    // Asynchronously commit any waiting acknowledgements from control records.
+                    sendShareAcknowledgeAsyncEvent(controlRecordAcknowledgements);
+                }
+                // We only send one ShareFetchEvent per poll call.
+                if (shouldSendShareFetchEvent) {
+                    // Check for any acknowledgements which could have come from control records (GAP) and include them.
+                    applicationEventHandler.add(new ShareFetchEvent(acknowledgementsMap));
+                    shouldSendShareFetchEvent = false;
+                    // Notify the network thread to wake up and start the next round of fetching
+                    applicationEventHandler.wakeupNetworkThread();
+                }
             } else if (!acknowledgementsMap.isEmpty()) {
                 // Asynchronously commit any waiting acknowledgements
-                Timer timer = time.timer(defaultApiTimeoutMs);
-                applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap, calculateDeadlineMs(timer)));
-
-                // Notify the network thread to wake up and start the next round of fetching
-                applicationEventHandler.wakeupNetworkThread();
+                sendShareAcknowledgeAsyncEvent(acknowledgementsMap);
             }
             return fetch;
         } else {
             if (!acknowledgementsMap.isEmpty()) {
                 // Asynchronously commit any waiting acknowledgements
-                Timer timer = time.timer(defaultApiTimeoutMs);
-                applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap, calculateDeadlineMs(timer)));
-
-                // Notify the network thread to wake up and start the next round of fetching
-                applicationEventHandler.wakeupNetworkThread();
+                sendShareAcknowledgeAsyncEvent(acknowledgementsMap);
             }
             if (acknowledgementMode == ShareAcknowledgementMode.EXPLICIT) {
                 // We cannot leave unacknowledged records in EXPLICIT acknowledgement mode, so we throw an exception to the application.
@@ -687,6 +687,14 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             }
             return currentFetch;
         }
+    }
+
+    private void sendShareAcknowledgeAsyncEvent(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
+        Timer timer = time.timer(defaultApiTimeoutMs);
+        applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap, calculateDeadlineMs(timer)));
+
+        // Notify the network thread to wake up and start the next round of fetching
+        applicationEventHandler.wakeupNetworkThread();
     }
 
     /**
