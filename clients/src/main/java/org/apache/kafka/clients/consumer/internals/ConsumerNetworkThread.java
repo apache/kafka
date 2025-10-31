@@ -128,9 +128,8 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             try {
                 initializeResources();
             } catch (Throwable t) {
-                maybeSetInitializationError(
-                    new KafkaException("Consumer network thread resource initialization failed", t)
-                );
+                KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(t);
+                maybeSetInitializationError(e);
                 cleanup();
                 return;
             } finally {
