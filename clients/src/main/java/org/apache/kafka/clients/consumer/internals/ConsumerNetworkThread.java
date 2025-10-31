@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
@@ -25,6 +26,7 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.IdempotentCloser;
@@ -48,6 +50,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
+
+import javax.security.auth.spi.LoginModule;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
@@ -100,7 +104,22 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         this.asyncConsumerMetrics = asyncConsumerMetrics;
     }
 
-    public void awaitInitialization(int timeoutMs) {
+    /**
+     * Start the network thread and let it complete its initialization before proceeding. The
+     * {@link ClassicKafkaConsumer} constructor blocks during creation of its {@link NetworkClient}, providing
+     * precedent for waiting here.
+     *
+     * In certain cases (e.g. an invalid {@link LoginModule} in {@link SaslConfigs#SASL_JAAS_CONFIG}), an error
+     * could be thrown during {@link #initializeResources()}. This would result in the {@link #run()} method
+     * exiting, no longer able to process events, which means that the consumer effectively hangs.
+     *
+     * @param timeoutMs Length of time, in milliseconds, to wait for the thread to start and complete initialization
+     */
+    public void start(int timeoutMs) {
+        // start() is invoked internally instead of by the caller to avoid SpotBugs errors about starting a thread
+        // in a constructor.
+        start();
+
         try {
             if (!initializationLatch.await(timeoutMs, TimeUnit.MILLISECONDS)) {
                 maybeSetInitializationError(
@@ -130,7 +149,8 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             } catch (Throwable t) {
                 KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(t);
                 maybeSetInitializationError(e);
-                cleanup();
+
+                // This will still call cleanup() via the `finally` section below.
                 return;
             } finally {
                 initializationLatch.countDown();

@@ -71,15 +71,7 @@ public class ApplicationEventHandler implements Closeable {
                 requestManagersSupplier,
                 asyncConsumerMetrics);
 
-        // Start the network thread and let it complete its initialization before proceeding. The ClassicKafkaConsumer
-        // constructor blocks during creation of its NetworkClient, thus providing a precedent for waiting here.
-        //
-        // In certain cases (e.g. an invalid javax.security.auth.spi.LoginModule in sasl.jaas.config), an error
-        // could be thrown during ConsumerNetworkThread.initializeResources(). This would result in the
-        // ConsumerNetworkThread.run() method exiting, no longer able to process events, which means that the consumer
-        // effectively hangs.
-        this.networkThread.start();
-        this.networkThread.awaitInitialization(initializationTimeoutMs);
+        this.networkThread.start(initializationTimeoutMs);
     }
 
     /**
