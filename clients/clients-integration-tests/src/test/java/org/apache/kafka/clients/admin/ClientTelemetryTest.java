@@ -67,12 +67,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ClientTelemetryTest {
 
     @ClusterTest(
-        types = Type.KRAFT,
-        brokers = 3,
-        serverProperties = {
-            @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.clients.admin.ClientTelemetryTest$TelemetryExporter"),
-        }
-    )
+            types = Type.KRAFT,
+            brokers = 3,
+            serverProperties = {
+                @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.clients.admin.ClientTelemetryTest$TelemetryExporter"),
+            })
     public void testClientInstanceId(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         Map<String, Object> configs = new HashMap<>();
         configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
