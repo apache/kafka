@@ -880,41 +880,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * is made during each invocation to see if the <em>inflight</em> event has completed. If it has, it will be
      * processed accordingly.
      */
-    @SuppressWarnings({"CyclomaticComplexity"})
-    public void checkInflightPoll(Timer timer, boolean firstPass) {
-        // Handle the case where there's an inflight poll from the *previous* invocation of AsyncKafkaConsumer.poll().
+    private void checkInflightPoll(Timer timer, boolean firstPass) {
         if (firstPass && inflightPoll != null) {
-            if (inflightPoll.isComplete()) {
-                Optional<KafkaException> errorOpt = inflightPoll.error();
-
-                if (errorOpt.isPresent()) {
-                    // If the previous inflight event is complete, check if it resulted in an error. If there was
-                    // an error, throw it without delay.
-                    log.trace("Previous inflight event {} completed with an error, clearing", inflightPoll);
-                    inflightPoll = null;
-                    throw errorOpt.get();
-                } else {
-                    if (fetchBuffer.isEmpty()) {
-                        // If it completed without error, but without populating the fetch buffer, clear the event
-                        // so that a new event will be enqueued below.
-                        log.trace("Previous inflight event {} completed without filling the buffer, clearing", inflightPoll);
-                        inflightPoll = null;
-                    } else {
-                        // However, if the event completed, and it populated the buffer, *don't* create a new event.
-                        // This is to prevent an edge case of starvation when poll() is called with a timeout of 0.
-                        // If a new event was created on *every* poll, each time the event would have to complete the
-                        // validate positions stage before the data in the fetch buffer is used. Because there is
-                        // no blocking, and effectively a 0 wait, the data in the fetch buffer is continuously ignored
-                        // leading to no data ever being returned from poll().
-                        log.trace("Previous inflight event {} completed and filled the buffer, not clearing", inflightPoll);
-                    }
-                }
-            } else if (time.milliseconds() >= inflightPoll.deadlineMs() && inflightPoll.isValidatePositionsComplete()) {
-                // Although the previous event passed the validate positions stage, it has expired. Since there's no
-                // result to check, clear out the event so that a new one will be enqueued below.
-                log.trace("Previous inflight event {} incomplete and expired, clearing", inflightPoll);
-                inflightPoll = null;
-            }
+            // Handle the case where there's a remaining inflight poll from the *previous* invocation
+            // of AsyncKafkaConsumer.poll().
+            maybeClearPreviousInflightPoll();
         }
 
         boolean newlySubmittedEvent = false;
@@ -922,15 +892,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         if (inflightPoll == null) {
             inflightPoll = new AsyncPollEvent(calculateDeadlineMs(timer), time.milliseconds());
             newlySubmittedEvent = true;
-
-            if (log.isTraceEnabled()) {
-                log.trace(
-                    "Inflight event {} submitted with {} remaining on timer",
-                    inflightPoll,
-                    timer.remainingMs()
-                );
-            }
-
+            log.trace("Inflight event {} submitted", inflightPoll);
             applicationEventHandler.add(inflightPoll);
         }
 
@@ -939,40 +901,75 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // the inflight event is cleared.
             offsetCommitCallbackInvoker.executeCallbacks();
             processBackgroundEvents();
-
-            if (inflightPoll.isComplete()) {
-                Optional<KafkaException> errorOpt = inflightPoll.error();
-
-                // The async poll event has completed, either successfully or not. In either case, clear out the
-                // inflight request.
-                log.trace("Inflight event {} completed, clearing", inflightPoll);
-                inflightPoll = null;
-
-                if (errorOpt.isPresent()) {
-                    throw errorOpt.get();
-                }
-            } else if (!newlySubmittedEvent) {
-                if (time.milliseconds() >= inflightPoll.deadlineMs() && inflightPoll.isValidatePositionsComplete()) {
-                    // The inflight event inflight validated positions, but it has expired.
-                    log.trace("Inflight event {} expired without completing, clearing", inflightPoll);
-                    inflightPoll = null;
-                } else {
-                    if (log.isTraceEnabled()) {
-                        log.trace(
-                            "Inflight event {} is incomplete with {} remaining on timer",
-                            inflightPoll,
-                            timer.remainingMs()
-                        );
-                    }
-                }
-            }
         } catch (Throwable t) {
-            // If an exception is hit in the offset commit callbacks, the background events, or the event result,
+            // If an exception was thrown during execution of offset commit callbacks or background events,
             // bubble it up to the user but make sure to clear out the inflight request because the error effectively
             // renders it complete.
             log.trace("Inflight event {} failed due to {}, clearing", inflightPoll, String.valueOf(t));
             inflightPoll = null;
             throw ConsumerUtils.maybeWrapAsKafkaException(t);
+        }
+
+        if (inflightPoll != null) {
+            maybeClearCurrentInflightPoll(newlySubmittedEvent);
+        }
+    }
+
+    private void maybeClearPreviousInflightPoll() {
+        if (inflightPoll.isComplete()) {
+            Optional<KafkaException> errorOpt = inflightPoll.error();
+
+            if (errorOpt.isPresent()) {
+                // If the previous inflight event is complete, check if it resulted in an error. If there was
+                // an error, throw it without delay.
+                KafkaException error = errorOpt.get();
+                log.trace("Previous inflight event {} completed with an error ({}), clearing", inflightPoll, error);
+                inflightPoll = null;
+                throw error;
+            } else {
+                // Successful case...
+                if (fetchBuffer.isEmpty()) {
+                    // If it completed without error, but without populating the fetch buffer, clear the event
+                    // so that a new event will be enqueued below.
+                    log.trace("Previous inflight event {} completed without filling the buffer, clearing", inflightPoll);
+                    inflightPoll = null;
+                } else {
+                    // However, if the event completed, and it populated the buffer, *don't* create a new event.
+                    // This is to prevent an edge case of starvation when poll() is called with a timeout of 0.
+                    // If a new event was created on *every* poll, each time the event would have to complete the
+                    // validate positions stage before the data in the fetch buffer is used. Because there is
+                    // no blocking, and effectively a 0 wait, the data in the fetch buffer is continuously ignored
+                    // leading to no data ever being returned from poll().
+                    log.trace("Previous inflight event {} completed and filled the buffer, not clearing", inflightPoll);
+                }
+            }
+        } else if (inflightPoll.isExpired(time) && inflightPoll.isValidatePositionsComplete()) {
+            // The inflight event inflight validated positions, but it has expired.
+            log.trace("Previous inflight event {} expired without completing, clearing", inflightPoll);
+            inflightPoll = null;
+        }
+    }
+
+    private void maybeClearCurrentInflightPoll(boolean newlySubmittedEvent) {
+        if (inflightPoll.isComplete()) {
+            Optional<KafkaException> errorOpt = inflightPoll.error();
+
+            if (errorOpt.isPresent()) {
+                // If the inflight event completed with an error, throw it without delay.
+                KafkaException error = errorOpt.get();
+                log.trace("Inflight event {} completed with an error ({}), clearing", inflightPoll, error);
+                inflightPoll = null;
+                throw error;
+            } else {
+                log.trace("Inflight event {} completed without error, clearing", inflightPoll);
+                inflightPoll = null;
+            }
+        } else if (!newlySubmittedEvent) {
+            if (inflightPoll.isExpired(time) && inflightPoll.isValidatePositionsComplete()) {
+                // The inflight event inflight validated positions, but it has expired.
+                log.trace("Inflight event {} expired without completing, clearing", inflightPoll);
+                inflightPoll = null;
+            }
         }
     }
 

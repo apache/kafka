@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.utils.Time;
 
 import java.time.Duration;
 import java.util.Optional;
@@ -70,6 +71,10 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
 
     public Optional<KafkaException> error() {
         return Optional.ofNullable(error);
+    }
+
+    public boolean isExpired(Time time) {
+        return time.milliseconds() >= deadlineMs();
     }
 
     public boolean isValidatePositionsComplete() {
