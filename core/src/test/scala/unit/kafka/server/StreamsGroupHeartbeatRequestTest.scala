@@ -661,7 +661,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           processId = "process-1"
         )
         streamsGroupHeartbeatResponse1.errorCode == Errors.NONE.code() &&
-        streamsGroupHeartbeatResponse1.activeTasks() != null
+          streamsGroupHeartbeatResponse1.activeTasks() != null
       }, "First StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
       // Second member joins the group
@@ -684,7 +684,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           processId = "process-2"
         )
         streamsGroupHeartbeatResponse2.errorCode == Errors.NONE.code() &&
-        streamsGroupHeartbeatResponse2.activeTasks() != null
+          streamsGroupHeartbeatResponse2.activeTasks() != null
       }, "Second StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
       // Verify both members do not have standby tasks initially
