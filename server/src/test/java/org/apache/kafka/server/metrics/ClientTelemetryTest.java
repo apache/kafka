@@ -30,7 +30,7 @@ import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class ClientTelemetryInterfaceTest {
+public class ClientTelemetryTest {
 
     private ClientTelemetryExporterPlugin clientTelemetryExporterPlugin;
 
