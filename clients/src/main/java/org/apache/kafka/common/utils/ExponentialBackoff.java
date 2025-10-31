@@ -19,6 +19,8 @@ package org.apache.kafka.common.utils;
 
 import java.util.concurrent.ThreadLocalRandom;
 
+import static java.lang.String.format;
+
 /**
  * A utility class for keeping the parameters and providing the value of exponential
  * retry backoff, exponential reconnect backoff, exponential timeout, etc.
@@ -43,7 +45,7 @@ public class ExponentialBackoff {
         this.multiplier = multiplier;
         this.maxInterval = maxInterval;
         if (jitter < 0 || jitter > 1) {
-            throw new IllegalArgumentException("jitter must be between 0 and 1");
+            throw new IllegalArgumentException(format("jitter must be between 0 and 1, but got %s", jitter));
         }
         this.jitter = jitter;
         this.expMax = maxInterval > initialInterval ?
