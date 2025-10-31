@@ -821,9 +821,9 @@ public class SharePartition {
 
                 // Compute if the batch is a full match.
                 boolean fullMatch = checkForFullMatch(inFlightBatch, firstBatch.baseOffset(), lastOffsetToAcquire);
-                long numRecordsToAcquire = inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1;
                 int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
-                if (!fullMatch || inFlightBatch.offsetState() != null || (isRecordLimitMode && (numRecordsToAcquire > numRecordsRemaining))) {
+                boolean recordLimitSubsetMatch = isRecordLimitMode && checkForRecordLimitSubsetMatch(inFlightBatch, maxRecordsToAcquire, acquiredCount);
+                if (!fullMatch || inFlightBatch.offsetState() != null || recordLimitSubsetMatch) {
                     log.trace("Subset or offset tracked batch record found for share partition,"
                             + " batch: {} request offsets - first: {}, last: {} for the share"
                             + " partition: {}-{}", inFlightBatch, firstBatch.baseOffset(),
@@ -874,7 +874,7 @@ public class SharePartition {
                     .setFirstOffset(inFlightBatch.firstOffset())
                     .setLastOffset(inFlightBatch.lastOffset())
                     .setDeliveryCount((short) inFlightBatch.batchDeliveryCount()));
-                acquiredCount += (int) numRecordsToAcquire;
+                acquiredCount += (int) (inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1);
             }
 
             // Some of the request offsets are not found in the fetched batches. Acquire the
@@ -1769,7 +1769,12 @@ public class SharePartition {
                 .setDeliveryCount((short) 1));
 
             if (isRecordLimitMode) {
+                // In record_limit mode, there will always be only one single batch in the result.
                 AcquiredRecords acquiredRecords = result.get(0);
+                // When the count of acquired records exceeds the max fetch limit, only initialize and schedule acquisition lock for
+                // acquired records up to the max fetch boundary and remaining offsets should still in available state.
+                // i.e. acquired records are 10-19 (10 records) and max fetch records is 5, then only 10-14 should be acquired
+                // and offset 15-19 should still in available state.
                 if (acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1 > maxFetchRecords) {
                     InFlightBatch inFlightBatch = new InFlightBatch(
                         timer,
@@ -1782,7 +1787,6 @@ public class SharePartition {
                         null,
                         timeoutHandler,
                         sharePartitionMetrics);
-
                     int delayMs = recordLockDurationMsOrDefault(groupConfigManager, groupId, defaultRecordLockDurationMs);
                     long lastOffset = acquiredRecords.firstOffset() + maxFetchRecords - 1;
                     acquiredRecords.setLastOffset(lastOffset);
@@ -1793,12 +1797,9 @@ public class SharePartition {
                     sharePartitionMetrics.recordInFlightBatchMessageCount(
                         acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1);
                     return List.of(acquiredRecords);
-                } else {
-                    addBatches(memberId, result);
                 }
-            } else {
-                addBatches(memberId, result);
             }
+            addBatches(memberId, result);
             return result;
         } finally {
             lock.writeLock().unlock();
@@ -1835,6 +1836,12 @@ public class SharePartition {
         } finally {
             lock.writeLock().unlock();
         }
+    }
+
+    private boolean checkForRecordLimitSubsetMatch(InFlightBatch inFlightBatch, int maxRecordsToAcquire, int acquiredCount) {
+        long numRecordsInBatch = inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1;
+        int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
+        return numRecordsInBatch > numRecordsRemaining;
     }
 
     private int acquireSubsetBatchRecords(
