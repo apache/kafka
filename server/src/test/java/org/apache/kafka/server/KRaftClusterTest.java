@@ -52,7 +52,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -63,8 +62,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class KRaftClusterTest {
 
@@ -161,8 +160,7 @@ public class KRaftClusterTest {
             cluster.format();
             cluster.startup();
             cluster.brokers().forEach((brokerId, broker) -> {
-                if (broker.remoteLogManagerOpt().isEmpty())
-                    fail("RemoteLogManager should be initialized");
+                assertFalse(broker.remoteLogManagerOpt().isEmpty(), "RemoteLogManager should be initialized");
             });
         }
     }
@@ -316,7 +314,7 @@ public class KRaftClusterTest {
 
         @Override
         public Map<String, String> quotaMetricTags(ClientQuotaType quotaType, KafkaPrincipal principal, String clientId) {
-            return Collections.emptyMap();
+            return Map.of();
         }
 
         @Override
@@ -356,7 +354,7 @@ public class KRaftClusterTest {
 
         @Override
         public Set<String> reconfigurableConfigs() {
-            return Collections.singleton(DUMMY_CLIENT_QUOTA_CALLBACK_VALUE_CONFIG_KEY);
+            return Set.of(DUMMY_CLIENT_QUOTA_CALLBACK_VALUE_CONFIG_KEY);
         }
 
         @Override
@@ -393,7 +391,7 @@ public class KRaftClusterTest {
 
         @Override
         public Set<String> reconfigurableConfigs() {
-            return Collections.singleton(FOOBAR_CONFIG_KEY);
+            return Set.of(FOOBAR_CONFIG_KEY);
         }
 
         @Override
@@ -417,7 +415,7 @@ public class KRaftClusterTest {
 
         @Override
         public Iterable<AclBinding> acls(AclBindingFilter filter) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         @Override
@@ -434,7 +432,7 @@ public class KRaftClusterTest {
             AuthorizableRequestContext requestContext,
             List<AclBinding> aclBindings
         ) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         @Override
@@ -442,7 +440,7 @@ public class KRaftClusterTest {
             AuthorizableRequestContext requestContext,
             List<AclBindingFilter> aclBindingFilters
         ) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         private int fakeConfigurableAuthorizerConfigToInt(Map<String, ?> configs) {
