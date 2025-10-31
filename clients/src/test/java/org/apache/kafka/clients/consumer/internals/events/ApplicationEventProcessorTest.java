@@ -49,6 +49,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.verification.VerificationMode;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -65,6 +66,7 @@ import static org.apache.kafka.clients.consumer.internals.events.CompletableEven
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -658,6 +660,71 @@ public class ApplicationEventProcessorTest {
                     "of the onAllTasksLost callback execution could not be sent")));
             verify(streamsMembershipManager, never()).onAllTasksLostCallbackCompleted(event);
         }
+    }
+
+    @Test
+    public void testUpdatePatternSubscriptionInvokedWhenMetadataUpdated() {
+        when(subscriptionState.hasPatternSubscription()).thenReturn(true);
+        when(subscriptionState.matchesSubscribedPattern(any(String.class))).thenReturn(true);
+        when(metadata.updateVersion()).thenReturn(1, 2);
+        testUpdatePatternSubscription(times(1));
+    }
+
+    @Test
+    public void testUpdatePatternSubscriptionNotInvokedWhenNotUsingPatternSubscription() {
+        when(subscriptionState.hasPatternSubscription()).thenReturn(false);
+        when(metadata.updateVersion()).thenReturn(1, 2);
+        testUpdatePatternSubscription(never());
+    }
+
+    @Test
+    public void testUpdatePatternSubscriptionNotInvokedWhenMetadataNotUpdated() {
+        when(subscriptionState.hasPatternSubscription()).thenReturn(true);
+        when(subscriptionState.matchesSubscribedPattern(any(String.class))).thenReturn(true);
+        when(metadata.updateVersion()).thenReturn(1, 1);
+        testUpdatePatternSubscription(never());
+    }
+
+    private void testUpdatePatternSubscription(VerificationMode verificationMode) {
+        String topic = "test-topic";
+        Cluster cluster = mock(Cluster.class);
+
+        when(metadata.fetch()).thenReturn(cluster);
+        when(cluster.topics()).thenReturn(Set.of(topic));
+
+        when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+        when(offsetsRequestManager.updateFetchPositions(anyLong())).thenReturn(CompletableFuture.completedFuture(true));
+
+        setupProcessor(true);
+        processor.process(new AsyncPollEvent(110, 100));
+        verify(membershipManager, verificationMode).onSubscriptionUpdated();
+    }
+
+    @Test
+    public void testRefreshCommittedOffsetsShouldNotResetIfFailedWithTimeout() {
+        setupProcessor(true);
+        testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout();
+    }
+
+    @Test
+    public void testRefreshCommittedOffsetsNotCalledIfNoGroupId() {
+        // Create consumer without group id so committed offsets are not used for updating positions
+        setupProcessor(false);
+        testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout();
+    }
+
+    private void testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout() {
+        when(offsetsRequestManager.updateFetchPositions(anyLong())).thenReturn(
+            CompletableFuture.failedFuture(new Throwable("Intentional failure"))
+        );
+        when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+
+        // Verify that the poll completes even when the update fetch positions throws an error.
+        AsyncPollEvent event = new AsyncPollEvent(110, 100);
+        processor.process(event);
+        verify(offsetsRequestManager).updateFetchPositions(anyLong());
+        assertTrue(event.isComplete());
+        assertFalse(event.error().isEmpty());
     }
 
     private List<NetworkClientDelegate.UnsentRequest> mockCommitResults() {
