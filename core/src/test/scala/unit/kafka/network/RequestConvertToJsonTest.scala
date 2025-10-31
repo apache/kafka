@@ -95,7 +95,7 @@ class RequestConvertToJsonTest {
     expectedNode.set("responseQueueTimeMs", new DoubleNode(responseQueueTimeMs))
     expectedNode.set("sendTimeMs", new DoubleNode(responseSendTimeMs))
     expectedNode.set("securityProtocol", new TextNode(req.context.securityProtocol.toString))
-    expectedNode.set("principal", new TextNode(req.session.principal.toString))
+    expectedNode.set("principal", new TextNode(req.session.principal().toString))
     expectedNode.set("listener", new TextNode(req.context.listenerName.value))
     expectedNode.set("clientInformation", RequestConvertToJson.clientInfoNode(req.context.clientInformation))
     expectedNode.set("temporaryMemoryBytes", new LongNode(temporaryMemoryBytes))

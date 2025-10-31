@@ -446,8 +446,8 @@ public class ClientQuotaManager {
      */
     public ClientSensors getOrCreateQuotaSensors(Session session, String clientId) {
         var metricTags = quotaCallback instanceof DefaultQuotaCallback defaultCallback
-                ? defaultCallback.quotaMetricTags(session.sanitizedUser, clientId)
-                : quotaCallback.quotaMetricTags(clientQuotaType, session.principal, clientId);
+                ? defaultCallback.quotaMetricTags(session.sanitizedUser(), clientId)
+                : quotaCallback.quotaMetricTags(clientQuotaType, session.principal(), clientId);
         var sensors = new ClientSensors(
                 metricTags,
                 sensorAccessor.getOrCreate(

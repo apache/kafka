@@ -221,7 +221,7 @@ class BrokerMetadataPublisher(
       dynamicClientQuotaPublisher.onMetadataUpdate(delta, newImage, manifest)
 
       // Apply topic or cluster quotas delta.
-      dynamicTopicClusterQuotaPublisher.onMetadataUpdate(delta, newImage)
+      dynamicTopicClusterQuotaPublisher.onMetadataUpdate(delta, newImage, manifest)
 
       // Apply SCRAM delta.
       scramPublisher.onMetadataUpdate(delta, newImage, manifest)

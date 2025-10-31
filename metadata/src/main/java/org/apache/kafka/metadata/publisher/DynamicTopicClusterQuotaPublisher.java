@@ -26,14 +26,14 @@ import org.apache.kafka.server.fault.FaultHandler;
 
 public class DynamicTopicClusterQuotaPublisher implements MetadataPublisher {
     private final String clusterId;
-    private final Integer nodeId;
+    private final int nodeId;
     private final FaultHandler faultHandler;
     private final String nodeType;
     private final QuotaManagersProvider quotaManagersProvider;
 
     public DynamicTopicClusterQuotaPublisher(
         String clusterId,
-        Integer nodeId,
+        int nodeId,
         FaultHandler faultHandler,
         String nodeType,
         QuotaManagersProvider quotaManagers
@@ -52,10 +52,6 @@ public class DynamicTopicClusterQuotaPublisher implements MetadataPublisher {
 
     @Override
     public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage, LoaderManifest manifest) {
-        onMetadataUpdate(delta, newImage);
-    }
-
-    public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage) {
         try {
             quotaManagersProvider.clientQuotaCallbackPlugin().ifPresent(plugin -> {
                 if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
