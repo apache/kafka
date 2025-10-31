@@ -664,6 +664,13 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           streamsGroupHeartbeatResponse1.activeTasks() != null
       }, "First StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
+      val expectedChangelogTopic = s"$groupId-subtopology-1-changelog"
+      val expectedRepartitionTopic = s"$groupId-subtopology-1-repartition"
+      TestUtils.waitUntilTrue(() => {
+        val topicNames = admin.listTopics().names().get()
+        topicNames.contains(expectedChangelogTopic) && topicNames.contains(expectedRepartitionTopic)
+      }, msg = s"Internal topics $expectedChangelogTopic or $expectedRepartitionTopic were not created")
+
       // Second member joins the group
       var streamsGroupHeartbeatResponse2: StreamsGroupHeartbeatResponseData = null
       TestUtils.waitUntilTrue(() => {
