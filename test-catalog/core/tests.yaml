@@ -2020,18 +2020,13 @@ kafka.server.JoinGroupRequestTest:
 kafka.server.KRaftClusterTest:
 - testAbandonedFutureReplicaRecovered_mainReplicaInOfflineLogDir
 - testAbandonedFutureReplicaRecovered_mainReplicaInOnlineLogDir
-- testAuthorizerFailureFoundInControllerStartup
 - testClientQuotas
-- testClusterWithLowerCaseListeners
 - testControllerFailover
-- testCreateClusterAndClose
 - testCreateClusterAndCreateAndManyTopics
 - testCreateClusterAndCreateListDeleteTopic
 - testCreateClusterAndCreateTopicWithRemoteLogManagerInstantiation
 - testCreateClusterAndPerformReassignment
-- testCreateClusterAndRestartBrokerNode
 - testCreateClusterAndRestartControllerNode
-- testCreateClusterAndWaitForBrokerInRunningState
 - testCreateClusterWithAdvertisedHostAndPortDifferentFromSocketServer
 - testCreateClusterWithAdvertisedPortZero
 - testCreatePartitions
@@ -2044,10 +2039,7 @@ kafka.server.KRaftClusterTest:
 - testIncrementalAlterConfigs
 - testOldBootstrapMetadataFile
 - testOverlyLargeCreateTopics
-- testReconfigureControllerAuthorizer
-- testReconfigureControllerClientQuotas
 - testRegisteredControllerEndpoints
-- testRemoteLogManagerInstantiation
 - testSetLog4jConfigurations
 - testSingleControllerSingleBrokerCluster
 - testSnapshotCount

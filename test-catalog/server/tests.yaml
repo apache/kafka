@@ -119,6 +119,15 @@ org.apache.kafka.server.EligibleLeaderReplicasIntegrationTest:
 - testElrMemberShouldBeKickOutWhenUncleanShutdown
 - testHighWatermarkShouldNotAdvanceIfUnderMinIsr
 - testLastKnownLeaderShouldBeElectedIfEmptyElr
+org.apache.kafka.server.KRaftClusterTest:
+- testAuthorizerFailureFoundInControllerStartup
+- testClusterWithLowerCaseListeners
+- testCreateClusterAndClose
+- testCreateClusterAndRestartBrokerNode
+- testCreateClusterAndWaitForBrokerInRunningState
+- testReconfigureControllerAuthorizer
+- testReconfigureControllerClientQuotas
+- testRemoteLogManagerInstantiation
 org.apache.kafka.server.LogManagerIntegrationTest:
 - testIOExceptionOnLogSegmentCloseResultsInRecovery
 - testRestartBrokerNoErrorIfMissingPartitionMetadata
