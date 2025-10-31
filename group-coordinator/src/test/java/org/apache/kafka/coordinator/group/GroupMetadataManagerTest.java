@@ -17428,9 +17428,6 @@ public class GroupMetadataManagerTest {
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 1000)
             .build();
 
-        assignor.prepareGroupAssignment(
-            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
-
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result;
 
         result = context.streamsGroupHeartbeat(
@@ -17447,7 +17444,7 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId)
-                .setMemberEpoch(2)
+                .setMemberEpoch(1)
                 .setHeartbeatIntervalMs(5000)
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
@@ -17457,13 +17454,16 @@ public class GroupMetadataManagerTest {
             result.response().data()
         );
 
+        assignor.prepareGroupAssignment(
+                Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
+
         context.sleep(10000);
 
         result = context.streamsGroupHeartbeat(
             new StreamsGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
-                .setMemberEpoch(2)
+                .setMemberEpoch(1)
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of()));

@@ -164,8 +164,7 @@ public class CurrentAssignmentBuilder {
                 // reconcile the member towards it. If the epoch is the same but
                 // the target assignment has changed (e.g., after initial rebalance
                 // delay fires), we must still reconcile to propagate the new tasks.
-                if (member.memberEpoch() != targetAssignmentEpoch
-                    || !member.assignedTasks().equals(targetAssignment)) {
+                if (member.memberEpoch() != targetAssignmentEpoch) {
                     return computeNextAssignment(
                         member.memberEpoch(),
                         member.assignedTasks()

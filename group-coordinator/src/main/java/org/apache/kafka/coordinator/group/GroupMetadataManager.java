@@ -2064,7 +2064,7 @@ public class GroupMetadataManager {
             boolean initialDelayActive = timer.isScheduled(streamsInitialRebalanceKey(groupId));
             if (initialDelayActive && group.assignmentEpoch() == 0) {
                 // During initial rebalance delay, return empty assignment to first joining members.
-                targetAssignmentEpoch = groupEpoch;
+                targetAssignmentEpoch = groupEpoch - 1;
                 targetAssignment = TasksTuple.EMPTY;
             } else {
                 targetAssignment = updateStreamsTargetAssignment(
@@ -8897,7 +8897,7 @@ public class GroupMetadataManager {
     static String classicGroupSyncKey(String groupId) {
         return "sync-" + groupId;
     }
-    
+
     /**
      * Generate a streams group initial rebalance key for the timer.
      *
