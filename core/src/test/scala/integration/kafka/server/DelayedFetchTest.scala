@@ -269,9 +269,9 @@ class DelayedFetchTest {
       error)
   }
 
-  def createFetchPartitionStatusMap(tpId: TopicIdPartition, status: FetchPartitionStatus): util.LinkedHashMap[TopicIdPartition, FetchPartitionStatus] = {
-    val map = new util.LinkedHashMap[TopicIdPartition, FetchPartitionStatus]
-    map.put(tpId, status)
-    map
+  private def createFetchPartitionStatusMap(tpId: TopicIdPartition, status: FetchPartitionStatus): util.LinkedHashMap[TopicIdPartition, FetchPartitionStatus] = {
+    val statusMap = new util.LinkedHashMap[TopicIdPartition, FetchPartitionStatus]
+    statusMap.put(tpId, status)
+    statusMap
   }
 }
