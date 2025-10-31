@@ -84,6 +84,10 @@
                 </subpackage>
             </subpackage>
         </subpackage>
+
+        <subpackage name="purgatory">
+            <allow pkg="org.apache.kafka.server.storage.log" />
+        </subpackage>
     </subpackage>
 
     <subpackage name="storage.internals">
@@ -164,7 +168,6 @@
         <allow pkg="org.apache.kafka.server.log.remote.storage" />
         <allow pkg="scala.jdk.javaapi" />
         <allow pkg="org.apache.kafka.test" />
-
     </subpackage>
     
 </import-control>
