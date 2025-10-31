@@ -74,7 +74,7 @@ public enum ShareAcquireMode {
             try {
                 of(acquireMode);
             } catch (Exception e) {
-                throw new ConfigException(name, value, "Invalid value " + acquireMode + " for configuration " +
+                throw new ConfigException(name, value, "Invalid value `" + acquireMode + "` for configuration " +
                     name + ". The value must either be 'batch_optimized' or 'record_limit'.");
             }
         }
