@@ -21,7 +21,9 @@
   // Version 0 was used for early access of KIP-932 in Apache Kafka 4.0 but removed in Apacke Kafka 4.1.
   //
   // Version 1 is the initial stable version (KIP-932).
-  "validVersions": "1",
+  //
+  // Version 2 introduces ShareAcquireMode and Renew acknowledgements (KIP-1206 and KIP-1222).
+  "validVersions": "1-2",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null", "entityType": "groupId",
@@ -40,29 +42,31 @@
       "about": "The maximum number of records to fetch. This limit can be exceeded for alignment of batch boundaries." },
     { "name": "BatchSize", "type": "int32", "versions": "1+",
       "about": "The optimal number of records for batches of acquired records and acknowledgements." },
+    { "name": "IsRenewAck", "type": "bool", "versions": "2+", "default": "false",
+      "about": "Whether Renew type acknowledgements present in AcknowledgementBatches." },
     { "name": "Topics", "type": "[]FetchTopic", "versions": "0+",
       "about": "The topics to fetch.", "fields": [
-      { "name": "TopicId", "type": "uuid", "versions": "0+", "about": "The unique topic ID.", "mapKey":  true },
+      { "name": "TopicId", "type": "uuid", "versions": "0+", "about": "The unique topic ID.", "mapKey": true },
       { "name": "Partitions", "type": "[]FetchPartition", "versions": "0+",
         "about": "The partitions to fetch.", "fields": [
-        { "name": "PartitionIndex", "type": "int32", "versions": "0+", "mapKey":  true,
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+", "mapKey": true,
           "about": "The partition index." },
         { "name": "PartitionMaxBytes", "type": "int32", "versions": "0",
           "about": "The maximum bytes to fetch from this partition. 0 when only acknowledgement with no fetching is required. See KIP-74 for cases where this limit may not be honored." },
         { "name": "AcknowledgementBatches", "type": "[]AcknowledgementBatch", "versions": "0+",
           "about": "Record batches to acknowledge.", "fields": [
           { "name": "FirstOffset", "type": "int64", "versions": "0+",
-            "about": "First offset of batch of records to acknowledge."},
+            "about": "First offset of batch of records to acknowledge." },
           { "name": "LastOffset", "type": "int64", "versions": "0+",
-            "about": "Last offset (inclusive) of batch of records to acknowledge."},
+            "about": "Last offset (inclusive) of batch of records to acknowledge." },
           { "name": "AcknowledgeTypes", "type": "[]int8", "versions": "0+",
-            "about": "Array of acknowledge types - 0:Gap,1:Accept,2:Release,3:Reject."}
+            "about": "Array of acknowledge types - 0:Gap,1:Accept,2:Release,3:Reject,4:Renew." }
         ]}
       ]}
     ]},
     { "name": "ForgottenTopicsData", "type": "[]ForgottenTopic", "versions": "0+",
       "about": "The partitions to remove from this share session.", "fields": [
-      { "name": "TopicId", "type": "uuid", "versions": "0+", "about": "The unique topic ID."},
+      { "name": "TopicId", "type": "uuid", "versions": "0+", "about": "The unique topic ID." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
         "about": "The partitions indexes to forget." }
     ]}

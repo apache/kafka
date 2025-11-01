@@ -785,6 +785,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             final Set<TopicPartition> partitions = responseData.keySet().stream().map(TopicIdPartition::topicPartition).collect(Collectors.toSet());
             final ShareFetchMetricsAggregator shareFetchMetricsAggregator = new ShareFetchMetricsAggregator(metricsManager, partitions);
 
+            List<ShareCompletedFetch> completedFetches = new ArrayList<>(responseData.size());
             Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo = new HashMap<>();
             for (Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData> entry : responseData.entrySet()) {
                 TopicIdPartition tip = entry.getKey();
@@ -815,19 +816,24 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     }
                 }
 
-                ShareCompletedFetch completedFetch = new ShareCompletedFetch(
+                completedFetches.add(
+                    new ShareCompletedFetch(
                         logContext,
                         BufferSupplier.create(),
                         fetchTarget.id(),
                         tip,
                         partitionData,
                         shareFetchMetricsAggregator,
-                        requestVersion);
-                shareFetchBuffer.add(completedFetch);
+                        requestVersion)
+                );
 
                 if (!partitionData.acquiredRecords().isEmpty()) {
                     fetchMoreRecords = false;
                 }
+            }
+
+            if (!completedFetches.isEmpty()) {
+                shareFetchBuffer.add(completedFetches);
             }
 
             // Handle any acknowledgements which were not received in the response for this node.

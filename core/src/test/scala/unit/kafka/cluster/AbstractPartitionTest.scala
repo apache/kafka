@@ -27,7 +27,7 @@ import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig,AlterPartitionListener}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.mockito.ArgumentMatchers
