@@ -16,6 +16,7 @@
   */
 package kafka.cluster
 
+import org.apache.kafka.storage.internals.log.SimpleAssignmentState
 import org.apache.kafka.common.DirectoryId
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -23,7 +24,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import java.util
-import scala.jdk.CollectionConverters._
 
 object AssignmentStateTest {
   import AbstractPartitionTest._
@@ -88,7 +88,7 @@ class AssignmentStateTest extends AbstractPartitionTest {
   @MethodSource(Array("parameters"))
   def testPartitionAssignmentStatus(isr: Array[Int], replicas: Array[Int],
                                     adding: Array[Int], removing: Array[Int],
-                                    original: util.List[Int], isUnderReplicated: Boolean): Unit = {
+                                    original: util.List[Integer], isUnderReplicated: Boolean): Unit = {
     val partitionRegistration = new PartitionRegistration.Builder()
       .setLeader(brokerId)
       .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
@@ -103,7 +103,7 @@ class AssignmentStateTest extends AbstractPartitionTest {
 
     // set the original replicas as the URP calculation will need them
     if (!original.isEmpty)
-      partition.assignmentState = SimpleAssignmentState(original.asScala)
+      partition.assignmentState = new SimpleAssignmentState(original)
     // do the test
     partition.makeLeader(partitionRegistration, isNew = false, offsetCheckpoints, None)
     val isReassigning = !adding.isEmpty || !removing.isEmpty
