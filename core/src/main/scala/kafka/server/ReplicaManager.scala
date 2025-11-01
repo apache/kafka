@@ -76,7 +76,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap, Future, RejectedExecutionException, TimeUnit}
 import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import java.util.function.Consumer
-import java.util.stream.Collectors
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOptional
@@ -1737,7 +1736,7 @@ class ReplicaManager(val config: KafkaConfig,
         val delayedFetchKeys = fetchPartitionStatus.keySet()
           .stream()
           .map(new TopicPartitionOperationKey(_))
-          .collect(Collectors.toList[TopicPartitionOperationKey]())
+          .toList()
 
         // try to complete the request immediately, otherwise put it into the purgatory;
         // this is because while the delayed fetch operation is being created, new requests
