@@ -3910,31 +3910,23 @@ public class SenderTest {
         client.prepareResponse(initProducerIdResponse(producerId, producerEpoch, error));
     }
 
-    private void assertFutureFailure(Future<?> future, Class<? extends Exception> expectedExceptionType)
-            throws InterruptedException {
+    private void assertFutureFailure(Future<?> future, Class<? extends Exception> expectedExceptionType) {
         assertTrue(future.isDone());
-        try {
-            future.get();
-            fail("Future should have raised " + expectedExceptionType.getName());
-        } catch (ExecutionException e) {
-            Class<? extends Throwable> causeType = e.getCause().getClass();
-            assertTrue(expectedExceptionType.isAssignableFrom(causeType), "Unexpected cause " + causeType.getName());
-        }
+        var e = assertThrows(ExecutionException.class, future::get);
+
+        Class<? extends Throwable> causeType = e.getCause().getClass();
+        assertTrue(expectedExceptionType.isAssignableFrom(causeType), "Unexpected cause " + causeType.getName());
     }
 
     private void assertFutureFailure(Future<?> future, Class<? extends Exception> expectedExceptionType,
                                      Class<? extends Exception> rootCauseExceptionType,
-                                     String rootCauseExceptionMessage)
-            throws InterruptedException {
+                                     String rootCauseExceptionMessage) {
         assertTrue(future.isDone());
-        try {
-            future.get();
-            fail("Future should have raised " + expectedExceptionType.getName());
-        } catch (ExecutionException e) {
-            Class<? extends Throwable> causeType = e.getCause().getClass();
-            assertTrue(expectedExceptionType.isAssignableFrom(causeType), "Unexpected cause " + causeType.getName());
-            assertInstanceOf(rootCauseExceptionType, e.getCause().getCause(), rootCauseExceptionMessage);
-        }
+        var e = assertThrows(ExecutionException.class, future::get);
+
+        Class<? extends Throwable> causeType = e.getCause().getClass();
+        assertTrue(expectedExceptionType.isAssignableFrom(causeType), "Unexpected cause " + causeType.getName());
+        assertInstanceOf(rootCauseExceptionType, e.getCause().getCause(), rootCauseExceptionMessage);
     }
 
 
