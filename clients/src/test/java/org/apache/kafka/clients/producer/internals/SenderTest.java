@@ -163,7 +163,7 @@ public class SenderTest {
             TOPIC_NAME, TOPIC_ID,
             "testSplitBatchAndSend", Uuid.fromString("2J9hK8m1wHMKjXfIkQyXx1")
     );
-    private static final String SENDER_TIMEOUT_MSG = "The broker might be unavailable or responding slowly, or the CPU might be busy.";
+    private static final String SENDER_TIMEOUT_MSG = "The request has not been sent, or no server response has been received yet.";
 
     private final TopicPartition tp0 = new TopicPartition(TOPIC_NAME, 0);
     private final TopicPartition tp1 = new TopicPartition(TOPIC_NAME, 1);
@@ -427,7 +427,8 @@ public class SenderTest {
             @Override
             public void onCompletion(RecordMetadata metadata, Exception exception) {
                 if (exception instanceof TimeoutException) {
-                    assertInstanceOf(KafkaException.class, exception.getCause(), SENDER_TIMEOUT_MSG);
+                    var rootCause = assertInstanceOf(KafkaException.class, exception.getCause());
+                    assertEquals(SENDER_TIMEOUT_MSG, rootCause.getMessage());
                     expiryCallbackCount.incrementAndGet();
                     try {
                         accumulator.append(tp1.topic(), tp1.partition(), 0L, key, value,
@@ -2537,7 +2538,8 @@ public class SenderTest {
 
         Throwable cause = assertThrows(ExecutionException.class, request::get).getCause();
         assertInstanceOf(TimeoutException.class, cause, "The expired batch should throw a TimeoutException");
-        assertInstanceOf(KafkaException.class, cause.getCause(), SENDER_TIMEOUT_MSG);
+        var rootEx = assertInstanceOf(KafkaException.class, cause.getCause());
+        assertEquals(SENDER_TIMEOUT_MSG, rootEx.getMessage());
     }
 
     @Test
@@ -2718,11 +2720,13 @@ public class SenderTest {
 
         ExecutionException e = assertThrows(ExecutionException.class, request1::get);
         assertInstanceOf(TimeoutException.class, e.getCause());
-        assertInstanceOf(KafkaException.class, e.getCause().getCause(), SENDER_TIMEOUT_MSG);
+        var kafkaEx1 = assertInstanceOf(KafkaException.class, e.getCause().getCause());
+        assertEquals(SENDER_TIMEOUT_MSG, kafkaEx1.getMessage());
 
         e = assertThrows(ExecutionException.class, request2::get);
         assertInstanceOf(TimeoutException.class, e.getCause());
-        assertInstanceOf(KafkaException.class, e.getCause().getCause(), SENDER_TIMEOUT_MSG);
+        var kafkaEx2 = assertInstanceOf(KafkaException.class, e.getCause().getCause());
+        assertEquals(SENDER_TIMEOUT_MSG, kafkaEx2.getMessage());
     }
 
     @Test
@@ -3926,7 +3930,10 @@ public class SenderTest {
 
         Class<? extends Throwable> causeType = e.getCause().getClass();
         assertTrue(expectedExceptionType.isAssignableFrom(causeType), "Unexpected cause " + causeType.getName());
-        assertInstanceOf(rootCauseExceptionType, e.getCause().getCause(), rootCauseExceptionMessage);
+
+        var rootCause = e.getCause().getCause();
+        assertInstanceOf(rootCauseExceptionType, rootCause, rootCauseExceptionMessage);
+        assertEquals(rootCauseExceptionMessage, rootCause.getMessage());
     }
 
 

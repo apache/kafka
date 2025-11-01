@@ -416,7 +416,7 @@ public class Sender implements Runnable {
             String errorMessage = "Expiring " + expiredBatch.recordCount + " record(s) for " + expiredBatch.topicPartition
                 + ":" + (now - expiredBatch.createdMs) + " ms has passed since batch creation";
             KafkaException potentialCause = new KafkaException(
-                    "the request have not been sent or no server response yet.");
+                    "The request has not been sent, or no server response has been received yet.");
             failBatch(expiredBatch, new TimeoutException(errorMessage, potentialCause), false);
             if (transactionManager != null && expiredBatch.inRetry()) {
                 // This ensures that no new batches are drained until the current in flight batches are fully resolved.

@@ -894,11 +894,10 @@ public class KafkaProducerTest {
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(5)).fetch();
         try {
-            assertInstanceOf(KafkaException.class,
-                             assertInstanceOf(
-                                     TimeoutException.class,
-                                     assertThrows(ExecutionException.class, future::get).getCause()).getCause(),
-                             METADATA_TIMEOUT_MSG);
+            var e = assertThrows(ExecutionException.class, future::get);
+            var timeout = assertInstanceOf(TimeoutException.class, e.getCause());
+            var kafkaEx = assertInstanceOf(KafkaException.class, timeout.getCause());
+            assertEquals(METADATA_TIMEOUT_MSG, kafkaEx.getMessage());
         } finally {
             producer.close(Duration.ofMillis(0));
         }
@@ -965,11 +964,10 @@ public class KafkaProducerTest {
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(5)).fetch();
         try {
-            assertInstanceOf(KafkaException.class,
-                             assertInstanceOf(
-                                     TimeoutException.class,
-                                     assertThrows(ExecutionException.class, future::get).getCause()).getCause(),
-                             METADATA_TIMEOUT_MSG);
+            var e = assertThrows(ExecutionException.class, future::get);
+            var timeout = assertInstanceOf(TimeoutException.class, e.getCause());
+            var kafkaEx = assertInstanceOf(KafkaException.class, timeout.getCause());
+            assertEquals(METADATA_TIMEOUT_MSG, kafkaEx.getMessage());
         } finally {
             producer.close(Duration.ofMillis(0));
         }
@@ -1097,11 +1095,11 @@ public class KafkaProducerTest {
             assertNotNull(producer.partitionsFor(topic));
             exchanger.exchange(null);  // 2
             exchanger.exchange(null);  // 3
-            assertInstanceOf(
-                    KafkaException.class,
-                    assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic)).getCause(),
-                    METADATA_TIMEOUT_MSG
-            );
+
+            var timeout = assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic));
+            var kafkaEx = assertInstanceOf(KafkaException.class, timeout.getCause());
+            assertEquals(METADATA_TIMEOUT_MSG, kafkaEx.getMessage());
+
             t.join();
         }
     }
@@ -1373,11 +1371,9 @@ public class KafkaProducerTest {
                     ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
                 FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", NODE));
 
-            assertInstanceOf(
-                    KafkaException.class,
-                    assertThrows(TimeoutException.class, producer::initTransactions).getCause(),
-                    INIT_TXN_TIMEOUT_MSG
-            );
+            var timeout = assertThrows(TimeoutException.class, producer::initTransactions);
+            var kafkaEx = assertInstanceOf(KafkaException.class, timeout.getCause());
+            assertEquals(INIT_TXN_TIMEOUT_MSG, kafkaEx.getMessage());
 
             client.prepareResponse(
                 request -> request instanceof FindCoordinatorRequest &&
@@ -2389,11 +2385,11 @@ public class KafkaProducerTest {
 
         Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(), new StringSerializer(),
                 metadata, client, null, time);
-        assertInstanceOf(
-                KafkaException.class,
-                assertThrows(TimeoutException.class, producer::initTransactions).getCause(),
-                INIT_TXN_TIMEOUT_MSG
-        );
+
+        var timeout = assertThrows(TimeoutException.class, producer::initTransactions);
+        var kafkaEx = assertInstanceOf(KafkaException.class, timeout.getCause());
+        assertEquals(INIT_TXN_TIMEOUT_MSG, kafkaEx.getMessage());
+
         // other transactional operations should not be allowed if we catch the error after initTransactions failed
         try {
             assertThrows(IllegalStateException.class, producer::beginTransaction);

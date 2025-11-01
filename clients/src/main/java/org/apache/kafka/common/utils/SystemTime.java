@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.TimeoutException;
 
 import java.util.function.Supplier;
@@ -56,7 +55,7 @@ class SystemTime implements Time {
 
                 long currentTimeMs = milliseconds();
                 if (currentTimeMs >= deadlineMs)
-                    throw new TimeoutException("Condition not satisfied before deadline", new KafkaException("Unknown Error"));
+                    throw new TimeoutException("Condition not satisfied before deadline");
 
                 obj.wait(deadlineMs - currentTimeMs);
             }
