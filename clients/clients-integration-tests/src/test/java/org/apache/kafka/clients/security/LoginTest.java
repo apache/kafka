@@ -110,7 +110,6 @@ public class LoginTest {
                 expectedTags(Map.of(
                     "mechanism", MECHANISMS,
                     "listener", "EXTERNAL",
-                    "networkProcessor", "0",
                     "class", ExternalCustomerLogin.class.getSimpleName()
                 ))
             );
@@ -119,8 +118,6 @@ public class LoginTest {
                 InterBrokerCustomerLogin.METRIC_NAME,
                 InterBrokerCustomerLogin.METRIC_DESCRIPTION,
                 expectedTags(Map.of(
-                    "node-id", "0",
-                    "component", "raft-channel",
                     "class", InterBrokerCustomerLogin.class.getSimpleName()
                 ))
             );

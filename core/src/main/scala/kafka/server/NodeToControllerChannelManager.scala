@@ -103,16 +103,9 @@ class NodeToControllerChannelManagerImpl(
   retryTimeoutMs: Long
 ) extends NodeToControllerChannelManager with Logging {
   private val logContext = new LogContext(s"[NodeToControllerChannelManager id=${config.nodeId} name=${channelName}] ")
-  val threadName = s"${threadNamePrefix}to-controller-${channelName}-channel-manager"
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val apiVersions = new ApiVersions()
   private val requestThread = newRequestThread
-  private[kafka] val metricTags: util.LinkedHashMap[String, String] = {
-    val map = new util.LinkedHashMap[String, String]()
-    map.put("component", channelName)
-    map.put("node-id", config.nodeId.toString)
-    map
-  }
 
   def start(): Unit = {
     requestThread.start()
@@ -133,8 +126,7 @@ class NodeToControllerChannelManagerImpl(
         controllerInfo.saslMechanism,
         time,
         logContext,
-        metrics,
-        metricTags
+        metrics
       )
       channelBuilder match {
         case reconfigurable: Reconfigurable => config.addReconfigurable(reconfigurable)
@@ -170,6 +162,7 @@ class NodeToControllerChannelManagerImpl(
         MetadataRecoveryStrategy.NONE
       )
     }
+    val threadName = s"${threadNamePrefix}to-controller-${channelName}-channel-manager"
 
     val controllerInformation = controllerNodeProvider.getControllerInfo()
     new NodeToControllerRequestThread(

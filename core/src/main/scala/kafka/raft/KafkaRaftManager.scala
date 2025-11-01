@@ -46,7 +46,6 @@ import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.util.timer.SystemTimer
 import org.apache.kafka.storage.internals.log.{LogManager, UnifiedLog}
 
-import java.util
 import scala.jdk.CollectionConverters._
 
 object KafkaRaftManager {
@@ -104,14 +103,6 @@ class KafkaRaftManager[T](
   private val threadNamePrefix = threadNamePrefixOpt.getOrElse("kafka-raft")
   private val logContext = new LogContext(s"[RaftManager id=${config.nodeId}] ")
   this.logIdent = logContext.logPrefix()
-  val clientId = s"raft-client-${config.nodeId}"
-  val metricGroupPrefix = "raft-channel"
-  private[kafka] val metricTags: util.LinkedHashMap[String, String] = {
-    val map = new util.LinkedHashMap[String, String]()
-    map.put("component", metricGroupPrefix)
-    map.put("node-id", config.nodeId.toString)
-    map
-  }
 
   private val scheduler = new KafkaScheduler(1, true, threadNamePrefix + "-scheduler")
   scheduler.startup()
@@ -223,10 +214,10 @@ class KafkaRaftManager[T](
       config.saslMechanismControllerProtocol,
       time,
       logContext,
-      metrics,
-      metricTags
+      metrics
     )
 
+    val metricGroupPrefix = "raft-channel"
     val collectPerConnectionMetrics = false
 
     val selector = new Selector(
@@ -238,9 +229,10 @@ class KafkaRaftManager[T](
       Map.empty[String, String].asJava,
       collectPerConnectionMetrics,
       channelBuilder,
-      logContext
+      logContext,
     )
 
+    val clientId = s"raft-client-${config.nodeId}"
     val maxInflightRequestsPerConnection = 1
     val reconnectBackoffMs = 50
     val reconnectBackoffMsMs = 500

@@ -877,7 +877,7 @@ private[kafka] class Processor(
         logContext,
         version => apiVersionManager.apiVersionResponse(0, version < 4),
         metrics,
-        new util.LinkedHashMap[String, String](metricTags)
+        new util.LinkedHashMap[String, String](util.Map.of(ListenerMetricTag, listenerName.value))
       )
     )
   }

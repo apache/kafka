@@ -41,7 +41,6 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -202,7 +201,7 @@ public abstract class SaslAuthenticatorFailureDelayTest {
 
         String saslMechanism = (String) saslClientConfigs.get(SaslConfigs.SASL_MECHANISM);
         ChannelBuilder channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT,
-                new TestSecurityConfig(clientConfigs), null, saslMechanism, time, new LogContext(), null, new LinkedHashMap<>());
+                new TestSecurityConfig(clientConfigs), null, saslMechanism, time, new LogContext(), null);
         this.selector = NetworkTestUtils.createSelector(channelBuilder, time);
     }
 

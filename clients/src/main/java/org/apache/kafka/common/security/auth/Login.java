@@ -37,26 +37,16 @@ import javax.security.auth.login.LoginException;
  *       <li><code>class</code> set to Login class name</li>
  *       <li><code>mechanism</code> set to SASL mechanism</li>
  *       <li><code>listener</code> set to listener name</li>
- *       <li><code>networkProcessor</code> set to network processor id</li>
  *     </ul>
  *   </li>
  *
- *   <li>brokers/controllers connecting to other brokers/controllers ({@link org.apache.kafka.common.network.ConnectionMode#CLIENT}).
- *     <ul>
- *       <li><code>config</code> set to value of <code>sasl.login.class</code></li>
- *       <li><code>class</code> set to Login class name</li>
- *       <li><code>component</code> set to metricGroupPrefix from the selector component</li>
- *       <li><code>node-id</code> set to node id</li>
- *     </ul>
- *   </li>
- *
- *   <li>Client applications connecting to brokers/controllers ({@link org.apache.kafka.common.network.ConnectionMode#CLIENT}).
+ *   <li>brokers/controllers connecting to other brokers/controllers and Client applications connecting to brokers/controllers
+ *   ({@link org.apache.kafka.common.network.ConnectionMode#CLIENT}).
  *     <ul>
  *       <li><code>config</code> set to value of <code>sasl.login.class</code></li>
  *       <li><code>class</code> set to Login class name</li>
  *     </ul>
  *   </li>
- * </ul>
  */
 public interface Login {
 

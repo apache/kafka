@@ -60,7 +60,6 @@ public class ChannelBuilders {
      * @param time the time instance
      * @param logContext the log context instance
      * @param metrics the metrics instance
-     * @param extraMetricsTags additional tags to be added to metrics
      *
      * @return the configured `ChannelBuilder`
      * @throws IllegalArgumentException if `mode` invariants described above is not maintained
@@ -73,8 +72,7 @@ public class ChannelBuilders {
         String clientSaslMechanism,
         Time time,
         LogContext logContext,
-        Metrics metrics,
-        LinkedHashMap<String, String> extraMetricsTags
+        Metrics metrics
     ) {
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
             if (contextType == null)
@@ -83,7 +81,7 @@ public class ChannelBuilders {
                 throw new IllegalArgumentException("`clientSaslMechanism` must be non-null in client mode if `securityProtocol` is `" + securityProtocol + "`");
         }
         return create(securityProtocol, ConnectionMode.CLIENT, contextType, config, listenerName, false, clientSaslMechanism,
-            null, null, time, logContext, null, metrics, extraMetricsTags);
+            null, null, time, logContext, null, metrics, new LinkedHashMap<>());
     }
 
     /**
@@ -132,7 +130,7 @@ public class ChannelBuilders {
         DelegationTokenCache tokenCache,
         Time time,
         LogContext logContext,
-        Function<Short, ApiVersionsResponse> apiVersionSupplier, 
+        Function<Short, ApiVersionsResponse> apiVersionSupplier,
         Metrics metrics,
         LinkedHashMap<String, String> extraMetricsTags
     ) {
