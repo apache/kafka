@@ -152,17 +152,6 @@ public class Struct {
         return this;
     }
 
-    public Struct setIfExists(Field def, Object value) {
-        return setIfExists(def.name, value);
-    }
-
-    public Struct setIfExists(String fieldName, Object value) {
-        BoundField field = this.schema.get(fieldName);
-        if (field != null)
-            this.values[field.index] = value;
-        return this;
-    }
-
     /**
      * Create a struct for the schema of a container type (struct or array). Note that for array type, this method
      * assumes that the type is an array of schema and creates a struct of that schema. Arrays of other types can't be
