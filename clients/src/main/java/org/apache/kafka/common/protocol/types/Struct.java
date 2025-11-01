@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.common.protocol.types;
 
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.record.BaseRecords;
-
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
@@ -100,115 +97,24 @@ public class Struct {
         return schema.get(name) != null;
     }
 
-    public boolean hasField(Field def) {
-        return schema.get(def.name) != null;
-    }
-
-    public Struct getStruct(BoundField field) {
-        return (Struct) get(field);
-    }
-
-    public Struct getStruct(String name) {
-        return (Struct) get(name);
-    }
-
-    public Byte getByte(BoundField field) {
-        return (Byte) get(field);
-    }
-
-    public byte getByte(String name) {
-        return (Byte) get(name);
-    }
-
-    public BaseRecords getRecords(String name) {
-        return (BaseRecords) get(name);
-    }
-
-    public Short getShort(BoundField field) {
-        return (Short) get(field);
-    }
-
     public Short getShort(String name) {
         return (Short) get(name);
-    }
-
-    public Integer getUnsignedShort(BoundField field) {
-        return (Integer) get(field);
-    }
-
-    public Integer getUnsignedShort(String name) {
-        return (Integer) get(name);
-    }
-
-    public Integer getInt(BoundField field) {
-        return (Integer) get(field);
     }
 
     public Integer getInt(String name) {
         return (Integer) get(name);
     }
 
-    public Long getUnsignedInt(String name) {
-        return (Long) get(name);
-    }
-
-    public Long getUnsignedInt(BoundField field) {
-        return (Long) get(field);
-    }
-
-    public Long getLong(BoundField field) {
-        return (Long) get(field);
-    }
-
     public Long getLong(String name) {
         return (Long) get(name);
-    }
-
-    public Uuid getUuid(BoundField field) {
-        return (Uuid) get(field);
-    }
-
-    public Uuid getUuid(String name) {
-        return (Uuid) get(name);
-    }
-
-    public Double getDouble(BoundField field) {
-        return (Double) get(field);
-    }
-
-    public Double getDouble(String name) {
-        return (Double) get(name);
-    }
-
-    public Object[] getArray(BoundField field) {
-        return (Object[]) get(field);
     }
 
     public Object[] getArray(String name) {
         return (Object[]) get(name);
     }
 
-    public String getString(BoundField field) {
-        return (String) get(field);
-    }
-
     public String getString(String name) {
         return (String) get(name);
-    }
-
-    public Boolean getBoolean(BoundField field) {
-        return (Boolean) get(field);
-    }
-
-    public Boolean getBoolean(String name) {
-        return (Boolean) get(name);
-    }
-
-    public ByteBuffer getBytes(BoundField field) {
-        Object result = get(field);
-        if (result instanceof byte[])
-            return ByteBuffer.wrap((byte[]) result);
-        return (ByteBuffer) result;
     }
 
     public ByteBuffer getBytes(String name) {
@@ -216,17 +122,6 @@ public class Struct {
         if (result instanceof byte[])
             return ByteBuffer.wrap((byte[]) result);
         return (ByteBuffer) result;
-    }
-
-    public byte[] getByteArray(String name) {
-        Object result = get(name);
-        if (result instanceof byte[])
-            return (byte[]) result;
-        ByteBuffer buf = (ByteBuffer) result;
-        byte[] arr = new byte[buf.remaining()];
-        buf.get(arr);
-        buf.flip();
-        return arr;
     }
 
     /**
