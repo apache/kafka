@@ -163,8 +163,6 @@ class BrokerServer(
 
   var persister: Persister = _
 
-  private val brokerReadyCallbacks: util.List[BrokerReadyCallback] = new util.ArrayList[BrokerReadyCallback]()
-
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
     try {
@@ -285,13 +283,6 @@ class BrokerServer(
             withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
 
       remoteLogManagerOpt = createRemoteLogManager(listenerInfo)
-
-      remoteLogManagerOpt.foreach(rlm =>
-        rlm.remoteLogMetadataManager() match {
-          case callback: BrokerReadyCallback => registerBrokerReadyCallback(callback)
-          case _ => // Skip registration
-        }
-      )
 
       alterPartitionManager = AlterPartitionManager(
         config,
@@ -601,14 +592,18 @@ class BrokerServer(
         "all of the SocketServer Acceptors to be started",
         enableRequestProcessingFuture, startupDeadline, time)
 
-      brokerReadyCallbacks.forEach { callback =>
-        try {
-          callback.onBrokerReady()
-        } catch {
-          case e: Exception =>
-            error(s"Error executing broker ready callback: ${callback.getClass.getSimpleName}", e)
+      remoteLogManagerOpt.foreach(rlm =>
+        rlm.remoteLogMetadataManager() match {
+          case callback: BrokerReadyCallback =>
+            try {
+              callback.onBrokerReady()
+            } catch {
+              case e: Exception =>
+                error(s"Error executing broker ready callback: ${callback.getClass.getSimpleName}", e)
+            }
+          case _ => // Skip
         }
-      }
+      )
 
       maybeChangeStatus(STARTING, STARTED)
     } catch {
@@ -618,10 +613,6 @@ class BrokerServer(
         shutdown()
         throw if (e.isInstanceOf[ExecutionException]) e.getCause else e
     }
-  }
-
-  def registerBrokerReadyCallback(callback: BrokerReadyCallback): Unit = {
-    brokerReadyCallbacks.add(callback)
   }
 
   private def createGroupCoordinator(): GroupCoordinator = {
