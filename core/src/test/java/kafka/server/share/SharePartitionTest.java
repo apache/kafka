@@ -2820,7 +2820,7 @@ public class SharePartitionTest {
 
         ackResult = sharePartition.acknowledge(
             MEMBER_ID,
-            List.of(new ShareAcknowledgementBatch(20, 25, List.of(AcknowledgeType.RELEASE.id))));
+            List.of(new ShareAcknowledgementBatch(20, 25, List.of(AcknowledgeType.REJECT.id))));
         assertTrue(ackResult.isCompletedExceptionally());
         assertFutureThrows(InvalidRequestException.class, ackResult);
         assertEquals(0, sharePartition.inFlightTerminalRecords());
@@ -6384,7 +6384,9 @@ public class SharePartitionTest {
         sharePartition.acknowledge(MEMBER_ID, List.of(
                 new ShareAcknowledgementBatch(5, 6, List.of(AcknowledgeType.RELEASE.id)),
                 new ShareAcknowledgementBatch(10, 18, List.of(
-                        AcknowledgeType.RELEASE.id, AcknowledgeType.RELEASE.id, AcknowledgeType.RELEASE.id, AcknowledgeType.RELEASE.id, AcknowledgeType.RELEASE.id, ACKNOWLEDGE_TYPE_GAP_ID, ACKNOWLEDGE_TYPE_GAP_ID, ACKNOWLEDGE_TYPE_GAP_ID, AcknowledgeType.RELEASE.id
+                        AcknowledgeType.RELEASE.id, AcknowledgeType.RELEASE.id, AcknowledgeType.RELEASE.id,
+                        AcknowledgeType.RELEASE.id, AcknowledgeType.RELEASE.id, ACKNOWLEDGE_TYPE_GAP_ID,
+                        ACKNOWLEDGE_TYPE_GAP_ID, ACKNOWLEDGE_TYPE_GAP_ID, AcknowledgeType.RELEASE.id
                 ))));
 
         // LSO is at 18.
