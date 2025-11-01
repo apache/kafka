@@ -3931,8 +3931,7 @@ public class SenderTest {
         Class<? extends Throwable> causeType = e.getCause().getClass();
         assertTrue(expectedExceptionType.isAssignableFrom(causeType), "Unexpected cause " + causeType.getName());
 
-        var rootCause = e.getCause().getCause();
-        assertInstanceOf(rootCauseExceptionType, rootCause, rootCauseExceptionMessage);
+        var rootCause = assertInstanceOf(rootCauseExceptionType, e.getCause().getCause());
         assertEquals(rootCauseExceptionMessage, rootCause.getMessage());
     }
 
