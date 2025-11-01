@@ -390,7 +390,7 @@ public class TopicBasedRemoteLogMetadataManager implements BrokerReadyCallback, 
      */
     @Override
     public void onBrokerReady() {
-        log.info("Broker is ready for requests, now initializing topic-based RLMM resources");
+        log.info("Broker is ready to handle requests for topic-based RLMM resources");
         initializationThread.start();
     }
 
