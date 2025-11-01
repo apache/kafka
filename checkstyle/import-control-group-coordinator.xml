@@ -75,7 +75,6 @@
             <allow pkg="org.apache.kafka.test" />
             <allow pkg="org.apache.kafka.timeline" />
             <allow pkg="org.apache.kafka.coordinator.common" />
-            <allow pkg="org.apache.kafka.coordinator.common.runtime" />
             <allow pkg="com.google.re2j" />
             <allow pkg="com.dynatrace.hash4j.hashing" />
             <allow pkg="org.apache.kafka.metadata" />
