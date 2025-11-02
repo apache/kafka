@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.FencedMemberEpochException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -1012,7 +1013,7 @@ public class GroupMetadataManager {
      * @throws IllegalStateException    if the group does not have the expected type.
      * Package private for testing.
      */
-    private StreamsGroup getOrMaybeCreatePersistedStreamsGroup(
+    StreamsGroup getOrMaybeCreatePersistedStreamsGroup(
         String groupId,
         boolean createIfNotExists
     ) throws GroupIdNotFoundException, IllegalStateException {
@@ -1514,6 +1515,21 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Checks whether the share group is empty.
+     *
+     * @param group     The share group.
+     *
+     * @throws GroupNotEmptyException if the group is not empty.
+     */
+    private void throwIfShareGroupIsNotEmpty(
+        ShareGroup group
+    ) throws GroupNotEmptyException {
+        if (group.numMembers() > 0) {
+            throw new GroupNotEmptyException(Errors.NON_EMPTY_GROUP.message());
+        }
+    }
+
+    /**
      * Validates the member epoch provided in the heartbeat request.
      *
      * @param member                The consumer group member.
@@ -1974,11 +1990,20 @@ public class GroupMetadataManager {
             bumpGroupEpoch = true;
         }
 
+        // Check if assignment configurations have changed
+        Map<String, String> currentAssignmentConfigs = streamsGroupAssignmentConfigs(groupId);
+        Map<String, String> storedAssignmentConfigs = group.lastAssignmentConfigs();
+        if (!bumpGroupEpoch && !currentAssignmentConfigs.equals(storedAssignmentConfigs)) {
+            log.info("[GroupId {}][MemberId {}] Assignment configurations changed to {}. Triggering rebalance.",
+                groupId, memberId, currentAssignmentConfigs);
+            bumpGroupEpoch = true;
+        }
+
         // Actually bump the group epoch
         int groupEpoch = group.groupEpoch();
         if (bumpGroupEpoch) {
             groupEpoch += 1;
-            records.add(newStreamsGroupMetadataRecord(groupId, groupEpoch, metadataHash, validatedTopologyEpoch));
+            records.add(newStreamsGroupMetadataRecord(groupId, groupEpoch, metadataHash, validatedTopologyEpoch, currentAssignmentConfigs));
             log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {} and validated topic epoch {}.", groupId, memberId, groupEpoch, metadataHash, validatedTopologyEpoch);
             metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
@@ -1996,7 +2021,8 @@ public class GroupMetadataManager {
                 updatedMember,
                 updatedConfiguredTopology,
                 metadataImage,
-                records
+                records,
+                currentAssignmentConfigs
             );
             targetAssignmentEpoch = groupEpoch;
         } else {
@@ -3950,10 +3976,10 @@ public class GroupMetadataManager {
         StreamsGroupMember updatedMember,
         ConfiguredTopology configuredTopology,
         CoordinatorMetadataImage metadataImage,
-        List<CoordinatorRecord> records
+        List<CoordinatorRecord> records,
+        Map<String, String> assignmentConfigs
     ) {
         TaskAssignor assignor = streamsGroupAssignor(group.groupId());
-        Map<String, String> assignmentConfigs = streamsGroupAssignmentConfigs(group.groupId());
         try {
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
                 new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(
@@ -4298,7 +4324,7 @@ public class GroupMetadataManager {
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
-        records.add(newStreamsGroupMetadataRecord(group.groupId(), groupEpoch, group.metadataHash(), group.validatedTopologyEpoch()));
+        records.add(newStreamsGroupMetadataRecord(group.groupId(), groupEpoch, group.metadataHash(), group.validatedTopologyEpoch(), group.lastAssignmentConfigs()));
 
         cancelTimers(group.groupId(), member.memberId());
 
@@ -5419,6 +5445,19 @@ public class GroupMetadataManager {
             streamsGroup.setGroupEpoch(value.epoch());
             streamsGroup.setMetadataHash(value.metadataHash());
             streamsGroup.setValidatedTopologyEpoch(value.validatedTopologyEpoch());
+
+            if (value.lastAssignmentConfigs() != null) {
+                streamsGroup.setLastAssignmentConfigs(
+                    value.lastAssignmentConfigs().stream()
+                        .collect(Collectors.toMap(
+                            StreamsGroupMetadataValue.LastAssignmentConfig::key,
+                            StreamsGroupMetadataValue.LastAssignmentConfig::value
+                        ))
+                );
+            } else {
+                streamsGroup.setLastAssignmentConfigs(Map.of());
+            }
+
         } else {
             StreamsGroup streamsGroup;
             try {
@@ -8277,19 +8316,37 @@ public class GroupMetadataManager {
         return deleteShareGroupStateRequestTopicsData;
     }
 
-    public Map.Entry<AlterShareGroupOffsetsResponseData, InitializeShareGroupStateParameters> completeAlterShareGroupOffsets(
+    /**
+     * Handles an AlterShareGroupOffsets request.
+     *
+     * Make the following checks to make sure the AlterShareGroupOffsetsRequest request is valid:
+     * 1. Checks whether the provided group is empty
+     * 2. Checks the requested topics are presented in the metadataImage
+     * 3. Checks the corresponding share partitions in AlterShareGroupOffsetsRequest are existing
+     *
+     * @param groupId   The group id from the request.
+     * @param topics    The topic information for altering the share group's offsets from the request.
+     *
+     * @return A Result containing a pair of ShareGroupHeartbeat response and maybe InitializeShareGroupStateParameters
+     *         and a list of records to update the state machine.
+     */
+    public CoordinatorResult<Map.Entry<AlterShareGroupOffsetsResponseData, InitializeShareGroupStateParameters>, CoordinatorRecord> alterShareGroupOffsets(
         String groupId,
-        AlterShareGroupOffsetsRequestData alterShareGroupOffsetsRequest,
-        List<CoordinatorRecord> records
-    ) {
+        AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection topics
+    ) throws ApiException {
         final long currentTimeMs = time.milliseconds();
-        Group group = groups.get(groupId);
+        final List<CoordinatorRecord> records = new ArrayList<>();
+
+        // Get or create the share group. If the group exists, check that it's empty. If it is created, it is empty.
+        final ShareGroup group = getOrMaybeCreateShareGroup(groupId, true);
+        throwIfShareGroupIsNotEmpty(group);
+
         AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection alterShareGroupOffsetsResponseTopics = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection();
 
         Map<Uuid, InitMapValue> initializingTopics = new HashMap<>();
         Map<Uuid, Map<Integer, Long>> offsetByTopicPartitions = new HashMap<>();
 
-        alterShareGroupOffsetsRequest.topics().forEach(topic -> {
+        topics.forEach(topic -> {
             Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadataOpt = metadataImage.topicMetadata(topic.topicName());
             if (topicMetadataOpt.isPresent()) {
                 var topicMetadata = topicMetadataOpt.get();
@@ -8343,10 +8400,13 @@ public class GroupMetadataManager {
         });
 
         addInitializingTopicsRecords(groupId, records, initializingTopics);
-        return Map.entry(
-            new AlterShareGroupOffsetsResponseData()
-                .setResponses(alterShareGroupOffsetsResponseTopics),
-            buildInitializeShareGroupState(groupId, ((ShareGroup) group).groupEpoch(), offsetByTopicPartitions)
+        return new CoordinatorResult<>(
+            records,
+            Map.entry(
+                new AlterShareGroupOffsetsResponseData()
+                    .setResponses(alterShareGroupOffsetsResponseTopics),
+                buildInitializeShareGroupState(groupId, group.groupEpoch(), offsetByTopicPartitions)
+            )
         );
     }
 
@@ -8409,7 +8469,7 @@ public class GroupMetadataManager {
         return new CoordinatorResult<>(records);
     }
 
-    /*
+    /**
      * Returns a list of {@link DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic} corresponding to the
      * topics for which persister delete share group state request was successful
      * @param groupId                    group ID of the share group

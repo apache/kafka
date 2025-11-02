@@ -19,9 +19,6 @@ package org.apache.kafka.tools.streams;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -32,7 +29,6 @@ import static org.apache.kafka.tools.ToolsUtils.minus;
 
 public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     private static final String NL = System.lineSeparator();
-    static final Logger LOGGER = LoggerFactory.getLogger(StreamsGroupCommandOptions.class);
 
     private static final String BOOTSTRAP_SERVER_DOC = "REQUIRED: The server(s) to connect to.";
     private static final String GROUP_DOC = "The streams group we wish to act on.";
@@ -144,11 +140,10 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         deleteOpt = parser.accepts("delete", DELETE_DOC);
         deleteOffsetsOpt = parser.accepts("delete-offsets", DELETE_OFFSETS_DOC);
         timeoutMsOpt = parser.accepts("timeout", TIMEOUT_MS_DOC)
-            .availableIf(describeOpt)
             .withRequiredArg()
             .describedAs("timeout (ms)")
             .ofType(Long.class)
-            .defaultsTo(5000L);
+            .defaultsTo(30000L);
         commandConfigOpt = parser.accepts("command-config", COMMAND_CONFIG_DOC)
             .withRequiredArg()
             .describedAs("command config property file")
@@ -214,9 +209,6 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
 
         if (options.has(describeOpt)) {
             checkDescribeArgs();
-        } else {
-            if (options.has(timeoutMsOpt))
-                LOGGER.debug("Option " + timeoutMsOpt + " is applicable only when " + describeOpt + " is used.");
         }
 
         if (options.has(deleteOpt)) {
