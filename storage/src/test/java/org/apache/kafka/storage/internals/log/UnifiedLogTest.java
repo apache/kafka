@@ -19,9 +19,12 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.server.storage.log.FetchIsolation;
@@ -36,6 +39,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -130,7 +134,7 @@ public class UnifiedLogTest {
 
     @Test
     public void shouldTruncateLeaderEpochsWhenDeletingSegments() throws IOException {
-        Supplier<MemoryRecords>  records = () -> TestUtils.singletonRecords("test".getBytes());
+        Supplier<MemoryRecords>  records = () -> singletonRecords("test".getBytes());
         LogConfig config = new LogTestUtils.LogConfigBuilder()
                 .withSegmentBytes(records.get().sizeInBytes() * 5)
                 .withRetentionBytes(records.get().sizeInBytes() * 10L)
@@ -159,7 +163,7 @@ public class UnifiedLogTest {
 
     @Test
     public void shouldUpdateOffsetForLeaderEpochsWhenDeletingSegments() throws IOException {
-        Supplier<MemoryRecords> records = () -> TestUtils.singletonRecords("test".getBytes());
+        Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes());
         LogConfig config = new LogTestUtils.LogConfigBuilder()
                 .withSegmentBytes(records.get().sizeInBytes() * 5)
                 .withRetentionBytes(records.get().sizeInBytes() * 10L)
@@ -188,7 +192,7 @@ public class UnifiedLogTest {
 
     @Test
     public void shouldTruncateLeaderEpochCheckpointFileWhenTruncatingLog() throws IOException {
-        Supplier<MemoryRecords> records = () -> TestUtils.records(List.of(new SimpleRecord("value".getBytes())), 0, 0);
+        Supplier<MemoryRecords> records = () -> records(List.of(new SimpleRecord("value".getBytes())), 0, 0);
         LogConfig config = new LogTestUtils.LogConfigBuilder()
                 .withSegmentBytes(10 * records.get().sizeInBytes())
                 .build();
@@ -224,7 +228,7 @@ public class UnifiedLogTest {
 
     @Test
     public void shouldDeleteSizeBasedSegments() throws IOException {
-        Supplier<MemoryRecords> records = () -> TestUtils.singletonRecords("test".getBytes());
+        Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes());
         LogConfig config = new LogTestUtils.LogConfigBuilder()
                 .withSegmentBytes(records.get().sizeInBytes() * 5)
                 .withRetentionBytes(records.get().sizeInBytes() * 10L)
@@ -243,7 +247,7 @@ public class UnifiedLogTest {
 
     @Test
     public void shouldNotDeleteSizeBasedSegmentsWhenUnderRetentionSize() throws IOException {
-        Supplier<MemoryRecords> records = () -> TestUtils.singletonRecords("test".getBytes());
+        Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes());
         LogConfig config = new LogTestUtils.LogConfigBuilder()
                 .withSegmentBytes(records.get().sizeInBytes() * 5)
                 .withRetentionBytes(records.get().sizeInBytes() * 15L)
@@ -263,7 +267,7 @@ public class UnifiedLogTest {
 
     @Test
     public void shouldDeleteTimeBasedSegmentsReadyToBeDeleted() throws IOException {
-        Supplier<MemoryRecords> records = () -> TestUtils.singletonRecords("test".getBytes(), 10L);
+        Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes(), 10L);
         LogConfig config = new LogTestUtils.LogConfigBuilder()
                 .withSegmentBytes(records.get().sizeInBytes() * 15)
                 .withRetentionMs(10000L)
@@ -282,7 +286,7 @@ public class UnifiedLogTest {
 
     @Test
     public void shouldNotDeleteTimeBasedSegmentsWhenNoneReadyToBeDeleted() throws IOException {
-        Supplier<MemoryRecords> records = () -> TestUtils.singletonRecords("test".getBytes(), mockTime.milliseconds());
+        Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes(), mockTime.milliseconds());
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .withSegmentBytes(records.get().sizeInBytes() * 5)
                 .withRetentionMs(10000000)
@@ -301,7 +305,7 @@ public class UnifiedLogTest {
 
     @Test
     public void shouldNotDeleteSegmentsWhenPolicyDoesNotIncludeDelete() throws IOException {
-        Supplier<MemoryRecords> records = () -> TestUtils.singletonRecords("test".getBytes(), "test".getBytes(), 10L);
+        Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes(), "test".getBytes(), 10L);
         LogConfig config = new LogTestUtils.LogConfigBuilder()
                 .withSegmentBytes(records.get().sizeInBytes() * 5)
                 .withRetentionMs(10000)
@@ -325,7 +329,7 @@ public class UnifiedLogTest {
 
     @Test
     public void shouldDeleteSegmentsReadyToBeDeletedWhenCleanupPolicyIsCompactAndDelete() throws IOException {
-        Supplier<MemoryRecords> records = () -> TestUtils.singletonRecords("test".getBytes(), "test".getBytes(), 10L);
+        Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes(), "test".getBytes(), 10L);
         LogConfig config = new LogTestUtils.LogConfigBuilder()
                 .withSegmentBytes(records.get().sizeInBytes() * 5)
                 .withRetentionBytes(records.get().sizeInBytes() * 10L)
@@ -346,7 +350,7 @@ public class UnifiedLogTest {
 
     @Test
     public void shouldDeleteLocalLogSegmentsWhenPolicyIsEmptyWithSizeRetention() throws IOException {
-        Supplier<MemoryRecords> records = () -> TestUtils.singletonRecords("test".getBytes(), "test".getBytes(), 10L);
+        Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes(), "test".getBytes(), 10L);
         int recordSize = records.get().sizeInBytes();
         LogConfig config = new LogTestUtils.LogConfigBuilder()
                 .withSegmentBytes(recordSize * 2)
@@ -372,7 +376,7 @@ public class UnifiedLogTest {
     @Test
     public void shouldDeleteLocalLogSegmentsWhenPolicyIsEmptyWithMsRetention() throws IOException {
         long oldTimestamp = mockTime.milliseconds() - 20000;
-        Supplier<MemoryRecords> oldRecords = () -> TestUtils.singletonRecords("test".getBytes(), "test".getBytes(), oldTimestamp);
+        Supplier<MemoryRecords> oldRecords = () -> singletonRecords("test".getBytes(), "test".getBytes(), oldTimestamp);
         int recordSize = oldRecords.get().sizeInBytes();
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .withSegmentBytes(recordSize * 2)
@@ -386,7 +390,7 @@ public class UnifiedLogTest {
             log.appendAsLeader(oldRecords.get(), 0);
         }
 
-        Supplier<MemoryRecords> newRecords = () -> TestUtils.singletonRecords("test".getBytes(), "test".getBytes(), mockTime.milliseconds());
+        Supplier<MemoryRecords> newRecords = () -> singletonRecords("test".getBytes(), "test".getBytes(), mockTime.milliseconds());
         for (int i = 0; i < 5; i++) {
             log.appendAsLeader(newRecords.get(), 0);
         }
@@ -403,7 +407,7 @@ public class UnifiedLogTest {
 
     @Test
     public void testLogDeletionAfterDeleteRecords() throws IOException {
-        Supplier<MemoryRecords> records = () -> TestUtils.singletonRecords("test".getBytes());
+        Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes());
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .withSegmentBytes(records.get().sizeInBytes() * 5)
                 .build();
@@ -434,7 +438,7 @@ public class UnifiedLogTest {
 
     @Test
     public void testLogDeletionAfterClose() throws IOException {
-        Supplier<MemoryRecords> records = () -> TestUtils.singletonRecords("test".getBytes(), mockTime.milliseconds() - 1000);
+        Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes(), mockTime.milliseconds() - 1000);
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .withSegmentBytes(records.get().sizeInBytes() * 5)
                 .withSegmentIndexBytes(1000)
@@ -458,7 +462,7 @@ public class UnifiedLogTest {
 
     @Test
     public void testDeleteOldSegments() throws IOException {
-        Supplier<MemoryRecords> records = () -> TestUtils.singletonRecords("test".getBytes(), mockTime.milliseconds() - 1000);
+        Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes(), mockTime.milliseconds() - 1000);
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .withSegmentBytes(records.get().sizeInBytes() * 5)
                 .withSegmentIndexBytes(1000)
@@ -521,7 +525,7 @@ public class UnifiedLogTest {
 
     @Test
     public void shouldDeleteStartOffsetBreachedSegmentsWhenPolicyDoesNotIncludeDelete() throws IOException {
-        Supplier<MemoryRecords> records = () -> TestUtils.singletonRecords("test".getBytes(), "test".getBytes(), 10L);
+        Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes(), "test".getBytes(), 10L);
         int recordsPerSegment = 5;
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
                 .withSegmentBytes(records.get().sizeInBytes() * recordsPerSegment)
@@ -610,7 +614,7 @@ public class UnifiedLogTest {
 
     private void append(int epoch, long startOffset, int count) {
         Function<Integer, MemoryRecords> records = i ->
-                TestUtils.records(List.of(new SimpleRecord("value".getBytes())), startOffset + i, epoch);
+                records(List.of(new SimpleRecord("value".getBytes())), startOffset + i, epoch);
         for (int i = 0; i < count; i++) {
             log.appendAsFollower(records.apply(i), epoch);
         }
@@ -646,5 +650,85 @@ public class UnifiedLogTest {
 
         this.logsToClose.add(log);
         return log;
+    }
+
+    public static MemoryRecords singletonRecords(byte[] value, byte[] key) {
+        return singletonRecords(value, key, Compression.NONE, RecordBatch.NO_TIMESTAMP, RecordBatch.CURRENT_MAGIC_VALUE);
+    }
+
+    public static MemoryRecords singletonRecords(byte[] value, long timestamp) {
+        return singletonRecords(value, null, Compression.NONE, timestamp, RecordBatch.CURRENT_MAGIC_VALUE);
+    }
+
+    public static MemoryRecords singletonRecords(
+            byte[] value
+    ) {
+        return records(List.of(new SimpleRecord(RecordBatch.NO_TIMESTAMP, null, value)),
+                RecordBatch.CURRENT_MAGIC_VALUE,
+                Compression.NONE,
+                RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH,
+                RecordBatch.NO_SEQUENCE,
+                0,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH
+        );
+    }
+
+    public static MemoryRecords singletonRecords(
+            byte[] value,
+            byte[] key,
+            Compression codec,
+            long timestamp,
+            byte magicValue
+    ) {
+        return records(List.of(new SimpleRecord(timestamp, key, value)),
+                magicValue, codec,
+                RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH,
+                RecordBatch.NO_SEQUENCE,
+                0,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH
+        );
+    }
+
+    public static MemoryRecords singletonRecords(byte[] value, byte[] key, long timestamp) {
+        return singletonRecords(value, key, Compression.NONE, timestamp, RecordBatch.CURRENT_MAGIC_VALUE);
+    }
+
+    public static MemoryRecords records(List<SimpleRecord> records) {
+        return records(records, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, 0L, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+    }
+
+    public static MemoryRecords records(List<SimpleRecord> records, long baseOffset) {
+        return records(records, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, baseOffset, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+    }
+
+    public static MemoryRecords records(List<SimpleRecord> records, long baseOffset, int partitionLeaderEpoch) {
+        return records(records, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, baseOffset, partitionLeaderEpoch);
+    }
+
+    public static MemoryRecords records(List<SimpleRecord> records, byte magicValue, Compression compression) {
+        return records(records, magicValue, compression, RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, 0L, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+    }
+
+    public static MemoryRecords records(List<SimpleRecord> records,
+                                        byte magicValue,
+                                        Compression compression,
+                                        long producerId,
+                                        short producerEpoch,
+                                        int sequence,
+                                        long baseOffset,
+                                        int partitionLeaderEpoch) {
+        ByteBuffer buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records));
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buf, magicValue, compression, TimestampType.CREATE_TIME, baseOffset,
+                System.currentTimeMillis(), producerId, producerEpoch, sequence, false, partitionLeaderEpoch);
+        for (SimpleRecord record : records) {
+            builder.append(record);
+        }
+        return builder.build();
     }
 }
