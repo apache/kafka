@@ -144,7 +144,7 @@ public class RepartitionMergeAcrossValueChangingOperationTest {
             .to(OUTPUT_TOPIC_1, Produced.with(Serdes.String(), Serdes.Long()));
 
         // Branch 2: filter → groupByKey → count
-        // Creates repartition-2 (cannot merge with repartition-1 due to mapValues)
+        // Creates repartition-2 (prior to KAFKA-19669, cannot merge with repartition-1 due to mapValues)
         mapped
             .filter((k, v) -> v.length() > 5)
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
@@ -163,11 +163,12 @@ public class RepartitionMergeAcrossValueChangingOperationTest {
         // Count repartition topics
         final int repartitionCount = countRepartitionTopics(topologyString);
 
-        // CURRENT BEHAVIOR: 2 repartition topics created
+        // Prior to KAFKA-19669: 2 repartition topics created
         // This is because optimization cannot push repartition above mapValues
+        // KAFKA-19669 merges these two topics
         assertEquals(1, repartitionCount,
-            "Current behavior: 2 repartition topics created because optimization " +
-            "is blocked by value-changing operation (mapValues)");
+            "KAFKA-19669 behavior: 1 merged repartition topic created because optimization " +
+            "can pass any value-changing operation (mapValues)");
 
         // Verify topology still works correctly
         topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration);
@@ -259,7 +260,8 @@ public class RepartitionMergeAcrossValueChangingOperationTest {
 
         // Without KAFKA-19669: 1 repartition topic (optimization successful!)
         assertEquals(1, repartitionCount,
-            "Optimization works: 1 merged repartition topic when no value-changing operation present");
+            "Prior-KAFKA-19669 Optimization still works: " +
+                    "1 merged repartition topic when no value-changing operation present");
 
         // Verify topology works correctly
         topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration);
@@ -339,9 +341,9 @@ public class RepartitionMergeAcrossValueChangingOperationTest {
 
         final int repartitionCount = countRepartitionTopics(topologyString);
 
-        // Optimize: push repartition all the way to source with Integer serde
+        // KAFKA-19669: push repartition all the way to source with Integer serde
         assertEquals(1, repartitionCount,
-            "Current: 2 repartition topics due to value-changing operations chain");
+            "KAFKA19669: merge 2 repartition topics to 1 due to value-changing operations chain");
 
         topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration);
 

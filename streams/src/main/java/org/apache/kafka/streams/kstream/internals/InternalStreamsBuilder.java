@@ -280,7 +280,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         if (node.isKeyChangingOperation()) {
             keyChangingOperationsToOptimizableRepartitionNodes.put(node, new LinkedHashSet<>());
         } else if (node instanceof OptimizableRepartitionNode) {
-            // final GraphNode parentNode = getKeyChangingParentNode(node);
             final GraphNode parentNode = findParentNodeMatching(node, GraphNode::isKeyChangingOperation);
             if (parentNode != null) {
                 keyChangingOperationsToOptimizableRepartitionNodes.get(parentNode).add((OptimizableRepartitionNode<?, ?>) node);
