@@ -36,6 +36,7 @@ import org.slf4j.Logger;
 import java.util.Collections;
 
 import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
+import static org.apache.kafka.clients.consumer.internals.RequestState.RETRY_BACKOFF_JITTER;
 
 /**
  * <p>Manages the request creation and response handling for the heartbeat. The module creates a
@@ -113,7 +114,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
-                retryBackoffMaxMs, maxPollIntervalMs);
+                retryBackoffMaxMs, RETRY_BACKOFF_JITTER);
         this.pollTimer = time.timer(maxPollIntervalMs);
         this.metricsManager = metricsManager;
     }
