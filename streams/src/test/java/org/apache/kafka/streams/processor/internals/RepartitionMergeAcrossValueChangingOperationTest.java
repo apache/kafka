@@ -44,7 +44,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -57,31 +56,20 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Test demonstrating the current limitation of merge.repartition.topic optimization
- * when value-changing operations are present.
+ * Test KAFAK-19669 merge.repartition.topic optimization when value-changing operations are present.
  *
- * CURRENT BEHAVIOR:
+ * Without optimization (KAFKA-19669):
  * - Optimization stops at value-changing operations (mapValues, flatMapValues, etc.)
  * - Cannot merge repartition topics that are separated by value-changing operations
  * - Results in multiple repartition topics even when they could be merged
  *
- * PROPOSED ENHANCEMENT (KAFKA-7138):
+ * With optimization (KAFKA-19669):
  * - Track input/output serdes at each node
  * - Allow pushing repartition upstream past value-changing operations
  * - Switch to upstream serdes when merging repartitions
- * - Would enable merging repartitions across value-changing boundaries
+ * - Enable merging repartitions across value-changing boundaries
  */
 public class RepartitionMergeAcrossValueChangingOperationTest {
-
-    /// key-changing operation -> repartition
-    /// value-changing operation -> cannot reorder repartition past this point
-
-    /// Critical locations to debug:
-    /// - InternalStreamBuilder.getKeyChangingParentNode() - The decision point
-    /// - InternalStreamBuilder.mergeRepartitionTopics() - Entry point for optimization
-    /// - isValueChangingOperation() - Flag checking
-    /// - setValueChangingOperation() - Where flags are set
-
 
     private static final String INPUT_TOPIC = "input";
     private static final String OUTPUT_TOPIC_1 = "output1";
@@ -121,17 +109,12 @@ public class RepartitionMergeAcrossValueChangingOperationTest {
      *       → groupByKey → count → output1
      *       → filter → groupByKey → count → output2
      *
-     * CURRENT BEHAVIOR:
-     * - Creates 2 repartition topics (both with String value serde)
-     * - Optimization blocked by mapValues operation
-     *
-     * DESIRED BEHAVIOR (with enhancement):
-     * - Could create 1 repartition topic (with Integer value serde from before mapValues)
+     * - Should create 1 repartition topic (with Integer value serde from before mapValues)
      * - Push repartition above mapValues
      * - Both branches read from same repartition and apply mapValues afterward
      */
     @Test
-    public void shouldCreateTwoRepartitionTopicsDueToValueChangingOperation() {
+    public void singleValueChangingOperation() {
         streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -228,12 +211,12 @@ public class RepartitionMergeAcrossValueChangingOperationTest {
      *     → groupByKey → count → output1
      *     → filter → groupByKey → count → output2
      *
-     * CURRENT BEHAVIOR:
+     *  Prior to KAFKA-19669, repartition applies to this case:
      * - Creates 1 repartition topic (optimization successful)
      * - Both branches share the same repartition topic
      */
     @Test
-    public void shouldMergeRepartitionTopicsWithoutValueChangingOperation() {
+    public void withoutValueChangingOperation() {
         streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -274,7 +257,7 @@ public class RepartitionMergeAcrossValueChangingOperationTest {
 
         final int repartitionCount = countRepartitionTopics(topologyString);
 
-        // CURRENT BEHAVIOR: 1 repartition topic (optimization successful!)
+        // Without KAFKA-19669: 1 repartition topic (optimization successful!)
         assertEquals(1, repartitionCount,
             "Optimization works: 1 merged repartition topic when no value-changing operation present");
 
@@ -310,11 +293,10 @@ public class RepartitionMergeAcrossValueChangingOperationTest {
     /**
      * Test Case 3: Multiple value-changing operations in sequence
      *
-     * Demonstrates even more complex scenario where multiple value transformations
-     * block the optimization.
+     * More complex scenario where multiple value transformations do not block the optimization.
      */
     @Test
-    public void shouldCreateTwoRepartitionTopicsWithMultipleValueChangingOperations() {
+    public void multipleValueChangingOperations() {
         streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -357,8 +339,7 @@ public class RepartitionMergeAcrossValueChangingOperationTest {
 
         final int repartitionCount = countRepartitionTopics(topologyString);
 
-        // CURRENT: 2 repartition topics
-        // DESIRED: Could push repartition all the way to source with Integer serde
+        // Optimize: push repartition all the way to source with Integer serde
         assertEquals(1, repartitionCount,
             "Current: 2 repartition topics due to value-changing operations chain");
 
@@ -385,9 +366,6 @@ public class RepartitionMergeAcrossValueChangingOperationTest {
         assertThat(output2.get("b"), equalTo(1L));
     }
 
-    /**
-     * Helper method to count repartition topics in the topology
-     */
     private int countRepartitionTopics(final String topologyString) {
         final Matcher matcher = repartitionTopicPattern.matcher(topologyString);
         final List<String> repartitionTopics = new ArrayList<>();
@@ -399,16 +377,5 @@ public class RepartitionMergeAcrossValueChangingOperationTest {
             System.out.println("  - " + topic);
         }
         return repartitionTopics.size();
-    }
-
-    /**
-     * Helper to convert KeyValue list to Map
-     */
-    private <K, V> Map<K, V> keyValueListToMap(final List<KeyValue<K, V>> keyValuePairs) {
-        final Map<K, V> map = new HashMap<>();
-        for (final KeyValue<K, V> pair : keyValuePairs) {
-            map.put(pair.key, pair.value);
-        }
-        return map;
     }
 }
