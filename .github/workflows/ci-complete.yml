@@ -32,6 +32,10 @@ run-name: Build Scans for ${{ github.event.workflow_run.display_title}}
 # the repository secrets. Here we can download the build scan files produced by a PR and publish
 # them to develocity.apache.org.
 #
+# The CI workflow itself runs according to the branch of the PR or push event. However, this
+# ci-complete workflow always runs using the trunk branch, regardless of the source branch of the
+# CI workflow.
+#
 # If we need to do things like comment on, label, or otherwise modify PRs from public forks. This
 # workflow is the place to do it. PR number is ${{ github.event.workflow_run.pull_requests[0].number }}
 
@@ -65,7 +69,6 @@ jobs:
       fail-fast: false
       matrix:
         build-scan-name: ${{ fromJson(needs.get-build-scan-names.outputs.build-scan-names) }}
-        # Make sure these match build.yml and also keep in mind that GitHub Actions build will always use this file from the trunk branch.
     steps:
       - name: Setup build scan info
         run: |
