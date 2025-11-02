@@ -37,7 +37,7 @@ run-name: Build Scans for ${{ github.event.workflow_run.display_title}}
 
 jobs:
   get-build-scan-names:
-    if: github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure'
+    if: (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure')
     runs-on: ubuntu-latest
     outputs:
       build-scan-names: ${{ steps.build-scan-names.outputs.build-scan-names }}
@@ -59,7 +59,7 @@ jobs:
   upload-build-scan:
     needs: get-build-scan-names
     # Skip this workflow if the CI run was skipped or cancelled
-    if: github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure'
+    if: (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -110,7 +110,7 @@ jobs:
           url: '${{ github.event.workflow_run.html_url }}'
           description: 'Could not find build scan'
           context: Gradle Build Scan / ${{ env.STATUS_CONTEXT }}
-          state: 'success' # Always mark as successful as a temporary fix; non-trunk branches will miss build scan. Real fix in KAFKA-19768
+          state: 'error'
       - name: Publish Scan
         id: publish-build-scan
         if: ${{ steps.download-build-scan.outcome == 'success' }}
