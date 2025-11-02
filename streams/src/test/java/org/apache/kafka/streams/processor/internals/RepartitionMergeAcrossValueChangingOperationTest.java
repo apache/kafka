@@ -57,17 +57,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Test KAFAK-19669 merge.repartition.topic optimization when value-changing operations are present.
- *
- * Without optimization (KAFKA-19669):
- * - Optimization stops at value-changing operations (mapValues, flatMapValues, etc.)
- * - Cannot merge repartition topics that are separated by value-changing operations
- * - Results in multiple repartition topics even when they could be merged
- *
- * With optimization (KAFKA-19669):
- * - Track input/output serdes at each node
- * - Allow pushing repartition upstream past value-changing operations
- * - Switch to upstream serdes when merging repartitions
- * - Enable merging repartitions across value-changing boundaries
  */
 public class RepartitionMergeAcrossValueChangingOperationTest {
 
@@ -125,7 +114,7 @@ public class RepartitionMergeAcrossValueChangingOperationTest {
             Consumed.with(Serdes.String(), Serdes.Integer())
         );
 
-        // KEY-CHANGING operation to trigger repartitioning
+        // Key-changing operation to trigger repartitioning
         final KStream<String, Integer> rekeyed = source.map(
             (k, v) -> KeyValue.pair(k.toLowerCase(Locale.getDefault()), v)
         );
@@ -227,7 +216,7 @@ public class RepartitionMergeAcrossValueChangingOperationTest {
             Consumed.with(Serdes.String(), Serdes.Integer())
         );
 
-        // KEY-CHANGING operation to trigger repartitioning
+        // Key-changing operation to trigger repartitioning
         final KStream<String, Integer> rekeyed = source.map(
             (k, v) -> KeyValue.pair(k.toLowerCase(Locale.getDefault()), v)
         );
@@ -308,7 +297,7 @@ public class RepartitionMergeAcrossValueChangingOperationTest {
             Consumed.with(Serdes.String(), Serdes.Integer())
         );
 
-        // KEY-CHANGING operation to trigger repartitioning
+        // Key-changing operation to trigger repartitioning
         final KStream<String, Integer> rekeyed = source.map(
             (k, v) -> KeyValue.pair(k.toLowerCase(Locale.getDefault()), v)
         );
