@@ -1507,6 +1507,35 @@ class StreamsGroupHeartbeatRequestManagerTest {
         }
     }
 
+    @Test
+    public void testStreamsRebalanceDataHeartbeatIntervalMsUpdatedOnSuccess() {
+        try (
+                final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
+                        HeartbeatRequestState.class,
+                        (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true))
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+            when(membershipManager.groupId()).thenReturn(GROUP_ID);
+            when(membershipManager.memberId()).thenReturn(MEMBER_ID);
+            when(membershipManager.memberEpoch()).thenReturn(MEMBER_EPOCH);
+            when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
+
+            // Initially, heartbeatIntervalMs should be -1
+            assertEquals(-1, streamsRebalanceData.heartbeatIntervalMs());
+
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+            assertEquals(1, result.unsentRequests.size());
+
+            final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+            final ClientResponse response = buildClientResponse();
+            networkRequest.handler().onComplete(response);
+
+            // After successful response, heartbeatIntervalMs should be updated
+            assertEquals(RECEIVED_HEARTBEAT_INTERVAL_MS, streamsRebalanceData.heartbeatIntervalMs());
+        }
+    }
+
     private static ConsumerConfig config() {
         Properties prop = new Properties();
         prop.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);

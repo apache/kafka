@@ -24,24 +24,14 @@ import java.util.concurrent.TimeUnit
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.purgatory.DelayedOperation
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
-import org.apache.kafka.storage.internals.log.LogOffsetMetadata
+import org.apache.kafka.storage.internals.log.{FetchPartitionStatus, LogOffsetMetadata}
 
 import scala.collection._
 import scala.jdk.CollectionConverters._
-
-case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInfo: PartitionData) {
-
-  override def toString: String = {
-    "[startOffsetMetadata: " + startOffsetMetadata +
-      ", fetchInfo: " + fetchInfo +
-      "]"
-  }
-}
 
 /**
  * A delayed fetch operation that can be created by the replica manager and watched

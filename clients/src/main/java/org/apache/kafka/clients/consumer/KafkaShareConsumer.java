@@ -17,9 +17,9 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.KafkaClient;
-import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerDelegate;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerDelegateCreator;
+import org.apache.kafka.clients.consumer.internals.ShareConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaShareConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
@@ -392,7 +392,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
                        final Time time,
                        final KafkaClient client,
                        final SubscriptionState subscriptions,
-                       final ConsumerMetadata metadata) {
+                       final ShareConsumerMetadata metadata) {
         delegate = CREATOR.create(
                 logContext, clientId, groupId, config, keyDeserializer, valueDeserializer,
                 time, client, subscriptions, metadata);
@@ -630,6 +630,16 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     @Override
     public Uuid clientInstanceId(Duration timeout) {
         return delegate.clientInstanceId(timeout);
+    }
+
+    /**
+     * Returns the acquisition lock timeout for the last set of records fetched from the cluster.
+     *
+     * @return The acquisition lock timeout in milliseconds, or {@code Optional.empty()} if the timeout is not known.
+     */
+    @Override
+    public Optional<Integer> acquisitionLockTimeoutMs() {
+        return delegate.acquisitionLockTimeoutMs();
     }
 
     /**

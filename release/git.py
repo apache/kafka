@@ -31,14 +31,16 @@ def __defaults(kwargs):
         kwargs["cwd"] = repo_dir
 
 
-def has_staged_changes(**kwargs):
+def ensure_no_staged_changes(**kwargs):
     __defaults(kwargs)
     execute("git diff --cached --exit-code --quiet", **kwargs)
+    return True
 
 
-def has_unstaged_changes(**kwargs):
+def ensure_no_unstaged_changes(**kwargs):
     __defaults(kwargs)
     execute("git diff --exit-code --quiet", **kwargs)
+    return True
 
 
 def fetch_tags(remote=push_remote_name, **kwargs):

@@ -76,4 +76,12 @@ public class SaslAuthenticateRequest extends AbstractRequest {
         return new SaslAuthenticateRequest(new SaslAuthenticateRequestData(readable, version),
             version);
     }
+
+    // Do not print authBytes, overwrite a temp copy of the data with empty bytes
+    @Override
+    public String toString() {
+        SaslAuthenticateRequestData tempData = data.duplicate();
+        tempData.setAuthBytes(new byte[0]);
+        return tempData.toString();
+    }
 }

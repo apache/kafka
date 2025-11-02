@@ -58,6 +58,7 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
         return null;
     }
 
+    @SuppressWarnings("removal")
     @Override
     public Subscription buildSubscriptionV1(List<String> topics, List<TopicPartition> partitions, int generationId, int consumerIndex) {
         assignor.onAssignment(new ConsumerPartitionAssignor.Assignment(partitions), new ConsumerGroupMetadata(groupId, generationId, consumer1, Optional.empty()));
@@ -69,12 +70,14 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
         return new Subscription(topics, assignor.subscriptionUserData(new HashSet<>(topics)), partitions, generationId, consumerRackId(consumerIndex));
     }
 
+    @SuppressWarnings("removal")
     @Override
     public ByteBuffer generateUserData(List<String> topics, List<TopicPartition> partitions, int generation) {
         assignor.onAssignment(new ConsumerPartitionAssignor.Assignment(partitions), new ConsumerGroupMetadata(groupId, generationId, consumer1, Optional.empty()));
         return assignor.subscriptionUserData(new HashSet<>(topics));
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testEncodeAndDecodeGeneration() {
         Subscription subscription = new Subscription(topics(topic), assignor.subscriptionUserData(new HashSet<>(topics(topic))));
@@ -141,6 +144,7 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
         assertTrue(isFullyBalanced(assignment));
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testMemberDataWithInconsistentData() {
         List<TopicPartition> ownedPartitionsInUserdata = partitions(tp1);

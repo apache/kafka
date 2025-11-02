@@ -20,7 +20,9 @@
   // Version 0 was used for early access of KIP-932 in Apache Kafka 4.0 but removed in Apacke Kafka 4.1.
   //
   // Version 1 is the initial stable version (KIP-932).
-  "validVersions": "1",
+  //
+  // Version 2 introduces Renew acknowledgements (KIP-1222).
+  "validVersions": "1-2",
   "flexibleVersions": "0+",
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
