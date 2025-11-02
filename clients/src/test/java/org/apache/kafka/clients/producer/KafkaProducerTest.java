@@ -176,12 +176,11 @@ import static org.mockito.Mockito.when;
 public class KafkaProducerTest {
 
     private static final String INIT_TXN_TIMEOUT_MSG =
-            "InitTransactions timed out – could not discover the transaction coordinator or "
-            + "receive the InitProducerId response within max.block.ms (broker unavailable, "
-            + "network lag, or ACL denial).";
+            "InitTransactions timed out — " +
+            "did not complete coordinator discovery or " +
+            "receive the InitProducerId response within max.block.ms.";
     private static final String METADATA_TIMEOUT_MSG =
-            "Metadata update timed out – topic missing, ACL denial, broker/partition unavailable, "
-            + "or client sender/buffer stalled.";
+            "Metadata update timed out – did not complete metadata update within max.block.ms";
 
     private final String topic = "topic";
     private final Collection<Node> nodes = Collections.singletonList(NODE);

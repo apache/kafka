@@ -249,23 +249,19 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public static final String NETWORK_THREAD_PREFIX = "kafka-producer-network-thread";
     public static final String PRODUCER_METRIC_GROUP_NAME = "producer-metrics";
 
-    private static final String INIT_TXN_TIMEOUT_MSG =
-            "InitTransactions timed out – could not discover the transaction coordinator or "
-            + "receive the InitProducerId response within max.block.ms (broker unavailable, "
-            + "network lag, or ACL denial).";
+    private static final String INIT_TXN_TIMEOUT_MSG = "InitTransactions timed out — " +
+            "did not complete coordinator discovery or " +
+            "receive the InitProducerId response within max.block.ms.";
+
     private static final String SEND_OFFSETS_TIMEOUT_MSG =
-            "SendOffsetsToTransaction timed out – unable to reach the consumer-group or "
-            + "transaction coordinator or to receive the TxnOffsetCommit/AddOffsetsToTxn response "
-            + "within max.block.ms (coordinator unavailable, rebalance in progress, network lag, or ACL denial).";
+            "SendOffsetsToTransaction timed out – did not reach the coordinator or " +
+                    "receive the TxnOffsetCommit/AddOffsetsToTxn response within max.block.ms";
     private static final String COMMIT_TXN_TIMEOUT_MSG =
-            "CommitTransaction timed out – failed to complete EndTxn with the transaction coordinator "
-            + "within max.block.ms (coordinator unavailable, network lag, or ACL denial).";
+            "CommitTransaction timed out – did not complete EndTxn with the transaction coordinator within max.block.ms";
     private static final String ABORT_TXN_TIMEOUT_MSG =
-            "AbortTransaction timed out – could not complete EndTxn(abort) with the transaction coordinator "
-            + "within max.block.ms (coordinator unavailable, network lag, or ACL denial).";
+            "AbortTransaction timed out – did not complete EndTxn(abort) with the transaction coordinator within max.block.ms";
     private static final String METADATA_TIMEOUT_MSG =
-            "Metadata update timed out – topic missing, ACL denial, broker/partition unavailable, "
-            + "or client sender/buffer stalled.";
+            "Metadata update timed out – did not complete metadata update within max.block.ms";
 
     private final String clientId;
     // Visible for testing
@@ -1269,6 +1265,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 final String errorMessage = getErrorMessage(partitionsCount, topic, partition, maxWaitMs);
                 if (metadata.getError(topic) != null && metadata.getError(topic).exception() instanceof RetriableException) {
                     throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
+                }
+                if (metadata.getError(topic) != null) {
+                    throw new TimeoutException(errorMessage,
+                            new KafkaException(METADATA_TIMEOUT_MSG + "; " + metadata.getError(topic).message()));
                 }
                 throw new TimeoutException(errorMessage, new KafkaException(METADATA_TIMEOUT_MSG));
             }
