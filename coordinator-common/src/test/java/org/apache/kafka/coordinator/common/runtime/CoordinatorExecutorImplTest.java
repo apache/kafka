@@ -21,6 +21,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.util.FutureUtils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.util.List;
@@ -167,8 +169,9 @@ public class CoordinatorExecutorImplTest {
         assertTrue(operationCalled.get());
     }
 
-    @Test
-    public void testTaskCancelledBeforeBeingExecuted() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testTaskCancelledBeforeBeingExecuted(boolean useCancelAll) {
         CoordinatorRuntime<CoordinatorShard<String>, String> runtime = mock(CoordinatorRuntime.class);
         ExecutorService executorService = mock(ExecutorService.class);
         CoordinatorExecutorImpl<CoordinatorShard<String>, String> executor = new CoordinatorExecutorImpl<>(
@@ -181,7 +184,11 @@ public class CoordinatorExecutorImplTest {
 
         when(executorService.submit(any(Runnable.class))).thenAnswer(args -> {
             // Cancel the task before running it.
-            executor.cancel(TASK_KEY);
+            if (useCancelAll) {
+                executor.cancelAll();
+            } else {
+                executor.cancel(TASK_KEY);
+            }
 
             // Running the task.
             Runnable op = args.getArgument(0);
@@ -211,8 +218,9 @@ public class CoordinatorExecutorImplTest {
         assertFalse(operationCalled.get());
     }
 
-    @Test
-    public void testTaskCancelledAfterBeingExecutedButBeforeWriteOperationIsExecuted() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testTaskCancelledAfterBeingExecutedButBeforeWriteOperationIsExecuted(boolean useCancelAll) {
         CoordinatorShard<String> coordinatorShard = mock(CoordinatorShard.class);
         CoordinatorRuntime<CoordinatorShard<String>, String> runtime = mock(CoordinatorRuntime.class);
         ExecutorService executorService = mock(ExecutorService.class);
@@ -231,7 +239,11 @@ public class CoordinatorExecutorImplTest {
             any()
         )).thenAnswer(args -> {
             // Cancel the task before running the write operation.
-            executor.cancel(TASK_KEY);
+            if (useCancelAll) {
+                executor.cancelAll();
+            } else {
+                executor.cancel(TASK_KEY);
+            }
 
             CoordinatorRuntime.CoordinatorWriteOperation<CoordinatorShard<String>, Void, String> op =
                 args.getArgument(3);
