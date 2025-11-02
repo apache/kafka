@@ -160,8 +160,8 @@ public class ShareGroupOffset {
     }
 
     public static ShareGroupOffset fromRequest(InitializeShareGroupStateRequestData.PartitionData data, int snapshotEpoch, long timestamp) {
-        // Since initialization changes the start offset, and hence the in flight state is forgotten, the end offset is set
-        // to be the same as the start offset, and the in flight record count is set to 0.
+        // This method is invoked during InitializeShareGroupStateRequest. Since the deliveryCompleteCount is not yet
+        // known at this stage, it is initialized to its default value.
         return new ShareGroupOffset(
             snapshotEpoch,
             data.stateEpoch(),

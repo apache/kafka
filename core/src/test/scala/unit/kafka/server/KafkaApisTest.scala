@@ -13853,7 +13853,7 @@ class KafkaApisTest extends Logging {
   def getWriteShareGroupStateResponse(requestData: WriteShareGroupStateRequestData, configOverrides: Map[String, String] = Map.empty,
                                       verifyNoErr: Boolean = true, authorizer: Authorizer = null,
                                       writeStateResult: util.List[WriteShareGroupStateResponseData.WriteStateResult]): WriteShareGroupStateResponse = {
-    val requestChannelRequest = buildRequest(new WriteShareGroupStateRequest.Builder(requestData).build(0))
+    val requestChannelRequest = buildRequest(new WriteShareGroupStateRequest.Builder(requestData).build())
 
     val future = new CompletableFuture[WriteShareGroupStateResponseData]()
     when(shareCoordinator.writeState(
