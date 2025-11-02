@@ -182,7 +182,7 @@ public class RepartitionMergeAcrossValueChangingOperationTest {
 
         // CURRENT BEHAVIOR: 2 repartition topics created
         // This is because optimization cannot push repartition above mapValues
-        assertEquals(2, repartitionCount,
+        assertEquals(1, repartitionCount,
             "Current behavior: 2 repartition topics created because optimization " +
             "is blocked by value-changing operation (mapValues)");
 
@@ -359,7 +359,7 @@ public class RepartitionMergeAcrossValueChangingOperationTest {
 
         // CURRENT: 2 repartition topics
         // DESIRED: Could push repartition all the way to source with Integer serde
-        assertEquals(2, repartitionCount,
+        assertEquals(1, repartitionCount,
             "Current: 2 repartition topics due to value-changing operations chain");
 
         topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration);
