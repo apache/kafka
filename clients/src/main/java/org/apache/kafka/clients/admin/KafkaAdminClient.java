@@ -4519,7 +4519,7 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<FeatureMetadata> future = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         final NodeProvider nodeProvider = options.nodeId().isPresent() ?
-            new ConstantNodeIdProvider(options.nodeId().getAsInt(), metadataManager.usingBootstrapControllers()) : new LeastLoadedBrokerOrActiveKController();
+            new ConstantNodeIdProvider(options.nodeId().getAsInt(), true) : new LeastLoadedBrokerOrActiveKController();
         final Call call = new Call(
             "describeFeatures", calcDeadlineMs(now, options.timeoutMs()), nodeProvider) {
 
