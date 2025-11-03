@@ -32,10 +32,10 @@ public class SharePartitionOffsetInfo {
     private final Optional<Long> lag;
 
     /**
-     * Construct a new StartPartitionOffsetInfo.
+     * Construct a new SharePartitionOffsetInfo.
      *
      * @param startOffset The share-partition start offset
-     * @param leaderEpoch The optional leader epoch of the start offset
+     * @param leaderEpoch The optional leader epoch of the share-partition
      * @param lag         The optional lag for the share-partition
      */
     public SharePartitionOffsetInfo(long startOffset, Optional<Integer> leaderEpoch, Optional<Long> lag) {
