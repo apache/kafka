@@ -922,6 +922,8 @@ org.apache.kafka.clients.consumer.KafkaShareConsumerMetricsTest:
 - testUnregisteringCustomMetricsWithSameNameDoesntAffectConsumerMetrics
 - testUnregisteringNonexistingMetricsDoesntCauseError
 org.apache.kafka.clients.consumer.KafkaShareConsumerTest:
+- testVerifyFetchAndCloseImplicit
+- testVerifyFetchAndCommitSyncImplicit
 - testVerifyHeartbeats
 org.apache.kafka.clients.consumer.MockConsumerTest:
 - endOffsetsShouldBeIdempotent
@@ -2171,7 +2173,6 @@ org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManagerTest:
 - testFetchError
 - testFetchNormal
 - testFetchWithAcquiredRecords
-- testFetchWithControlRecords
 - testFetchWithLastRecordMissingFromBatch
 - testHandleFetchResponseError
 - testHeaders
@@ -2230,6 +2231,7 @@ org.apache.kafka.clients.consumer.internals.ShareConsumerImplTest:
 - testProcessBackgroundEventsWithInitialDelay
 - testProcessBackgroundEventsWithoutDelay
 - testRecordBackgroundEventQueueSize
+- testShouldSendOneShareFetchEventPerPoll
 - testStopFindCoordinatorOnClose
 - testSubscribeGeneratesEvent
 - testSubscribeToEmptyListActsAsUnsubscribe
