@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -169,18 +170,39 @@ public class ShareSessionHandler {
         // The replaced topic-partitions need to be removed, and their replacements are already added
         removed.addAll(replaced);
 
+        boolean hasRenewAcknowledgements = false;
         Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementBatches = new HashMap<>();
-        nextAcknowledgements.forEach((partition, acknowledgements) -> acknowledgementBatches.put(partition, acknowledgements.getAcknowledgementBatches()
-                .stream().map(AcknowledgementBatch::toShareFetchRequest)
-                .collect(Collectors.toList())));
+        if (!nextAcknowledgements.isEmpty()) {
+            for (Map.Entry<TopicIdPartition, Acknowledgements> partitionsAcks : nextAcknowledgements.entrySet()) {
+                List<AcknowledgementBatch> partitionAckBatches = partitionsAcks.getValue().getAcknowledgementBatches();
+                for (AcknowledgementBatch ackBatch : partitionAckBatches) {
+                    if (ackBatch.acknowledgeTypes().contains(AcknowledgeType.RENEW.id)) {
+                        hasRenewAcknowledgements = true;
+                    }
+                    acknowledgementBatches.computeIfAbsent(partitionsAcks.getKey(), k -> new ArrayList<>()).add(ackBatch.toShareFetchRequest());
+                }
+            }
+        }
 
         nextPartitions = new LinkedHashMap<>();
         nextAcknowledgements = new LinkedHashMap<>();
 
-        return ShareFetchRequest.Builder.forConsumer(
+        if (hasRenewAcknowledgements) {
+            // If the request has renew acknowledgements, the ShareFetch is only used to send the acknowledgements
+            // and potentially update the share session. The parameters for wait time, number of bytes and number of
+            // records are all zero.
+            return ShareFetchRequest.Builder.forConsumer(
+                groupId, nextMetadata, 0,
+                0, 0, 0,
+                0, true,
+                added, removed, acknowledgementBatches);
+        } else {
+            return ShareFetchRequest.Builder.forConsumer(
                 groupId, nextMetadata, fetchConfig.maxWaitMs,
                 fetchConfig.minBytes, fetchConfig.maxBytes, fetchConfig.maxPollRecords,
-                fetchConfig.maxPollRecords, added, removed, acknowledgementBatches);
+                fetchConfig.maxPollRecords, false,
+                added, removed, acknowledgementBatches);
+        }
     }
 
     public ShareAcknowledgeRequest.Builder newShareAcknowledgeBuilder(String groupId, FetchConfig fetchConfig) {
