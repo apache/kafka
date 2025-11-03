@@ -257,7 +257,6 @@ public class MetadataBatchLoader {
                         break;
                 }
                 hasSeenRecord = true;
-                System.out.println("DEBUG: MetadataLoader calling delta.replay() for: " + type);
                 delta.replay(record.message());
         }
     }

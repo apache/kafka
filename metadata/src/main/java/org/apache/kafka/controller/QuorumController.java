@@ -1012,7 +1012,6 @@ public final class QuorumController implements Controller {
             appendRaftEvent(String.format("handleLoadSnapshot[snapshotId=%s]", reader.snapshotId()), () -> {
                 try {
                     String snapshotName = Snapshots.filenameFromSnapshotId(reader.snapshotId());
-                    
                     if (isActiveController()) {
                         throw fatalFaultHandler.handleFault("Asked to load snapshot " + snapshotName +
                                 ", but we are the active controller at epoch " + curClaimEpoch);
@@ -1022,7 +1021,6 @@ public final class QuorumController implements Controller {
                         Batch<ApiMessageAndVersion> batch = reader.next();
                         long offset = batch.lastOffset();
                         List<ApiMessageAndVersion> messages = batch.records();
-                        System.out.println("DEBUG: Processing batch - offset: " + offset + ", controlRecords: " + batch.controlRecords().size() + ", dataRecords: " + messages.size());
                         if (bootstrapMetadata == null) {
                             if (reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID)) {
                                 // For bootstrap snapshots, extract feature levels from all data records
