@@ -2093,8 +2093,8 @@ public class SharePartition {
                     // Only valid for ACQUIRED offsets; the check above ensures this.
                     long key = offsetState.getKey();
                     InFlightState state = offsetState.getValue();
-                    log.debug("Renewing acq lock for {}-{} with offsets {}-{} for member {}.",
-                        groupId, topicIdPartition, key, key, memberId);
+                    log.debug("Renewing acq lock for {}-{} with offset {} in batch {} for member {}.",
+                        groupId, topicIdPartition, key, inFlightBatch, memberId);
                     state.cancelAndClearAcquisitionLockTimeoutTask();
                     AcquisitionLockTimerTask renewalTask = scheduleAcquisitionLockTimeout(memberId, key, key);
                     state.updateAcquisitionLockTimeoutTask(renewalTask);
@@ -2161,7 +2161,7 @@ public class SharePartition {
             if (ackType == AcknowledgeType.RENEW.id) {
                 // Renew the acquisition lock timer for the complete batch. We have already
                 // checked that the batchState is ACQUIRED above.
-                log.debug("Renewing acq lock for {}-{} with offsets {}-{} for member {}.",
+                log.debug("Renewing acq lock for {}-{} with batch {}-{} for member {}.",
                     groupId, topicIdPartition, inFlightBatch.firstOffset(), inFlightBatch.lastOffset(), memberId);
                 inFlightBatch.cancelAndClearAcquisitionLockTimeoutTask();
                 AcquisitionLockTimerTask renewalTask = scheduleAcquisitionLockTimeout(memberId,
