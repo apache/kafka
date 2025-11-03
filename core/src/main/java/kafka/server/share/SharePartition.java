@@ -2159,13 +2159,8 @@ public class SharePartition {
             // Before reaching this point, it should be verified that it is full batch ack and
             // not per offset ack as well as startOffset not moved.
             if (ackType == AcknowledgeType.RENEW.id) {
-                if (inFlightBatch.batchState() != RecordState.ACQUIRED) {
-                    log.debug("The batch with RENEW ack is not in the acquired state: {} for share partition: {}-{}",
-                        inFlightBatch, groupId, topicIdPartition);
-                    return Optional.of(new InvalidRecordStateException(
-                        "The batch cannot be RENEW acknowledged. The batch is not in the acquired state."));
-                }
-                // Renew the acquisition lock timer for the complete batch.
+                // Renew the acquisition lock timer for the complete batch. We have already
+                // checked that the batchState is ACQUIRED above.
                 log.debug("Renewing acq lock for {}-{} with offsets {}-{} for member {}.",
                     groupId, topicIdPartition, inFlightBatch.firstOffset(), inFlightBatch.lastOffset(), memberId);
                 inFlightBatch.cancelAndClearAcquisitionLockTimeoutTask();
