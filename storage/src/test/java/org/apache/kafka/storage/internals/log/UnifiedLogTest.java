@@ -155,7 +155,7 @@ public class UnifiedLogTest {
 
         // When first segment is removed
         log.updateHighWatermark(log.logEndOffset());
-        log.deleteOldSegments();
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
 
         //The oldest epoch entry should have been removed
         assertEquals(List.of(new EpochEntry(1, 5), new EpochEntry(2, 10)), cache.epochEntries());
@@ -184,7 +184,7 @@ public class UnifiedLogTest {
 
         // When first segment removed (up to offset 5)
         log.updateHighWatermark(log.logEndOffset());
-        log.deleteOldSegments();
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
 
         //The first entry should have gone from (0,0) => (0,5)
         assertEquals(List.of(new EpochEntry(0, 5), new EpochEntry(1, 7), new EpochEntry(2, 10)), cache.epochEntries());
@@ -241,7 +241,7 @@ public class UnifiedLogTest {
         }
 
         log.updateHighWatermark(log.logEndOffset());
-        log.deleteOldSegments();
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
         assertEquals(2, log.numberOfSegments(), "should have 2 segments");
     }
 
@@ -261,7 +261,7 @@ public class UnifiedLogTest {
         }
 
         log.updateHighWatermark(log.logEndOffset());
-        log.deleteOldSegments();
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
         assertEquals(3, log.numberOfSegments(), "should have 3 segments");
     }
 
@@ -280,7 +280,7 @@ public class UnifiedLogTest {
         }
 
         log.updateHighWatermark(log.logEndOffset());
-        log.deleteOldSegments();
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
         assertEquals(1, log.numberOfSegments(), "There should be 1 segment remaining");
     }
 
@@ -299,7 +299,7 @@ public class UnifiedLogTest {
         }
 
         log.updateHighWatermark(log.logEndOffset());
-        log.deleteOldSegments();
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
         assertEquals(3, log.numberOfSegments(), "There should be 3 segments remaining");
     }
 
@@ -323,7 +323,7 @@ public class UnifiedLogTest {
 
         int segments = log.numberOfSegments();
         log.updateHighWatermark(log.logEndOffset());
-        log.deleteOldSegments();
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
         assertEquals(segments, log.numberOfSegments(), "There should be 3 segments remaining");
     }
 
@@ -344,7 +344,7 @@ public class UnifiedLogTest {
         }
 
         log.updateHighWatermark(log.logEndOffset());
-        log.deleteOldSegments();
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
         assertEquals(1, log.numberOfSegments(), "There should be 1 segment remaining");
     }
 
@@ -421,17 +421,17 @@ public class UnifiedLogTest {
         log.updateHighWatermark(log.logEndOffset());
 
         log.maybeIncrementLogStartOffset(1, LogStartOffsetIncrementReason.ClientRecordDeletion);
-        log.deleteOldSegments();
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
         assertEquals(3, log.numberOfSegments());
         assertEquals(1, log.logStartOffset());
 
         log.maybeIncrementLogStartOffset(6, LogStartOffsetIncrementReason.ClientRecordDeletion);
-        log.deleteOldSegments();
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
         assertEquals(2, log.numberOfSegments());
         assertEquals(6, log.logStartOffset());
 
         log.maybeIncrementLogStartOffset(15, LogStartOffsetIncrementReason.ClientRecordDeletion);
-        log.deleteOldSegments();
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
         assertEquals(1, log.numberOfSegments());
         assertEquals(15, log.logStartOffset());
     }
@@ -482,14 +482,14 @@ public class UnifiedLogTest {
 
         // segments are not eligible for deletion if no high watermark has been set
         int numSegments = log.numberOfSegments();
-        log.deleteOldSegments();
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
         assertEquals(numSegments, log.numberOfSegments());
         assertEquals(0L, log.logStartOffset());
 
         // only segments with offset before the current high watermark are eligible for deletion
         for (long hw = 25; hw <= 30; hw++) {
             log.updateHighWatermark(hw);
-            log.deleteOldSegments();
+            assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
             assertTrue(log.logStartOffset() <= hw);
             long finalHw = hw;
             log.logSegments().forEach(segment -> {
@@ -508,7 +508,7 @@ public class UnifiedLogTest {
         }
 
         log.updateHighWatermark(log.logEndOffset());
-        log.deleteOldSegments();
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
         assertEquals(1, log.numberOfSegments(), "The deleted segments should be gone.");
         assertEquals(1, epochCache(log).epochEntries().size(), "Epoch entries should have gone.");
         assertEquals(new EpochEntry(1, 100), epochCache(log).epochEntries().get(0), "Epoch entry should be the latest epoch and the leo.");
@@ -547,7 +547,7 @@ public class UnifiedLogTest {
         // Of the remaining the segments, the first can overlap the log start offset and the rest must have a base offset
         // greater than the start offset.
         log.updateHighWatermark(log.logEndOffset());
-        log.deleteOldSegments();
+        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
         assertEquals(2, log.numberOfSegments(), "There should be 2 segments remaining");
         assertTrue(log.logSegments().iterator().next().baseOffset() <= log.logStartOffset());
         log.logSegments().forEach(segment -> {
