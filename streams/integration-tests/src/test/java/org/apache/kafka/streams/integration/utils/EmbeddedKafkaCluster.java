@@ -414,7 +414,7 @@ public class EmbeddedKafkaCluster {
     }
 
     public void waitForRemainingTopics(final long timeoutMs, final String... topics) throws InterruptedException {
-        TestUtils.waitForCondition(new TopicsRemainingCondition(topics), timeoutMs, "Topics are not expected after " + timeoutMs + " milli seconds.");
+        TestUtils.waitForCondition(new TopicsRemainingCondition(topics), timeoutMs, "Topics are not expected after " + timeoutMs + " milliseconds.");
     }
 
     public Set<String> getAllTopicsInCluster() {
