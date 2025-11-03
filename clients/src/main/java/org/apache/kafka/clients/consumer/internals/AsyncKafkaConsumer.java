@@ -944,7 +944,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 }
             }
         } else if (inflightPoll.isExpired(time) && inflightPoll.isValidatePositionsComplete()) {
-            // The inflight event inflight validated positions, but it has expired.
+            // The inflight event validated positions, but it has expired.
             log.trace("Previous inflight event {} expired without completing, clearing", inflightPoll);
             inflightPoll = null;
         }
@@ -966,7 +966,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
         } else if (!newlySubmittedEvent) {
             if (inflightPoll.isExpired(time) && inflightPoll.isValidatePositionsComplete()) {
-                // The inflight event inflight validated positions, but it has expired.
+                // The inflight event validated positions, but it has expired.
                 log.trace("Inflight event {} expired without completing, clearing", inflightPoll);
                 inflightPoll = null;
             }
