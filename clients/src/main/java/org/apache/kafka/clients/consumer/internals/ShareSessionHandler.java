@@ -213,15 +213,23 @@ public class ShareSessionHandler {
             return null;
         }
 
+        boolean hasRenewAcknowledgements = false;
         Map<TopicIdPartition, List<ShareAcknowledgeRequestData.AcknowledgementBatch>> acknowledgementBatches = new HashMap<>();
-        nextAcknowledgements.forEach((partition, acknowledgements) ->
-                acknowledgementBatches.put(partition, acknowledgements.getAcknowledgementBatches()
-                        .stream().map(AcknowledgementBatch::toShareAcknowledgeRequest)
-                        .collect(Collectors.toList())));
+        if (!nextAcknowledgements.isEmpty()) {
+            for (Map.Entry<TopicIdPartition, Acknowledgements> partitionsAcks : nextAcknowledgements.entrySet()) {
+                List<AcknowledgementBatch> partitionAckBatches = partitionsAcks.getValue().getAcknowledgementBatches();
+                for (AcknowledgementBatch ackBatch : partitionAckBatches) {
+                    if (ackBatch.acknowledgeTypes().contains(AcknowledgeType.RENEW.id)) {
+                        hasRenewAcknowledgements = true;
+                    }
+                    acknowledgementBatches.computeIfAbsent(partitionsAcks.getKey(), k -> new ArrayList<>()).add(ackBatch.toShareAcknowledgeRequest());
+                }
+            }
+        }
 
         nextAcknowledgements = new LinkedHashMap<>();
 
-        return ShareAcknowledgeRequest.Builder.forConsumer(groupId, nextMetadata, acknowledgementBatches);
+        return ShareAcknowledgeRequest.Builder.forConsumer(groupId, nextMetadata, hasRenewAcknowledgements, acknowledgementBatches);
     }
 
     private String topicIdPartitionsToLogString(Collection<TopicIdPartition> partitions) {
