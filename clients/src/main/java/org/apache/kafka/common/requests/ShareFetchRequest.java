@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.consumer.ShareAcquireMode;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -143,6 +144,10 @@ public class ShareFetchRequest extends AbstractRequest {
                 // The v1 does not support AcknowledgeType RENEW.
                 if (data.isRenewAck()) {
                     throw new UnsupportedVersionException("The v1 ShareFetch does not support AcknowledgeType.RENEW");
+                }
+                // The v1 does not support ShareAcquireMode record_limit.
+                if (data.shareAcquireMode() == ShareAcquireMode.RECORD_LIMIT.id()) {
+                    throw new UnsupportedVersionException("The v1 ShareFetch does not support ShareAcquireMode.RECORD_LIMIT");
                 }
             }
             return new ShareFetchRequest(data, version);

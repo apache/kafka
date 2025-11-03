@@ -10251,7 +10251,7 @@ public class SharePartitionTest {
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             MEMBER_ID,
-            List.of(new ShareAcknowledgementBatch(0, 0, List.of((byte) 1))));
+            List.of(new ShareAcknowledgementBatch(0, 0, List.of(AcknowledgeType.ACCEPT.id))));
 
         assertNull(ackResult.join());
         assertFalse(ackResult.isCompletedExceptionally());
@@ -10280,7 +10280,7 @@ public class SharePartitionTest {
         // Ack only 1 record
         ackResult = sharePartition.acknowledge(
             MEMBER_ID,
-            List.of(new ShareAcknowledgementBatch(1, 1, List.of((byte) 1))));
+            List.of(new ShareAcknowledgementBatch(1, 1, List.of(AcknowledgeType.ACCEPT.id))));
         assertNull(ackResult.join());
         assertFalse(ackResult.isCompletedExceptionally());
         assertEquals(3, sharePartition.nextFetchOffset());
@@ -10409,7 +10409,7 @@ public class SharePartitionTest {
         // Ack offset at 1 and let the other offset to expire again.
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             MEMBER_ID,
-            List.of(new ShareAcknowledgementBatch(1, 1, List.of((byte) 2))));
+            List.of(new ShareAcknowledgementBatch(1, 1, List.of(AcknowledgeType.RELEASE.id))));
         assertNull(ackResult.join());
         assertFalse(ackResult.isCompletedExceptionally());
 
@@ -10587,7 +10587,7 @@ public class SharePartitionTest {
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(10L).offsetState().get(15L).state());
 
         // Acknowledging over subset of second batch with subset of gap offsets.
-        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(10, 12, List.of((byte) 1, (byte) 1, (byte) 0))));
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(10, 12, List.of(AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id, ACKNOWLEDGE_TYPE_GAP_ID))));
 
 
         // Release acquired records for "member-1".
