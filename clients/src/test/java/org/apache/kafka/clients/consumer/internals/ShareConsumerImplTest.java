@@ -343,7 +343,7 @@ public class ShareConsumerImplTest {
     }
 
     @Test
-    public void shouldSendOneShareFetchEventPerPoll() {
+    public void testShouldSendOneShareFetchEventPerPoll() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(subscriptions);
 
