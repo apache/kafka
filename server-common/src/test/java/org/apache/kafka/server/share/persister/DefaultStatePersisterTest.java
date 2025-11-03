@@ -600,7 +600,7 @@ class DefaultStatePersisterTest {
                                 .setStateEpoch(0)
                                 .setLeaderEpoch(1)
                                 .setStartOffset(0)
-                                .setDeliveryCompleteCount(10)
+                                .setDeliveryCompleteCount(11)
                                 .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
                                     .setFirstOffset(0)
                                     .setLastOffset(10)
