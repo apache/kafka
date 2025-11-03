@@ -1100,7 +1100,8 @@ class UnifiedLogTest {
     // Clean segments, this should delete everything except the active segment since there only
     // exists the key "a".
     cleaner.clean(new LogToClean(log, 0, log.logEndOffset, false))
-    assertTrue(log.deleteOldSegments > 0, "At least one segment should be deleted")
+    // There is no other key so we don't delete anything
+    assertEquals(0, log.deleteOldSegments())
     // Sleep to breach the file delete delay and run scheduled file deletion tasks
     mockTime.sleep(1)
     assertEquals(log.logSegments.asScala.map(_.baseOffset).toSeq.sorted.drop(1), ProducerStateManager.listSnapshotFiles(logDir).asScala.map(_.offset).sorted,
@@ -1862,7 +1863,7 @@ class UnifiedLogTest {
 
       // time goes by; the log file is deleted
       log.updateHighWatermark(currOffset)
-      assertTrue(log.deleteOldSegments > 0, "At least one segment should be deleted")
+      log.deleteOldSegments()
 
       assertEquals(currOffset, log.logEndOffset, "Deleting segments shouldn't have changed the logEndOffset")
       assertEquals(1, log.numberOfSegments, "We should still have one segment left")
@@ -3529,7 +3530,7 @@ class UnifiedLogTest {
     for (hw <- 0 to 100) {
       log.updateHighWatermark(hw)
       assertEquals(hw, log.highWatermark)
-      assertTrue(log.deleteOldSegments > 0, "At least one segment should be deleted")
+      log.deleteOldSegments()
       assertTrue(log.logStartOffset <= hw)
 
       // verify that all segments up to the high watermark have been deleted
@@ -4197,7 +4198,7 @@ class UnifiedLogTest {
 
     mockTime.sleep(2)
     // It should have rolled the active segment as they are eligible for deletion
-    assertTrue(log.deleteOldSegments > 0, "At least one segment should be deleted")
+    assertEquals(0, log.deleteOldSegments())
     assertEquals(2, log.logSegments.size)
     log.logSegments.asScala.zipWithIndex.foreach {
       case (segment, idx) => assertEquals(idx, segment.baseOffset)
@@ -4237,14 +4238,14 @@ class UnifiedLogTest {
 
     // No segments are uploaded to remote storage, none of the local log segments should be eligible for deletion
     log.updateHighestOffsetInRemoteStorage(-1L)
-    assertTrue(log.deleteOldSegments > 0, "At least one segment should be deleted")
+    assertEquals(0, log.deleteOldSegments())
     mockTime.sleep(1)
     assertEquals(2, log.logSegments.size)
     assertFalse(log.isEmpty)
 
     // Update the log-start-offset from 0 to 3, then the base segment should not be eligible for deletion
     log.updateLogStartOffsetFromRemoteTier(3L)
-    assertTrue(log.deleteOldSegments > 0, "At least one segment should be deleted")
+    assertEquals(0, log.deleteOldSegments())
     mockTime.sleep(1)
     assertEquals(2, log.logSegments.size)
     assertFalse(log.isEmpty)
@@ -4258,7 +4259,7 @@ class UnifiedLogTest {
     assertFalse(log.isEmpty)
 
     log.updateLogStartOffsetFromRemoteTier(5L)
-    assertTrue(log.deleteOldSegments > 0, "At least one segment should be deleted")
+    assertEquals(0, log.deleteOldSegments())
     mockTime.sleep(1)
     assertEquals(1, log.logSegments.size)
     assertTrue(log.isEmpty)
@@ -4329,7 +4330,7 @@ class UnifiedLogTest {
     log.updateHighWatermark(log.logEndOffset)
 
     // Should not delete local log because highest remote storage offset is -1 (default value)
-    assertTrue(log.deleteOldSegments > 0, "At least one segment should be deleted")
+    assertEquals(0, log.deleteOldSegments())
     assertEquals(6, log.logSegments.size())
     assertEquals(0, log.logStartOffset)
     assertEquals(0, log.localLogStartOffset())
@@ -4349,7 +4350,7 @@ class UnifiedLogTest {
 
     // No local logs will be deleted even though local retention bytes is 1 because we'll adopt retention.ms/bytes
     // when remote.log.copy.disable = true
-    assertTrue(log.deleteOldSegments > 0, "At least one segment should be deleted")
+    assertEquals(0, log.deleteOldSegments())
     assertEquals(4, log.logSegments.size())
     assertEquals(0, log.logStartOffset)
     assertEquals(2, log.localLogStartOffset())
@@ -4381,7 +4382,7 @@ class UnifiedLogTest {
 
     // Should not delete any logs because no local logs expired using retention.ms = 1000
     mockTime.sleep(10)
-    assertTrue(log.deleteOldSegments > 0, "At least one segment should be deleted")
+    assertEquals(0, log.deleteOldSegments())
     assertEquals(5, log.logSegments.size())
     assertEquals(4, log.logStartOffset)
     assertEquals(4, log.localLogStartOffset())
