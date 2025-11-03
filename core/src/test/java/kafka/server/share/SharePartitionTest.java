@@ -100,7 +100,6 @@ import static kafka.server.share.SharePartition.EMPTY_MEMBER_ID;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.memoryRecordsBuilder;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.yammerMetricValue;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
-import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -190,9 +189,9 @@ public class SharePartitionTest {
         // inFlightTerminalRecords is incremented by the number of ACKNOWLEDGED and ARCHIVED records in readState result.
         assertEquals(5, sharePartition.inFlightTerminalRecords());
 
-        waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 2,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 2,
             "In-flight batch count should be 2.");
-        waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 11,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 11,
             "In-flight message count should be 11.");
         assertEquals(11, sharePartitionMetrics.inFlightBatchMessageCount().sum());
         assertEquals(2, sharePartitionMetrics.inFlightBatchMessageCount().count());
@@ -363,9 +362,9 @@ public class SharePartitionTest {
         assertEquals(PartitionFactory.DEFAULT_STATE_EPOCH, sharePartition.stateEpoch());
         assertEquals(0, sharePartition.inFlightTerminalRecords());
 
-        waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 0,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 0,
             "In-flight batch count should be 0.");
-        waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 0,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 0,
             "In-flight message count should be 0.");
     }
 
@@ -1814,9 +1813,9 @@ public class SharePartitionTest {
         // inFlightTerminalRecords will not be changed because no record went to a Terminal state.
         assertEquals(0, sharePartition.inFlightTerminalRecords());
 
-        waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
             "In-flight batch count should be 1.");
-        waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 1,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 1,
             "In-flight message count should be 1.");
         assertEquals(1, sharePartitionMetrics.inFlightBatchMessageCount().sum());
     }
@@ -1844,9 +1843,9 @@ public class SharePartitionTest {
         // inFlightTerminalRecords will not be changed because no record went to a Terminal state.
         assertEquals(0, sharePartition.inFlightTerminalRecords());
 
-        waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
             "In-flight batch count should be 1.");
-        waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 5,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 5,
             "In-flight message count should be 5.");
         assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().sum());
     }
@@ -1937,9 +1936,9 @@ public class SharePartitionTest {
         assertEquals(1, sharePartition.cachedState().get(10L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(10L).offsetState());
 
-        waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
             "In-flight batch count should be 1.");
-        waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 20,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 20,
             "In-flight message count should be 20.");
         assertEquals(20, sharePartitionMetrics.inFlightBatchMessageCount().sum());
     }
@@ -2183,9 +2182,9 @@ public class SharePartitionTest {
         assertTrue(sharePartition.cachedState().containsKey(4L));
         assertTrue(sharePartition.cachedState().containsKey(10L));
 
-        waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 2,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 2,
             "In-flight batch count should be 2.");
-        waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 13,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 13,
             "In-flight message count should be 13.");
         assertEquals(13, sharePartitionMetrics.inFlightBatchMessageCount().sum());
         assertEquals(2, sharePartitionMetrics.inFlightBatchMessageCount().count());
@@ -3941,7 +3940,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> sharePartition.nextFetchOffset() == 0 &&
                         sharePartition.cachedState().get(0L).batchState() == RecordState.AVAILABLE &&
                         sharePartition.cachedState().get(0L).batchDeliveryCount() == 1 &&
@@ -3972,7 +3971,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0
                         && sharePartition.nextFetchOffset() == 10
                         && sharePartition.cachedState().get(10L).batchState() == RecordState.AVAILABLE
@@ -4011,7 +4010,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire. The acquisition lock timeout will cause release of records for all the acquired records.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         sharePartition.nextFetchOffset() == 0 &&
                         sharePartition.cachedState().get(0L).batchState() == RecordState.AVAILABLE &&
@@ -4043,7 +4042,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         sharePartition.nextFetchOffset() == 10 &&
                         sharePartition.cachedState().get(10L).batchState() == RecordState.AVAILABLE,
@@ -4084,7 +4083,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire. This will not cause any change to cached state map since the batch is already acknowledged.
         // Hence, the acquisition lock timeout task would be cancelled already.
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         sharePartition.nextFetchOffset() == 0 &&
                         sharePartition.cachedState().get(0L).batchState() == RecordState.AVAILABLE &&
@@ -4115,7 +4114,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire. This will not cause any change to cached state map since the batch is already acknowledged.
         // Hence, the acquisition lock timeout task would be cancelled already.
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         sharePartition.nextFetchOffset() == 5 &&
                         sharePartition.cachedState().get(5L).batchState() == RecordState.AVAILABLE &&
@@ -4169,7 +4168,7 @@ public class SharePartitionTest {
         // Allowing acquisition lock to expire. The acquisition lock timeout will cause release of records for batch with starting offset 1.
         // Since, other records have been acknowledged.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         sharePartition.nextFetchOffset() == 1 &&
                         sharePartition.cachedState().get(1L).batchAcquisitionLockTimeoutTask() == null &&
@@ -4199,7 +4198,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         sharePartition.nextFetchOffset() == 10 &&
                         sharePartition.cachedState().size() == 1 &&
@@ -4226,7 +4225,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire for the acquired subset batch.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> {
                     Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
                     expectedOffsetStateMap.put(10L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
@@ -4310,7 +4309,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire for the offsets that have not been acknowledged yet.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> {
                     Map<Long, InFlightState> expectedOffsetStateMap1 = new HashMap<>();
                     expectedOffsetStateMap1.put(5L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
@@ -4374,7 +4373,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         sharePartition.nextFetchOffset() == 0 &&
                         sharePartition.cachedState().get(10L).batchState() == RecordState.AVAILABLE &&
@@ -4394,7 +4393,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire to archive the records that reach max delivery count.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         sharePartition.nextFetchOffset() == 0 &&
                         // After the second delivery attempt fails to acknowledge the record correctly, the record should be archived.
@@ -4422,7 +4421,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         sharePartition.nextFetchOffset() == 0 &&
                         sharePartition.cachedState().get(0L).batchState() == RecordState.AVAILABLE &&
@@ -4448,7 +4447,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire to archive the records that reach max delivery count.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> {
                     Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
                     expectedOffsetStateMap.put(0L, new InFlightState(RecordState.ARCHIVED, (short) 2, EMPTY_MEMBER_ID));
@@ -4500,7 +4499,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         sharePartition.nextFetchOffset() == 0 &&
                         sharePartition.cachedState().get(0L).batchState() == RecordState.AVAILABLE &&
@@ -4517,7 +4516,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire to archive the records that reach max delivery count.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         // After the second failed attempt to acknowledge the record batch successfully, the record batch is archived.
                         // Since this is the first batch in the share partition, SPSO moves forward and the cachedState is cleared
@@ -4542,7 +4541,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         sharePartition.nextFetchOffset() == 5 &&
                         sharePartition.cachedState().get(5L).batchState() == RecordState.AVAILABLE &&
@@ -4607,7 +4606,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire will only affect the offsets that have not been acknowledged yet.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> {
                     // Check cached state.
                     Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
@@ -4654,7 +4653,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire. Even if write share group state RPC fails, state transition still happens.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> sharePartition.timer().size() == 0 &&
                         sharePartition.nextFetchOffset() == 5 &&
                         sharePartition.cachedState().size() == 1 &&
@@ -4691,7 +4690,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire. Even if write share group state RPC fails, state transition still happens.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
             () -> sharePartition.timer().size() == 0 &&
                 sharePartition.nextFetchOffset() == 5 &&
                 sharePartition.cachedState().size() == 2 &&
@@ -4715,7 +4714,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire. Even if write share group state RPC fails, state transition still happens.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
             () -> sharePartition.timer().size() == 0 &&
                 sharePartition.nextFetchOffset() == 5 &&
                 sharePartition.cachedState().size() == 2 &&
@@ -4762,7 +4761,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire. Even if write share group state RPC fails, state transition still happens.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
             () -> {
                 Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
                 expectedOffsetStateMap.put(5L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
@@ -4798,7 +4797,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire. Even if write share group state RPC fails, state transition still happens.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
             () -> {
                 Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
                 expectedOffsetStateMap.put(5L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
@@ -4848,7 +4847,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire. Even if write share group state RPC fails, state transition still happens.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> {
                     Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
                     expectedOffsetStateMap.put(5L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
@@ -6882,7 +6881,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
             () -> {
                 Map<Long, InFlightState> expectedOffsetStateMap1 = new HashMap<>();
                 expectedOffsetStateMap1.put(5L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
@@ -6944,7 +6943,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
             () -> sharePartition.cachedState().get(5L).batchMemberId().equals(EMPTY_MEMBER_ID) &&
                     sharePartition.cachedState().get(5L).batchState() == RecordState.ARCHIVED &&
                     sharePartition.cachedState().get(10L).batchMemberId().equals(EMPTY_MEMBER_ID) &&
@@ -6977,7 +6976,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
             () -> {
                 Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
                 expectedOffsetStateMap.put(10L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
@@ -7182,7 +7181,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> sharePartition.nextFetchOffset() == 7 && sharePartition.cachedState().isEmpty() &&
                             sharePartition.startOffset() == 7 && sharePartition.endOffset() == 7,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
@@ -7237,7 +7236,7 @@ public class SharePartitionTest {
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
                 () -> sharePartition.nextFetchOffset() == 3 && sharePartition.cachedState().isEmpty() &&
                         sharePartition.startOffset() == 3 && sharePartition.endOffset() == 3,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
@@ -9748,7 +9747,7 @@ public class SharePartitionTest {
         // Allowing acquisition lock to expire. This will not cause any change because the record is not in ACQUIRED state.
         // This will remove the entry of the timer task from timer.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
             () -> sharePartition.cachedState().get(0L).batchState() == RecordState.ACKNOWLEDGED &&
                 sharePartition.cachedState().get(0L).batchDeliveryCount() == 1 &&
                 sharePartition.timer().size() == 0,
@@ -9835,7 +9834,7 @@ public class SharePartitionTest {
         // Allowing acquisition lock to expire. This will also ensure that acquisition lock timeout task
         // is run successfully post write state RPC failure.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
-        waitForCondition(
+        TestUtils.waitForCondition(
             () -> sharePartition.cachedState().get(2L).offsetState().get(3L).state() == RecordState.AVAILABLE  &&
                 sharePartition.cachedState().get(7L).batchState() == RecordState.AVAILABLE &&
                 sharePartition.cachedState().get(2L).offsetState().get(3L).deliveryCount() == 1 &&
@@ -9864,7 +9863,7 @@ public class SharePartitionTest {
         // Verify the timer tasks have run and the state is archived for the offsets which are not acknowledged,
         // but the acquisition lock timeout task should be just expired for acknowledged offsets, though
         // the state should not be archived.
-        waitForCondition(
+        TestUtils.waitForCondition(
             () -> sharePartition.cachedState().get(2L).offsetState().get(2L).state() == RecordState.ARCHIVED  &&
                 sharePartition.cachedState().get(2L).offsetState().get(3L).state() == RecordState.ACKNOWLEDGED  &&
                 sharePartition.cachedState().get(2L).offsetState().get(3L).acquisitionLockTimeoutTask().hasExpired() &&
@@ -9975,7 +9974,7 @@ public class SharePartitionTest {
 
         assertTrue(taskOrig.isCancelled()); // Original acq lock cancelled.
         assertNotEquals(taskOrig, sharePartition.cachedState().get(0L).offsetState().get(0L).acquisitionLockTimeoutTask());
-        waitForCondition(() -> sharePartition.cachedState().get(0L).offsetState() != null, "offset state not populated");
+        TestUtils.waitForCondition(() -> sharePartition.cachedState().get(0L).offsetState() != null, "offset state not populated");
 
         InFlightState offset0 = sharePartition.cachedState().get(0L).offsetState().get(0L);
         InFlightState offset1 = sharePartition.cachedState().get(0L).offsetState().get(1L);
