@@ -181,9 +181,9 @@ object KafkaRaftServer {
     }
 
     // Load the BootstrapMetadata.
-    // val bootstrapDirectory = new BootstrapDirectory(config.metadataLogDir)
-    // val bootstrapMetadata = bootstrapDirectory.read()
-    (metaPropsEnsemble, null)
+    val bootstrapDirectory = new BootstrapDirectory(config.metadataLogDir)
+    val bootstrapMetadata = bootstrapDirectory.read()
+    (metaPropsEnsemble, bootstrapMetadata)
   }
 
   val configSchema = new KafkaConfigSchema(Map(

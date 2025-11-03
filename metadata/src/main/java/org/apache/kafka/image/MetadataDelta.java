@@ -316,11 +316,7 @@ public final class MetadataDelta {
     }
 
     public void replay(FeatureLevelRecord record) {
-        System.out.println("DEBUG: MetadataDelta.replay(FeatureLevelRecord): " + record);
-        System.out.println("DEBUG: Before replay - featuresDelta: " + featuresDelta);
         getOrCreateFeaturesDelta().replay(record);
-        System.out.println("DEBUG: After replay - featuresDelta changes: " + featuresDelta.changes());
-        System.out.println("DEBUG: After replay - metadataVersionChange: " + featuresDelta.metadataVersionChange());
         featuresDelta.metadataVersionChange().ifPresent(changedMetadataVersion -> {
             // If any feature flags change, need to immediately check if any metadata needs to be downgraded.
             getOrCreateClusterDelta().handleMetadataVersionChange(changedMetadataVersion);

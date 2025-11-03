@@ -399,9 +399,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private void updateListenersProgress(long highWatermark) {
         for (ListenerContext listenerContext : listenerContexts.values()) {
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
-                System.out.println("DEBUG: RaftClient updateListenersProgress - listener: " + listenerContext.listenerName() 
-                    + ", nextExpectedOffset: " + nextExpectedOffset + ", highWatermark: " + highWatermark 
-                    + ", log.startOffset(): " + log.startOffset() + ", latestSnapshot().isPresent(): " + latestSnapshot().isPresent());
                 // Send snapshot to the listener, if there is a snapshot for the partition,
                 // and it is a new listener or
                 // the listener is trying to read an offset for which there isn't a segment in the
@@ -411,7 +408,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                      nextExpectedOffset < log.startOffset()) &&
                     latestSnapshot().isPresent()
                 ) {
-                    System.out.println("DEBUG: RaftClient calling fireHandleSnapshot for listener: " + listenerContext.listenerName());
                     listenerContext.fireHandleSnapshot(latestSnapshot().get());
                 } else if (nextExpectedOffset == ListenerContext.STARTING_NEXT_OFFSET) {
                     // Reset the next offset to 0 since it is a new listener context and there are
@@ -456,8 +452,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 logContext
             )
         );
-        System.out.println("DEBUG: RaftClient latestSnapshot() - found snapshot: " + snapshot.isPresent() + 
-            (snapshot.isPresent() ? ", snapshot ID: " + snapshot.get().snapshotId() : ""));
         return snapshot;
     }
 

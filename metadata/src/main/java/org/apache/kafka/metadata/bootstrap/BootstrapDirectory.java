@@ -73,7 +73,12 @@ public class BootstrapDirectory {
                 CLUSTER_METADATA_TOPIC_PARTITION.partition()),
                 BINARY_BOOTSTRAP_CHECKPOINT_FILENAME);
         if (!Files.exists(binaryBootstrapPath)) {
-            return readFromConfiguration();
+            Path oldBootstrapPath = Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME);
+            if (!Files.exists(oldBootstrapPath)) {
+                return readFromConfiguration();
+            } else {
+                return readFromBinaryFile(oldBootstrapPath.toString());
+            }
         } else {
             return readFromBinaryFile(binaryBootstrapPath.toString());
         }

@@ -37,7 +37,6 @@ import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 
 public class ActivationRecordsGenerator {
 
-
     static ControllerResult<Void> recordsForEmptyLog(
         Consumer<String> activationMessageConsumer,
         long transactionStartOffset,
@@ -93,7 +92,6 @@ public class ActivationRecordsGenerator {
         // If no records have been replayed, we need to write out the bootstrap records.
         // This will include the new metadata.version, as well as things like SCRAM
         // initialization, etc.
-        System.out.println("DEBUG: recordsForEmptyLog - adding " + bootstrapMetadata.records().size() + " bootstrap records");
         records.addAll(bootstrapMetadata.records());
 
         // If ELR is enabled, we need to set a cluster-level min.insync.replicas.
@@ -144,9 +142,7 @@ public class ActivationRecordsGenerator {
 
         // Write bootstrap records to the log so brokers can read them, but only if not handling a partial transaction
         // Brokers can't read snapshots, only log entries
-        boolean shouldWriteBootstrapRecords = (transactionStartOffset == -1L);
-        System.out.println("DEBUG: recordsForNonEmptyLog - shouldWriteBootstrapRecords: " + shouldWriteBootstrapRecords + " (transactionStartOffset: " + transactionStartOffset + ")");
-        
+        boolean shouldWriteBootstrapRecords = (transactionStartOffset == -1L);        
         if (shouldWriteBootstrapRecords) {
             logMessageBuilder
                 .append("Writing bootstrap records to log for broker consumption. ")
@@ -167,7 +163,6 @@ public class ActivationRecordsGenerator {
                 .append("'. ");
 
             // Add bootstrap records
-            System.out.println("DEBUG: recordsForNonEmptyLog - adding " + bootstrapMetadata.records().size() + " bootstrap records for broker consumption");
             records.addAll(bootstrapMetadata.records());
 
             // If ELR is enabled, we need to set a cluster-level min.insync.replicas.
@@ -182,8 +177,6 @@ public class ActivationRecordsGenerator {
             if (curMetadataVersion.isMetadataTransactionSupported()) {
                 records.add(new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0));
             }
-        } else {
-            System.out.println("DEBUG: recordsForNonEmptyLog - skipping bootstrap records (handling partial transaction)");
         }
 
         activationMessageConsumer.accept(logMessageBuilder.toString().trim());
@@ -214,14 +207,12 @@ public class ActivationRecordsGenerator {
         int defaultMinInSyncReplicas
     ) {
         if (curMetadataVersion.isEmpty()) {
-            System.out.println("DEBUG: Taking recordsForEmptyLog path - metadata version is empty");
             return recordsForEmptyLog(activationMessageConsumer,
                     transactionStartOffset,
                     bootstrapMetadata,
                     bootstrapMetadata.metadataVersion(),
                     defaultMinInSyncReplicas);
         } else {
-            System.out.println("DEBUG: Taking recordsForNonEmptyLog path - metadata version present: " + curMetadataVersion.get());
             return recordsForNonEmptyLog(activationMessageConsumer,
                     transactionStartOffset,
                     bootstrapMetadata,

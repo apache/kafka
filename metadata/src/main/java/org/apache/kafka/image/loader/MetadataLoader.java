@@ -350,8 +350,6 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             }
         }
         metrics.updateLastAppliedImageProvenance(image.provenance());
-        System.out.println("DEBUG: MetadataLoader trying to get metadata version from FeaturesImage: " + image.features());
-        System.out.println("DEBUG: FeaturesImage metadataVersion: " + image.features().metadataVersion());
         MetadataVersion metadataVersion = image.features().metadataVersionOrThrow();
         metrics.setCurrentMetadataVersion(metadataVersion);
 
@@ -378,8 +376,6 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     @Override
     public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
         eventQueue.append(() -> {
-            System.out.println("DEBUG: MetadataLoader[" + hashCode() + "] handleCommit - processing records from Raft log");
-            System.out.println("DEBUG: MetadataLoader[" + hashCode() + "] current image features: " + image.features());
             try (reader) {
                 while (reader.hasNext()) {
                     Batch<ApiMessageAndVersion> batch = reader.next();
