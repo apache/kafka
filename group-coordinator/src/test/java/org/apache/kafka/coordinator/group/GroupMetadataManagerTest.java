@@ -21307,19 +21307,28 @@ public class GroupMetadataManagerTest {
                 .withResolvedRegularExpression("foo*", new ResolvedRegularExpression(
                     Set.of(fooTopicName), 0L, 0L)))
             .build();
+        ConsumerGroup group = context.groupMetadataManager.consumerGroup(groupId);
+        group.setMetadataRefreshDeadline(Long.MAX_VALUE, 10);
 
         // Member 1 is replaced by a classic member with the same instance id.
+        JoinGroupRequestProtocolCollection joinProtocols = new JoinGroupRequestProtocolCollection();
+        joinProtocols.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+                List.of()
+            ))))
+        );
         JoinGroupRequestData joinRequest = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId(groupId)
             .withMemberId(UNKNOWN_MEMBER_ID)
             .withGroupInstanceId(instanceId)
             .withRebalanceTimeoutMs(5000)
             .withProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-            .withDefaultProtocolTypeAndProtocols()
+            .withProtocols(joinProtocols)
             .build();
         GroupMetadataManagerTestContext.JoinResult result = context.sendClassicGroupJoin(joinRequest);
 
-        ConsumerGroupMember newMember1 = context.groupMetadataManager.consumerGroup(groupId).staticMember(instanceId);
+        ConsumerGroupMember newMember1 = group.staticMember(instanceId);
 
         ConsumerGroupMember expectedCopiedMember = new ConsumerGroupMember.Builder(newMember1.memberId())
             .setState(MemberState.STABLE)
@@ -21344,7 +21353,6 @@ public class GroupMetadataManagerTest {
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
             .setRebalanceTimeoutMs(5000)
             .setSubscribedTopicRegex("") // empty regex subscription
-            .setSubscribedTopicNames(List.of("foo"))
             .setServerAssignorName("range")
             .setAssignedPartitions(Map.of()) // empty assignment
             .setClassicMemberMetadata(

@@ -2481,7 +2481,7 @@ public class GroupMetadataManager {
                     .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols)))
             .build();
 
-        boolean bumpGroupEpoch = hasMemberSubscriptionChanged(
+        boolean hasMemberSubscriptionChanged = hasMemberSubscriptionChanged(
             groupId,
             member,
             updatedMember,
@@ -2490,13 +2490,15 @@ public class GroupMetadataManager {
 
         // Maybe create tombstone for the regex if the joining member replaces a static member
         // with regex subscription.
-        maybeUpdateRegularExpressions(
+        UpdateRegularExpressionsResult updateRegularExpressionsResult = maybeUpdateRegularExpressions(
             context,
             group,
             member,
             updatedMember,
             records
         );
+
+        boolean bumpGroupEpoch = hasMemberSubscriptionChanged || updateRegularExpressionsResult.regexUpdated();
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
