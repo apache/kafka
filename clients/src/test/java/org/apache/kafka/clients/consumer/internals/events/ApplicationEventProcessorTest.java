@@ -697,6 +697,7 @@ public class ApplicationEventProcessorTest {
 
         setupProcessor(true);
         processor.process(new AsyncPollEvent(110, 100));
+        verify(subscriptionState, verificationMode).matchesSubscribedPattern(topic);
         verify(membershipManager, verificationMode).onSubscriptionUpdated();
     }
 
