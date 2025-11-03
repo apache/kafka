@@ -1025,9 +1025,7 @@ public final class QuorumController implements Controller {
                             if (reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID)) {
                                 // For bootstrap snapshots, extract feature levels from all data records
                                 if (batch.controlRecords().isEmpty()) {
-                                    System.out.println("DEBUG: Extracting bootstrap metadata from " + messages.size() + " records");
                                     bootstrapMetadata = BootstrapMetadata.fromRecords(messages, "bootstrap");
-                                    System.out.println("DEBUG: Bootstrap metadata extracted: " + bootstrapMetadata);
                                 }
                             } else {
                                 Map<String, Short> featureVersions = new HashMap<>();
