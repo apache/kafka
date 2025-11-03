@@ -18,7 +18,7 @@
   "type": "request",
   "listeners": ["broker"],
   "name": "ShareAcknowledgeRequest",
-  // Version 0 was used for early access of KIP-932 in Apache Kafka 4.0 but removed in Apacke Kafka 4.1.
+  // Version 0 was used for early access of KIP-932 in Apache Kafka 4.0 but removed in Apache Kafka 4.1.
   //
   // Version 1 is the initial stable version (KIP-932).
   //

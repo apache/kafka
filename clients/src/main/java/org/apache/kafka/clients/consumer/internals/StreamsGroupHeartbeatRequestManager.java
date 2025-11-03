@@ -50,6 +50,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
+import static org.apache.kafka.clients.consumer.internals.RequestState.RETRY_BACKOFF_JITTER;
 
 /**
  * <p>Manages the request creation and response handling for the streams group heartbeat. The class creates a
@@ -330,7 +331,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             0,
             retryBackoffMs,
             retryBackoffMaxMs,
-            maxPollIntervalMs
+            RETRY_BACKOFF_JITTER
         );
         this.pollTimer = time.timer(maxPollIntervalMs);
     }

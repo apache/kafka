@@ -39,6 +39,7 @@ import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong}
 import org.mockito.Mockito.{mock, when}
 import org.mockito.{AdditionalMatchers, ArgumentMatchers}
 
+import java.util
 import scala.jdk.CollectionConverters._
 
 class ReplicaManagerQuotasTest {
@@ -185,7 +186,7 @@ class ReplicaManagerQuotasTest {
 
       new DelayedFetch(
         params = fetchParams,
-        fetchPartitionStatus = Seq(tp -> fetchPartitionStatus),
+        fetchPartitionStatus = createFetchPartitionStatusMap(tp, fetchPartitionStatus),
         replicaManager = replicaManager,
         quota = null,
         responseCallback = null
@@ -236,7 +237,7 @@ class ReplicaManagerQuotasTest {
 
       new DelayedFetch(
         params = fetchParams,
-        fetchPartitionStatus = Seq(tidp -> fetchPartitionStatus),
+        fetchPartitionStatus = createFetchPartitionStatusMap(tidp, fetchPartitionStatus),
         replicaManager = replicaManager,
         quota = null,
         responseCallback = null
@@ -340,4 +341,9 @@ class ReplicaManagerQuotasTest {
     quota
   }
 
+  private def createFetchPartitionStatusMap(tpId: TopicIdPartition, status: FetchPartitionStatus): util.LinkedHashMap[TopicIdPartition, FetchPartitionStatus] = {
+    val statusMap = new util.LinkedHashMap[TopicIdPartition, FetchPartitionStatus]
+    statusMap.put(tpId, status)
+    statusMap
+  }
 }
