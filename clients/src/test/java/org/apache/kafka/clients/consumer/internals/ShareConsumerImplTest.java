@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandle
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeAsyncEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackRegistrationEvent;
@@ -269,20 +270,15 @@ public class ShareConsumerImplTest {
 
         consumer.poll(Duration.ZERO);
 
-        // Verify that next ShareFetchEvent was sent with the acknowledgement GAP for offset 1
+        // Verify that a ShareAcknowledeAsyncEvent was sent with the acknowledgement GAP for offset 1
         verify(applicationEventHandler).add(argThat(event -> {
-            if (!(event instanceof ShareFetchEvent)) {
+            if (!(event instanceof ShareAcknowledgeAsyncEvent)) {
                 return false;
             }
-            ShareFetchEvent fetchEvent = (ShareFetchEvent) event;
+            ShareAcknowledgeAsyncEvent shareAcknowledgeAsyncEvent = (ShareAcknowledgeAsyncEvent) event;
             
-            // Regular acknowledgements map should be empty
-            if (!fetchEvent.acknowledgementsMap().isEmpty()) {
-                return false;
-            }
-            
-            // Control record acknowledgements map should contain the GAP for offset 1
-            Map<TopicIdPartition, NodeAcknowledgements> controlRecordAcks = fetchEvent.controlRecordAcknowledgements();
+            // Acknowledgements map should contain the GAP for offset 1
+            Map<TopicIdPartition, NodeAcknowledgements> controlRecordAcks = shareAcknowledgeAsyncEvent.acknowledgementsMap();
             return controlRecordAcks.containsKey(tip) &&
                    controlRecordAcks.get(tip).acknowledgements().get(1L) == null; // Null indicates GAP
         }));
@@ -344,6 +340,32 @@ public class ShareConsumerImplTest {
         consumer.close();
         final IllegalStateException res = assertThrows(IllegalStateException.class, consumer::subscription);
         assertEquals("This consumer has already been closed.", res.getMessage());
+    }
+
+    @Test
+    public void testShouldSendOneShareFetchEventPerPoll() {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        // Setup test data
+        String topic = "test-topic";
+        // Setup an empty fetch.
+        ShareFetch<String, String> firstFetch = ShareFetch.empty();
+
+        doReturn(firstFetch)
+                .doReturn(ShareFetch.empty())
+                .when(fetchCollector)
+                .collect(any(ShareFetchBuffer.class));
+
+        // Setup subscription
+        List<String> topics = Collections.singletonList(topic);
+        completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, topics);
+        consumer.subscribe(topics);
+
+        doReturn(0L).when(applicationEventHandler).maximumTimeToWait();
+        // Check that only 1 ShareFetchEvent is sent per poll
+        consumer.poll(Duration.ofMillis(100));
+        verify(applicationEventHandler, times(1)).add(argThat(event -> event instanceof ShareFetchEvent));
     }
 
     @Test
