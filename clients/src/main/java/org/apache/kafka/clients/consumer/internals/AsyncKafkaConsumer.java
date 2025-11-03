@@ -908,6 +908,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             log.trace("Inflight event {} failed due to {}, clearing", inflightPoll, String.valueOf(t));
             inflightPoll = null;
             throw ConsumerUtils.maybeWrapAsKafkaException(t);
+        } finally {
+            timer.update();
         }
 
         if (inflightPoll != null) {
