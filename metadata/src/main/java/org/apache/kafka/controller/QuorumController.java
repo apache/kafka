@@ -116,6 +116,7 @@ import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
@@ -384,8 +385,6 @@ public final class QuorumController implements Controller {
         public QuorumController build() throws Exception {
             if (raftClient == null) {
                 throw new IllegalStateException("You must set a raft client.");
-            } else if (bootstrapMetadata == null) {
-                throw new IllegalStateException("You must specify an initial metadata.version using the kafka-storage tool.");
             } else if (quorumFeatures == null) {
                 throw new IllegalStateException("You must specify the quorum features");
             } else if (nonFatalFaultHandler == null) {
@@ -802,6 +801,13 @@ public final class QuorumController implements Controller {
             } else {
                 // Pass the records to the Raft layer. This will start the process of committing
                 // them to the log.
+                System.out.println("DEBUG: QuorumController about to append " + result.records().size() + " records to Raft log");
+                for (ApiMessageAndVersion record : result.records()) {
+                    System.out.println("DEBUG: QuorumController appending record to Raft log: " + MetadataRecordType.fromId(record.message().apiKey()) + " - " + record.message().getClass().getSimpleName());
+                    if (MetadataRecordType.fromId(record.message().apiKey()) == MetadataRecordType.FEATURE_LEVEL_RECORD) {
+                        System.out.println("DEBUG: QuorumController writing FeatureLevelRecord to Raft log: " + record.message());
+                    }
+                }
                 long offset = appendRecords(log, result, maxRecordsPerBatch,
                     records -> {
                         // Start by trying to apply the record to our in-memory state. This should always
@@ -957,6 +963,8 @@ public final class QuorumController implements Controller {
         @Override
         public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
             appendRaftEvent("handleCommit[baseOffset=" + reader.baseOffset() + "]", () -> {
+                System.out.println("DEBUG: QuorumController handleCommit - processing log records");
+                System.out.println("DEBUG: Current FeaturesImage metadataVersion at start of commit: " + featureControl.metadataVersion());
                 try {
                     boolean isActive = isActiveController();
                     while (reader.hasNext()) {
@@ -1013,6 +1021,12 @@ public final class QuorumController implements Controller {
             appendRaftEvent(String.format("handleLoadSnapshot[snapshotId=%s]", reader.snapshotId()), () -> {
                 try {
                     String snapshotName = Snapshots.filenameFromSnapshotId(reader.snapshotId());
+                    System.out.println("DEBUG: Loading snapshot: " + snapshotName + " (snapshotId=" + reader.snapshotId() + ")");
+                    System.out.println("DEBUG: Bootstrap snapshot ID: " + Snapshots.BOOTSTRAP_SNAPSHOT_ID);
+                    System.out.println("DEBUG: Is bootstrap snapshot? " + reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID));
+                    System.out.println("DEBUG: Initial bootstrapMetadata: " + bootstrapMetadata);
+                    System.out.println("DEBUG: Initial FeaturesImage metadataVersion: " + featureControl.metadataVersion());
+                    
                     if (isActiveController()) {
                         throw fatalFaultHandler.handleFault("Asked to load snapshot " + snapshotName +
                                 ", but we are the active controller at epoch " + curClaimEpoch);
@@ -1022,13 +1036,31 @@ public final class QuorumController implements Controller {
                         Batch<ApiMessageAndVersion> batch = reader.next();
                         long offset = batch.lastOffset();
                         List<ApiMessageAndVersion> messages = batch.records();
-
+                        System.out.println("DEBUG: Processing batch - offset: " + offset + ", controlRecords: " + batch.controlRecords().size() + ", dataRecords: " + messages.size());
+                        if (bootstrapMetadata == null) {
+                            if (reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID)) {
+                                // For bootstrap snapshots, extract feature levels from all data records
+                                System.out.println("DEBUG: Bootstrap snapshot batch - controlRecords empty: " + batch.controlRecords().isEmpty() + ", messages empty: " + messages.isEmpty());
+                                if (batch.controlRecords().isEmpty()) {
+                                    System.out.println("DEBUG: Extracting bootstrap metadata from " + messages.size() + " records");
+                                    bootstrapMetadata = BootstrapMetadata.fromRecords(messages, "bootstrap");
+                                    System.out.println("DEBUG: Bootstrap metadata extracted: " + bootstrapMetadata);
+                                }
+                            } else {
+                                Map<String, Short> featureVersions = new HashMap<>();
+                                MetadataVersion metadataVersion = MetadataVersion.latestProduction();
+                                featureVersions.put(MetadataVersion.FEATURE_NAME, metadataVersion.featureLevel());
+                                featureVersions.put(KRaftVersion.FEATURE_NAME, raftClient.kraftVersion().featureLevel());
+                                bootstrapMetadata = BootstrapMetadata.fromVersions(metadataVersion, featureVersions, "generated default");
+                            }
+                        }
                         log.debug("Replaying snapshot {} batch with last offset of {}",
                                 snapshotName, offset);
 
                         int i = 1;
                         for (ApiMessageAndVersion message : messages) {
                             try {
+                                System.out.println("DEBUG: Replaying message " + i + "/" + messages.size() + ": " + message.message().getClass().getSimpleName());
                                 replay(message.message(), Optional.of(reader.snapshotId()),
                                         reader.lastContainedLogOffset());
                             } catch (Throwable e) {
@@ -1042,6 +1074,8 @@ public final class QuorumController implements Controller {
                             i++;
                         }
                     }
+                    System.out.println("DEBUG: Finished loading snapshot. Final bootstrapMetadata: " + bootstrapMetadata);
+                    System.out.println("DEBUG: Final FeaturesImage metadataVersion: " + featureControl.metadataVersion());
                     offsetControl.endLoadSnapshot(reader.lastContainedLogTimestamp());
                 } catch (FaultHandlerException e) {
                     throw e;
@@ -1139,6 +1173,10 @@ public final class QuorumController implements Controller {
         @Override
         public ControllerResult<Void> generateRecordsAndResult() {
             try {
+                if (bootstrapMetadata == null) {
+                    throw new IllegalStateException("Bootstrap metadata not available during activation. " +
+                        "This should not happen if a bootstrap snapshot was processed.");
+                }
                 return ActivationRecordsGenerator.generate(
                     log::warn,
                     offsetControl.transactionStartOffset(),
@@ -1227,7 +1265,9 @@ public final class QuorumController implements Controller {
                 replicationControl.replay((RemoveTopicRecord) message);
                 break;
             case FEATURE_LEVEL_RECORD:
+                System.out.println("DEBUG: Replaying FeatureLevelRecord: " + message);
                 featureControl.replay((FeatureLevelRecord) message);
+                System.out.println("DEBUG: After FeatureLevelRecord replay, metadataVersion: " + featureControl.metadataVersion());
                 break;
             case CLIENT_QUOTA_RECORD:
                 clientQuotaControlManager.replay((ClientQuotaRecord) message);
@@ -1436,7 +1476,7 @@ public final class QuorumController implements Controller {
     /**
      * The bootstrap metadata to use for initialization if needed.
      */
-    private final BootstrapMetadata bootstrapMetadata;
+    private BootstrapMetadata bootstrapMetadata;
 
     /**
      * The maximum number of records per batch to allow.

@@ -215,6 +215,10 @@ public class MetadataBatchLoader {
 
     private void replay(ApiMessageAndVersion record) {
         MetadataRecordType type = MetadataRecordType.fromId(record.message().apiKey());
+        System.out.println("DEBUG: MetadataBatchLoader[" + hashCode() + "] replaying record: " + type + " - " + record.message().getClass().getSimpleName());
+        if (type == MetadataRecordType.FEATURE_LEVEL_RECORD) {
+            System.out.println("DEBUG: MetadataBatchLoader[" + hashCode() + "] received FeatureLevelRecord from Raft log: " + record.message());
+        }
         switch (type) {
             case BEGIN_TRANSACTION_RECORD:
                 if (transactionState == TransactionState.STARTED_TRANSACTION ||
@@ -257,13 +261,22 @@ public class MetadataBatchLoader {
                         break;
                 }
                 hasSeenRecord = true;
+                System.out.println("DEBUG: MetadataLoader calling delta.replay() for: " + type);
                 delta.replay(record.message());
         }
     }
 
     private void applyDeltaAndUpdate(MetadataDelta delta, LogDeltaManifest manifest) {
+        System.out.println("DEBUG: MetadataLoader applyDeltaAndUpdate - creating new image from delta");
+        System.out.println("DEBUG: Delta featuresDelta: " + delta.featuresDelta());
+        if (delta.featuresDelta() != null) {
+            System.out.println("DEBUG: Delta has featuresDelta - changes: " + delta.featuresDelta().changes());
+            System.out.println("DEBUG: Delta metadataVersionChange: " + delta.featuresDelta().metadataVersionChange());
+        }
         try {
+            System.out.println("DEBUG: Old image features: " + image.features());
             image = delta.apply(manifest.provenance());
+            System.out.println("DEBUG: New image features: " + image.features());
         } catch (Throwable e) {
             faultHandler.handleFault("Error generating new metadata image from " +
                 "metadata delta between offset " + image.offset() +

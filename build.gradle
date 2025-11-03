@@ -29,21 +29,22 @@ buildscript {
 }
 
 plugins {
-  id 'com.github.ben-manes.versions' version '0.53.0'
+  id 'com.github.ben-manes.versions' version '0.48.0'
   id 'idea'
   id 'jacoco'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '12.1.3'
+  id 'org.owasp.dependencycheck' version '8.2.1'
   id 'org.nosphere.apache.rat' version "0.8.1"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
-  id "com.github.spotbugs" version '6.2.5' apply false
+  id "com.github.spotbugs" version '6.2.3' apply false
   id 'org.scoverage' version '8.0.3' apply false
-  id 'com.gradleup.shadow' version '8.3.9' apply false
-  id 'com.diffplug.spotless' version "7.2.1"
+  id 'com.github.johnrengelman.shadow' version '8.0.0' apply false
+  id 'com.diffplug.spotless' version "6.25.0"
 }
 
 ext {
+  gradleVersion = versions.gradle
   minClientJavaVersion = 11
   minNonClientJavaVersion = 17
   modulesNeedingJava11 = [":clients", ":generator", ":streams", ":streams:test-utils", ":streams:examples", ":streams-scala", ":test-common:test-common-util"]
@@ -70,13 +71,6 @@ ext {
       "--add-opens=java.base/java.time=ALL-UNNAMED",
       "--add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED"
     )
-
-  if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_25)) {
-    // Spotbugs is not compatible with Java 25+ so Gradle related tasks are disabled
-    // until version can be upgraded: https://github.com/spotbugs/spotbugs/issues/3564
-    project.gradle.startParameter.excludedTaskNames.add("spotbugsMain")
-    project.gradle.startParameter.excludedTaskNames.add("spotbugsTest")
-  }    
 
   maxTestForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : Runtime.runtime.availableProcessors()
   maxScalacThreads = project.hasProperty('maxScalacThreads') ? maxScalacThreads.toInteger() :
@@ -303,7 +297,7 @@ if (repo != null) {
 } else {
   rat.enabled = false
 }
-println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $versions.gradle, Java ${JavaVersion.current()} and Scala ${versions.scala}")
+println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $gradleVersion, Java ${JavaVersion.current()} and Scala ${versions.scala}")
 println("Build properties: ignoreFailures=$userIgnoreFailures, maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
 
 subprojects {
@@ -322,7 +316,19 @@ subprojects {
   // We use the shadow plugin for the jmh-benchmarks module and the `-all` jar can get pretty large, so
   // don't publish it
   def shouldPublish = !project.name.equals('jmh-benchmarks')
-  def shouldPublishWithShadow = (['clients'].contains(project.name))
+  def shouldPublishWithShadow = false // Temporarily disabled due to ASM compatibility issue
+  // def shouldPublishWithShadow = (['clients'].contains(project.name))
+
+  if (shouldPublishWithShadow) {
+    apply plugin: 'com.github.johnrengelman.shadow'
+  }
+
+  // Fix for upgrade system tests that may not have actual test files
+  if (project.name.startsWith('upgrade-system-tests')) {
+    tasks.withType(Test) {
+      failOnNoDiscoveredTests = false
+    }
+  }
 
   if (shouldPublish) {
     apply plugin: 'maven-publish'
@@ -332,16 +338,6 @@ subprojects {
     // The maven plugin was replaced by the maven-publish plugin in Gradle 7.0
     tasks.register('install').configure { dependsOn(publishToMavenLocal) }
     tasks.register('uploadArchives').configure { dependsOn(publish) }
-  }
-
-  tasks.withType(AbstractArchiveTask).configureEach {
-    reproducibleFileOrder = false
-    preserveFileTimestamps = true
-    useFileSystemPermissions()
-  }
-
-  tasks.withType(AbstractTestTask).configureEach {
-    failOnNoDiscoveredTests = false
   }
 
   // apply the eclipse plugin only to subprojects that hold code. 'connect' is just a folder.
@@ -379,8 +375,8 @@ subprojects {
           if (!shouldPublishWithShadow) {
             from components.java
           } else {
-            apply plugin: 'com.gradleup.shadow'
-            from components.shadow
+            // Temporarily use java components instead of shadow due to ASM compatibility issue
+            from components.java
 
             // Fix for avoiding inclusion of runtime dependencies marked as 'shadow' in MANIFEST Class-Path.
             // https://github.com/GradleUp/shadow/issues/324
@@ -1055,8 +1051,6 @@ project(':core') {
     implementation project(':transaction-coordinator')
     implementation project(':metadata')
     implementation project(':storage:storage-api')
-    // tools-api is automatically included in releaseTarGz via core's runtimeClasspath.
-    // If removed from here, remember to explicitly add it back in the releaseTarGz task.
     implementation project(':tools:tools-api')
     implementation project(':raft')
     implementation project(':storage')
@@ -1279,6 +1273,8 @@ project(':core') {
     from(project(':streams:test-utils').configurations.runtimeClasspath) { into("libs/") }
     from(project(':streams:examples').jar) { into("libs/") }
     from(project(':streams:examples').configurations.runtimeClasspath) { into("libs/") }
+    from(project(':tools:tools-api').jar) { into("libs/") }
+    from(project(':tools:tools-api').configurations.runtimeClasspath) { into("libs/") }
     duplicatesStrategy 'exclude'
   }
 
@@ -1911,39 +1907,20 @@ project(':clients') {
     }
   }
 
-  shadowJar {
+  // Temporarily disabled shadowJar configuration due to ASM compatibility issue
+  // Use regular jar instead
+
+  jar {
+    enabled true
     dependsOn createVersionFile
-    // archiveClassifier defines the classifier for the shadow jar, the default is 'all'.
-    // We don't want to use the default classifier because it will cause the shadow jar to
-    // overwrite the original jar. We also don't want to use the 'shadow' classifier because
-    // it will cause the shadow jar to be named kafka-clients-shadow.jar. We want to use the
-    // same name as the original jar, kafka-clients.jar.
-    archiveClassifier = null
-    // KIP-714: move shaded dependencies to a shaded location
-    relocate('io.opentelemetry.proto', 'org.apache.kafka.shaded.io.opentelemetry.proto')
-    relocate('com.google.protobuf', 'org.apache.kafka.shaded.com.google.protobuf')
-
-    // dependencies excluded from the final jar, since they are declared as runtime dependencies
-    dependencies {
-      project.configurations.shadowed.allDependencies.each {
-        exclude(dependency(it))
-      }
-      // exclude proto files from the jar
-      exclude "**/opentelemetry/proto/**/*.proto"
-      exclude "**/google/protobuf/*.proto"
-    }
-
+    
+    // Add the version file and licenses to regular jar
     from("${layout.buildDirectory.get().asFile.path}") {
       include "kafka/$buildVersionFileName"
     }
-
+    
     from "$rootDir/LICENSE"
     from "$rootDir/NOTICE"
-  }
-
-  jar {
-    enabled false
-    dependsOn 'shadowJar'
   }
 
   clean.doFirst {
@@ -2673,7 +2650,7 @@ project(':streams') {
   }
 
   dependencies {
-    api project(path: ':clients', configuration: 'shadow')
+    api project(path: ':clients') // Changed from 'shadow' configuration due to ASM compatibility issue
     // `org.rocksdb.Options` is part of Kafka Streams public api via `RocksDBConfigSetter`
     api libs.rocksDBJni
 
@@ -3381,11 +3358,14 @@ project(':streams:upgrade-system-tests-41') {
 
 project(':jmh-benchmarks') {
 
-  apply plugin: 'com.gradleup.shadow'
+  // Temporarily disabled due to ASM compatibility issue
+  // apply plugin: 'com.github.johnrengelman.shadow'
 
+  /*
   shadowJar {
     archiveBaseName = 'kafka-jmh-benchmarks'
   }
+  */
 
   dependencies {
     implementation(project(':core')) {

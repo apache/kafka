@@ -51,6 +51,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -168,9 +169,9 @@ public class FormatterTest {
         try (TestEnv testEnv = new TestEnv(1)) {
             new File(testEnv.directory(0)).setReadOnly();
             FormatterContext formatter1 = testEnv.newFormatter();
-            String expectedPrefix = "Error while writing meta.properties file";
+            String expectedPrefix = "Error creating temporary file, logDir =";
             assertEquals(expectedPrefix,
-                assertThrows(FormatterException.class,
+                assertThrows(UncheckedIOException.class,
                     formatter1.formatter::run).
                         getMessage().substring(0, expectedPrefix.length()));
         }

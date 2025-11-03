@@ -34,6 +34,7 @@ import java.util.Objects;
 
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
+import static org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION;
 
 /**
  * A read-only class that holds the controller bootstrap metadata. A file named "bootstrap.checkpoint" is used and the
@@ -41,6 +42,8 @@ import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
  */
 public class BootstrapDirectory {
     public static final String BINARY_BOOTSTRAP_FILENAME = "bootstrap.checkpoint";
+
+    public static final String BINARY_BOOTSTRAP_CHECKPOINT_FILENAME = "00000000000000000000-0000000000.checkpoint";
 
     private final String directoryPath;
 
@@ -65,7 +68,10 @@ public class BootstrapDirectory {
                 throw new RuntimeException("No such directory as " + directoryPath);
             }
         }
-        Path binaryBootstrapPath = Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME);
+        Path binaryBootstrapPath = Paths.get(directoryPath, String.format("%s-%d",
+                CLUSTER_METADATA_TOPIC_PARTITION.topic(),
+                CLUSTER_METADATA_TOPIC_PARTITION.partition()),
+                BINARY_BOOTSTRAP_CHECKPOINT_FILENAME);
         if (!Files.exists(binaryBootstrapPath)) {
             return readFromConfiguration();
         } else {

@@ -24,7 +24,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.metadata.KafkaConfigSchema
-import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble}
 import org.apache.kafka.raft.QuorumConfig
@@ -181,9 +181,9 @@ object KafkaRaftServer {
     }
 
     // Load the BootstrapMetadata.
-    val bootstrapDirectory = new BootstrapDirectory(config.metadataLogDir)
-    val bootstrapMetadata = bootstrapDirectory.read()
-    (metaPropsEnsemble, bootstrapMetadata)
+    // val bootstrapDirectory = new BootstrapDirectory(config.metadataLogDir)
+    // val bootstrapMetadata = bootstrapDirectory.read()
+    (metaPropsEnsemble, null)
   }
 
   val configSchema = new KafkaConfigSchema(Map(
