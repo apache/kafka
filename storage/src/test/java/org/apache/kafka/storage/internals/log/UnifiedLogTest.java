@@ -261,7 +261,7 @@ public class UnifiedLogTest {
         }
 
         log.updateHighWatermark(log.logEndOffset());
-        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+        assertEquals(0, log.deleteOldSegments());
         assertEquals(3, log.numberOfSegments(), "should have 3 segments");
     }
 
@@ -299,7 +299,7 @@ public class UnifiedLogTest {
         }
 
         log.updateHighWatermark(log.logEndOffset());
-        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+        assertEquals(0, log.deleteOldSegments());
         assertEquals(3, log.numberOfSegments(), "There should be 3 segments remaining");
     }
 
@@ -323,7 +323,7 @@ public class UnifiedLogTest {
 
         int segments = log.numberOfSegments();
         log.updateHighWatermark(log.logEndOffset());
-        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+        assertEquals(0, log.deleteOldSegments());
         assertEquals(segments, log.numberOfSegments(), "There should be 3 segments remaining");
     }
 
@@ -420,8 +420,9 @@ public class UnifiedLogTest {
         assertEquals(0, log.logStartOffset());
         log.updateHighWatermark(log.logEndOffset());
 
+        // The logStartOffset at the first segment so we did not delete it.
         log.maybeIncrementLogStartOffset(1, LogStartOffsetIncrementReason.ClientRecordDeletion);
-        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+        assertEquals(0, log.deleteOldSegments());
         assertEquals(3, log.numberOfSegments());
         assertEquals(1, log.logStartOffset());
 
@@ -482,14 +483,14 @@ public class UnifiedLogTest {
 
         // segments are not eligible for deletion if no high watermark has been set
         int numSegments = log.numberOfSegments();
-        assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+        assertEquals(0, log.deleteOldSegments());
         assertEquals(numSegments, log.numberOfSegments());
         assertEquals(0L, log.logStartOffset());
 
         // only segments with offset before the current high watermark are eligible for deletion
         for (long hw = 25; hw <= 30; hw++) {
             log.updateHighWatermark(hw);
-            assertTrue(log.deleteOldSegments() > 0, "At least one segment should be deleted");
+            log.deleteOldSegments();
             assertTrue(log.logStartOffset() <= hw);
             long finalHw = hw;
             log.logSegments().forEach(segment -> {
