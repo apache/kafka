@@ -2375,8 +2375,9 @@ public class SharePartition {
             NavigableMap.Entry<Long, InFlightBatch> entry = cachedState.floorEntry(lastOffsetAcknowledged);
             // If the lastOffsetAcknowledged is equal to the last offset of entry, then the entire batch can potentially be removed.
             if (lastOffsetAcknowledged == entry.getValue().lastOffset()) {
-                if (cachedState.higherKey(lastOffsetAcknowledged) > startOffset) {
-                    startOffset = cachedState.higherKey(lastOffsetAcknowledged);
+                long lastOffsetAcknowledgedHigherKey = cachedState.higherKey(lastOffsetAcknowledged);
+                if (lastOffsetAcknowledgedHigherKey > startOffset) {
+                    startOffset = lastOffsetAcknowledgedHigherKey;
                 }
                 if (isPersisterReadGapWindowActive()) {
                     // This case will arise if we have a situation where there is an acquirable gap after the lastOffsetAcknowledged.
