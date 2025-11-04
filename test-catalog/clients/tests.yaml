@@ -1188,8 +1188,6 @@ org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumerTest:
 - testReaperInvokedInPoll
 - testReaperInvokedInUnsubscribe
 - testRecordBackgroundEventQueueSizeAndBackgroundEventQueueTime
-- testRefreshCommittedOffsetsNotCalledIfNoGroupId
-- testRefreshCommittedOffsetsShouldNotResetIfFailedWithTimeout
 - testSeekToBeginning
 - testSeekToBeginningWithException
 - testSeekToEnd
@@ -1208,7 +1206,6 @@ org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumerTest:
 - testSuccessfulStartupShutdown
 - testUnsubscribeGeneratesUnsubscribeEvent
 - testUnsubscribeWithoutGroupId
-- testUpdatePatternSubscriptionEventGeneratedOnlyIfPatternUsed
 - testVerifyApplicationEventOnShutdown
 - testWakeupAfterEmptyFetch
 - testWakeupAfterNonEmptyFetch
@@ -2636,14 +2633,16 @@ org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessorTest
 - testAsyncCommitEventWithEmptyOffsets
 - testAsyncCommitEventWithException
 - testAsyncCommitEventWithoutCommitRequestManager
+- testAsyncPollEvent
 - testFetchCommittedOffsetsEvent
 - testListOffsetsEventIsProcessed
-- testPollEvent
 - testPrepClosingCommitEvents
 - testProcessUnsubscribeEventWithGroupId
 - testProcessUnsubscribeEventWithoutGroupId
 - testR2JPatternSubscriptionEventFailureWithMixedSubscriptionType
 - testR2JPatternSubscriptionEventSuccess
+- testRefreshCommittedOffsetsNotCalledIfNoGroupId
+- testRefreshCommittedOffsetsShouldNotResetIfFailedWithTimeout
 - testResetOffsetEvent
 - testSeekUnvalidatedEvent
 - testSeekUnvalidatedEventWithException
@@ -2663,6 +2662,9 @@ org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessorTest
 - testTopicSubscriptionChangeEvent
 - testTopicSubscriptionChangeEventWithIllegalSubscriptionState
 - testUpdatePatternSubscriptionEventOnlyTakesEffectWhenMetadataHasNewVersion
+- testUpdatePatternSubscriptionInvokedWhenMetadataUpdated
+- testUpdatePatternSubscriptionNotInvokedWhenMetadataNotUpdated
+- testUpdatePatternSubscriptionNotInvokedWhenNotUsingPatternSubscription
 org.apache.kafka.clients.consumer.internals.events.CompletableEventReaperTest:
 - testCompleted
 - testCompletedAndExpired
