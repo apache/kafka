@@ -9958,6 +9958,7 @@ public class SharePartitionTest {
 
         assertNull(batch.batchAcquisitionLockTimeoutTask());
         assertEquals(RecordState.AVAILABLE, batch.batchState());    // Verify batch record state
+        assertEquals(0, sharePartition.timer().size()); // Timer jobs
         Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());  // 1 persister call.
     }
 
@@ -10055,6 +10056,7 @@ public class SharePartitionTest {
 
         assertNull(offset0.acquisitionLockTimeoutTask());
         assertEquals(RecordState.AVAILABLE, offset0.state());    // Verify batch record state
+        assertEquals(0, sharePartition.timer().size()); // Timer jobs
         Mockito.verify(persister, Mockito.times(2)).writeState(Mockito.any());  // 1 more persister call.
     }
 
@@ -10093,7 +10095,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testLsoMovementWithPerOffsetRenewal() {
+    public void testLsoMovementWithPerOffsetRenewal() throws InterruptedException {
         Persister persister = Mockito.mock(Persister.class);
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withState(SharePartitionState.ACTIVE)
@@ -10155,7 +10157,18 @@ public class SharePartitionTest {
 
         assertEquals(3, sharePartition.timer().size()); // Timer jobs - 3 because the renewed offsets are non-contiguous.
 
-        Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());
+        // Expire timer
+        mockTimer.advanceClock(ACQUISITION_LOCK_TIMEOUT_MS + 1);    // Trigger expire
+        List<RecordState> expectedStates = List.of(RecordState.ARCHIVED, RecordState.ACKNOWLEDGED, RecordState.AVAILABLE, RecordState.ACKNOWLEDGED, RecordState.AVAILABLE);
+        for (long i = 0; i <= 4; i++) {
+            InFlightState offset = sharePartition.cachedState().get(0L).offsetState().get(i);
+            assertNull(offset.acquisitionLockTimeoutTask());
+            assertEquals(expectedStates.get((int) i), offset.state());
+        }
+
+        assertEquals(0, sharePartition.timer().size()); // Timer jobs
+
+        Mockito.verify(persister, Mockito.times(4)).writeState(Mockito.any());
     }
 
     @Test
