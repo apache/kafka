@@ -113,9 +113,8 @@
     <p>
         Kafka Streams now supports Dead Letter Queue (DLQ).
         A new config <code>errors.deadletterqueue.topic.name</code> allows to specify the name of the DLQ topic. When set and <code>DefaultProductionExceptionHandler</code> is used, records that cause exceptions will be forwarded to the DLQ topic.
-        If a custom exception handler is used, it is up to the custom handler to build DLQ records to send, in this case, the <code>errors.deadletterqueue.topic.name</code> configuration has no impact.
-    </p>
-    <p>
+        If a custom exception handler is used, it is up to the custom handler to build DLQ records to send, hence, depending on the implementation, the <code>errors.deadletterqueue.topic.name</code> configuration may be ignored.
+
         <code>org.apache.kafka.streams.errors.ProductionExceptionHandler$ProductionExceptionHandlerResponse</code> is deprecated and replaced by <code>org.apache.kafka.streams.errors.ProductionExceptionHandler$Response</code>.
         Methods <code>handle</code> and <code>handleSerializationException</code> in <code>org.apache.kafka.streams.errors.ProductionExceptionHandler</code> are deprecated and replaced by <code>handleError</code> and <code>handleSerializationError</code> respectively in order to use the new <code>Response</code> class.
         More details can be found in <a href="https://cwiki.apache.org/confluence/x/HwviEQ">KIP-1034</a>.
@@ -124,6 +123,7 @@
     <p>
         We introduce a new <code>org.apache.kafka.streams.CloseOptions</code> class which replaces the existing <code>org.apache.kafka.streams.KafkaStreams$CloseOptions</code>.
         The latter is deprecated and will be removed in the next major release.
+        <code>CloseOptions</code> class allows to specify close timeout and group membership operation - whether the consumer needs to leave the group or remain in the group.
         More details can be found in <a href="https://cwiki.apache.org/confluence/x/QAq9F">KIP-1153</a>.
     </p>
 
@@ -133,7 +133,7 @@
     </p>
 
     <p>
-        <code>org.apache.kafka.streams.errors.BrokerNotFoundException</code> was deprecated and will removed in the next major release.
+        <code>org.apache.kafka.streams.errors.BrokerNotFoundException</code> was deprecated and will be removed in the next major release.
         More details can be found in <a href="https://cwiki.apache.org/confluence/x/8AxJFg">KIP-1195</a>.
     </p>
 
