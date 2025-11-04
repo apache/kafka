@@ -330,28 +330,18 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     private void maybePublishMetadata(MetadataDelta delta, MetadataImage image, LoaderManifest manifest) {
         this.image = image;
 
-        System.out.println("[Debug] MetadataLoader.maybePublishMetadata: manifestType=" + manifest.type() +
-            ", lastContainedOffset=" + manifest.provenance().lastContainedOffset() +
-            ", metadataVersionPresent=" + image.features().metadataVersion().isPresent() +
-            image.features().metadataVersion().map(version -> ", metadataVersion=" + version).orElse(""));
-
         if (stillNeedToCatchUp(
             "maybePublishMetadata(" + manifest.type().toString() + ")",
             manifest.provenance().lastContainedOffset())
         ) {
-            System.out.println("[Debug] MetadataLoader.maybePublishMetadata: still catching up, deferring publish for manifestType="
-                + manifest.type());
             return;
         }
 
         if (log.isDebugEnabled()) {
             log.debug("handleCommit: publishing new image with provenance {}.", image.provenance());
         }
-        System.out.println("[Debug] MetadataLoader.maybePublishMetadata: publishing image at offset=" +
-            image.offset() + ", metadataVersion=" + image.features().metadataVersion().orElse(null));
         for (MetadataPublisher publisher : publishers.values()) {
             try {
-                System.out.println("[Debug] MetadataLoader.maybePublishMetadata: notifying publisher=" + publisher.name());
                 publisher.onMetadataUpdate(delta, image, manifest);
             } catch (Throwable e) {
                 faultHandler.handleFault("Unhandled error publishing the new metadata " +
@@ -389,16 +379,12 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             try (reader) {
                 while (reader.hasNext()) {
                     Batch<ApiMessageAndVersion> batch = reader.next();
-                    System.out.println("[Debug] MetadataLoader.handleCommit: baseOffset=" + batch.baseOffset() +
-                        ", lastOffset=" + batch.lastOffset() + ", epoch=" + batch.epoch() +
-                        ", recordCount=" + batch.records().size());
                     loadControlRecords(batch);
                     long elapsedNs = batchLoader.loadBatch(batch, currentLeaderAndEpoch);
                     metrics.updateBatchSize(batch.records().size());
                     metrics.updateBatchProcessingTimeNs(elapsedNs);
                 }
                 batchLoader.maybeFlushBatches(currentLeaderAndEpoch, true);
-                System.out.println("[Debug] MetadataLoader.handleCommit: finished processing commit batches. current image offset=" + image.offset());
             } catch (Throwable e) {
                 // This is a general catch-all block where we don't expect to end up;
                 // failure-prone operations should have individual try/catch blocks around them.

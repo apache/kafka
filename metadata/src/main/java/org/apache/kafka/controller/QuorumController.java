@@ -963,9 +963,6 @@ public final class QuorumController implements Controller {
                         long offset = batch.lastOffset();
                         int epoch = batch.epoch();
                         List<ApiMessageAndVersion> messages = batch.records();
-                        System.out.println("[Debug] QuorumController.handleCommit: baseOffset=" + batch.baseOffset() +
-                            ", lastOffset=" + offset + ", epoch=" + epoch + ", messageCount=" + messages.size() +
-                            ", activeController=" + isActive);
 
                         if (messages.isEmpty()) {
                             log.debug("Skipping handling commit for batch with no data records with offset {} and epoch {}.", offset, epoch);
@@ -989,9 +986,6 @@ public final class QuorumController implements Controller {
                             int recordIndex = 0;
                             for (ApiMessageAndVersion message : messages) {
                                 long recordOffset = batch.baseOffset() + recordIndex;
-                                System.out.println("[Debug] QuorumController.handleCommit: replaying record type=" +
-                                    message.message().getClass().getSimpleName() + ", offset=" + recordOffset +
-                                    ", version=" + message.version());
                                 try {
                                     replay(message.message(), Optional.empty(), recordOffset);
                                 } catch (Throwable e) {
@@ -1027,16 +1021,11 @@ public final class QuorumController implements Controller {
                         Batch<ApiMessageAndVersion> batch = reader.next();
                         long offset = batch.lastOffset();
                         List<ApiMessageAndVersion> messages = batch.records();
-                        System.out.println("[Debug] QuorumController.handleLoadSnapshot: snapshot=" + snapshotName +
-                            ", baseOffset=" + batch.baseOffset() + ", lastOffset=" + offset +
-                            ", messageCount=" + messages.size());
                         if (bootstrapMetadata == null) {
                             if (reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID)) {
                                 // For bootstrap snapshots, extract feature levels from all data records
                                 if (batch.controlRecords().isEmpty()) {
                                     bootstrapMetadata = BootstrapMetadata.fromRecords(messages, "bootstrap");
-                                    System.out.println("[Debug] QuorumController.handleLoadSnapshot: loaded bootstrap metadata from snapshot. metadata.version="
-                                        + bootstrapMetadata.metadataVersion() + ", record count=" + bootstrapMetadata.records().size());
                                 }
                             } else {
                                 Map<String, Short> featureVersions = new HashMap<>();
@@ -1044,8 +1033,6 @@ public final class QuorumController implements Controller {
                                 featureVersions.put(MetadataVersion.FEATURE_NAME, metadataVersion.featureLevel());
                                 featureVersions.put(KRaftVersion.FEATURE_NAME, raftClient.kraftVersion().featureLevel());
                                 bootstrapMetadata = BootstrapMetadata.fromVersions(metadataVersion, featureVersions, "generated default");
-                                System.out.println("[Debug] QuorumController.handleLoadSnapshot: synthesized bootstrap metadata. metadata.version="
-                                    + bootstrapMetadata.metadataVersion() + ", record count=" + bootstrapMetadata.records().size());
                             }
                         }
                         log.debug("Replaying snapshot {} batch with last offset of {}",
@@ -1053,9 +1040,6 @@ public final class QuorumController implements Controller {
 
                         int i = 1;
                         for (ApiMessageAndVersion message : messages) {
-                            System.out.println("[Debug] QuorumController.handleLoadSnapshot: replaying record type=" +
-                                message.message().getClass().getSimpleName() + ", version=" + message.version() +
-                                ", index=" + i + "/" + messages.size());
                             try {
                                 replay(message.message(), Optional.of(reader.snapshotId()),
                                         reader.lastContainedLogOffset());
@@ -1172,9 +1156,6 @@ public final class QuorumController implements Controller {
                         "This should not happen if a bootstrap snapshot was processed.");
                 }
                 if (!bootstrapRecordsAppended) {
-                    System.out.println("[Debug] QuorumController.CompleteActivationEvent: forcing bootstrap records to be appended to the log. metadata.version="
-                        + bootstrapMetadata.metadataVersion() + ", bootstrap source='" + bootstrapMetadata.source() + "', record count="
-                        + bootstrapMetadata.records().size());
                     ControllerResult<Void> result = ActivationRecordsGenerator.recordsForEmptyLog(
                         log::warn,
                         offsetControl.transactionStartOffset(),
@@ -1184,8 +1165,6 @@ public final class QuorumController implements Controller {
                     bootstrapRecordsAppended = true;
                     return result;
                 }
-                System.out.println("[Debug] QuorumController.CompleteActivationEvent: generating activation records without bootstrap append. metadata.version="
-                    + featureControl.metadataVersion() + ", bootstrapAlreadyAppended=" + bootstrapRecordsAppended);
                 return ActivationRecordsGenerator.generate(
                     log::warn,
                     offsetControl.transactionStartOffset(),
