@@ -56,6 +56,7 @@ import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimerTask;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
+import org.apache.kafka.server.share.fetch.InFlightBatch;
 import org.apache.kafka.server.share.fetch.InFlightState;
 import org.apache.kafka.server.share.fetch.RecordState;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
@@ -102,11 +103,13 @@ import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -9892,6 +9895,341 @@ public class SharePartitionTest {
         // At this point, the batch 2 -> 6 is removed from the cached state and startOffset is moved to 7. Thus, in flight
         // contains records 7 -> 11 which are archived. Therefore, deliveryCompleteCount becomes 5.
         assertEquals(5, sharePartition.deliveryCompleteCount());
+    }
+
+    @Test
+    public void testAckTypeToRecordStateMapping() {
+        // This test will help catch bugs if the map changes.
+        Map<Byte, RecordState> actualMap = SharePartition.ackTypeToRecordStateMapping();
+        assertEquals(4, actualMap.size());
+
+        Map<Byte, RecordState> expected = Map.of(
+            (byte) 0, RecordState.ARCHIVED,
+            AcknowledgeType.ACCEPT.id, RecordState.ACKNOWLEDGED,
+            AcknowledgeType.RELEASE.id, RecordState.AVAILABLE,
+            AcknowledgeType.REJECT.id, RecordState.ARCHIVED
+        );
+
+        for (byte key : expected.keySet()) {
+            assertEquals(expected.get(key), actualMap.get(key));
+        }
+    }
+
+    @Test
+    public void testFetchAckTypeMapForBatch() {
+        ShareAcknowledgementBatch batch = mock(ShareAcknowledgementBatch.class);
+        when(batch.acknowledgeTypes()).thenReturn(List.of((byte) -1));
+        assertThrows(IllegalArgumentException.class, () -> SharePartition.fetchAckTypeMapForBatch(batch));
+    }
+
+    @Test
+    public void testRenewAcknowledgeWithCompleteBatchAck() throws InterruptedException {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withPersister(persister)
+            .build();
+
+        List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 1), 1);
+        assertEquals(1, records.size());
+        assertEquals(records.get(0).firstOffset(), records.get(0).lastOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        InFlightBatch batch = sharePartition.cachedState().get(0L);
+        AcquisitionLockTimerTask taskOrig = batch.batchAcquisitionLockTimeoutTask();
+
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(0, 0, List.of(AcknowledgeType.RENEW.id))));
+        assertTrue(taskOrig.isCancelled()); // Original acq lock cancelled.
+        assertNotEquals(taskOrig, batch.batchAcquisitionLockTimeoutTask()); // Lock changes.
+        assertEquals(1, sharePartition.timer().size()); // Timer jobs
+        assertEquals(RecordState.ACQUIRED, batch.batchState());
+        Mockito.verify(persister, Mockito.times(0)).writeState(Mockito.any());  // No persister call.
+
+        // Expire timer
+        // On expiration state will transition to AVAILABLE resulting in persister write RPC
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        mockTimer.advanceClock(ACQUISITION_LOCK_TIMEOUT_MS + 1);    // Trigger expire
+
+        assertNull(batch.batchAcquisitionLockTimeoutTask());
+        assertEquals(RecordState.AVAILABLE, batch.batchState());    // Verify batch record state
+        assertEquals(0, sharePartition.timer().size()); // Timer jobs
+        Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());  // 1 persister call.
+    }
+
+    @Test
+    public void testRenewAcknowledgeOnExpiredBatch() throws InterruptedException {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withPersister(persister)
+            .build();
+
+        List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 1), 1);
+        assertEquals(1, records.size());
+        assertEquals(records.get(0).firstOffset(), records.get(0).lastOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        InFlightBatch batch = sharePartition.cachedState().get(0L);
+        AcquisitionLockTimerTask taskOrig = batch.batchAcquisitionLockTimeoutTask();
+
+        // Expire acq lock timeout.
+        // Persister mocking for recordState transition.
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+
+        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        mockTimer.advanceClock(ACQUISITION_LOCK_TIMEOUT_MS + 1);
+        TestUtils.waitForCondition(() -> batch.batchAcquisitionLockTimeoutTask() == null, "Acq lock timeout not cancelled.");
+        CompletableFuture<Void> future = sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(0, 0, List.of(AcknowledgeType.RENEW.id))));
+
+        assertTrue(future.isCompletedExceptionally());
+        try {
+            future.get();
+            fail("No exception thrown");
+        } catch (Exception e) {
+            assertNotNull(e);
+            assertInstanceOf(InvalidRecordStateException.class, e.getCause());
+        }
+        assertTrue(taskOrig.isCancelled()); // Original acq lock cancelled.
+        assertNotEquals(taskOrig, batch.batchAcquisitionLockTimeoutTask()); // Lock changes.
+        assertEquals(0, sharePartition.timer().size()); // Timer jobs
+        assertEquals(RecordState.AVAILABLE, batch.batchState());
+        Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());  // 1 persister call to update record state.
+    }
+
+    @Test
+    public void testRenewAcknowledgeWithPerOffsetAck() throws InterruptedException {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withPersister(persister)
+            .build();
+
+        List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 2), 2);
+        assertEquals(1, records.size());
+        assertEquals(records.get(0).firstOffset() + 1, records.get(0).lastOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        InFlightBatch batch = sharePartition.cachedState().get(0L);
+        assertEquals(RecordState.ACQUIRED, batch.batchState());
+        AcquisitionLockTimerTask taskOrig = batch.batchAcquisitionLockTimeoutTask();
+
+        // For ACCEPT ack call.
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+
+        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(0, 1,
+            List.of(AcknowledgeType.RENEW.id, AcknowledgeType.ACCEPT.id))));
+
+        assertTrue(taskOrig.isCancelled()); // Original acq lock cancelled.
+        assertNotEquals(taskOrig, sharePartition.cachedState().get(0L).offsetState().get(0L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(0L).offsetState());
+
+        InFlightState offset0 = sharePartition.cachedState().get(0L).offsetState().get(0L);
+        InFlightState offset1 = sharePartition.cachedState().get(0L).offsetState().get(1L);
+        assertEquals(RecordState.ACQUIRED, offset0.state());
+        assertNotNull(offset0.acquisitionLockTimeoutTask());
+        assertEquals(1, sharePartition.timer().size()); // Timer jobs
+
+        assertEquals(RecordState.ACKNOWLEDGED, offset1.state());
+        assertNull(offset1.acquisitionLockTimeoutTask());
+
+        Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());
+
+        // Expire timer
+        mockTimer.advanceClock(ACQUISITION_LOCK_TIMEOUT_MS + 1);    // Trigger expire
+
+        assertNull(offset0.acquisitionLockTimeoutTask());
+        assertEquals(RecordState.AVAILABLE, offset0.state());    // Verify batch record state
+        assertEquals(0, sharePartition.timer().size()); // Timer jobs
+        Mockito.verify(persister, Mockito.times(2)).writeState(Mockito.any());  // 1 more persister call.
+    }
+
+    @Test
+    public void testLsoMovementWithBatchRenewal() {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withPersister(persister)
+            .build();
+
+        List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 10), 10);
+        assertEquals(1, records.size());
+        assertNotEquals(records.get(0).firstOffset(), records.get(0).lastOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        InFlightBatch batch = sharePartition.cachedState().get(0L);
+        AcquisitionLockTimerTask taskOrig = batch.batchAcquisitionLockTimeoutTask();
+
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(0, 9, List.of(AcknowledgeType.RENEW.id))));
+        sharePartition.updateCacheAndOffsets(5);
+
+        assertEquals(10, sharePartition.nextFetchOffset());
+        assertEquals(5, sharePartition.startOffset());
+        assertEquals(9, sharePartition.endOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+
+        assertEquals(MEMBER_ID, sharePartition.cachedState().get(0L).batchMemberId());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).batchState());
+
+        assertTrue(taskOrig.isCancelled()); // Original acq lock cancelled.
+        assertNotEquals(taskOrig, batch.batchAcquisitionLockTimeoutTask()); // Lock changes.
+        assertEquals(1, sharePartition.timer().size()); // Timer jobs
+        Mockito.verify(persister, Mockito.times(0)).writeState(Mockito.any());  // No persister call.
+    }
+
+    @Test
+    public void testLsoMovementWithPerOffsetRenewal() throws InterruptedException {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withPersister(persister)
+            .build();
+
+        List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 5), 5);
+        assertEquals(1, records.size());
+        assertEquals(records.get(0).firstOffset() + 4, records.get(0).lastOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        InFlightBatch batch = sharePartition.cachedState().get(0L);
+        assertEquals(RecordState.ACQUIRED, batch.batchState());
+        AcquisitionLockTimerTask taskOrig = batch.batchAcquisitionLockTimeoutTask();
+
+        // For ACCEPT ack call.
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+
+        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(0, 4,
+            List.of(AcknowledgeType.RENEW.id, AcknowledgeType.ACCEPT.id, AcknowledgeType.RENEW.id, AcknowledgeType.ACCEPT.id, AcknowledgeType.RENEW.id))));
+
+        sharePartition.updateCacheAndOffsets(3);
+
+        assertEquals(5, sharePartition.nextFetchOffset());
+        assertEquals(3, sharePartition.startOffset());
+        assertEquals(4, sharePartition.endOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+
+        assertTrue(taskOrig.isCancelled()); // Original acq lock cancelled.
+        assertNotEquals(taskOrig, sharePartition.cachedState().get(0L).offsetState().get(0L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(0L).offsetState());
+
+        InFlightState offset0 = sharePartition.cachedState().get(0L).offsetState().get(0L);
+        InFlightState offset1 = sharePartition.cachedState().get(0L).offsetState().get(1L);
+        InFlightState offset2 = sharePartition.cachedState().get(0L).offsetState().get(2L);
+        InFlightState offset3 = sharePartition.cachedState().get(0L).offsetState().get(3L);
+        InFlightState offset4 = sharePartition.cachedState().get(0L).offsetState().get(4L);
+
+        assertEquals(RecordState.ACQUIRED, offset0.state());
+        assertNotNull(offset0.acquisitionLockTimeoutTask());
+
+        assertEquals(RecordState.ACKNOWLEDGED, offset1.state());
+        assertNull(offset1.acquisitionLockTimeoutTask());
+
+        assertEquals(RecordState.ACQUIRED, offset2.state());
+        assertNotNull(offset2.acquisitionLockTimeoutTask());
+
+        assertEquals(RecordState.ACKNOWLEDGED, offset3.state());
+        assertNull(offset3.acquisitionLockTimeoutTask());
+
+        assertEquals(RecordState.ACQUIRED, offset4.state());
+        assertNotNull(offset4.acquisitionLockTimeoutTask());
+
+        assertEquals(3, sharePartition.timer().size()); // Timer jobs - 3 because the renewed offsets are non-contiguous.
+
+        // Expire timer
+        mockTimer.advanceClock(ACQUISITION_LOCK_TIMEOUT_MS + 1);    // Trigger expire
+        List<RecordState> expectedStates = List.of(RecordState.ARCHIVED, RecordState.ACKNOWLEDGED, RecordState.ARCHIVED, RecordState.ACKNOWLEDGED, RecordState.AVAILABLE);
+        for (long i = 0; i <= 4; i++) {
+            InFlightState offset = sharePartition.cachedState().get(0L).offsetState().get(i);
+            assertNull(offset.acquisitionLockTimeoutTask());
+            assertEquals(expectedStates.get((int) i), offset.state());
+        }
+
+        assertEquals(0, sharePartition.timer().size()); // Timer jobs
+
+        Mockito.verify(persister, Mockito.times(4)).writeState(Mockito.any());
+    }
+
+    @Test
+    public void testRenewAcknowledgeWithPerOffsetAndBatchMix() {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withPersister(persister)
+            .build();
+
+        // Batch
+        List<AcquiredRecords> recordsB = fetchAcquiredRecords(sharePartition, memoryRecords(0, 1), 1);
+        assertEquals(1, recordsB.size());
+        assertEquals(recordsB.get(0).firstOffset(), recordsB.get(0).lastOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        InFlightBatch batchB = sharePartition.cachedState().get(0L);
+        AcquisitionLockTimerTask taskOrigB = batchB.batchAcquisitionLockTimeoutTask();
+
+        // Per offset
+        List<AcquiredRecords> recordsO = fetchAcquiredRecords(sharePartition, memoryRecords(1, 2), 2);
+        assertEquals(1, recordsO.size());
+        assertEquals(recordsO.get(0).firstOffset() + 1, recordsO.get(0).lastOffset());
+        assertEquals(2, sharePartition.cachedState().size());
+        InFlightBatch batchO = sharePartition.cachedState().get(0L);
+        assertEquals(RecordState.ACQUIRED, batchO.batchState());
+        AcquisitionLockTimerTask taskOrigO = batchO.batchAcquisitionLockTimeoutTask();
+
+        // For ACCEPT ack call.
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+
+        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        sharePartition.acknowledge(MEMBER_ID, List.of(
+            new ShareAcknowledgementBatch(0, 0, List.of(AcknowledgeType.RENEW.id)),
+            new ShareAcknowledgementBatch(1, 2, List.of(AcknowledgeType.RENEW.id, AcknowledgeType.ACCEPT.id))
+        ));
+
+        // Batch checks
+        assertTrue(taskOrigB.isCancelled()); // Original acq lock cancelled.
+        assertNotEquals(taskOrigB, batchB.batchAcquisitionLockTimeoutTask()); // Lock changes.
+
+        // Per offset checks
+        assertTrue(taskOrigO.isCancelled()); // Original acq lock cancelled.
+        assertNotEquals(taskOrigO, sharePartition.cachedState().get(1L).offsetState().get(1L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(1L).offsetState());
+
+        InFlightState offset1 = sharePartition.cachedState().get(1L).offsetState().get(1L);
+        InFlightState offset2 = sharePartition.cachedState().get(1L).offsetState().get(2L);
+        assertEquals(RecordState.ACQUIRED, offset1.state());
+        assertNotNull(offset1.acquisitionLockTimeoutTask());
+
+        assertEquals(RecordState.ACKNOWLEDGED, offset2.state());
+        assertNull(offset2.acquisitionLockTimeoutTask());
+
+        assertEquals(2, sharePartition.timer().size()); // Timer jobs one for batch and one for single renewal in per offset.
+        Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());
     }
 
     @Test

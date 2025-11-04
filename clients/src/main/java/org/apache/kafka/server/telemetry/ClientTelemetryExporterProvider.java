@@ -21,22 +21,16 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 
 /**
  * A {@link MetricsReporter} may implement this interface to indicate support for collecting client
- * telemetry on the server side.
- *
- * @deprecated Since 4.2.0, use {@link ClientTelemetryExporterProvider} instead. This interface will be
- *             removed in Kafka 5.0.0. The new interface provides a {@link ClientTelemetryExporter}
- *             which includes additional context such as the push interval.
+ * telemetry on the server side using the new exporter API.
  */
-@Deprecated(since = "4.2", forRemoval = true)
-@SuppressWarnings("removal")
-public interface ClientTelemetry {
+public interface ClientTelemetryExporterProvider {
 
     /**
-     * Called by the broker to fetch instance of {@link ClientTelemetryReceiver}.
+     * Called by the broker to fetch instance of {@link ClientTelemetryExporter}.
      * <p>
      * This instance may be cached by the broker.
      *
-     * @return broker side instance of {@link ClientTelemetryReceiver}.
+     * @return broker side instance of {@link ClientTelemetryExporter}
      */
-    ClientTelemetryReceiver clientReceiver();
+    ClientTelemetryExporter clientTelemetryExporter();
 }

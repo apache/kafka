@@ -24,6 +24,10 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
+import org.apache.kafka.server.telemetry.ClientTelemetry;
+import org.apache.kafka.server.telemetry.ClientTelemetryContext;
+import org.apache.kafka.server.telemetry.ClientTelemetryExporter;
+import org.apache.kafka.server.telemetry.ClientTelemetryExporterProvider;
 import org.apache.kafka.server.telemetry.ClientTelemetryPayload;
 import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
 import org.apache.kafka.test.TestUtils;
@@ -94,6 +98,7 @@ public class ClientMetricsTestUtils {
             false);
     }
 
+    @SuppressWarnings("deprecation")
     public static class TestClientMetricsReceiver implements ClientTelemetryReceiver {
         public int exportMetricsInvokedCount = 0;
         public List<ByteBuffer> metricsData = new ArrayList<>();
@@ -101,6 +106,52 @@ public class ClientMetricsTestUtils {
         public void exportMetrics(AuthorizableRequestContext context, ClientTelemetryPayload payload) {
             exportMetricsInvokedCount += 1;
             metricsData.add(payload.data());
+        }
+    }
+
+    public static class TestClientTelemetryExporter implements ClientTelemetryExporter {
+        public int exportMetricsInvokedCount = 0;
+        public List<ByteBuffer> metricsData = new ArrayList<>();
+        public List<Integer> pushIntervals = new ArrayList<>();
+
+        @Override
+        public void exportMetrics(ClientTelemetryContext context, ClientTelemetryPayload payload) {
+            exportMetricsInvokedCount += 1;
+            metricsData.add(payload.data());
+            pushIntervals.add(context.pushIntervalMs());
+        }
+    }
+
+    /**
+     * Test implementation that supports both deprecated and new interfaces.
+     * When both are implemented, only the new interface should be used.
+     */
+    @SuppressWarnings("deprecation")
+    public static class TestDualImplementation implements ClientTelemetry, ClientTelemetryExporterProvider {
+        private final TestClientMetricsReceiver receiver;
+        private final TestClientTelemetryExporter exporter;
+
+        public TestDualImplementation() {
+            this.receiver = new TestClientMetricsReceiver();
+            this.exporter = new TestClientTelemetryExporter();
+        }
+
+        @Override
+        public ClientTelemetryReceiver clientReceiver() {
+            return receiver;
+        }
+
+        @Override
+        public ClientTelemetryExporter clientTelemetryExporter() {
+            return exporter;
+        }
+
+        public TestClientMetricsReceiver getReceiver() {
+            return receiver;
+        }
+
+        public TestClientTelemetryExporter getExporter() {
+            return exporter;
         }
     }
 }
