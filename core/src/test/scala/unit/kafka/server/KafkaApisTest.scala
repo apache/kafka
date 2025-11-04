@@ -6610,13 +6610,6 @@ class KafkaApisTest extends Logging {
               .setDeliveryCount(1)
           )))
       ))
-    ).thenReturn(
-      CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
-        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-        new ShareFetchResponseData.PartitionData()
-          .setErrorCode(Errors.NONE.code)
-          .setAcknowledgeErrorCode(Errors.NONE.code)
-      ))
     )
 
     val cachedSharePartitions = new ImplicitLinkedHashCollection[CachedSharePartition]
@@ -6711,6 +6704,8 @@ class KafkaApisTest extends Logging {
     assertEquals(Errors.NONE.code, topicResponse.partitions.get(0).acknowledgeErrorCode)
     assertEquals(expectedRecords, topicResponse.partitions.get(0).records)
     assertEquals(0, topicResponse.partitions.get(0).acquiredRecords.size())
+    // fetchMessages only called once for 1st ShareFetch.
+    verify(sharePartitionManager, times(1)).fetchMessages(any(), any(), any(), anyInt(), anyInt(), anyInt(), any())
   }
 
   @Test
@@ -7562,7 +7557,7 @@ class KafkaApisTest extends Logging {
 
     kafkaApis = createKafkaApis()
     val acknowledgeBatches = kafkaApis.getAcknowledgeBatchesFromShareFetchRequest(shareFetchRequest, topicIdNames, erroneous)
-    val erroneousTopicIdPartitions = kafkaApis.validateAcknowledgementBatches(acknowledgeBatches, erroneous)
+    val erroneousTopicIdPartitions = kafkaApis.validateAcknowledgementBatches(acknowledgeBatches, erroneous, ApiKeys.SHARE_FETCH.latestVersion, isRenewAck = false)
 
     assertEquals(3, erroneous.size)
     assertEquals(2, erroneousTopicIdPartitions.size)
@@ -7691,7 +7686,7 @@ class KafkaApisTest extends Logging {
 
     kafkaApis = createKafkaApis()
     val acknowledgeBatches = kafkaApis.getAcknowledgeBatchesFromShareAcknowledgeRequest(shareAcknowledgeRequest, topicIdNames, erroneous)
-    val erroneousTopicIdPartitions = kafkaApis.validateAcknowledgementBatches(acknowledgeBatches, erroneous)
+    val erroneousTopicIdPartitions = kafkaApis.validateAcknowledgementBatches(acknowledgeBatches, erroneous, ApiKeys.SHARE_FETCH.latestVersion, isRenewAck = false)
 
     assertEquals(3, erroneous.size)
     assertEquals(2, erroneousTopicIdPartitions.size)
@@ -7764,7 +7759,9 @@ class KafkaApisTest extends Logging {
       sharePartitionManager,
       authorizedTopics,
       groupId,
-      memberId.toString
+      memberId.toString,
+      ApiKeys.SHARE_ACKNOWLEDGE.latestVersion,
+      isRenewAck = false
     ).get()
 
     assertEquals(3, ackResult.size)
@@ -7839,7 +7836,9 @@ class KafkaApisTest extends Logging {
       sharePartitionManager,
       authorizedTopics,
       groupId,
-      memberId.toString
+      memberId.toString,
+      ApiKeys.SHARE_ACKNOWLEDGE.latestVersion,
+      isRenewAck = false
     ).get()
 
     assertEquals(3, ackResult.size)
@@ -7915,7 +7914,9 @@ class KafkaApisTest extends Logging {
       sharePartitionManager,
       authorizedTopics,
       groupId,
-      memberId.toString
+      memberId.toString,
+      ApiKeys.SHARE_ACKNOWLEDGE.latestVersion,
+      isRenewAck = false
     ).get()
 
     assertEquals(3, ackResult.size)
@@ -7985,7 +7986,9 @@ class KafkaApisTest extends Logging {
       sharePartitionManager,
       authorizedTopics,
       groupId,
-      memberId.toString
+      memberId.toString,
+      ApiKeys.SHARE_ACKNOWLEDGE.latestVersion,
+      isRenewAck = false
     ).get()
 
     assertEquals(3, ackResult.size)
@@ -13894,6 +13897,73 @@ class KafkaApisTest extends Logging {
 
     val response = verifyNoThrottling[AlterShareGroupOffsetsResponse](requestChannelRequest)
     assertEquals(alterShareGroupOffsetsResponseData, response.data)
+  }
+
+  @ParameterizedTest
+  @CsvSource(value = Array("1,true,true", "1,false,true", "2,true,false", "2,false,true"))
+  def testValidateAcknowledgementBatchesForRenew(version: Short, isRenew: Boolean, shouldFail: Boolean): Unit = {
+    kafkaApis = createKafkaApis()
+    val tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("topic", 0))
+    val ackMap = mutable.Map(tp -> util.List.of(new ShareAcknowledgementBatch(0, 0, util.List.of(AcknowledgeType.RENEW.id))))
+    val erroneous:mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData] = mutable.Map()
+    val errorSet = kafkaApis.validateAcknowledgementBatches(ackMap, erroneous, version, isRenewAck = isRenew)
+    if (shouldFail) {
+      assertEquals(1, errorSet.size, s"expected error topic partition, version=${version}, isRenew=${isRenew}")
+      assertTrue(errorSet.contains(tp), s"error topic partition mismatch, version=${version}, isRenew=${isRenew}")
+    } else {
+      assertEquals(0, errorSet.size, s"unexpected error topic partition, version=${version}, isRenew=${isRenew}")
+    }
+  }
+
+  @Test
+  def testHandleShareFetchRenewInvalidRequest(): Unit = {
+    val topicId = Uuid.randomUuid()
+    val partitionIndex = 0
+    val groupId = "group"
+    val memberId = Uuid.randomUuid()
+    val testPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user")
+    val testClientAddress = InetAddress.getByName("192.168.1.100")
+    val testClientId = "test-client-id"
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
+
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
+      new FinalContext()
+    )
+
+    val shareFetchRequestData = new ShareFetchRequestData()
+      .setGroupId(groupId)
+      .setMemberId(memberId.toString)
+      .setShareSessionEpoch(0)
+      .setIsRenewAck(true)
+      .setMinBytes(10)
+      .setMaxBytes(20)
+      .setMaxRecords(30)
+      .setMaxWaitMs(40)
+      .setTopics(new ShareFetchRequestData.FetchTopicCollection(util.List.of(new ShareFetchRequestData.FetchTopic()
+        .setTopicId(topicId)
+        .setPartitions(new ShareFetchRequestData.FetchPartitionCollection(util.List.of(
+          new ShareFetchRequestData.FetchPartition()
+            .setAcknowledgementBatches(util.List.of(new AcknowledgementBatch()
+              .setFirstOffset(0)
+              .setLastOffset(0)
+              .setAcknowledgeTypes(util.List.of(AcknowledgeType.RENEW.id))))
+            .setPartitionIndex(partitionIndex)
+        ).iterator))
+      ).iterator))
+
+    val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
+
+    // Create request with custom principal and client address to test quota tags
+    val requestHeader = new RequestHeader(shareFetchRequest.apiKey, shareFetchRequest.version, testClientId, 0)
+    val request = buildRequest(shareFetchRequest, testPrincipal, testClientAddress,
+      ListenerName.forSecurityProtocol(SecurityProtocol.SSL), fromPrivilegedListener = false, Some(requestHeader), requestChannelMetrics)
+
+    val kafkaApis = createKafkaApis()
+    kafkaApis.handleShareFetchRequest(request)
+    val response = verifyNoThrottling[ShareFetchResponse](request)
+    val responseData = response.data()
+
+    assertEquals(Errors.INVALID_REQUEST.code, responseData.errorCode)
   }
 
   def getShareGroupDescribeResponse(groupIds: util.List[String], enableShareGroups: Boolean = true,

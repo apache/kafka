@@ -3182,6 +3182,35 @@ class KafkaApis(val requestChannel: RequestChannel,
     val newReqMetadata: ShareRequestMetadata = new ShareRequestMetadata(Uuid.fromString(memberId), shareSessionEpoch)
     var shareFetchContext: ShareFetchContext = null
 
+    // KIP-1222 enforces setting the maxBytes, minBytes, maxRecords, maxWaitMs
+    // values to 0, in case isRenewAck is true.
+    if (shareFetchRequest.version >= 2 && shareFetchRequest.data.isRenewAck) {
+      val reqData = shareFetchRequest.data
+      var errorMsg: String = ""
+      if (reqData.maxBytes != 0) {
+        errorMsg += "maxBytes must be set to 0, "
+      }
+
+      if (reqData.minBytes != 0) {
+        errorMsg += "minBytes must be set to 0, "
+      }
+
+      if (reqData.maxRecords != 0) {
+        errorMsg += "maxRecords must be set to 0, "
+      }
+
+      if (reqData.maxWaitMs != 0) {
+        errorMsg += "maxWaitMs must be set to 0, "
+      }
+
+      if (errorMsg != "") {
+        errorMsg += "if renewAck is true."
+        error(errorMsg)
+        requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.INVALID_REQUEST.exception(errorMsg)))
+        return CompletableFuture.completedFuture[Unit](())
+      }
+    }
+
     try {
       // Creating the shareFetchContext for Share Session Handling. if context creation fails, the request is failed directly here.
       shareFetchContext = sharePartitionManager.newContext(groupId, shareFetchData, forgottenTopics, newReqMetadata, isAcknowledgeDataPresent, request.context.connectionId)
@@ -3234,11 +3263,19 @@ class KafkaApis(val requestChannel: RequestChannel,
         authorizedTopics,
         groupId,
         memberId,
+        shareFetchRequest.version,
+        shareFetchRequest.data.isRenewAck
       )
     }
 
     // Handling the Fetch from the ShareFetchRequest.
     // Variable to store the topic partition wise result of fetching.
+
+    // Here we are populating fetchResult conditionally because per the design of
+    // KIP-1222, if a ShareFetch request contains a RENEW ack type piggybacked then
+    // we must forego the record fetching as the amount of time spent in fetching
+    // might be more that the acquisition lock timeout which got RENEWed and as a result
+    // it'll timeout again, before the response reaches the share consumer.
     val fetchResult: CompletableFuture[Map[TopicIdPartition, ShareFetchResponseData.PartitionData]] =
       if (shareFetchRequest.version() >= 2 && shareFetchRequest.data.isRenewAck)
         CompletableFuture.completedFuture(mutable.Map.empty[TopicIdPartition, ShareFetchResponseData.PartitionData])
@@ -3419,9 +3456,11 @@ class KafkaApis(val requestChannel: RequestChannel,
                              sharePartitionManagerInstance: SharePartitionManager,
                              authorizedTopics: Set[String],
                              groupId: String,
-                             memberId: String): CompletableFuture[Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]] = {
+                             memberId: String,
+                             version: Short,
+                             isRenewAck: Boolean): CompletableFuture[Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]] = {
 
-    val erroneousTopicIdPartitions = validateAcknowledgementBatches(acknowledgementData, erroneous)
+    val erroneousTopicIdPartitions = validateAcknowledgementBatches(acknowledgementData, erroneous, version, isRenewAck)
     erroneousTopicIdPartitions.foreach(tp => acknowledgementData.remove(tp))
 
     val interested = mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]()
@@ -3520,7 +3559,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val erroneous = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
     val acknowledgementDataFromRequest = getAcknowledgeBatchesFromShareAcknowledgeRequest(shareAcknowledgeRequest, topicIdNames, erroneous)
-    handleAcknowledgements(acknowledgementDataFromRequest, erroneous, sharePartitionManager, authorizedTopics, groupId, memberId)
+    handleAcknowledgements(acknowledgementDataFromRequest, erroneous, sharePartitionManager, authorizedTopics, groupId, memberId, shareAcknowledgeRequest.version, shareAcknowledgeRequest.data.isRenewAck)
       .handle[Unit] {(result, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
@@ -3984,7 +4023,9 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   // Visible for Testing
   def validateAcknowledgementBatches(acknowledgementDataFromRequest: mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]],
-                                     erroneous: mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]
+                                     erroneous: mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData],
+                                     version: Short,
+                                     isRenewAck: Boolean
                                     ): mutable.Set[TopicIdPartition] = {
     val erroneousTopicIdPartitions: mutable.Set[TopicIdPartition] = mutable.Set.empty[TopicIdPartition]
 
@@ -4009,7 +4050,9 @@ class KafkaApis(val requestChannel: RequestChannel,
             erroneous += tp -> ShareAcknowledgeResponse.partitionResponse(tp, Errors.INVALID_REQUEST)
             erroneousTopicIdPartitions.add(tp)
             isErroneous = true
-          } else if (batch.acknowledgeTypes.stream().anyMatch(ackType => ackType < 0 || ackType > 4)) {
+          } else if (batch.acknowledgeTypes.stream().anyMatch(ackType => ackType < 0 ||
+                                                                         (version < 2 && ackType > 3) ||
+                                                                         (version >= 2 && !isRenewAck && ackType > 3))) {
             erroneous += tp -> ShareAcknowledgeResponse.partitionResponse(tp, Errors.INVALID_REQUEST)
             erroneousTopicIdPartitions.add(tp)
             isErroneous = true
