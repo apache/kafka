@@ -278,10 +278,10 @@ public class SharePartition {
     private final DelayedShareFetchKey delayedShareFetchKey;
 
     /**
-     * The inFlightTerminalRecords tracks the number of terminal (ACKNOWLEDGED / ARCHIVED) records within the
+     * The deliveryCompleteCount tracks the number of terminal (ACKNOWLEDGED / ARCHIVED) records within the
      * cachedState. This is used in the calculations for determining the current Share Partition lag.
      */
-    private final AtomicInteger inFlightTerminalRecords;
+    private final AtomicInteger deliveryCompleteCount;
 
     /**
      * The state epoch is used to track the version of the state of the share partition.
@@ -368,7 +368,7 @@ public class SharePartition {
         this.sharePartitionMetrics = sharePartitionMetrics;
         this.timeoutHandler = releaseAcquisitionLockOnTimeout();
         this.registerGaugeMetrics();
-        this.inFlightTerminalRecords = new AtomicInteger(0);
+        this.deliveryCompleteCount = new AtomicInteger(0);
     }
 
     /**
@@ -475,10 +475,10 @@ public class SharePartition {
                         stateBatch.lastOffset(), RecordState.forId(stateBatch.deliveryState()), stateBatch.deliveryCount(),
                         null, timeoutHandler, sharePartitionMetrics);
                     cachedState.put(stateBatch.firstOffset(), inFlightBatch);
-                    // During initialization, inFlightTerminalRecords is updated with the number of records that are in the
+                    // During initialization, deliveryCompleteCount is updated with the number of records that are in the
                     // ACKNOWLEDGED or ARCHIVED state.
                     if (isStateTerminal(RecordState.forId(stateBatch.deliveryState()))) {
-                        inFlightTerminalRecords.addAndGet((int) (stateBatch.lastOffset() - stateBatch.firstOffset() + 1));
+                        deliveryCompleteCount.addAndGet((int) (stateBatch.lastOffset() - stateBatch.firstOffset() + 1));
                     }
                     sharePartitionMetrics.recordInFlightBatchMessageCount(stateBatch.lastOffset() - stateBatch.firstOffset() + 1);
                 }
@@ -1056,7 +1056,7 @@ public class SharePartition {
                 persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(offsetState.getKey(),
                     offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount())));
                 if (offsetState.getKey() >= startOffset && isStateTerminal(updateResult.state())) {
-                    inFlightTerminalRecords.incrementAndGet();
+                    deliveryCompleteCount.incrementAndGet();
                 }
                 // Do not update the next fetch offset as the offset has not completed the transition yet.
             }
@@ -1097,7 +1097,7 @@ public class SharePartition {
             persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(inFlightBatch.firstOffset(),
                 inFlightBatch.lastOffset(), updateResult.state().id(), (short) updateResult.deliveryCount())));
             if (isStateTerminal(updateResult.state())) {
-                inFlightTerminalRecords.addAndGet(numInFlightRecordsInBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset()));
+                deliveryCompleteCount.addAndGet(numInFlightRecordsInBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset()));
             }
             // Do not update the next fetch offset as the batch has not completed the transition yet.
         }
@@ -1139,7 +1139,7 @@ public class SharePartition {
                 // This can occur during the initialization of share partition if LSO has moved.
                 startOffset = logStartOffset;
                 endOffset = logStartOffset;
-                inFlightTerminalRecords.set(0);
+                deliveryCompleteCount.set(0);
                 return;
             }
 
@@ -1158,8 +1158,8 @@ public class SharePartition {
 
             // The new startOffset will be the log start offset.
             startOffset = logStartOffset;
-            // After the start offset has moved, update the inFlightTerminalRecords.
-            inFlightTerminalRecords.addAndGet((-1) * numTerminalRecordsRemoved);
+            // After the start offset has moved, update the deliveryCompleteCount.
+            deliveryCompleteCount.addAndGet((-1) * numTerminalRecordsRemoved);
             if (endOffset < startOffset) {
                 // This case means that the cached state is completely fresh now.
                 // Example scenario - batch of 0-10 in acquired state in cached state, then LSO moves to 15,
@@ -1294,7 +1294,7 @@ public class SharePartition {
      * @param endOffset The offset before which the records should be archived.
      * @param map The map containing the in-flight records.
      * @param initialState The initial state of the records to be archived.
-     * @param updateInFlightTerminalRecords A boolean which indicates whether the inFlightTerminalRecords should be updated.
+     * @param updateDeliveryCompleteCount A boolean which indicates whether the deliveryCompleteCount should be updated.
      * @return A boolean which indicates whether any record is archived or not.
      */
     private boolean archiveRecords(
@@ -1302,7 +1302,7 @@ public class SharePartition {
         long endOffset,
         NavigableMap<Long, InFlightBatch> map,
         RecordState initialState,
-        boolean updateInFlightTerminalRecords) {
+        boolean updateDeliveryCompleteCount) {
         lock.writeLock().lock();
         try {
             boolean isAnyOffsetArchived = false, isAnyBatchArchived = false;
@@ -1328,11 +1328,11 @@ public class SharePartition {
                         }
                         inFlightBatch.maybeInitializeOffsetStateUpdate();
                     }
-                    isAnyOffsetArchived = archivePerOffsetBatchRecords(inFlightBatch, startOffset, endOffset - 1, initialState, updateInFlightTerminalRecords) || isAnyOffsetArchived;
+                    isAnyOffsetArchived = archivePerOffsetBatchRecords(inFlightBatch, startOffset, endOffset - 1, initialState, updateDeliveryCompleteCount) || isAnyOffsetArchived;
                     continue;
                 }
                 // The in-flight batch is a full match hence change the state of the complete batch.
-                isAnyBatchArchived = archiveCompleteBatch(inFlightBatch, initialState, updateInFlightTerminalRecords) || isAnyBatchArchived;
+                isAnyBatchArchived = archiveCompleteBatch(inFlightBatch, initialState, updateDeliveryCompleteCount) || isAnyBatchArchived;
             }
             return isAnyOffsetArchived || isAnyBatchArchived;
         } finally {
@@ -1344,7 +1344,7 @@ public class SharePartition {
                                                  long startOffsetToArchive,
                                                  long endOffsetToArchive,
                                                  RecordState initialState,
-                                                 boolean updateInFlightTerminalRecords
+                                                 boolean updateDeliveryCompleteCount
     ) {
         lock.writeLock().lock();
         try {
@@ -1363,10 +1363,10 @@ public class SharePartition {
                 }
 
                 offsetState.getValue().archive();
-                if (updateInFlightTerminalRecords) {
-                    // If the record moves from a non-terminal state to a terminal state (in this case ARCHIVE), inFlightTerminalRecords
+                if (updateDeliveryCompleteCount) {
+                    // If the record moves from a non-terminal state to a terminal state (in this case ARCHIVE), deliveryCompleteCount
                     // needs to be incremented.
-                    inFlightTerminalRecords.incrementAndGet();
+                    deliveryCompleteCount.incrementAndGet();
                 }
                 isAnyOffsetArchived = true;
             }
@@ -1379,17 +1379,17 @@ public class SharePartition {
     private boolean archiveCompleteBatch(
         InFlightBatch inFlightBatch,
         RecordState initialState,
-        boolean updateInFlightTerminalRecords) {
+        boolean updateDeliveryCompleteCount) {
         lock.writeLock().lock();
         try {
             log.trace("Archiving complete batch: {} for the share partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
             if (inFlightBatch.batchState() == initialState) {
                 // Change the state of complete batch since the same state exists for the entire inFlight batch.
                 inFlightBatch.archiveBatch();
-                if (updateInFlightTerminalRecords) {
-                    // If the records move from a non-terminal state to a terminal state (in this case ARCHIVE), inFlightTerminalRecords
+                if (updateDeliveryCompleteCount) {
+                    // If the records move from a non-terminal state to a terminal state (in this case ARCHIVE), deliveryCompleteCount
                     // needs to be incremented by the number of records in the batch.
-                    inFlightTerminalRecords.addAndGet((int) (inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1));
+                    deliveryCompleteCount.addAndGet((int) (inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1));
                 }
                 return true;
             }
@@ -2103,7 +2103,7 @@ public class SharePartition {
                 persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(offsetState.getKey(),
                     offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount())));
                 if (isStateTerminal(updateResult.state())) {
-                    inFlightTerminalRecords.incrementAndGet();
+                    deliveryCompleteCount.incrementAndGet();
                 }
                 // Do not update the nextFetchOffset as the offset has not completed the transition yet.
             }
@@ -2153,7 +2153,7 @@ public class SharePartition {
             persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(inFlightBatch.firstOffset(),
                 inFlightBatch.lastOffset(), updateResult.state().id(), (short) updateResult.deliveryCount())));
             if (isStateTerminal(updateResult.state())) {
-                inFlightTerminalRecords.addAndGet((int) (inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1));
+                deliveryCompleteCount.addAndGet((int) (inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1));
             }
             // Do not update the next fetch offset as the batch has not completed the transition yet.
         } finally {
@@ -2209,12 +2209,12 @@ public class SharePartition {
                     if (persisterBatch.updatedState.state() == RecordState.AVAILABLE) {
                         updateFindNextFetchOffset(true);
                     }
-                    // If there is a failure, then update the inFlightTerminalRecords only in case there are some records
+                    // If there is a failure, then update the deliveryCompleteCount only in case there are some records
                     // which were in a Terminal state, but after rolling back they are in a non-Terminal state. We also
                     // need to consider only those records that lie after the start offset, because LSO movement can happen
                     // after local state transition begins but before writeState result is obtained.
                     if (isStateTerminal(RecordState.forId(persisterBatch.stateBatch.deliveryState())) && !isStateTerminal(persisterBatch.updatedState.state())) {
-                        inFlightTerminalRecords.addAndGet(-numInFlightRecordsInBatch(persisterBatch.stateBatch.firstOffset(), persisterBatch.stateBatch.lastOffset()));
+                        deliveryCompleteCount.addAndGet(-numInFlightRecordsInBatch(persisterBatch.stateBatch.firstOffset(), persisterBatch.stateBatch.lastOffset()));
                     }
                 });
                 future.completeExceptionally(throwable);
@@ -2247,12 +2247,12 @@ public class SharePartition {
                             if (persisterBatch.updatedState().state() == RecordState.AVAILABLE) {
                                 updateFindNextFetchOffset(true);
                             }
-                            // If there is a failure, then update the inFlightTerminalRecords only in case there are some records
+                            // If there is a failure, then update the deliveryCompleteCount only in case there are some records
                             // which were in a Terminal state, but after rolling back they are in a non-Terminal state. We also
                             // need to consider only those records that lie after the start offset, because LSO movement can happen
                             // after local state transition begins but before writeState result is obtained.
                             if (isStateTerminal(RecordState.forId(persisterBatch.stateBatch.deliveryState())) && !isStateTerminal(persisterBatch.updatedState.state())) {
-                                inFlightTerminalRecords.addAndGet(-numInFlightRecordsInBatch(persisterBatch.stateBatch.firstOffset(), persisterBatch.stateBatch.lastOffset()));
+                                deliveryCompleteCount.addAndGet(-numInFlightRecordsInBatch(persisterBatch.stateBatch.firstOffset(), persisterBatch.stateBatch.lastOffset()));
                             }
                         });
                         future.completeExceptionally(exception);
@@ -2311,7 +2311,7 @@ public class SharePartition {
                 startOffset = lastCachedOffset + 1; // The next offset that will be fetched and acquired in the share partition
                 endOffset = lastCachedOffset + 1;
                 cachedState.clear();
-                inFlightTerminalRecords.set(0);
+                deliveryCompleteCount.set(0);
                 // Nothing further to do.
                 return true;
             }
@@ -2356,7 +2356,7 @@ public class SharePartition {
                     lastKeyToRemove = cachedState.lowerKey(entry.getKey());
                 }
             }
-            inFlightTerminalRecords.addAndGet((-1) * result.numTerminalRecords);
+            deliveryCompleteCount.addAndGet((-1) * result.numTerminalRecords);
             if (lastKeyToRemove != -1) {
                 cachedState.subMap(firstKeyToRemove, true, lastKeyToRemove, true).clear();
             }
@@ -2427,7 +2427,7 @@ public class SharePartition {
      * the current startOffset which are in terminal state (ACKNOWLEDGED or ARCHIVED), then the startOffset can be moved
      * past these. The method iterates over the cached state and finds the last offset which is in terminal state which
      * can be moved out of in-flight. The method also counts the number of records which are in terminal state which would
-     * be removed from in-flight if the startOffset is moved, in order to update the inFlightTerminalRecords count.
+     * be removed from in-flight if the startOffset is moved, in order to update the deliveryCompleteCount count.
      *
      * @return StartOffsetAdvanceResult, which contains the last offset post which the startOffset can move
      * and the number of terminal records which be moved out of in-flight if the startOffset is moved.
@@ -2504,7 +2504,7 @@ public class SharePartition {
                 .setGroupId(this.groupId)
                 .setTopicsData(List.of(new TopicData<>(topicIdPartition.topicId(),
                     List.of(PartitionFactory.newPartitionStateBatchData(
-                        topicIdPartition.partition(), stateEpoch, startOffset(), leaderEpoch, stateBatches))))
+                        topicIdPartition.partition(), stateEpoch, startOffset(), deliveryCompleteCount(), leaderEpoch, stateBatches))))
                 ).build()).build())
             .whenComplete((result, exception) -> {
                 if (exception != null) {
@@ -2683,12 +2683,12 @@ public class SharePartition {
                 updateFindNextFetchOffset(true);
             }
             // If after acquisition lock timeout, a batch is moved to ARCHIVED state, then we have records moved from
-            // non-Terminal state to a Terminal state. Hence, we need to update inFlightTerminalRecords. But there could
+            // non-Terminal state to a Terminal state. Hence, we need to update deliveryCompleteCount. But there could
             // be a situation where the batch was acquired, and LSO moved past. In that case, we only need to consider the
             // records from the current batch that are greater than or equal to the new startOffset. For the records that
-            // lie before the new startOffset, they would have already been counted in inFlightTerminalRecords when LSO moved.
+            // lie before the new startOffset, they would have already been counted in deliveryCompleteCount when LSO moved.
             if (isStateTerminal(updateResult.state())) {
-                inFlightTerminalRecords.addAndGet(numInFlightRecordsInBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset()));
+                deliveryCompleteCount.addAndGet(numInFlightRecordsInBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset()));
             }
             return;
         }
@@ -2738,11 +2738,11 @@ public class SharePartition {
                 updateFindNextFetchOffset(true);
             }
             // If after acquisition lock timeout, an offset state is moved to ARCHIVED, then we have records moved from
-            // non-Terminal state to a Terminal state. Hence, we need to update inFlightTerminalRecords, but only if the
+            // non-Terminal state to a Terminal state. Hence, we need to update deliveryCompleteCount, but only if the
             // records are past the startOffset. If the LSO was moved in between, then we don't need to care about the
-            // records that lie before the startOffset as they would have already been counted in inFlightTerminalRecords.
+            // records that lie before the startOffset as they would have already been counted in deliveryCompleteCount.
             if (offsetState.getKey() >= startOffset && isStateTerminal(updateResult.state())) {
-                inFlightTerminalRecords.incrementAndGet();
+                deliveryCompleteCount.incrementAndGet();
             }
         }
     }
@@ -3035,8 +3035,8 @@ public class SharePartition {
     }
 
     // Visible for testing.
-    int inFlightTerminalRecords() {
-        return inFlightTerminalRecords.get();
+    int deliveryCompleteCount() {
+        return deliveryCompleteCount.get();
     }
 
     /**

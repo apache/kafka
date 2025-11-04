@@ -47,6 +47,7 @@ import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, TopicIdPartition}
 import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
+import org.apache.kafka.server.log.remote.metadata.storage.BrokerReadyCallback
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
@@ -595,6 +596,19 @@ class BrokerServer(
       FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "all of the SocketServer Acceptors to be started",
         enableRequestProcessingFuture, startupDeadline, time)
+
+      remoteLogManagerOpt.foreach(rlm =>
+        rlm.remoteLogMetadataManager() match {
+          case callback: BrokerReadyCallback =>
+            try {
+              callback.onBrokerReady()
+            } catch {
+              case e: Exception =>
+                error(s"Error executing broker ready callback: ${callback.getClass.getSimpleName}", e)
+            }
+          case _ => // Skip
+        }
+      )
 
       maybeChangeStatus(STARTING, STARTED)
     } catch {

@@ -13299,6 +13299,7 @@ class KafkaApisTest extends Logging {
               .setLeaderEpoch(1)
               .setStateEpoch(2)
               .setStartOffset(10)
+              .setDeliveryCompleteCount(5)
               .setStateBatches(util.List.of(
                 new WriteShareGroupStateRequestData.StateBatch()
                   .setFirstOffset(11)
@@ -13346,6 +13347,7 @@ class KafkaApisTest extends Logging {
               .setLeaderEpoch(1)
               .setStateEpoch(2)
               .setStartOffset(10)
+              .setDeliveryCompleteCount(5)
               .setStateBatches(util.List.of(
                 new WriteShareGroupStateRequestData.StateBatch()
                   .setFirstOffset(11)

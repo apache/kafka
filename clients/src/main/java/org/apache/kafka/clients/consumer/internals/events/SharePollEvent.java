@@ -16,41 +16,17 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import java.util.concurrent.CompletableFuture;
-
-public class PollEvent extends ApplicationEvent {
+public class SharePollEvent extends ApplicationEvent {
 
     private final long pollTimeMs;
 
-    /**
-     * A future that represents the completion of reconciliation and auto-commit
-     * processing.
-     * This future is completed when all commit request generation points have
-     * been passed, including:
-     * <ul>
-     *   <li>auto-commit on rebalance</li>
-     *   <li>auto-commit on the interval</li>
-     * </ul>
-     * Once completed, it signals that it's safe for the consumer to proceed with
-     * fetching new records.
-     */
-    private final CompletableFuture<Void> reconcileAndAutoCommit = new CompletableFuture<>();
-
-    public PollEvent(final long pollTimeMs) {
-        super(Type.POLL);
+    public SharePollEvent(final long pollTimeMs) {
+        super(Type.SHARE_POLL);
         this.pollTimeMs = pollTimeMs;
     }
 
     public long pollTimeMs() {
         return pollTimeMs;
-    }
-
-    public CompletableFuture<Void> reconcileAndAutoCommit() {
-        return reconcileAndAutoCommit;
-    }
-
-    public void markReconcileAndAutoCommitComplete() {
-        reconcileAndAutoCommit.complete(null);
     }
 
     @Override
