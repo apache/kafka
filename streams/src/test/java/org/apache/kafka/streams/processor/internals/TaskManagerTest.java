@@ -2929,6 +2929,7 @@ public class TaskManagerTest {
         verify(stateUpdater).add(task00);
         verify(tasks, never()).addTask(task00);
         verify(consumer, never()).resume(task00.inputPartitions());
+        verifyNoInteractions(consumer);
     }
 
     @Test
