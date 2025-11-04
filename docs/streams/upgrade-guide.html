@@ -184,9 +184,19 @@
         Set <code>unstable.feature.versions.enable=true</code> for controllers and brokers, and
         set <code>unstable.api.versions.enable=true</code> on the brokers as well. In your Kafka Streams application
         configuration, set <code>group.protocol=streams</code>.
-        After the new feature is configured, check
-	<code>kafka-features.sh --bootstrap-server localhost:9092 describe</code>
-	and `streams.version` should now have FinalizedVersionLevel 1.
+    </p>
+
+    <p>
+        When <code>unstable.api.versions.enable=true</code> is set when the kafka storage is first created,
+        and no explicit metadata version is set, the feature will be enabled by default. In other configurations
+        (e.g. if the cluster already existed, or a metadata version was hardcoded), you may have to enable it explicitly.
+        First, check the current feature level by running
+        <code>kafka-features.sh --bootstrap-server localhost:9092 describe</code>.
+        If <code>streams.version</code> shows <code>FinalizedVersionLevel</code> is 1, no action is needed.
+        Otherwise, upgrade by running
+        <code>kafka-features.sh --bootstrap-server localhost:9092 upgrade --feature streams.version=1</code>.
+        After the upgrade, verify the change by running
+        <code>kafka-features.sh --bootstrap-server localhost:9092 describe</code>.
     </p>
 
     <p>

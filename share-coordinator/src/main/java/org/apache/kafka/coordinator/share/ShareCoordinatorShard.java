@@ -403,6 +403,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             .setLeaderEpoch(leaderEpoch)
             .setStateBatches(List.of())
             .setStartOffset(responseData.results().get(0).partitions().get(0).startOffset())
+            .setDeliveryCompleteCount(offsetValue.deliveryCompleteCount())
             .setStateEpoch(responseData.results().get(0).partitions().get(0).stateEpoch());
 
         CoordinatorRecord record = generateShareStateRecord(writePartitionData, key, true);
@@ -668,6 +669,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 new ShareGroupOffset.Builder()
                     .setSnapshotEpoch(currentState.snapshotEpoch() + 1)   // We must increment snapshot epoch as this is new snapshot.
                     .setStartOffset(newStartOffset)
+                    .setDeliveryCompleteCount(partitionData.deliveryCompleteCount())
                     .setLeaderEpoch(newLeaderEpoch)
                     .setStateEpoch(currentState.stateEpoch())
                     .setStateBatches(mergeBatches(currentState.stateBatches(), partitionData, newStartOffset))
@@ -683,6 +685,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 new ShareGroupOffset.Builder()
                     .setSnapshotEpoch(currentState.snapshotEpoch()) // Use same snapshotEpoch as last share snapshot.
                     .setStartOffset(partitionData.startOffset())
+                    .setDeliveryCompleteCount(partitionData.deliveryCompleteCount())
                     .setLeaderEpoch(newLeaderEpoch)
                     .setStateBatches(mergeBatches(List.of(), partitionData))
                     .build());
@@ -995,6 +998,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             .setSnapshotEpoch(soFar.snapshotEpoch())
             .setStateEpoch(soFar.stateEpoch())
             .setStartOffset(newStartOffset)
+            .setDeliveryCompleteCount(newData.deliveryCompleteCount())
             .setLeaderEpoch(newLeaderEpoch)
             .setStateBatches(new PersisterStateBatchCombiner(currentBatches, newData.stateBatches().stream()
                 .map(ShareCoordinatorShard::toPersisterStateBatch)

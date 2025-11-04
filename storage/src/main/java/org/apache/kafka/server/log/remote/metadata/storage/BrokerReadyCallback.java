@@ -14,21 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.server.log.remote.metadata.storage;
 
-import org.apache.kafka.common.PartitionInfo;
+/**
+ * Callback interface for broker ready notification.
+ */
+public interface BrokerReadyCallback {
+    /**
+     * This method will be called during broker startup for the implementation,
+     * which needs delayed initialization until the broker can process requests.
+     */
+    void onBrokerReady();
 
-import java.util.List;
-import java.util.Map;
-
-public abstract class AbstractTopicMetadataEvent extends CompletableApplicationEvent<Map<String, List<PartitionInfo>>> implements MetadataErrorNotifiableEvent {
-
-    protected AbstractTopicMetadataEvent(final Type type, final long deadlineMs) {
-        super(type, deadlineMs);
-    }
-
-    @Override
-    public void onMetadataError(Exception metadataError) {
-        future().completeExceptionally(metadataError);
-    }
 }

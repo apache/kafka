@@ -35,7 +35,7 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer
-import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
+import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, ConsumerRecords, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, SslConfigs, TopicConfig}
@@ -568,8 +568,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       try {
         consumer.assign(util.Set.of(tp))
         consumer.seekToBeginning(util.Set.of(tp))
-        val records = consumer.poll(time.Duration.ofSeconds(3))
-        assertEquals(expectedNumber, records.count())
+        def verifyRecordCount(records: ConsumerRecords[Array[Byte], Array[Byte]]): Boolean = {
+          expectedNumber == records.count()
+        }
+        TestUtils.pollRecordsUntilTrue(
+          consumer,
+          verifyRecordCount,
+          s"Consumer.poll() did not return the expected number of records ($expectedNumber) within the timeout",
+          pollTimeoutMs = 3000
+        )
       } finally consumer.close()
     }
 
@@ -4637,7 +4644,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     prepareRecords(testTopicName)
 
     // Producer sends messages
-    for (i <- 1 to 20) {
+    val numRecords = 20
+
+    for (i <- 1 to numRecords) {
       TestUtils.waitUntilTrue(() => {
         val producerRecord = producer.send(
             new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
@@ -4646,19 +4655,29 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       }, "Fail to produce record to topic")
     }
 
+    val consumerConfig = new Properties();
+    consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+
     val streams = createStreamsGroup(
+      configOverrides = consumerConfig,
       inputTopics = Set(testTopicName),
       changelogTopics = Set(testTopicName + "-changelog"),
       streamsGroupId = streamsGroupId,
     )
 
     try {
-      TestUtils.waitUntilTrue(() => {
-        streams.poll(JDuration.ofMillis(100L))
-        !streams.assignment().isEmpty
-      }, "Consumer not assigned to partitions")
+      var counter = 0
 
-      streams.poll(JDuration.ofMillis(1000L))
+      def verifyRecordCount(records: ConsumerRecords[Nothing, Nothing]): Boolean = {
+        counter += records.count()
+        counter >= numRecords
+      }
+      TestUtils.pollRecordsUntilTrue(
+        streams,
+        verifyRecordCount,
+        s"Consumer not assigned to partitions"
+      )
+
       streams.commitSync()
 
       TestUtils.waitUntilTrue(() => {
@@ -4698,7 +4717,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     prepareTopics(List(testTopicName), testNumPartitions)
     prepareRecords(testTopicName)
     // Producer sends messages
-    for (i <- 1 to 20) {
+    val numRecords = 20
+
+    for (i <- 1 to numRecords) {
       TestUtils.waitUntilTrue(() => {
         val producerRecord = producer.send(
             new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
@@ -4707,19 +4728,29 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       }, "Fail to produce record to topic")
     }
 
+    val consumerConfig = new Properties();
+    consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+
     val streams = createStreamsGroup(
+      configOverrides = consumerConfig,
       inputTopics = Set(testTopicName),
       changelogTopics = Set(testTopicName + "-changelog"),
       streamsGroupId = streamsGroupId,
     )
 
     try {
-      TestUtils.waitUntilTrue(() => {
-        streams.poll(JDuration.ofMillis(100L))
-        !streams.assignment().isEmpty
-      }, "Consumer not assigned to partitions")
+      var counter = 0
 
-      streams.poll(JDuration.ofMillis(1000L))
+      def verifyRecordCount(records: ConsumerRecords[Nothing, Nothing]): Boolean = {
+        counter += records.count()
+        counter >= numRecords
+      }
+      TestUtils.pollRecordsUntilTrue(
+        streams,
+        verifyRecordCount,
+        s"Consumer not assigned to partitions"
+      )
+
       streams.commitSync()
 
       // List streams group offsets
@@ -4776,7 +4807,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     prepareRecords(testTopicName)
 
     // Producer sends messages
-    for (i <- 1 to 20) {
+    val numRecords = 20
+
+    for (i <- 1 to numRecords) {
       TestUtils.waitUntilTrue(() => {
         val producerRecord = producer.send(
             new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
@@ -4785,19 +4818,29 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       }, "Fail to produce record to topic")
     }
 
+    val consumerConfig = new Properties();
+    consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+
     val streams = createStreamsGroup(
+      configOverrides = consumerConfig,
       inputTopics = Set(testTopicName),
       changelogTopics = Set(testTopicName + "-changelog"),
       streamsGroupId = streamsGroupId,
     )
 
     try {
-      TestUtils.waitUntilTrue(() => {
-        streams.poll(JDuration.ofMillis(100L))
-        !streams.assignment().isEmpty
-      }, "Consumer not assigned to partitions")
+      var counter = 0
 
-      streams.poll(JDuration.ofMillis(1000L))
+      def verifyRecordCount(records: ConsumerRecords[Nothing, Nothing]): Boolean = {
+        counter += records.count()
+        counter >= numRecords
+      }
+      TestUtils.pollRecordsUntilTrue(
+        streams,
+        verifyRecordCount,
+        s"Consumer not assigned to partitions"
+      )
+
       streams.commitSync()
 
       // List streams group offsets

@@ -153,7 +153,7 @@ public class FeatureCommand {
 
     private static void addDowngradeParser(Subparsers subparsers) {
         Subparser downgradeParser = subparsers.addParser("downgrade")
-                .help("Upgrade one or more feature flags.");
+                .help("Downgrade one or more feature flags.");
         downgradeParser.addArgument("--metadata")
                 .help("DEPRECATED -- The level to which we should downgrade the metadata. For example, 3.3-IV0.")
                 .action(store());

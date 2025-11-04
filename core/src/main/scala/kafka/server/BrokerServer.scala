@@ -47,6 +47,7 @@ import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, TopicIdPartition}
 import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
+import org.apache.kafka.server.log.remote.metadata.storage.BrokerReadyCallback
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
@@ -465,9 +466,14 @@ class BrokerServer(
         clientMetricsManager = clientMetricsManager,
         groupConfigManager = groupConfigManager)
 
-      dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
-        socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
-        config.numIoThreads, "RequestHandlerAvgIdlePercent")
+      dataPlaneRequestHandlerPool = sharedServer.requestHandlerPoolFactory.createPool(
+        config.nodeId,
+        socketServer.dataPlaneRequestChannel,
+        dataPlaneRequestProcessor,
+        time,
+        config.numIoThreads,
+        "broker"
+      )
 
       metadataPublishers.add(new MetadataVersionConfigValidator(config.brokerId,
         () => config.processRoles.contains(ProcessRole.BrokerRole) && config.logDirs().size() > 1,
@@ -590,6 +596,19 @@ class BrokerServer(
       FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "all of the SocketServer Acceptors to be started",
         enableRequestProcessingFuture, startupDeadline, time)
+
+      remoteLogManagerOpt.foreach(rlm =>
+        rlm.remoteLogMetadataManager() match {
+          case callback: BrokerReadyCallback =>
+            try {
+              callback.onBrokerReady()
+            } catch {
+              case e: Exception =>
+                error(s"Error executing broker ready callback: ${callback.getClass.getSimpleName}", e)
+            }
+          case _ => // Skip
+        }
+      )
 
       maybeChangeStatus(STARTING, STARTED)
     } catch {
