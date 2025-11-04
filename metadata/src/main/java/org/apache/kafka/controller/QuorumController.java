@@ -1027,12 +1027,6 @@ public final class QuorumController implements Controller {
                                 if (batch.controlRecords().isEmpty()) {
                                     bootstrapMetadata = BootstrapMetadata.fromRecords(messages, "bootstrap");
                                 }
-                            } else {
-                                Map<String, Short> featureVersions = new HashMap<>();
-                                MetadataVersion metadataVersion = MetadataVersion.latestProduction();
-                                featureVersions.put(MetadataVersion.FEATURE_NAME, metadataVersion.featureLevel());
-                                featureVersions.put(KRaftVersion.FEATURE_NAME, raftClient.kraftVersion().featureLevel());
-                                bootstrapMetadata = BootstrapMetadata.fromVersions(metadataVersion, featureVersions, "generated default");
                             }
                         }
                         log.debug("Replaying snapshot {} batch with last offset of {}",
