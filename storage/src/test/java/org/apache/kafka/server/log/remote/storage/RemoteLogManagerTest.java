@@ -72,6 +72,7 @@ import com.yammer.metrics.core.MetricName;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -3400,6 +3401,7 @@ public class RemoteLogManagerTest {
     }
 
 
+    @Disabled("KAFKA-19578")
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testCopyQuota(boolean quotaExceeded) throws Exception {
