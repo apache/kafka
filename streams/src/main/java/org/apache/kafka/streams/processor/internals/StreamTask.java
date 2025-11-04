@@ -760,8 +760,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 // NOT_READY - check if it should log
                 final long timeSinceLastLog = wallClockTime - lastNotReadyLogTime;
                 if (timeSinceLastLog >= NOT_READY_LOG_INTERVAL_MS) {
-                    final String reason = getNotReadyPartitionStatus();
-                    log.info("Task is not ready to process (started idling at time {}): {}", timeCurrentIdlingStarted.orElse(-1L), reason);
+                    final String partitionStatus = getNotReadyPartitionStatus();
+                    log.info("Task is not ready to process (started idling at time {}): {}", timeCurrentIdlingStarted.orElse(-1L), partitionStatus);
                     lastNotReadyLogTime = wallClockTime;
                 }
             }
