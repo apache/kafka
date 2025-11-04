@@ -490,7 +490,7 @@ public class SharePartitionManager implements AutoCloseable {
                     throw Errors.SHARE_SESSION_LIMIT_REACHED.exception();
                 }
 
-                context = new ShareSessionContext(memberId, shareSessionEpoch, shareFetchData);
+                context = new ShareSessionContext(shareSessionEpoch, shareFetchData);
                 log.debug("Created a new ShareSessionContext with key {} isSubsequent {} returning {}. A new share " +
                         "session will be started.", responseShareSessionKey, false,
                         partitionsToLogString(shareFetchData));
@@ -520,7 +520,7 @@ public class SharePartitionManager implements AutoCloseable {
                         partitionsToLogString(modifiedTopicIdPartitions.get(ShareSession.ModifiedTopicIdPartitionType.UPDATED)),
                         partitionsToLogString(modifiedTopicIdPartitions.get(ShareSession.ModifiedTopicIdPartitionType.REMOVED))
                 );
-                context = new ShareSessionContext(memberId, shareSessionEpoch, shareSession);
+                context = new ShareSessionContext(shareSessionEpoch, shareSession);
             }
         }
         return context;

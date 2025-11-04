@@ -2458,7 +2458,7 @@ class KafkaApisTest extends Logging {
             ))))))
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(memberId, 0, util.List.of(
+      new ShareSessionContext(0, util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)))
     )
 
@@ -2665,7 +2665,7 @@ class KafkaApisTest extends Logging {
             .setErrorCode(Errors.NONE.code))))
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(memberId, 1, util.List.of(
+      new ShareSessionContext(1, util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)))
     )
 
@@ -4517,7 +4517,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(memberId, shareSessionEpoch, util.List.of(
+      new ShareSessionContext(shareSessionEpoch, util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)))
     )
 
@@ -4588,7 +4588,7 @@ class KafkaApisTest extends Logging {
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenThrow(
       Errors.INVALID_REQUEST.exception()
-    ).thenReturn(new ShareSessionContext(memberId, 1, new ShareSession(
+    ).thenReturn(new ShareSessionContext(1, new ShareSession(
       new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2
     )))
 
@@ -4683,7 +4683,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(memberId, 0, util.List.of(
+      new ShareSessionContext(0, util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
     ).thenThrow(Errors.INVALID_REQUEST.exception)
@@ -4769,7 +4769,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(memberId, 0, util.List.of(
+      new ShareSessionContext(0, util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
     )
@@ -4834,7 +4834,7 @@ class KafkaApisTest extends Logging {
       new TopicIdPartition(topicId, partitionIndex, topicName), false))
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any()))
-      .thenReturn(new ShareSessionContext(memberId, 1, new ShareSession(
+      .thenReturn(new ShareSessionContext(1, new ShareSession(
         new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2))
       )
 
@@ -4893,7 +4893,7 @@ class KafkaApisTest extends Logging {
       new TopicIdPartition(topicId, partitionIndex, topicName), false))
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any()))
-      .thenReturn(new ShareSessionContext(memberId, 1, new ShareSession(
+      .thenReturn(new ShareSessionContext(1, new ShareSession(
         new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2))
       )
 
@@ -4950,7 +4950,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(memberId, 0, util.List.of(
+      new ShareSessionContext(0, util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
     )
@@ -5015,7 +5015,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(memberId, 0, util.List.of(
+      new ShareSessionContext(0, util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
     ).thenThrow(Errors.SHARE_SESSION_NOT_FOUND.exception)
@@ -5102,7 +5102,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(memberId, 0, util.List.of(
+      new ShareSessionContext(0, util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
     ).thenThrow(Errors.INVALID_SHARE_SESSION_EPOCH.exception)
@@ -5270,12 +5270,12 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(memberId, 0, util.List.of(
+      new ShareSessionContext(0, util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
-    ).thenReturn(new ShareSessionContext(memberId, 1, new ShareSession(
+    ).thenReturn(new ShareSessionContext(1, new ShareSession(
       new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2))
-    ).thenReturn(new ShareSessionContext(memberId, 2, new ShareSession(
+    ).thenReturn(new ShareSessionContext(2, new ShareSession(
       new ShareSessionKey(groupId, memberId), cachedSharePartitions, 3))
     )
 
@@ -5535,15 +5535,15 @@ class KafkaApisTest extends Logging {
     ))
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(memberId, 0, util.List.of(
+      new ShareSessionContext(0, util.List.of(
         new TopicIdPartition(topicId1, new TopicPartition(topicName1, 0)),
         new TopicIdPartition(topicId1, new TopicPartition(topicName1, 1)),
         new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0)),
         new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1))
       ))
-    ).thenReturn(new ShareSessionContext(memberId, 1, new ShareSession(
+    ).thenReturn(new ShareSessionContext(1, new ShareSession(
       new ShareSessionKey(groupId, memberId), cachedSharePartitions1, 2))
-    ).thenReturn(new ShareSessionContext(memberId, 2, new ShareSession(
+    ).thenReturn(new ShareSessionContext(2, new ShareSession(
       new ShareSessionKey(groupId, memberId), cachedSharePartitions2, 3))
     ).thenReturn(new FinalContext())
 
@@ -6498,10 +6498,10 @@ class KafkaApisTest extends Logging {
     ))
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(memberId, 0, util.List.of(
+      new ShareSessionContext(0, util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
-    ).thenReturn(new ShareSessionContext(memberId, 1, new ShareSession(
+    ).thenReturn(new ShareSessionContext(1, new ShareSession(
       new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2))
     )
 
@@ -13813,10 +13813,10 @@ class KafkaApisTest extends Logging {
     ))
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(memberId, 0, util.List.of(
+      new ShareSessionContext(0, util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
-    ).thenReturn(new ShareSessionContext(memberId, 1, new ShareSession(
+    ).thenReturn(new ShareSessionContext(1, new ShareSession(
       new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2))
     )
 

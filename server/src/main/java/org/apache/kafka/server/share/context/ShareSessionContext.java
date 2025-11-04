@@ -48,7 +48,6 @@ public class ShareSessionContext extends ShareFetchContext {
 
     private static final Logger log = LoggerFactory.getLogger(ShareSessionContext.class);
 
-    private final String memberId;
     private final int epoch;
     private final boolean isSubsequent;
     private List<TopicIdPartition> shareFetchData;
@@ -57,14 +56,11 @@ public class ShareSessionContext extends ShareFetchContext {
     /**
      * The share fetch context for the first request that starts a share session.
      *
-     * @param memberId           The member from which we received the request.
      * @param epoch              The epoch of share session received in the share fetch request.
      * @param shareFetchData     The share partition data from the share fetch request.
      */
-    public ShareSessionContext(String memberId,
-                               int epoch,
+    public ShareSessionContext(int epoch,
                                List<TopicIdPartition> shareFetchData) {
-        this.memberId = memberId;
         this.epoch = epoch;
         this.shareFetchData = shareFetchData;
         this.isSubsequent = false;
@@ -73,12 +69,10 @@ public class ShareSessionContext extends ShareFetchContext {
     /**
      * The share fetch context for a subsequent request that utilizes an existing share session.
      *
-     * @param memberId     The member from which we received the request.
      * @param epoch        The epoch of share session received in the share fetch request.
      * @param session      The subsequent fetch request session.
      */
-    public ShareSessionContext(String memberId, int epoch, ShareSession session) {
-        this.memberId = memberId;
+    public ShareSessionContext(int epoch, ShareSession session) {
         this.epoch = epoch;
         this.session = session;
         this.isSubsequent = true;
