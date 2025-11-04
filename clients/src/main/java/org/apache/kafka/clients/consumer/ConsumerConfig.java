@@ -388,7 +388,7 @@ public class ConsumerConfig extends AbstractConfig {
             " If set to <code>record_limit</code>, the number of records returned in each poll() will not exceed the value of <code>max.poll.records</code>." +
             " If set to <code>batch_optimized</code>, the number of records returned in each poll() call may exceed <code>max.poll.records</code>" +
             " to align with batch boundaries for optimization.";
-    public static final String DEFAULT_SHARE_ACQUIRE_MODE = ShareAcquireMode.RECORD_LIMIT.name();
+    public static final String DEFAULT_SHARE_ACQUIRE_MODE = ShareAcquireMode.BATCH_OPTIMIZED.name();
 
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 

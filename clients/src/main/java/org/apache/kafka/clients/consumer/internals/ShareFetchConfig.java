@@ -97,7 +97,7 @@ public class ShareFetchConfig {
 
     @Override
     public String toString() {
-        return "FetchConfig{" +
+        return "ShareFetchConfig{" +
                 "minBytes=" + minBytes +
                 ", maxBytes=" + maxBytes +
                 ", maxWaitMs=" + maxWaitMs +
