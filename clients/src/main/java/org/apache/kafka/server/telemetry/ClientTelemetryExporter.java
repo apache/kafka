@@ -19,8 +19,8 @@ package org.apache.kafka.server.telemetry;
 
 /**
  * {@code ClientTelemetryExporter} defines the behavior for telemetry exporters on the broker side
- * which receive and export client telemetry metrics. This interface replaces the deprecated
- * {@link ClientTelemetryReceiver} and provides additional context including the push interval.
+ * which receive and export client telemetry metrics and provides additional context including the
+ * push interval.
  */
 public interface ClientTelemetryExporter {
 
