@@ -2346,8 +2346,11 @@ public class SharePartition {
                 lastKeyToRemove = entry.getKey();
             } else {
                 // The code will reach this point only if lastOffsetAcknowledged is in the middle of some stateBatch. In this case
-                // we can simply move the startOffset to the next offset of lastOffsetAcknowledged and should consider any read gap offsets.
-                startOffset = lastOffsetAcknowledged + 1;
+                // we can move the startOffset to the next offset of lastOffsetAcknowledged only if that offset is
+                // ahead of start offset and should consider any read gap offsets.
+                if (lastOffsetAcknowledged + 1 > startOffset) {
+                    startOffset = lastOffsetAcknowledged + 1;
+                }
                 if (entry.getKey().equals(cachedState.firstKey())) {
                     // If the first batch in cachedState has some records yet to be acknowledged,
                     // then nothing should be removed from cachedState
