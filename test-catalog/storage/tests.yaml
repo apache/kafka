@@ -136,7 +136,6 @@ org.apache.kafka.server.log.remote.storage.RemoteLogManagerTest:
 - testConfigure
 - testCopyLogSegmentToRemoteForStaleTopic
 - testCopyLogSegmentsToRemoteShouldCopyExpectedLogSegment
-- testCopyQuota
 - testCopyQuotaManagerConfig
 - testCopyThrottling
 - testCustomMetadataSizeExceedsLimit
