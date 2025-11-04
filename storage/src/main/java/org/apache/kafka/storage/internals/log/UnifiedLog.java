@@ -2634,7 +2634,6 @@ public class UnifiedLog implements AutoCloseable {
         // Remote log is enabled only for non-compact and non-internal topics
         return remoteStorageSystemEnable &&
                 !(config.compact || Topic.isInternal(topic)
-                        || TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME.equals(topic)
                         || Topic.CLUSTER_METADATA_TOPIC_NAME.equals(topic)) &&
                 config.remoteStorageEnable();
     }
