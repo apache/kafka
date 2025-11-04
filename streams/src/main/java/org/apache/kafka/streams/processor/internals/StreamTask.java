@@ -767,7 +767,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 final long timeSinceLastLog = wallClockTime - lastNotReadyLogTime;
                 if (timeSinceLastLog >= NOT_READY_LOG_INTERVAL_MS) {
                     final long notReadyDuration = wallClockTime - timeCurrentIdlingStarted.orElse(wallClockTime);
-                    final String reason = getNotReadyReason();
+                    final String reason = getNotReadyPartitionStatus();
                     log.info("Task is not ready to process (not ready for {}ms): {}", notReadyDuration, reason);
                     lastNotReadyLogTime = wallClockTime;
                 }
@@ -785,7 +785,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * Get the reason why the task is not ready to process.
      * This method is called when the task has been not ready for a while.
      */
-    private String getNotReadyReason() {
+    private String getNotReadyPartitionStatus() {
         final Set<TopicPartition> emptyPartitions = new HashSet<>();
         final Set<TopicPartition> bufferedPartitions = new HashSet<>();
 
@@ -798,7 +798,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
 
         if (emptyPartitions.isEmpty()) {
-            return "all partitions have buffered data but partitionGroup.readyToProcess returned false";
+            return String.format("all partitions have buffered data (buffered: %s)", bufferedPartitions);
         } else if (bufferedPartitions.isEmpty()) {
             return String.format("no partitions have buffered data locally (empty partitions: %s)", emptyPartitions);
         } else {
