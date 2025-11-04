@@ -196,6 +196,9 @@ public class InFlightBatch {
      * an acquisition lock timeout task for each offset.
      * (targetOffset to lastOffset]: initialize each offset to {@link RecordState#AVAILABLE}
      * and do not schedule any timer task for these offsets.
+     *
+     * @param targetOffset The target offset up to which the offset states are initialized using the current batch state.
+     * @param delayMs The delay in milliseconds for the acquisition lock timeout task.
      */
     public void maybeInitializeOffsetStateUpdate(long targetOffset, int delayMs) {
         if (offsetState == null) {
