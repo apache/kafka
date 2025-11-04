@@ -145,8 +145,8 @@ public class ShareFetchRequest extends AbstractRequest {
                 if (data.isRenewAck()) {
                     throw new UnsupportedVersionException("The v1 ShareFetch does not support AcknowledgeType.RENEW");
                 }
-                // The v1 does not support ShareAcquireMode record_limit.
-                if (data.shareAcquireMode() == ShareAcquireMode.RECORD_LIMIT.id()) {
+                // The v1 only supports ShareAcquireMode.BATCH_OPTIMIZED.
+                if (data.shareAcquireMode() != ShareAcquireMode.BATCH_OPTIMIZED.id()) {
                     throw new UnsupportedVersionException("The v1 ShareFetch does not support ShareAcquireMode.RECORD_LIMIT");
                 }
             }
