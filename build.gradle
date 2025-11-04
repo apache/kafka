@@ -2871,6 +2871,7 @@ project(':streams:integration-tests') {
     testImplementation libs.bcpkix
     testImplementation libs.hamcrest
     testImplementation libs.junitJupiter
+    testImplementation libs.opentelemetryProto
     testImplementation libs.junitPlatformSuiteEngine // supports suite test
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs

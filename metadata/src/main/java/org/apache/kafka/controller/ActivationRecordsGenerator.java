@@ -115,9 +115,7 @@ public class ActivationRecordsGenerator {
     static ControllerResult<Void> recordsForNonEmptyLog(
         Consumer<String> activationMessageConsumer,
         long transactionStartOffset,
-        BootstrapMetadata bootstrapMetadata,
-        MetadataVersion curMetadataVersion,
-        int defaultMinInSyncReplicas
+        MetadataVersion curMetadataVersion
     ) {
         StringBuilder logMessageBuilder = new StringBuilder("Performing controller activation. ");
 
@@ -140,54 +138,8 @@ public class ActivationRecordsGenerator {
             }
         }
 
-        // Write bootstrap records to the log so brokers can read them, but only if not handling a partial transaction
-        // Brokers can't read snapshots, only log entries
-        boolean shouldWriteBootstrapRecords = (transactionStartOffset == -1L);        
-        if (shouldWriteBootstrapRecords) {
-            logMessageBuilder
-                .append("Writing bootstrap records to log for broker consumption. ")
-                .append("Appending ")
-                .append(bootstrapMetadata.records().size())
-                .append(" bootstrap record(s) ");
-            
-            if (curMetadataVersion.isMetadataTransactionSupported()) {
-                records.add(new ApiMessageAndVersion(
-                    new BeginTransactionRecord().setName("Bootstrap records"), (short) 0));
-                logMessageBuilder.append("in metadata transaction ");
-            }
-            logMessageBuilder
-                .append("at metadata.version ")
-                .append(curMetadataVersion)
-                .append(" from bootstrap source '")
-                .append(bootstrapMetadata.source())
-                .append("'. ");
-
-            // Add bootstrap records
-            records.addAll(bootstrapMetadata.records());
-
-            // If ELR is enabled, we need to set a cluster-level min.insync.replicas.
-            if (bootstrapMetadata.featureLevel(EligibleLeaderReplicasVersion.FEATURE_NAME) > 0) {
-                records.add(new ApiMessageAndVersion(new ConfigRecord().
-                    setResourceType(BROKER.id()).
-                    setResourceName("").
-                    setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).
-                    setValue(Integer.toString(defaultMinInSyncReplicas)), (short) 0));
-            }
-
-            if (curMetadataVersion.isMetadataTransactionSupported()) {
-                records.add(new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0));
-            }
-        }
-
         activationMessageConsumer.accept(logMessageBuilder.toString().trim());
-        
-        // If we wrote bootstrap records and transactions are supported, use non-atomic result
-        // If we only aborted a transaction or don't support transactions, use atomic result
-        if (shouldWriteBootstrapRecords && curMetadataVersion.isMetadataTransactionSupported()) {
-            return ControllerResult.of(records, null);
-        } else {
-            return ControllerResult.atomicOf(records, null);
-        }
+        return ControllerResult.atomicOf(records, null);
     }
 
     /**
@@ -215,9 +167,7 @@ public class ActivationRecordsGenerator {
         } else {
             return recordsForNonEmptyLog(activationMessageConsumer,
                     transactionStartOffset,
-                    bootstrapMetadata,
-                    curMetadataVersion.get(),
-                    defaultMinInSyncReplicas);
+                    curMetadataVersion.get());
         }
     }
 }

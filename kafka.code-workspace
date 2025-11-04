@@ -1,0 +1,56 @@
+{
+    "folders": [
+        {
+            "path": "."
+        }
+    ],
+    "settings": {
+        "java.compile.nullAnalysis.mode": "automatic",
+        "java.configuration.updateBuildConfiguration": "automatic",
+        "java.configuration.runtimes": [
+            {
+                "name": "JavaSE-17",
+                "path": "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home",
+                "default": true
+            }
+        ],
+        "java.import.gradle.enabled": true,
+        "java.import.gradle.wrapper.enabled": true,
+        "java.import.gradle.java.home": "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home",
+        "gradle.nestedProjects": true,
+        "terminal.integrated.env.osx": {
+            "JAVA_HOME": "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home"
+        },
+        "gradle.debug": false,
+        "gradle.rootProject": ".",
+        "java.project.resourceFilters": ["node_modules", ".git"]
+    },
+    "tasks": {
+        "version": "2.0.0",
+        "tasks": [
+            {
+                "type": "shell",
+                "label": "gradle: build -x test",
+                "command": "./gradlew",
+                "args": ["build", "-x", "test"],
+                "group": {
+                    "kind": "build",
+                    "isDefault": true
+                },
+                "options": {
+                    "cwd": "${workspaceFolder}"
+                },
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": false,
+                    "panel": "shared"
+                },
+                "problemMatcher": [
+                    "$gradle"
+                ]
+            }
+        ]
+    }
+}
+
