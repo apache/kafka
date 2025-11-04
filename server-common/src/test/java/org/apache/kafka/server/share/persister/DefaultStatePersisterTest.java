@@ -178,7 +178,7 @@ class DefaultStatePersisterTest {
                 .setGroupId(groupId)
                 .setTopicsData(List.of(new TopicData<>(null,
                     List.of(PartitionFactory.newPartitionStateBatchData(
-                        partition, 1, 0, 0, null))))).build()).build());
+                        partition, 1, 0, 0, 0, null))))).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(IllegalArgumentException.class, result);
@@ -200,7 +200,7 @@ class DefaultStatePersisterTest {
                 .setGroupId(groupId)
                 .setTopicsData(List.of(new TopicData<>(topicId,
                     List.of(PartitionFactory.newPartitionStateBatchData(
-                        incorrectPartition, 1, 0, 0, null))))).build()).build());
+                        incorrectPartition, 1, 0, 0,  0, null))))).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(IllegalArgumentException.class, result);
@@ -600,6 +600,7 @@ class DefaultStatePersisterTest {
                                 .setStateEpoch(0)
                                 .setLeaderEpoch(1)
                                 .setStartOffset(0)
+                                .setDeliveryCompleteCount(11)
                                 .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
                                     .setFirstOffset(0)
                                     .setLastOffset(10)

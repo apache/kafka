@@ -150,6 +150,7 @@ public class DefaultStatePersister implements Persister {
                         partitionData.stateEpoch(),
                         partitionData.leaderEpoch(),
                         partitionData.startOffset(),
+                        partitionData.deliveryCompleteCount(),
                         partitionData.stateBatches(),
                         future, null)
                 );

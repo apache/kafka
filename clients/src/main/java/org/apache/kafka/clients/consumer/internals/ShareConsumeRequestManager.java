@@ -283,16 +283,14 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         }
     }
 
-    public void fetch(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap,
-                      Map<TopicIdPartition, NodeAcknowledgements> controlRecordAcknowledgements) {
+    public void fetch(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
         if (!fetchMoreRecords) {
             log.debug("Fetch more data");
             fetchMoreRecords = true;
         }
 
-        // Process both acknowledgement maps and sends them in the next ShareFetch.
+        // Store the acknowledgements and send them in the next ShareFetch.
         processAcknowledgementsMap(acknowledgementsMap);
-        processAcknowledgementsMap(controlRecordAcknowledgements);
     }
 
     private void processAcknowledgementsMap(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
