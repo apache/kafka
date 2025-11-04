@@ -37,7 +37,7 @@ public class ListShareGroupOffsetsSpec {
     /**
      * Set the topic partitions whose offsets are to be listed for a share group.
      *
-     * @param topicPartitions List of topic partitions to include
+     * @param topicPartitions List of topic partitions to include, or {@code null} to include all topic partitions.
      */
     public ListShareGroupOffsetsSpec topicPartitions(Collection<TopicPartition> topicPartitions) {
         this.topicPartitions = topicPartitions;
