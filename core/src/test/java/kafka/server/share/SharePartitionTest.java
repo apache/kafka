@@ -10159,6 +10159,7 @@ public class SharePartitionTest {
 
         // Expire timer
         mockTimer.advanceClock(ACQUISITION_LOCK_TIMEOUT_MS + 1);    // Trigger expire
+        // todo: index 2 in expectedStates should be RecordState.ARCHIVED - fix after ticket KAFKA-19859 is addressed.
         List<RecordState> expectedStates = List.of(RecordState.ARCHIVED, RecordState.ACKNOWLEDGED, RecordState.AVAILABLE, RecordState.ACKNOWLEDGED, RecordState.AVAILABLE);
         for (long i = 0; i <= 4; i++) {
             InFlightState offset = sharePartition.cachedState().get(0L).offsetState().get(i);
