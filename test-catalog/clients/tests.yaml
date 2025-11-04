@@ -5365,6 +5365,7 @@ org.apache.kafka.common.utils.UtilsTest:
 - testMin
 - testMsToNs
 - testMurmur2
+- testMurmur2Checksum
 - testPropsToMap
 - testPropsToMapNonStringKey
 - testPropsToMapWithDefaults
