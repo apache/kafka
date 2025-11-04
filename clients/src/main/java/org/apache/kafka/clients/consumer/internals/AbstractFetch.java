@@ -335,7 +335,7 @@ public abstract class AbstractFetch implements Closeable {
     }
 
     /**
-     * Return the set of <em>fetchable</em> partitions, which are the set of partitions to which we are subscribed,
+     * Return the list of <em>fetchable</em> partitions, which are the list of partitions to which we are subscribed,
      * but <em>excluding</em> any partitions for which we still have buffered data. The idea is that since the user
      * has yet to process the data for the partition that has already been fetched, we should not go send for more data
      * until the previously-fetched data has been processed.
@@ -429,7 +429,7 @@ public abstract class AbstractFetch implements Closeable {
         // This is the set of partitions that have buffered data
         Set<TopicPartition> buffered = Collections.unmodifiableSet(fetchBuffer.bufferedPartitions());
 
-        // This is the set of partitions that do not have buffered data
+        // This is the list of partitions that are fetchable and have no buffered data
         List<TopicPartition> unbuffered = fetchablePartitions(buffered);
 
         if (unbuffered.isEmpty()) {

@@ -880,6 +880,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     warmupTasks: List[StreamsGroupHeartbeatRequestData.TaskIds] = null,
     topology: StreamsGroupHeartbeatRequestData.Topology = null,
     expectedError: Errors = Errors.NONE,
+    processId: String = null,
     version: Short = ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion(isUnstableApiEnabled)
   ): StreamsGroupHeartbeatResponseData = {
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequest.Builder(
@@ -892,6 +893,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         .setStandbyTasks(standbyTasks.asJava)
         .setWarmupTasks(warmupTasks.asJava)
         .setTopology(topology)
+        .setProcessId(processId)
     ).build(version)
 
     // Send the request until receiving a successful response. There is a delay

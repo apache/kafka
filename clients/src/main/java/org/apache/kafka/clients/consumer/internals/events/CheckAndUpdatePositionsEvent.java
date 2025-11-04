@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.TopicPartition;
 
@@ -30,7 +31,7 @@ import java.time.Duration;
  * The event completes with a boolean indicating if all assigned partitions have valid fetch positions
  * (based on {@link SubscriptionState#hasAllFetchPositions()}).
  */
-public class CheckAndUpdatePositionsEvent extends CompletableApplicationEvent<Boolean> {
+public class CheckAndUpdatePositionsEvent extends CompletableApplicationEvent<Boolean> implements MetadataErrorNotifiableEvent {
 
     public CheckAndUpdatePositionsEvent(long deadlineMs) {
         super(Type.CHECK_AND_UPDATE_POSITIONS, deadlineMs);
@@ -39,11 +40,11 @@ public class CheckAndUpdatePositionsEvent extends CompletableApplicationEvent<Bo
     /**
      * Indicates that this event requires subscription metadata to be present
      * for its execution. This is used to ensure that metadata errors are
-     * handled correctly during the {@link org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer#poll(Duration) poll} 
-     * or {@link org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer#position(TopicPartition) position} process.
+     * handled correctly during the {@link Consumer#poll(Duration) poll}
+     * or {@link Consumer#position(TopicPartition) position} process.
      */
     @Override
-    public boolean requireSubscriptionMetadata() {
-        return true;
+    public void onMetadataError(Exception metadataError) {
+        future().completeExceptionally(metadataError);
     }
 }
