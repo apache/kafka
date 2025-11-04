@@ -161,9 +161,7 @@ public class CurrentAssignmentBuilder {
             case STABLE:
                 // When the member is in the STABLE state, we verify if a newer
                 // epoch (or target assignment) is available. If it is, we can
-                // reconcile the member towards it. If the epoch is the same but
-                // the target assignment has changed (e.g., after initial rebalance
-                // delay fires), we must still reconcile to propagate the new tasks.
+                // reconcile the member towards it. Otherwise, we return.
                 if (member.memberEpoch() != targetAssignmentEpoch) {
                     return computeNextAssignment(
                         member.memberEpoch(),
