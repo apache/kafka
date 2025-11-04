@@ -61,6 +61,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -3105,8 +3107,9 @@ public class TaskManagerTest {
         verify(task03, never()).suspend();
     }
 
-    @Test
-    public void shouldNotCommitIfNoRevokedTasksNeedCommitting() {
+    @ParameterizedTest
+    @EnumSource(ProcessingMode.class)
+    public void shouldNotCommitIfNoRevokedTasksNeedCommitting(final ProcessingMode processingMode) {
         // task00 being revoked, no commit needed
         final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .withInputPartitions(taskId00Partitions)
@@ -3132,47 +3135,7 @@ public class TaskManagerTest {
         when(task01.commitNeeded()).thenReturn(true); // only task01 needs commit
         when(task02.commitNeeded()).thenReturn(false);
 
-        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
-
-        taskManager.handleRevocation(taskId00Partitions);
-
-        verify(task00, never()).prepareCommit(anyBoolean());
-        verify(task01, never()).prepareCommit(anyBoolean());
-        verify(task02, never()).prepareCommit(anyBoolean());
-
-        verify(task00).suspend();
-        verify(task01, never()).suspend();
-        verify(task02, never()).suspend();
-    }
-
-    @Test
-    public void shouldNotCommitIfNoRevokedTasksNeedCommittingWithEOSv2() {
-        // task00 being revoked, no commit needed
-        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
-            .withInputPartitions(taskId00Partitions)
-            .inState(State.RUNNING)
-            .build();
-
-        // task01 NOT being revoked, commit needed
-        final StreamTask task01 = statefulTask(taskId01, taskId01ChangelogPartitions)
-            .withInputPartitions(taskId01Partitions)
-            .inState(State.RUNNING)
-            .build();
-
-        // task02 NOT being revoked, no commit needed
-        final StreamTask task02 = statefulTask(taskId02, taskId02ChangelogPartitions)
-            .withInputPartitions(taskId02Partitions)
-            .inState(State.RUNNING)
-            .build();
-
-        final TasksRegistry tasks = mock(TasksRegistry.class);
-        when(tasks.allTasks()).thenReturn(Set.of(task00, task01, task02));
-
-        when(task00.commitNeeded()).thenReturn(false);
-        when(task01.commitNeeded()).thenReturn(true); // only task01 needs commit
-        when(task02.commitNeeded()).thenReturn(false);
-
-        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.EXACTLY_ONCE_V2, tasks);
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(processingMode, tasks);
 
         taskManager.handleRevocation(taskId00Partitions);
 
