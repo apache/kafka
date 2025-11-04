@@ -1847,6 +1847,7 @@ kafka.server.DescribeUserScramCredentialsRequestTest:
 kafka.server.DynamicBrokerConfigTest:
 - testAdvertisedListenersIsNotDynamicallyReconfigurable
 - testAuthorizerConfig
+- testClientTelemetryExporter
 - testCombinedControllerAuthorizerConfig
 - testConfigUpdate
 - testConfigUpdateWithReconfigurableValidationFailure
@@ -2999,6 +3000,7 @@ kafka.server.share.SharePartitionManagerTest:
 - testToForgetPartitions
 - testZeroSizeShareSession
 kafka.server.share.SharePartitionTest:
+- testAckTypeToRecordStateMapping
 - testAcknowledgeAfterAcquisitionLockTimeout
 - testAcknowledgeBatchAndOffsetPostLsoMovement
 - testAcknowledgeBatchPostLsoMovement
@@ -3099,6 +3101,7 @@ kafka.server.share.SharePartitionTest:
 - testDeliveryCompleteCountWhenStaleOffsetsAreArchived
 - testFetchAbortedTransactionRecordBatchesForAbortedAndCommittedTransactions
 - testFetchAbortedTransactionRecordBatchesForOnlyAbortedTransactions
+- testFetchAckTypeMapForBatch
 - testFetchLockReleasedByDifferentId
 - testFilterRecordBatchesFromAcquiredRecords
 - testLsoMovementAheadOfEndOffset
@@ -3119,8 +3122,10 @@ kafka.server.share.SharePartitionTest:
 - testLsoMovementThenAcquisitionLockTimeoutThenAcknowledgeBatchLastOffsetAheadOfStartOffsetBatch
 - testLsoMovementToEndOffset
 - testLsoMovementToEndOffsetWhereEndOffsetIsAvailable
+- testLsoMovementWithBatchRenewal
 - testLsoMovementWithGapsInCachedStateMap
 - testLsoMovementWithGapsInCachedStateMapAndAcknowledgedBatch
+- testLsoMovementWithPerOffsetRenewal
 - testLsoMovementWithWriteStateRPCFailuresInAcknowledgement
 - testMaxDeliveryCountLimitExceededForRecordBatch
 - testMaxDeliveryCountLimitExceededForRecordsSubset
@@ -3198,6 +3203,10 @@ kafka.server.share.SharePartitionTest:
 - testReleaseMultipleRecordBatch
 - testReleaseOffsetWithWriteShareGroupStateFailure
 - testReleaseSingleRecordBatch
+- testRenewAcknowledgeOnExpiredBatch
+- testRenewAcknowledgeWithCompleteBatchAck
+- testRenewAcknowledgeWithPerOffsetAck
+- testRenewAcknowledgeWithPerOffsetAndBatchMix
 - testScheduleAcquisitionLockTimeoutValueFromGroupConfig
 - testScheduleAcquisitionLockTimeoutValueUpdatesSuccessfully
 - testTerminalRecordsNotUpdatedWhenBatchesBeforeStartOffsetAreExpired

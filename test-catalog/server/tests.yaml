@@ -169,8 +169,14 @@ org.apache.kafka.server.metrics.ClientMetricsInstanceTest:
 - testMaybeUpdatePushRequestWithImmediateRetryAfterGetValid
 - testMaybeUpdatePushRequestWithImmediateRetryFail
 - testMaybeUpdateRequestTimestampValid
-org.apache.kafka.server.metrics.ClientMetricsReceiverPluginTest:
-- testExportMetrics
+org.apache.kafka.server.metrics.ClientMetricsTelemetryPluginTest:
+- testExportMetricsWithBothReceiverAndExporter
+- testExportMetricsWithDeprecatedReceiver
+- testExportMetricsWithDualImplementation
+- testExportMetricsWithNewExporter
+org.apache.kafka.server.metrics.ClientTelemetryTest:
+- testMultipleDeprecatedReceivers
+- testMultipleNewExporters
 org.apache.kafka.server.metrics.ForwardingManagerMetricsTest:
 - testMetricsNames
 - testQueueLength
