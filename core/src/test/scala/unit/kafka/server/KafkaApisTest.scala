@@ -12240,6 +12240,7 @@ class KafkaApisTest extends Logging {
             .setErrorMessage(null)
             .setStateEpoch(1)
             .setStartOffset(10)
+            .setDeliveryCompleteCount(0)
         ))
     )
 
@@ -12280,6 +12281,7 @@ class KafkaApisTest extends Logging {
             .setErrorMessage(null)
             .setStateEpoch(1)
             .setStartOffset(10)
+            .setDeliveryCompleteCount(0)
         ))
     )
 
