@@ -34,6 +34,8 @@ import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentMatchers.{any, anyInt}
 import org.mockito.Mockito.{mock, when}
 
+import java.util
+
 class DelayedFetchTest {
   private val maxBytes = 1024
   private val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
@@ -59,7 +61,7 @@ class DelayedFetchTest {
 
     val delayedFetch = new DelayedFetch(
       params = fetchParams,
-      fetchPartitionStatus = Seq(topicIdPartition -> fetchStatus),
+      fetchPartitionStatus = createFetchPartitionStatusMap(topicIdPartition, fetchStatus),
       replicaManager = replicaManager,
       quota = replicaQuota,
       responseCallback = callback
@@ -105,7 +107,7 @@ class DelayedFetchTest {
 
     val delayedFetch = new DelayedFetch(
       params = fetchParams,
-      fetchPartitionStatus = Seq(topicIdPartition -> fetchStatus),
+      fetchPartitionStatus = createFetchPartitionStatusMap(topicIdPartition, fetchStatus),
       replicaManager = replicaManager,
       quota = replicaQuota,
       responseCallback = callback
@@ -145,7 +147,7 @@ class DelayedFetchTest {
 
     val delayedFetch = new DelayedFetch(
       params = fetchParams,
-      fetchPartitionStatus = Seq(topicIdPartition -> fetchStatus),
+      fetchPartitionStatus = createFetchPartitionStatusMap(topicIdPartition, fetchStatus),
       replicaManager = replicaManager,
       quota = replicaQuota,
       responseCallback = callback
@@ -196,7 +198,7 @@ class DelayedFetchTest {
 
     val delayedFetch = new DelayedFetch(
       params = fetchParams,
-      fetchPartitionStatus = Seq(topicIdPartition -> fetchStatus),
+      fetchPartitionStatus = createFetchPartitionStatusMap(topicIdPartition, fetchStatus),
       replicaManager = replicaManager,
       quota = replicaQuota,
       responseCallback = callback
@@ -267,4 +269,9 @@ class DelayedFetchTest {
       error)
   }
 
+  private def createFetchPartitionStatusMap(tpId: TopicIdPartition, status: FetchPartitionStatus): util.LinkedHashMap[TopicIdPartition, FetchPartitionStatus] = {
+    val statusMap = new util.LinkedHashMap[TopicIdPartition, FetchPartitionStatus]
+    statusMap.put(tpId, status)
+    statusMap
+  }
 }

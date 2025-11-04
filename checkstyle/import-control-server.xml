@@ -63,7 +63,6 @@
   <allow pkg="org.apache.kafka.queue" />
   <allow pkg="org.apache.kafka.security" />
   <allow pkg="org.apache.kafka.server.common" />
-  <allow pkg="org.apache.kafka.server.metrics" />
   <allow pkg="org.apache.kafka.server.util" />
   <allow pkg="com.yammer.metrics" />
 
@@ -85,22 +84,14 @@
     <allow pkg="javax.crypto" />
     <allow pkg="org.apache.kafka.server" />
     <allow pkg="org.apache.kafka.image" />
-    <allow pkg="org.apache.kafka.network.metrics" />
     <allow pkg="org.apache.kafka.network" />
     <allow pkg="org.apache.kafka.storage.internals.log" />
     <allow pkg="org.apache.kafka.storage.internals.checkpoint" />
     <allow pkg="org.apache.logging.log4j" />
-    <allow pkg="org.apache.logging.log4j.core" />
-    <allow pkg="org.apache.logging.log4j.core.config" />
     <subpackage name="metrics">
       <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
       <allow class="org.apache.kafka.controller.QuorumFeatures" />
       <allow pkg="org.apache.kafka.server.telemetry" />
-    </subpackage>
-    <subpackage name="config">
-      <allow pkg="org.apache.kafka.server" />
-      <allow pkg="org.apache.kafka.network" />
-      <allow pkg="org.apache.kafka.storage.internals.log" />
     </subpackage>
     <subpackage name="share">
       <allow pkg="org.apache.kafka.storage.log.metrics" />

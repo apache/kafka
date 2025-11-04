@@ -26,6 +26,10 @@
 <h5><a id="upgrade_420_notable" href="#upgrade_420_notable">Notable changes in 4.2.0</a></h5>
 <ul>
     <li>
+        The <code>org.apache.kafka.common.header.internals.RecordHeader</code> class has been updated to be read thread-safe. See <a href="https://cwiki.apache.org/confluence/x/nYmhFg">KIP-1205</a> for details.
+        In other words, each individual <code>Header</code> object within a <code>ConsumerRecord</code>'s <code>headers</code> can now be safely read from multiple threads concurrently.
+    </li>
+    <li>
         The <code>org.apache.kafka.disallowed.login.modules</code> config was deprecated. Please use the <code>org.apache.kafka.allowed.login.modules</code>
         instead.
     </li>

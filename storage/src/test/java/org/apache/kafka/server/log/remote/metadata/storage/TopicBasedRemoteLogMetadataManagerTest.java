@@ -357,6 +357,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
                 TopicBasedRemoteLogMetadataManagerConfig.BROKER_ID, 0
             );
             rlmm.configure(configs);
+            rlmm.onBrokerReady();
             
             // Wait for initialization failure and exit procedure to be called
             TestUtils.waitForCondition(() -> exitCalled.get(), 

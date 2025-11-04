@@ -56,6 +56,7 @@ import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimerTask;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
+import org.apache.kafka.server.share.fetch.InFlightBatch;
 import org.apache.kafka.server.share.fetch.InFlightState;
 import org.apache.kafka.server.share.fetch.RecordState;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
@@ -102,10 +103,13 @@ import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -184,8 +188,8 @@ public class SharePartitionTest {
         assertEquals(3, sharePartition.cachedState().get(11L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(11L).offsetState());
 
-        // inFlightTerminalRecords is incremented by the number of ACKNOWLEDGED and ARCHIVED records in readState result.
-        assertEquals(5, sharePartition.inFlightTerminalRecords());
+        // deliveryCompleteCount is incremented by the number of ACKNOWLEDGED and ARCHIVED records in readState result.
+        assertEquals(5, sharePartition.deliveryCompleteCount());
 
         TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 2,
             "In-flight batch count should be 2.");
@@ -245,7 +249,7 @@ public class SharePartitionTest {
         assertEquals(0, sharePartition.startOffset());
         assertEquals(0, sharePartition.endOffset());
         assertEquals(PartitionFactory.DEFAULT_STATE_EPOCH, sharePartition.stateEpoch());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -296,7 +300,7 @@ public class SharePartitionTest {
         assertEquals(15, sharePartition.startOffset());
         assertEquals(15, sharePartition.endOffset());
         assertEquals(PartitionFactory.DEFAULT_STATE_EPOCH, sharePartition.stateEpoch());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -358,7 +362,7 @@ public class SharePartitionTest {
         assertEquals(15, sharePartition.startOffset());
         assertEquals(15, sharePartition.endOffset());
         assertEquals(PartitionFactory.DEFAULT_STATE_EPOCH, sharePartition.stateEpoch());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 0,
             "In-flight batch count should be 0.");
@@ -641,7 +645,7 @@ public class SharePartitionTest {
         assertEquals(10, sharePartition.endOffset());
         assertEquals(5, sharePartition.stateEpoch());
         assertEquals(10, sharePartition.nextFetchOffset());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -978,8 +982,8 @@ public class SharePartitionTest {
         assertEquals(10, persisterReadResultGapWindow.gapStartOffset());
         assertEquals(30, persisterReadResultGapWindow.endOffset());
 
-        // inFlightTerminalRecords is incremented by the number of ACKNOWLEDGED and ARCHIVED records in readState result.
-        assertEquals(16, sharePartition.inFlightTerminalRecords());
+        // deliveryCompleteCount is incremented by the number of ACKNOWLEDGED and ARCHIVED records in readState result.
+        assertEquals(16, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -1026,8 +1030,8 @@ public class SharePartitionTest {
         assertEquals(10, persisterReadResultGapWindow.gapStartOffset());
         assertEquals(40, persisterReadResultGapWindow.endOffset());
 
-        // inFlightTerminalRecords is incremented by the number of ACKNOWLEDGED and ARCHIVED records in readState result.
-        assertEquals(17, sharePartition.inFlightTerminalRecords());
+        // deliveryCompleteCount is incremented by the number of ACKNOWLEDGED and ARCHIVED records in readState result.
+        assertEquals(17, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -1069,7 +1073,7 @@ public class SharePartitionTest {
 
         assertEquals(21, persisterReadResultGapWindow.gapStartOffset());
         assertEquals(40, persisterReadResultGapWindow.endOffset());
-        assertEquals(11, sharePartition.inFlightTerminalRecords());
+        assertEquals(11, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -1095,7 +1099,7 @@ public class SharePartitionTest {
         assertEquals(31, sharePartition.endOffset());
         assertEquals(3, sharePartition.stateEpoch());
         assertEquals(31, sharePartition.nextFetchOffset());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         GapWindow persisterReadResultGapWindow = sharePartition.persisterReadResultGapWindow();
 
@@ -1136,7 +1140,7 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.persisterReadResultGapWindow());
         assertEquals(10L, sharePartition.persisterReadResultGapWindow().gapStartOffset());
         assertEquals(30L, sharePartition.persisterReadResultGapWindow().endOffset());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
 
         // Create a single batch record that covers the entire range from 10 to 30 of initial read gap.
         // The records in the batch are from 10 to 49.
@@ -1164,7 +1168,7 @@ public class SharePartitionTest {
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(26L).batchState());
         assertNotNull(sharePartition.persisterReadResultGapWindow());
         assertEquals(15L, sharePartition.persisterReadResultGapWindow().gapStartOffset());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
 
         // Send the same batch again to acquire the next set of records.
         acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
@@ -1199,7 +1203,7 @@ public class SharePartitionTest {
         assertEquals(30L, sharePartition.endOffset());
         // As all the gaps are now filled, the persisterReadResultGapWindow should be null.
         assertNull(sharePartition.persisterReadResultGapWindow());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
 
         // Now initial read gap is filled, so the complete batch can be acquired despite max fetch records being 1.
         acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
@@ -1220,7 +1224,7 @@ public class SharePartitionTest {
         assertEquals(1, sharePartition.cachedState().get(31L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(31L).offsetState());
         assertEquals(49L, sharePartition.endOffset());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -1256,7 +1260,7 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.persisterReadResultGapWindow());
         assertEquals(10L, sharePartition.persisterReadResultGapWindow().gapStartOffset());
         assertEquals(30L, sharePartition.persisterReadResultGapWindow().endOffset());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
 
         // Create a single batch record that covers the entire range from 10 to 30 of initial read gap.
         // The records in the batch are from 10 to 49.
@@ -1300,7 +1304,7 @@ public class SharePartitionTest {
         assertEquals(49L, sharePartition.endOffset());
         // As all the gaps are now filled, the persisterReadResultGapWindow should be null.
         assertNull(sharePartition.persisterReadResultGapWindow());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -1336,7 +1340,7 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.persisterReadResultGapWindow());
         assertEquals(10L, sharePartition.persisterReadResultGapWindow().gapStartOffset());
         assertEquals(30L, sharePartition.persisterReadResultGapWindow().endOffset());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
 
         // Create a single batch record that ends in between the cached batch and the fetch offset is
         // post startOffset.
@@ -1381,7 +1385,7 @@ public class SharePartitionTest {
         assertEquals(30L, sharePartition.endOffset());
         assertNotNull(sharePartition.persisterReadResultGapWindow());
         assertEquals(28L, sharePartition.persisterReadResultGapWindow().gapStartOffset());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -1417,7 +1421,7 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.persisterReadResultGapWindow());
         assertEquals(10L, sharePartition.persisterReadResultGapWindow().gapStartOffset());
         assertEquals(30L, sharePartition.persisterReadResultGapWindow().endOffset());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
 
         // Create a single batch record where first offset is prior startOffset.
         MemoryRecords records = memoryRecords(6, 16);
@@ -1451,7 +1455,7 @@ public class SharePartitionTest {
         assertEquals(30L, sharePartition.endOffset());
         assertNotNull(sharePartition.persisterReadResultGapWindow());
         assertEquals(20L, sharePartition.persisterReadResultGapWindow().gapStartOffset());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -1487,7 +1491,7 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.persisterReadResultGapWindow());
         assertEquals(5L, sharePartition.persisterReadResultGapWindow().gapStartOffset());
         assertEquals(30L, sharePartition.persisterReadResultGapWindow().endOffset());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
 
         // Create multiple batch records that covers the entire range from 5 to 30 of initial read gap.
         // The records in the batch are from 5 to 49.
@@ -1524,7 +1528,7 @@ public class SharePartitionTest {
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(26L).batchState());
         assertNotNull(sharePartition.persisterReadResultGapWindow());
         assertEquals(7L, sharePartition.persisterReadResultGapWindow().gapStartOffset());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
 
         // Remove first batch from the records as the fetch offset has moved forward to 7 offset.
         List<RecordBatch> batch = TestUtils.toList(records.batches());
@@ -1553,7 +1557,7 @@ public class SharePartitionTest {
         assertEquals(30L, sharePartition.endOffset());
         assertNotNull(sharePartition.persisterReadResultGapWindow());
         assertEquals(12L, sharePartition.persisterReadResultGapWindow().gapStartOffset());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
 
         // Remove the next 2 batches from the records as the fetch offset has moved forward to 12 offset.
         int size = batch.get(1).sizeInBytes() + batch.get(2).sizeInBytes();
@@ -1591,7 +1595,7 @@ public class SharePartitionTest {
         assertEquals(30L, sharePartition.endOffset());
         assertNotNull(sharePartition.persisterReadResultGapWindow());
         assertEquals(26L, sharePartition.persisterReadResultGapWindow().gapStartOffset());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
 
         // Remove the next 2 batches from the records as the fetch offset has moved forward to 26 offset.
         // Do not remove the 5th batch as it's only partially acquired.
@@ -1621,7 +1625,7 @@ public class SharePartitionTest {
         assertEquals(49L, sharePartition.endOffset());
         // As all the gaps are now filled, the persisterReadResultGapWindow should be null.
         assertNull(sharePartition.persisterReadResultGapWindow());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -1657,7 +1661,7 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.persisterReadResultGapWindow());
         assertEquals(5L, sharePartition.persisterReadResultGapWindow().gapStartOffset());
         assertEquals(30L, sharePartition.persisterReadResultGapWindow().endOffset());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
 
         // Create multiple batch records that ends in between the cached batch and the fetch offset is
         // post startOffset.
@@ -1709,7 +1713,7 @@ public class SharePartitionTest {
         assertEquals(30L, sharePartition.endOffset());
         assertNotNull(sharePartition.persisterReadResultGapWindow());
         assertEquals(28L, sharePartition.persisterReadResultGapWindow().gapStartOffset());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -1745,7 +1749,7 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.persisterReadResultGapWindow());
         assertEquals(10L, sharePartition.persisterReadResultGapWindow().gapStartOffset());
         assertEquals(30L, sharePartition.persisterReadResultGapWindow().endOffset());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
 
         // Create multiple batch records where multiple batches base offsets are prior startOffset.
         ByteBuffer buffer = ByteBuffer.allocate(4096);
@@ -1785,7 +1789,7 @@ public class SharePartitionTest {
         assertEquals(30L, sharePartition.endOffset());
         assertNotNull(sharePartition.persisterReadResultGapWindow());
         assertEquals(20L, sharePartition.persisterReadResultGapWindow().gapStartOffset());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -1808,8 +1812,8 @@ public class SharePartitionTest {
         assertEquals(1, sharePartition.cachedState().get(0L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(0L).offsetState());
 
-        // inFlightTerminalRecords will not be changed because no record went to a Terminal state.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // deliveryCompleteCount will not be changed because no record went to a Terminal state.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
             "In-flight batch count should be 1.");
@@ -1838,8 +1842,8 @@ public class SharePartitionTest {
         assertEquals(1, sharePartition.cachedState().get(10L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(10L).offsetState());
 
-        // inFlightTerminalRecords will not be changed because no record went to a Terminal state.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // deliveryCompleteCount will not be changed because no record went to a Terminal state.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
             "In-flight batch count should be 1.");
@@ -2317,7 +2321,7 @@ public class SharePartitionTest {
         // Release middle batch.
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             MEMBER_ID,
-            List.of(new ShareAcknowledgementBatch(15, 19, List.of((byte) 2))));
+            List.of(new ShareAcknowledgementBatch(15, 19, List.of(AcknowledgeType.RELEASE.id))));
         assertNull(ackResult.join());
         assertFalse(ackResult.isCompletedExceptionally());
         // Validate the nextFetchOffset is updated to 15.
@@ -2342,7 +2346,7 @@ public class SharePartitionTest {
         // Release last offset of the acquired batch. Only 1 record should be released and later acquired.
         ackResult = sharePartition.acknowledge(
             MEMBER_ID,
-            List.of(new ShareAcknowledgementBatch(29, 29, List.of((byte) 2))));
+            List.of(new ShareAcknowledgementBatch(29, 29, List.of(AcknowledgeType.RELEASE.id))));
         assertNull(ackResult.join());
         assertFalse(ackResult.isCompletedExceptionally());
         // Validate the nextFetchOffset is updated to 29.
@@ -2390,7 +2394,7 @@ public class SharePartitionTest {
         // Release middle batch.
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             MEMBER_ID,
-            List.of(new ShareAcknowledgementBatch(5, 14, List.of((byte) 2))));
+            List.of(new ShareAcknowledgementBatch(5, 14, List.of(AcknowledgeType.RELEASE.id))));
         assertNull(ackResult.join());
         assertFalse(ackResult.isCompletedExceptionally());
         // Validate the nextFetchOffset is updated to 5.
@@ -2442,7 +2446,7 @@ public class SharePartitionTest {
         // Release only 1 middle batch.
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             MEMBER_ID,
-            List.of(new ShareAcknowledgementBatch(5, 9, List.of((byte) 2))));
+            List.of(new ShareAcknowledgementBatch(5, 9, List.of(AcknowledgeType.RELEASE.id))));
         assertNull(ackResult.join());
         assertFalse(ackResult.isCompletedExceptionally());
         // Validate the nextFetchOffset is updated to 5.
@@ -2637,7 +2641,7 @@ public class SharePartitionTest {
 
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             MEMBER_ID,
-            List.of(new ShareAcknowledgementBatch(1, 1, List.of((byte) 1))));
+            List.of(new ShareAcknowledgementBatch(1, 1, List.of(AcknowledgeType.ACCEPT.id))));
         assertNull(ackResult.join());
         assertFalse(ackResult.isCompletedExceptionally());
 
@@ -2649,7 +2653,7 @@ public class SharePartitionTest {
         // Should not invoke completeDelayedShareFetchRequest as the first offset is not acknowledged yet.
         Mockito.verify(replicaManager, Mockito.times(0))
             .completeDelayedShareFetchRequest(new DelayedShareFetchGroupKey(GROUP_ID, TOPIC_ID_PARTITION));
-        assertEquals(1, sharePartition.inFlightTerminalRecords());
+        assertEquals(1, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -2666,7 +2670,7 @@ public class SharePartitionTest {
 
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             MEMBER_ID,
-            List.of(new ShareAcknowledgementBatch(5, 14, List.of((byte) 1))));
+            List.of(new ShareAcknowledgementBatch(5, 14, List.of(AcknowledgeType.ACCEPT.id))));
         assertNull(ackResult.join());
         assertFalse(ackResult.isCompletedExceptionally());
 
@@ -2675,7 +2679,7 @@ public class SharePartitionTest {
         // Should invoke completeDelayedShareFetchRequest as the start offset is moved.
         Mockito.verify(replicaManager, Mockito.times(1))
             .completeDelayedShareFetchRequest(new DelayedShareFetchGroupKey(GROUP_ID, TOPIC_ID_PARTITION));
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -2701,11 +2705,11 @@ public class SharePartitionTest {
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             MEMBER_ID,
             List.of(
-                new ShareAcknowledgementBatch(5, 6, List.of((byte) 2)),
+                new ShareAcknowledgementBatch(5, 6, List.of(AcknowledgeType.RELEASE.id)),
                 new ShareAcknowledgementBatch(10, 18, List.of(
-                    (byte) 2, (byte) 2, (byte) 2,
-                    (byte) 2, (byte) 2, (byte) 0,
-                    (byte) 0, (byte) 0, (byte) 1
+                    AcknowledgeType.RELEASE.id, AcknowledgeType.RELEASE.id, AcknowledgeType.RELEASE.id,
+                    AcknowledgeType.RELEASE.id, AcknowledgeType.RELEASE.id, ACKNOWLEDGE_TYPE_GAP_ID,
+                    ACKNOWLEDGE_TYPE_GAP_ID, ACKNOWLEDGE_TYPE_GAP_ID, AcknowledgeType.ACCEPT.id
                 ))));
         assertNull(ackResult.join());
         assertFalse(ackResult.isCompletedExceptionally());
@@ -2730,9 +2734,9 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(18L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
 
-        // Out of the 11 records acquired, 3 are GAP and 1 is ACCEPTED, which are Terminal. Thus inFlightTerminalRecords
+        // Out of the 11 records acquired, 3 are GAP and 1 is ACCEPTED, which are Terminal. Thus deliveryCompleteCount
         // will be 4
-        assertEquals(4, sharePartition.inFlightTerminalRecords());
+        assertEquals(4, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -2763,11 +2767,11 @@ public class SharePartitionTest {
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             MEMBER_ID,
             List.of(new ShareAcknowledgementBatch(6, 18, List.of(
-                (byte) 1, (byte) 1, (byte) 1,
-                (byte) 1, (byte) 1, (byte) 1,
-                (byte) 0, (byte) 0, (byte) 1,
-                (byte) 0, (byte) 1, (byte) 0,
-                (byte) 1))));
+                AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id,
+                AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id,
+                ACKNOWLEDGE_TYPE_GAP_ID, ACKNOWLEDGE_TYPE_GAP_ID, AcknowledgeType.ACCEPT.id,
+                ACKNOWLEDGE_TYPE_GAP_ID, AcknowledgeType.ACCEPT.id, ACKNOWLEDGE_TYPE_GAP_ID,
+                AcknowledgeType.ACCEPT.id))));
         assertNull(ackResult.join());
         assertFalse(ackResult.isCompletedExceptionally());
 
@@ -2797,7 +2801,7 @@ public class SharePartitionTest {
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
 
         // After acknowledgements, records at offsets 6, and 10 -> 18 are in Terminal state.
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        assertEquals(10, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -2806,7 +2810,7 @@ public class SharePartitionTest {
         // Acknowledge a batch when cache is empty.
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             MEMBER_ID,
-            List.of(new ShareAcknowledgementBatch(0, 15, List.of((byte) 3))));
+            List.of(new ShareAcknowledgementBatch(0, 15, List.of(AcknowledgeType.REJECT.id))));
         assertTrue(ackResult.isCompletedExceptionally());
         assertFutureThrows(InvalidRecordStateException.class, ackResult);
 
@@ -2820,10 +2824,10 @@ public class SharePartitionTest {
 
         ackResult = sharePartition.acknowledge(
             MEMBER_ID,
-            List.of(new ShareAcknowledgementBatch(20, 25, List.of((byte) 3))));
+            List.of(new ShareAcknowledgementBatch(20, 25, List.of(AcknowledgeType.REJECT.id))));
         assertTrue(ackResult.isCompletedExceptionally());
         assertFutureThrows(InvalidRequestException.class, ackResult);
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -2844,8 +2848,8 @@ public class SharePartitionTest {
 
         // Acknowledge a batch when first batch violates the range.
         List<ShareAcknowledgementBatch> acknowledgeBatches = List.of(
-            new ShareAcknowledgementBatch(0, 10, List.of((byte) 1)),
-            new ShareAcknowledgementBatch(20, 24, List.of((byte) 1)));
+            new ShareAcknowledgementBatch(0, 10, List.of(AcknowledgeType.ACCEPT.id)),
+            new ShareAcknowledgementBatch(20, 24, List.of(AcknowledgeType.ACCEPT.id)));
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             MEMBER_ID, acknowledgeBatches);
         assertTrue(ackResult.isCompletedExceptionally());
@@ -2856,7 +2860,7 @@ public class SharePartitionTest {
         acquiredRecordsList = fetchAcquiredRecords(sharePartition, records, 6);
 
         assertEquals(1, acquiredRecordsList.size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Previous failed acknowledge request should succeed now.
         ackResult = sharePartition.acknowledge(
@@ -2864,8 +2868,8 @@ public class SharePartitionTest {
         assertNull(ackResult.join());
         assertFalse(ackResult.isCompletedExceptionally());
         // After the acknowledgments are successful, the cache is updated. Since all record batches are in Terminal state,
-        // the cache is cleared and thus inFlightTerminalRecords is set as 0.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // the cache is cleared and thus deliveryCompleteCount is set as 0.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -2881,7 +2885,7 @@ public class SharePartitionTest {
 
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             "member-2",
-            List.of(new ShareAcknowledgementBatch(5, 9, List.of((byte) 3))));
+            List.of(new ShareAcknowledgementBatch(5, 9, List.of(AcknowledgeType.REJECT.id))));
         assertTrue(ackResult.isCompletedExceptionally());
         assertFutureThrows(InvalidRecordStateException.class, ackResult);
     }
@@ -2899,17 +2903,17 @@ public class SharePartitionTest {
 
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             MEMBER_ID,
-            List.of(new ShareAcknowledgementBatch(5, 9, List.of((byte) 2))));
+            List.of(new ShareAcknowledgementBatch(5, 9, List.of(AcknowledgeType.RELEASE.id))));
         assertNull(ackResult.join());
         assertFalse(ackResult.isCompletedExceptionally());
 
         // All records are RELEASED, so none of them moved to a Terminal state.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Acknowledge the same batch again but with ACCEPT type.
         ackResult = sharePartition.acknowledge(
             MEMBER_ID,
-            List.of(new ShareAcknowledgementBatch(5, 9, List.of((byte) 1))));
+            List.of(new ShareAcknowledgementBatch(5, 9, List.of(AcknowledgeType.ACCEPT.id))));
         assertTrue(ackResult.isCompletedExceptionally());
         assertFutureThrows(InvalidRecordStateException.class, ackResult);
 
@@ -2917,22 +2921,22 @@ public class SharePartitionTest {
         acquiredRecordsList = fetchAcquiredRecords(sharePartition, records, 5);
 
         assertEquals(1, acquiredRecordsList.size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         ackResult = sharePartition.acknowledge(
             MEMBER_ID,
-            List.of(new ShareAcknowledgementBatch(6, 8, List.of((byte) 3))));
+            List.of(new ShareAcknowledgementBatch(6, 8, List.of(AcknowledgeType.REJECT.id))));
         assertNull(ackResult.join());
         assertFalse(ackResult.isCompletedExceptionally());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
 
         // Re-acknowledge the subset batch with REJECT type.
         ackResult = sharePartition.acknowledge(
             MEMBER_ID,
-            List.of(new ShareAcknowledgementBatch(6, 8, List.of((byte) 3))));
+            List.of(new ShareAcknowledgementBatch(6, 8, List.of(AcknowledgeType.REJECT.id))));
         assertTrue(ackResult.isCompletedExceptionally());
         assertFutureThrows(InvalidRecordStateException.class, ackResult);
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -2958,11 +2962,11 @@ public class SharePartitionTest {
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             MEMBER_ID,
             List.of(
-                new ShareAcknowledgementBatch(5, 9, List.of((byte) 2)),
-                new ShareAcknowledgementBatch(10, 14, List.of((byte) 1)),
-                new ShareAcknowledgementBatch(15, 19, List.of((byte) 1)),
+                new ShareAcknowledgementBatch(5, 9, List.of(AcknowledgeType.RELEASE.id)),
+                new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.ACCEPT.id)),
+                new ShareAcknowledgementBatch(15, 19, List.of(AcknowledgeType.ACCEPT.id)),
                 // Add another batch which should fail the request.
-                new ShareAcknowledgementBatch(15, 19, List.of((byte) 1))));
+                new ShareAcknowledgementBatch(15, 19, List.of(AcknowledgeType.ACCEPT.id))));
         assertTrue(ackResult.isCompletedExceptionally());
         assertFutureThrows(InvalidRecordStateException.class, ackResult);
 
@@ -2971,7 +2975,7 @@ public class SharePartitionTest {
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(15L).batchState());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -2997,11 +3001,11 @@ public class SharePartitionTest {
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             MEMBER_ID,
             List.of(
-                new ShareAcknowledgementBatch(5, 9, List.of((byte) 2)),
-                new ShareAcknowledgementBatch(10, 14, List.of((byte) 1)),
-                new ShareAcknowledgementBatch(15, 19, List.of((byte) 1)),
+                new ShareAcknowledgementBatch(5, 9, List.of(AcknowledgeType.RELEASE.id)),
+                new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.ACCEPT.id)),
+                new ShareAcknowledgementBatch(15, 19, List.of(AcknowledgeType.ACCEPT.id)),
                 // Add another batch which should fail the request.
-                new ShareAcknowledgementBatch(16, 19, List.of((byte) 1))));
+                new ShareAcknowledgementBatch(16, 19, List.of(AcknowledgeType.ACCEPT.id))));
         assertTrue(ackResult.isCompletedExceptionally());
         assertFutureThrows(InvalidRecordStateException.class, ackResult);
 
@@ -3012,7 +3016,7 @@ public class SharePartitionTest {
         // Though the last batch is subset but the offset state map will not be exploded as the batch is
         // not in acquired state due to previous batch acknowledgement.
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(15L).batchState());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -3027,7 +3031,7 @@ public class SharePartitionTest {
 
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             MEMBER_ID,
-            List.of(new ShareAcknowledgementBatch(12, 13, List.of((byte) 2))));
+            List.of(new ShareAcknowledgementBatch(12, 13, List.of(AcknowledgeType.RELEASE.id))));
         assertNull(ackResult.join());
         assertFalse(ackResult.isCompletedExceptionally());
 
@@ -3042,14 +3046,14 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(13L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(14L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Send the same fetch request batch again but only 2 offsets should come as acquired.
         acquiredRecordsList = fetchAcquiredRecords(sharePartition, records, 2);
 
         assertArrayEquals(expectedAcquiredRecords(12, 13, 2).toArray(), acquiredRecordsList.toArray());
         assertEquals(15, sharePartition.nextFetchOffset());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -3095,7 +3099,7 @@ public class SharePartitionTest {
 
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             MEMBER_ID,
-            List.of(new ShareAcknowledgementBatch(12, 30, List.of((byte) 2))));
+            List.of(new ShareAcknowledgementBatch(12, 30, List.of(AcknowledgeType.RELEASE.id))));
         assertNull(ackResult.join());
         assertFalse(ackResult.isCompletedExceptionally());
 
@@ -3186,7 +3190,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         sharePartition.maybeInitialize();
-        assertEquals(20, sharePartition.inFlightTerminalRecords());
+        assertEquals(20, sharePartition.deliveryCompleteCount());
 
         // All records fetched are part of the gap. The gap is from 11 to 20, fetched offsets are 11 to 15.
         MemoryRecords records = memoryRecords(11, 5);
@@ -3201,7 +3205,7 @@ public class SharePartitionTest {
         assertEquals(40, sharePartition.endOffset());
         assertEquals(3, sharePartition.stateEpoch());
         assertEquals(16, sharePartition.nextFetchOffset());
-        assertEquals(20, sharePartition.inFlightTerminalRecords());
+        assertEquals(20, sharePartition.deliveryCompleteCount());
 
         GapWindow persisterReadResultGapWindow = sharePartition.persisterReadResultGapWindow();
         assertNotNull(persisterReadResultGapWindow);
@@ -3227,7 +3231,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         sharePartition.maybeInitialize();
-        assertEquals(20, sharePartition.inFlightTerminalRecords());
+        assertEquals(20, sharePartition.deliveryCompleteCount());
 
         // Fetched offsets overlap the inFlight batches. The gap is from 11 to 20, but fetched records are from 11 to 25.
         MemoryRecords records = memoryRecords(11, 15);
@@ -3242,7 +3246,7 @@ public class SharePartitionTest {
         assertEquals(40, sharePartition.endOffset());
         assertEquals(3, sharePartition.stateEpoch());
         assertEquals(41, sharePartition.nextFetchOffset());
-        assertEquals(20, sharePartition.inFlightTerminalRecords());
+        assertEquals(20, sharePartition.deliveryCompleteCount());
 
         GapWindow persisterReadResultGapWindow = sharePartition.persisterReadResultGapWindow();
         assertNotNull(persisterReadResultGapWindow);
@@ -3274,7 +3278,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         sharePartition.maybeInitialize();
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        assertEquals(10, sharePartition.deliveryCompleteCount());
 
         // Fetched offsets overlap the inFlight batches. The gap is from 11 to 20, but fetched records are from 11 to 25.
         MemoryRecords records = memoryRecords(11, 15);
@@ -3297,7 +3301,7 @@ public class SharePartitionTest {
         assertEquals(40, sharePartition.endOffset());
         assertEquals(3, sharePartition.stateEpoch());
         assertEquals(26, sharePartition.nextFetchOffset());
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        assertEquals(10, sharePartition.deliveryCompleteCount());
 
         GapWindow persisterReadResultGapWindow = sharePartition.persisterReadResultGapWindow();
         assertNotNull(persisterReadResultGapWindow);
@@ -3323,7 +3327,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         sharePartition.maybeInitialize();
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        assertEquals(10, sharePartition.deliveryCompleteCount());
 
         // Fetched records are part of inFlightBatch 11-20 with state AVAILABLE. Fetched offsets also overlap the
         // inFlight batches. The gap is from 11 to 20, but fetched records are from 11 to 25.
@@ -3343,7 +3347,7 @@ public class SharePartitionTest {
         assertEquals(40, sharePartition.endOffset());
         assertEquals(3, sharePartition.stateEpoch());
         assertEquals(26, sharePartition.nextFetchOffset());
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        assertEquals(10, sharePartition.deliveryCompleteCount());
 
         GapWindow persisterReadResultGapWindow = sharePartition.persisterReadResultGapWindow();
         assertNotNull(persisterReadResultGapWindow);
@@ -3371,7 +3375,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         sharePartition.maybeInitialize();
-        assertEquals(20, sharePartition.inFlightTerminalRecords());
+        assertEquals(20, sharePartition.deliveryCompleteCount());
 
         MemoryRecords records = memoryRecords(11, 75);
 
@@ -3406,7 +3410,7 @@ public class SharePartitionTest {
         GapWindow persisterReadResultGapWindow = sharePartition.persisterReadResultGapWindow();
         assertNotNull(persisterReadResultGapWindow);
 
-        assertEquals(20, sharePartition.inFlightTerminalRecords());
+        assertEquals(20, sharePartition.deliveryCompleteCount());
 
         // After records are acquired, the persisterReadResultGapWindow should be updated
         assertEquals(86, persisterReadResultGapWindow.gapStartOffset());
@@ -3430,7 +3434,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         sharePartition.maybeInitialize();
-        assertEquals(20, sharePartition.inFlightTerminalRecords());
+        assertEquals(20, sharePartition.deliveryCompleteCount());
 
         MemoryRecords records = memoryRecords(11, 20);
 
@@ -3449,7 +3453,7 @@ public class SharePartitionTest {
         assertEquals(70, sharePartition.endOffset());
         assertEquals(3, sharePartition.stateEpoch());
         assertEquals(31, sharePartition.nextFetchOffset());
-        assertEquals(20, sharePartition.inFlightTerminalRecords());
+        assertEquals(20, sharePartition.deliveryCompleteCount());
 
         GapWindow persisterReadResultGapWindow = sharePartition.persisterReadResultGapWindow();
         assertNotNull(persisterReadResultGapWindow);
@@ -3477,7 +3481,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         sharePartition.maybeInitialize();
-        assertEquals(20, sharePartition.inFlightTerminalRecords());
+        assertEquals(20, sharePartition.deliveryCompleteCount());
 
         MemoryRecords records = memoryRecords(11, 65);
 
@@ -3502,7 +3506,7 @@ public class SharePartitionTest {
         assertEquals(90, sharePartition.endOffset());
         assertEquals(3, sharePartition.stateEpoch());
         assertEquals(76, sharePartition.nextFetchOffset());
-        assertEquals(20, sharePartition.inFlightTerminalRecords());
+        assertEquals(20, sharePartition.deliveryCompleteCount());
 
         GapWindow persisterReadResultGapWindow = sharePartition.persisterReadResultGapWindow();
         assertNotNull(persisterReadResultGapWindow);
@@ -3531,8 +3535,8 @@ public class SharePartitionTest {
         sharePartition.maybeInitialize();
         // After initialization is successful, the startOffset can move ahead because the very first batch in cached state
         // is in a Terminal state (11 -> 20 ACKNOWLEDGED). Thus, start offset will move past it and the only batch remaining
-        // in cached state will be (31 -> 40) ARCHIVED. This, instead of 20, inFlightTerminalRecords is 10.
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        // in cached state will be (31 -> 40) ARCHIVED. This, instead of 20, deliveryCompleteCount is 10.
+        assertEquals(10, sharePartition.deliveryCompleteCount());
 
         // Creating 3 batches of records with a total of 8 records
         ByteBuffer buffer = ByteBuffer.allocate(4096);
@@ -3584,7 +3588,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         sharePartition.maybeInitialize();
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        assertEquals(10, sharePartition.deliveryCompleteCount());
 
         // Creating 3 batches of records with a total of 8 records
         ByteBuffer buffer = ByteBuffer.allocate(4096);
@@ -3634,7 +3638,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         sharePartition.maybeInitialize();
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Creating 3 batches of records with a total of 8 records
         ByteBuffer buffer = ByteBuffer.allocate(4096);
@@ -3684,7 +3688,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         sharePartition.maybeInitialize();
-        assertEquals(17, sharePartition.inFlightTerminalRecords());
+        assertEquals(17, sharePartition.deliveryCompleteCount());
 
         ByteBuffer buffer = ByteBuffer.allocate(4096);
         memoryRecordsBuilder(buffer, 10, 11).close();
@@ -3734,7 +3738,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         sharePartition.maybeInitialize();
-        assertEquals(20, sharePartition.inFlightTerminalRecords());
+        assertEquals(20, sharePartition.deliveryCompleteCount());
 
         // Creating 2 batches starting from 21, such that there is a natural gap from 11 to 20
         ByteBuffer buffer = ByteBuffer.allocate(4096);
@@ -3779,7 +3783,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         sharePartition.maybeInitialize();
-        assertEquals(20, sharePartition.inFlightTerminalRecords());
+        assertEquals(20, sharePartition.deliveryCompleteCount());
 
         // Creating 2 batches starting from 16, such that there is a natural gap from 11 to 15
         ByteBuffer buffer = ByteBuffer.allocate(4096);
@@ -3826,7 +3830,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         sharePartition.maybeInitialize();
-        assertEquals(20, sharePartition.inFlightTerminalRecords());
+        assertEquals(20, sharePartition.deliveryCompleteCount());
 
         // Creating 3 batches starting from 11, such that there is a natural gap from 26 to 30
         ByteBuffer buffer = ByteBuffer.allocate(4096);
@@ -3882,7 +3886,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         sharePartition.maybeInitialize();
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        assertEquals(10, sharePartition.deliveryCompleteCount());
 
         // Fetched records are from 21 to 35
         MemoryRecords records = memoryRecords(21, 15);
@@ -3934,7 +3938,7 @@ public class SharePartitionTest {
 
         assertNotNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
@@ -3949,9 +3953,9 @@ public class SharePartitionTest {
 
         assertEquals(1, sharePartitionMetrics.acquisitionLockTimeoutPerSec().count());
         assertTrue(sharePartitionMetrics.acquisitionLockTimeoutPerSec().meanRate() > 0);
-        // Since the delivery attempts are not exhausted, the inFlightTerminalRecords will still be 0 as the state
+        // Since the delivery attempts are not exhausted, the deliveryCompleteCount will still be 0 as the state
         // of the record is AVAILABLE.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -3965,7 +3969,7 @@ public class SharePartitionTest {
 
         assertEquals(1, sharePartition.timer().size());
         assertNotNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
@@ -3980,9 +3984,9 @@ public class SharePartitionTest {
 
         assertEquals(5, sharePartitionMetrics.acquisitionLockTimeoutPerSec().count());
         assertTrue(sharePartitionMetrics.acquisitionLockTimeoutPerSec().meanRate() > 0);
-        // Since the delivery attempts are not exhausted, the inFlightTerminalRecords will still be 0 as the state
+        // Since the delivery attempts are not exhausted, the deliveryCompleteCount will still be 0 as the state
         // of the record is AVAILABLE.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -3997,7 +4001,7 @@ public class SharePartitionTest {
 
         assertNotNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Add records from 0-9 offsets, 5-9 should be acquired and 0-4 should be ignored.
         fetchAcquiredRecords(sharePartition, memoryRecords(10), 5);
@@ -4020,9 +4024,9 @@ public class SharePartitionTest {
 
         assertEquals(10, sharePartitionMetrics.acquisitionLockTimeoutPerSec().count());
         assertTrue(sharePartitionMetrics.acquisitionLockTimeoutPerSec().meanRate() > 0);
-        // Since the delivery attempts are not exhausted, the inFlightTerminalRecords will still be 0 as the state
+        // Since the delivery attempts are not exhausted, the deliveryCompleteCount will still be 0 as the state
         // of the record is AVAILABLE.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -4036,7 +4040,7 @@ public class SharePartitionTest {
 
         assertNotNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
@@ -4047,7 +4051,7 @@ public class SharePartitionTest {
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> assertionFailedMessage(sharePartition, Map.of(10L, List.of())));
 
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Acquire the same batch again.
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
@@ -4055,7 +4059,7 @@ public class SharePartitionTest {
         // Acquisition lock timeout task should be created on re-acquire action.
         assertNotNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -4067,11 +4071,11 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
 
-        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(0, 0, List.of((byte) 2))));
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(0, 0, List.of(AcknowledgeType.RELEASE.id))));
 
         assertNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
         assertEquals(0, sharePartition.timer().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         assertEquals(0, sharePartition.nextFetchOffset());
         assertEquals(1, sharePartition.cachedState().size());
@@ -4089,7 +4093,7 @@ public class SharePartitionTest {
                         sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask() == null,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> assertionFailedMessage(sharePartition, Map.of(0L, List.of())));
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -4101,14 +4105,14 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
 
-        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(5, 14, List.of((byte) 2))));
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(5, 14, List.of(AcknowledgeType.RELEASE.id))));
 
         assertEquals(5, sharePartition.nextFetchOffset());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).batchState());
         assertEquals(1, sharePartition.cachedState().get(5L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertEquals(0, sharePartition.timer().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Allowing acquisition lock to expire. This will not cause any change to cached state map since the batch is already acknowledged.
         // Hence, the acquisition lock timeout task would be cancelled already.
@@ -4120,7 +4124,7 @@ public class SharePartitionTest {
                         sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask() == null,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> assertionFailedMessage(sharePartition, Map.of(5L, List.of())));
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -4154,14 +4158,14 @@ public class SharePartitionTest {
 
         sharePartition.acknowledge(MEMBER_ID,
                 // Do not send gap offsets to verify that they are ignored and accepted as per client ack.
-                List.of(new ShareAcknowledgementBatch(5, 18, List.of((byte) 1))));
+                List.of(new ShareAcknowledgementBatch(5, 18, List.of(AcknowledgeType.ACCEPT.id))));
 
         assertNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
         assertNotNull(sharePartition.cachedState().get(1L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
         // All the acquired records except 1 -> 2 have been acknowledged.
-        assertEquals(11, sharePartition.inFlightTerminalRecords());
+        assertEquals(11, sharePartition.deliveryCompleteCount());
 
         // Allowing acquisition lock to expire. The acquisition lock timeout will cause release of records for batch with starting offset 1.
         // Since, other records have been acknowledged.
@@ -4178,7 +4182,7 @@ public class SharePartitionTest {
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(1L).batchState());
         assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(5L).batchState());
         assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(10L).batchState());
-        assertEquals(11, sharePartition.inFlightTerminalRecords());
+        assertEquals(11, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -4192,7 +4196,7 @@ public class SharePartitionTest {
 
         assertNotNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
@@ -4205,7 +4209,7 @@ public class SharePartitionTest {
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> assertionFailedMessage(sharePartition, Map.of(10L, List.of())));
 
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Acquire subset of records again.
         fetchAcquiredRecords(sharePartition, memoryRecords(12, 3), 3);
@@ -4249,7 +4253,7 @@ public class SharePartitionTest {
         assertNull(sharePartition.cachedState().get(10L).offsetState().get(15L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(10L).offsetState().get(16L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(10L).offsetState().get(17L).acquisitionLockTimeoutTask());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -4277,16 +4281,16 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, records2, 11);
         assertNotNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
         assertEquals(2, sharePartition.timer().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Acknowledging over subset of both batch with subset of gap offsets.
         sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(
                         6, 18, List.of(
-                        (byte) 1, (byte) 1, (byte) 1,
-                        (byte) 1, (byte) 1, (byte) 1,
-                        (byte) 0, (byte) 0, (byte) 1,
-                        (byte) 0, (byte) 1, (byte) 0,
-                        (byte) 1))));
+                        AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id,
+                        AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id,
+                        ACKNOWLEDGE_TYPE_GAP_ID, ACKNOWLEDGE_TYPE_GAP_ID, AcknowledgeType.ACCEPT.id,
+                        ACKNOWLEDGE_TYPE_GAP_ID, AcknowledgeType.ACCEPT.id, ACKNOWLEDGE_TYPE_GAP_ID,
+                        AcknowledgeType.ACCEPT.id))));
 
         assertNotNull(sharePartition.cachedState().get(5L).offsetState().get(5L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(6L).acquisitionLockTimeoutTask());
@@ -4303,7 +4307,7 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.cachedState().get(10L).offsetState().get(19L).acquisitionLockTimeoutTask());
         assertNotNull(sharePartition.cachedState().get(10L).offsetState().get(20L).acquisitionLockTimeoutTask());
         assertEquals(3, sharePartition.timer().size());
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        assertEquals(10, sharePartition.deliveryCompleteCount());
 
         // Allowing acquisition lock to expire for the offsets that have not been acknowledged yet.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
@@ -4348,7 +4352,7 @@ public class SharePartitionTest {
         assertNull(sharePartition.cachedState().get(10L).offsetState().get(18L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(10L).offsetState().get(19L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(10L).offsetState().get(20L).acquisitionLockTimeoutTask());
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        assertEquals(10, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -4380,7 +4384,7 @@ public class SharePartitionTest {
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> assertionFailedMessage(sharePartition, Map.of(10L, List.of())));
 
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 10), 10);
 
@@ -4401,7 +4405,7 @@ public class SharePartitionTest {
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> assertionFailedMessage(sharePartition, Map.of(10L, List.of())));
         // After the acquisition lock expires for the second time, the records should be archived as the max delivery count is reached.
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        assertEquals(10, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -4428,7 +4432,7 @@ public class SharePartitionTest {
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> assertionFailedMessage(sharePartition, Map.of(0L, List.of())));
 
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5), 5);
 
@@ -4479,7 +4483,7 @@ public class SharePartitionTest {
         // Since only first 5 records from the batch are archived, the batch remains in the cachedState, but the
         // start offset is updated
         assertEquals(5, sharePartition.startOffset());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -4505,7 +4509,7 @@ public class SharePartitionTest {
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> assertionFailedMessage(sharePartition, Map.of(0L, List.of())));
 
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         fetchAcquiredRecords(sharePartition, memoryRecords(10), 10);
 
@@ -4522,7 +4526,7 @@ public class SharePartitionTest {
                         sharePartition.nextFetchOffset() == 10,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> assertionFailedMessage(sharePartition, Map.of()));
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -4547,25 +4551,25 @@ public class SharePartitionTest {
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> assertionFailedMessage(sharePartition, Map.of(5L, List.of())));
 
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Acknowledge with ACCEPT type should throw InvalidRecordStateException since they've been released due to acquisition lock timeout.
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(MEMBER_ID,
-                List.of(new ShareAcknowledgementBatch(5, 9, List.of((byte) 1))));
+            List.of(new ShareAcknowledgementBatch(5, 9, List.of(AcknowledgeType.ACCEPT.id))));
         assertTrue(ackResult.isCompletedExceptionally());
         assertFutureThrows(InvalidRecordStateException.class, ackResult);
         assertNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertEquals(0, sharePartition.timer().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Try acknowledging with REJECT type should throw InvalidRecordStateException since they've been released due to acquisition lock timeout.
         ackResult = sharePartition.acknowledge(MEMBER_ID,
-                List.of(new ShareAcknowledgementBatch(5, 9, List.of((byte) 3))));
+                List.of(new ShareAcknowledgementBatch(5, 9, List.of(AcknowledgeType.REJECT.id))));
         assertTrue(ackResult.isCompletedExceptionally());
         assertFutureThrows(InvalidRecordStateException.class, ackResult);
         assertNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertEquals(0, sharePartition.timer().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -4580,8 +4584,8 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
 
-        // Acknowledge with REJECT type.
-        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(5, 6, List.of((byte) 2))));
+        // Acknowledge with RELEASE type.
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(5, 6, List.of(AcknowledgeType.RELEASE.id))));
 
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(5L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(6L).acquisitionLockTimeoutTask());
@@ -4589,10 +4593,10 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.cachedState().get(5L).offsetState().get(8L).acquisitionLockTimeoutTask());
         assertNotNull(sharePartition.cachedState().get(5L).offsetState().get(9L).acquisitionLockTimeoutTask());
         assertEquals(3, sharePartition.timer().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Acknowledge with ACCEPT type.
-        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(8, 9, List.of((byte) 1))));
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(8, 9, List.of(AcknowledgeType.ACCEPT.id))));
 
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(5L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(6L).acquisitionLockTimeoutTask());
@@ -4600,7 +4604,7 @@ public class SharePartitionTest {
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(8L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(9L).acquisitionLockTimeoutTask());
         assertEquals(1, sharePartition.timer().size());
-        assertEquals(2, sharePartition.inFlightTerminalRecords());
+        assertEquals(2, sharePartition.deliveryCompleteCount());
 
         // Allowing acquisition lock to expire will only affect the offsets that have not been acknowledged yet.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
@@ -4625,7 +4629,7 @@ public class SharePartitionTest {
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(7L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(8L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(9L).acquisitionLockTimeoutTask());
-        assertEquals(2, sharePartition.inFlightTerminalRecords());
+        assertEquals(2, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -4662,7 +4666,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testInFlightTerminalRecordsOnLockExpiryAndWriteFailureOnBatchLastDelivery() throws InterruptedException {
+    public void testDeliveryCompleteCountOnLockExpiryAndWriteFailureOnBatchLastDelivery() throws InterruptedException {
         Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister)
@@ -4684,7 +4688,7 @@ public class SharePartitionTest {
         assertEquals(2, sharePartition.timer().size());
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertNotNull(sharePartition.cachedState().get(15L).batchAcquisitionLockTimeoutTask());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Allowing acquisition lock to expire. Even if write share group state RPC fails, state transition still happens.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
@@ -4696,12 +4700,12 @@ public class SharePartitionTest {
                 sharePartition.cachedState().get(15L).batchAcquisitionLockTimeoutTask() == null,
             DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
             () -> assertionFailedMessage(sharePartition, Map.of(5L, List.of())));
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         fetchAcquiredRecords(sharePartition, memoryRecords(15, 10), 10);
         assertEquals(1, sharePartition.timer().size());
         assertNotNull(sharePartition.cachedState().get(15L).batchAcquisitionLockTimeoutTask());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns false.
         writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
@@ -4721,12 +4725,12 @@ public class SharePartitionTest {
             DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
             () -> assertionFailedMessage(sharePartition, Map.of(5L, List.of())));
 
-        // Even though the write state call failed, the records are still archived and inFlightTerminalRecords is updated.
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        // Even though the write state call failed, the records are still archived and deliveryCompleteCount is updated.
+        assertEquals(10, sharePartition.deliveryCompleteCount());
     }
 
     @Test
-    public void testInFlightTerminalRecordsOnLockExpiryAndWriteFailureOnOffsetLastDelivery() throws InterruptedException {
+    public void testDeliveryCompleteCountOnLockExpiryAndWriteFailureOnOffsetLastDelivery() throws InterruptedException {
         Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister)
@@ -4747,9 +4751,9 @@ public class SharePartitionTest {
         assertEquals(1, sharePartition.timer().size());
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
 
-        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(8, 9, List.of((byte) 1))));
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(8, 9, List.of(AcknowledgeType.ACCEPT.id))));
 
-        assertEquals(2, sharePartition.inFlightTerminalRecords());
+        assertEquals(2, sharePartition.deliveryCompleteCount());
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns false.
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
@@ -4780,7 +4784,7 @@ public class SharePartitionTest {
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(8L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(9L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(10L).acquisitionLockTimeoutTask());
-        assertEquals(2, sharePartition.inFlightTerminalRecords());
+        assertEquals(2, sharePartition.deliveryCompleteCount());
 
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 1), 1);
 
@@ -4810,8 +4814,8 @@ public class SharePartitionTest {
             DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
             () -> assertionFailedMessage(sharePartition, Map.of(5L, List.of(5L, 6L, 7L, 10L))));
 
-        // Even though the write state call failed, the record is still archived and inFlightTerminalRecords is updated.
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        // Even though the write state call failed, the record is still archived and deliveryCompleteCount is updated.
+        assertEquals(3, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -4835,7 +4839,7 @@ public class SharePartitionTest {
         assertEquals(1, sharePartition.timer().size());
         assertNotNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
 
-        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(8, 9, List.of((byte) 1))));
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(8, 9, List.of(AcknowledgeType.ACCEPT.id))));
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns false.
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
@@ -4873,7 +4877,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         fetchAcquiredRecords(sharePartition, memoryRecords(1), 1);
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertNull(releaseResult.join());
@@ -4885,7 +4889,7 @@ public class SharePartitionTest {
         // Release delivery count.
         assertEquals(0, sharePartition.cachedState().get(0L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(0L).offsetState());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -4893,7 +4897,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 10), 10);
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertNull(releaseResult.join());
@@ -4904,7 +4908,7 @@ public class SharePartitionTest {
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).batchState());
         assertEquals(0, sharePartition.cachedState().get(5L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(5L).offsetState());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -4919,11 +4923,11 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, records1, 2);
         fetchAcquiredRecords(sharePartition, records2, 9);
 
-        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(5, 18, List.of((byte) 1))));
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(5, 18, List.of(AcknowledgeType.ACCEPT.id))));
         // After the acknowledgements, the cached state has 11 Terminal records ->
         // (5 -> 6)
         // (10 -> 18)
-        assertEquals(11, sharePartition.inFlightTerminalRecords());
+        assertEquals(11, sharePartition.deliveryCompleteCount());
 
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertNull(releaseResult.join());
@@ -4934,7 +4938,7 @@ public class SharePartitionTest {
         assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(10L).batchState());
         assertNull(sharePartition.cachedState().get(5L).offsetState());
         assertNull(sharePartition.cachedState().get(10L).offsetState());
-        assertEquals(11, sharePartition.inFlightTerminalRecords());
+        assertEquals(11, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -4957,16 +4961,16 @@ public class SharePartitionTest {
 
         // Acknowledging over subset of both batch with subset of gap offsets.
         sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(6, 18, List.of(
-                (byte) 1, (byte) 1, (byte) 1,
-                (byte) 1, (byte) 1, (byte) 1,
-                (byte) 0, (byte) 0, (byte) 1,
-                (byte) 0, (byte) 1, (byte) 0,
-                (byte) 1))));
+                AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id,
+                AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id,
+                ACKNOWLEDGE_TYPE_GAP_ID, ACKNOWLEDGE_TYPE_GAP_ID, AcknowledgeType.ACCEPT.id,
+                ACKNOWLEDGE_TYPE_GAP_ID, AcknowledgeType.ACCEPT.id, ACKNOWLEDGE_TYPE_GAP_ID,
+                AcknowledgeType.ACCEPT.id))));
 
         // After the acknowledgements, the cached state has 10 Terminal records ->
         // 6
         // (10 -> 18)
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        assertEquals(10, sharePartition.deliveryCompleteCount());
 
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertNull(releaseResult.join());
@@ -4992,7 +4996,7 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        assertEquals(10, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -5014,13 +5018,13 @@ public class SharePartitionTest {
 
         // Acknowledging over subset of second batch with subset of gap offsets.
         sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(10, 18, List.of(
-                (byte) 1, (byte) 1, (byte) 0, (byte) 0,
-                (byte) 1, (byte) 0, (byte) 1, (byte) 0,
-                (byte) 1))));
+                AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id, ACKNOWLEDGE_TYPE_GAP_ID, ACKNOWLEDGE_TYPE_GAP_ID,
+                AcknowledgeType.ACCEPT.id, ACKNOWLEDGE_TYPE_GAP_ID, AcknowledgeType.ACCEPT.id, ACKNOWLEDGE_TYPE_GAP_ID,
+                AcknowledgeType.ACCEPT.id))));
 
         // After the acknowledgements, the cached state has 9 Terminal records ->
         // (10 -> 18)
-        assertEquals(9, sharePartition.inFlightTerminalRecords());
+        assertEquals(9, sharePartition.deliveryCompleteCount());
 
         // Release acquired records for "member-1".
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
@@ -5044,7 +5048,7 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
-        assertEquals(9, sharePartition.inFlightTerminalRecords());
+        assertEquals(9, sharePartition.deliveryCompleteCount());
 
         // Release acquired records for "member-2".
         releaseResult = sharePartition.releaseAcquiredRecords("member-2");
@@ -5068,7 +5072,7 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
-        assertEquals(9, sharePartition.inFlightTerminalRecords());
+        assertEquals(9, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -5090,13 +5094,13 @@ public class SharePartitionTest {
 
         // Acknowledging over subset of second batch with subset of gap offsets.
         sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(10, 18, List.of(
-                (byte) 1, (byte) 1, (byte) 0, (byte) 0,
-                (byte) 1, (byte) 0, (byte) 1, (byte) 0,
-                (byte) 1))));
+                AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id, ACKNOWLEDGE_TYPE_GAP_ID, ACKNOWLEDGE_TYPE_GAP_ID,
+                AcknowledgeType.ACCEPT.id, ACKNOWLEDGE_TYPE_GAP_ID, AcknowledgeType.ACCEPT.id, ACKNOWLEDGE_TYPE_GAP_ID,
+                AcknowledgeType.ACCEPT.id))));
 
         // After the acknowledgements, the cached state has 9 Terminal records ->
         // (10 -> 18)
-        assertEquals(9, sharePartition.inFlightTerminalRecords());
+        assertEquals(9, sharePartition.deliveryCompleteCount());
 
         // Release acquired records for "member-1".
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
@@ -5120,14 +5124,14 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
-        assertEquals(9, sharePartition.inFlightTerminalRecords());
+        assertEquals(9, sharePartition.deliveryCompleteCount());
 
         // Ack subset of records by "member-2".
         sharePartition.acknowledge("member-2",
-                List.of(new ShareAcknowledgementBatch(5, 5, List.of((byte) 1))));
+                List.of(new ShareAcknowledgementBatch(5, 5, List.of(AcknowledgeType.ACCEPT.id))));
         // After the acknowledgements, the startOffset will be upadated to 6, since offset 5 is Terminal. Hence
-        // inFlightTerminalRecords will remain 9.
-        assertEquals(9, sharePartition.inFlightTerminalRecords());
+        // deliveryCompleteCount will remain 9.
+        assertEquals(9, sharePartition.deliveryCompleteCount());
 
         // Release acquired records for "member-2".
         releaseResult = sharePartition.releaseAcquiredRecords("member-2");
@@ -5153,7 +5157,7 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
-        assertEquals(9, sharePartition.inFlightTerminalRecords());
+        assertEquals(9, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -5173,12 +5177,12 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
 
         sharePartition.acknowledge(MEMBER_ID,
-                List.of(new ShareAcknowledgementBatch(5, 6, List.of((byte) 2))));
+                List.of(new ShareAcknowledgementBatch(5, 6, List.of(AcknowledgeType.RELEASE.id))));
 
         sharePartition.acknowledge(MEMBER_ID,
-                List.of(new ShareAcknowledgementBatch(8, 9, List.of((byte) 1))));
+                List.of(new ShareAcknowledgementBatch(8, 9, List.of(AcknowledgeType.ACCEPT.id))));
 
-        assertEquals(2, sharePartition.inFlightTerminalRecords());
+        assertEquals(2, sharePartition.deliveryCompleteCount());
 
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertNull(releaseResult.join());
@@ -5192,7 +5196,7 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(8L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(9L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(5L).offsetState());
-        assertEquals(2, sharePartition.inFlightTerminalRecords());
+        assertEquals(2, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -5208,8 +5212,8 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, records2, 5);
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(10, 14, List.of((byte) 2))));
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+                new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.RELEASE.id))));
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         fetchAcquiredRecords(sharePartition, records2, 5);
 
@@ -5221,7 +5225,7 @@ public class SharePartitionTest {
         assertEquals(2, sharePartition.cachedState().size());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(10L).batchState());
         assertNull(sharePartition.cachedState().get(10L).offsetState());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -5242,12 +5246,12 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, records3, 5);
 
         sharePartition.acknowledge(MEMBER_ID, new ArrayList<>(List.of(
-                new ShareAcknowledgementBatch(13, 16, List.of((byte) 2)),
-                new ShareAcknowledgementBatch(17, 19, List.of((byte) 3)),
-                new ShareAcknowledgementBatch(20, 24, List.of((byte) 2))
+                new ShareAcknowledgementBatch(13, 16, List.of(AcknowledgeType.RELEASE.id)),
+                new ShareAcknowledgementBatch(17, 19, List.of(AcknowledgeType.REJECT.id)),
+                new ShareAcknowledgementBatch(20, 24, List.of(AcknowledgeType.RELEASE.id))
         )));
 
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
 
         // Send next batch from offset 13, only 2 records should be acquired.
         fetchAcquiredRecords(sharePartition, records1, 2);
@@ -5285,7 +5289,7 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(18L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(19L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(15L).offsetState());
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -5306,15 +5310,15 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, records3, 5);
 
         sharePartition.acknowledge(MEMBER_ID, new ArrayList<>(List.of(
-                new ShareAcknowledgementBatch(10, 12, List.of((byte) 1)),
-                new ShareAcknowledgementBatch(13, 16, List.of((byte) 2)),
-                new ShareAcknowledgementBatch(17, 19, List.of((byte) 3)),
-                new ShareAcknowledgementBatch(20, 24, List.of((byte) 2))
+                new ShareAcknowledgementBatch(10, 12, List.of(AcknowledgeType.ACCEPT.id)),
+                new ShareAcknowledgementBatch(13, 16, List.of(AcknowledgeType.RELEASE.id)),
+                new ShareAcknowledgementBatch(17, 19, List.of(AcknowledgeType.REJECT.id)),
+                new ShareAcknowledgementBatch(20, 24, List.of(AcknowledgeType.RELEASE.id))
         )));
 
         // After acknowledgements, since offsets 10 -> 12 are at the start of the caches state and are in Terminal state,
         // the start offset will be updated to 13. From the remaining offstes in flight, only records (17 -> 19) are in Terminal state.
-        assertEquals(3, sharePartition.inFlightTerminalRecords());
+        assertEquals(3, sharePartition.deliveryCompleteCount());
 
         // Send next batch from offset 13, only 2 records should be acquired.
         fetchAcquiredRecords(sharePartition, records1, 2);
@@ -5323,13 +5327,13 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, records3, 5);
 
         sharePartition.acknowledge(MEMBER_ID, new ArrayList<>(List.of(
-            new ShareAcknowledgementBatch(13, 16, List.of((byte) 2)),
-            new ShareAcknowledgementBatch(20, 24, List.of((byte) 2))
+            new ShareAcknowledgementBatch(13, 16, List.of(AcknowledgeType.RELEASE.id)),
+            new ShareAcknowledgementBatch(20, 24, List.of(AcknowledgeType.RELEASE.id))
         )));
 
         assertEquals(25, sharePartition.nextFetchOffset());
         assertEquals(0, sharePartition.cachedState().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -5339,9 +5343,9 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 7), 7);
 
         sharePartition.acknowledge(MEMBER_ID,
-                List.of(new ShareAcknowledgementBatch(5, 7, List.of((byte) 1))));
+                List.of(new ShareAcknowledgementBatch(5, 7, List.of(AcknowledgeType.ACCEPT.id))));
 
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Release acquired records subset with another member.
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords("member-2");
@@ -5357,7 +5361,7 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(10L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
         expectedOffsetStateMap.put(11L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(5L).offsetState());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -5386,7 +5390,7 @@ public class SharePartitionTest {
         assertEquals(1, sharePartition.cachedState().size());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(5L).batchMemberId());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -5408,9 +5412,9 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 6), 6);
 
         sharePartition.acknowledge(MEMBER_ID,
-                List.of(new ShareAcknowledgementBatch(8, 9, List.of((byte) 1))));
+                List.of(new ShareAcknowledgementBatch(8, 9, List.of(AcknowledgeType.ACCEPT.id))));
 
-        assertEquals(2, sharePartition.inFlightTerminalRecords());
+        assertEquals(2, sharePartition.deliveryCompleteCount());
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns false.
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
@@ -5437,7 +5441,7 @@ public class SharePartitionTest {
         assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(8L).memberId());
         assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(9L).memberId());
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(10L).memberId());
-        assertEquals(2, sharePartition.inFlightTerminalRecords());
+        assertEquals(2, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -5458,7 +5462,7 @@ public class SharePartitionTest {
         // Acquisition lock timer task would be cancelled by the release acquired records operation.
         assertNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
         assertEquals(0, sharePartition.timer().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -5483,13 +5487,13 @@ public class SharePartitionTest {
         // Acknowledging over subset of both batch with subset of gap offsets.
         sharePartition.acknowledge(MEMBER_ID,
                 List.of(new ShareAcknowledgementBatch(6, 18, List.of(
-                        (byte) 1, (byte) 1, (byte) 1,
-                        (byte) 1, (byte) 1, (byte) 1,
-                        (byte) 0, (byte) 0, (byte) 1,
-                        (byte) 0, (byte) 1, (byte) 0,
-                        (byte) 1))));
+                        AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id,
+                        AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id,
+                        ACKNOWLEDGE_TYPE_GAP_ID, ACKNOWLEDGE_TYPE_GAP_ID, AcknowledgeType.ACCEPT.id,
+                        ACKNOWLEDGE_TYPE_GAP_ID, AcknowledgeType.ACCEPT.id, ACKNOWLEDGE_TYPE_GAP_ID,
+                        AcknowledgeType.ACCEPT.id))));
 
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        assertEquals(10, sharePartition.deliveryCompleteCount());
 
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertNull(releaseResult.join());
@@ -5533,11 +5537,11 @@ public class SharePartitionTest {
         assertNull(sharePartition.cachedState().get(10L).offsetState().get(20L).acquisitionLockTimeoutTask());
 
         assertEquals(0, sharePartition.timer().size());
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        assertEquals(10, sharePartition.deliveryCompleteCount());
     }
 
     @Test
-    public void testInFlightTerminalRecordsWhenStaleBatchesAreArchived() {
+    public void testDeliveryCompleteCountWhenStaleBatchesAreArchived() {
         Persister persister = Mockito.mock(Persister.class);
         ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
         Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(List.of(
@@ -5553,7 +5557,7 @@ public class SharePartitionTest {
 
         sharePartition.maybeInitialize();
         assertEquals(11, sharePartition.nextFetchOffset());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Fetched records are from 21 to 30
         MemoryRecords records = memoryRecords(21, 10);
@@ -5574,12 +5578,12 @@ public class SharePartitionTest {
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(11L).batchState());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(21L).batchState());
 
-        // Since the records 11 -> 20 are ARCHIVED, inFlightTerminalRecords will be 10.
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        // Since the records 11 -> 20 are ARCHIVED, deliveryCompleteCount will be 10.
+        assertEquals(10, sharePartition.deliveryCompleteCount());
     }
 
     @Test
-    public void testInFlightTerminalRecordsWhenStaleOffsetsAreArchived() {
+    public void testDeliveryCompleteCountWhenStaleOffsetsAreArchived() {
         Persister persister = Mockito.mock(Persister.class);
         ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
         Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(List.of(
@@ -5595,7 +5599,7 @@ public class SharePartitionTest {
 
         sharePartition.maybeInitialize();
         assertEquals(11, sharePartition.nextFetchOffset());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Fetched records are from 21 to 30
         MemoryRecords records = memoryRecords(16, 15);
@@ -5626,8 +5630,8 @@ public class SharePartitionTest {
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(11L).offsetState().get(15L).state());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(21L).batchState());
 
-        // Since the records 11 -> 15 are ARCHIVED, inFlightTerminalRecords will be 5.
-        assertEquals(5, sharePartition.inFlightTerminalRecords());
+        // Since the records 11 -> 15 are ARCHIVED, deliveryCompleteCount will be 5.
+        assertEquals(5, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -5659,16 +5663,16 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(32, 5), 5);
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(2, 6, List.of((byte) 1)),
-                new ShareAcknowledgementBatch(12, 16, List.of((byte) 2)),
-                new ShareAcknowledgementBatch(22, 26, List.of((byte) 2)),
-                new ShareAcknowledgementBatch(27, 31, List.of((byte) 3))
+                new ShareAcknowledgementBatch(2, 6, List.of(AcknowledgeType.ACCEPT.id)),
+                new ShareAcknowledgementBatch(12, 16, List.of(AcknowledgeType.RELEASE.id)),
+                new ShareAcknowledgementBatch(22, 26, List.of(AcknowledgeType.RELEASE.id)),
+                new ShareAcknowledgementBatch(27, 31, List.of(AcknowledgeType.REJECT.id))
         ));
 
         // After the acknowledgements, the records in Terminal state are ->
         // 27 -> 31: ARCHIVED
         // Records 2 -> 6 are ACKNOWLEDGED, but since they are at the start of the cache, the start offset will be moved to 7.
-        assertEquals(5, sharePartition.inFlightTerminalRecords());
+        assertEquals(5, sharePartition.deliveryCompleteCount());
 
         // LSO is at 20.
         sharePartition.updateCacheAndOffsets(20);
@@ -5704,8 +5708,8 @@ public class SharePartitionTest {
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(32L).batchState());
         assertNotNull(sharePartition.cachedState().get(32L).batchAcquisitionLockTimeoutTask());
         // After the LSO is moved, AVAILABLE batches are ARCHIVED. Thus, the records 12 -> 16 will be ARCHIVED. Since
-        // these are prior to the new startOffset, inFlightTerminalRecords remains the same.
-        assertEquals(5, sharePartition.inFlightTerminalRecords());
+        // these are prior to the new startOffset, deliveryCompleteCount remains the same.
+        assertEquals(5, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -5722,16 +5726,16 @@ public class SharePartitionTest {
 
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-            new ShareAcknowledgementBatch(2, 6, List.of((byte) 2)),
-            new ShareAcknowledgementBatch(12, 16, List.of((byte) 3)),
-            new ShareAcknowledgementBatch(22, 26, List.of((byte) 2)),
-            new ShareAcknowledgementBatch(27, 31, List.of((byte) 3))
+            new ShareAcknowledgementBatch(2, 6, List.of(AcknowledgeType.RELEASE.id)),
+            new ShareAcknowledgementBatch(12, 16, List.of(AcknowledgeType.REJECT.id)),
+            new ShareAcknowledgementBatch(22, 26, List.of(AcknowledgeType.RELEASE.id)),
+            new ShareAcknowledgementBatch(27, 31, List.of(AcknowledgeType.REJECT.id))
         ));
 
         // After the acknowledgements, the records in Terminal state are ->
         // 12 -> 16: ARCHIVED
         // 27 -> 31: ARCHIVED
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        assertEquals(10, sharePartition.deliveryCompleteCount());
 
         // LSO is at 20.
         sharePartition.updateCacheAndOffsets(20);
@@ -5770,8 +5774,8 @@ public class SharePartitionTest {
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(32L).batchState());
         assertNotNull(sharePartition.cachedState().get(32L).batchAcquisitionLockTimeoutTask());
         // After the LSO is moved, the number of Terminal records between old and new start offsets is calculated.
-        // In this case it is 5 (for the records 12 -> 16). Thus, inFlightTerminalRecords is decremented by 5.
-        assertEquals(5, sharePartition.inFlightTerminalRecords());
+        // In this case it is 5 (for the records 12 -> 16). Thus, deliveryCompleteCount is decremented by 5.
+        assertEquals(5, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -5788,18 +5792,18 @@ public class SharePartitionTest {
 
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-            new ShareAcknowledgementBatch(2, 6, List.of((byte) 2)),
-            new ShareAcknowledgementBatch(12, 16, List.of((byte) 3)),
-            new ShareAcknowledgementBatch(19, 21, List.of((byte) 3)),
-            new ShareAcknowledgementBatch(22, 26, List.of((byte) 2)),
-            new ShareAcknowledgementBatch(27, 31, List.of((byte) 3))
+            new ShareAcknowledgementBatch(2, 6, List.of(AcknowledgeType.RELEASE.id)),
+            new ShareAcknowledgementBatch(12, 16, List.of(AcknowledgeType.REJECT.id)),
+            new ShareAcknowledgementBatch(19, 21, List.of(AcknowledgeType.REJECT.id)),
+            new ShareAcknowledgementBatch(22, 26, List.of(AcknowledgeType.RELEASE.id)),
+            new ShareAcknowledgementBatch(27, 31, List.of(AcknowledgeType.REJECT.id))
         ));
 
         // After the acknowledgements, the records in Terminal state are ->
         // 12 -> 16: ARCHIVED
         // 19 -> 21: ARCHIVED
         // 27 -> 31: ARCHIVED
-        assertEquals(13, sharePartition.inFlightTerminalRecords());
+        assertEquals(13, sharePartition.deliveryCompleteCount());
 
         // LSO is at 20.
         sharePartition.updateCacheAndOffsets(20);
@@ -5840,8 +5844,8 @@ public class SharePartitionTest {
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(32L).batchState());
         assertNotNull(sharePartition.cachedState().get(32L).batchAcquisitionLockTimeoutTask());
         // After the LSO is moved, the number of Terminal records between old and new start offsets is calculated.
-        // In this case it is 6 (for the records 12 -> 16 and 19). Thus, inFlightTerminalRecords is decremented by 6.
-        assertEquals(7, sharePartition.inFlightTerminalRecords());
+        // In this case it is 6 (for the records 12 -> 16 and 19). Thus, deliveryCompleteCount is decremented by 6.
+        assertEquals(7, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -5860,11 +5864,11 @@ public class SharePartitionTest {
         // 3. 31 -> 40: AVAILABLE
         // 4. 41 -> 50: ACQUIRED
         sharePartition.acknowledge(MEMBER_ID, List.of(
-            new ShareAcknowledgementBatch(11, 20, List.of((byte) 2)),
-            new ShareAcknowledgementBatch(31, 40, List.of((byte) 2))
+            new ShareAcknowledgementBatch(11, 20, List.of(AcknowledgeType.RELEASE.id)),
+            new ShareAcknowledgementBatch(31, 40, List.of(AcknowledgeType.RELEASE.id))
         ));
 
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Move the LSO to 41. When the LSO moves ahead, all batches that are AVAILABLE before the new LSO will be ARCHIVED.
         // Thus, the state of the share partition will be:
@@ -5886,13 +5890,13 @@ public class SharePartitionTest {
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(31L).batchState());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(41L).batchState());
         // There are no records in flight in Terminal state.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // The client acknowledges the batch 21 -> 30. Since this batch is before the LSO, nothing will be done and these
         // records will remain in the ACQUIRED state.
-        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(21L, 30L, List.of((byte) 2))));
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(21L, 30L, List.of(AcknowledgeType.RELEASE.id))));
         // The acknowledgements make no difference to in flight records.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // The batch is still in ACQUIRED state.
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(21L).batchState());
@@ -5902,7 +5906,7 @@ public class SharePartitionTest {
         sharePartition.cachedState().get(21L).batchAcquisitionLockTimeoutTask().run();
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(21L).batchState());
         // Even when the acquisition lock expires, this happens for records before the LSO, hence in flight terminal records remain 0.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -5921,11 +5925,11 @@ public class SharePartitionTest {
         // 3. 31 -> 40: AVAILABLE
         // 4. 41 -> 50: ACQUIRED
         sharePartition.acknowledge(MEMBER_ID, List.of(
-            new ShareAcknowledgementBatch(11, 20, List.of((byte) 2)),
-            new ShareAcknowledgementBatch(31, 40, List.of((byte) 2))
+            new ShareAcknowledgementBatch(11, 20, List.of(AcknowledgeType.RELEASE.id)),
+            new ShareAcknowledgementBatch(31, 40, List.of(AcknowledgeType.RELEASE.id))
         ));
 
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Move the LSO to 36. When the LSO moves ahead, all records that are AVAILABLE before the new LSO will be ARCHIVED.
         // Thus, the state of the share partition will be:
@@ -5956,22 +5960,22 @@ public class SharePartitionTest {
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(31L).offsetState().get(39L).state());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(31L).offsetState().get(40L).state());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(41L).batchState());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // The client acknowledges the batch 21 -> 30. Since this batch is before the LSO, nothing will be done and these
         // records will remain in the ACQUIRED state.
-        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(21L, 30L, List.of((byte) 2))));
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(21L, 30L, List.of(AcknowledgeType.RELEASE.id))));
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // The batch is still in ACQUIRED state.
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(21L).batchState());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Once the acquisition lock timer task for the batch 21 -> 30 is expired, these records will directly be
         // ARCHIVED.
         sharePartition.cachedState().get(21L).batchAcquisitionLockTimeoutTask().run();
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(21L).batchState());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -5982,7 +5986,7 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(7, 5), 5);
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(4, 8, List.of((byte) 1))));
+                new ShareAcknowledgementBatch(4, 8, List.of(AcknowledgeType.ACCEPT.id))));
 
         // LSO at is 5.
         sharePartition.updateCacheAndOffsets(5);
@@ -6117,7 +6121,7 @@ public class SharePartitionTest {
 
         // Acknowledge with ACCEPT action.
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(7, 8, List.of((byte) 1))));
+                new ShareAcknowledgementBatch(7, 8, List.of(AcknowledgeType.ACCEPT.id))));
 
         // LSO is at 7.
         sharePartition.updateCacheAndOffsets(7);
@@ -6163,7 +6167,7 @@ public class SharePartitionTest {
 
         // Acknowledge with RELEASE action.
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(7, 8, List.of((byte) 2))));
+                new ShareAcknowledgementBatch(7, 8, List.of(AcknowledgeType.RELEASE.id))));
 
         // LSO is at 7.
         sharePartition.updateCacheAndOffsets(7);
@@ -6195,7 +6199,7 @@ public class SharePartitionTest {
 
         // Acknowledge with RELEASE action.
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(7, 8, List.of((byte) 2))));
+                new ShareAcknowledgementBatch(7, 8, List.of(AcknowledgeType.RELEASE.id))));
 
         // LSO is at 11.
         sharePartition.updateCacheAndOffsets(11);
@@ -6227,8 +6231,8 @@ public class SharePartitionTest {
 
         // Acknowledge with RELEASE action.
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(7, 8, List.of((byte) 2)),
-                new ShareAcknowledgementBatch(11, 11, List.of((byte) 2))));
+                new ShareAcknowledgementBatch(7, 8, List.of(AcknowledgeType.RELEASE.id)),
+                new ShareAcknowledgementBatch(11, 11, List.of(AcknowledgeType.RELEASE.id))));
 
         // LSO is at 11.
         sharePartition.updateCacheAndOffsets(11);
@@ -6260,7 +6264,7 @@ public class SharePartitionTest {
 
         // Acknowledge with RELEASE action.
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(7, 8, List.of((byte) 2))));
+                new ShareAcknowledgementBatch(7, 8, List.of(AcknowledgeType.RELEASE.id))));
 
         // LSO is at 12.
         sharePartition.updateCacheAndOffsets(12);
@@ -6350,7 +6354,7 @@ public class SharePartitionTest {
 
         // Acknowledge with RELEASE action.
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(10, 14, List.of((byte) 2))));
+                new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.RELEASE.id))));
 
         // LSO is at 10.
         sharePartition.updateCacheAndOffsets(10);
@@ -6382,9 +6386,11 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, records2, 9);
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(5, 6, List.of((byte) 2)),
+                new ShareAcknowledgementBatch(5, 6, List.of(AcknowledgeType.RELEASE.id)),
                 new ShareAcknowledgementBatch(10, 18, List.of(
-                        (byte) 2, (byte) 2, (byte) 2, (byte) 2, (byte) 2, (byte) 0, (byte) 0, (byte) 0, (byte) 2
+                        AcknowledgeType.RELEASE.id, AcknowledgeType.RELEASE.id, AcknowledgeType.RELEASE.id,
+                        AcknowledgeType.RELEASE.id, AcknowledgeType.RELEASE.id, ACKNOWLEDGE_TYPE_GAP_ID,
+                        ACKNOWLEDGE_TYPE_GAP_ID, ACKNOWLEDGE_TYPE_GAP_ID, AcknowledgeType.RELEASE.id
                 ))));
 
         // LSO is at 18.
@@ -6429,7 +6435,7 @@ public class SharePartitionTest {
 
         sharePartition.maybeInitialize();
         assertEquals(11, sharePartition.nextFetchOffset());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Fetched records are from 11 to 20
         MemoryRecords records = memoryRecords(10, 11);
@@ -6452,17 +6458,17 @@ public class SharePartitionTest {
         sharePartition.updateCacheAndOffsets(21);
 
         // After the LSO is moved to 21, all the records after new Start offset are in non-Terminal states. Thus,
-        // inFlightTerminalRecords is not changed.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // deliveryCompleteCount is not changed.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(11L).batchState());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(21L).batchState());
 
         // Acknowledge the acquired records. Since these records are present before the startOffset, these acknowledgements
         // will simply be ignored.
-        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(11L, 20L, List.of((byte) 2))));
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(11L, 20L, List.of(AcknowledgeType.RELEASE.id))));
 
-        // Since the acknowledgements are ignored, the inFlightTerminalRecords should not change.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // Since the acknowledgements are ignored, the deliveryCompleteCount should not change.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(11L).batchState());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(21L).batchState());
 
@@ -6475,8 +6481,8 @@ public class SharePartitionTest {
         // moved to the ARCHIVED state.
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(11L).batchState());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(21L).batchState());
-        // Since these records are present before the start offset, the inFlightTerminalRecords should not change.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // Since these records are present before the start offset, the deliveryCompleteCount should not change.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -6496,7 +6502,7 @@ public class SharePartitionTest {
 
         sharePartition.maybeInitialize();
         assertEquals(11, sharePartition.nextFetchOffset());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Fetched records are from 11 to 20
         MemoryRecords records = memoryRecords(10, 11);
@@ -6519,8 +6525,8 @@ public class SharePartitionTest {
         sharePartition.updateCacheAndOffsets(16);
 
         // After the LSO is moved to 21, all the records after new Start offset are in non-Terminal states. Thus,
-        // inFlightTerminalRecords is not changed.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // deliveryCompleteCount is not changed.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
         assertEquals(16, sharePartition.startOffset());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(11L).batchState());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(21L).batchState());
@@ -6530,8 +6536,8 @@ public class SharePartitionTest {
         // Expiring the acquisition lock timer task of the ACQUIRED batch.
         sharePartition.cachedState().get(11L).batchAcquisitionLockTimeoutTask().run();
 
-        // Since these records are present before the start offset, the inFlightTerminalRecords should not change.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // Since these records are present before the start offset, the deliveryCompleteCount should not change.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(11L).offsetState().get(11L).state());
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(11L).offsetState().get(12L).state());
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(11L).offsetState().get(13L).state());
@@ -6562,7 +6568,7 @@ public class SharePartitionTest {
 
         sharePartition.maybeInitialize();
         assertEquals(11, sharePartition.nextFetchOffset());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Fetched records are from 11 to 20
         MemoryRecords records = memoryRecords(10, 11);
@@ -6585,7 +6591,7 @@ public class SharePartitionTest {
         sharePartition.updateCacheAndOffsets(16);
 
         // There are no Terminal records between start offset and end offset.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
         assertEquals(16, sharePartition.startOffset());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(11L).batchState());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(21L).batchState());
@@ -6598,9 +6604,9 @@ public class SharePartitionTest {
         Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
         // Acknowledge the acquired records. Only those records that are after the startOffset will be acknowledged.
         // In this case, records 11 -> 15 will remain in the ACQUIRED state, while records 16 -> 20 will be RELEASED.
-        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(11L, 20L, List.of((byte) 2))));
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(11L, 20L, List.of(AcknowledgeType.RELEASE.id))));
 
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(11L).offsetState().get(11L).state());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(11L).offsetState().get(12L).state());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(11L).offsetState().get(13L).state());
@@ -6622,8 +6628,8 @@ public class SharePartitionTest {
         sharePartition.cachedState().get(11L).offsetState().get(14L).acquisitionLockTimeoutTask().run();
         sharePartition.cachedState().get(11L).offsetState().get(15L).acquisitionLockTimeoutTask().run();
 
-        // Since these records are present before the start offset, the inFlightTerminalRecords should not change.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // Since these records are present before the start offset, the deliveryCompleteCount should not change.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(11L).offsetState().get(11L).state());
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(11L).offsetState().get(12L).state());
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(11L).offsetState().get(13L).state());
@@ -6651,17 +6657,17 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(30, 5), 5);
         fetchAcquiredRecords(sharePartition, memoryRecords(35, 5), 5);
 
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Acknowledge records.
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(6, 7, List.of((byte) 1)),
-                new ShareAcknowledgementBatch(8, 8, List.of((byte) 2)),
-                new ShareAcknowledgementBatch(25, 29, List.of((byte) 2)),
-                new ShareAcknowledgementBatch(35, 37, List.of((byte) 2))
+                new ShareAcknowledgementBatch(6, 7, List.of(AcknowledgeType.ACCEPT.id)),
+                new ShareAcknowledgementBatch(8, 8, List.of(AcknowledgeType.RELEASE.id)),
+                new ShareAcknowledgementBatch(25, 29, List.of(AcknowledgeType.RELEASE.id)),
+                new ShareAcknowledgementBatch(35, 37, List.of(AcknowledgeType.RELEASE.id))
         ));
 
-        assertEquals(2, sharePartition.inFlightTerminalRecords());
+        assertEquals(2, sharePartition.deliveryCompleteCount());
 
         // LSO is at 24.
         sharePartition.updateCacheAndOffsets(24);
@@ -6670,7 +6676,7 @@ public class SharePartitionTest {
         assertEquals(24, sharePartition.startOffset());
         assertEquals(39, sharePartition.endOffset());
         assertEquals(7, sharePartition.cachedState().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Release acquired records for MEMBER_ID.
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
@@ -6700,7 +6706,7 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(23L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(24L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
 
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(20L).offsetState());
 
@@ -6733,7 +6739,7 @@ public class SharePartitionTest {
         assertEquals(10, sharePartition.startOffset());
         assertEquals(14, sharePartition.endOffset());
         assertEquals(2, sharePartition.cachedState().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Release acquired records.
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
@@ -6746,8 +6752,8 @@ public class SharePartitionTest {
         assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(10L).batchMemberId());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(10L).batchState());
 
-        // The records after the start offset are in non-Terminal states. Thus, inFlightTerminalRecords is not changed.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // The records after the start offset are in non-Terminal states. Thus, deliveryCompleteCount is not changed.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -6765,7 +6771,7 @@ public class SharePartitionTest {
         assertEquals(14, sharePartition.endOffset());
         assertEquals(2, sharePartition.cachedState().size());
 
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Release acquired records.
         CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
@@ -6784,8 +6790,8 @@ public class SharePartitionTest {
 
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
 
-        // The records after the start offset are in non-Terminal states. Thus, inFlightTerminalRecords is not changed.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // The records after the start offset are in non-Terminal states. Thus, deliveryCompleteCount is not changed.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -6795,10 +6801,10 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
 
-        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(12, 13, List.of((byte) 1))));
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(12, 13, List.of(AcknowledgeType.ACCEPT.id))));
 
         // Records 12 and 13 are ACKNOWLEDGED.
-        assertEquals(2, sharePartition.inFlightTerminalRecords());
+        assertEquals(2, sharePartition.deliveryCompleteCount());
 
         // LSO is at 11.
         sharePartition.updateCacheAndOffsets(11);
@@ -6807,7 +6813,7 @@ public class SharePartitionTest {
         assertEquals(11, sharePartition.startOffset());
         assertEquals(14, sharePartition.endOffset());
         assertEquals(2, sharePartition.cachedState().size());
-        assertEquals(2, sharePartition.inFlightTerminalRecords());
+        assertEquals(2, sharePartition.deliveryCompleteCount());
 
         // Before release, the delivery count was incremented.
         Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
@@ -6836,7 +6842,7 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(13L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(14L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
-        assertEquals(2, sharePartition.inFlightTerminalRecords());
+        assertEquals(2, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -6858,13 +6864,13 @@ public class SharePartitionTest {
 
         // Acknowledge records.
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(6, 7, List.of((byte) 1)),
-                new ShareAcknowledgementBatch(8, 8, List.of((byte) 2)),
-                new ShareAcknowledgementBatch(25, 29, List.of((byte) 2)),
-                new ShareAcknowledgementBatch(35, 37, List.of((byte) 2))
+                new ShareAcknowledgementBatch(6, 7, List.of(AcknowledgeType.ACCEPT.id)),
+                new ShareAcknowledgementBatch(8, 8, List.of(AcknowledgeType.RELEASE.id)),
+                new ShareAcknowledgementBatch(25, 29, List.of(AcknowledgeType.RELEASE.id)),
+                new ShareAcknowledgementBatch(35, 37, List.of(AcknowledgeType.RELEASE.id))
         ));
 
-        assertEquals(2, sharePartition.inFlightTerminalRecords());
+        assertEquals(2, sharePartition.deliveryCompleteCount());
 
         // LSO is at 24.
         sharePartition.updateCacheAndOffsets(24);
@@ -6873,7 +6879,7 @@ public class SharePartitionTest {
         assertEquals(24, sharePartition.startOffset());
         assertEquals(39, sharePartition.endOffset());
         assertEquals(7, sharePartition.cachedState().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
@@ -6915,7 +6921,7 @@ public class SharePartitionTest {
         assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(15L).batchMemberId());
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(15L).batchState());
 
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -6935,7 +6941,7 @@ public class SharePartitionTest {
         assertEquals(10, sharePartition.startOffset());
         assertEquals(14, sharePartition.endOffset());
         assertEquals(2, sharePartition.cachedState().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
@@ -6947,8 +6953,8 @@ public class SharePartitionTest {
             DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
             () -> assertionFailedMessage(sharePartition, Map.of(5L, List.of(), 10L, List.of())));
 
-        // All records after startOffset are in non-Terminal states. Thus, inFlightTerminalRecords is not changed.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // All records after startOffset are in non-Terminal states. Thus, deliveryCompleteCount is not changed.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -6968,7 +6974,7 @@ public class SharePartitionTest {
         assertEquals(11, sharePartition.startOffset());
         assertEquals(14, sharePartition.endOffset());
         assertEquals(2, sharePartition.cachedState().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
@@ -6987,8 +6993,8 @@ public class SharePartitionTest {
             DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
             () -> assertionFailedMessage(sharePartition, Map.of(5L, List.of(), 10L, List.of(10L, 11L, 12L, 13L, 14L))));
 
-        // All records after startOffset are in non-Terminal states. Thus, inFlightTerminalRecords is not changed.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // All records after startOffset are in non-Terminal states. Thus, deliveryCompleteCount is not changed.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -7050,7 +7056,7 @@ public class SharePartitionTest {
         assertEquals(12, sharePartition.startOffset());
         assertEquals(14, sharePartition.endOffset());
         assertEquals(2, sharePartition.cachedState().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Check cached state map.
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(2L).batchMemberId());
@@ -7061,13 +7067,13 @@ public class SharePartitionTest {
 
         // Acknowledge with RELEASE action.
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(2, 6, List.of((byte) 2)),
-                new ShareAcknowledgementBatch(10, 14, List.of((byte) 2))));
+                new ShareAcknowledgementBatch(2, 6, List.of(AcknowledgeType.RELEASE.id)),
+                new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.RELEASE.id))));
 
         assertNull(ackResult.join());
         assertFalse(ackResult.isCompletedExceptionally());
-        // No record is moved to Terminal state, thus inFlightTerminalRecords is not changed.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // No record is moved to Terminal state, thus deliveryCompleteCount is not changed.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         assertEquals(12, sharePartition.nextFetchOffset());
         assertEquals(12, sharePartition.startOffset());
@@ -7094,7 +7100,7 @@ public class SharePartitionTest {
         assertNull(sharePartition.cachedState().get(10L).offsetState().get(13L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(10L).offsetState().get(14L).acquisitionLockTimeoutTask());
 
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -7120,15 +7126,15 @@ public class SharePartitionTest {
 
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(20L).batchMemberId());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(20L).batchState());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Acknowledge with ACCEPT action.
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(2, 14, List.of((byte) 1))));
+                new ShareAcknowledgementBatch(2, 14, List.of(AcknowledgeType.ACCEPT.id))));
         assertNull(ackResult.join());
         assertFalse(ackResult.isCompletedExceptionally());
-        // Only record 14 is post startOffset and in a Terminal state. Thus, only that is considered for inFlightTerminalRecords.
-        assertEquals(1, sharePartition.inFlightTerminalRecords());
+        // Only record 14 is post startOffset and in a Terminal state. Thus, only that is considered for deliveryCompleteCount.
+        assertEquals(1, sharePartition.deliveryCompleteCount());
 
         assertEquals(25, sharePartition.nextFetchOffset());
         // For cached state corresponding to entry 2, the offset states will be ARCHIVED, ARCHIVED, ARCHIVED, ARCHIVED and ACKNOWLEDGED.
@@ -7173,7 +7179,7 @@ public class SharePartitionTest {
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(2L).batchMemberId());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(2L).batchState());
         assertNotNull(sharePartition.cachedState().get(2L).batchAcquisitionLockTimeoutTask());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
@@ -7182,7 +7188,7 @@ public class SharePartitionTest {
                             sharePartition.startOffset() == 7 && sharePartition.endOffset() == 7,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> assertionFailedMessage(sharePartition, Map.of()));
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
 
@@ -7190,12 +7196,12 @@ public class SharePartitionTest {
         assertEquals(10, sharePartition.startOffset());
         assertEquals(14, sharePartition.endOffset());
         assertEquals(1, sharePartition.cachedState().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Acknowledge with RELEASE action. This contains a batch that doesn't exist at all.
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(2, 14, List.of((byte) 2))));
+                new ShareAcknowledgementBatch(2, 14, List.of(AcknowledgeType.RELEASE.id))));
 
         assertEquals(10, sharePartition.nextFetchOffset());
         assertEquals(10, sharePartition.startOffset());
@@ -7205,7 +7211,7 @@ public class SharePartitionTest {
         assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(10L).batchMemberId());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(10L).batchState());
         assertNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -7223,7 +7229,7 @@ public class SharePartitionTest {
         assertEquals(3, sharePartition.startOffset());
         assertEquals(3, sharePartition.endOffset());
         assertEquals(1, sharePartition.cachedState().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Check cached state map.
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(1L).batchMemberId());
@@ -7238,7 +7244,7 @@ public class SharePartitionTest {
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> assertionFailedMessage(sharePartition, Map.of()));
 
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         fetchAcquiredRecords(sharePartition, memoryRecords(3, 2), 2);
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 3), 3);
@@ -7247,11 +7253,11 @@ public class SharePartitionTest {
         assertEquals(3, sharePartition.startOffset());
         assertEquals(7, sharePartition.endOffset());
         assertEquals(2, sharePartition.cachedState().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Acknowledge with RELEASE action. This contains a batch that doesn't exist at all.
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(1, 7, List.of((byte) 2))));
+                new ShareAcknowledgementBatch(1, 7, List.of(AcknowledgeType.RELEASE.id))));
 
         assertEquals(3, sharePartition.nextFetchOffset());
         assertEquals(3, sharePartition.startOffset());
@@ -7265,7 +7271,7 @@ public class SharePartitionTest {
         assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(5L).batchMemberId());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).batchState());
         assertNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -7502,7 +7508,7 @@ public class SharePartitionTest {
         assertFalse(sharePartition.canAcquireRecords());
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                        new ShareAcknowledgementBatch(0, 249, List.of((byte) 1))));
+                new ShareAcknowledgementBatch(0, 249, List.of(AcknowledgeType.ACCEPT.id))));
 
         assertEquals(250, sharePartition.nextFetchOffset());
         // The SPSO should only move when the initial records in cached state are acknowledged with type ACKNOWLEDGE or ARCHIVED.
@@ -7511,7 +7517,7 @@ public class SharePartitionTest {
         assertTrue(sharePartition.canAcquireRecords());
         // The records have been accepted, thus they are removed from the cached state.
         assertEquals(0, sharePartition.cachedState().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -7523,7 +7529,7 @@ public class SharePartitionTest {
         assertFalse(sharePartition.canAcquireRecords());
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(0, 249, List.of((byte) 3))));
+            new ShareAcknowledgementBatch(0, 249, List.of((AcknowledgeType.REJECT.id)))));
 
         assertEquals(250, sharePartition.nextFetchOffset());
         // The SPSO should only move when the initial records in cached state are acknowledged with type ACKNOWLEDGE or ARCHIVED.
@@ -7532,7 +7538,7 @@ public class SharePartitionTest {
         assertTrue(sharePartition.canAcquireRecords());
         // The records have been rejected, thus they are removed from the cached state.
         assertEquals(0, sharePartition.cachedState().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -7543,7 +7549,7 @@ public class SharePartitionTest {
         assertFalse(sharePartition.canAcquireRecords());
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(0, 249, List.of((byte) 2))));
+                new ShareAcknowledgementBatch(0, 249, List.of(AcknowledgeType.RELEASE.id))));
 
         // The SPSO should only move when the initial records in cached state are acknowledged with type ACKNOWLEDGE or ARCHIVED.
         assertEquals(0, sharePartition.startOffset());
@@ -7554,7 +7560,7 @@ public class SharePartitionTest {
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).batchState());
         assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(0L).batchMemberId());
         assertEquals(1, sharePartition.cachedState().get(0L).batchDeliveryCount());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -7571,7 +7577,7 @@ public class SharePartitionTest {
         assertFalse(sharePartition.canAcquireRecords());
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(0, 12, List.of((byte) 1))));
+                new ShareAcknowledgementBatch(0, 12, List.of(AcknowledgeType.ACCEPT.id))));
 
         assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(0L).offsetState().get(12L).state());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).offsetState().get(13L).state());
@@ -7581,7 +7587,7 @@ public class SharePartitionTest {
         assertEquals(13, sharePartition.startOffset());
         assertEquals(29, sharePartition.endOffset());
         assertEquals(30, sharePartition.nextFetchOffset());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -7597,7 +7603,7 @@ public class SharePartitionTest {
         assertFalse(sharePartition.canAcquireRecords());
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(0, 14, List.of((byte) 3))));
+                new ShareAcknowledgementBatch(0, 14, List.of(AcknowledgeType.REJECT.id))));
 
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(15L).batchState());
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(15L).batchMemberId());
@@ -7607,7 +7613,7 @@ public class SharePartitionTest {
         assertEquals(15, sharePartition.startOffset());
         assertEquals(29, sharePartition.endOffset());
         assertEquals(30, sharePartition.nextFetchOffset());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -7624,7 +7630,7 @@ public class SharePartitionTest {
         assertFalse(sharePartition.canAcquireRecords());
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(10, 14, List.of((byte) 3))));
+                new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.REJECT.id))));
 
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).offsetState().get(9L).state());
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(0L).offsetState().get(10L).state());
@@ -7637,8 +7643,8 @@ public class SharePartitionTest {
         assertEquals(0, sharePartition.startOffset());
         assertEquals(29, sharePartition.endOffset());
         assertEquals(30, sharePartition.nextFetchOffset());
-        // Records 10 -> 14 are in ARCHIVED state, and so inFlightTerminalRecords is 5.
-        assertEquals(5, sharePartition.inFlightTerminalRecords());
+        // Records 10 -> 14 are in ARCHIVED state, and so deliveryCompleteCount is 5.
+        assertEquals(5, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -7655,14 +7661,14 @@ public class SharePartitionTest {
         assertFalse(sharePartition.canAcquireRecords());
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(0, 29, List.of((byte) 1))));
+                new ShareAcknowledgementBatch(0, 29, List.of(AcknowledgeType.ACCEPT.id))));
 
         assertTrue(sharePartition.canAcquireRecords());
         assertEquals(30, sharePartition.startOffset());
         assertEquals(30, sharePartition.endOffset());
         assertEquals(30, sharePartition.nextFetchOffset());
         // Cache state is empty.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -7683,19 +7689,19 @@ public class SharePartitionTest {
 
         // First Acknowledgement for the first batch of records 0-19.
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(0, 19, List.of((byte) 1))));
+                new ShareAcknowledgementBatch(0, 19, List.of(AcknowledgeType.ACCEPT.id))));
 
         assertTrue(sharePartition.canAcquireRecords());
         assertEquals(20, sharePartition.startOffset());
         assertEquals(59, sharePartition.endOffset());
         assertEquals(60, sharePartition.nextFetchOffset());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         fetchAcquiredRecords(sharePartition, memoryRecords(60, 20), 20);
         assertTrue(sharePartition.canAcquireRecords());
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(20, 49, List.of((byte) 1))));
+                new ShareAcknowledgementBatch(20, 49, List.of(AcknowledgeType.ACCEPT.id))));
 
         assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(40L).offsetState().get(49L).state());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(40L).offsetState().get(50L).state());
@@ -7704,21 +7710,21 @@ public class SharePartitionTest {
         assertEquals(50, sharePartition.startOffset());
         assertEquals(79, sharePartition.endOffset());
         assertEquals(80, sharePartition.nextFetchOffset());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         fetchAcquiredRecords(sharePartition, memoryRecords(80, 100), 100);
         assertFalse(sharePartition.canAcquireRecords());
 
         // Final Acknowledgement, all records are acknowledged here.
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(50, 179, List.of((byte) 3))));
+                new ShareAcknowledgementBatch(50, 179, List.of(AcknowledgeType.REJECT.id))));
 
         assertEquals(0, sharePartition.cachedState().size());
         assertTrue(sharePartition.canAcquireRecords());
         assertEquals(180, sharePartition.startOffset());
         assertEquals(180, sharePartition.endOffset());
         assertEquals(180, sharePartition.nextFetchOffset());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         fetchAcquiredRecords(sharePartition, memoryRecords(180, 20), 20);
 
@@ -7728,7 +7734,7 @@ public class SharePartitionTest {
         assertEquals(180, sharePartition.startOffset());
         assertEquals(199, sharePartition.endOffset());
         assertEquals(200, sharePartition.nextFetchOffset());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -7753,7 +7759,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
         sharePartition.maybeInitialize();
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        assertEquals(10, sharePartition.deliveryCompleteCount());
 
         // Acquiring the first AVAILABLE batch from 11 to 20
         fetchAcquiredRecords(sharePartition, memoryRecords(11, 10), 10);
@@ -7761,7 +7767,7 @@ public class SharePartitionTest {
 
         // Sending acknowledgement for the first batch from 11 to 20
         sharePartition.acknowledge(MEMBER_ID, List.of(
-            new ShareAcknowledgementBatch(11, 20, List.of((byte) 1))));
+            new ShareAcknowledgementBatch(11, 20, List.of(AcknowledgeType.ACCEPT.id))));
 
         assertTrue(sharePartition.canAcquireRecords());
         // After the acknowledgement is done successfully, maybeUpdateCachedStateAndOffsets method is invoked to see
@@ -7771,7 +7777,7 @@ public class SharePartitionTest {
         assertEquals(21, sharePartition.startOffset());
         assertEquals(40, sharePartition.endOffset());
         assertEquals(21, sharePartition.nextFetchOffset());
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        assertEquals(10, sharePartition.deliveryCompleteCount());
 
         GapWindow persisterReadResultGapWindow = sharePartition.persisterReadResultGapWindow();
         assertNotNull(persisterReadResultGapWindow);
@@ -7810,7 +7816,7 @@ public class SharePartitionTest {
         assertEquals(249, sharePartition.endOffset());
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(0, 249, List.of((byte) 1))));
+                new ShareAcknowledgementBatch(0, 249, List.of(AcknowledgeType.ACCEPT.id))));
 
         assertTrue(sharePartition.canAcquireRecords());
         assertEquals(250, sharePartition.startOffset());
@@ -7832,7 +7838,7 @@ public class SharePartitionTest {
         assertEquals(249, sharePartition.endOffset());
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(0, 89, List.of((byte) 2))));
+                new ShareAcknowledgementBatch(0, 89, List.of(AcknowledgeType.RELEASE.id))));
 
         // The SPSO should only move when the initial records in cached state are acknowledged with type ACKNOWLEDGE or ARCHIVED.
         assertEquals(0, sharePartition.startOffset());
@@ -7856,7 +7862,7 @@ public class SharePartitionTest {
         assertEquals(249, sharePartition.endOffset());
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(0, 89, List.of((byte) 3))));
+            new ShareAcknowledgementBatch(0, 89, List.of(AcknowledgeType.REJECT.id))));
 
         // The SPSO should only move when the initial records in cached state are acknowledged with type ACKNOWLEDGE or ARCHIVED.
         assertEquals(90, sharePartition.startOffset());
@@ -7879,7 +7885,7 @@ public class SharePartitionTest {
         assertEquals(249, sharePartition.endOffset());
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                        new ShareAcknowledgementBatch(0, 89, List.of((byte) 1))));
+                        new ShareAcknowledgementBatch(0, 89, List.of(AcknowledgeType.ACCEPT.id))));
 
         // The SPSO should only move when the initial records in cached state are acknowledged with type ACKNOWLEDGE or ARCHIVED.
         assertEquals(90, sharePartition.startOffset());
@@ -7906,7 +7912,7 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 10), 10);
 
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(MEMBER_ID,
-                List.of(new ShareAcknowledgementBatch(5, 14, List.of((byte) 1))));
+                List.of(new ShareAcknowledgementBatch(5, 14, List.of(AcknowledgeType.ACCEPT.id))));
         assertTrue(ackResult.isCompletedExceptionally());
         assertFutureThrows(UnknownTopicOrPartitionException.class, ackResult);
 
@@ -7935,7 +7941,7 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 6), 6);
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
                 MEMBER_ID,
-                List.of(new ShareAcknowledgementBatch(8, 10, List.of((byte) 3))));
+                List.of(new ShareAcknowledgementBatch(8, 10, List.of(AcknowledgeType.REJECT.id))));
         assertTrue(ackResult.isCompletedExceptionally());
 
         // Due to failure in writeShareGroupState, the cached state should not be updated.
@@ -7961,11 +7967,11 @@ public class SharePartitionTest {
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 7), 7);
         sharePartition.acknowledge(MEMBER_ID,
-                List.of(new ShareAcknowledgementBatch(5, 7, List.of((byte) 1))));
+                List.of(new ShareAcknowledgementBatch(5, 7, List.of(AcknowledgeType.ACCEPT.id))));
 
         // Acknowledge subset with another member.
         CompletableFuture<Void> ackResult = sharePartition.acknowledge("member-2",
-                List.of(new ShareAcknowledgementBatch(9, 11, List.of((byte) 1))));
+                List.of(new ShareAcknowledgementBatch(9, 11, List.of(AcknowledgeType.ACCEPT.id))));
         assertTrue(ackResult.isCompletedExceptionally());
         assertFutureThrows(InvalidRecordStateException.class, ackResult);
     }
@@ -7981,10 +7987,10 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(15, 5), 5);
 
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(5, 9, List.of((byte) 2)),
+                new ShareAcknowledgementBatch(5, 9, List.of(AcknowledgeType.RELEASE.id)),
                 // Acknowledging batch with another member will cause failure and rollback.
-                new ShareAcknowledgementBatch(10, 14, List.of((byte) 1)),
-                new ShareAcknowledgementBatch(15, 19, List.of((byte) 1))));
+                new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.ACCEPT.id)),
+                new ShareAcknowledgementBatch(15, 19, List.of(AcknowledgeType.ACCEPT.id))));
 
         assertTrue(ackResult.isCompletedExceptionally());
         assertFutureThrows(InvalidRecordStateException.class, ackResult);
@@ -8010,10 +8016,10 @@ public class SharePartitionTest {
         sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 15, fetchPartitionData(memoryRecords(15, 5)), FETCH_ISOLATION_HWM);
 
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(5, 9, List.of((byte) 2)),
-                new ShareAcknowledgementBatch(10, 14, List.of((byte) 1)),
+                new ShareAcknowledgementBatch(5, 9, List.of(AcknowledgeType.RELEASE.id)),
+                new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.ACCEPT.id)),
                 // Acknowledging subset with another member will cause failure and rollback.
-                new ShareAcknowledgementBatch(16, 18, List.of((byte) 1))));
+                new ShareAcknowledgementBatch(16, 18, List.of(AcknowledgeType.ACCEPT.id))));
         assertTrue(ackResult.isCompletedExceptionally());
         assertFutureThrows(InvalidRecordStateException.class, ackResult);
 
@@ -8040,11 +8046,11 @@ public class SharePartitionTest {
 
         fetchAcquiredRecords(sharePartition, records, 10);
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(5, 14, List.of((byte) 2))));
+                new ShareAcknowledgementBatch(5, 14, List.of(AcknowledgeType.RELEASE.id))));
 
         fetchAcquiredRecords(sharePartition, records, 10);
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(5, 14, List.of((byte) 2))));
+                new ShareAcknowledgementBatch(5, 14, List.of(AcknowledgeType.RELEASE.id))));
 
         // All the records in the batch reached the max delivery count, hence they got archived and the cached state cleared.
         assertEquals(15, sharePartition.nextFetchOffset());
@@ -8068,9 +8074,9 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, records2, 5);
 
         sharePartition.acknowledge(MEMBER_ID, new ArrayList<>(List.of(
-                new ShareAcknowledgementBatch(10, 12, List.of((byte) 1)),
-                new ShareAcknowledgementBatch(13, 16, List.of((byte) 2)),
-                new ShareAcknowledgementBatch(17, 19, List.of((byte) 1)))));
+                new ShareAcknowledgementBatch(10, 12, List.of(AcknowledgeType.ACCEPT.id)),
+                new ShareAcknowledgementBatch(13, 16, List.of(AcknowledgeType.RELEASE.id)),
+                new ShareAcknowledgementBatch(17, 19, List.of(AcknowledgeType.ACCEPT.id)))));
 
         // Send next batch from offset 13, only 2 records should be acquired.
         fetchAcquiredRecords(sharePartition, records1, 2);
@@ -8078,7 +8084,7 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, records2, 2);
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(13, 16, List.of((byte) 2))));
+                new ShareAcknowledgementBatch(13, 16, List.of(AcknowledgeType.RELEASE.id))));
 
         assertEquals(20, sharePartition.nextFetchOffset());
         // Cached state will be empty because after the second release, the acquired records will now have moved to
@@ -8098,12 +8104,12 @@ public class SharePartitionTest {
 
         fetchAcquiredRecords(sharePartition, records1, 5);
         sharePartition.acknowledge(MEMBER_ID, new ArrayList<>(List.of(
-                new ShareAcknowledgementBatch(0, 1, List.of((byte) 2)))));
+                new ShareAcknowledgementBatch(0, 1, List.of(AcknowledgeType.RELEASE.id)))));
 
         // Send next batch from offset 0, only 2 records should be acquired.
         fetchAcquiredRecords(sharePartition, memoryRecords(2), 2);
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(0, 4, List.of((byte) 2))));
+                new ShareAcknowledgementBatch(0, 4, List.of(AcknowledgeType.RELEASE.id))));
 
         assertEquals(2, sharePartition.nextFetchOffset());
         assertEquals(1, sharePartition.cachedState().size());
@@ -8135,7 +8141,7 @@ public class SharePartitionTest {
         assertEquals(20, sharePartition.nextFetchOffset());
 
         sharePartition.acknowledge(memberId1, List.of(
-                new ShareAcknowledgementBatch(5, 9, List.of((byte) 2))));
+                new ShareAcknowledgementBatch(5, 9, List.of(AcknowledgeType.RELEASE.id))));
 
         assertTrue(sharePartition.findNextFetchOffset());
         assertEquals(5, sharePartition.nextFetchOffset());
@@ -8161,9 +8167,9 @@ public class SharePartitionTest {
         assertEquals(3, sharePartition.nextFetchOffset());
 
         sharePartition.acknowledge(memberId1, List.of(
-                new ShareAcknowledgementBatch(0, 2, List.of((byte) 2))));
+                new ShareAcknowledgementBatch(0, 2, List.of(AcknowledgeType.RELEASE.id))));
         assertEquals(0, sharePartition.nextFetchOffset());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         sharePartition.acquire(memberId2, BATCH_SIZE, MAX_FETCH_RECORDS, 3, fetchPartitionData(memoryRecords(3, 2)), FETCH_ISOLATION_HWM);
         assertEquals(0, sharePartition.nextFetchOffset());
@@ -8172,9 +8178,9 @@ public class SharePartitionTest {
         assertEquals(5, sharePartition.nextFetchOffset());
 
         sharePartition.acknowledge(memberId2, List.of(
-                new ShareAcknowledgementBatch(3, 4, List.of((byte) 2))));
+                new ShareAcknowledgementBatch(3, 4, List.of(AcknowledgeType.RELEASE.id))));
         assertEquals(3, sharePartition.nextFetchOffset());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -8185,7 +8191,7 @@ public class SharePartitionTest {
 
         fetchAcquiredRecords(sharePartition, memoryRecords(2, 5), 5);
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(2, 6, List.of((byte) 1))));
+                new ShareAcknowledgementBatch(2, 6, List.of(AcknowledgeType.ACCEPT.id))));
         // Acknowledge records will induce 1 write state RPC call via function isWriteShareGroupStateSuccessful.
         Mockito.verify(sharePartition, Mockito.times(1)).writeShareGroupState(anyList());
 
@@ -8204,13 +8210,13 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 12), 12);
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                new ShareAcknowledgementBatch(5, 11, List.of((byte) 2)),
-                new ShareAcknowledgementBatch(12, 13, List.of((byte) 0)),
-                new ShareAcknowledgementBatch(14, 15, List.of((byte) 2)),
-                new ShareAcknowledgementBatch(17, 20, List.of((byte) 2))));
+                new ShareAcknowledgementBatch(5, 11, List.of(AcknowledgeType.RELEASE.id)),
+                new ShareAcknowledgementBatch(12, 13, List.of(ACKNOWLEDGE_TYPE_GAP_ID)),
+                new ShareAcknowledgementBatch(14, 15, List.of(AcknowledgeType.RELEASE.id)),
+                new ShareAcknowledgementBatch(17, 20, List.of(AcknowledgeType.RELEASE.id))));
 
         // Records 12-13 have been identified as gaps, hence they are kept in the cache as ARCHIVED state.
-        assertEquals(2, sharePartition.inFlightTerminalRecords());
+        assertEquals(2, sharePartition.deliveryCompleteCount());
 
         // Reacquire with another member.
         sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 5, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
@@ -8270,7 +8276,7 @@ public class SharePartitionTest {
         assertEquals(734, sharePartition.nextFetchOffset());
         assertEquals(734, sharePartition.startOffset());
         assertEquals(734, sharePartition.endOffset());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -8296,8 +8302,8 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
 
         List<ShareAcknowledgementBatch> acknowledgementBatches = new ArrayList<>();
-        acknowledgementBatches.add(new ShareAcknowledgementBatch(2, 3, List.of((byte) 2)));
-        acknowledgementBatches.add(new ShareAcknowledgementBatch(5, 9, List.of((byte) 2)));
+        acknowledgementBatches.add(new ShareAcknowledgementBatch(2, 3, List.of(AcknowledgeType.RELEASE.id)));
+        acknowledgementBatches.add(new ShareAcknowledgementBatch(5, 9, List.of(AcknowledgeType.RELEASE.id)));
         // Acknowledge 2-3, 5-9 offsets with RELEASE acknowledge type.
         sharePartition.acknowledge(MEMBER_ID, acknowledgementBatches);
 
@@ -8507,7 +8513,7 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.cachedState().get(5L).offsetState());
 
         // after acknowledgements, the start offset moves to 15, and thus there are no Terminal records post that.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Check cached state.
         Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
@@ -8557,7 +8563,7 @@ public class SharePartitionTest {
         sharePartition.releaseAcquiredRecords(MEMBER_ID);
         // Validate cache has 4 entries.
         assertEquals(4, sharePartition.cachedState().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Compact all batches and remove some of the batches from the fetch response.
         buffer = ByteBuffer.allocate(4096);
@@ -8618,7 +8624,7 @@ public class SharePartitionTest {
             }
         });
         // All in flight records are in a non-Terminal state.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     /**
@@ -8644,7 +8650,7 @@ public class SharePartitionTest {
         // Validate cache has 3 entries.
         assertEquals(3, sharePartition.cachedState().size());
 
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Compact second batch and remove first batch from the fetch response.
         ByteBuffer buffer = ByteBuffer.allocate(4096);
@@ -8676,7 +8682,7 @@ public class SharePartitionTest {
             assertEquals(RecordState.AVAILABLE, inFlightState.batchState());
         });
 
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     /**
@@ -8700,14 +8706,14 @@ public class SharePartitionTest {
             // Accept the 3 offsets of first batch.
             new ShareAcknowledgementBatch(5, 7, List.of(AcknowledgeType.ACCEPT.id)))).join();
 
-        // After acknowledgements, the start offset moves past Terminal records, hence inFlightTerminalRecords is 0.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // After acknowledgements, the start offset moves past Terminal records, hence deliveryCompleteCount is 0.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Release the remaining batches/offsets in the cache.
         sharePartition.releaseAcquiredRecords(MEMBER_ID).join();
         // Validate cache has 2 entries.
         assertEquals(2, sharePartition.cachedState().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Mark fetch offset within the first batch to 8, first available offset.
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 15), 8, 0, 15);
@@ -8718,7 +8724,7 @@ public class SharePartitionTest {
         assertEquals(8, sharePartition.startOffset());
         // Since the fetchOffset in the acquire request was prior to the actual records fetched, the records 8 and 9 are marked
         // as ARCHIVED. Thus, there are 2 Terminal records in the cache.
-        assertEquals(2, sharePartition.inFlightTerminalRecords());
+        assertEquals(2, sharePartition.deliveryCompleteCount());
 
         // Releasing acquired records updates the cache and moves the start offset.
         sharePartition.releaseAcquiredRecords(MEMBER_ID);
@@ -8728,7 +8734,7 @@ public class SharePartitionTest {
         assertEquals(1, sharePartition.cachedState().size());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(10L).batchState());
         // Since the start offset has moved past all Terminal records, the count is 0.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     /**
@@ -8758,7 +8764,7 @@ public class SharePartitionTest {
         sharePartition.releaseAcquiredRecords(MEMBER_ID);
         // Validate cache has 1 entry.
         assertEquals(1, sharePartition.cachedState().size());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Compact second batch and remove first batch from the fetch response.
         buffer = ByteBuffer.allocate(4096);
@@ -8778,7 +8784,7 @@ public class SharePartitionTest {
         // the acquire operation only marks offsets as archived. The start offset will be correctly
         // updated once any records are acknowledged.
         assertEquals(0, sharePartition.startOffset());
-        assertEquals(5, sharePartition.inFlightTerminalRecords());
+        assertEquals(5, sharePartition.deliveryCompleteCount());
 
         // Releasing acquired records updates the cache and moves the start offset.
         sharePartition.releaseAcquiredRecords(MEMBER_ID);
@@ -8792,7 +8798,7 @@ public class SharePartitionTest {
                 assertEquals(recordState, offsetState.state());
             });
         });
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     private String assertionFailedMessage(SharePartition sharePartition, Map<Long, List<Long>> offsets) {
@@ -9241,8 +9247,8 @@ public class SharePartitionTest {
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(19L).batchState());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(20L).batchState());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(29L).batchState());
-        // Records 10 -> 18 are ARCHIVED, hence inFlightTerminalRecords should be 9.
-        assertEquals(9, sharePartition.inFlightTerminalRecords());
+        // Records 10 -> 18 are ARCHIVED, hence deliveryCompleteCount should be 9.
+        assertEquals(9, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -9294,8 +9300,8 @@ public class SharePartitionTest {
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).offsetState().get(6L).state());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).offsetState().get(7L).state());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).offsetState().get(8L).state());
-        // Records 3 -> 4 are ARCHIVED, hence inFlightTerminalRecords should be 2.
-        assertEquals(2, sharePartition.inFlightTerminalRecords());
+        // Records 3 -> 4 are ARCHIVED, hence deliveryCompleteCount should be 2.
+        assertEquals(2, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -9341,8 +9347,8 @@ public class SharePartitionTest {
         // Acknowledge batch to create ongoing transition.
         sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(21, 30, List.of(AcknowledgeType.RELEASE.id))));
 
-        // Since the future is not yet completed, inFlightTerminalRecords will not be updated yet.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // Since the future is not yet completed, deliveryCompleteCount will not be updated yet.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Assert the start offset has not moved and batch has ongoing transition.
         assertEquals(21L, sharePartition.startOffset());
@@ -9359,8 +9365,8 @@ public class SharePartitionTest {
             ), 0
         );
 
-        // Since no new records are acquired, inFlightTerminalRecords will remain the same.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // Since no new records are acquired, deliveryCompleteCount will remain the same.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(21L).batchState());
         assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(21L).batchMemberId());
@@ -9372,8 +9378,8 @@ public class SharePartitionTest {
                 PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
         future.complete(writeShareGroupStateResult);
 
-        // Since the records successfully acknowledged are moved to AVAILABLE state, inFlightTerminalRecords will still not change.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // Since the records successfully acknowledged are moved to AVAILABLE state, deliveryCompleteCount will still not change.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Acquire the same batch with member-2. 10 records will be acquired.
         fetchAcquiredRecords(
@@ -9383,7 +9389,7 @@ public class SharePartitionTest {
         );
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(21L).batchState());
         assertEquals("member-2", sharePartition.cachedState().get(21L).batchMemberId());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -9428,8 +9434,8 @@ public class SharePartitionTest {
         sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(0, 9, List.of(AcknowledgeType.RELEASE.id))));
         sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(10, 19, List.of(AcknowledgeType.RELEASE.id))));
 
-        // inFlightTerminalRecords will not be updated, because the acknowledgment type is RELEASE.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // deliveryCompleteCount will not be updated, because the acknowledgment type is RELEASE.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Complete future2 so second acknowledge API can be completed, which updates the cache.
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
@@ -9438,8 +9444,8 @@ public class SharePartitionTest {
                 PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
         future2.complete(writeShareGroupStateResult);
 
-        // Since the records successfully acknowledged are moved to AVAILABLE state, inFlightTerminalRecords will still not change.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // Since the records successfully acknowledged are moved to AVAILABLE state, deliveryCompleteCount will still not change.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Offsets 0-9 will have ongoing state transition since future1 is not complete yet.
         // Offsets 10-19 won't have ongoing state transition since future2 has been completed.
@@ -9481,8 +9487,8 @@ public class SharePartitionTest {
         sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(5, 9, List.of(AcknowledgeType.RELEASE.id))));
         sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(20, 24, List.of(AcknowledgeType.RELEASE.id))));
 
-        // inFlightTerminalRecords will not be updated, because the acknowledgment type is RELEASE.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // deliveryCompleteCount will not be updated, because the acknowledgment type is RELEASE.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Complete future2 so second acknowledge API can be completed, which updates the cache.
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
@@ -9491,8 +9497,8 @@ public class SharePartitionTest {
                 PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
         future2.complete(writeShareGroupStateResult);
 
-        // Since the records successfully acknowledged are moved to AVAILABLE state, inFlightTerminalRecords will still not change.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // Since the records successfully acknowledged are moved to AVAILABLE state, deliveryCompleteCount will still not change.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Offsets 5-9 will have ongoing state transition since future1 is not complete yet.
         // Offsets 20-24 won't have ongoing state transition since future2 has been completed.
@@ -9570,8 +9576,8 @@ public class SharePartitionTest {
         assertFalse(sharePartition.cachedState().get(0L).offsetState().get(2L).hasOngoingStateTransition());
         assertTrue(sharePartition.cachedState().get(5L).batchHasOngoingStateTransition());
 
-        // Records 1 and 5 -> 19 are acked with ACKNOWLEDGE type, thus inFlightTerminalRecords will account for these.
-        assertEquals(16, sharePartition.inFlightTerminalRecords());
+        // Records 1 and 5 -> 19 are acked with ACKNOWLEDGE type, thus deliveryCompleteCount will account for these.
+        assertEquals(16, sharePartition.deliveryCompleteCount());
 
         // Validate first timer task is already cancelled.
         assertTrue(timerTask1.isCancelled());
@@ -9591,8 +9597,8 @@ public class SharePartitionTest {
         future2.complete(writeShareGroupStateResult);
 
         // Now that the futures are completed, offsets 1 and 5 -> 19 are all committed to the final ACKNOWLEDGED state.
-        // The inFlightTerminalRecords will remain same as before the future is completed.
-        assertEquals(16, sharePartition.inFlightTerminalRecords());
+        // The deliveryCompleteCount will remain same as before the future is completed.
+        assertEquals(16, sharePartition.deliveryCompleteCount());
 
         // Verify timer tasks are now cancelled, except unacknowledged offsets.
         assertEquals(2, sharePartition.cachedState().size());
@@ -9622,7 +9628,7 @@ public class SharePartitionTest {
         timerTaskOffsetState3.run();
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).offsetState().get(2L).state());
 
-        assertEquals(16, sharePartition.inFlightTerminalRecords());
+        assertEquals(16, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -9655,8 +9661,8 @@ public class SharePartitionTest {
         // Validate that there is no ongoing transition.
         assertTrue(sharePartition.cachedState().get(2L).batchHasOngoingStateTransition());
         assertTrue(sharePartition.cachedState().get(7L).batchHasOngoingStateTransition());
-        // Records 7 -> 11 are acked with ACCEPT type, thus inFlightTerminalRecords will account for these.
-        assertEquals(5, sharePartition.inFlightTerminalRecords());
+        // Records 7 -> 11 are acked with ACCEPT type, thus deliveryCompleteCount will account for these.
+        assertEquals(5, sharePartition.deliveryCompleteCount());
 
         // Move LSO to 7, so some records/offsets can be marked archived for the first batch.
         sharePartition.updateCacheAndOffsets(7L);
@@ -9671,7 +9677,7 @@ public class SharePartitionTest {
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(2L).batchState());
         assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(7L).batchState());
 
-        assertEquals(5, sharePartition.inFlightTerminalRecords());
+        assertEquals(5, sharePartition.deliveryCompleteCount());
 
         // Complete future1 exceptionally so acknowledgement for 2-6 offsets will be completed.
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
@@ -9690,7 +9696,7 @@ public class SharePartitionTest {
         assertTrue(sharePartition.cachedState().get(7L).batchHasOngoingStateTransition());
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(2L).batchState());
         assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(7L).batchState());
-        assertEquals(5, sharePartition.inFlightTerminalRecords());
+        assertEquals(5, sharePartition.deliveryCompleteCount());
 
         future2.complete(writeShareGroupStateResult);
         assertEquals(12L, sharePartition.nextFetchOffset());
@@ -9699,9 +9705,9 @@ public class SharePartitionTest {
         assertEquals(2, sharePartition.cachedState().size());
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(2L).batchState());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(7L).batchState());
-        // After the write RPC failure, the record states are rolled back and inFlightTerminalRecords is calculated
-        // from scratch. Since there is no Terminal record now in flight, inFlightTerminalRecords becomes 0.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // After the write RPC failure, the record states are rolled back and deliveryCompleteCount is calculated
+        // from scratch. Since there is no Terminal record now in flight, deliveryCompleteCount becomes 0.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -9737,8 +9743,8 @@ public class SharePartitionTest {
         assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(0L).batchMemberId());
         // Timer task has not been expired yet.
         assertFalse(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask().hasExpired());
-        // Record are acked with ACKNOWLEDGED type, thus inFlightTerminalRecords will account for these.
-        assertEquals(2, sharePartition.inFlightTerminalRecords());
+        // Record are acked with ACKNOWLEDGED type, thus deliveryCompleteCount will account for these.
+        assertEquals(2, sharePartition.deliveryCompleteCount());
 
         // Allowing acquisition lock to expire. This will not cause any change because the record is not in ACQUIRED state.
         // This will remove the entry of the timer task from timer.
@@ -9755,7 +9761,7 @@ public class SharePartitionTest {
         // Timer task should be expired now.
         assertTrue(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask().hasExpired());
 
-        assertEquals(2, sharePartition.inFlightTerminalRecords());
+        assertEquals(2, sharePartition.deliveryCompleteCount());
 
         // Complete future exceptionally so acknowledgement for 0-1 offsets will be completed.
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
@@ -9770,9 +9776,9 @@ public class SharePartitionTest {
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).batchState());
         assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(0L).batchMemberId());
         assertNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
-        // After the write RPC failure, the record states are rolled back and inFlightTerminalRecords is calculated
-        // from scratch. Since there is no Terminal record now in flight, inFlightTerminalRecords becomes 0.
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        // After the write RPC failure, the record states are rolled back and deliveryCompleteCount is calculated
+        // from scratch. Since there is no Terminal record now in flight, deliveryCompleteCount becomes 0.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -9802,8 +9808,8 @@ public class SharePartitionTest {
         assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(7L).batchState());
         assertEquals(1, sharePartition.cachedState().get(7L).batchDeliveryCount());
 
-        // Records 3 and 7 -> 11 are acked with ACKNOWLEDGE type, thus inFlightTerminalRecords will account for these.
-        assertEquals(6, sharePartition.inFlightTerminalRecords());
+        // Records 3 and 7 -> 11 are acked with ACKNOWLEDGE type, thus deliveryCompleteCount will account for these.
+        assertEquals(6, sharePartition.deliveryCompleteCount());
 
         WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
         Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
@@ -9816,7 +9822,7 @@ public class SharePartitionTest {
         assertEquals(1, sharePartition.cachedState().get(2L).offsetState().get(3L).deliveryCount());
         assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(7L).batchState());
         assertEquals(1, sharePartition.cachedState().get(7L).batchDeliveryCount());
-        assertEquals(5, sharePartition.inFlightTerminalRecords());
+        assertEquals(5, sharePartition.deliveryCompleteCount());
 
         future2.complete(writeShareGroupStateResult);
         assertEquals(12L, sharePartition.nextFetchOffset());
@@ -9825,7 +9831,7 @@ public class SharePartitionTest {
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(7L).batchState());
         assertEquals(1, sharePartition.cachedState().get(7L).batchDeliveryCount());
 
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Allowing acquisition lock to expire. This will also ensure that acquisition lock timeout task
         // is run successfully post write state RPC failure.
@@ -9840,7 +9846,7 @@ public class SharePartitionTest {
             () -> assertionFailedMessage(sharePartition, Map.of(2L, List.of(3L), 7L, List.of())));
         // Acquisition lock timeout task has run already and next fetch offset is moved to 2.
         assertEquals(2, sharePartition.nextFetchOffset());
-        assertEquals(0, sharePartition.inFlightTerminalRecords());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
 
         // Send the same batches again.
         fetchAcquiredRecords(sharePartition, memoryRecords(2, 5), 5);
@@ -9853,7 +9859,7 @@ public class SharePartitionTest {
         sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(3, 3, List.of(AcknowledgeType.ACCEPT.id))));
         sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(7, 11, List.of(AcknowledgeType.ACCEPT.id))));
 
-        assertEquals(6, sharePartition.inFlightTerminalRecords());
+        assertEquals(6, sharePartition.deliveryCompleteCount());
 
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
         // Verify the timer tasks have run and the state is archived for the offsets which are not acknowledged,
@@ -9868,9 +9874,9 @@ public class SharePartitionTest {
             DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
             () -> assertionFailedMessage(sharePartition, Map.of(2L, List.of(3L), 7L, List.of())));
 
-        // After the acquisition lock timeout task has expired, records 2, 4 -> 6 are archived, and thus inFlightTerminalRecords
+        // After the acquisition lock timeout task has expired, records 2, 4 -> 6 are archived, and thus deliveryCompleteCount
         // increases by 4.
-        assertEquals(10, sharePartition.inFlightTerminalRecords());
+        assertEquals(10, sharePartition.deliveryCompleteCount());
 
         future1.complete(writeShareGroupStateResult);
         // Now the state should be archived for the offsets despite the write state RPC failure, as the
@@ -9887,8 +9893,508 @@ public class SharePartitionTest {
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(7L).batchState());
         assertEquals(2, sharePartition.cachedState().get(7L).batchDeliveryCount());
         // At this point, the batch 2 -> 6 is removed from the cached state and startOffset is moved to 7. Thus, in flight
-        // contains records 7 -> 11 which are archived. Therefore, inFlightTerminalRecords becomes 5.
-        assertEquals(5, sharePartition.inFlightTerminalRecords());
+        // contains records 7 -> 11 which are archived. Therefore, deliveryCompleteCount becomes 5.
+        assertEquals(5, sharePartition.deliveryCompleteCount());
+    }
+
+    @Test
+    public void testAckTypeToRecordStateMapping() {
+        // This test will help catch bugs if the map changes.
+        Map<Byte, RecordState> actualMap = SharePartition.ackTypeToRecordStateMapping();
+        assertEquals(4, actualMap.size());
+
+        Map<Byte, RecordState> expected = Map.of(
+            (byte) 0, RecordState.ARCHIVED,
+            AcknowledgeType.ACCEPT.id, RecordState.ACKNOWLEDGED,
+            AcknowledgeType.RELEASE.id, RecordState.AVAILABLE,
+            AcknowledgeType.REJECT.id, RecordState.ARCHIVED
+        );
+
+        for (byte key : expected.keySet()) {
+            assertEquals(expected.get(key), actualMap.get(key));
+        }
+    }
+
+    @Test
+    public void testFetchAckTypeMapForBatch() {
+        ShareAcknowledgementBatch batch = mock(ShareAcknowledgementBatch.class);
+        when(batch.acknowledgeTypes()).thenReturn(List.of((byte) -1));
+        assertThrows(IllegalArgumentException.class, () -> SharePartition.fetchAckTypeMapForBatch(batch));
+    }
+
+    @Test
+    public void testRenewAcknowledgeWithCompleteBatchAck() throws InterruptedException {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withPersister(persister)
+            .build();
+
+        List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 1), 1);
+        assertEquals(1, records.size());
+        assertEquals(records.get(0).firstOffset(), records.get(0).lastOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        InFlightBatch batch = sharePartition.cachedState().get(0L);
+        AcquisitionLockTimerTask taskOrig = batch.batchAcquisitionLockTimeoutTask();
+
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(0, 0, List.of(AcknowledgeType.RENEW.id))));
+        assertTrue(taskOrig.isCancelled()); // Original acq lock cancelled.
+        assertNotEquals(taskOrig, batch.batchAcquisitionLockTimeoutTask()); // Lock changes.
+        assertEquals(1, sharePartition.timer().size()); // Timer jobs
+        assertEquals(RecordState.ACQUIRED, batch.batchState());
+        Mockito.verify(persister, Mockito.times(0)).writeState(Mockito.any());  // No persister call.
+
+        // Expire timer
+        // On expiration state will transition to AVAILABLE resulting in persister write RPC
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        mockTimer.advanceClock(ACQUISITION_LOCK_TIMEOUT_MS + 1);    // Trigger expire
+
+        assertNull(batch.batchAcquisitionLockTimeoutTask());
+        assertEquals(RecordState.AVAILABLE, batch.batchState());    // Verify batch record state
+        assertEquals(0, sharePartition.timer().size()); // Timer jobs
+        Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());  // 1 persister call.
+    }
+
+    @Test
+    public void testRenewAcknowledgeOnExpiredBatch() throws InterruptedException {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withPersister(persister)
+            .build();
+
+        List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 1), 1);
+        assertEquals(1, records.size());
+        assertEquals(records.get(0).firstOffset(), records.get(0).lastOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        InFlightBatch batch = sharePartition.cachedState().get(0L);
+        AcquisitionLockTimerTask taskOrig = batch.batchAcquisitionLockTimeoutTask();
+
+        // Expire acq lock timeout.
+        // Persister mocking for recordState transition.
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+
+        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        mockTimer.advanceClock(ACQUISITION_LOCK_TIMEOUT_MS + 1);
+        TestUtils.waitForCondition(() -> batch.batchAcquisitionLockTimeoutTask() == null, "Acq lock timeout not cancelled.");
+        CompletableFuture<Void> future = sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(0, 0, List.of(AcknowledgeType.RENEW.id))));
+
+        assertTrue(future.isCompletedExceptionally());
+        try {
+            future.get();
+            fail("No exception thrown");
+        } catch (Exception e) {
+            assertNotNull(e);
+            assertInstanceOf(InvalidRecordStateException.class, e.getCause());
+        }
+        assertTrue(taskOrig.isCancelled()); // Original acq lock cancelled.
+        assertNotEquals(taskOrig, batch.batchAcquisitionLockTimeoutTask()); // Lock changes.
+        assertEquals(0, sharePartition.timer().size()); // Timer jobs
+        assertEquals(RecordState.AVAILABLE, batch.batchState());
+        Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());  // 1 persister call to update record state.
+    }
+
+    @Test
+    public void testRenewAcknowledgeWithPerOffsetAck() throws InterruptedException {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withPersister(persister)
+            .build();
+
+        List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 2), 2);
+        assertEquals(1, records.size());
+        assertEquals(records.get(0).firstOffset() + 1, records.get(0).lastOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        InFlightBatch batch = sharePartition.cachedState().get(0L);
+        assertEquals(RecordState.ACQUIRED, batch.batchState());
+        AcquisitionLockTimerTask taskOrig = batch.batchAcquisitionLockTimeoutTask();
+
+        // For ACCEPT ack call.
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+
+        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(0, 1,
+            List.of(AcknowledgeType.RENEW.id, AcknowledgeType.ACCEPT.id))));
+
+        assertTrue(taskOrig.isCancelled()); // Original acq lock cancelled.
+        assertNotEquals(taskOrig, sharePartition.cachedState().get(0L).offsetState().get(0L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(0L).offsetState());
+
+        InFlightState offset0 = sharePartition.cachedState().get(0L).offsetState().get(0L);
+        InFlightState offset1 = sharePartition.cachedState().get(0L).offsetState().get(1L);
+        assertEquals(RecordState.ACQUIRED, offset0.state());
+        assertNotNull(offset0.acquisitionLockTimeoutTask());
+        assertEquals(1, sharePartition.timer().size()); // Timer jobs
+
+        assertEquals(RecordState.ACKNOWLEDGED, offset1.state());
+        assertNull(offset1.acquisitionLockTimeoutTask());
+
+        Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());
+
+        // Expire timer
+        mockTimer.advanceClock(ACQUISITION_LOCK_TIMEOUT_MS + 1);    // Trigger expire
+
+        assertNull(offset0.acquisitionLockTimeoutTask());
+        assertEquals(RecordState.AVAILABLE, offset0.state());    // Verify batch record state
+        assertEquals(0, sharePartition.timer().size()); // Timer jobs
+        Mockito.verify(persister, Mockito.times(2)).writeState(Mockito.any());  // 1 more persister call.
+    }
+
+    @Test
+    public void testLsoMovementWithBatchRenewal() {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withPersister(persister)
+            .build();
+
+        List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 10), 10);
+        assertEquals(1, records.size());
+        assertNotEquals(records.get(0).firstOffset(), records.get(0).lastOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        InFlightBatch batch = sharePartition.cachedState().get(0L);
+        AcquisitionLockTimerTask taskOrig = batch.batchAcquisitionLockTimeoutTask();
+
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(0, 9, List.of(AcknowledgeType.RENEW.id))));
+        sharePartition.updateCacheAndOffsets(5);
+
+        assertEquals(10, sharePartition.nextFetchOffset());
+        assertEquals(5, sharePartition.startOffset());
+        assertEquals(9, sharePartition.endOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+
+        assertEquals(MEMBER_ID, sharePartition.cachedState().get(0L).batchMemberId());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).batchState());
+
+        assertTrue(taskOrig.isCancelled()); // Original acq lock cancelled.
+        assertNotEquals(taskOrig, batch.batchAcquisitionLockTimeoutTask()); // Lock changes.
+        assertEquals(1, sharePartition.timer().size()); // Timer jobs
+        Mockito.verify(persister, Mockito.times(0)).writeState(Mockito.any());  // No persister call.
+    }
+
+    @Test
+    public void testLsoMovementWithPerOffsetRenewal() throws InterruptedException {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withPersister(persister)
+            .build();
+
+        List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 5), 5);
+        assertEquals(1, records.size());
+        assertEquals(records.get(0).firstOffset() + 4, records.get(0).lastOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        InFlightBatch batch = sharePartition.cachedState().get(0L);
+        assertEquals(RecordState.ACQUIRED, batch.batchState());
+        AcquisitionLockTimerTask taskOrig = batch.batchAcquisitionLockTimeoutTask();
+
+        // For ACCEPT ack call.
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+
+        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(0, 4,
+            List.of(AcknowledgeType.RENEW.id, AcknowledgeType.ACCEPT.id, AcknowledgeType.RENEW.id, AcknowledgeType.ACCEPT.id, AcknowledgeType.RENEW.id))));
+
+        sharePartition.updateCacheAndOffsets(3);
+
+        assertEquals(5, sharePartition.nextFetchOffset());
+        assertEquals(3, sharePartition.startOffset());
+        assertEquals(4, sharePartition.endOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+
+        assertTrue(taskOrig.isCancelled()); // Original acq lock cancelled.
+        assertNotEquals(taskOrig, sharePartition.cachedState().get(0L).offsetState().get(0L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(0L).offsetState());
+
+        InFlightState offset0 = sharePartition.cachedState().get(0L).offsetState().get(0L);
+        InFlightState offset1 = sharePartition.cachedState().get(0L).offsetState().get(1L);
+        InFlightState offset2 = sharePartition.cachedState().get(0L).offsetState().get(2L);
+        InFlightState offset3 = sharePartition.cachedState().get(0L).offsetState().get(3L);
+        InFlightState offset4 = sharePartition.cachedState().get(0L).offsetState().get(4L);
+
+        assertEquals(RecordState.ACQUIRED, offset0.state());
+        assertNotNull(offset0.acquisitionLockTimeoutTask());
+
+        assertEquals(RecordState.ACKNOWLEDGED, offset1.state());
+        assertNull(offset1.acquisitionLockTimeoutTask());
+
+        assertEquals(RecordState.ACQUIRED, offset2.state());
+        assertNotNull(offset2.acquisitionLockTimeoutTask());
+
+        assertEquals(RecordState.ACKNOWLEDGED, offset3.state());
+        assertNull(offset3.acquisitionLockTimeoutTask());
+
+        assertEquals(RecordState.ACQUIRED, offset4.state());
+        assertNotNull(offset4.acquisitionLockTimeoutTask());
+
+        assertEquals(3, sharePartition.timer().size()); // Timer jobs - 3 because the renewed offsets are non-contiguous.
+
+        // Expire timer
+        mockTimer.advanceClock(ACQUISITION_LOCK_TIMEOUT_MS + 1);    // Trigger expire
+        List<RecordState> expectedStates = List.of(RecordState.ARCHIVED, RecordState.ACKNOWLEDGED, RecordState.ARCHIVED, RecordState.ACKNOWLEDGED, RecordState.AVAILABLE);
+        for (long i = 0; i <= 4; i++) {
+            InFlightState offset = sharePartition.cachedState().get(0L).offsetState().get(i);
+            assertNull(offset.acquisitionLockTimeoutTask());
+            assertEquals(expectedStates.get((int) i), offset.state());
+        }
+
+        assertEquals(0, sharePartition.timer().size()); // Timer jobs
+
+        Mockito.verify(persister, Mockito.times(4)).writeState(Mockito.any());
+    }
+
+    @Test
+    public void testRenewAcknowledgeWithPerOffsetAndBatchMix() {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withPersister(persister)
+            .build();
+
+        // Batch
+        List<AcquiredRecords> recordsB = fetchAcquiredRecords(sharePartition, memoryRecords(0, 1), 1);
+        assertEquals(1, recordsB.size());
+        assertEquals(recordsB.get(0).firstOffset(), recordsB.get(0).lastOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        InFlightBatch batchB = sharePartition.cachedState().get(0L);
+        AcquisitionLockTimerTask taskOrigB = batchB.batchAcquisitionLockTimeoutTask();
+
+        // Per offset
+        List<AcquiredRecords> recordsO = fetchAcquiredRecords(sharePartition, memoryRecords(1, 2), 2);
+        assertEquals(1, recordsO.size());
+        assertEquals(recordsO.get(0).firstOffset() + 1, recordsO.get(0).lastOffset());
+        assertEquals(2, sharePartition.cachedState().size());
+        InFlightBatch batchO = sharePartition.cachedState().get(0L);
+        assertEquals(RecordState.ACQUIRED, batchO.batchState());
+        AcquisitionLockTimerTask taskOrigO = batchO.batchAcquisitionLockTimeoutTask();
+
+        // For ACCEPT ack call.
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+
+        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        sharePartition.acknowledge(MEMBER_ID, List.of(
+            new ShareAcknowledgementBatch(0, 0, List.of(AcknowledgeType.RENEW.id)),
+            new ShareAcknowledgementBatch(1, 2, List.of(AcknowledgeType.RENEW.id, AcknowledgeType.ACCEPT.id))
+        ));
+
+        // Batch checks
+        assertTrue(taskOrigB.isCancelled()); // Original acq lock cancelled.
+        assertNotEquals(taskOrigB, batchB.batchAcquisitionLockTimeoutTask()); // Lock changes.
+
+        // Per offset checks
+        assertTrue(taskOrigO.isCancelled()); // Original acq lock cancelled.
+        assertNotEquals(taskOrigO, sharePartition.cachedState().get(1L).offsetState().get(1L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(1L).offsetState());
+
+        InFlightState offset1 = sharePartition.cachedState().get(1L).offsetState().get(1L);
+        InFlightState offset2 = sharePartition.cachedState().get(1L).offsetState().get(2L);
+        assertEquals(RecordState.ACQUIRED, offset1.state());
+        assertNotNull(offset1.acquisitionLockTimeoutTask());
+
+        assertEquals(RecordState.ACKNOWLEDGED, offset2.state());
+        assertNull(offset2.acquisitionLockTimeoutTask());
+
+        assertEquals(2, sharePartition.timer().size()); // Timer jobs one for batch and one for single renewal in per offset.
+        Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());
+    }
+
+    @Test
+    public void testLsoMovementWithPendingAcknowledgements() throws InterruptedException {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withPersister(persister)
+            .build();
+
+        List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 5), 5);
+        assertEquals(1, records.size());
+        assertEquals(0, records.get(0).firstOffset());
+        assertEquals(4, records.get(0).lastOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).batchState());
+        AcquisitionLockTimerTask taskOrig = sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask();
+
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        // Acknowledge offsets 1 and 3 out of 0-4 with ACCEPT.
+        sharePartition.acknowledge(MEMBER_ID, List.of(
+            new ShareAcknowledgementBatch(1, 1, List.of(AcknowledgeType.ACCEPT.id)),
+            new ShareAcknowledgementBatch(3, 3, List.of(AcknowledgeType.ACCEPT.id))));
+
+        // Move LSO to 3.
+        sharePartition.updateCacheAndOffsets(3);
+
+        assertEquals(5, sharePartition.nextFetchOffset());
+        assertEquals(3, sharePartition.startOffset());
+        assertEquals(4, sharePartition.endOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+
+        assertTrue(taskOrig.isCancelled()); // Original acq lock cancelled.
+        assertNotEquals(taskOrig, sharePartition.cachedState().get(0L).offsetState().get(0L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(0L).offsetState());
+
+        InFlightState offset0 = sharePartition.cachedState().get(0L).offsetState().get(0L);
+        InFlightState offset1 = sharePartition.cachedState().get(0L).offsetState().get(1L);
+        InFlightState offset2 = sharePartition.cachedState().get(0L).offsetState().get(2L);
+        InFlightState offset3 = sharePartition.cachedState().get(0L).offsetState().get(3L);
+        InFlightState offset4 = sharePartition.cachedState().get(0L).offsetState().get(4L);
+
+        assertEquals(RecordState.ACQUIRED, offset0.state());
+        assertNotNull(offset0.acquisitionLockTimeoutTask());
+
+        assertEquals(RecordState.ACKNOWLEDGED, offset1.state());
+        assertNull(offset1.acquisitionLockTimeoutTask());
+
+        assertEquals(RecordState.ACQUIRED, offset2.state());
+        assertNotNull(offset2.acquisitionLockTimeoutTask());
+
+        assertEquals(RecordState.ACKNOWLEDGED, offset3.state());
+        assertNull(offset3.acquisitionLockTimeoutTask());
+
+        assertEquals(RecordState.ACQUIRED, offset4.state());
+        assertNotNull(offset4.acquisitionLockTimeoutTask());
+
+        assertEquals(3, sharePartition.timer().size()); // offsets 0,2 and 4 are still in ACQUIRED state.
+
+        // Expire acquisition lock timeout
+        mockTimer.advanceClock(ACQUISITION_LOCK_TIMEOUT_MS + 1);
+        List<RecordState> expectedStates = List.of(RecordState.ARCHIVED, RecordState.ACKNOWLEDGED, RecordState.ARCHIVED, RecordState.ACKNOWLEDGED, RecordState.AVAILABLE);
+        for (long i = 0; i <= 4; i++) {
+            InFlightState offset = sharePartition.cachedState().get(0L).offsetState().get(i);
+            assertNull(offset.acquisitionLockTimeoutTask());
+            assertEquals(expectedStates.get((int) i), offset.state());
+        }
+
+        assertEquals(0, sharePartition.timer().size()); // All timer jobs have completed
+        Mockito.verify(persister, Mockito.times(4)).writeState(Mockito.any());
+    }
+
+    @Test
+    public void testLsoMovementWithPendingAcknowledgementsForBatches() throws InterruptedException {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withPersister(persister)
+            .build();
+
+        fetchAcquiredRecords(sharePartition, memoryRecords(0, 5), 5);
+        fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
+        fetchAcquiredRecords(sharePartition, memoryRecords(15, 5), 5);
+        fetchAcquiredRecords(sharePartition, memoryRecords(20, 5), 5);
+        assertEquals(5, sharePartition.cachedState().size());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).batchState());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(15L).batchState());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(20L).batchState());
+
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+        when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        // Acknowledge batches 5-9 and 15-19 with ACCEPT.
+        sharePartition.acknowledge(MEMBER_ID, List.of(
+            new ShareAcknowledgementBatch(5, 9, List.of(AcknowledgeType.ACCEPT.id)),
+            new ShareAcknowledgementBatch(15, 19, List.of(AcknowledgeType.ACCEPT.id))));
+
+        // Move LSO to 12.
+        sharePartition.updateCacheAndOffsets(12);
+
+        assertEquals(25, sharePartition.nextFetchOffset());
+        assertEquals(12, sharePartition.startOffset());
+        assertEquals(24, sharePartition.endOffset());
+        assertEquals(5, sharePartition.cachedState().size());
+
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).batchState());
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(5L).batchState());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(15L).batchState());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(20L).batchState());
+        assertNotNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(15L).batchAcquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(20L).batchAcquisitionLockTimeoutTask());
+
+        assertEquals(3, sharePartition.timer().size());
+
+        // Expire acquisition lock timeout.
+        mockTimer.advanceClock(ACQUISITION_LOCK_TIMEOUT_MS + 1);
+
+        assertEquals(12, sharePartition.nextFetchOffset());
+        assertEquals(12, sharePartition.startOffset());
+        assertEquals(24, sharePartition.endOffset());
+        assertEquals(5, sharePartition.cachedState().size());
+
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(0L).batchState());
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(5L).batchState());
+        // Batch 10-14 will now be tracked on a per-offset basis.
+        assertNotNull(sharePartition.cachedState().get(10L).offsetState());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(10L).offsetState().get(10L).state());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(10L).offsetState().get(11L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(10L).offsetState().get(12L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(10L).offsetState().get(13L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(10L).offsetState().get(14L).state());
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(15L).batchState());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(20L).batchState());
+
+        assertNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(10L).offsetState().get(10L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(10L).offsetState().get(11L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(10L).offsetState().get(12L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(10L).offsetState().get(13L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(10L).offsetState().get(14L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(15L).batchAcquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(20L).batchAcquisitionLockTimeoutTask());
+
+        assertEquals(0, sharePartition.timer().size()); // All timer jobs have completed
+        Mockito.verify(persister, Mockito.times(4)).writeState(Mockito.any());
     }
 
     /**
