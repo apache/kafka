@@ -445,7 +445,7 @@ public class SharePartitionManager implements AutoCloseable {
      * @param groupId The group id in the share fetch request.
      * @param shareFetchData The topic-partitions in the share fetch request.
      * @param toForget The topic-partitions to forget present in the share fetch request.
-     * @param memberId The member is in the share fetch request.
+     * @param memberId The member id in the share fetch request.
      * @param shareSessionEpoch The epoch of share session utilized in the share fetch request.
      * @param isAcknowledgeDataPresent This tells whether the fetch request received includes piggybacked acknowledgements or not.
      * @param clientConnectionId The client connection id.
@@ -529,7 +529,7 @@ public class SharePartitionManager implements AutoCloseable {
     /**
      * The acknowledgeSessionUpdate method is used to update the request epoch and lastUsed time of the share session.
      * @param groupId The group id in the share fetch request.
-     * @param memberId The member is in the share fetch request.
+     * @param memberId The member id in the share fetch request.
      * @param shareSessionEpoch The epoch of share session utilized in the share fetch request.
      */
     public void acknowledgeSessionUpdate(String groupId, String memberId, int shareSessionEpoch) {
