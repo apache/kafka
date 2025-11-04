@@ -732,23 +732,18 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             return false;
         }
 
+        final boolean wasReady = lastNotReadyLogTime == -1L;
         if (hasPendingTxCommit) {
             // if the task has a pending TX commit, we should just retry the commit but not process any records
             // thus, the task is not processable, even if there is available data in the record queue
-            final boolean wasReady = lastNotReadyLogTime == -1L;
             if (wasReady) {
                 // READY -> NOT_READY - start timer
                 lastNotReadyLogTime = wallClockTime;
-                if (timeCurrentIdlingStarted.isEmpty()) {
-                    timeCurrentIdlingStarted = Optional.of(wallClockTime);
-                }
             } else {
                 // NOT_READY - check if it should log
                 final long timeSinceLastLog = wallClockTime - lastNotReadyLogTime;
                 if (timeSinceLastLog >= NOT_READY_LOG_INTERVAL_MS) {
-                    final long notReadyDuration = wallClockTime - timeCurrentIdlingStarted.orElse(wallClockTime);
-                    log.info("Task is not ready to process (not ready for {}ms): task has pending transaction commit",
-                            notReadyDuration);
+                    log.info("Task is not ready to process: has pending transaction commit");
                     lastNotReadyLogTime = wallClockTime;
                 }
             }
@@ -757,7 +752,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         final boolean readyToProcess = partitionGroup.readyToProcess(wallClockTime);
         if (!readyToProcess) {
-            final boolean wasReady = lastNotReadyLogTime == -1L;
             if (wasReady) {
                 // READY -> NOT_READY - start the timer
                 lastNotReadyLogTime = wallClockTime;
@@ -766,9 +760,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 // NOT_READY - check if it should log
                 final long timeSinceLastLog = wallClockTime - lastNotReadyLogTime;
                 if (timeSinceLastLog >= NOT_READY_LOG_INTERVAL_MS) {
-                    final long notReadyDuration = wallClockTime - timeCurrentIdlingStarted.orElse(wallClockTime);
                     final String reason = getNotReadyPartitionStatus();
-                    log.info("Task is not ready to process (not ready for {}ms): {}", notReadyDuration, reason);
+                    log.info("Task is not ready to process (started idling at time {}): {}", timeCurrentIdlingStarted.orElse(-1L), reason);
                     lastNotReadyLogTime = wallClockTime;
                 }
             }
