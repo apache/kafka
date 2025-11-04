@@ -10004,7 +10004,7 @@ public class SharePartitionTest {
         assertNotEquals(taskOrig, batch.batchAcquisitionLockTimeoutTask()); // Lock changes.
         assertEquals(0, sharePartition.timer().size()); // Timer jobs
         assertEquals(RecordState.AVAILABLE, batch.batchState());
-        Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());  // No persister call.
+        Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());  // 1 persister call to update record state.
     }
 
     @Test
