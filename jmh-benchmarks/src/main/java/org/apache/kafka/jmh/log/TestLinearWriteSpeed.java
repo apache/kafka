@@ -23,7 +23,6 @@ import org.apache.kafka.common.compress.ZstdCompression;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
@@ -56,8 +55,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
