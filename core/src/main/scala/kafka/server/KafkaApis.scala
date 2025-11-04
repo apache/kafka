@@ -3178,13 +3178,11 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val shareFetchData = shareFetchRequest.shareFetchData(topicIdNames)
     val forgottenTopics = shareFetchRequest.forgottenTopics(topicIdNames)
-
-    val newReqMetadata: ShareRequestMetadata = new ShareRequestMetadata(Uuid.fromString(memberId), shareSessionEpoch)
     var shareFetchContext: ShareFetchContext = null
 
     try {
       // Creating the shareFetchContext for Share Session Handling. if context creation fails, the request is failed directly here.
-      shareFetchContext = sharePartitionManager.newContext(groupId, shareFetchData, forgottenTopics, newReqMetadata, isAcknowledgeDataPresent, request.context.connectionId)
+      shareFetchContext = sharePartitionManager.newContext(groupId, shareFetchData, forgottenTopics, memberId, shareSessionEpoch, isAcknowledgeDataPresent, request.context.connectionId)
     } catch {
       case _: ShareSessionLimitReachedException =>
         sharePartitionManager.createIdleShareFetchTimerTask(shareFetchRequest.maxWait).handle(
@@ -3489,11 +3487,10 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val memberId = shareAcknowledgeRequest.data.memberId
     val shareSessionEpoch = shareAcknowledgeRequest.data.shareSessionEpoch
-    val newReqMetadata: ShareRequestMetadata = new ShareRequestMetadata(Uuid.fromString(memberId), shareSessionEpoch)
 
     try {
       // Updating the cache for Share Session Handling
-      sharePartitionManager.acknowledgeSessionUpdate(groupId, newReqMetadata)
+      sharePartitionManager.acknowledgeSessionUpdate(groupId, memberId, shareSessionEpoch)
     } catch {
       case e: Exception =>
         requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e))
@@ -4111,7 +4108,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       shareFetchResponse = shareFetchContext.throttleResponse(maxThrottleTimeMs)
     } else {
       // Get the actual response. This will update the fetch context.
-      shareFetchResponse = shareFetchContext.updateAndGenerateResponseData(groupId, Uuid.fromString(memberId), partitions)
+      shareFetchResponse = shareFetchContext.updateAndGenerateResponseData(groupId, memberId, partitions)
       val responsePartitionsSize = shareFetchResponse.data.responses.stream().mapToInt(_.partitions.size()).sum()
       trace(s"Sending Share Fetch response with partitions size=$responsePartitionsSize")
     }
