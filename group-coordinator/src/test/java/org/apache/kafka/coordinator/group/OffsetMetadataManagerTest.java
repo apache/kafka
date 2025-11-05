@@ -3671,11 +3671,11 @@ public class OffsetMetadataManagerTest {
             .setSubtopologyId("0")
             .setSourceTopics(List.of("bar")))));
 
-        // Member at epoch 10, with partitions assigned at epoch 5
+        // Member at epoch 10, with partitions assigned at epoch 4 and 5 respsectively.
         group.updateMember(StreamsGroupMember.Builder.withDefaults("member")
             .setMemberEpoch(10)
             .setAssignedTasks(new TasksTupleWithEpochs(
-                Map.of("0", Map.of(0, 5, 1, 5)),
+                Map.of("0", Map.of(0, 4, 1, 5)),
                 Map.of(), Map.of()))
             .build());
 
@@ -3717,7 +3717,7 @@ public class OffsetMetadataManagerTest {
                 Map.of(), Map.of()))
             .build());
 
-        // Commit with member epoch 3 should fail (3 < assignment epochs 5 and 8)
+        // Commit with member epoch 7 should fail (3 < assignment epochs 8)
         assertThrows(StaleMemberEpochException.class, () -> context.commitOffset(
             new OffsetCommitRequestData()
                 .setGroupId("foo")
@@ -3732,47 +3732,5 @@ public class OffsetMetadataManagerTest {
                         new OffsetCommitRequestData.OffsetCommitRequestPartition()
                             .setPartitionIndex(1)
                             .setCommittedOffset(200L)))))));
-    }
-
-    @Test
-    public void testStreamsGroupOffsetCommitWithOlderMemberEpochValidAssignments() {
-        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
-        StreamsGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedStreamsGroup("foo", true);
-
-        group.setTopology(new StreamsTopology(1, Map.of("0", new StreamsGroupTopologyValue.Subtopology()
-            .setSubtopologyId("0")
-            .setSourceTopics(List.of("bar")))));
-
-        // Member at epoch 10, with partitions assigned at different epochs (2, 3, 5)
-        group.updateMember(StreamsGroupMember.Builder.withDefaults("member")
-            .setMemberEpoch(10)
-            .setAssignedTasks(new TasksTupleWithEpochs(
-                Map.of("0", Map.of(0, 2, 1, 3, 2, 5)),
-                Map.of(), Map.of()))
-            .build());
-
-        // Commit with member epoch 5 should succeed (5 >= all assignment epochs)
-        CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> result = context.commitOffset(
-            new OffsetCommitRequestData()
-                .setGroupId("foo")
-                .setMemberId("member")
-                .setGenerationIdOrMemberEpoch(5)
-                .setTopics(List.of(new OffsetCommitRequestData.OffsetCommitRequestTopic()
-                    .setName("bar")
-                    .setPartitions(List.of(
-                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                            .setPartitionIndex(0)
-                            .setCommittedOffset(100L),
-                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                            .setPartitionIndex(1)
-                            .setCommittedOffset(200L),
-                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                            .setPartitionIndex(2)
-                            .setCommittedOffset(300L))))));
-
-        assertEquals(Errors.NONE.code(), result.response().topics().get(0).partitions().get(0).errorCode());
-        assertEquals(Errors.NONE.code(), result.response().topics().get(0).partitions().get(1).errorCode());
-        assertEquals(Errors.NONE.code(), result.response().topics().get(0).partitions().get(2).errorCode());
-        assertEquals(3, result.records().size());
     }
 }

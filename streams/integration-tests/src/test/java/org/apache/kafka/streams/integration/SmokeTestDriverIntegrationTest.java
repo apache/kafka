@@ -223,7 +223,7 @@ public class SmokeTestDriverIntegrationTest {
         // We check that we did no have to reprocess any records, which would indicate a bug since everything
         // runs locally in this test.
         assertEquals(expectedRecords, numDataRecordsProcessed,
-            String.format("It seems we had to reprocess records, with %d processed records expected, but %d records processed.",
+            String.format("It seems we had to reprocess records, expected %d records, processed %d records.",
                 expectedRecords,
                 numDataRecordsProcessed)
         );

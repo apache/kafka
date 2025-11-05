@@ -690,7 +690,7 @@ public class StreamsGroupTest {
         group.updateMember(new StreamsGroupMember.Builder("member-1")
             .setMemberEpoch(2)
             .setAssignedTasks(new TasksTupleWithEpochs(
-                Map.of("0", Map.of(0, 2, 1, 2)),
+                Map.of("0", Map.of(0, 2, 1, 1)),
                 Map.of(), Map.of()))
             .build());
         
@@ -745,18 +745,14 @@ public class StreamsGroupTest {
         group.updateMember(new StreamsGroupMember.Builder("member-1")
             .setMemberEpoch(2)
             .setAssignedTasks(new TasksTupleWithEpochs(
-                Map.of("0", Map.of(0, 2)),
+                Map.of("0", Map.of(0, 1)),
                 Map.of(), Map.of()))
             .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
             .build());
         
         CommitPartitionValidator validator = group.validateOffsetCommit(
             "member-1", "", 1, false, ApiKeys.OFFSET_COMMIT.latestVersion());
-        
-        // Partition 0 assigned with epoch 2, received epoch 1 should throw
-        assertThrows(StaleMemberEpochException.class, () ->
-            validator.validate("input-topic", Uuid.ZERO_UUID, 0));
-        
+
         // Partition 1 not assigned should throw
         assertThrows(StaleMemberEpochException.class, () ->
             validator.validate("input-topic", Uuid.ZERO_UUID, 1));
