@@ -1609,22 +1609,19 @@ public class StreamTaskTest {
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
-        
-        // Make task not ready by not adding records to all partitions
-        // Only add records to partition1, not partition2, so task is not ready
+
         task.addRecords(partition1, singleton(getConsumerRecordWithOffsetAsTimestamp(partition1, 0)));
         
-        // Use reflection to set lastNotReadyLogTime to simulate it's been stale
+        // Set lastNotReadyLogTime to simulate staleness
         final Field lastNotReadyLogTimeField = StreamTask.class.getDeclaredField("lastNotReadyLogTime");
         lastNotReadyLogTimeField.setAccessible(true);
-        
-        // Use LogCaptureAppender to capture log messages
+
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamTask.class)) {
-            // Set lastNotReadyLogTime so that after advancing 20 seconds, it will trigger logging
+            // Set lastNotReadyLogTime to 100 seconds ago
             final long initialTime = time.milliseconds();
             lastNotReadyLogTimeField.set(task, Optional.of(initialTime - 100_000L));
             
-            // Advance time by 5 seconds to simulate staleness
+            // Advance time by approximately 5 seconds
             long newTime = time.milliseconds() + 5_000L;
             
             // Should not trigger logging after being stale for 105 seconds
@@ -1632,7 +1629,7 @@ public class StreamTaskTest {
             List<String> messages = appender.getMessages();
             assertEquals(0, messages.size(), "No log message should be logged before 20 seconds");
 
-            // Advance time by approximately 20 seconds to simulate staleness
+            // Advance time by approximately 20 seconds
             newTime = time.milliseconds() + 20_000L;
 
             // Should trigger logging after being stale for 120 seconds
