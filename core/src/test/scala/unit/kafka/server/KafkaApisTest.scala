@@ -7625,7 +7625,7 @@ class KafkaApisTest extends Logging {
 
     kafkaApis = createKafkaApis()
     val acknowledgeBatches = kafkaApis.getAcknowledgeBatchesFromShareFetchRequest(shareFetchRequest, topicIdNames, erroneous)
-    val erroneousTopicIdPartitions = kafkaApis.validateAcknowledgementBatches(acknowledgeBatches, erroneous, ApiKeys.SHARE_FETCH.latestVersion, isRenewAck = false)
+    val erroneousTopicIdPartitions = kafkaApis.validateAcknowledgementBatches(acknowledgeBatches, erroneous, supportsRenewAcknowledgements = true, isRenewAck = false)
 
     assertEquals(3, erroneous.size)
     assertEquals(2, erroneousTopicIdPartitions.size)
@@ -7754,7 +7754,7 @@ class KafkaApisTest extends Logging {
 
     kafkaApis = createKafkaApis()
     val acknowledgeBatches = kafkaApis.getAcknowledgeBatchesFromShareAcknowledgeRequest(shareAcknowledgeRequest, topicIdNames, erroneous)
-    val erroneousTopicIdPartitions = kafkaApis.validateAcknowledgementBatches(acknowledgeBatches, erroneous, ApiKeys.SHARE_FETCH.latestVersion, isRenewAck = false)
+    val erroneousTopicIdPartitions = kafkaApis.validateAcknowledgementBatches(acknowledgeBatches, erroneous, supportsRenewAcknowledgements = true, isRenewAck = false)
 
     assertEquals(3, erroneous.size)
     assertEquals(2, erroneousTopicIdPartitions.size)
@@ -7828,7 +7828,7 @@ class KafkaApisTest extends Logging {
       authorizedTopics,
       groupId,
       memberId.toString,
-      ApiKeys.SHARE_ACKNOWLEDGE.latestVersion,
+      supportsRenewAcknowledgements = true,
       isRenewAck = false
     ).get()
 
@@ -7905,7 +7905,7 @@ class KafkaApisTest extends Logging {
       authorizedTopics,
       groupId,
       memberId.toString,
-      ApiKeys.SHARE_ACKNOWLEDGE.latestVersion,
+      supportsRenewAcknowledgements = true,
       isRenewAck = false
     ).get()
 
@@ -7983,7 +7983,7 @@ class KafkaApisTest extends Logging {
       authorizedTopics,
       groupId,
       memberId.toString,
-      ApiKeys.SHARE_ACKNOWLEDGE.latestVersion,
+      supportsRenewAcknowledgements = true,
       isRenewAck = false
     ).get()
 
@@ -8055,7 +8055,7 @@ class KafkaApisTest extends Logging {
       authorizedTopics,
       groupId,
       memberId.toString,
-      ApiKeys.SHARE_ACKNOWLEDGE.latestVersion,
+      supportsRenewAcknowledgements = true,
       isRenewAck = false
     ).get()
 
@@ -13974,7 +13974,7 @@ class KafkaApisTest extends Logging {
     val tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("topic", 0))
     val ackMap = mutable.Map(tp -> util.List.of(new ShareAcknowledgementBatch(0, 0, util.List.of(AcknowledgeType.RENEW.id))))
     val erroneous:mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData] = mutable.Map()
-    val errorSet = kafkaApis.validateAcknowledgementBatches(ackMap, erroneous, version, isRenewAck = isRenew)
+    val errorSet = kafkaApis.validateAcknowledgementBatches(ackMap, erroneous, supportsRenewAcknowledgements = version == 2, isRenewAck = isRenew)
     if (shouldFail) {
       assertEquals(1, errorSet.size, s"expected error topic partition, version=${version}, isRenew=${isRenew}")
       assertTrue(errorSet.contains(tp), s"error topic partition mismatch, version=${version}, isRenew=${isRenew}")

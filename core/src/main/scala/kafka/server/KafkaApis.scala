@@ -3263,7 +3263,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         authorizedTopics,
         groupId,
         memberId,
-        shareFetchRequest.version,
+        shareFetchRequest.version == 2,
         shareFetchRequest.data.isRenewAck
       )
     }
@@ -3457,10 +3457,10 @@ class KafkaApis(val requestChannel: RequestChannel,
                              authorizedTopics: Set[String],
                              groupId: String,
                              memberId: String,
-                             version: Short,
+                             supportsRenewAcknowledgements: Boolean,
                              isRenewAck: Boolean): CompletableFuture[Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]] = {
 
-    val erroneousTopicIdPartitions = validateAcknowledgementBatches(acknowledgementData, erroneous, version, isRenewAck)
+    val erroneousTopicIdPartitions = validateAcknowledgementBatches(acknowledgementData, erroneous, supportsRenewAcknowledgements, isRenewAck)
     erroneousTopicIdPartitions.foreach(tp => acknowledgementData.remove(tp))
 
     val interested = mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]()
@@ -3559,7 +3559,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val erroneous = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
     val acknowledgementDataFromRequest = getAcknowledgeBatchesFromShareAcknowledgeRequest(shareAcknowledgeRequest, topicIdNames, erroneous)
-    handleAcknowledgements(acknowledgementDataFromRequest, erroneous, sharePartitionManager, authorizedTopics, groupId, memberId, shareAcknowledgeRequest.version, shareAcknowledgeRequest.data.isRenewAck)
+    handleAcknowledgements(acknowledgementDataFromRequest, erroneous, sharePartitionManager, authorizedTopics, groupId, memberId, shareAcknowledgeRequest.version == 2, shareAcknowledgeRequest.data.isRenewAck)
       .handle[Unit] {(result, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
@@ -4024,7 +4024,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   // Visible for Testing
   def validateAcknowledgementBatches(acknowledgementDataFromRequest: mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]],
                                      erroneous: mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData],
-                                     version: Short,
+                                     supportsRenewAcknowledgements: Boolean,
                                      isRenewAck: Boolean
                                     ): mutable.Set[TopicIdPartition] = {
     val erroneousTopicIdPartitions: mutable.Set[TopicIdPartition] = mutable.Set.empty[TopicIdPartition]
@@ -4032,6 +4032,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     acknowledgementDataFromRequest.foreach { case (tp: TopicIdPartition, acknowledgeBatches: util.List[ShareAcknowledgementBatch]) =>
       var prevEndOffset = -1L
       var isErroneous = false
+      val maxAcknowledgeType = if (supportsRenewAcknowledgements) 4 else 3
       acknowledgeBatches.forEach { batch =>
         if (!isErroneous) {
           if (batch.firstOffset > batch.lastOffset) {
@@ -4050,9 +4051,11 @@ class KafkaApis(val requestChannel: RequestChannel,
             erroneous += tp -> ShareAcknowledgeResponse.partitionResponse(tp, Errors.INVALID_REQUEST)
             erroneousTopicIdPartitions.add(tp)
             isErroneous = true
-          } else if (batch.acknowledgeTypes.stream().anyMatch(ackType => ackType < 0 ||
-                                                                         (version < 2 && ackType > 3) ||
-                                                                         (version >= 2 && !isRenewAck && ackType > 3))) {
+          } else if (batch.acknowledgeTypes.stream().anyMatch(ackType => ackType < 0 || ackType > maxAcknowledgeType)) {
+            erroneous += tp -> ShareAcknowledgeResponse.partitionResponse(tp, Errors.INVALID_REQUEST)
+            erroneousTopicIdPartitions.add(tp)
+            isErroneous = true
+          } else if (batch.acknowledgeTypes.stream().anyMatch(ackType => ackType == 4) && !isRenewAck) {
             erroneous += tp -> ShareAcknowledgeResponse.partitionResponse(tp, Errors.INVALID_REQUEST)
             erroneousTopicIdPartitions.add(tp)
             isErroneous = true
