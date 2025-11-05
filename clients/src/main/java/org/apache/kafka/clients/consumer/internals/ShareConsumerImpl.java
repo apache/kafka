@@ -45,6 +45,7 @@ import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeSyncEv
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackRegistrationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareRenewAcknowledgementsCompleteEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
 import org.apache.kafka.clients.consumer.internals.events.StopFindCoordinatorOnCloseEvent;
@@ -146,6 +147,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     process((ShareAcknowledgementCommitCallbackEvent) event);
                     break;
 
+                case SHARE_RENEW_ACKNOWLEDGEMENTS_COMPLETE:
+                    process((ShareRenewAcknowledgementsCompleteEvent) event);
+                    break;
+
                 default:
                     throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
             }
@@ -159,6 +164,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             if (acknowledgementCommitCallbackHandler != null) {
                 completedAcknowledgements.add(event.acknowledgementsMap());
             }
+        }
+
+        private void process(final ShareRenewAcknowledgementsCompleteEvent event) {
+            currentFetch.renew(event.acknowledgementsMap());
         }
     }
 
@@ -595,6 +604,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 final ShareFetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
                     currentFetch = fetch;
+                    System.out.println("Assigned currentFetch in poll");
                     return new ConsumerRecords<>(fetch.records(), Map.of());
                 }
 
@@ -606,6 +616,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             return ConsumerRecords.empty();
         } catch (ShareFetchException e) {
             currentFetch = (ShareFetch<K, V>) e.shareFetch();
+            System.out.println("Assigned currentFetch in exception for poll()");
             throw e.cause();
         } finally {
             kafkaShareConsumerMetrics.recordPollEnd(timer.currentTimeMs());
@@ -668,6 +679,14 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 applicationEventHandler.wakeupNetworkThread();
             }
             return fetch;
+        } else if (currentFetch.hasRenewals()) {
+            // Check for any acknowledgements which could have come from control records (GAP) and include them.
+            applicationEventHandler.add(new ShareFetchEvent(acknowledgementsMap, Map.of()));
+
+            // Notify the network thread to wake up and start the next round of fetching
+            applicationEventHandler.wakeupNetworkThread();
+
+            return currentFetch;
         } else {
             if (!acknowledgementsMap.isEmpty()) {
                 // Asynchronously commit any waiting acknowledgements

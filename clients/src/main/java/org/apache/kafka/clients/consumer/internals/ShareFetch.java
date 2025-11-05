@@ -88,7 +88,8 @@ public class ShareFetch<K, V> {
             while (iterator.hasNext()) {
                 Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> entry = iterator.next();
                 ShareInFlightBatch<K, V> batch = entry.getValue();
-                if (batch.isEmpty()) {
+                if (batch.isEmpty() && !batch.hasRenewals()) {
+                    System.out.println("Here's the removal");
                     iterator.remove();
                 } else {
                     numRecords += batch.numRecords();
@@ -104,6 +105,20 @@ public class ShareFetch<K, V> {
      */
     public boolean isEmpty() {
         return numRecords() == 0;
+    }
+
+    /**
+     * @return {@code true} if this fetch contains records being renewed
+     */
+    public boolean hasRenewals() {
+        boolean hasRenewals = false;
+        for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> entry : batches.entrySet()) {
+            if (entry.getValue().hasRenewals()) {
+                hasRenewals = true;
+                break;
+            }
+        }
+        return hasRenewals;
     }
 
     /**
@@ -171,6 +186,19 @@ public class ShareFetch<K, V> {
             if (!acknowledgements.isEmpty())
                 acknowledgementMap.put(tip, new NodeAcknowledgements(nodeId, acknowledgements));
         });
+        System.out.println("ShareFetch in takeAcknowledgedRecords() batches: " + batches);
         return acknowledgementMap;
+    }
+
+    /**
+     * Handles completed renew acknowledgements by returning successfully renewed records
+     * to the set of in-flight records.
+     *
+     * @param acknowledgementsMap Map from topic-partition to acknowledgements for
+     *                            completed renew acknowledgements
+     */
+    public void renew(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
+        System.out.println("ShareFetch batches: " + batches);
+        acknowledgementsMap.forEach((tip, acknowledgements) -> batches.get(tip).renew(acknowledgements));
     }
 }

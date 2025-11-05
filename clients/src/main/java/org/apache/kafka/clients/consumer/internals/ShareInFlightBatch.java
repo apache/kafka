@@ -29,43 +29,52 @@ import java.util.TreeSet;
 
 public class ShareInFlightBatch<K, V> {
     private final int nodeId;
-    final TopicIdPartition partition;
+    private final TopicIdPartition partition;
     private final Map<Long, ConsumerRecord<K, V>> inFlightRecords;
+    private final Map<Long, ConsumerRecord<K, V>> renewingRecords;
     private final Set<Long> acknowledgedRecords;
     private Acknowledgements acknowledgements;
     private ShareInFlightBatchException exception;
     private boolean hasCachedException = false;
+    private boolean checkForRenewAcknowledgements = false;
 
     public ShareInFlightBatch(int nodeId, TopicIdPartition partition) {
         this.nodeId = nodeId;
         this.partition = partition;
-        inFlightRecords = new TreeMap<>();
-        acknowledgedRecords = new TreeSet<>();
-        acknowledgements = Acknowledgements.empty();
+        this.inFlightRecords = new TreeMap<>();
+        this.renewingRecords = new TreeMap<>();
+        this.acknowledgedRecords = new TreeSet<>();
+        this.acknowledgements = Acknowledgements.empty();
     }
 
-    public void addAcknowledgement(long offset, AcknowledgeType acknowledgeType) {
-        acknowledgements.add(offset, acknowledgeType);
+    public void addAcknowledgement(long offset, AcknowledgeType type) {
+        acknowledgements.add(offset, type);
+        if (type == AcknowledgeType.RENEW) {
+            checkForRenewAcknowledgements = true;
+        }
     }
 
     public void acknowledge(ConsumerRecord<K, V> record, AcknowledgeType type) {
         if (inFlightRecords.get(record.offset()) != null) {
             acknowledgements.add(record.offset(), type);
             acknowledgedRecords.add(record.offset());
+            if (type == AcknowledgeType.RENEW) {
+                checkForRenewAcknowledgements = true;
+            }
             return;
         }
         throw new IllegalStateException("The record cannot be acknowledged.");
     }
 
-    public int acknowledgeAll(AcknowledgeType type) {
-        int recordsAcknowledged = 0;
+    public void acknowledgeAll(AcknowledgeType type) {
         for (Map.Entry<Long, ConsumerRecord<K, V>> entry : inFlightRecords.entrySet()) {
             if (acknowledgements.addIfAbsent(entry.getKey(), type)) {
                 acknowledgedRecords.add(entry.getKey());
-                recordsAcknowledged++;
+                if (type == AcknowledgeType.RENEW) {
+                    checkForRenewAcknowledgements = true;
+                }
             }
         }
-        return recordsAcknowledged;
     }
 
     public void addRecord(ConsumerRecord<K, V> record) {
@@ -85,7 +94,11 @@ public class ShareInFlightBatch<K, V> {
     }
 
     int numRecords() {
-        return inFlightRecords.size();
+        return inFlightRecords.size() + renewingRecords.size();
+    }
+
+    boolean hasRenewals() {
+        return !renewingRecords.isEmpty();
     }
 
     int nodeId() {
@@ -93,6 +106,10 @@ public class ShareInFlightBatch<K, V> {
     }
 
     Acknowledgements takeAcknowledgedRecords() {
+        if (checkForRenewAcknowledgements) {
+            acknowledgedRecords.forEach(offset -> renewingRecords.put(offset, inFlightRecords.get(offset)));
+        }
+
         // Usually, all records will be acknowledged, so we can just clear the in-flight records leaving
         // an empty batch, which will trigger more fetching
         if (acknowledgedRecords.size() == inFlightRecords.size()) {
@@ -106,6 +123,28 @@ public class ShareInFlightBatch<K, V> {
         Acknowledgements currentAcknowledgements = acknowledgements;
         acknowledgements = Acknowledgements.empty();
         return currentAcknowledgements;
+    }
+
+    void renew(Acknowledgements acknowledgements) {
+        if (acknowledgements.isCompleted()) {
+            if (acknowledgements.getAcknowledgeException() == null) {
+                Map<Long, AcknowledgeType> ackTypeMap = acknowledgements.getAcknowledgementsTypeMap();
+                ackTypeMap.forEach((offset, ackType) -> {
+                    if (ackType == AcknowledgeType.RENEW) {
+                        inFlightRecords.put(offset, renewingRecords.remove(offset));
+                    }
+                });
+            } else {
+                Map<Long, AcknowledgeType> ackTypeMap = acknowledgements.getAcknowledgementsTypeMap();
+                ackTypeMap.forEach((offset, ackType) -> {
+                    if (ackType == AcknowledgeType.RENEW) {
+                        renewingRecords.remove(offset);
+                    }
+                });
+            }
+        } else {
+            throw new IllegalStateException("WTF");
+        }
     }
 
     Acknowledgements getAcknowledgements() {

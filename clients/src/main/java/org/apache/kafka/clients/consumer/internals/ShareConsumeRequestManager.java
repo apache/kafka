@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollRes
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareRenewAcknowledgementsCompleteEvent;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -384,6 +385,11 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         this.isAcknowledgementCommitCallbackRegistered = isAcknowledgementCommitCallbackRegistered;
     }
 
+    private void sendShareRenewAcknowledgementsCompleteEvent(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
+        ShareRenewAcknowledgementsCompleteEvent event = new ShareRenewAcknowledgementsCompleteEvent(acknowledgementsMap);
+        backgroundEventHandler.add(event);
+    }
+
     private void maybeSendShareAcknowledgeCommitCallbackEvent(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
         if (isAcknowledgementCommitCallbackRegistered) {
             ShareAcknowledgementCommitCallbackEvent event = new ShareAcknowledgementCommitCallbackEvent(acknowledgementsMap);
@@ -739,7 +745,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     }
 
     private void handleShareFetchSuccess(Node fetchTarget,
-                                         @SuppressWarnings("unused") ShareFetchRequestData requestData,
+                                         ShareFetchRequestData requestData,
                                          ClientResponse resp) {
         try {
             log.debug("Completed ShareFetch request from node {} successfully", fetchTarget.id());
@@ -803,6 +809,9 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         }
                         acks.complete(Errors.forCode(partitionData.acknowledgeErrorCode()).exception());
                         Map<TopicIdPartition, Acknowledgements> acksMap = Map.of(tip, acks);
+                        if (requestData.isRenewAck()) {
+                            sendShareRenewAcknowledgementsCompleteEvent(acksMap);
+                        }
                         maybeSendShareAcknowledgeCommitCallbackEvent(acksMap);
                     }
                 }
@@ -832,7 +841,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 }
             }
 
-            if (!completedFetches.isEmpty()) {
+            if (!completedFetches.isEmpty() || requestData.isRenewAck()) {
                 shareFetchBuffer.add(completedFetches);
             }
 
@@ -887,6 +896,9 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                             acks.complete(Errors.UNKNOWN_SERVER_ERROR.exception());
                         }
                         Map<TopicIdPartition, Acknowledgements> acksMap = Map.of(tip, acks);
+                        if (requestData.isRenewAck()) {
+                            sendShareRenewAcknowledgementsCompleteEvent(acksMap);
+                        }
                         maybeSendShareAcknowledgeCommitCallbackEvent(acksMap);
                     }
                 }
