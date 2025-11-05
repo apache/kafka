@@ -332,9 +332,11 @@ org.apache.kafka.clients.consumer.ShareConsumerTest:
 - testExplicitAcknowledgeOffsetThrowsNotException
 - testExplicitAcknowledgeOffsetThrowsParametersError
 - testExplicitAcknowledgeReleaseAccept
+- testExplicitAcknowledgeReleaseAcceptInRecordLimitMode
 - testExplicitAcknowledgeReleaseClose
 - testExplicitAcknowledgeReleasePollAccept
 - testExplicitAcknowledgeSuccess
+- testExplicitAcknowledgeSuccessInRecordLimitMode
 - testExplicitAcknowledgeThrowsNotInBatch
 - testExplicitAcknowledgementCommitAsync
 - testExplicitAcknowledgementCommitAsyncPartialBatch
@@ -352,6 +354,9 @@ org.apache.kafka.clients.consumer.ShareConsumerTest:
 - testMultipleConsumersInGroupSequentialConsumption
 - testMultipleConsumersInMultipleGroupsConcurrentConsumption
 - testMultipleConsumersWithDifferentGroupIds
+- testPollAndExplicitAcknowledgeSingleMessageInRecordLimitMode
+- testPollInBatchOptimizedMode
+- testPollInRecordLimitMode
 - testPollNoSubscribeFails
 - testPollRecordsGreaterThanMaxBytes
 - testPollThrowsInterruptExceptionIfInterrupted
