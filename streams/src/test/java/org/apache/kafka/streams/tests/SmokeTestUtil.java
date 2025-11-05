@@ -43,7 +43,7 @@ public class SmokeTestUtil {
         return printProcessorSupplier(topic, name, new AtomicInteger());
     }
 
-    static ProcessorSupplier<Object, Object, Void, Void> printProcessorSupplier(final String topic, final String name, AtomicInteger totalRecordsProcessed) {
+    static ProcessorSupplier<Object, Object, Void, Void> printProcessorSupplier(final String topic, final String name, final AtomicInteger totalRecordsProcessed) {
         return () -> new ContextualProcessor<>() {
             private int numRecordsProcessed = 0;
             private long smallestOffset = Long.MAX_VALUE;
