@@ -14,23 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.server.metrics;
 
-package org.apache.kafka.server.share.persister;
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
+import org.apache.kafka.server.telemetry.ClientTelemetryContext;
 
 /**
- * This interface is implemented by classes used to contain the data for a partition with state summary and error data (if any)
- * in the interface to {@link Persister}.
+ * Default implementation of {@link ClientTelemetryContext}.
  */
-public interface PartitionStateSummaryData extends PartitionInfoData, PartitionIdData {
-    int stateEpoch();
+public record DefaultClientTelemetryContext(int pushIntervalMs,
+                                            AuthorizableRequestContext authorizableRequestContext) implements ClientTelemetryContext {
 
-    int leaderEpoch();
-
-    long startOffset();
-
-    int deliveryCompleteCount();
-
-    short errorCode();
-
-    String errorMessage();
 }
