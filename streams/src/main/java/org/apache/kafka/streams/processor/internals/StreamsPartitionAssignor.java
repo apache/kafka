@@ -1458,7 +1458,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     @Override
     public void onAssignment(final Assignment assignment, final ConsumerGroupMetadata metadata) {
-        Set<Task> tasksWithOpenTransactions = taskManager.allOwnedTasks()
+        final Set<Task> tasksWithOpenTransactions = taskManager.allOwnedTasks()
             .values()
             .stream()
             .filter(t -> t.commitNeeded())

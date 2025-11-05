@@ -1442,6 +1442,14 @@ public class StreamsPartitionAssignorTest {
         setUp(parameterizedConfig, false);
         taskManager = mock(TaskManager.class);
 
+        final Task notToCommit = mock(Task.class);
+        final Task toCommit = mock(Task.class);
+        final TaskId notToCommitId = new TaskId(0, 0);
+        final TaskId toCommitId = new TaskId(0, 1);
+        when(notToCommit.commitNeeded()).thenReturn(false);
+        when(toCommit.commitNeeded()).thenReturn(true);
+        when(taskManager.allOwnedTasks()).thenReturn(Map.of(notToCommitId, notToCommit, toCommitId, toCommit));
+
         final Map<HostInfo, Set<TopicPartition>> hostState = Collections.singletonMap(
             new HostInfo("localhost", 9090),
             Set.of(t3p0, t3p3));
@@ -1465,6 +1473,7 @@ public class StreamsPartitionAssignorTest {
 
         verify(streamsMetadataState).onChange(eq(hostState), any(), topicPartitionInfoCaptor.capture());
         verify(taskManager).handleAssignment(activeTasks, standbyTasks);
+        verify(taskManager).commit(Set.of(toCommit));
 
         assertTrue(topicPartitionInfoCaptor.getValue().containsKey(t3p0));
         assertTrue(topicPartitionInfoCaptor.getValue().containsKey(t3p3));
