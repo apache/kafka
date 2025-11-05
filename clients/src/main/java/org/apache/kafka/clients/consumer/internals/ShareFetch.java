@@ -89,7 +89,6 @@ public class ShareFetch<K, V> {
                 Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> entry = iterator.next();
                 ShareInFlightBatch<K, V> batch = entry.getValue();
                 if (batch.isEmpty() && !batch.hasRenewals()) {
-                    System.out.println("Here's the removal");
                     iterator.remove();
                 } else {
                     numRecords += batch.numRecords();
@@ -186,7 +185,6 @@ public class ShareFetch<K, V> {
             if (!acknowledgements.isEmpty())
                 acknowledgementMap.put(tip, new NodeAcknowledgements(nodeId, acknowledgements));
         });
-        System.out.println("ShareFetch in takeAcknowledgedRecords() batches: " + batches);
         return acknowledgementMap;
     }
 
@@ -198,7 +196,6 @@ public class ShareFetch<K, V> {
      *                            completed renew acknowledgements
      */
     public void renew(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
-        System.out.println("ShareFetch batches: " + batches);
         acknowledgementsMap.forEach((tip, acknowledgements) -> batches.get(tip).renew(acknowledgements));
     }
 }

@@ -607,7 +607,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 final ShareFetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
                     currentFetch = fetch;
-                    System.out.println("Assigned currentFetch in poll");
                     return new ConsumerRecords<>(fetch.records(), Map.of());
                 }
 
@@ -619,7 +618,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             return ConsumerRecords.empty();
         } catch (ShareFetchException e) {
             currentFetch = (ShareFetch<K, V>) e.shareFetch();
-            System.out.println("Assigned currentFetch in exception for poll()");
             throw e.cause();
         } finally {
             kafkaShareConsumerMetrics.recordPollEnd(timer.currentTimeMs());
@@ -688,11 +686,14 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             }
             return fetch;
         } else if (currentFetch.hasRenewals()) {
-            // Check for any acknowledgements which could have come from control records (GAP) and include them.
-            applicationEventHandler.add(new ShareFetchEvent(acknowledgementsMap, Map.of()));
-
-            // Notify the network thread to wake up and start the next round of fetching
-            applicationEventHandler.wakeupNetworkThread();
+            // We only send one ShareFetchEvent per poll call.
+            if (shouldSendShareFetchEvent) {
+                // Check for any acknowledgements which could have come from control records (GAP) and include them.
+                applicationEventHandler.add(new ShareFetchEvent(acknowledgementsMap));
+                shouldSendShareFetchEvent = false;
+                // Notify the network thread to wake up and start the next round of fetching
+                applicationEventHandler.wakeupNetworkThread();
+            }
 
             return currentFetch;
         } else {

@@ -94,7 +94,7 @@ public class ShareInFlightBatch<K, V> {
     }
 
     int numRecords() {
-        return inFlightRecords.size() + renewingRecords.size();
+        return inFlightRecords.size();
     }
 
     boolean hasRenewals() {
@@ -142,8 +142,6 @@ public class ShareInFlightBatch<K, V> {
                     }
                 });
             }
-        } else {
-            throw new IllegalStateException("WTF");
         }
     }
 
