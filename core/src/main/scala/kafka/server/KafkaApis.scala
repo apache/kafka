@@ -3033,6 +3033,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else if (!authHelper.authorize(request.context, READ, GROUP, shareGroupHeartbeatRequest.data.groupId)) {
       requestHelper.sendMaybeThrottle(request, shareGroupHeartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
+    } else if (!isMemberIdValid(shareGroupHeartbeatRequest.data.memberId)) {
+      requestHelper.sendMaybeThrottle(request, shareGroupHeartbeatRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
+      CompletableFuture.completedFuture[Unit](())
     } else {
       if (shareGroupHeartbeatRequest.data.subscribedTopicNames != null &&
         !shareGroupHeartbeatRequest.data.subscribedTopicNames.isEmpty) {
@@ -3166,6 +3169,11 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val memberId = shareFetchRequest.data.memberId
     val shareSessionEpoch = shareFetchRequest.data.shareSessionEpoch
+
+    if (!isMemberIdValid(memberId)) {
+      requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.INVALID_REQUEST.exception))
+      return CompletableFuture.completedFuture[Unit](())
+    }
 
     def isAcknowledgeDataPresentInFetchRequest: Boolean = {
       shareFetchRequest.data.topics.asScala
@@ -3487,6 +3495,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val memberId = shareAcknowledgeRequest.data.memberId
     val shareSessionEpoch = shareAcknowledgeRequest.data.shareSessionEpoch
+
+    if (!isMemberIdValid(memberId)) {
+      requestHelper.sendMaybeThrottle(request,
+        shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.INVALID_REQUEST.exception))
+      return CompletableFuture.completedFuture[Unit](())
+    }
 
     try {
       // Updating the cache for Share Session Handling
@@ -4132,6 +4146,11 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def isShareGroupProtocolEnabled: Boolean = {
     config.shareGroupConfig.isShareGroupEnabled || shareVersion().supportsShareGroups
+  }
+
+  // Visible for testing.
+  def isMemberIdValid(memberId: String): Boolean = {
+    memberId.nonEmpty && memberId.length <= 36 && !memberId.equals(Uuid.ZERO_UUID.toString)
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,
