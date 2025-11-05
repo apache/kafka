@@ -173,7 +173,7 @@ public final class RemoveVoterHandler {
                         )
                     );
                     if (!voters.isVoter(localKey)) {
-                        logger.info(
+                        logger.warn(
                             "Leader is not in the committed voter set {} resign from epoch {}",
                             voters.voterKeys(),
                             leaderState.epoch()
@@ -183,6 +183,13 @@ public final class RemoveVoterHandler {
                     }
                 }
             })
+        );
+    }
+
+    public void printVoterSet(VoterSet voterSet) {
+        voterSet.voterNodes().stream().forEach(node -> {
+            System.err.println(node.voterKey());
+            }
         );
     }
 }
