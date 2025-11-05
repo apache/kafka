@@ -407,9 +407,8 @@
       <allow pkg="org.apache.kafka.server.config" />
       <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
       <allow class="org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.MetricsData"/>
-      <allow class="org.apache.kafka.server.telemetry.ClientTelemetry" />
-      <allow class="org.apache.kafka.server.telemetry.ClientTelemetryPayload" />
-      <allow class="org.apache.kafka.server.telemetry.ClientTelemetryReceiver" />
+      <allow class="org.apache.kafka.server.telemetry.ClientTelemetryExporter" />
+      <allow class="org.apache.kafka.server.telemetry.ClientTelemetryExporterProvider" />
       <allow class="org.apache.kafka.storage.internals.log.CleanerConfig" />
       <allow class="org.apache.kafka.coordinator.transaction.TransactionLogConfig" />
       <allow pkg="org.apache.kafka.coordinator.group" />
