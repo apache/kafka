@@ -1149,16 +1149,6 @@ public final class QuorumController implements Controller {
                     throw new IllegalStateException("Bootstrap metadata not available during activation. " +
                         "This should not happen if a bootstrap snapshot was processed.");
                 }
-                if (!bootstrapRecordsAppended) {
-                    ControllerResult<Void> result = ActivationRecordsGenerator.recordsForEmptyLog(
-                        log::warn,
-                        offsetControl.transactionStartOffset(),
-                        bootstrapMetadata,
-                        bootstrapMetadata.metadataVersion(),
-                        configurationControl.getStaticallyConfiguredMinInsyncReplicas());
-                    bootstrapRecordsAppended = true;
-                    return result;
-                }
                 return ActivationRecordsGenerator.generate(
                     log::warn,
                     offsetControl.transactionStartOffset(),
@@ -1404,7 +1394,6 @@ public final class QuorumController implements Controller {
      * This must be accessed only by the event queue thread.
      */
     private final FeatureControlManager featureControl;
-    private boolean bootstrapRecordsAppended;
 
     /**
      * An object which stores the controller's view of the latest producer ID
@@ -1564,7 +1553,6 @@ public final class QuorumController implements Controller {
             setSnapshotRegistry(snapshotRegistry).
             setClusterControlManager(clusterControl).
             build();
-        this.bootstrapRecordsAppended = false;
         this.replicationControl = new ReplicationControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setLogContext(logContext).
