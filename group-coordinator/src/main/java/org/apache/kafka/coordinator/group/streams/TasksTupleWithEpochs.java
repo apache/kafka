@@ -126,7 +126,7 @@ public record TasksTupleWithEpochs(Map<String, Map<Integer, Integer>> activeTask
 
     private static Map<String, Map<Integer, Integer>> parseActiveTasksWithEpochs(
         List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> taskIdsList,
-        int defaultEpoch
+        int memberEpoch
     ) {
         Map<String, Map<Integer, Integer>> result = new HashMap<>();
 
@@ -152,7 +152,7 @@ public record TasksTupleWithEpochs(Map<String, Map<Integer, Integer>> activeTask
             } else {
                 // Legacy record without epochs: use member epoch as default
                 for (Integer partition : partitions) {
-                    partitionsWithEpochs.put(partition, defaultEpoch);
+                    partitionsWithEpochs.put(partition, memberEpoch);
                 }
             }
 
