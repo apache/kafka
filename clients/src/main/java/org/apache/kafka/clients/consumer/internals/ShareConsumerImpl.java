@@ -322,7 +322,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     logContext,
                     metadata,
                     subscriptions,
-                    new FetchConfig(config),
+                    new ShareFetchConfig(config),
                     deserializers);
 
             this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics);
@@ -374,7 +374,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 logContext,
                 metadata,
                 subscriptions,
-                new FetchConfig(config),
+                new ShareFetchConfig(config),
                 deserializers);
         this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics);
         this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP);
@@ -495,7 +495,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 final LogContext logContext,
                 final ShareConsumerMetadata metadata,
                 final SubscriptionState subscriptions,
-                final FetchConfig fetchConfig,
+                final ShareFetchConfig shareFetchConfig,
                 final Deserializers<K, V> deserializers
         );
     }

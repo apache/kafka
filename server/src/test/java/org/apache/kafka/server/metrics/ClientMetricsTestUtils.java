@@ -98,7 +98,7 @@ public class ClientMetricsTestUtils {
             false);
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("removal")
     public static class TestClientMetricsReceiver implements ClientTelemetryReceiver {
         public int exportMetricsInvokedCount = 0;
         public List<ByteBuffer> metricsData = new ArrayList<>();
@@ -126,7 +126,7 @@ public class ClientMetricsTestUtils {
      * Test implementation that supports both deprecated and new interfaces.
      * When both are implemented, only the new interface should be used.
      */
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("removal")
     public static class TestDualImplementation implements ClientTelemetry, ClientTelemetryExporterProvider {
         private final TestClientMetricsReceiver receiver;
         private final TestClientTelemetryExporter exporter;
