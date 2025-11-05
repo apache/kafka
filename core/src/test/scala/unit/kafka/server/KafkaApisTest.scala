@@ -13966,6 +13966,7 @@ class KafkaApisTest extends Logging {
     assertTrue(kafkaApis.isMemberIdValid(Uuid.randomUuid().toString))
     assertFalse(kafkaApis.isMemberIdValid(Uuid.ZERO_UUID.toString))
     assertFalse(kafkaApis.isMemberIdValid(""))
+    assertTrue(kafkaApis.isMemberIdValid("       "))
     var validStr1: String = ""
     var validStr2: String = ""
     var inValidStr: String = ""

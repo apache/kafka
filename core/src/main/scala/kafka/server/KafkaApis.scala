@@ -3034,7 +3034,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, shareGroupHeartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else if (!isMemberIdValid(shareGroupHeartbeatRequest.data.memberId)) {
-      requestHelper.sendMaybeThrottle(request, shareGroupHeartbeatRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
+      requestHelper.sendMaybeThrottle(request,
+        shareGroupHeartbeatRequest.getErrorResponse(Errors.INVALID_REQUEST.exception("Invalid member id in the request.")))
       CompletableFuture.completedFuture[Unit](())
     } else {
       if (shareGroupHeartbeatRequest.data.subscribedTopicNames != null &&
@@ -3171,7 +3172,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     val shareSessionEpoch = shareFetchRequest.data.shareSessionEpoch
 
     if (!isMemberIdValid(memberId)) {
-      requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.INVALID_REQUEST.exception))
+      requestHelper.sendMaybeThrottle(request,
+        shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.INVALID_REQUEST.exception("Invalid member id in the request.")))
       return CompletableFuture.completedFuture[Unit](())
     }
 
@@ -3499,7 +3501,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     if (!isMemberIdValid(memberId)) {
       requestHelper.sendMaybeThrottle(request,
-        shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.INVALID_REQUEST.exception))
+        shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.INVALID_REQUEST.exception("Invalid member id in the request.")))
       return CompletableFuture.completedFuture[Unit](())
     }
 
