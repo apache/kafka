@@ -108,6 +108,35 @@
 
     <p>Since 2.6.0 release, Kafka Streams depends on a RocksDB version that requires MacOS 10.14 or higher.</p>
 
+    <h3><a id="streams_api_changes_420" href="#streams_api_changes_420">Streams API changes in 4.2.0</a></h3>
+
+    <p>
+        Kafka Streams now supports Dead Letter Queue (DLQ).
+        A new config <code>errors.deadletterqueue.topic.name</code> allows to specify the name of the DLQ topic. When set and <code>DefaultProductionExceptionHandler</code> is used, records that cause exceptions will be forwarded to the DLQ topic.
+        If a custom exception handler is used, it is up to the custom handler to build DLQ records to send, hence, depending on the implementation, the <code>errors.deadletterqueue.topic.name</code> configuration may be ignored.
+
+        <code>org.apache.kafka.streams.errors.ProductionExceptionHandler$ProductionExceptionHandlerResponse</code> is deprecated and replaced by <code>org.apache.kafka.streams.errors.ProductionExceptionHandler$Response</code>.
+        Methods <code>handle</code> and <code>handleSerializationException</code> in <code>org.apache.kafka.streams.errors.ProductionExceptionHandler</code> are deprecated and replaced by <code>handleError</code> and <code>handleSerializationError</code> respectively in order to use the new <code>Response</code> class.
+        More details can be found in <a href="https://cwiki.apache.org/confluence/x/HwviEQ">KIP-1034</a>.
+    </p>
+
+    <p>
+        We introduce a new <code>org.apache.kafka.streams.CloseOptions</code> class which replaces the existing <code>org.apache.kafka.streams.KafkaStreams$CloseOptions</code>.
+        The latter is deprecated and will be removed in the next major release.
+        <code>CloseOptions</code> class allows to specify close timeout and group membership operation - whether the consumer needs to leave the group or remain in the group.
+        More details can be found in <a href="https://cwiki.apache.org/confluence/x/QAq9F">KIP-1153</a>.
+    </p>
+
+    <p>
+        Kafka Streams now allows to enable state store directories created by Kafka Streams to have write access for the OS group, via the newly added config <code>allow.os.group.write.access</code>.
+        More details can be found in <a href="https://cwiki.apache.org/confluence/x/jgl3Fw">KIP-1230</a>.
+    </p>
+
+    <p>
+        <code>org.apache.kafka.streams.errors.BrokerNotFoundException</code> was deprecated and will be removed in the next major release.
+        More details can be found in <a href="https://cwiki.apache.org/confluence/x/8AxJFg">KIP-1195</a>.
+    </p>
+
     <h3><a id="streams_api_changes_410" href="#streams_api_changes_410">Streams API changes in 4.1.0</a></h3>
 
     <p><b>Note:</b> Kafka Streams 4.1.0 contains a critical memory leak bug (<a href="https://issues.apache.org/jira/browse/KAFKA-19748">KAFKA-19748</a>) that affects users of range scans and certain DSL operators (session windows, sliding windows, stream-stream joins, foreign-key joins). Users running Kafka Streams should consider upgrading directly to 4.1.1 when available.</p>

@@ -2375,7 +2375,10 @@ public class SharePartition {
             NavigableMap.Entry<Long, InFlightBatch> entry = cachedState.floorEntry(lastOffsetAcknowledged);
             // If the lastOffsetAcknowledged is equal to the last offset of entry, then the entire batch can potentially be removed.
             if (lastOffsetAcknowledged == entry.getValue().lastOffset()) {
-                startOffset = cachedState.higherKey(lastOffsetAcknowledged);
+                long lastOffsetAcknowledgedHigherKey = cachedState.higherKey(lastOffsetAcknowledged);
+                if (lastOffsetAcknowledgedHigherKey > startOffset) {
+                    startOffset = lastOffsetAcknowledgedHigherKey;
+                }
                 if (isPersisterReadGapWindowActive()) {
                     // This case will arise if we have a situation where there is an acquirable gap after the lastOffsetAcknowledged.
                     // Ex, the cachedState has following state batches -> {(0, 10), (11, 20), (31,40)} and all these batches are acked.
@@ -2389,8 +2392,11 @@ public class SharePartition {
                 lastKeyToRemove = entry.getKey();
             } else {
                 // The code will reach this point only if lastOffsetAcknowledged is in the middle of some stateBatch. In this case
-                // we can simply move the startOffset to the next offset of lastOffsetAcknowledged and should consider any read gap offsets.
-                startOffset = lastOffsetAcknowledged + 1;
+                // we can move the startOffset to the next offset of lastOffsetAcknowledged only if that offset is
+                // ahead of start offset and should consider any read gap offsets.
+                if (lastOffsetAcknowledged + 1 > startOffset) {
+                    startOffset = lastOffsetAcknowledged + 1;
+                }
                 if (entry.getKey().equals(cachedState.firstKey())) {
                     // If the first batch in cachedState has some records yet to be acknowledged,
                     // then nothing should be removed from cachedState
