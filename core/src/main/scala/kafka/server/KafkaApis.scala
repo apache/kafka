@@ -3204,7 +3204,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       if (errorMsg != "") {
-        errorMsg += "if renewAck is true."
+        errorMsg += "if isRenewAck is true."
         error(errorMsg)
         requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.INVALID_REQUEST.exception(errorMsg)))
         return CompletableFuture.completedFuture[Unit](())
