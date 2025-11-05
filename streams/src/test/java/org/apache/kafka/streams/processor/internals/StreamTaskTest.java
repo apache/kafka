@@ -1638,7 +1638,6 @@ public class StreamTaskTest {
             // Call isProcessable which should not trigger logging after being stale for 120 seconds
             assertFalse(task.isProcessable(newTime));
             messages = appender.getMessages();
-            System.out.println("Captured log messages: " + messages);
             assertThat("Should have logged not ready message", messages.size(), is(1));
             assertThat(messages.get(0), equalTo("stream-thread [Test worker] task [0_0] Partition topic1-0 has buffered data, ready for processing\n" +
                 "Partition topic2-0 has fetched lag for -1\n\tWaiting to fetch data for topic2-0"));
