@@ -1602,7 +1602,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldLogNotReadyWhenStaleFor20Seconds() throws Exception {
+    public void shouldLogNotReadyWhenStaleAfterThreshold() throws Exception {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         
@@ -1624,15 +1624,15 @@ public class StreamTaskTest {
             final long initialTime = time.milliseconds();
             lastNotReadyLogTimeField.set(task, Optional.of(initialTime - 100_000L));
             
-            // Advance time by 20 seconds to simulate staleness
-            long newTime = time.milliseconds() + 10_000L;
+            // Advance time by 5 seconds to simulate staleness
+            long newTime = time.milliseconds() + 5_000L;
             
-            // Call isProcessable which should not trigger logging after being stale for 2 seconds
+            // Call isProcessable which should not trigger logging after being stale for 105 seconds
             assertFalse(task.isProcessable(newTime));
             List<String> messages = appender.getMessages();
             assertEquals(0, messages.size(), "No log message should be logged before 20 seconds");
 
-            // Advance time by 100 seconds to simulate staleness
+            // Advance time by approximately 20 seconds to simulate staleness
             newTime = time.milliseconds() + 20_000L;
 
             // Call isProcessable which should not trigger logging after being stale for 120 seconds
