@@ -896,6 +896,7 @@ subprojects {
         }
     }
   }
+  check.dependsOn("checkJsonLicenseHeader")
 }
 
 gradle.taskGraph.whenReady { taskGraph ->
