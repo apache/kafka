@@ -133,7 +133,7 @@ class PartitionGroup extends AbstractPartitionGroup {
                 queued.add(partition);
             } else {
                 final Long fetchedLag = fetchedLags.getOrDefault(partition, -1L);
-                appendLog(logMessageBuilder, String.format("Fetched lag for partition %s is %d", partition, fetchedLag));
+                appendLog(logMessageBuilder, String.format("Partition %s has fetched lag for %d", partition, fetchedLag));
                 
                 if (fetchedLag == -1L) {
                     // must wait to fetch metadata for the partition
@@ -146,7 +146,7 @@ class PartitionGroup extends AbstractPartitionGroup {
                     // must wait to poll the data we know to be on the broker
                     idlePartitionDeadlines.remove(partition);
                     appendLog(logMessageBuilder,
-                        String.format("Lag for partition %s is currently %d, but no data is buffered locally. Waiting to buffer some records.",
+                        String.format("Partition %s has current lag %d, but no data is buffered locally. Waiting to buffer some records.",
                         partition, fetchedLag));
 
                     return new ReadyToProcessResult(false, Optional.of(logMessageBuilder.toString()));
@@ -161,7 +161,7 @@ class PartitionGroup extends AbstractPartitionGroup {
                     final long deadline = idlePartitionDeadlines.get(partition);
                     if (wallClockTime < deadline) {
                         appendLog(logMessageBuilder, String.format(String.format(
-                            "Lag for partition %s is currently 0 and current time is %d. " +
+                            "Partition %s has current lag 0 and current time is %d. " +
                                 "Waiting for new data to be produced for configured idle time %d (deadline is %d).",
                             partition, wallClockTime, maxTaskIdleMs, deadline)));
 

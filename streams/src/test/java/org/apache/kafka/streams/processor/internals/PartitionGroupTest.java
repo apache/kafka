@@ -803,7 +803,7 @@ public class PartitionGroupTest {
         final AbstractPartitionGroup.ReadyToProcessResult result = group.readyToProcess(0L);
         assertFalse(result.isReady());
         assertTrue(result.getLogMessage().isPresent() &&
-            result.getLogMessage().get().contains("Lag for partition topic-2 is currently 1, but no data is buffered locally. Waiting to buffer some records."));
+            result.getLogMessage().get().contains("Partition topic-2 has current lag 1, but no data is buffered locally. Waiting to buffer some records."));
     }
 
     @Test
@@ -831,7 +831,7 @@ public class PartitionGroupTest {
         final AbstractPartitionGroup.ReadyToProcessResult result1 = group.readyToProcess(0L);
         assertFalse(result1.isReady());
         assertTrue(result1.getLogMessage().isPresent() &&
-            result1.getLogMessage().get().contains("Lag for partition topic-2 is currently 0 and current time is 0. Waiting for new data to be produced for configured idle time 1 (deadline is 1)."));
+            result1.getLogMessage().get().contains("Partition topic-2 has current lag 0 and current time is 0. Waiting for new data to be produced for configured idle time 1 (deadline is 1)."));
 
         final AbstractPartitionGroup.ReadyToProcessResult result2 = group.readyToProcess(1L);
         assertTrue(result2.isReady());
@@ -869,7 +869,7 @@ public class PartitionGroupTest {
         final AbstractPartitionGroup.ReadyToProcessResult result = group.readyToProcess(0L);
         assertFalse(result.isReady());
         assertTrue(result.getLogMessage().isPresent() &&
-            result.getLogMessage().get().contains(String.format("Lag for partition %s is currently 0 and current time is %d. "
+            result.getLogMessage().get().contains(String.format("Partition %s has current lag 0 and current time is %d. "
             + "Waiting for new data to be produced for configured idle time", partition, 0L)));
     }
 
@@ -878,7 +878,7 @@ public class PartitionGroupTest {
         final AbstractPartitionGroup.ReadyToProcessResult result = group.readyToProcess(0L);
         assertFalse(result.isReady());
         assertTrue(result.getLogMessage().isPresent() &&
-            result.getLogMessage().get().contains(String.format("Lag for partition %s is currently %d, but no data is buffered locally. "
+            result.getLogMessage().get().contains(String.format("Partition %s has current lag %d, but no data is buffered locally. "
             + "Waiting to buffer some records.", partition, lag)));
     }
 

@@ -41,6 +41,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -91,6 +92,7 @@ import org.mockito.quality.Strictness;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;
@@ -1597,6 +1599,50 @@ public class StreamTaskTest {
         task.resume();
 
         assertThat("task is not idling", task.timeCurrentIdlingStarted().isEmpty());
+    }
+
+    @Test
+    public void shouldLogNotReadyWhenStaleFor20Seconds() throws Exception {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        
+        task = createStatelessTask(createConfig("100"));
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+        
+        // Make task not ready by not adding records to all partitions
+        // Only add records to partition1, not partition2, so task is not ready
+        task.addRecords(partition1, singleton(getConsumerRecordWithOffsetAsTimestamp(partition1, 0)));
+        
+        // Use reflection to set lastNotReadyLogTime to simulate it's been stale
+        final Field lastNotReadyLogTimeField = StreamTask.class.getDeclaredField("lastNotReadyLogTime");
+        lastNotReadyLogTimeField.setAccessible(true);
+        
+        // Use LogCaptureAppender to capture log messages
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamTask.class)) {
+            // Set lastNotReadyLogTime so that after advancing 20 seconds, it will trigger logging
+            final long initialTime = time.milliseconds();
+            lastNotReadyLogTimeField.set(task, Optional.of(initialTime - 100_000L));
+            
+            // Advance time by 20 seconds to simulate staleness
+            long newTime = time.milliseconds() + 10_000L;
+            
+            // Call isProcessable which should not trigger logging after being stale for 2 seconds
+            assertFalse(task.isProcessable(newTime));
+            List<String> messages = appender.getMessages();
+            assertEquals(0, messages.size(), "No log message should be logged before 20 seconds");
+
+            // Advance time by 100 seconds to simulate staleness
+            newTime = time.milliseconds() + 20_000L;
+
+            // Call isProcessable which should not trigger logging after being stale for 120 seconds
+            assertFalse(task.isProcessable(newTime));
+            messages = appender.getMessages();
+            System.out.println("Captured log messages: " + messages);
+            assertThat("Should have logged not ready message", messages.size(), is(1));
+            assertThat(messages.get(0), equalTo("stream-thread [Test worker] task [0_0] Partition topic1-0 has buffered data, ready for processing\n" +
+                "Partition topic2-0 has fetched lag for -1\n\tWaiting to fetch data for topic2-0"));
+        }
     }
 
     @Test
