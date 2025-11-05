@@ -37,6 +37,7 @@ import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNA
 public class TaskExecutionMetadata {
     // TODO: implement exponential backoff, for now we just wait 5s
     private static final long CONSTANT_BACKOFF_MS = 5_000L;
+    private static final long NOT_READY_LOG_INTERVAL_MS = 120_000L; // Log interval of not being ready (2 minutes)
 
     private final boolean hasNamedTopologies;
     private final Set<String> pausedTopologies;
@@ -44,6 +45,10 @@ public class TaskExecutionMetadata {
     private final Collection<Task> successfullyProcessed = new HashSet<>();
     // map of topologies experiencing errors/currently under backoff
     private final ConcurrentHashMap<String, NamedTopologyMetadata> topologyNameToErrorMetadata = new ConcurrentHashMap<>();
+    // map of task to last not ready logging time (not present means ready, >= 0 means not ready and tracks last log time)
+    private final ConcurrentHashMap<TaskId, Long> taskToLastNotReadyLogTime = new ConcurrentHashMap<>();
+    // map of task to time when idling started
+    private final ConcurrentHashMap<TaskId, Long> taskToIdlingStartTime = new ConcurrentHashMap<>();
     private final Logger log;
 
     public TaskExecutionMetadata(final Set<String> allTopologyNames,
@@ -65,20 +70,58 @@ public class TaskExecutionMetadata {
 
     public boolean canProcessTask(final Task task, final long now) {
         final String topologyName = task.id().topologyName();
+        final boolean taskWasReady = !taskToLastNotReadyLogTime.containsKey(task.id());
+        
+        final boolean canProcess;
+        final String logMessage;
+        
         if (!hasNamedTopologies) {
             // TODO implement error handling/backoff for non-named topologies (needs KIP)
-            log.trace("Task {} processing check for unnamed topology '{}'", task.id(), topologyName);
-            return !pausedTopologies.contains(UNNAMED_TOPOLOGY);
+            logMessage = String.format("Task %s processing check for unnamed topology '%s'", task.id(), topologyName);
+            canProcess = !pausedTopologies.contains(UNNAMED_TOPOLOGY);
         } else {
             if (pausedTopologies.contains(topologyName)) {
-                log.trace("Task {} can't be processed: topology '{}' is paused", task.id(), topologyName);
-                return false;
+                canProcess = false;
+                logMessage = String.format("Task %s can't be processed: topology '%s' is paused", task.id(), topologyName);
             } else {
-                log.trace("Task {} processing check for named topology '{}'", task.id(), topologyName);
+                logMessage = String.format("Task %s processing check for named topology '%s'", task.id(), topologyName);
                 final NamedTopologyMetadata metadata = topologyNameToErrorMetadata.get(topologyName);
-                return metadata == null || (metadata.canProcess() && metadata.canProcessTask(task, now));
-
+                canProcess = metadata == null || (metadata.canProcess() && metadata.canProcessTask(task, now));
             }
+        }
+        
+        if (!canProcess) {
+            if (taskWasReady) {
+                // READY -> NOT_READY - start timer
+                taskToLastNotReadyLogTime.put(task.id(), now);
+                taskToIdlingStartTime.put(task.id(), now);
+            } else {
+                // NOT_READY - check if it should log
+                maybeLogNotReady(task.id(), now, logMessage);
+            }
+        } else {
+            // Task is ready - clear the timer
+            taskToLastNotReadyLogTime.remove(task.id());
+            taskToIdlingStartTime.remove(task.id());
+            log.trace(logMessage);
+        }
+        
+        return canProcess;
+    }
+    
+    private void maybeLogNotReady(final TaskId taskId, final long now, final String logMessage) {
+        final Long lastLogTime = taskToLastNotReadyLogTime.get(taskId);
+        if (lastLogTime == null) {
+            return;
+        }
+        
+        final long timeSinceLastLog = now - lastLogTime;
+        if (timeSinceLastLog >= NOT_READY_LOG_INTERVAL_MS) {
+            final Long idlingStartTime = taskToIdlingStartTime.get(taskId);
+            final long idlingDuration = idlingStartTime != null ? now - idlingStartTime : 0L;
+            log.info("Task {} is not ready to process (not ready for {}ms): {}", 
+                    taskId, idlingDuration, logMessage != null ? logMessage : "Task cannot be processed");
+            taskToLastNotReadyLogTime.put(taskId, now);
         }
     }
 
@@ -114,6 +157,12 @@ public class TaskExecutionMetadata {
 
     void clearSuccessfullyProcessed() {
         successfullyProcessed.clear();
+    }
+    
+    void removeTaskFromNotReadyTracking(final Task task) {
+        final TaskId taskId = task.id();
+        taskToLastNotReadyLogTime.remove(taskId);
+        taskToIdlingStartTime.remove(taskId);
     }
 
     private class NamedTopologyMetadata {

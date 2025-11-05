@@ -25,7 +25,29 @@ import java.util.function.Function;
 
 abstract class AbstractPartitionGroup {
 
-    abstract boolean readyToProcess(long wallClockTime);
+    /**
+     * Result of readyToProcess check, containing both the readiness status
+     * and an optional diagnostic log message.
+     */
+    static final class ReadyToProcessResult {
+        private final boolean ready;
+        private final Optional<String> logMessage;
+
+        ReadyToProcessResult(final boolean ready, final Optional<String> logMessage) {
+            this.ready = ready;
+            this.logMessage = logMessage;
+        }
+
+        boolean isReady() {
+            return ready;
+        }
+
+        Optional<String> getLogMessage() {
+            return logMessage;
+        }
+    }
+
+    abstract ReadyToProcessResult readyToProcess(long wallClockTime);
 
     // creates queues for new partitions, removes old queues, saves cached records for previously assigned partitions
     abstract void updatePartitions(Set<TopicPartition> inputPartitions, Function<TopicPartition, RecordQueue> recordQueueCreator);

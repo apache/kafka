@@ -119,8 +119,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private boolean commitRequested = false;
     private boolean hasPendingTxCommit = false;
     private Optional<Long> timeCurrentIdlingStarted; // time since the task started idling, empty if not idling
-    private long lastNotReadyLogTime = -1L;  // -1 means ready (no logging needed), >= 0 means not ready and tracks last log time
-    private static final long NOT_READY_LOG_INTERVAL_MS = 120_000L; // Log interval of not being ready (2 minutes)
+    private Optional<Long> lastNotReadyLogTime;   // last time logged about not being ready to process
+    private static final long NOT_READY_LOG_INTERVAL_MS = 120_000L; // log interval of not being ready (2 minutes)
 
     @SuppressWarnings({"rawtypes", "this-escape", "checkstyle:ParameterNumber"})
     public StreamTask(final TaskId id,
@@ -228,6 +228,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             highWatermark.put(topicPartition, -1L);
         }
         timeCurrentIdlingStarted = Optional.empty();
+        lastNotReadyLogTime = Optional.empty();
         processingExceptionHandler = config.processingExceptionHandler;
     }
 
@@ -418,6 +419,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw new IllegalStateException("Unknown state " + state() + " while resuming active task " + id);
         }
         timeCurrentIdlingStarted = Optional.empty();
+        lastNotReadyLogTime = Optional.empty();
     }
 
     public void flush() {
@@ -732,71 +734,43 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             return false;
         }
 
-        final boolean wasReady = lastNotReadyLogTime == -1L;
+        final boolean wasReady = lastNotReadyLogTime.isEmpty();
         if (hasPendingTxCommit) {
             // if the task has a pending TX commit, we should just retry the commit but not process any records
             // thus, the task is not processable, even if there is available data in the record queue
             if (wasReady) {
                 // READY -> NOT_READY - start timer
-                lastNotReadyLogTime = wallClockTime;
+                lastNotReadyLogTime = Optional.of(wallClockTime);
             } else {
-                // NOT_READY - check if it should log
-                final long timeSinceLastLog = wallClockTime - lastNotReadyLogTime;
-                if (timeSinceLastLog >= NOT_READY_LOG_INTERVAL_MS) {
-                    log.info("Task is not ready to process: has pending transaction commit");
-                    lastNotReadyLogTime = wallClockTime;
-                }
+                maybeLogNotReady(wallClockTime, "Task is not ready to process: has pending transaction commit");
             }
             return false;
         }
 
-        final boolean readyToProcess = partitionGroup.readyToProcess(wallClockTime);
-        if (!readyToProcess) {
+        final AbstractPartitionGroup.ReadyToProcessResult readyToProcess = partitionGroup.readyToProcess(wallClockTime);
+        if (!readyToProcess.isReady()) {
             if (wasReady) {
                 // READY -> NOT_READY - start the timer
-                lastNotReadyLogTime = wallClockTime;
+                lastNotReadyLogTime = Optional.of(wallClockTime);
                 timeCurrentIdlingStarted = Optional.of(wallClockTime);
             } else {
-                // NOT_READY - check if it should log
-                final long timeSinceLastLog = wallClockTime - lastNotReadyLogTime;
-                if (timeSinceLastLog >= NOT_READY_LOG_INTERVAL_MS) {
-                    final String partitionStatus = getNotReadyPartitionStatus();
-                    log.info("Task is not ready to process (started idling at time {}): {}", timeCurrentIdlingStarted.orElse(-1L), partitionStatus);
-                    lastNotReadyLogTime = wallClockTime;
-                }
+                maybeLogNotReady(wallClockTime, readyToProcess.getLogMessage().orElse("Task is not ready to process"));
             }
         } else {
             // Task is ready - clear the timer
-            lastNotReadyLogTime = -1L;
+            lastNotReadyLogTime = Optional.empty();
             timeCurrentIdlingStarted = Optional.empty();
             log.trace("Task is ready to process");
         }
-        return readyToProcess;
+        return readyToProcess.isReady();
     }
 
-    /**
-     * Get the reason why the task is not ready to process.
-     * This method is called when the task has been not ready for a while.
-     */
-    private String getNotReadyPartitionStatus() {
-        final Set<TopicPartition> emptyPartitions = new HashSet<>();
-        final Set<TopicPartition> bufferedPartitions = new HashSet<>();
-
-        for (final TopicPartition partition : partitionGroup.partitions()) {
-            if (partitionGroup.numBuffered(partition) == 0) {
-                emptyPartitions.add(partition);
-            } else {
-                bufferedPartitions.add(partition);
-            }
-        }
-
-        if (emptyPartitions.isEmpty()) {
-            return String.format("all partitions have buffered data (buffered: %s)", bufferedPartitions);
-        } else if (bufferedPartitions.isEmpty()) {
-            return String.format("no partitions have buffered data locally (empty partitions: %s)", emptyPartitions);
-        } else {
-            return String.format("some partitions have no buffered data (buffered: %s, empty: %s)",
-                    bufferedPartitions, emptyPartitions);
+    private void maybeLogNotReady(final long wallClockTime, final String logMessage) {
+        // NOT_READY - check if it should log
+        final long timeSinceLastLog = lastNotReadyLogTime.map(aLong -> wallClockTime - aLong).orElse(0L);
+        if (timeSinceLastLog >= NOT_READY_LOG_INTERVAL_MS) {
+            log.info(logMessage);
+            lastNotReadyLogTime = Optional.of(wallClockTime);
         }
     }
 

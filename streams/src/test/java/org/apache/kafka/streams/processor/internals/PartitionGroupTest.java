@@ -28,7 +28,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -40,8 +39,6 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
 
-import org.apache.logging.log4j.Level;
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -57,10 +54,8 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
-import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -708,22 +703,15 @@ public class PartitionGroupTest {
         group.addRawRecords(partition1, list1);
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
-            assertThat(group.readyToProcess(0L), is(true));
-            assertThat(
-                appender.getEvents(),
-                hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("TRACE")),
-                    Matchers.hasProperty("message", equalTo(
-                        "[test] Ready for processing because max.task.idle.ms is disabled.\n" +
-                            "\tThere may be out-of-order processing for this task as a result.\n" +
-                            "\tBuffered partitions: [topic-1]\n" +
-                            "\tNon-buffered partitions: [topic-2]"
-                    ))
-                ))
-            );
-        }
+        final AbstractPartitionGroup.ReadyToProcessResult result = group.readyToProcess(0L);
+        assertTrue(result.isReady());
+        assertTrue(result.getLogMessage().isPresent() &&
+            result.getLogMessage().get().contains(
+            "Ready for processing because max.task.idle.ms is disabled.\n" +
+                "\tThere may be out-of-order processing for this task as a result.\n" +
+                "\tBuffered partitions: [topic-1]\n" +
+                "\tNon-buffered partitions: [topic-2]"
+        ));
     }
 
     @Test
@@ -751,17 +739,10 @@ public class PartitionGroupTest {
         group.addRawRecords(partition2, list2);
 
         assertThat(group.allPartitionsBufferedLocally(), is(true));
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
-            assertThat(group.readyToProcess(0L), is(true));
-            assertThat(
-                appender.getEvents(),
-                hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("TRACE")),
-                    Matchers.hasProperty("message", equalTo("[test] All partitions were buffered locally, so this task is ready for processing."))
-                ))
-            );
-        }
+        final AbstractPartitionGroup.ReadyToProcessResult result = group.readyToProcess(0L);
+        assertTrue(result.isReady());
+        assertTrue(result.getLogMessage().isPresent() &&
+            result.getLogMessage().get().contains("All partitions were buffered locally, so this task is ready for processing."));
     }
 
     @Test
@@ -785,20 +766,13 @@ public class PartitionGroupTest {
         group.addRawRecords(partition1, list1);
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
-            assertThat(group.readyToProcess(0L), is(false));
-            assertThat(
-                appender.getEvents(),
-                hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("TRACE")),
-                    Matchers.hasProperty("message", equalTo("[test] Waiting to fetch data for topic-2"))
-                ))
-            );
-        }
+        final AbstractPartitionGroup.ReadyToProcessResult result = group.readyToProcess(0L);
+        assertFalse(result.isReady());
+        assertTrue(result.getLogMessage().isPresent() &&
+            result.getLogMessage().get().contains("Waiting to fetch data for topic-2"));
         lags.put(partition2, OptionalLong.of(0L));
         group.updateLags();
-        assertThat(group.readyToProcess(0L), is(true));
+        assertTrue(group.readyToProcess(0L).isReady());
     }
 
     @Test
@@ -826,17 +800,10 @@ public class PartitionGroupTest {
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
-            assertThat(group.readyToProcess(0L), is(false));
-            assertThat(
-                appender.getEvents(),
-                hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("TRACE")),
-                    Matchers.hasProperty("message", equalTo("[test] Lag for partition topic-2 is currently 1, but no data is buffered locally. Waiting to buffer some records."))
-                ))
-            );
-        }
+        final AbstractPartitionGroup.ReadyToProcessResult result = group.readyToProcess(0L);
+        assertFalse(result.isReady());
+        assertTrue(result.getLogMessage().isPresent() &&
+            result.getLogMessage().get().contains("Lag for partition topic-2 is currently 1, but no data is buffered locally. Waiting to buffer some records."));
     }
 
     @Test
@@ -861,85 +828,58 @@ public class PartitionGroupTest {
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
-            assertThat(group.readyToProcess(0L), is(false));
-            assertThat(
-                appender.getEvents(),
-                hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("TRACE")),
-                    Matchers.hasProperty("message", equalTo("[test] Lag for partition topic-2 is currently 0 and current time is 0. Waiting for new data to be produced for configured idle time 1 (deadline is 1)."))
-                ))
-            );
-        }
+        final AbstractPartitionGroup.ReadyToProcessResult result1 = group.readyToProcess(0L);
+        assertFalse(result1.isReady());
+        assertTrue(result1.getLogMessage().isPresent() &&
+            result1.getLogMessage().get().contains("Lag for partition topic-2 is currently 0 and current time is 0. Waiting for new data to be produced for configured idle time 1 (deadline is 1)."));
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
-            assertThat(group.readyToProcess(1L), is(true));
-            assertThat(
-                appender.getEvents(),
-                hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("TRACE")),
-                    Matchers.hasProperty("message", equalTo(
-                        "[test] Continuing to process although some partitions are empty on the broker.\n" +
-                            "\tThere may be out-of-order processing for this task as a result.\n" +
-                            "\tPartitions with local data: [topic-1].\n" +
-                            "\tPartitions we gave up waiting for, with their corresponding deadlines: {topic-2=1}.\n" +
-                            "\tConfigured max.task.idle.ms: 1.\n" +
-                            "\tCurrent wall-clock time: 1."
-                    ))
-                ))
-            );
-        }
+        final AbstractPartitionGroup.ReadyToProcessResult result2 = group.readyToProcess(1L);
+        assertTrue(result2.isReady());
+        assertTrue(result2.getLogMessage().isPresent() &&
+            result2.getLogMessage().get().contains(
+            "Continuing to process although some partitions are empty on the broker.\n" +
+                "\tThere may be out-of-order processing for this task as a result.\n" +
+                "\tPartitions with local data: [topic-1].\n" +
+                "\tPartitions we gave up waiting for, with their corresponding deadlines: {topic-2=1}.\n" +
+                "\tConfigured max.task.idle.ms: 1.\n" +
+                "\tCurrent wall-clock time: 1."
+        ));
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
-            assertThat(group.readyToProcess(2L), is(true));
-            assertThat(
-                appender.getEvents(),
-                hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("TRACE")),
-                    Matchers.hasProperty("message", equalTo(
-                        "[test] Continuing to process although some partitions are empty on the broker.\n" +
-                            "\tThere may be out-of-order processing for this task as a result.\n" +
-                            "\tPartitions with local data: [topic-1].\n" +
-                            "\tPartitions we gave up waiting for, with their corresponding deadlines: {topic-2=1}.\n" +
-                            "\tConfigured max.task.idle.ms: 1.\n" +
-                            "\tCurrent wall-clock time: 2."
-                    ))
-                ))
-            );
-        }
+        final AbstractPartitionGroup.ReadyToProcessResult result3 = group.readyToProcess(2L);
+        assertTrue(result3.isReady());
+        assertTrue(result3.getLogMessage().isPresent() &&
+            result3.getLogMessage().get().contains(
+            "Continuing to process although some partitions are empty on the broker.\n" +
+                "\tThere may be out-of-order processing for this task as a result.\n" +
+                "\tPartitions with local data: [topic-1].\n" +
+                "\tPartitions we gave up waiting for, with their corresponding deadlines: {topic-2=1}.\n" +
+                "\tConfigured max.task.idle.ms: 1.\n" +
+                "\tCurrent wall-clock time: 2."
+        ));
     }
 
     private void hasNoFetchedLag(final PartitionGroup group, final TopicPartition partition) {
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
-            assertFalse(group.readyToProcess(0L));
-            assertThat(appender.getEvents(), hasItem(Matchers.hasProperty("message",
-                equalTo(String.format("[test] Waiting to fetch data for %s", partition)))));
-        }
+        final AbstractPartitionGroup.ReadyToProcessResult result = group.readyToProcess(0L);
+        assertFalse(result.isReady());
+        assertTrue(result.getLogMessage().isPresent() &&
+            result.getLogMessage().get().contains(String.format("Waiting to fetch data for %s", partition)));
     }
 
     private void hasZeroFetchedLag(final PartitionGroup group, final TopicPartition partition) {
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
-            assertFalse(group.readyToProcess(0L));
-            assertThat(appender.getEvents(), hasItem(Matchers.hasProperty("message",
-                startsWith(String.format("[test] Lag for partition %s is currently 0 and current time is %d. "
-                    + "Waiting for new data to be produced for configured idle time", partition, 0L)))));
-        }
+        final AbstractPartitionGroup.ReadyToProcessResult result = group.readyToProcess(0L);
+        assertFalse(result.isReady());
+        assertTrue(result.getLogMessage().isPresent() &&
+            result.getLogMessage().get().contains(String.format("Lag for partition %s is currently 0 and current time is %d. "
+            + "Waiting for new data to be produced for configured idle time", partition, 0L)));
     }
 
     @SuppressWarnings("SameParameterValue")
     private void hasNonZeroFetchedLag(final PartitionGroup group, final TopicPartition partition, final long lag) {
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
-            appender.setClassLogger(PartitionGroup.class, Level.TRACE);
-            assertFalse(group.readyToProcess(0L));
-            assertThat(appender.getEvents(), hasItem(Matchers.hasProperty("message",
-                equalTo(String.format("[test] Lag for partition %s is currently %d, but no data is buffered locally. "
-                    + "Waiting to buffer some records.", partition, lag)))));
-        }
+        final AbstractPartitionGroup.ReadyToProcessResult result = group.readyToProcess(0L);
+        assertFalse(result.isReady());
+        assertTrue(result.getLogMessage().isPresent() &&
+            result.getLogMessage().get().contains(String.format("Lag for partition %s is currently %d, but no data is buffered locally. "
+            + "Waiting to buffer some records.", partition, lag)));
     }
 
 
