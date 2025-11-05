@@ -1627,7 +1627,7 @@ public class StreamTaskTest {
             // Advance time by 5 seconds to simulate staleness
             long newTime = time.milliseconds() + 5_000L;
             
-            // Call isProcessable which should not trigger logging after being stale for 105 seconds
+            // Should not trigger logging after being stale for 105 seconds
             assertFalse(task.isProcessable(newTime));
             List<String> messages = appender.getMessages();
             assertEquals(0, messages.size(), "No log message should be logged before 20 seconds");
@@ -1635,7 +1635,7 @@ public class StreamTaskTest {
             // Advance time by approximately 20 seconds to simulate staleness
             newTime = time.milliseconds() + 20_000L;
 
-            // Call isProcessable which should not trigger logging after being stale for 120 seconds
+            // Should trigger logging after being stale for 120 seconds
             assertFalse(task.isProcessable(newTime));
             messages = appender.getMessages();
             assertThat("Should have logged not ready message", messages.size(), is(1));
