@@ -138,8 +138,7 @@ class PartitionGroup extends AbstractPartitionGroup {
                 if (fetchedLag == -1L) {
                     // must wait to fetch metadata for the partition
                     idlePartitionDeadlines.remove(partition);
-                    appendLog(logMessageBuilder, String.format(String.format(
-                        "\tWaiting to fetch data for %s", partition)));
+                    appendLog(logMessageBuilder, String.format(String.format("\tWaiting to fetch data for %s", partition)));
 
                     return new ReadyToProcessResult(false, Optional.of(logMessageBuilder.toString()));
                 } else if (fetchedLag > 0L) {
@@ -275,8 +274,7 @@ class PartitionGroup extends AbstractPartitionGroup {
                     recordLatenessSensor.record(0, wallClockTime);
                     logger.trace("Partition {} stream time updated from {} to {}", queue.partition(), oldStreamTime, streamTime);
                 } else {
-                    final long lateness = streamTime - record.timestamp;
-                    recordLatenessSensor.record(lateness, wallClockTime);
+                    recordLatenessSensor.record(streamTime - record.timestamp, wallClockTime);
                 }
             }
         } else {
