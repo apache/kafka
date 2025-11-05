@@ -59,6 +59,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION;
 import static org.apache.kafka.metadata.storage.ScramParserTest.TEST_SALT;
 import static org.apache.kafka.metadata.storage.ScramParserTest.TEST_SALTED_PASSWORD;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -150,6 +151,19 @@ public class FormatterTest {
             BootstrapMetadata bootstrapMetadata =
                 new BootstrapDirectory(testEnv.directory(0)).read();
             assertEquals(MetadataVersion.latestProduction(), bootstrapMetadata.metadataVersion());
+        }
+    }
+
+    @Test
+    public void testBrokerRoleSkipsBootstrapSnapshot() throws Exception {
+        try (TestEnv testEnv = new TestEnv(1)) {
+            FormatterContext context = testEnv.newFormatter();
+            context.formatter.setWriteBootstrapSnapshot(false);
+            context.formatter.run();
+            File clusterMetadataDir = new File(testEnv.directory(0), String.format("%s-%d",
+                CLUSTER_METADATA_TOPIC_PARTITION.topic(),
+                CLUSTER_METADATA_TOPIC_PARTITION.partition()));
+            assertFalse(clusterMetadataDir.exists());
         }
     }
 

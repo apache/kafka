@@ -58,6 +58,24 @@ public class BootstrapDirectory {
         this.directoryPath = Objects.requireNonNull(directoryPath);
     }
 
+    public BootstrapMetadata readBootstrapCheckpoint() throws Exception {
+        Path path = Paths.get(directoryPath);
+        if (!Files.isDirectory(path)) {
+            if (Files.exists(path)) {
+                throw new RuntimeException("Path " + directoryPath + " exists, but is not " +
+                        "a directory.");
+            } else {
+                throw new RuntimeException("No such directory as " + directoryPath);
+            }
+        }
+        Path binaryBootstrapPath = Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME);
+        if (!Files.exists(binaryBootstrapPath)) {
+            return null;
+        } else {
+            return readFromBinaryFile(binaryBootstrapPath.toString());
+        }
+    }
+
     public BootstrapMetadata read() throws Exception {
         Path path = Paths.get(directoryPath);
         if (!Files.isDirectory(path)) {
@@ -69,19 +87,15 @@ public class BootstrapDirectory {
             }
         }
         Path binaryBootstrapPath = Paths.get(directoryPath, String.format("%s-%d",
-                CLUSTER_METADATA_TOPIC_PARTITION.topic(),
-                CLUSTER_METADATA_TOPIC_PARTITION.partition()),
-                BINARY_BOOTSTRAP_CHECKPOINT_FILENAME);
+            CLUSTER_METADATA_TOPIC_PARTITION.topic(),
+            CLUSTER_METADATA_TOPIC_PARTITION.partition()),
+            BINARY_BOOTSTRAP_CHECKPOINT_FILENAME);
         if (!Files.exists(binaryBootstrapPath)) {
-            Path oldBootstrapPath = Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME);
-            if (!Files.exists(oldBootstrapPath)) {
-                return readFromConfiguration();
-            } else {
-                return readFromBinaryFile(oldBootstrapPath.toString());
-            }
+            return null;
         } else {
             return readFromBinaryFile(binaryBootstrapPath.toString());
         }
+        
     }
 
     BootstrapMetadata readFromConfiguration() {

@@ -131,6 +131,7 @@ public class Formatter {
      */
     private Optional<DynamicVoters> initialControllers = Optional.empty();
     private boolean hasDynamicQuorum = false;
+    private boolean writeBootstrapSnapshot = true;
 
     public Formatter setPrintStream(PrintStream printStream) {
         this.printStream = printStream;
@@ -218,6 +219,11 @@ public class Formatter {
 
     public Formatter setHasDynamicQuorum(boolean hasDynamicQuorum) {
         this.hasDynamicQuorum = hasDynamicQuorum;
+        return this;
+    }
+
+    public Formatter setWriteBootstrapSnapshot(boolean writeBootstrapSnapshot) {
+        this.writeBootstrapSnapshot = writeBootstrapSnapshot;
         return this;
     }
 
@@ -436,11 +442,13 @@ public class Formatter {
                     directoryTypes.get(writeLogDir).description(), writeLogDir,
                     MetadataVersion.FEATURE_NAME, releaseVersion);
                 Files.createDirectories(Paths.get(writeLogDir));
-                writeBoostrapSnapshot(writeLogDir,
-                    bootstrapMetadata,
-                    initialControllers,
-                    featureLevels.get(KRaftVersion.FEATURE_NAME),
-                    controllerListenerName);
+                if (writeBootstrapSnapshot) {
+                    writeBoostrapSnapshot(writeLogDir,
+                        bootstrapMetadata,
+                        initialControllers,
+                        featureLevels.get(KRaftVersion.FEATURE_NAME),
+                        controllerListenerName);
+                }
             });
             copier.setWriteErrorHandler((errorLogDir, e) -> {
                 throw new FormatterException("Error while writing meta.properties file " +

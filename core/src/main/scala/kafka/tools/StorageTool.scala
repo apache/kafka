@@ -120,9 +120,13 @@ object StorageTool extends Logging {
       throw new TerseFailure("The kafka configuration file appears to be for " +
         "a legacy cluster. Formatting is only supported for clusters in KRaft mode.")
     }
+    val writeBootstrapSnapshot = config.processRoles.contains(ProcessRole.ControllerRole) ||
+      !config.processRoles.contains(ProcessRole.BrokerRole)
+
     val formatter = new Formatter().
       setPrintStream(printStream).
       setNodeId(config.nodeId).
+      setWriteBootstrapSnapshot(writeBootstrapSnapshot).
       setClusterId(namespace.getString("cluster_id")).
       setUnstableFeatureVersionsEnabled(config.unstableFeatureVersionsEnabled).
       setIgnoreFormatted(namespace.getBoolean("ignore_formatted")).
