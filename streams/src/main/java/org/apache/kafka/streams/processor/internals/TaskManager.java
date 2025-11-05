@@ -1082,6 +1082,7 @@ public class TaskManager {
         try {
             if (canTryInitializeTask(task.id(), nowMs)) {
                 task.initializeIfNeeded();
+                task.clearTaskTimeout();
                 taskIdToBackoffRecord.remove(task.id());
                 stateUpdater.add(task);
             } else {
@@ -1095,6 +1096,11 @@ public class TaskManager {
                      lockException.getMessage());
             tasks.addPendingTasksToInit(Collections.singleton(task));
             updateOrCreateBackoffRecord(task.id(), nowMs);
+        } catch (final TimeoutException timeoutException) {
+            task.maybeInitTaskTimeoutOrThrow(nowMs, timeoutException);
+            tasks.addPendingTasksToInit(Collections.singleton(task));
+            updateOrCreateBackoffRecord(task.id(), nowMs);
+            log.debug("Task {} timed out during initialization; will retry", task.id(), timeoutException);
         }
     }
 
