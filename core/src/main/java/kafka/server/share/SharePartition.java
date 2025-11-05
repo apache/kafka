@@ -20,6 +20,7 @@ import kafka.server.ReplicaManager;
 import kafka.server.share.SharePartitionManager.SharePartitionListener;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
+import org.apache.kafka.clients.consumer.ShareAcquireMode;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
@@ -682,18 +683,20 @@ public class SharePartition {
      * batches from fetchOffset to first base offset of the fetch response are archived.
      *
      * @param memberId           The member id of the client that is fetching the record.
+     * @param shareAcquireMode   The share acquire mode to acquire the records.
      * @param batchSize          The number of records per acquired records batch.
      * @param maxFetchRecords    The maximum number of records that should be acquired, this is a soft
      *                           limit and the method might acquire more records than the maxFetchRecords,
      *                           if the records are already part of the same fetch batch.
      * @param fetchOffset        The fetch offset for which the records are fetched.
      * @param fetchPartitionData The fetched records for the share partition.
-     * @param isolationLevel      The isolation level for the share fetch request.
+     * @param isolationLevel     The isolation level for the share fetch request.
      * @return The acquired records for the share partition.
      */
     @SuppressWarnings({"cyclomaticcomplexity", "methodlength"}) // Consider refactoring to avoid suppression
     public ShareAcquiredRecords acquire(
         String memberId,
+        ShareAcquireMode shareAcquireMode,
         int batchSize,
         int maxFetchRecords,
         long fetchOffset,
@@ -701,6 +704,7 @@ public class SharePartition {
         FetchIsolation isolationLevel
     ) {
         log.trace("Received acquire request for share partition: {}-{} memberId: {}", groupId, topicIdPartition, memberId);
+        boolean isRecordLimitMode = isRecordLimitMode(shareAcquireMode);
         if (stateNotActive() || maxFetchRecords <= 0) {
             // Nothing to acquire.
             return ShareAcquiredRecords.empty();
@@ -772,7 +776,7 @@ public class SharePartition {
                     groupId, topicIdPartition);
                 // It's safe to use lastOffsetToAcquire instead of lastBatch.lastOffset() because there is no
                 // overlap hence the lastOffsetToAcquire is same as lastBatch.lastOffset() or before that.
-                ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
+                ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(), isRecordLimitMode,
                     firstBatch.baseOffset(), lastOffsetToAcquire, batchSize, maxRecordsToAcquire);
                 return maybeFilterAbortedTransactionalAcquiredRecords(fetchPartitionData, isolationLevel, shareAcquiredRecords);
             }
@@ -811,8 +815,9 @@ public class SharePartition {
                         // from 10-15 will be acquired later in the code. In other case, when
                         // fetch returns batches from 0-25, then the sub map will have 2 entries and
                         // gap will be computed correctly.
-                        ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
-                            maybeGapStartOffset, entry.getKey() - 1, batchSize, maxRecordsToAcquire);
+                        int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
+                        ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(), isRecordLimitMode,
+                            maybeGapStartOffset, entry.getKey() - 1, batchSize, numRecordsRemaining);
                         result.addAll(shareAcquiredRecords.acquiredRecords());
                         acquiredCount += shareAcquiredRecords.count();
                     }
@@ -827,8 +832,9 @@ public class SharePartition {
 
                 // Compute if the batch is a full match.
                 boolean fullMatch = checkForFullMatch(inFlightBatch, firstBatch.baseOffset(), lastOffsetToAcquire);
-
-                if (!fullMatch || inFlightBatch.offsetState() != null) {
+                int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
+                boolean recordLimitSubsetMatch = isRecordLimitMode && checkForRecordLimitSubsetMatch(inFlightBatch, maxRecordsToAcquire, acquiredCount);
+                if (!fullMatch || inFlightBatch.offsetState() != null || recordLimitSubsetMatch) {
                     log.trace("Subset or offset tracked batch record found for share partition,"
                             + " batch: {} request offsets - first: {}, last: {} for the share"
                             + " partition: {}-{}", inFlightBatch, firstBatch.baseOffset(),
@@ -849,10 +855,10 @@ public class SharePartition {
                         // the offsets state in the in-flight batch.
                         inFlightBatch.maybeInitializeOffsetStateUpdate();
                     }
-                    // Do not send max fetch records to acquireSubsetBatchRecords as we want to acquire
-                    // all the records from the batch as the batch will anyway be part of the file-records
-                    // response batch.
-                    int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, firstBatch.baseOffset(), lastOffsetToAcquire, inFlightBatch, result);
+                    // In record_limit mode, we need to ensure that we do not acquire more than
+                    // maxRecordsToAcquire. Hence, pass the remaining number of records that can
+                    // be acquired.
+                    int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, isRecordLimitMode, numRecordsRemaining, firstBatch.baseOffset(), lastOffsetToAcquire, inFlightBatch, result);
                     acquiredCount += acquiredSubsetCount;
                     continue;
                 }
@@ -886,9 +892,10 @@ public class SharePartition {
             // missing records as well.
             if (acquiredCount < maxRecordsToAcquire && subMap.lastEntry().getValue().lastOffset() < lastOffsetToAcquire) {
                 log.trace("There exists another batch which needs to be acquired as well");
-                ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
+                int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
+                ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(), isRecordLimitMode,
                     subMap.lastEntry().getValue().lastOffset() + 1,
-                    lastOffsetToAcquire, batchSize, maxRecordsToAcquire - acquiredCount);
+                    lastOffsetToAcquire, batchSize, numRecordsRemaining);
                 result.addAll(shareAcquiredRecords.acquiredRecords());
                 acquiredCount += shareAcquiredRecords.count();
             }
@@ -1659,6 +1666,7 @@ public class SharePartition {
     private ShareAcquiredRecords acquireNewBatchRecords(
         String memberId,
         Iterable<? extends RecordBatch> batches,
+        boolean isRecordLimitMode,
         long firstOffset,
         long lastOffset,
         int batchSize,
@@ -1678,10 +1686,11 @@ public class SharePartition {
             // Check how many records can be acquired from the batch.
             long lastAcquiredOffset = lastOffset;
             if (maxFetchRecords < lastAcquiredOffset - firstAcquiredOffset + 1) {
-                // The max records to acquire is less than the complete available batches hence
-                // limit the acquired records. The last offset shall be the batches last offset
-                // which falls under the max records limit. As the max fetch records is the soft
-                // limit, the last offset can be higher than the max records.
+                // The max records to acquire is less than the complete available batches, so we
+                // limit the acquired records. Although shareAcquireMode is introduced, even in
+                // record_limit mode, the last offset should still be the batch's last offset
+                // that falls under the max records limit, because the InFlightBatch
+                // in cachedState should still reflect the complete batch.
                 lastAcquiredOffset = lastOffsetFromBatchWithRequestOffset(batches, firstAcquiredOffset + maxFetchRecords - 1);
                 // If the initial read gap offset window is active then it's not guaranteed that the
                 // batches align on batch boundaries. Hence, reset to last offset itself if the batch's
@@ -1700,7 +1709,7 @@ public class SharePartition {
             }
 
             // Create batches of acquired records.
-            List<AcquiredRecords> acquiredRecords = createBatches(memberId, batches, firstAcquiredOffset, lastAcquiredOffset, batchSize);
+            List<AcquiredRecords> acquiredRecords = createBatches(memberId, batches, isRecordLimitMode, maxFetchRecords, firstAcquiredOffset, lastAcquiredOffset, batchSize);
             // if the cachedState was empty before acquiring the new batches then startOffset needs to be updated
             if (cachedState.firstKey() == firstAcquiredOffset)  {
                 startOffset = firstAcquiredOffset;
@@ -1713,6 +1722,11 @@ public class SharePartition {
             if (lastAcquiredOffset > endOffset) {
                 endOffset = lastAcquiredOffset;
             }
+            // Update lastAcquireOffset to the last offset of acquired records in record_limit mode
+            // Since this is required to calculate the actual number of offsets acquired.
+            if (isRecordLimitMode) {
+                lastAcquiredOffset = acquiredRecords.get(0).lastOffset();
+            }
             maybeUpdatePersisterGapWindowStartOffset(lastAcquiredOffset + 1);
             return new ShareAcquiredRecords(acquiredRecords, (int) (lastAcquiredOffset - firstAcquiredOffset + 1));
         } finally {
@@ -1723,6 +1737,8 @@ public class SharePartition {
     private List<AcquiredRecords> createBatches(
         String memberId,
         Iterable<? extends RecordBatch> batches,
+        boolean isRecordLimitMode,
+        int maxFetchRecords,
         long firstAcquiredOffset,
         long lastAcquiredOffset,
         int batchSize
@@ -1731,9 +1747,10 @@ public class SharePartition {
         try {
             List<AcquiredRecords> result = new ArrayList<>();
             long currentFirstOffset = firstAcquiredOffset;
-            // No split of batches is required if the batch size is greater than records which
-            // can be acquired, else split the batch into multiple batches.
-            if (lastAcquiredOffset - firstAcquiredOffset + 1 > batchSize) {
+            // Batch splitting only occurs in batch_optimized mode when the number of records to acquire exceeds the batch size.
+            // If acquireMode is record_limit, or the batch size is greater than the number of records to acquire, no splitting is performed.
+            long recordCount = lastAcquiredOffset - firstAcquiredOffset + 1;
+            if (!isRecordLimitMode && recordCount > batchSize) {
                 // The batch is split into multiple batches considering batch size.
                 // Note: Try reading only the baseOffset of the batch and avoid reading the lastOffset
                 // as lastOffset call of RecordBatch is expensive (loads headers).
@@ -1762,10 +1779,57 @@ public class SharePartition {
                 .setLastOffset(lastAcquiredOffset)
                 .setDeliveryCount((short) 1));
 
-            result.forEach(acquiredRecords -> {
-                // Schedule acquisition lock timeout for the batch.
-                AcquisitionLockTimerTask timerTask = scheduleAcquisitionLockTimeout(memberId, acquiredRecords.firstOffset(), acquiredRecords.lastOffset());
-                // Add the new batch to the in-flight records along with the acquisition lock timeout task for the batch.
+            if (isRecordLimitMode) {
+                // In record_limit mode, there will always be only one single batch in the result.
+                AcquiredRecords acquiredRecords = result.get(0);
+                // When the count of acquired records exceeds the max fetch limit, only initialize and schedule acquisition lock for
+                // acquired records up to the max fetch boundary and remaining offsets should still in available state.
+                // i.e. acquired records are 10-19 (10 records) and max fetch records is 5, then only 10-14 should be acquired
+                // and offset 15-19 should still in available state.
+                if (acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1 > maxFetchRecords) {
+                    InFlightBatch inFlightBatch = new InFlightBatch(
+                        timer,
+                        time,
+                        memberId,
+                        acquiredRecords.firstOffset(),
+                        acquiredRecords.lastOffset(),
+                        RecordState.ACQUIRED,
+                        1,
+                        null,
+                        timeoutHandler,
+                        sharePartitionMetrics);
+                    int delayMs = recordLockDurationMsOrDefault(groupConfigManager, groupId, defaultRecordLockDurationMs);
+                    long lastOffset = acquiredRecords.firstOffset() + maxFetchRecords - 1;
+                    acquiredRecords.setLastOffset(lastOffset);
+                    inFlightBatch.maybeInitializeOffsetStateUpdate(lastOffset, delayMs);
+                    updateFindNextFetchOffset(true);
+
+                    cachedState.put(acquiredRecords.firstOffset(), inFlightBatch);
+                    sharePartitionMetrics.recordInFlightBatchMessageCount(
+                        acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1);
+                    return List.of(acquiredRecords);
+                }
+            }
+            addBatches(memberId, result);
+            return result;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Add the acquired record batches to the cache and schedule acquisition lock timeouts.
+     *
+     * @param memberId The member id for which the records are acquired.
+     * @param acquiredRecordsList The list of acquired records to add to cache state.
+     */
+    private void addBatches(String memberId, List<AcquiredRecords> acquiredRecordsList) {
+        lock.writeLock().lock();
+        try {
+            acquiredRecordsList.forEach(acquiredRecords -> {
+                AcquisitionLockTimerTask timerTask = scheduleAcquisitionLockTimeout(
+                    memberId, acquiredRecords.firstOffset(), acquiredRecords.lastOffset());
+
                 cachedState.put(acquiredRecords.firstOffset(), new InFlightBatch(
                     timer,
                     time,
@@ -1780,14 +1844,21 @@ public class SharePartition {
                 // Update the in-flight batch message count metrics for the share partition.
                 sharePartitionMetrics.recordInFlightBatchMessageCount(acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1);
             });
-            return result;
         } finally {
             lock.writeLock().unlock();
         }
     }
 
+    private boolean checkForRecordLimitSubsetMatch(InFlightBatch inFlightBatch, int maxRecordsToAcquire, int acquiredCount) {
+        long numRecordsInBatch = inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1;
+        int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
+        return numRecordsInBatch > numRecordsRemaining;
+    }
+
     private int acquireSubsetBatchRecords(
         String memberId,
+        boolean isRecordLimitMode,
+        long maxFetchRecords,
         long requestFirstOffset,
         long requestLastOffset,
         InFlightBatch inFlightBatch,
@@ -1833,6 +1904,10 @@ public class SharePartition {
                     .setLastOffset(offsetState.getKey())
                     .setDeliveryCount((short) offsetState.getValue().deliveryCount()));
                 acquiredCount++;
+                if (isRecordLimitMode && acquiredCount == maxFetchRecords) {
+                    // In record_limit mode, acquire only the requested number of records.
+                    break;
+                }
             }
         } finally {
             lock.writeLock().unlock();
@@ -3031,6 +3106,10 @@ public class SharePartition {
         } finally {
             lock.readLock().unlock();
         }
+    }
+
+    private boolean isRecordLimitMode(ShareAcquireMode shareAcquireMode) {
+        return ShareAcquireMode.RECORD_LIMIT.equals(shareAcquireMode);
     }
 
     // Visible for testing.

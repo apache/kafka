@@ -112,6 +112,7 @@ public class ShareFetchUtils {
             } else {
                 ShareAcquiredRecords shareAcquiredRecords = sharePartition.acquire(
                     shareFetch.memberId(),
+                    shareFetch.shareAcquireMode(),
                     shareFetch.batchSize(),
                     shareFetch.maxFetchRecords() - acquiredRecordsCount,
                     shareFetchPartitionData.fetchOffset(),

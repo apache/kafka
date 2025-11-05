@@ -42,6 +42,8 @@
       "about": "The maximum number of records to fetch. This limit can be exceeded for alignment of batch boundaries." },
     { "name": "BatchSize", "type": "int32", "versions": "1+",
       "about": "The optimal number of records for batches of acquired records and acknowledgements." },
+    { "name": "ShareAcquireMode", "type": "int8", "versions": "2+", "default": "0", "ignorable": true,
+      "about": "The acquire mode to control the fetch behavior: 0 - batch-optimized, 1 - record-limit" },
     { "name": "IsRenewAck", "type": "bool", "versions": "2+", "default": "false",
       "about": "Whether Renew type acknowledgements present in AcknowledgementBatches." },
     { "name": "Topics", "type": "[]FetchTopic", "versions": "0+",

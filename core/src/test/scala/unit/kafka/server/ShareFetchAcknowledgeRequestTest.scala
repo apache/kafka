@@ -18,6 +18,7 @@ package kafka.server
 
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.DescribeShareGroupsOptions
+import org.apache.kafka.clients.consumer.ShareAcquireMode
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterTest, ClusterTestDefaults, ClusterTests, Type}
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords
 import org.apache.kafka.common.message.{FindCoordinatorRequestData, ShareAcknowledgeRequestData, ShareAcknowledgeResponseData, ShareFetchRequestData, ShareFetchResponseData, ShareGroupHeartbeatRequestData}
@@ -2472,8 +2473,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
                                       maxBytes: Int = Int.MaxValue,
                                       maxRecords: Int = 500,
                                       batchSize: Int = 500,
+                                      shareAcquireMode: ShareAcquireMode = ShareAcquireMode.BATCH_OPTIMIZED,
                                       isRenewAck: Boolean = false): ShareFetchRequest = {
-    ShareFetchRequest.Builder.forConsumer(groupId, metadata, maxWaitMs, minBytes, maxBytes, maxRecords, batchSize, isRenewAck, send, forget, acknowledgementsMap)
+    ShareFetchRequest.Builder.forConsumer(groupId, metadata, maxWaitMs, minBytes, maxBytes, maxRecords, batchSize, shareAcquireMode.id, isRenewAck, send, forget, acknowledgementsMap)
       .build()
   }
 

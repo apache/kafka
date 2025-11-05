@@ -183,6 +183,7 @@
       <allow pkg="org.apache.kafka.server.authorizer" />
       <!-- for IncrementalAlterConfigsRequest Builder -->
       <allow pkg="org.apache.kafka.clients.admin" />
+      <allow pkg="org.apache.kafka.clients.consumer" />
       <!-- for testing -->
       <!-- for testing -->
       <allow pkg="io.opentelemetry.proto"/>
