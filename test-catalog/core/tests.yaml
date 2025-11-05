@@ -3125,6 +3125,8 @@ kafka.server.share.SharePartitionTest:
 - testLsoMovementWithBatchRenewal
 - testLsoMovementWithGapsInCachedStateMap
 - testLsoMovementWithGapsInCachedStateMapAndAcknowledgedBatch
+- testLsoMovementWithPendingAcknowledgements
+- testLsoMovementWithPendingAcknowledgementsForBatches
 - testLsoMovementWithPerOffsetRenewal
 - testLsoMovementWithWriteStateRPCFailuresInAcknowledgement
 - testMaxDeliveryCountLimitExceededForRecordBatch
