@@ -6721,9 +6721,6 @@ class KafkaApisTest extends Logging {
 
     val groupId = "group"
 
-    when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
-
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
