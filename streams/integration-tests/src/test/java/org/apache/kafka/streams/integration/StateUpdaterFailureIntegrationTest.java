@@ -85,7 +85,7 @@ public class StateUpdaterFailureIntegrationTest {
     }
 
     @Test
-    public void correctlyHandleFlushErrorsDuringRebalance() throws InterruptedException {
+    public void correctlyHandleFlushErrorsDuringRebalance() throws Exception {
         final AtomicInteger numberOfStoreInits = new AtomicInteger();
         final AtomicReference<KafkaStreams.State> currentState = new AtomicReference<>();
 
