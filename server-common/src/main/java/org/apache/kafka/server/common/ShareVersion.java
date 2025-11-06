@@ -24,7 +24,7 @@ public enum ShareVersion implements FeatureVersion {
     SV_0(0, MetadataVersion.MINIMUM_VERSION, Map.of()),
 
     // Version 1 enables share groups (KIP-932).
-    // This is a preview in 4.1, and expected to be production-ready in 4.2.
+    // This was a preview in 4.1 which required enabling explicitly.
     SV_1(1, MetadataVersion.IBP_4_2_IV0, Map.of());
 
     public static final String FEATURE_NAME = "share.version";

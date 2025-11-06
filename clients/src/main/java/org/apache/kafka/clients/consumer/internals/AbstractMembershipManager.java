@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -108,7 +109,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     /**
      * Metadata that allows us to create the partitions needed for {@link ConsumerRebalanceListener}.
      */
-    private final ConsumerMetadata metadata;
+    private final Metadata metadata;
 
     /**
      * Logger.
@@ -204,7 +205,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
     AbstractMembershipManager(String groupId,
                               SubscriptionState subscriptions,
-                              ConsumerMetadata metadata,
+                              Metadata metadata,
                               Logger log,
                               Time time,
                               RebalanceMetricsManager metricsManager,
@@ -988,7 +989,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             String reason = rejoinedWhileReconciliationInProgress ?
                 "the member has re-joined the group" :
                 "the member already transitioned out of the reconciling state into " + state;
-            log.info("Interrupting reconciliation that is not relevant anymore because " + reason);
+            log.info("Interrupting reconciliation that is not relevant anymore because {}", reason);
             markReconciliationCompleted();
         }
         return shouldAbort;

@@ -408,6 +408,7 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
+  @SuppressWarnings(Array("removal"))
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testFencingOnSendOffsets(groupProtocol: String): Unit = {
@@ -440,6 +441,7 @@ class TransactionsTest extends IntegrationTestHarness {
     }
   }
 
+  @SuppressWarnings(Array("removal"))
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testOffsetMetadataInSendOffsetsToTransaction(groupProtocol: String): Unit = {
@@ -472,6 +474,7 @@ class TransactionsTest extends IntegrationTestHarness {
     testTimeout(needInitAndSendMsg = false, producer => producer.initTransactions())
   }
 
+  @SuppressWarnings(Array("removal"))
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testSendOffsetsToTransactionTimeout(groupProtocol: String): Unit = {

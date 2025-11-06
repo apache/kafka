@@ -25,16 +25,4 @@ import java.util.Optional;
  */
 public record LogReadInfo(FetchDataInfo fetchedData, Optional<FetchResponseData.EpochEndOffset> divergingEpoch,
                           long highWatermark, long logStartOffset, long logEndOffset, long lastStableOffset) {
-
-    @Override
-    public String toString() {
-        return "LogReadInfo(" +
-                "fetchedData=" + fetchedData +
-                ", divergingEpoch=" + divergingEpoch +
-                ", highWatermark=" + highWatermark +
-                ", logStartOffset=" + logStartOffset +
-                ", logEndOffset=" + logEndOffset +
-                ", lastStableOffset=" + lastStableOffset +
-                ')';
-    }
 }

@@ -98,7 +98,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
     private static MockInternalProcessorContext<?, ?> makeContext() {
         final Properties properties = new Properties();
         properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
-        properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
+        properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "mock:localhost:9092");
 
         final TaskId taskId = new TaskId(0, 0);
 

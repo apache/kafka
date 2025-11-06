@@ -684,8 +684,8 @@ public class MetricsTest {
             MetricName inheritedMetric = inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, childTagsWithValues);
 
             Map<String, String> filledOutTags = inheritedMetric.tags();
-            assertEquals(filledOutTags.get("parent-tag"), "parent-tag-value", "parent-tag should be set properly");
-            assertEquals(filledOutTags.get("child-tag"), "child-tag-value", "child-tag should be set properly");
+            assertEquals("parent-tag-value", filledOutTags.get("parent-tag"), "parent-tag should be set properly");
+            assertEquals("child-tag-value", filledOutTags.get("child-tag"), "child-tag should be set properly");
 
             assertThrows(IllegalArgumentException.class,
                 () -> inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, parentTagsWithValues),

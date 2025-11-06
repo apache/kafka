@@ -34,7 +34,6 @@ import org.mockito.Mockito;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
@@ -670,17 +669,17 @@ public class LeaderStateTest {
             KRaftVersion.KRAFT_VERSION_1
         );
 
-        IntStream.of(remoteIds).forEach(id -> {
-            List.of(true, false).forEach(isPrevote -> {
+        IntStream.of(remoteIds).forEach(id ->
+            List.of(true, false).forEach(isPrevote ->
                 assertFalse(
                     state.canGrantVote(
                         ReplicaKey.of(id, ReplicaKey.NO_DIRECTORY_ID),
                         isLogUpToDate,
                         isPrevote
                     )
-                );
-            });
-        });
+                )
+            )
+        );
     }
 
     @ParameterizedTest
@@ -867,25 +866,7 @@ public class LeaderStateTest {
         );
     }
 
-    private static class MockOffsetMetadata implements OffsetMetadata {
-        private final String value;
-
-        private MockOffsetMetadata(String value) {
-            this.value = value;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            MockOffsetMetadata that = (MockOffsetMetadata) o;
-            return Objects.equals(value, that.value);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(value);
-        }
+    private record MockOffsetMetadata(String value) implements OffsetMetadata {
     }
 
     private ReplicaKey replicaKey(int id, boolean withDirectoryId) {

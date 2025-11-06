@@ -23,7 +23,6 @@ import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
-import org.apache.kafka.connect.transforms.util.NonEmptyListValidator;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.HashSet;
@@ -41,7 +40,8 @@ public class DropHeaders<R extends ConnectRecord<R>> implements Transformation<R
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(HEADERS_FIELD, ConfigDef.Type.LIST,
-                    NO_DEFAULT_VALUE, new NonEmptyListValidator(),
+                    NO_DEFAULT_VALUE, 
+                    ConfigDef.ValidList.anyNonDuplicateValues(false, false),
                     ConfigDef.Importance.HIGH,
                     "The name of the headers to be removed.");
 

@@ -72,6 +72,7 @@ import com.yammer.metrics.core.MetricName;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -381,6 +382,7 @@ public class RemoteLogManagerTest {
         assertFalse(remoteStorageManagerConfig.containsKey("remote.storage.manager.y"));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void testRemoteLogMetadataManagerWithEndpointConfig() {
         ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
@@ -391,6 +393,7 @@ public class RemoteLogManagerTest {
         assertEquals(brokerId, capture.getValue().get(ServerConfigs.BROKER_ID_CONFIG));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void testRemoteLogMetadataManagerWithEndpointConfigOverridden() throws IOException {
         Properties props = new Properties();
@@ -430,6 +433,7 @@ public class RemoteLogManagerTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void testConfigure() {
         ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
@@ -2071,6 +2075,7 @@ public class RemoteLogManagerTest {
         assertEquals(expected, actual);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testRemoteSizeData() {
         Supplier<RemoteLogManager.RetentionSizeData>[] invalidRetentionSizeData =
@@ -2087,6 +2092,7 @@ public class RemoteLogManagerTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testRemoteSizeTime() {
         Supplier<RemoteLogManager.RetentionTimeData>[] invalidRetentionTimeData =
@@ -3395,6 +3401,7 @@ public class RemoteLogManagerTest {
     }
 
 
+    @Disabled("KAFKA-19578")
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testCopyQuota(boolean quotaExceeded) throws Exception {
