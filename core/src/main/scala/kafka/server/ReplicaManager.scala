@@ -1117,6 +1117,8 @@ class ReplicaManager(val config: KafkaConfig,
             throw new InvalidTopicException("The topic name is too long.")
           if (!logManager.isLogDirOnline(destinationDir))
             throw new KafkaStorageException(s"Log directory $destinationDir is offline")
+          if (logManager.cordonedLogDirs().contains(destinationDir))
+            throw new InvalidReplicaAssignmentException(s"Log directory $destinationDir is cordoned")
 
           getPartition(topicPartition) match {
             case online: HostedPartition.Online[Partition] =>
@@ -1171,7 +1173,8 @@ class ReplicaManager(val config: KafkaConfig,
           case e@(_: InvalidTopicException |
                   _: LogDirNotFoundException |
                   _: ReplicaNotAvailableException |
-                  _: KafkaStorageException) =>
+                  _: KafkaStorageException |
+                  _: InvalidReplicaAssignmentException) =>
             warn(s"Unable to alter log dirs for $topicPartition", e)
             (topicPartition, Errors.forException(e))
           case e: NotLeaderOrFollowerException =>
@@ -1225,12 +1228,17 @@ class ReplicaManager(val config: KafkaConfig,
             Collections.emptyList[DescribeLogDirsTopic]()
         }
 
+        val isCordoned = if (metadataCache.metadataVersion().isCordonedLogDirsSupported)
+          logManager.cordonedLogDirs().contains(absolutePath)
+        else
+          false
         val describeLogDirsResult = new DescribeLogDirsResponseData.DescribeLogDirsResult()
           .setLogDir(absolutePath)
           .setTopics(topicInfos)
           .setErrorCode(Errors.NONE.code)
           .setTotalBytes(totalBytes)
           .setUsableBytes(usableBytes)
+          .setIsCordoned(isCordoned)
         describeLogDirsResult
 
       } catch {

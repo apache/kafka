@@ -894,7 +894,7 @@ public class ReplicationControlManagerTest {
             setErrorCode(INVALID_REPLICATION_FACTOR.code()).
             setErrorMessage("Unable to replicate the partition 4 time(s): The target " +
                 "replication factor of 4 cannot be reached because only 3 broker(s) " +
-                "are registered."));
+                "are registered or some brokers have all their log directories cordoned."));
         assertEquals(expectedResponse, result.response());
     }
 

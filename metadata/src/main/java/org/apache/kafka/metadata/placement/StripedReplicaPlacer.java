@@ -412,7 +412,7 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
         if (replicationFactor > numTotalBrokers) {
             throw new InvalidReplicationFactorException("The target replication factor " +
                     "of " + replicationFactor + " cannot be reached because only " +
-                    numTotalBrokers + " broker(s) are registered.");
+                    numTotalBrokers + " broker(s) are registered or some brokers have all their log directories cordoned.");
         }
     }
 

@@ -1667,6 +1667,9 @@ public class ReplicationControlManager {
         if (featureControl.metadataVersionOrThrow().isDirectoryAssignmentSupported()) {
             handleDirectoriesOffline(brokerId, brokerEpoch, request.offlineLogDirs(), records);
         }
+        if (featureControl.metadataVersionOrThrow().isCordonedLogDirsSupported()) {
+            clusterControl.updateCordonedLogDirs(brokerId, request.cordonedLogDirs());
+        }
         boolean isCaughtUp = request.currentMetadataOffset() >= registerBrokerRecordOffset;
         BrokerHeartbeatReply reply = new BrokerHeartbeatReply(isCaughtUp,
                 states.next().fenced(),
