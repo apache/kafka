@@ -87,6 +87,9 @@ public class ShareInFlightBatch<K, V> {
 
     public void merge(ShareInFlightBatch<K, V> other) {
         inFlightRecords.putAll(other.inFlightRecords);
+        if (other.checkForRenewAcknowledgements) {
+            checkForRenewAcknowledgements = true;
+        }
     }
 
     List<ConsumerRecord<K, V>> getInFlightRecords() {
@@ -131,7 +134,10 @@ public class ShareInFlightBatch<K, V> {
                 Map<Long, AcknowledgeType> ackTypeMap = acknowledgements.getAcknowledgementsTypeMap();
                 ackTypeMap.forEach((offset, ackType) -> {
                     if (ackType == AcknowledgeType.RENEW) {
-                        inFlightRecords.put(offset, renewingRecords.remove(offset));
+                        ConsumerRecord<K, V> record = renewingRecords.remove(offset);
+                        if (record != null) {
+                            inFlightRecords.put(offset, record);
+                        }
                     }
                 });
             } else {
@@ -142,6 +148,8 @@ public class ShareInFlightBatch<K, V> {
                     }
                 });
             }
+        } else {
+            throw new IllegalStateException("Renewing with uncompleted acknowledgements");
         }
     }
 

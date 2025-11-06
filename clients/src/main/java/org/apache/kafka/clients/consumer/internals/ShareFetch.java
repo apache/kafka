@@ -89,7 +89,9 @@ public class ShareFetch<K, V> {
                 Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> entry = iterator.next();
                 ShareInFlightBatch<K, V> batch = entry.getValue();
                 if (batch.isEmpty()) {
-                    iterator.remove();
+                    if (!batch.hasRenewals()) {
+                        iterator.remove();
+                    }
                 } else {
                     numRecords += batch.numRecords();
                 }
