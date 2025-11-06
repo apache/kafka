@@ -1631,8 +1631,8 @@ public class StreamsConfig extends AbstractConfig {
 
         clientProvidedProps.remove(GROUP_PROTOCOL_CONFIG);
 
-        checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
-        checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
+        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
+        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
 
         final Map<String, Object> consumerProps = new HashMap<>(eosEnabled ? CONSUMER_EOS_OVERRIDES : CONSUMER_DEFAULT_OVERRIDES);
         if (StreamsConfigUtils.eosEnabled(this)) {
@@ -1647,12 +1647,12 @@ public class StreamsConfig extends AbstractConfig {
         return consumerProps;
     }
 
-    private void checkIfUnexpectedUserSpecifiedConsumerConfig(final Map<String, Object> clientProvidedProps,
-                                                              final String[] nonConfigurableConfigs) {
-        // Streams does not allow users to configure certain consumer/producer configurations, for example,
-        // enable.auto.commit. In cases where user tries to override such non-configurable
-        // consumer/producer configurations, log a warning and remove the user defined value from the Map.
-        // Thus, the default values for these consumer/producer configurations that are suitable for
+    private void checkIfUnexpectedUserSpecifiedClientConfig(final Map<String, Object> clientProvidedProps,
+                                                            final String[] nonConfigurableConfigs) {
+        // Streams does not allow users to configure certain client configurations (consumer/producer),
+        // for example, enable.auto.commit or transactional.id. In cases where user tries to override
+        // such non-configurable client configurations, log a warning and remove the user defined value
+        // from the Map. Thus, the default values for these client configurations that are suitable for
         // Streams will be used instead.
 
         final String nonConfigurableConfigMessage = "Unexpected user-specified {} config '{}' found. {} setting ({}) will be ignored and the Streams default setting ({}) will be used.";
@@ -1760,7 +1760,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get main consumer override configs
         final Map<String, Object> mainConsumerProps = originalsWithPrefix(MAIN_CONSUMER_PREFIX);
-        checkIfUnexpectedUserSpecifiedConsumerConfig(mainConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
+        checkIfUnexpectedUserSpecifiedClientConfig(mainConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
         consumerProps.putAll(mainConsumerProps);
 
         // this is a hack to work around StreamsConfig constructor inside StreamsPartitionAssignor to avoid casting
@@ -1833,7 +1833,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get restore consumer override configs
         final Map<String, Object> restoreConsumerProps = originalsWithPrefix(RESTORE_CONSUMER_PREFIX);
-        checkIfUnexpectedUserSpecifiedConsumerConfig(restoreConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
+        checkIfUnexpectedUserSpecifiedClientConfig(restoreConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
         baseConsumerProps.putAll(restoreConsumerProps);
 
         // no need to set group id for a restore consumer
@@ -1867,7 +1867,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get global consumer override configs
         final Map<String, Object> globalConsumerProps = originalsWithPrefix(GLOBAL_CONSUMER_PREFIX);
-        checkIfUnexpectedUserSpecifiedConsumerConfig(globalConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
+        checkIfUnexpectedUserSpecifiedClientConfig(globalConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
         baseConsumerProps.putAll(globalConsumerProps);
 
         // no need to set group id for a global consumer
@@ -1895,7 +1895,7 @@ public class StreamsConfig extends AbstractConfig {
     public Map<String, Object> getProducerConfigs(final String clientId) {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(PRODUCER_PREFIX, ProducerConfig.configNames());
 
-        checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS);
+        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS);
 
         // generate producer configs from original properties and overridden maps
         final Map<String, Object> props = new HashMap<>(eosEnabled ? PRODUCER_EOS_OVERRIDES : PRODUCER_DEFAULT_OVERRIDES);
