@@ -30,6 +30,7 @@ import kafka.server.share.{DelayedShareFetch, SharePartition}
 import kafka.utils.TestUtils.waitUntilTrue
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.FetchSessionHandler
+import org.apache.kafka.clients.consumer.ShareAcquireMode
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
@@ -5929,6 +5930,7 @@ class ReplicaManagerTest {
         Uuid.randomUuid.toString,
         future,
         topicPartitions,
+        ShareAcquireMode.BATCH_OPTIMIZED.id(),
         500,
         100,
         brokerTopicStats)

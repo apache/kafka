@@ -75,7 +75,7 @@ public class ShareFetchCollectorTest {
     private LogContext logContext;
 
     private SubscriptionState subscriptions;
-    private FetchConfig fetchConfig;
+    private ShareFetchConfig shareFetchConfig;
     private ShareConsumerMetadata metadata;
     private ShareFetchBuffer fetchBuffer;
     private Deserializers<String, String> deserializers;
@@ -140,7 +140,7 @@ public class ShareFetchCollectorTest {
         fetchCollector = new ShareFetchCollector<>(logContext,
                 metadata,
                 subscriptions,
-                fetchConfig,
+                shareFetchConfig,
                 deserializers) {
 
             @Override
@@ -244,7 +244,7 @@ public class ShareFetchCollectorTest {
         shareFetchMetricsAggregator = new ShareFetchMetricsAggregator(shareFetchMetricsManager, partitionSet);
 
         subscriptions = createSubscriptionState(config, logContext);
-        fetchConfig = new FetchConfig(config);
+        shareFetchConfig = new ShareFetchConfig(config);
 
         metadata = new ShareConsumerMetadata(
                 0,
@@ -258,7 +258,7 @@ public class ShareFetchCollectorTest {
                 logContext,
                 metadata,
                 subscriptions,
-                fetchConfig,
+                shareFetchConfig,
                 deserializers);
         fetchBuffer = new ShareFetchBuffer(logContext);
         completedFetchBuilder = new ShareCompletedFetchBuilder();

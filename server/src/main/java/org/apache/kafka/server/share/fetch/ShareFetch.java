@@ -17,6 +17,7 @@
 
 package org.apache.kafka.server.share.fetch;
 
+import org.apache.kafka.clients.consumer.ShareAcquireMode;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.protocol.Errors;
@@ -64,6 +65,10 @@ public class ShareFetch {
      */
     private final int batchSize;
     /**
+     * The share acquire mode for the fetch request.
+     */
+    private final ShareAcquireMode shareAcquireMode;
+    /**
      * The maximum number of records that can be fetched for the request.
      */
     private final int maxFetchRecords;
@@ -83,6 +88,7 @@ public class ShareFetch {
         String memberId,
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
         List<TopicIdPartition> topicIdPartitions,
+        byte shareAcquireMode,
         int batchSize,
         int maxFetchRecords,
         BrokerTopicStats brokerTopicStats
@@ -92,6 +98,7 @@ public class ShareFetch {
         this.memberId = memberId;
         this.future = future;
         this.topicIdPartitions = topicIdPartitions;
+        this.shareAcquireMode = ShareAcquireMode.forId(shareAcquireMode);
         this.batchSize = batchSize;
         this.maxFetchRecords = maxFetchRecords;
         this.brokerTopicStats = brokerTopicStats;
@@ -119,6 +126,10 @@ public class ShareFetch {
 
     public int maxFetchRecords() {
         return maxFetchRecords;
+    }
+
+    public ShareAcquireMode shareAcquireMode() {
+        return shareAcquireMode;
     }
 
     /**
