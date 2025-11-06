@@ -201,7 +201,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             }
         }
 
-
         // Iterate over the session handlers to see if there are acknowledgements to be sent for partitions
         // which are no longer part of the current subscription.
         // We fail acknowledgements for records fetched from a previous leader.

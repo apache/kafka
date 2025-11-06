@@ -125,6 +125,7 @@ public class ShareInFlightBatch<K, V> {
 
         Acknowledgements currentAcknowledgements = acknowledgements;
         acknowledgements = Acknowledgements.empty();
+        checkForRenewAcknowledgements = false;
         return currentAcknowledgements;
     }
 
@@ -138,6 +139,10 @@ public class ShareInFlightBatch<K, V> {
                         if (record != null) {
                             inFlightRecords.put(offset, record);
                         }
+                    } else {
+                        if (renewingRecords.get(offset) != null) {
+                            throw new IllegalStateException("Trying to renew a record incorrectly");
+                        }
                     }
                 });
             } else {
@@ -145,6 +150,10 @@ public class ShareInFlightBatch<K, V> {
                 ackTypeMap.forEach((offset, ackType) -> {
                     if (ackType == AcknowledgeType.RENEW) {
                         renewingRecords.remove(offset);
+                    } else {
+                        if (renewingRecords.get(offset) != null) {
+                            throw new IllegalStateException("Trying to renew a record incorrectly");
+                        }
                     }
                 });
             }
