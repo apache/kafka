@@ -151,6 +151,12 @@ public class SharePartition {
     );
 
     /**
+     * Records whose delivery count exceeds this are deemed abnormal,
+     * and the batching of these records should be reduced.
+     */
+    private static final int BAD_RECORD_DELIVERY_THRESHOLD = 2;
+
+    /**
      * The group id of the share partition belongs to.
      */
     private final String groupId;
@@ -834,7 +840,7 @@ public class SharePartition {
                 boolean fullMatch = checkForFullMatch(inFlightBatch, firstBatch.baseOffset(), lastOffsetToAcquire);
                 int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
                 boolean recordLimitSubsetMatch = isRecordLimitMode && checkForRecordLimitSubsetMatch(inFlightBatch, maxRecordsToAcquire, acquiredCount);
-                if (!fullMatch || inFlightBatch.offsetState() != null || recordLimitSubsetMatch) {
+                if (!fullMatch || inFlightBatch.offsetState() != null || recordLimitSubsetMatch || inFlightBatch.batchDeliveryCount() >= 2) {
                     log.trace("Subset or offset tracked batch record found for share partition,"
                             + " batch: {} request offsets - first: {}, last: {} for the share"
                             + " partition: {}-{}", inFlightBatch, firstBatch.baseOffset(),
@@ -858,7 +864,14 @@ public class SharePartition {
                     // In record_limit mode, we need to ensure that we do not acquire more than
                     // maxRecordsToAcquire. Hence, pass the remaining number of records that can
                     // be acquired.
-                    int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, isRecordLimitMode, numRecordsRemaining, firstBatch.baseOffset(), lastOffsetToAcquire, inFlightBatch, result);
+                    int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, isRecordLimitMode, numRecordsRemaining, firstBatch.baseOffset(), lastOffsetToAcquire, acquiredCount, inFlightBatch, result);
+                    // If a bad record is present, return immediately and set `maxRecordsToAcquire = -1`
+                    // to prevent acquiring any new records afterwards.
+                    if (acquiredSubsetCount < 0) {
+                        maxRecordsToAcquire = -1;
+                        acquiredCount += -1 * acquiredSubsetCount;
+                        break;
+                    }
                     acquiredCount += acquiredSubsetCount;
                     continue;
                 }
@@ -1861,6 +1874,7 @@ public class SharePartition {
         long maxFetchRecords,
         long requestFirstOffset,
         long requestLastOffset,
+        long hasBeenAcquired,
         InFlightBatch inFlightBatch,
         List<AcquiredRecords> result
     ) {
@@ -1885,6 +1899,11 @@ public class SharePartition {
                     continue;
                 }
 
+                // If the record has any pending deliveries, return immediately and do not deliver the current bad record.
+                if (offsetState.getValue().deliveryCount() >= BAD_RECORD_DELIVERY_THRESHOLD && (hasBeenAcquired > 0 || acquiredCount > 0)) {
+                    return -acquiredCount;
+                }
+
                 InFlightState updateResult =  offsetState.getValue().tryUpdateState(RecordState.ACQUIRED, DeliveryCountOps.INCREASE,
                     maxDeliveryCount, memberId);
                 if (updateResult == null || updateResult.state() != RecordState.ACQUIRED) {
@@ -1904,6 +1923,11 @@ public class SharePartition {
                     .setLastOffset(offsetState.getKey())
                     .setDeliveryCount((short) offsetState.getValue().deliveryCount()));
                 acquiredCount++;
+
+                // If the record is the first pending one, deliver only this record.
+                if (offsetState.getValue().deliveryCount() - 1 >= BAD_RECORD_DELIVERY_THRESHOLD) {
+                    return -acquiredCount;
+                }
                 if (isRecordLimitMode && acquiredCount == maxFetchRecords) {
                     // In record_limit mode, acquire only the requested number of records.
                     break;
