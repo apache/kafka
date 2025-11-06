@@ -36,4 +36,3 @@ public interface PartitionMetadataClient extends AutoCloseable {
         Set<TopicPartition> topicPartitions
     );
 }
-
