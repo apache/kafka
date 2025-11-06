@@ -3313,9 +3313,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                   subMap.get(partition.partitionIndex) match {
                     case Some(value) =>
                       partition.setAcknowledgeErrorCode(value.errorCode)
-                      if (value.errorMessage != null) {
-                        partition.setAcknowledgeErrorMessage(value.errorMessage)
-                      }
+                      partition.setAcknowledgeErrorMessage(value.errorMessage)
                       // Delete the element.
                       subMap.remove(partition.partitionIndex)
                     case None =>
@@ -3327,10 +3325,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                     .setPartitionIndex(partitionIndex)
                     .setErrorCode(Errors.NONE.code)
                     .setAcknowledgeErrorCode(value.errorCode)
+                    .setAcknowledgeErrorMessage(value.errorMessage)
                     .setRecords(MemoryRecords.EMPTY)
-                  if (value.errorMessage != null) {
-                    fetchPartitionData.setAcknowledgeErrorMessage(value.errorMessage)
-                  }
                   topic.partitions.add(fetchPartitionData)
                 }
                 topicPartitionAcknowledgements.remove(topicId)
@@ -3346,10 +3342,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 .setPartitionIndex(partitionIndex)
                 .setErrorCode(Errors.NONE.code)
                 .setAcknowledgeErrorCode(value.errorCode)
+                .setAcknowledgeErrorMessage(value.errorMessage)
                 .setRecords(MemoryRecords.EMPTY)
-              if (value.errorMessage != null) {
-                fetchPartitionData.setAcknowledgeErrorMessage(value.errorMessage)
-              }
               topicData.partitions.add(fetchPartitionData)
             }
             shareFetchResponse.data.responses.add(topicData)
