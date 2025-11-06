@@ -30,7 +30,7 @@ public interface PartitionMetadataClient extends AutoCloseable {
      * Lists the latest offsets for the provided topic partitions.
      *
      * @param topicPartitions A set of topic partitions.
-     * @return A map of topic partitions to their latest offsets
+     * @return A map of topic partitions to the completableFuture of their latest offsets
      */
     Map<TopicPartition, CompletableFuture<Long>> listLatestOffsets(
         Set<TopicPartition> topicPartitions

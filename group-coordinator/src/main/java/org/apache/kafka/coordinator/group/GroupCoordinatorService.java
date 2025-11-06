@@ -330,6 +330,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
      */
     private final Set<String> consumerGroupAssignors;
 
+    /**
+     * The client used for getting partition end offsets
+     */
     private final PartitionMetadataClient partitionMetadataClient;
 
     /**
@@ -1894,21 +1897,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             });
         });
 
-        Map<TopicPartition, CompletableFuture<Long>> partitionLatestOffsets;
-
-        try {
-            partitionLatestOffsets = partitionsToComputeLag.isEmpty() ? new HashMap<>() :
+        Map<TopicPartition, CompletableFuture<Long>> partitionLatestOffsets = partitionsToComputeLag.isEmpty() ? new HashMap<>() :
                 partitionMetadataClient.listLatestOffsets(partitionsToComputeLag);
-        } catch (Exception e) {
-            log.error("Failed to list latest offsets for partitions: {}", partitionsToComputeLag, e);
-            DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup responseGroup =
-                new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
-                    .setGroupId(groupId)
-                    .setErrorCode(Errors.forException(e).code())
-                    .setErrorMessage(e.getMessage());
-            responseFuture.complete(responseGroup);
-            return;
-        }
 
         // Create a CompletableFuture for each partition that will complete when lag is computed
         List<CompletableFuture<Void>> lagComputationFutures = new ArrayList<>();

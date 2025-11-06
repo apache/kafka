@@ -625,7 +625,14 @@ class BrokerServer(
   }
 
   private def createPartitionMetadataClient(): PartitionMetadataClient = {
-    new AdminPartitionMetadataClient(new util.HashMap[String, AnyRef]())
+    new PartitionMetadataClient {
+      override def listLatestOffsets(topicPartitions: util.Set[TopicPartition]
+                                    ): util.Map[TopicPartition, util.concurrent.CompletableFuture[java.lang.Long]] = {
+        util.Collections.emptyMap()
+      }
+
+      override def close(): Unit = {}
+    }
   }
 
   private def createGroupCoordinator(): GroupCoordinator = {
