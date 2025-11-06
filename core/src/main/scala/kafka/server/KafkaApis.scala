@@ -4195,7 +4195,15 @@ class KafkaApis(val requestChannel: RequestChannel,
     config.shareGroupConfig.isShareGroupEnabled || shareVersion().supportsShareGroups
   }
 
-  // Visible for testing.
+  /**
+   * This function checks if the member id passed from the client in KIP-932 related RPCs is valid or not. We disallow
+   * empty strings since group coordinator disallows it. We also disallow Uuid.ZERO_UUID ("AAAAAAAAAAAAAAAAAAAAAA")
+   * because it is used to identify empty member id in SharePartition. The member id should also not extend beyond the
+   * length of a human-readable UUID (36 characters).
+   *
+   * @param memberId string representing the member id passed from the client.
+   * @return boolean if the member id in the RPC is valid or not.
+   */
   def isMemberIdValid(memberId: String): Boolean = {
     memberId.nonEmpty && memberId.length <= 36 && !memberId.equals(Uuid.ZERO_UUID.toString)
   }
