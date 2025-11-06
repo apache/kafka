@@ -38,7 +38,7 @@ public class InFlightState {
     /**
      * empty member id used to indicate when a record is not acquired by any member.
      */
-    public static final String EMPTY_MEMBER_ID = Uuid.ZERO_UUID.toString();
+    public static final String EMPTY_MEMBER_ID = "";
 
     // The state of the fetch batch records.
     private RecordState state;

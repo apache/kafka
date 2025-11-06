@@ -14233,7 +14233,7 @@ class KafkaApisTest extends Logging {
   def testIsMemberIdValid(): Unit = {
     kafkaApis = createKafkaApis()
     assertTrue(kafkaApis.isMemberIdValid(Uuid.randomUuid().toString))
-    assertFalse(kafkaApis.isMemberIdValid(Uuid.ZERO_UUID.toString))
+    assertTrue(kafkaApis.isMemberIdValid(Uuid.ZERO_UUID.toString))
     assertFalse(kafkaApis.isMemberIdValid(""))
     assertTrue(kafkaApis.isMemberIdValid("       "))
     var validStr1: String = ""
@@ -14257,7 +14257,7 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testShareGroupHeartbeatRequestWithInvalidMemberId(): Unit = {
-    val shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequestData().setGroupId("group").setMemberId(Uuid.ZERO_UUID.toString)
+    val shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequestData().setGroupId("group").setMemberId("")
 
     val requestChannelRequest = buildRequest(new ShareGroupHeartbeatRequest.Builder(shareGroupHeartbeatRequest).build())
 
@@ -14304,11 +14304,11 @@ class KafkaApisTest extends Logging {
     val partitionIndex = 0
     metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
-    val memberId: Uuid = Uuid.ZERO_UUID
+    val memberId = ""
 
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData().
       setGroupId("group").
-      setMemberId(memberId.toString).
+      setMemberId(memberId).
       setShareSessionEpoch(1).
       setTopics(new ShareAcknowledgeRequestData.AcknowledgeTopicCollection(util.List.of(new ShareAcknowledgeRequestData.AcknowledgeTopic().
         setTopicId(topicId).
