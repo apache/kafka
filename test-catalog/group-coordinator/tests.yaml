@@ -679,6 +679,8 @@ org.apache.kafka.coordinator.group.OffsetMetadataManagerTest:
 - testSimpleGroupOffsetCommitWithInstanceId
 - testStreamsGroupOffsetCommit
 - testStreamsGroupOffsetCommitFromAdminClient
+- testStreamsGroupOffsetCommitWithAssignmentEpochStale
+- testStreamsGroupOffsetCommitWithAssignmentEpochValid
 - testStreamsGroupOffsetCommitWithOffsetMetadataTooLarge
 - testStreamsGroupOffsetCommitWithStaleMemberEpoch
 - testStreamsGroupOffsetCommitWithUnknownMemberId
@@ -1120,6 +1122,11 @@ org.apache.kafka.coordinator.group.streams.StreamsGroupTest:
 - testUpdatingMemberUpdatesTaskProcessIdWhenPartitionIsReassignedBeforeBeingRevoked
 - testValidateDeleteGroup
 - testValidateOffsetCommit
+- testValidateOffsetCommitWithOlderEpoch
+- testValidateOffsetCommitWithOlderEpochMissingSubtopology
+- testValidateOffsetCommitWithOlderEpochMissingTopology
+- testValidateOffsetCommitWithOlderEpochUnassignedPartition
+- testValidateOffsetCommitWithOlderEpochValidAssignment
 - testValidateOffsetFetch
 - testValidateTransactionalOffsetCommit
 org.apache.kafka.coordinator.group.streams.StreamsTopologyTest:
