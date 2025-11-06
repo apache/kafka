@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.share.fetch;
 
-import org.apache.kafka.common.Uuid;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
