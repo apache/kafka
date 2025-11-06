@@ -80,7 +80,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private final String groupId;
     private final ShareConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
-    private final FetchConfig fetchConfig;
+    private final ShareFetchConfig shareFetchConfig;
     protected final ShareFetchBuffer shareFetchBuffer;
     private final BackgroundEventHandler backgroundEventHandler;
     private final Map<Integer, ShareSessionHandler> sessionHandlers;
@@ -105,7 +105,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                final String groupId,
                                final ShareConsumerMetadata metadata,
                                final SubscriptionState subscriptions,
-                               final FetchConfig fetchConfig,
+                               final ShareFetchConfig shareFetchConfig,
                                final ShareFetchBuffer shareFetchBuffer,
                                final BackgroundEventHandler backgroundEventHandler,
                                final ShareFetchMetricsManager metricsManager,
@@ -117,7 +117,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         this.groupId = groupId;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
-        this.fetchConfig = fetchConfig;
+        this.shareFetchConfig = shareFetchConfig;
         this.shareFetchBuffer = shareFetchBuffer;
         this.backgroundEventHandler = backgroundEventHandler;
         this.metricsManager = metricsManager;
@@ -244,7 +244,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             ShareSessionHandler handler = entry.getValue();
 
             log.trace("Building ShareFetch request to send to node {}", target.id());
-            ShareFetchRequest.Builder requestBuilder = handler.newShareFetchBuilder(groupId, fetchConfig);
+            ShareFetchRequest.Builder requestBuilder = handler.newShareFetchBuilder(groupId, shareFetchConfig);
 
             nodesWithPendingRequests.add(target.id());
 
@@ -1191,7 +1191,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 sessionHandler.addPartitionToFetch(entry.getKey(), entry.getValue());
             }
 
-            ShareAcknowledgeRequest.Builder requestBuilder = sessionHandler.newShareAcknowledgeBuilder(groupId, fetchConfig);
+            ShareAcknowledgeRequest.Builder requestBuilder = sessionHandler.newShareAcknowledgeBuilder(groupId, shareFetchConfig);
 
             isProcessed = false;
             Node nodeToSend = metadata.fetch().nodeById(nodeId);

@@ -140,6 +140,8 @@ public class ShareConsumerTest {
     private static final String VALUE = "application/octet-stream";
     private static final String EXPLICIT = "explicit";
     private static final String IMPLICIT = "implicit";
+    private static final String RECORD_LIMIT = "record_limit";
+    private static final String BATCH_OPTIMIZED = "batch_optimized";
 
     public ShareConsumerTest(ClusterInstance cluster) {
         this.cluster = cluster;
@@ -2754,6 +2756,154 @@ public class ShareConsumerTest {
             }
         }
         verifyShareGroupStateTopicRecordsProduced();
+    }
+
+    @ClusterTest
+    public void testPollInBatchOptimizedMode() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                "group1",
+                Map.of(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 5, ConsumerConfig.SHARE_ACQUIRE_MODE_CONFIG, BATCH_OPTIMIZED))
+        ) {
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            for (int i = 0; i < 10; i++) {
+                producer.send(record);
+            }
+            producer.flush();
+            shareConsumer.subscribe(List.of(tp.topic()));
+
+            // although max.poll.records is set to 5, in batch optimized mode we will still get all 10 records.
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 10);
+            assertEquals(10, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
+    @ClusterTest
+    public void testPollInRecordLimitMode() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                 "group1",
+                 Map.of(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 5, ConsumerConfig.SHARE_ACQUIRE_MODE_CONFIG, RECORD_LIMIT))
+        ) {
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            for (int i = 0; i < 10; i++) {
+                producer.send(record);
+            }
+            producer.flush();
+            shareConsumer.subscribe(List.of(tp.topic()));
+
+            // In record limit mode we will get only up to max.poll.records number of records.
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 5);
+            assertEquals(5, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
+    @ClusterTest
+    public void testPollAndExplicitAcknowledgeSingleMessageInRecordLimitMode() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                 "group1",
+                 Map.of(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1,
+                     ConsumerConfig.SHARE_ACQUIRE_MODE_CONFIG, RECORD_LIMIT,
+                     ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))
+        ) {
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            for (int i = 0; i < 10; i++) {
+                producer.send(record);
+            }
+            producer.flush();
+            shareConsumer.subscribe(List.of(tp.topic()));
+
+            for (int i = 0; i < 10; i++) {
+                ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+                assertEquals(1, records.count());
+                for (ConsumerRecord<byte[], byte[]> rec : records) {
+                    shareConsumer.acknowledge(rec, AcknowledgeType.ACCEPT);
+                }
+                shareConsumer.commitSync();
+            }
+            verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
+    @ClusterTest
+    public void testExplicitAcknowledgeSuccessInRecordLimitMode() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                 "group1",
+                 Map.of(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 10,
+                     ConsumerConfig.SHARE_ACQUIRE_MODE_CONFIG, RECORD_LIMIT,
+                     ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))
+        ) {
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            for (int i = 0; i < 15; i++) {
+                producer.send(record);
+            }
+            producer.flush();
+            shareConsumer.subscribe(List.of(tp.topic()));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 10);
+            assertEquals(10, records.count());
+            for (ConsumerRecord<byte[], byte[]> rec : records) {
+                shareConsumer.acknowledge(rec, AcknowledgeType.ACCEPT);
+            }
+            shareConsumer.commitSync();
+
+            records = waitedPoll(shareConsumer, 2500L, 5);
+            assertEquals(5, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
+    @ClusterTest
+    public void testExplicitAcknowledgeReleaseAcceptInRecordLimitMode() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                 "group1",
+                 Map.of(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 10,
+                     ConsumerConfig.SHARE_ACQUIRE_MODE_CONFIG, RECORD_LIMIT,
+                     ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))
+        ) {
+            for (int i = 0; i < 20; i++) {
+                ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp2.topic(), tp2.partition(), null, "key".getBytes(), ("Message " + i).getBytes());
+                producer.send(record);
+            }
+            producer.flush();
+            shareConsumer.subscribe(List.of(tp2.topic()));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 10);
+            assertEquals(10, records.count());
+
+            int count = 0;
+            Map<TopicIdPartition, Optional<KafkaException>> result;
+            for (ConsumerRecord<byte[], byte[]> record : records) {
+                if (count % 2 == 0) {
+                    shareConsumer.acknowledge(record, AcknowledgeType.ACCEPT);
+                } else {
+                    shareConsumer.acknowledge(record, AcknowledgeType.RELEASE);
+                }
+                result = shareConsumer.commitSync();
+                assertEquals(1, result.size());
+                count++;
+            }
+
+            // Poll again to get 10 records.
+            records = waitedPoll(shareConsumer, 2500L, 10);
+            assertEquals(10, records.count());
+            for (ConsumerRecord<byte[], byte[]> record : records) {
+                shareConsumer.acknowledge(record, AcknowledgeType.ACCEPT);
+            }
+
+            // Get the rest of all 5 records.
+            records = waitedPoll(shareConsumer, 2500L, 5);
+            assertEquals(5, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
+        }
     }
 
     /**

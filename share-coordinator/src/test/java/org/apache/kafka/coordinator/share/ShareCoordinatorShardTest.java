@@ -169,6 +169,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(0)
                     .setStateEpoch(0)
                     .setLeaderEpoch(leaderEpoch)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
@@ -611,6 +612,7 @@ class ShareCoordinatorShardTest {
         assertEquals(ReadShareGroupStateSummaryResponse.toResponseData(
             TOPIC_ID,
             PARTITION,
+            0,
             0,
             0,
             0
