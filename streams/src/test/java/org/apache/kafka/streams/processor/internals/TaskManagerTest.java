@@ -2874,36 +2874,40 @@ public class TaskManagerTest {
 
     @Test
     public void shouldNotCompleteRestorationIfTasksCannotInitialize() {
-        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
-            .withInputPartitions(taskId00Partitions)
-            .inState(State.CREATED)
-            .build();
-
-        final TasksRegistry tasks = mock(TasksRegistry.class);
-        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
         final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
-            mkEntry(taskId00, taskId00Partitions)
+            mkEntry(taskId00, taskId00Partitions),
+            mkEntry(taskId01, taskId01Partitions)
         );
+        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
+            @Override
+            public void initializeIfNeeded() {
+                throw new LockException("can't lock");
+            }
+        };
+        final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
+            @Override
+            public void initializeIfNeeded() {
+                throw new TimeoutException("timed out");
+            }
+        };
 
-        when(activeTaskCreator.createTasks(any(), eq(assignment)))
-            .thenReturn(singletonList(task00));
+        when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(asList(task00, task01));
+
         taskManager.handleAssignment(assignment, emptyMap());
 
-        verify(tasks).addPendingTasksToInit(singletonList(task00));
+        assertThat(task00.state(), is(Task.State.CREATED));
+        assertThat(task01.state(), is(Task.State.CREATED));
 
-        when(tasks.drainPendingTasksToInit()).thenReturn(Set.of(task00));
-        final LockException lockException = new LockException("can't lock");
-        doThrow(lockException).when(task00).initializeIfNeeded();
-        when(tasks.hasPendingTasksToInit()).thenReturn(true);
+        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(false));
 
-        final boolean restorationComplete = taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
-
-        assertFalse(restorationComplete);
-        verify(task00).initializeIfNeeded();
-        verify(tasks, times(2)).addPendingTasksToInit(
-            argThat(tasksToInit -> tasksToInit.contains(task00))
+        assertThat(task00.state(), is(Task.State.CREATED));
+        assertThat(task01.state(), is(Task.State.CREATED));
+        assertThat(
+            taskManager.activeTaskMap(),
+            Matchers.equalTo(mkMap(mkEntry(taskId00, task00), mkEntry(taskId01, task01)))
         );
-        verify(stateUpdater, never()).add(task00);
+        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
+        verify(changeLogReader).enforceRestoreActive();
         verifyNoInteractions(consumer);
     }
 
