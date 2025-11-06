@@ -75,11 +75,21 @@ public class ShareConsumerPerformance {
                 printHeader();
 
             List<ShareConsumer<byte[], byte[]>> shareConsumers = new ArrayList<>();
+            List<String> clientIds = new ArrayList<>();
             for (int i = 0; i < options.threads(); i++) {
-                shareConsumers.add(shareConsumerCreator.apply(options.props()));
+                if (options.threads() == 1) {
+                    clientIds.add(options.props().getProperty(ConsumerConfig.CLIENT_ID_CONFIG));
+                    shareConsumers.add(shareConsumerCreator.apply(options.props()));
+                    continue;
+                }
+                Properties shareConsumerProps = options.props();
+                String shareConsumerClientId = options.props().getProperty(ConsumerConfig.CLIENT_ID_CONFIG) + "-" + (i + 1);
+                shareConsumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, shareConsumerClientId);
+                clientIds.add(shareConsumerClientId);
+                shareConsumers.add(shareConsumerCreator.apply(shareConsumerProps));
             }
             long startMs = System.currentTimeMillis();
-            consume(shareConsumers, options, totalRecordsRead, totalBytesRead, startMs);
+            consume(shareConsumers, options, totalRecordsRead, totalBytesRead, startMs, clientIds);
             long endMs = System.currentTimeMillis();
 
             List<Map<MetricName, ? extends Metric>> shareConsumersMetrics = new ArrayList<>();
@@ -94,7 +104,7 @@ public class ShareConsumerPerformance {
             // Print final stats for share group.
             double elapsedSec = (endMs - startMs) / 1_000.0;
             long fetchTimeInMs = endMs - startMs;
-            printStats(totalBytesRead.get(), totalRecordsRead.get(), elapsedSec, fetchTimeInMs, startMs, endMs,
+            printStats("", totalBytesRead.get(), totalRecordsRead.get(), elapsedSec, fetchTimeInMs, startMs, endMs,
                     options.dateFormat(), -1);
 
             shareConsumersMetrics.forEach(ToolsUtils::printMetrics);
@@ -116,7 +126,8 @@ public class ShareConsumerPerformance {
                                 ShareConsumerPerfOptions options,
                                 AtomicLong totalRecordsRead,
                                 AtomicLong totalBytesRead,
-                                long startMs) throws ExecutionException, InterruptedException {
+                                long startMs,
+                                List<String> clientIds) throws ExecutionException, InterruptedException {
         long numRecords = options.numRecords();
         long recordFetchTimeoutMs = options.recordFetchTimeoutMs();
         shareConsumers.forEach(shareConsumer -> shareConsumer.subscribe(options.topic()));
@@ -174,7 +185,7 @@ public class ShareConsumerPerformance {
                 long fetchTimeInMs = endMs - startMs;
                 long recordsReadByConsumer = shareConsumersConsumptionDetails.get(index).recordsConsumed();
                 long bytesReadByConsumer = shareConsumersConsumptionDetails.get(index).bytesConsumed();
-                printStats(bytesReadByConsumer, recordsReadByConsumer, elapsedSec, fetchTimeInMs, startMs, endMs, options.dateFormat(), index + 1);
+                printStats(clientIds.get(index), bytesReadByConsumer, recordsReadByConsumer, elapsedSec, fetchTimeInMs, startMs, endMs, options.dateFormat(), index + 1);
             }
         }
 
@@ -251,9 +262,10 @@ public class ShareConsumerPerformance {
         System.out.println();
     }
 
-    // Prints stats for both share consumer and share group. For share group, index is -1. For share consumer,
-    // index is >= 1.
-    private static void printStats(long bytesRead,
+    // Prints stats for both share consumer and share group. For share group, index is -1 and client id is "".
+    // For share consumer, index is >= 1.
+    private static void printStats(String clientId,
+                                   long bytesRead,
                                    long recordsRead,
                                    double elapsedSec,
                                    long fetchTimeInMs,
@@ -263,8 +275,9 @@ public class ShareConsumerPerformance {
                                    int index) {
         double totalMbRead = (bytesRead * 1.0) / (1024 * 1024);
         if (index != -1) {
-            System.out.printf("Share consumer %s consumption metrics- %s, %s, %.4f, %.4f, %.4f, %d, %d%n",
+            System.out.printf("Share consumer %s having client id %s consumption metrics- %s, %s, %.4f, %.4f, %.4f, %d, %d%n",
                     index,
+                    clientId,
                     dateFormat.format(startMs),
                     dateFormat.format(endMs),
                     totalMbRead,
