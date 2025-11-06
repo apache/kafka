@@ -2928,7 +2928,6 @@ public class TaskManagerTest {
         verify(task00).completeRestoration(any());
         verify(stateUpdater).add(task00);
         verify(tasks, never()).addTask(task00);
-        verify(consumer, never()).resume(task00.inputPartitions());
         verifyNoInteractions(consumer);
     }
 
@@ -2946,8 +2945,6 @@ public class TaskManagerTest {
 
         when(task00.commitNeeded()).thenReturn(true);
         when(task00.prepareCommit(true)).thenReturn(offsets);
-        doNothing().when(task00).postCommit(true);
-        doNothing().when(task00).suspend();
 
         final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
 
