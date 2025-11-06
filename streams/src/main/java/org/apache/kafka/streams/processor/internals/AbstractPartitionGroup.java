@@ -35,11 +35,9 @@ abstract class AbstractPartitionGroup {
 
         ReadyToProcessResult(final boolean ready, final Optional<String> logMessage) {
             if (ready && logMessage.isPresent()) {
-                throw new IllegalArgumentException("Invalid ReadyToProcessResult: 'ready' is true but a log message is present. " +
-                    "Log messages should only be set when not ready.");
+                throw new IllegalArgumentException("Invalid ReadyToProcessResult: 'ready' is true but a log message is present.");
             } else if (!ready && logMessage.isEmpty()) {
-                throw new IllegalArgumentException("Invalid ReadyToProcessResult: 'ready' is false but no log message is provided. " +
-                    "A log message must explain why processing is not ready.");
+                throw new IllegalArgumentException("Invalid ReadyToProcessResult: 'ready' is false but no log message is provided.");
             }
             this.ready = ready;
             this.logMessage = logMessage;
