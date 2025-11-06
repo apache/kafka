@@ -85,6 +85,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -483,9 +484,8 @@ public class CommitRequestManagerTest {
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.commitSync(
             offsets, time.milliseconds() + defaultApiTimeoutMs);
         assertEquals(1, commitRequestManager.unsentOffsetCommitRequests().size());
-        List<NetworkClientDelegate.FutureCompletionHandler> pollResults = assertPoll(1, commitRequestManager);
+        List<NetworkClientDelegate.FutureCompletionHandler> pollResults = assertPoll(true, 1, commitRequestManager, true);
         pollResults.forEach(v -> v.onComplete(mockOffsetCommitResponseWithTopicId(
-            "topic",
             topicId,
             1,
             (short) 10,
@@ -514,13 +514,13 @@ public class CommitRequestManagerTest {
         assertEquals(1, commitRequestManager.unsentOffsetCommitRequests().size());
         List<NetworkClientDelegate.FutureCompletionHandler> pollResults = assertPoll(1, commitRequestManager);
         pollResults.forEach(v -> v.onComplete(mockOffsetCommitResponseWithTopicId(
-            "topic",
             topicId,
             1,
             (short) 10,
             Errors.NONE)));
 
         verify(subscriptionState, never()).allConsumed();
+        verify(metadata, never()).updateLastSeenEpochIfNewer(any(), anyInt());
         Map<TopicPartition, OffsetAndMetadata> commitOffsets = assertDoesNotThrow(() -> future.get());
         assertTrue(future.isDone());
         assertEquals(offsets, commitOffsets);
@@ -1643,13 +1643,21 @@ public class CommitRequestManagerTest {
     private List<NetworkClientDelegate.FutureCompletionHandler> assertPoll(
         final int numRes,
         final CommitRequestManager manager) {
-        return assertPoll(true, numRes, manager);
+        return assertPoll(true, numRes, manager, false);
     }
 
     private List<NetworkClientDelegate.FutureCompletionHandler> assertPoll(
         final boolean coordinatorDiscovered,
         final int numRes,
         final CommitRequestManager manager) {
+        return assertPoll(coordinatorDiscovered, numRes, manager, false);
+    }
+
+    private List<NetworkClientDelegate.FutureCompletionHandler> assertPoll(
+        final boolean coordinatorDiscovered,
+        final int numRes,
+        final CommitRequestManager manager,
+        final boolean shouldUseTopicIds) {
         if (coordinatorDiscovered) {
             when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
         } else {
@@ -1657,6 +1665,11 @@ public class CommitRequestManagerTest {
         }
         NetworkClientDelegate.PollResult res = manager.poll(time.milliseconds());
         assertEquals(numRes, res.unsentRequests.size());
+        if (shouldUseTopicIds) {
+            res.unsentRequests.stream()
+                .flatMap(request -> ((OffsetCommitRequestData) request.requestBuilder().build().data()).topics().stream())
+                .forEach(topic -> assertNotEquals(Uuid.ZERO_UUID, topic.topicId()));
+        }
 
         return res.unsentRequests.stream().map(NetworkClientDelegate.UnsentRequest::handler).collect(Collectors.toList());
     }
@@ -1726,12 +1739,11 @@ public class CommitRequestManagerTest {
         );
     }
 
-    private ClientResponse mockOffsetCommitResponseWithTopicId(String topic,
-                                                              Uuid topicId,
+    private ClientResponse mockOffsetCommitResponseWithTopicId(Uuid topicId,
                                                               int partition,
                                                               short apiKeyVersion,
                                                               Errors error) {
-        return mockOffsetCommitResponse(topic, topicId, partition, apiKeyVersion, time.milliseconds(), time.milliseconds(), error);
+        return mockOffsetCommitResponse("", topicId, partition, apiKeyVersion, time.milliseconds(), time.milliseconds(), error);
     }
 
     private ClientResponse mockOffsetCommitResponse(String topic,

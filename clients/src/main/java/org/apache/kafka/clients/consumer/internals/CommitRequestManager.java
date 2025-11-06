@@ -771,7 +771,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             boolean failedRequestRegistered = false;
             for (OffsetCommitResponseData.OffsetCommitResponseTopic topic : commitResponse.data().topics()) {
                 for (OffsetCommitResponseData.OffsetCommitResponsePartition partition : topic.partitions()) {
-                    // Version 10 drop topic name and support to topic id.
+                    // Version 10 drops topic name, and supports topic id.
                     // We need to find offsetAndMetadata based on topic id and partition index only as
                     // topic name in the response will be emtpy.
                     // For older versions, topic id is zero, and we will find the offsetAndMetadata based on the topic name.
