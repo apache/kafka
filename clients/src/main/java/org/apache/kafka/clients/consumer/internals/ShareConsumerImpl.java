@@ -45,6 +45,7 @@ import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCo
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackRegistrationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.SharePollEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareRenewAcknowledgementsCompleteEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
 import org.apache.kafka.clients.consumer.internals.events.StopFindCoordinatorOnCloseEvent;
@@ -146,6 +147,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     process((ShareAcknowledgementCommitCallbackEvent) event);
                     break;
 
+                case SHARE_RENEW_ACKNOWLEDGEMENTS_COMPLETE:
+                    process((ShareRenewAcknowledgementsCompleteEvent) event);
+                    break;
+
                 default:
                     throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
             }
@@ -159,6 +164,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             if (acknowledgementCommitCallbackHandler != null) {
                 completedAcknowledgements.add(event.acknowledgementsMap());
             }
+        }
+
+        private void process(final ShareRenewAcknowledgementsCompleteEvent event) {
+            currentFetch.renew(event.acknowledgementsMap());
         }
     }
 
@@ -676,6 +685,16 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 sendShareAcknowledgeAsyncEvent(acknowledgementsMap);
             }
             return fetch;
+        } else if (currentFetch.hasRenewals()) {
+            // We only send one ShareFetchEvent per poll call.
+            if (shouldSendShareFetchEvent) {
+                // Check for any acknowledgements which could have come from control records (GAP) and include them.
+                applicationEventHandler.add(new ShareFetchEvent(acknowledgementsMap));
+                shouldSendShareFetchEvent = false;
+                // Notify the network thread to wake up and start the next round of fetching
+                applicationEventHandler.wakeupNetworkThread();
+            }
+            return currentFetch;
         } else {
             if (!acknowledgementsMap.isEmpty()) {
                 // Asynchronously commit any waiting acknowledgements

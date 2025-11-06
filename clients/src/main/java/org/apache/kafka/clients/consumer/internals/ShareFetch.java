@@ -107,6 +107,20 @@ public class ShareFetch<K, V> {
     }
 
     /**
+     * @return {@code true} if this fetch contains records being renewed
+     */
+    public boolean hasRenewals() {
+        boolean hasRenewals = false;
+        for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> entry : batches.entrySet()) {
+            if (entry.getValue().hasRenewals()) {
+                hasRenewals = true;
+                break;
+            }
+        }
+        return hasRenewals;
+    }
+
+    /**
      * Acknowledge a single record in the current batch.
      *
      * @param record The record to acknowledge
@@ -172,5 +186,16 @@ public class ShareFetch<K, V> {
                 acknowledgementMap.put(tip, new NodeAcknowledgements(nodeId, acknowledgements));
         });
         return acknowledgementMap;
+    }
+
+    /**
+     * Handles completed renew acknowledgements by returning successfully renewed records
+     * to the set of in-flight records.
+     *
+     * @param acknowledgementsMap Map from topic-partition to acknowledgements for
+     *                            completed renew acknowledgements
+     */
+    public void renew(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
+        acknowledgementsMap.forEach((tip, acknowledgements) -> batches.get(tip).renew(acknowledgements));
     }
 }

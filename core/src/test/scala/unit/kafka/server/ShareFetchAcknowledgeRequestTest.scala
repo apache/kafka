@@ -2473,16 +2473,17 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
                                       maxBytes: Int = Int.MaxValue,
                                       maxRecords: Int = 500,
                                       batchSize: Int = 500,
-                                      shareAcquireMode: ShareAcquireMode = ShareAcquireMode.BATCH_OPTIMIZED): ShareFetchRequest = {
-    ShareFetchRequest.Builder.forConsumer(groupId, metadata, maxWaitMs, minBytes, maxBytes, maxRecords, batchSize, shareAcquireMode.id, send, forget, acknowledgementsMap)
+                                      shareAcquireMode: ShareAcquireMode = ShareAcquireMode.BATCH_OPTIMIZED,
+                                      isRenewAck: Boolean = false): ShareFetchRequest = {
+    ShareFetchRequest.Builder.forConsumer(groupId, metadata, maxWaitMs, minBytes, maxBytes, maxRecords, batchSize, shareAcquireMode.id, isRenewAck, send, forget, acknowledgementsMap)
       .build()
   }
 
   private def createShareAcknowledgeRequest(groupId: String,
                                             metadata: ShareRequestMetadata,
-                                            acknowledgementsMap: util.Map[TopicIdPartition, util.List[ShareAcknowledgeRequestData.AcknowledgementBatch]]
-                                           ): ShareAcknowledgeRequest = {
-    ShareAcknowledgeRequest.Builder.forConsumer(groupId, metadata, acknowledgementsMap)
+                                            acknowledgementsMap: util.Map[TopicIdPartition, util.List[ShareAcknowledgeRequestData.AcknowledgementBatch]],
+                                            isRenewAck: Boolean = false): ShareAcknowledgeRequest = {
+    ShareAcknowledgeRequest.Builder.forConsumer(groupId, metadata, isRenewAck, acknowledgementsMap)
       .build()
   }
 }
