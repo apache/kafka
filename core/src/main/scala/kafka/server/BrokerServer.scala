@@ -628,7 +628,12 @@ class BrokerServer(
     new PartitionMetadataClient {
       override def listLatestOffsets(topicPartitions: util.Set[TopicPartition]
                                     ): util.Map[TopicPartition, util.concurrent.CompletableFuture[java.lang.Long]] = {
-        util.Collections.emptyMap()
+        topicPartitions.asScala
+          .map { tp =>
+            tp -> CompletableFuture.completedFuture(java.lang.Long.valueOf(-1L))
+          }
+          .toMap
+          .asJava
       }
 
       override def close(): Unit = {}
