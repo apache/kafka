@@ -940,6 +940,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * the cluster by this client for the given topic. In this case it will block for up to {@code max.block.ms} milliseconds if 
      * Kafka cluster is unreachable; 2) Allocating a buffer if buffer pool doesn't have any free buffers.
      * <p>
+     * <b>Reducing first-send latency:</b> You can reduce the latency of the first send by preloading metadata
+     * with {@link #partitionsFor(String)}. However, be aware that metadata cache will be cleared after
+     * {@code metadata.max.idle.ms} of inactivity, so subsequent sends after a long idle period will still
+     * experience delays. To address this, either increase {@code metadata.max.idle.ms} to exceed your maximum
+     * send interval, or periodically call {@link #partitionsFor(String)} to keep the metadata fresh.
+     * <p>
      * The result of the send is a {@link RecordMetadata} specifying the partition the record was sent to, the offset
      * it was assigned and the timestamp of the record. If the producer is configured with acks = 0, the {@link RecordMetadata}
      * will have offset = -1 because the producer does not wait for the acknowledgement from the broker.
@@ -1036,6 +1042,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws InterruptException     If the thread is interrupted while blocked
      * @throws SerializationException If the key or value are not valid objects given the configured serializers
      * @throws KafkaException         If a Kafka related error occurs that does not belong to the public API exceptions.
+     * @see #partitionsFor(String)
      */
     @Override
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
