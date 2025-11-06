@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
@@ -95,6 +96,7 @@ import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
+import org.apache.kafka.coordinator.group.metrics.PartitionMetadataClient;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
@@ -109,6 +111,7 @@ import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PartitionStateData;
 import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParameters;
+import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryResult;
 import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.Timer;
@@ -163,6 +166,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private GroupConfigManager groupConfigManager;
         private Persister persister;
         private Optional<Plugin<Authorizer>> authorizerPlugin;
+        private PartitionMetadataClient partitionMetadataClient;
 
         public Builder(
             int nodeId,
@@ -214,6 +218,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         public Builder withAuthorizerPlugin(Optional<Plugin<Authorizer>> authorizerPlugin) {
             this.authorizerPlugin = authorizerPlugin;
+            return this;
+        }
+
+        public Builder withPartitionMetadataClient(PartitionMetadataClient partitionMetadataClient) {
+            this.partitionMetadataClient = partitionMetadataClient;
             return this;
         }
 
@@ -270,7 +279,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 groupCoordinatorMetrics,
                 groupConfigManager,
                 persister,
-                timer
+                timer,
+                partitionMetadataClient
             );
         }
     }
@@ -320,6 +330,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
      */
     private final Set<String> consumerGroupAssignors;
 
+    private final PartitionMetadataClient partitionMetadataClient;
+
     /**
      * The number of partitions of the __consumer_offsets topics. This is provided
      * when the component is started.
@@ -349,7 +361,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         GroupCoordinatorMetrics groupCoordinatorMetrics,
         GroupConfigManager groupConfigManager,
         Persister persister,
-        Timer timer
+        Timer timer,
+        PartitionMetadataClient partitionMetadataClient
     ) {
         this.log = logContext.logger(GroupCoordinatorService.class);
         this.config = config;
@@ -363,6 +376,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             .stream()
             .map(ConsumerGroupPartitionAssignor::name)
             .collect(Collectors.toSet());
+        this.partitionMetadataClient = partitionMetadataClient;
     }
 
     /**
@@ -1835,27 +1849,141 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     return;
                 }
 
+                computeLagAndBuildResponse(
+                    result,
+                    requestTopicIdToNameMapping,
+                    describeShareGroupOffsetsResponseTopicList,
+                    future,
+                    readSummaryRequestData.groupId()
+                );
+            });
+        return future;
+    }
+
+    private void computeLagAndBuildResponse(
+        ReadShareGroupStateSummaryResult readSummaryResult,
+        Map<Uuid, String> requestTopicIdToNameMapping,
+        List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic> describeShareGroupOffsetsResponseTopicList,
+        CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> responseFuture,
+        String groupId
+    ) {
+        Set<TopicPartition> partitionsToComputeLag = new HashSet<>();
+        Map<TopicIdPartition, DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition> partitionsResponses = new HashMap<>();
+
+        readSummaryResult.topicsData().forEach(topicData -> {
+            topicData.partitions().forEach(partitionData -> {
+                TopicIdPartition tp = new TopicIdPartition(
+                    topicData.topicId(),
+                    new TopicPartition(requestTopicIdToNameMapping.get(topicData.topicId()), partitionData.partition())
+                );
                 // Return -1 (uninitialized offset) for the situation where the persister returned an error.
                 // This is consistent with OffsetFetch for situations in which there is no offset information to fetch.
                 // It's treated as absence of data, rather than an error.
-                result.topicsData().forEach(topicData ->
-                    describeShareGroupOffsetsResponseTopicList.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
-                        .setTopicId(topicData.topicId())
-                        .setTopicName(requestTopicIdToNameMapping.get(topicData.topicId()))
-                        .setPartitions(topicData.partitions().stream().map(
-                            partitionData -> new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
-                                .setPartitionIndex(partitionData.partition())
-                                .setStartOffset(partitionData.errorCode() == Errors.NONE.code() ? partitionData.startOffset() : PartitionFactory.UNINITIALIZED_START_OFFSET)
-                                .setLeaderEpoch(partitionData.errorCode() == Errors.NONE.code() ? partitionData.leaderEpoch() : PartitionFactory.DEFAULT_LEADER_EPOCH)
-                        ).toList())
-                    ));
-
-                future.complete(
-                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
-                        .setGroupId(readSummaryRequestData.groupId())
-                        .setTopics(describeShareGroupOffsetsResponseTopicList));
+                if (partitionData.errorCode() != Errors.NONE.code() || partitionData.startOffset() == PartitionFactory.UNINITIALIZED_START_OFFSET) {
+                    partitionsResponses.put(
+                        tp,
+                        new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
+                            .setPartitionIndex(partitionData.partition())
+                            .setStartOffset(PartitionFactory.UNINITIALIZED_START_OFFSET)
+                            .setLeaderEpoch(PartitionFactory.DEFAULT_LEADER_EPOCH)
+                            .setLag(PartitionFactory.UNINITIALIZED_LAG)
+                    );
+                } else {
+                    partitionsToComputeLag.add(new TopicPartition(requestTopicIdToNameMapping.get(topicData.topicId()), partitionData.partition()));
+                }
             });
-        return future;
+        });
+
+        Map<TopicPartition, CompletableFuture<Long>> partitionLatestOffsets;
+
+        try {
+            partitionLatestOffsets = partitionsToComputeLag.isEmpty() ? new HashMap<>() :
+                partitionMetadataClient.listLatestOffsets(partitionsToComputeLag);
+        } catch (Exception e) {
+            log.error("Failed to list latest offsets for partitions: {}", partitionsToComputeLag, e);
+            DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup responseGroup =
+                new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+                    .setGroupId(groupId)
+                    .setErrorCode(Errors.forException(e).code())
+                    .setErrorMessage(e.getMessage());
+            responseFuture.complete(responseGroup);
+            return;
+        }
+
+        // Create a CompletableFuture for each partition that will complete when lag is computed
+        List<CompletableFuture<Void>> lagComputationFutures = new ArrayList<>();
+
+        readSummaryResult.topicsData().forEach(topicData -> {
+            topicData.partitions().forEach(partitionData -> {
+                TopicPartition tp = new TopicPartition(requestTopicIdToNameMapping.get(topicData.topicId()), partitionData.partition());
+                TopicIdPartition tip = new TopicIdPartition(topicData.topicId(), tp);
+                if (partitionData.errorCode() == Errors.NONE.code() && partitionData.startOffset() != PartitionFactory.UNINITIALIZED_START_OFFSET) {
+                    CompletableFuture<Void> lagComputationFuture = partitionLatestOffsets.get(tp)
+                        .handle((latestOffset, throwable) -> {
+                            if (throwable != null) {
+                                partitionsResponses.put(
+                                    tip,
+                                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
+                                        .setPartitionIndex(partitionData.partition())
+                                        .setErrorCode(Errors.forException(throwable).code())
+                                        .setErrorMessage(throwable.getMessage())
+                                );
+                            } else {
+                                // Compute lag: lag = partitionLatestOffset - startOffset + 1 - deliveryCompleteCount
+                                long lag = latestOffset - partitionData.startOffset() + 1 - partitionData.deliveryCompleteCount();
+                                partitionsResponses.put(
+                                    tip,
+                                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
+                                        .setPartitionIndex(partitionData.partition())
+                                        .setStartOffset(partitionData.startOffset())
+                                        .setLeaderEpoch(partitionData.leaderEpoch())
+                                        .setLag(lag)
+                                );
+                            }
+                            return null;
+                        });
+
+                    lagComputationFutures.add(lagComputationFuture);
+                }
+            });
+        });
+
+        CompletableFuture.allOf(lagComputationFutures.toArray(new CompletableFuture<?>[0]))
+            .whenComplete((result, throwable) -> {
+                if (throwable != null) {
+                    DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup responseGroup =
+                        new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+                            .setGroupId(groupId)
+                            .setErrorCode(Errors.forException(throwable).code())
+                            .setErrorMessage(throwable.getMessage());
+                    responseFuture.complete(responseGroup);
+                } else {
+                    Map<Uuid, List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition>> topicToPartitions = new HashMap<>();
+                    for (Map.Entry<TopicIdPartition, DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition> entry : partitionsResponses.entrySet()) {
+                        Uuid topicId = entry.getKey().topicId();
+                        topicToPartitions.computeIfAbsent(topicId, k -> new ArrayList<>()).add(entry.getValue());
+                    }
+
+                    List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic> responseTopics = new ArrayList<>();
+                    for (Map.Entry<Uuid, List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition>> entry : topicToPartitions.entrySet()) {
+                        DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic topic =
+                            new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
+                                .setTopicId(entry.getKey())
+                                .setTopicName(requestTopicIdToNameMapping.get(entry.getKey()))
+                                .setPartitions(entry.getValue());
+                        responseTopics.add(topic);
+                    }
+
+                    responseTopics.addAll(describeShareGroupOffsetsResponseTopicList);
+
+                    DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup responseGroup =
+                        new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+                            .setGroupId(groupId)
+                            .setTopics(responseTopics);
+
+                    responseFuture.complete(responseGroup);
+                }
+            });
     }
 
     /**
