@@ -28,6 +28,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.internals.IdempotentCloser;
@@ -799,7 +800,12 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         if (partitionData.acknowledgeErrorCode() != Errors.NONE.code()) {
                             metricsManager.recordFailedAcknowledgements(acks.size());
                         }
-                        acks.complete(Errors.forCode(partitionData.acknowledgeErrorCode()).exception());
+                        String acknowledgeErrorMessage = partitionData.acknowledgeErrorMessage();
+                        if (acknowledgeErrorMessage != null) {
+                            acks.complete(new ApiException(acknowledgeErrorMessage));
+                        } else {
+                            acks.complete(Errors.forCode(partitionData.acknowledgeErrorCode()).exception());
+                        }
                         Map<TopicIdPartition, Acknowledgements> acksMap = Map.of(tip, acks);
                         maybeSendShareAcknowledgeCommitCallbackEvent(acksMap);
                     }
