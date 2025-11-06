@@ -94,9 +94,8 @@ class PartitionGroup extends AbstractPartitionGroup {
 
     @Override
     ReadyToProcessResult readyToProcess(final long wallClockTime) {
-        Optional<String> logMessage = Optional.empty();
         if (maxTaskIdleMs == StreamsConfig.MAX_TASK_IDLE_MS_DISABLED) {
-            if (!allBuffered && totalBuffered > 0) {
+            if (logger.isTraceEnabled() && !allBuffered && totalBuffered > 0) {
                 final Set<TopicPartition> bufferedPartitions = new HashSet<>();
                 final Set<TopicPartition> emptyPartitions = new HashSet<>();
                 for (final Map.Entry<TopicPartition, RecordQueue> entry : partitionQueues.entrySet()) {
@@ -106,16 +105,14 @@ class PartitionGroup extends AbstractPartitionGroup {
                         bufferedPartitions.add(entry.getKey());
                     }
                 }
-                logMessage = Optional.of(String.format(
-                    "Ready for processing because max.task.idle.ms is disabled.%n" +
-                        "\tThere may be out-of-order processing for this task as a result.%n" +
-                        "\tBuffered partitions: %s%n" +
-                        "\tNon-buffered partitions: %s",
+                logger.trace("Ready for processing because max.task.idle.ms is disabled." +
+                        "\n\tThere may be out-of-order processing for this task as a result." +
+                        "\n\tBuffered partitions: {}" +
+                        "\n\tNon-buffered partitions: {}",
                     bufferedPartitions,
-                    emptyPartitions
-                ));
+                    emptyPartitions);
             }
-            return new ReadyToProcessResult(true, logMessage);
+            return new ReadyToProcessResult(true, Optional.empty());
         }
 
         final Set<TopicPartition> queued = new HashSet<>();
@@ -128,7 +125,7 @@ class PartitionGroup extends AbstractPartitionGroup {
 
             if (!queue.isEmpty()) {
                 // this partition is ready for processing
-                appendLog(logMessageBuilder, String.format("Partition %s has buffered data, ready for processing", partition));
+                logger.trace("Partition {} has buffered data, ready for processing", partition);
                 idlePartitionDeadlines.remove(partition);
                 queued.add(partition);
             } else {
@@ -138,7 +135,7 @@ class PartitionGroup extends AbstractPartitionGroup {
                 if (fetchedLag == -1L) {
                     // must wait to fetch metadata for the partition
                     idlePartitionDeadlines.remove(partition);
-                    appendLog(logMessageBuilder, String.format(String.format("\tWaiting to fetch data for %s", partition)));
+                    appendLog(logMessageBuilder, String.format("\tWaiting to fetch data for %s", partition));
 
                     return new ReadyToProcessResult(false, Optional.of(logMessageBuilder.toString()));
                 } else if (fetchedLag > 0L) {
@@ -159,15 +156,15 @@ class PartitionGroup extends AbstractPartitionGroup {
                     idlePartitionDeadlines.putIfAbsent(partition, wallClockTime + maxTaskIdleMs);
                     final long deadline = idlePartitionDeadlines.get(partition);
                     if (wallClockTime < deadline) {
-                        appendLog(logMessageBuilder, String.format(String.format(
+                        appendLog(logMessageBuilder, String.format(
                             "Partition %s has current lag 0 and current time is %d. " +
                                 "Waiting for new data to be produced for configured idle time %d (deadline is %d).",
-                            partition, wallClockTime, maxTaskIdleMs, deadline)));
+                            partition, wallClockTime, maxTaskIdleMs, deadline));
 
                         return new ReadyToProcessResult(false, Optional.of(logMessageBuilder.toString()));
                     } else {
                         // this partition is ready for processing due to the task idling deadline passing
-                        appendLog(logMessageBuilder, String.format("Partition %s is ready for processing due to the task idling deadline passing", partition));
+                        logger.trace("Partition {} is ready for processing due to the task idling deadline passing", partition);
                         if (enforced == null) {
                             enforced = new HashMap<>();
                         }
@@ -177,23 +174,25 @@ class PartitionGroup extends AbstractPartitionGroup {
             }
         }
         if (enforced == null) {
-            appendLog(logMessageBuilder, "All partitions were buffered locally, so this task is ready for processing.");
-            return new ReadyToProcessResult(true, Optional.of(logMessageBuilder.toString()));
+            logger.trace("All partitions were buffered locally, so this task is ready for processing.");
+            return new ReadyToProcessResult(true, Optional.empty());
         } else if (queued.isEmpty()) {
             appendLog(logMessageBuilder, "No partitions were buffered locally, so this task is not ready for processing.");
             return new ReadyToProcessResult(false, Optional.of(logMessageBuilder.toString()));
         } else {
             enforcedProcessingSensor.record(1.0d, wallClockTime);
-            appendLog(logMessageBuilder, String.format(
-                "Continuing to process although some partitions are empty on the broker.%n" +
-                    "\tThere may be out-of-order processing for this task as a result.%n" +
-                    "\tPartitions with local data: %s.%n" +
-                    "\tPartitions we gave up waiting for, with their corresponding deadlines: %s.%n" +
-                    "\tConfigured max.task.idle.ms: %d.%n" +
-                    "\tCurrent wall-clock time: %d.",
-                queued, enforced, maxTaskIdleMs, wallClockTime));
+            logger.trace("Continuing to process although some partitions are empty on the broker." +
+                    "\n\tThere may be out-of-order processing for this task as a result." +
+                    "\n\tPartitions with local data: {}." +
+                    "\n\tPartitions we gave up waiting for, with their corresponding deadlines: {}." +
+                    "\n\tConfigured max.task.idle.ms: {}." +
+                    "\n\tCurrent wall-clock time: {}.",
+                queued,
+                enforced,
+                maxTaskIdleMs,
+                wallClockTime);
 
-            return new ReadyToProcessResult(true, Optional.of(logMessageBuilder.toString()));
+            return new ReadyToProcessResult(true, Optional.empty());
         }
     }
 

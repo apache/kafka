@@ -47,8 +47,6 @@ public class TaskExecutionMetadata {
     private final ConcurrentHashMap<String, NamedTopologyMetadata> topologyNameToErrorMetadata = new ConcurrentHashMap<>();
     // map of task to last not ready logging time (not present means ready, >= 0 means not ready and tracks last log time)
     private final ConcurrentHashMap<TaskId, Long> taskToLastNotReadyLogTime = new ConcurrentHashMap<>();
-    // map of task to time when idling started
-    private final ConcurrentHashMap<TaskId, Long> taskToIdlingStartTime = new ConcurrentHashMap<>();
     private final Logger log;
 
     public TaskExecutionMetadata(final Set<String> allTopologyNames,
@@ -94,7 +92,6 @@ public class TaskExecutionMetadata {
             if (taskWasReady) {
                 // READY -> NOT_READY - start timer
                 taskToLastNotReadyLogTime.put(task.id(), now);
-                taskToIdlingStartTime.put(task.id(), now);
             } else {
                 // NOT_READY - check if it should log
                 maybeLogNotReady(task.id(), now, logMessage);
@@ -102,7 +99,6 @@ public class TaskExecutionMetadata {
         } else {
             // Task is ready - clear the timer
             taskToLastNotReadyLogTime.remove(task.id());
-            taskToIdlingStartTime.remove(task.id());
             log.trace(logMessage);
         }
         
@@ -117,10 +113,7 @@ public class TaskExecutionMetadata {
         
         final long timeSinceLastLog = now - lastLogTime;
         if (timeSinceLastLog >= NOT_READY_LOG_INTERVAL_MS) {
-            final Long idlingStartTime = taskToIdlingStartTime.get(taskId);
-            final long idlingDuration = idlingStartTime != null ? now - idlingStartTime : 0L;
-            log.info("Task {} is not ready to process (not ready for {}ms): {}", 
-                    taskId, idlingDuration, logMessage != null ? logMessage : "Task cannot be processed");
+            log.info("Task {} is not ready to process: {}", taskId, logMessage != null ? logMessage : "Task cannot be processed");
             taskToLastNotReadyLogTime.put(taskId, now);
         }
     }
@@ -162,7 +155,6 @@ public class TaskExecutionMetadata {
     void removeTaskFromNotReadyTracking(final Task task) {
         final TaskId taskId = task.id();
         taskToLastNotReadyLogTime.remove(taskId);
-        taskToIdlingStartTime.remove(taskId);
     }
 
     private class NamedTopologyMetadata {
