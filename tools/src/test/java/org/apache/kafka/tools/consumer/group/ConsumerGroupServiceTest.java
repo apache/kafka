@@ -90,7 +90,7 @@ public class ConsumerGroupServiceTest {
                 .thenReturn(listGroupOffsetsResult(GROUP));
         when(admin.listOffsets(offsetsArgMatcher(), any()))
                 .thenReturn(listOffsetsResult());
-        when(admin.describeTopics(ArgumentMatchers.anySet()))
+        when(admin.describeTopics(ArgumentMatchers.anySet(), any()))
                 .thenReturn(describeTopicsResult());
 
         Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
@@ -142,7 +142,7 @@ public class ConsumerGroupServiceTest {
                 true,
                 Set.of(
                     new MemberDescription(
-                        "member1", Optional.of("instance1"), "client1", "host1", new MemberAssignment(assignedTopicPartitions),
+                        "member1", Optional.of("instance1"), Optional.of("rackId1"), "client1", "host1", new MemberAssignment(assignedTopicPartitions),
                         Optional.empty(), Optional.empty(), Optional.empty()
                     )
                 ),
@@ -175,7 +175,7 @@ public class ConsumerGroupServiceTest {
                 any()
         )).thenReturn(new ListOffsetsResult(endOffsets.entrySet().stream().filter(e -> unassignedTopicPartitions.contains(e.getKey()))
                 .collect(Collectors.toMap(Entry::getKey, Entry::getValue))));
-        when(admin.describeTopics(ArgumentMatchers.anySet())).thenReturn(describeTopicsResult());
+        when(admin.describeTopics(ArgumentMatchers.anySet(), any())).thenReturn(describeTopicsResult());
 
         Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
         Optional<GroupState> state = statesAndAssignments.getKey();
@@ -233,7 +233,7 @@ public class ConsumerGroupServiceTest {
                 .thenReturn(describeGroupsResult(GroupState.DEAD));
         when(admin.describeTopics(ArgumentMatchers.eq(topicsWithoutPartitionsSpecified), any()))
                 .thenReturn(describeTopicsResult(topicsWithoutPartitionsSpecified));
-        when(admin.describeTopics(anySet()))
+        when(admin.describeTopics(anySet(), any()))
                 .thenReturn(describeTopicsResult(TOPICS));
         when(admin.listOffsets(offsetsArgMatcher(), any()))
                 .thenReturn(listOffsetsResult());
@@ -259,7 +259,7 @@ public class ConsumerGroupServiceTest {
     @SuppressWarnings("deprecation")
     private DescribeConsumerGroupsResult describeGroupsResult(GroupState groupState) {
         MemberDescription member1 = new MemberDescription(
-            "member1", Optional.of("instance1"), "client1", "host1", null,
+            "member1", Optional.of("instance1"), Optional.of("rackId1"), "client1", "host1", null,
             Optional.empty(), Optional.empty(), Optional.empty());
         ConsumerGroupDescription description = new ConsumerGroupDescription(GROUP,
                 true,

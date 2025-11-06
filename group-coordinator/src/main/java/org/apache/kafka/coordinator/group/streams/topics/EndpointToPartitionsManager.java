@@ -40,7 +40,11 @@ public class EndpointToPartitionsManager {
                                                                                               final StreamsGroup streamsGroup,
                                                                                               final CoordinatorMetadataImage metadataImage) {
         StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = new StreamsGroupHeartbeatResponseData.EndpointToPartitions();
-        Map<String, Set<Integer>> activeTasks = streamsGroupMember.assignedTasks().activeTasks();
+        Map<String, Set<Integer>> activeTasks = streamsGroupMember.assignedTasks().activeTasksWithEpochs().entrySet().stream()
+            .collect(java.util.stream.Collectors.toUnmodifiableMap(
+                Map.Entry::getKey,
+                entry -> entry.getValue().keySet()
+            ));
         Map<String, Set<Integer>> standbyTasks = streamsGroupMember.assignedTasks().standbyTasks();
         endpointToPartitions.setUserEndpoint(responseEndpoint);
         Map<String, ConfiguredSubtopology> configuredSubtopologies = streamsGroup.configuredTopology().flatMap(ConfiguredTopology::subtopologies).get();
