@@ -106,11 +106,11 @@ class PartitionGroup extends AbstractPartitionGroup {
                     }
                 }
                 logger.trace("Ready for processing because max.task.idle.ms is disabled." +
-                        "\n\tThere may be out-of-order processing for this task as a result." +
-                        "\n\tBuffered partitions: {}" +
-                        "\n\tNon-buffered partitions: {}",
-                    bufferedPartitions,
-                    emptyPartitions);
+                                "\n\tThere may be out-of-order processing for this task as a result." +
+                                "\n\tBuffered partitions: {}" +
+                                "\n\tNon-buffered partitions: {}",
+                        bufferedPartitions,
+                        emptyPartitions);
             }
             return new ReadyToProcessResult(true, Optional.empty());
         }
@@ -182,16 +182,15 @@ class PartitionGroup extends AbstractPartitionGroup {
         } else {
             enforcedProcessingSensor.record(1.0d, wallClockTime);
             logger.trace("Continuing to process although some partitions are empty on the broker." +
-                    "\n\tThere may be out-of-order processing for this task as a result." +
-                    "\n\tPartitions with local data: {}." +
-                    "\n\tPartitions we gave up waiting for, with their corresponding deadlines: {}." +
-                    "\n\tConfigured max.task.idle.ms: {}." +
-                    "\n\tCurrent wall-clock time: {}.",
-                queued,
-                enforced,
-                maxTaskIdleMs,
-                wallClockTime);
-
+                            "\n\tThere may be out-of-order processing for this task as a result." +
+                            "\n\tPartitions with local data: {}." +
+                            "\n\tPartitions we gave up waiting for, with their corresponding deadlines: {}." +
+                            "\n\tConfigured max.task.idle.ms: {}." +
+                            "\n\tCurrent wall-clock time: {}.",
+                    queued,
+                    enforced,
+                    maxTaskIdleMs,
+                    wallClockTime);
             return new ReadyToProcessResult(true, Optional.empty());
         }
     }

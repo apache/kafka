@@ -69,7 +69,6 @@ public class TaskExecutionMetadata {
     public boolean canProcessTask(final Task task, final long now) {
         final String topologyName = task.id().topologyName();
         final boolean taskWasReady = !taskToLastNotReadyLogTime.containsKey(task.id());
-        
         final boolean canProcess;
         final String logMessage;
         
