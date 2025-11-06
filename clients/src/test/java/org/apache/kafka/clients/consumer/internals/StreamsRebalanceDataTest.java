@@ -437,4 +437,41 @@ public class StreamsRebalanceDataTest {
         assertTrue(streamsRebalanceData.statuses().isEmpty());
     }
 
+    @Test
+    public void streamsRebalanceDataShouldBeConstructedWithHeartbeatIntervalMsSetToMinusOne() {
+        final UUID processId = UUID.randomUUID();
+        final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new
+                StreamsRebalanceData.HostInfo("localhost", 9090));
+        final Map<String, StreamsRebalanceData.Subtopology> subtopologies = Map.of();
+        final Map<String, String> clientTags = Map.of("clientTag1",
+                "clientTagValue1");
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+                processId,
+                endpoint,
+                subtopologies,
+                clientTags
+        );
+
+        assertEquals(-1, streamsRebalanceData.heartbeatIntervalMs());
+    }
+
+    @Test
+    public void streamsRebalanceDataShouldBeAbleToUpdateHeartbeatIntervalMs() {
+        final UUID processId = UUID.randomUUID();
+        final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new
+                StreamsRebalanceData.HostInfo("localhost", 9090));
+        final Map<String, StreamsRebalanceData.Subtopology> subtopologies = Map.of();
+        final Map<String, String> clientTags = Map.of("clientTag1",
+                "clientTagValue1");
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+                processId,
+                endpoint,
+                subtopologies,
+                clientTags
+        );
+
+        streamsRebalanceData.setHeartbeatIntervalMs(1000);
+        assertEquals(1000, streamsRebalanceData.heartbeatIntervalMs());
+    }
+
 }
