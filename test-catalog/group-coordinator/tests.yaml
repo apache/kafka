@@ -1014,6 +1014,9 @@ org.apache.kafka.coordinator.group.modern.share.ShareGroupTest:
 - testValidateOffsetDelete
 - testValidateOffsetFetch
 org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilderTest:
+- testAssignmentEpochsShouldBePreservedFromPreviousAssignment
+- testMixedPreservedAndNewAssignmentEpochs
+- testNewlyAssignedTasksGetTargetAssignmentEpoch
 - testRemainsInUnrevokedTasks
 - testStableToStable
 - testStableToStableAtTargetEpoch
@@ -1085,6 +1088,7 @@ org.apache.kafka.coordinator.group.streams.StreamsGroupMemberTest:
 - testBuilderWithDefaults
 - testBuilderWithMemberIdIsNull
 - testBuilderWithMemberIsNull
+- testBuilderWithoutDefaults
 - testHasAssignedTasksChanged
 org.apache.kafka.coordinator.group.streams.StreamsGroupTest:
 - testAddTaskProcessIds
@@ -1145,9 +1149,18 @@ org.apache.kafka.coordinator.group.streams.TasksTupleTest:
 - testContainsAny
 - testFromTargetAssignmentRecord
 - testIsEmpty
-- testMerge
 - testReturnUnmodifiableTaskAssignments
 - testTasksCannotBeNull
+org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochsTest:
+- testFromCurrentAssignmentRecord
+- testFromCurrentAssignmentRecordWithMismatchedEpochs
+- testFromCurrentAssignmentRecordWithoutEpochs
+- testIsEmpty
+- testMerge
+- testMergeWithOverlappingActiveTasks
+- testReturnUnmodifiableTaskAssignments
+- testTasksCannotBeNull
+- testToString
 org.apache.kafka.coordinator.group.streams.TopicMetadataTest:
 - testConstructor
 - testConstructorWithEmptyName
