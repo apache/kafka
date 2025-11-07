@@ -84,6 +84,16 @@ public class StateUpdaterFailureIntegrationTest {
         }
     }
 
+    /**
+     * The conditions that we need to meet:
+     * <p><ul>
+     * <li>We have an unhandled task in {@link org.apache.kafka.streams.processor.internals.DefaultStateUpdater}</li>
+     * <li>StreamThread is not running, so {@link org.apache.kafka.streams.processor.internals.TaskManager#handleExceptionsFromStateUpdater} is not called anymore</li>
+     * <li>The task throws exception in {@link org.apache.kafka.streams.processor.internals.Task#maybeCheckpoint(boolean)} while being processed by {@code DefaultStateUpdater}</li>
+     * <li>{@link org.apache.kafka.streams.processor.internals.TaskManager#shutdownStateUpdater} tries to clean up all tasks that are left in the {@code DefaultStateUpdater}</li>
+     * </ul><p>
+     * If all conditions are met, {@code TaskManager} needs to be able to handle the failed task from the {@code DefaultStateUpdater} correctly and not hang.
+     */
     @Test
     public void correctlyHandleFlushErrorsDuringRebalance() throws Exception {
         final AtomicInteger numberOfStoreInits = new AtomicInteger();
@@ -103,7 +113,9 @@ public class StateUpdaterFailureIntegrationTest {
 
                     @Override
                     public void flush() {
-                        if (numberOfStoreInits.get() == NUM_PARTITIONS * 1.5) {
+                        // we want to throw the ProcessorStateException here only when the rebalance finished(we reassigned the 3 tasks from the removed thread to the existing thread)
+                        // we use waitForCondition to wait until the current state is PENDING_SHUTDOWN to make sure the Stream Thread will not handle the exception and we can get to in TaskManager#shutdownStateUpdater
+                        if (numberOfStoreInits.get() == 9) {
                             try {
                                 TestUtils.waitForCondition(() -> currentState.get() == KafkaStreams.State.PENDING_SHUTDOWN, "Streams never reached PENDING_SHUTDOWN state");
                             } catch (final InterruptedException e) {
@@ -129,7 +141,8 @@ public class StateUpdaterFailureIntegrationTest {
 
         streams.removeStreamThread();
 
-        TestUtils.waitForCondition(() -> numberOfStoreInits.get() == NUM_PARTITIONS * 1.5, "Streams never reinitialized the store enough times");
+        // Before shutting down, we want the tasks to be reassigned
+        TestUtils.waitForCondition(() -> numberOfStoreInits.get() == 9, "Streams never reinitialized the store enough times");
 
         assertTrue(streams.close(Duration.ofSeconds(60)));
     }

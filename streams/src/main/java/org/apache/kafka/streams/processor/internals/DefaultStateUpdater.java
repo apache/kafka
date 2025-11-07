@@ -350,8 +350,8 @@ public class DefaultStateUpdater implements StateUpdater {
 
                 // we need to enforce a checkpoint that removes the corrupted partitions
                 measureCheckpointLatency(() -> task.maybeCheckpoint(true));
-            } catch (final StreamsException e) {
-                log.warn("Checkpoint failed for corrupted task {}", task.id(), e);
+            } catch (final StreamsException swallow) {
+                log.warn("Checkpoint failed for corrupted task {}", task.id(), swallow);
             }
         }
 
