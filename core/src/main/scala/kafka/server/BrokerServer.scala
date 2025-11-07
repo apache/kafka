@@ -625,6 +625,9 @@ class BrokerServer(
   }
 
   private def createPartitionMetadataClient(): PartitionMetadataClient = {
+    // This is a no-op implementation of PartitionMetadataClient. It always returns -1 as the latest offset for any
+    // requested topic partition.
+    // TODO: KAFKA-19800: Implement a real PartitionMetadataClient that can fetch latest offsets via InterBrokerSendThread.
     new PartitionMetadataClient {
       override def listLatestOffsets(topicPartitions: util.Set[TopicPartition]
                                     ): util.Map[TopicPartition, util.concurrent.CompletableFuture[java.lang.Long]] = {
