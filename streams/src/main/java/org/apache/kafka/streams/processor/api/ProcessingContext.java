@@ -172,9 +172,9 @@ public interface ProcessingContext {
      *   <li>{@link PunctuationType#STREAM_TIME} &mdash; uses "stream time", which is advanced by the processing of messages
      *   in accordance with the timestamp as extracted by the {@link TimestampExtractor} in use.
      *   The first punctuation will be triggered by the first record that is processed.
-     *   <b>NOTE:</b> Only advanced if messages arrive</li>
+     *   <b>NOTE:</b> Only advances as messages arrive</li>
      *   <li>{@link PunctuationType#WALL_CLOCK_TIME} &mdash; uses system time (the wall-clock time),
-     *   which is advanced independent of whether new messages arrive.
+     *   which advances independent of whether new messages arrive.
      *   The first punctuation will be triggered after interval has elapsed.
      *   <b>NOTE:</b> This is best effort only as its granularity is limited by how long an iteration of the
      *   processing loop takes to complete</li>

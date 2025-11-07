@@ -1237,7 +1237,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    // For anchored schedule, we want to have all punctuations to happen only on times based on combinations of startTime and interval
+    // For anchored schedule, we want to have all punctuations only fire on times based on combinations of startTime and interval
     // This method ensures that the first anchored punctuation is not fired prematurely due to startTime < now
     private PunctuationSchedule getInitialSchedule(final long startTime, final long interval, final PunctuationType type, final Punctuator punctuator, final boolean anchored) {
         final PunctuationSchedule originalSchedule = new PunctuationSchedule(processorContext.currentNode(), startTime, interval, punctuator);
