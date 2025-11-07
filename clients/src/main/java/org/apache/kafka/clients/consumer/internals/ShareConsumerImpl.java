@@ -641,7 +641,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
         // If data is available already, return it immediately
         final ShareFetch<K, V> fetch = collect(acknowledgementsMap);
-        if (!fetch.isEmpty()) {
+        if (!fetch.isEmpty() && !fetch.hasRenewals()) {
             return fetch;
         }
 
@@ -663,7 +663,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     }
 
     private ShareFetch<K, V> collect(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
-        if (currentFetch.isEmpty() && !currentFetch.hasRenewals()) {
+        if (currentFetch.isEmpty() || currentFetch.hasRenewals()) {
             final ShareFetch<K, V> fetch = fetchCollector.collect(fetchBuffer);
             if (fetch.isEmpty()) {
                 Map<TopicIdPartition, NodeAcknowledgements> controlRecordAcknowledgements = fetch.takeAcknowledgedRecords();
@@ -685,16 +685,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 sendShareAcknowledgeAsyncEvent(acknowledgementsMap);
             }
             return fetch;
-        } else if (currentFetch.hasRenewals()) {
-            // We only send one ShareFetchEvent per poll call.
-            if (shouldSendShareFetchEvent) {
-                // Check for any acknowledgements which could have come from control records (GAP) and include them.
-                applicationEventHandler.add(new ShareFetchEvent(acknowledgementsMap));
-                shouldSendShareFetchEvent = false;
-                // Notify the network thread to wake up and start the next round of fetching
-                applicationEventHandler.wakeupNetworkThread();
-            }
-            return currentFetch;
         } else {
             if (!acknowledgementsMap.isEmpty()) {
                 // Asynchronously commit any waiting acknowledgements

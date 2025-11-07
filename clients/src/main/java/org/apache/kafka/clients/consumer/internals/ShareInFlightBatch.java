@@ -137,15 +137,11 @@ public class ShareInFlightBatch<K, V> {
             for (Map.Entry<Long, AcknowledgeType> ackTypeEntry : ackTypeMap.entrySet()) {
                 long offset = ackTypeEntry.getKey();
                 AcknowledgeType ackType = ackTypeEntry.getValue();
+                ConsumerRecord<K, V> record = renewingRecords.remove(offset);
                 if (ackType == AcknowledgeType.RENEW) {
-                    ConsumerRecord<K, V> record = renewingRecords.remove(offset);
                     if (record != null && !isCompletedExceptionally) {
                         inFlightRecords.put(offset, record);
                         recordsRenewed++;
-                    }
-                } else {
-                    if (renewingRecords.get(offset) != null) {
-                        throw new IllegalStateException("Trying to renew a record incorrectly");
                     }
                 }
             }
