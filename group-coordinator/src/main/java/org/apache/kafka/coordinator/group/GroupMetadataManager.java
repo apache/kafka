@@ -2030,7 +2030,6 @@ public class GroupMetadataManager {
 
         // Actually bump the group epoch
         int groupEpoch = group.groupEpoch();
-        int initialGroupEpoch = groupEpoch;
         if (bumpGroupEpoch) {
             if (groupEpoch == 0) {
                 groupEpoch = 2;
@@ -2044,7 +2043,7 @@ public class GroupMetadataManager {
         }
 
         // Schedule initial rebalance delay for new streams groups to coalesce joins.
-        boolean isInitialRebalance = (initialGroupEpoch == 0);
+        boolean isInitialRebalance = (group.groupEpoch() == 0);
         if (isInitialRebalance) {
             int initialDelayMs = streamsGroupInitialRebalanceDelayMs(groupId);
             if (initialDelayMs > 0) {
@@ -4066,9 +4065,9 @@ public class GroupMetadataManager {
                 .withMetadataImage(metadataImage)
                 .withTargetAssignment(group.targetAssignment());
 
-            if (updatedMember.isPresent()) {
-                assignmentResultBuilder.addOrUpdateMember(updatedMember.get().memberId(), updatedMember.get());
-            }
+            updatedMember.ifPresent(member ->
+                assignmentResultBuilder.addOrUpdateMember(member.memberId(), member)
+            );
 
             long startTimeMs = time.milliseconds();
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
@@ -4085,7 +4084,8 @@ public class GroupMetadataManager {
 
             records.addAll(assignmentResult.records());
 
-            return updatedMember.isPresent() ? assignmentResult.targetAssignment().get(updatedMember.get().memberId()) : TasksTuple.EMPTY;
+            return updatedMember.map(member -> assignmentResult.targetAssignment().get(member.memberId()))
+                .orElse(TasksTuple.EMPTY);
         } catch (TaskAssignorException ex) {
             String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
                 groupEpoch, ex.getMessage());
@@ -8243,6 +8243,7 @@ public class GroupMetadataManager {
     ) {
         // At this point, we have already validated the group id, so we know that the group exists and that no exception will be thrown.
         createGroupTombstoneRecords(group(groupId), records);
+        timer.cancel(streamsInitialRebalanceKey(groupId));
     }
 
     /**
@@ -8256,6 +8257,7 @@ public class GroupMetadataManager {
         List<CoordinatorRecord> records
     ) {
         group.createGroupTombstoneRecords(records);
+        timer.cancel(streamsInitialRebalanceKey(group.groupId()));
     }
 
     /**
@@ -8727,8 +8729,6 @@ public class GroupMetadataManager {
             // Add tombstones for the previous streams group. The tombstones won't actually be
             // replayed because its coordinator result has a non-null appendFuture.
             createGroupTombstoneRecords(group, records);
-            // Cancel initial rebalance timer.
-            timer.cancel(streamsInitialRebalanceKey(groupId));
             removeGroup(groupId);
             return true;
         }

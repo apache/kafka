@@ -17409,7 +17409,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testStreamsInitialRebalanceDelay_EmptyDuringDelay_AssignsAfterTimer() {
+    public void testStreamsInitialRebalanceDelayEmptyDuringDelay_AssignsAfterTimer() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
         String subtopology1 = "subtopology1";
