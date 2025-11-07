@@ -388,17 +388,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
         // Verify all transactions are finished before proceeding with data verification
         if (eosEnabled) {
-            final Properties txnProps = new Properties();
-            txnProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "verifier");
-            txnProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
-            txnProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-            txnProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-            txnProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString());
-
             final VerificationResult txnResult;
-            try (final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(txnProps)) {
-                txnResult = verifyAllTransactionFinished(consumer, kafka);
-            }
+            txnResult = verifyAllTransactionFinished(kafka);
 
             if (!txnResult.passed()) {
                 System.err.println("Transaction verification failed: " + txnResult.result());
@@ -736,54 +727,65 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return partitions;
     }
 
-    private static VerificationResult verifyAllTransactionFinished(final KafkaConsumer<byte[], byte[]> consumer,
-                                                                   final String kafka) {
-        // Get all output topics except "data" (which is the input topic)
-        final String[] outputTopics = Arrays.stream(NUMERIC_VALUE_TOPICS)
-                .filter(topic -> !topic.equals("data"))
-                .toArray(String[]::new);
+    private static Properties createConsumerPropsWithByteDeserializer(final String kafka, final String clientId) {
+        final Properties props = new Properties();
+        props.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        return props;
+    }
 
-        final List<TopicPartition> partitions = getAllPartitions(consumer, outputTopics);
-        consumer.assign(partitions);
-        consumer.seekToEnd(partitions);
-        for (final TopicPartition tp : partitions) {
-            System.out.println(tp + " at position " + consumer.position(tp));
-        }
+    private static VerificationResult verifyAllTransactionFinished(final String kafka) {
+        final Properties txnProps = createConsumerPropsWithByteDeserializer(kafka, "verifier");
+        txnProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString());
+        try (final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(txnProps)) {
+            // Get all output topics except "data" (which is the input topic)
+            final String[] outputTopics = Arrays.stream(NUMERIC_VALUE_TOPICS)
+                    .filter(topic -> !topic.equals("data"))
+                    .toArray(String[]::new);
 
-        final Properties consumerProps = new Properties();
-        consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer-uncommitted");
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
-        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-
-        final long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
-        try (final KafkaConsumer<byte[], byte[]> consumerUncommitted = new KafkaConsumer<>(consumerProps)) {
-            while (!partitions.isEmpty() && System.currentTimeMillis() < maxWaitTime) {
-                consumer.seekToEnd(partitions);
-                final Map<TopicPartition, Long> topicEndOffsets = consumerUncommitted.endOffsets(partitions);
-
-                final java.util.Iterator<TopicPartition> iterator = partitions.iterator();
-                while (iterator.hasNext()) {
-                    final TopicPartition topicPartition = iterator.next();
-                    final long position = consumer.position(topicPartition);
-
-                    if (position == topicEndOffsets.get(topicPartition)) {
-                        iterator.remove();
-                        System.out.println("Removing " + topicPartition + " at position " + position);
-                    } else if (consumer.position(topicPartition) > topicEndOffsets.get(topicPartition)) {
-                        return new VerificationResult(false, "Offset for partition " + topicPartition + " is larger than topic endOffset: " + position + " > " + topicEndOffsets.get(topicPartition));
-                    } else {
-                        System.out.println("Retry " + topicPartition + " at position " + position);
-                    }
-                }
-                sleep(1000L);
+            final List<TopicPartition> partitions = getAllPartitions(consumer, outputTopics);
+            consumer.assign(partitions);
+            consumer.seekToEnd(partitions);
+            for (final TopicPartition tp : partitions) {
+                System.out.println(tp + " at position " + consumer.position(tp));
             }
-        }
+            final Properties consumerProps = createConsumerPropsWithByteDeserializer(kafka, "consumer-uncommitted");
 
-        if (!partitions.isEmpty()) {
-            return new VerificationResult(false, "Could not read all verification records. Did not receive any new record within the last " + (MAX_IDLE_TIME_MS / 1000L) + " sec.");
+            final long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
+            try (final KafkaConsumer<byte[], byte[]> consumerUncommitted = new KafkaConsumer<>(consumerProps)) {
+                while (!partitions.isEmpty() && System.currentTimeMillis() < maxWaitTime) {
+                    consumer.seekToEnd(partitions);
+                    final Map<TopicPartition, Long> topicEndOffsets = consumerUncommitted.endOffsets(partitions);
+
+                    final java.util.Iterator<TopicPartition> iterator = partitions.iterator();
+                    while (iterator.hasNext()) {
+                        final TopicPartition topicPartition = iterator.next();
+                        final long position = consumer.position(topicPartition);
+
+                        if (position == topicEndOffsets.get(topicPartition)) {
+                            iterator.remove();
+                            System.out.println("Removing " + topicPartition + " at position " + position);
+                        } else if (position > topicEndOffsets.get(topicPartition)) {
+                            return new VerificationResult(false, "Offset for partition " + topicPartition + " is larger than topic endOffset: " + position + " > " + topicEndOffsets.get(topicPartition));
+                        } else {
+                            System.out.println("Retry " + topicPartition + " at position " + position);
+                        }
+                    }
+                    sleep(1000L);
+                }
+            }
+
+            if (!partitions.isEmpty()) {
+                return new VerificationResult(false, "Could not read all verification records. Did not receive any new record within the last " + (MAX_IDLE_TIME_MS / 1000L) + " sec.");
+            }
+            return new VerificationResult(true, "All transactions finished successfully");
+        } catch (final Exception e) {
+            e.printStackTrace(System.err);
+            System.out.println("FAILED");
+            return new VerificationResult(false, "Transaction verification failed: " + e.getMessage());
         }
-        return new VerificationResult(true, "All transactions finished successfully");
     }
 
 }
