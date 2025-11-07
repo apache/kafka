@@ -21,6 +21,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
@@ -109,7 +110,7 @@ public class GroupCoordinatorConfig {
     public static final String OFFSETS_TOPIC_COMPRESSION_CODEC_DOC = "Compression codec for the offsets topic - compression may be used to achieve \"atomic\" commits.";
 
     public static final String APPEND_MAX_BUFFER_SIZE_CONFIG = "group.coordinator.append.max.buffer.size";
-    public static final int APPEND_MAX_BUFFER_SIZE_DEFAULT = 1024 * 1024;
+    public static final int APPEND_MAX_BUFFER_SIZE_DEFAULT = 1024 * 1024 + Records.LOG_OVERHEAD;
     public static final String APPEND_MAX_BUFFER_SIZE_DOC = "The largest buffer size allowed by GroupCoordinator (It is recommended not to exceed the maximum allowed message size).";
 
     ///

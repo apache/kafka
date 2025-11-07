@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.share;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Optional;
@@ -81,7 +82,7 @@ public class ShareCoordinatorConfig {
     public static final String COLD_PARTITION_SNAPSHOT_INTERVAL_MS_DOC = "The duration in milliseconds that the share coordinator will wait between force snapshotting share partitions which are not being updated.";
 
     public static final String APPEND_MAX_BUFFER_SIZE_CONFIG = "share.coordinator.append.max.buffer.size";
-    public static final int APPEND_MAX_BUFFER_SIZE_DEFAULT = 1024 * 1024;
+    public static final int APPEND_MAX_BUFFER_SIZE_DEFAULT = 1024 * 1024 + Records.LOG_OVERHEAD;
     public static final String APPEND_MAX_BUFFER_SIZE_DOC = "The largest buffer size allowed by ShareCoordinator (It is recommended not to exceed the maximum allowed message size).";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
