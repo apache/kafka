@@ -87,13 +87,7 @@ public class AdminPartitionMetadataClient implements PartitionMetadataClient {
 
             if (leaderNodeOpt.isEmpty() || leaderNodeOpt.get().isEmpty()) {
                 // No leader available - complete with error
-                ListOffsetsPartitionResponse errorResponse = 
-                    new ListOffsetsPartitionResponse()
-                        .setPartitionIndex(tp.partition())
-                        .setErrorCode(Errors.LEADER_NOT_AVAILABLE.code())
-                        .setOffset(ListOffsetsResponse.UNKNOWN_OFFSET)
-                        .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP);
-                future.complete(errorResponse);
+                future.complete(createErrorPartitionResponse(tp, Errors.LEADER_NOT_AVAILABLE.code()));
                 continue;
             }
 
@@ -165,6 +159,14 @@ public class AdminPartitionMetadataClient implements PartitionMetadataClient {
         }
     }
 
+    private ListOffsetsPartitionResponse createErrorPartitionResponse(TopicPartition tp, short errorCode) {
+        return new ListOffsetsPartitionResponse()
+            .setPartitionIndex(tp.partition())
+            .setErrorCode(errorCode)
+            .setOffset(ListOffsetsResponse.UNKNOWN_OFFSET)
+            .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP);
+    }
+
     /**
      * Tracks a pending ListOffsets request and its associated futures.
      */
@@ -212,14 +214,6 @@ public class AdminPartitionMetadataClient implements PartitionMetadataClient {
             }
 
             return requests;
-        }
-        
-        private ListOffsetsPartitionResponse createErrorPartitionResponse(TopicPartition tp, short errorCode) {
-            return new ListOffsetsPartitionResponse()
-                .setPartitionIndex(tp.partition())
-                .setErrorCode(errorCode)
-                .setOffset(ListOffsetsResponse.UNKNOWN_OFFSET)
-                .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP);
         }
         
         private void handleErrorResponse(PendingRequest pendingRequest, ClientResponse clientResponse) {
