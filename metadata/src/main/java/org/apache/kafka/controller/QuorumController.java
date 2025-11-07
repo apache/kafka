@@ -1022,8 +1022,9 @@ public final class QuorumController implements Controller {
                         List<ApiMessageAndVersion> messages = batch.records();
                         if (reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID)) {
                             // For bootstrap snapshots, extract feature levels from all data records
-                            if (batch.controlRecords().isEmpty()) {
+                            if (!messages.isEmpty()) {
                                 bootstrapMetadata = BootstrapMetadata.fromRecords(messages, "bootstrap");
+                                return;
                             }
                         }
                         log.debug("Replaying snapshot {} batch with last offset of {}",
@@ -1142,14 +1143,10 @@ public final class QuorumController implements Controller {
         @Override
         public ControllerResult<Void> generateRecordsAndResult() {
             try {
-                boolean forceBootstrapWrite = featureControl.metadataVersion().isPresent() &&
-                    offsetControl.lastCommittedOffset() == Snapshots.BOOTSTRAP_SNAPSHOT_ID.offset() &&
-                    offsetControl.lastCommittedEpoch() == Snapshots.BOOTSTRAP_SNAPSHOT_ID.epoch();
                 return ActivationRecordsGenerator.generate(
                     log::warn,
                     offsetControl.transactionStartOffset(),
                     bootstrapMetadata,
-                    forceBootstrapWrite,
                     featureControl.metadataVersion(),
                     configurationControl.getStaticallyConfiguredMinInsyncReplicas());
             } catch (Throwable t) {

@@ -155,11 +155,10 @@ public class ActivationRecordsGenerator {
         Consumer<String> activationMessageConsumer,
         long transactionStartOffset,
         BootstrapMetadata bootstrapMetadata,
-        boolean forceBootstrapWrite,
         Optional<MetadataVersion> curMetadataVersion,
         int defaultMinInSyncReplicas
     ) {
-        if (forceBootstrapWrite || curMetadataVersion.isEmpty()) {
+        if (curMetadataVersion.isEmpty()) {
             return recordsForEmptyLog(activationMessageConsumer,
                     transactionStartOffset,
                     bootstrapMetadata,
