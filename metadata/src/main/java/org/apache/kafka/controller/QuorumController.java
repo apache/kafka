@@ -1142,10 +1142,6 @@ public final class QuorumController implements Controller {
         @Override
         public ControllerResult<Void> generateRecordsAndResult() {
             try {
-                if (bootstrapMetadata == null) {
-                    throw new IllegalStateException("Bootstrap metadata not available during activation. " +
-                        "This should not happen if a bootstrap snapshot was processed.");
-                }
                 boolean forceBootstrapWrite = featureControl.metadataVersion().isPresent() &&
                     offsetControl.lastCommittedOffset() == Snapshots.BOOTSTRAP_SNAPSHOT_ID.offset() &&
                     offsetControl.lastCommittedEpoch() == Snapshots.BOOTSTRAP_SNAPSHOT_ID.epoch();
