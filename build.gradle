@@ -279,6 +279,7 @@ if (repo != null) {
         'gradlew',
         'gradlew.bat',
         'gradle/wrapper/gradle-wrapper.properties',
+        'kafka.code-workspace',
         'trogdor/README.md',
         '**/README.md',
         '**/id_rsa',

@@ -240,7 +240,7 @@ public class TransactionsExpirationTest {
                 // The epoch should be at least oldProducerEpoch + 2 for the first commit and the restarted producer.
                 assertTrue(oldProducerEpoch + 2 <= newProducerEpoch);
             } else {
-                assertEquals(oldProducerEpoch + 3, newProducerEpoch);
+                assertEquals(oldProducerEpoch + 1, newProducerEpoch);
             }
 
             assertConsumeRecords(clusterInstance, List.of(TOPIC1), 2);

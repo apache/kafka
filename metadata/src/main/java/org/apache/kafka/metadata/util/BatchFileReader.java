@@ -17,9 +17,11 @@
 
 package org.apache.kafka.metadata.util;
 
+import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
+import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
@@ -122,6 +124,17 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
                         messages.add(new ApiMessageAndVersion(message, (short) 0));
                         break;
                     }
+                    case KRAFT_VERSION: {
+                        KRaftVersionRecord message = new KRaftVersionRecord();
+                        message.read(new ByteBufferAccessor(record.value()), (short) 0);
+                        messages.add(new ApiMessageAndVersion(message, (short) 0));
+                        break;
+                    }
+                    case KRAFT_VOTERS:
+                        VotersRecord message =  new VotersRecord();
+                        message.read(new ByteBufferAccessor(record.value()), (short) 0);
+                        messages.add(new ApiMessageAndVersion(message, (short) 0));
+                        break;
                     default:
                         throw new RuntimeException("Unsupported control record type " + type + " at offset " +
                                 record.offset());

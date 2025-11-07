@@ -30,7 +30,7 @@ import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.common.Feature
+import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 
 import java.lang.{Byte => JByte}
@@ -48,8 +48,15 @@ import scala.jdk.CollectionConverters._
 class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
   @ClusterTest(
+    metadataVersion = MetadataVersion.IBP_4_1_IV1,
     features = Array(
       new ClusterFeature(feature = Feature.GROUP_VERSION, version = 0)
+    ),
+    serverProperties = Array(
+      new ClusterConfigProperty(
+        key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG,
+        value = "classic"
+      )
     )
   )
   def testConsumerGroupDescribeWhenFeatureFlagNotEnabled(): Unit = {

@@ -389,11 +389,11 @@ Found problem:
   def testFormatWithReleaseVersionAndFeatureOverride(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
-    properties.putAll(defaultStaticQuorumProperties)
+    properties.putAll(defaultDynamicQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream, properties, Seq(
-      "--release-version", "3.7-IV0",
+      "--release-version", "3.7-IV0", "--standalone",
       "--feature", "share.version=1")))
 
     // Verify that the feature override is applied by checking the bootstrap metadata
@@ -408,7 +408,7 @@ Found problem:
       "Failed to find release version in output: " + stream.toString())
 
     // Verify that the format command completed successfully with features
-    assertTrue(stream.toString().contains("Formatting metadata directory"),
+    assertTrue(stream.toString().contains("Formatting dynamic metadata voter directory"),
       "Failed to find formatting message in output: " + stream.toString())
   }
 
@@ -416,11 +416,11 @@ Found problem:
   def testFormatWithMultipleFeatures(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
-    properties.putAll(defaultStaticQuorumProperties)
+    properties.putAll(defaultDynamicQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream, properties, Seq(
-      "--release-version", "3.8-IV0",
+      "--release-version", "3.8-IV0", "--standalone",
       "--feature", "share.version=1",
       "--feature", "transaction.version=2",
       "--feature", "group.version=1")))
@@ -441,7 +441,7 @@ Found problem:
       "Failed to find release version in output: " + stream.toString())
 
     // Verify that the format command completed successfully with multiple features
-    assertTrue(stream.toString().contains("Formatting metadata directory"),
+    assertTrue(stream.toString().contains("Formatting dynamic metadata voter directory"),
       "Failed to find formatting message in output: " + stream.toString())
   }
   
@@ -841,11 +841,11 @@ Found problem:
   def testBootstrapScramRecords(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
-    properties.putAll(defaultStaticQuorumProperties)
+    properties.putAll(defaultDynamicQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String](
-      "--release-version", "3.9-IV0",
+      "--release-version", "3.9-IV0", "--standalone",
       "--add-scram", "SCRAM-SHA-512=[name=alice,password=changeit]",
       "--add-scram", "SCRAM-SHA-512=[name=bob,password=changeit]"
     )

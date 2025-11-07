@@ -116,7 +116,6 @@ import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
@@ -1021,12 +1020,10 @@ public final class QuorumController implements Controller {
                         Batch<ApiMessageAndVersion> batch = reader.next();
                         long offset = batch.lastOffset();
                         List<ApiMessageAndVersion> messages = batch.records();
-                        if (bootstrapMetadata == null) {
-                            if (reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID)) {
-                                // For bootstrap snapshots, extract feature levels from all data records
-                                if (batch.controlRecords().isEmpty()) {
-                                    bootstrapMetadata = BootstrapMetadata.fromRecords(messages, "bootstrap");
-                                }
+                        if (reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID)) {
+                            // For bootstrap snapshots, extract feature levels from all data records
+                            if (batch.controlRecords().isEmpty()) {
+                                bootstrapMetadata = BootstrapMetadata.fromRecords(messages, "bootstrap");
                             }
                         }
                         log.debug("Replaying snapshot {} batch with last offset of {}",
@@ -1149,10 +1146,14 @@ public final class QuorumController implements Controller {
                     throw new IllegalStateException("Bootstrap metadata not available during activation. " +
                         "This should not happen if a bootstrap snapshot was processed.");
                 }
+                boolean forceBootstrapWrite = featureControl.metadataVersion().isPresent() &&
+                    offsetControl.lastCommittedOffset() == Snapshots.BOOTSTRAP_SNAPSHOT_ID.offset() &&
+                    offsetControl.lastCommittedEpoch() == Snapshots.BOOTSTRAP_SNAPSHOT_ID.epoch();
                 return ActivationRecordsGenerator.generate(
                     log::warn,
                     offsetControl.transactionStartOffset(),
                     bootstrapMetadata,
+                    forceBootstrapWrite,
                     featureControl.metadataVersion(),
                     configurationControl.getStaticallyConfiguredMinInsyncReplicas());
             } catch (Throwable t) {

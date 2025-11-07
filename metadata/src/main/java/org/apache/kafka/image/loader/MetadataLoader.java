@@ -396,32 +396,34 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
 
     @Override
     public void handleLoadSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
-        eventQueue.append(() -> {
-            try {
-                long numLoaded = metrics.incrementHandleLoadSnapshotCount();
-                String snapshotName = Snapshots.filenameFromSnapshotId(reader.snapshotId());
-                log.info("handleLoadSnapshot({}): incrementing HandleLoadSnapshotCount to {}.",
-                    snapshotName, numLoaded);
-                MetadataDelta delta = new MetadataDelta.Builder().
-                    setImage(image).
-                    build();
-                SnapshotManifest manifest = loadSnapshot(delta, reader);
-                log.info("handleLoadSnapshot({}): generated a metadata delta between offset {} " +
-                        "and this snapshot in {} us.", snapshotName,
-                        image.provenance().lastContainedOffset(),
-                        NANOSECONDS.toMicros(manifest.elapsedNs()));
-                MetadataImage image = delta.apply(manifest.provenance());
-                batchLoader.resetToImage(image);
-                maybePublishMetadata(delta, image, manifest);
-            } catch (Throwable e) {
-                // This is a general catch-all block where we don't expect to end up;
-                // failure-prone operations should have individual try/catch blocks around them.
-                faultHandler.handleFault("Unhandled fault in MetadataLoader#handleLoadSnapshot. " +
-                        "Snapshot offset was " + reader.lastContainedLogOffset(), e);
-            } finally {
-                reader.close();
-            }
-        });
+        if (!reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID)) {
+            eventQueue.append(() -> {
+                try {
+                    long numLoaded = metrics.incrementHandleLoadSnapshotCount();
+                    String snapshotName = Snapshots.filenameFromSnapshotId(reader.snapshotId());
+                    log.info("handleLoadSnapshot({}): incrementing HandleLoadSnapshotCount to {}.",
+                        snapshotName, numLoaded);
+                    MetadataDelta delta = new MetadataDelta.Builder().
+                        setImage(image).
+                        build();
+                    SnapshotManifest manifest = loadSnapshot(delta, reader);
+                    log.info("handleLoadSnapshot({}): generated a metadata delta between offset {} " +
+                            "and this snapshot in {} us.", snapshotName,
+                            image.provenance().lastContainedOffset(),
+                            NANOSECONDS.toMicros(manifest.elapsedNs()));
+                    MetadataImage image = delta.apply(manifest.provenance());
+                    batchLoader.resetToImage(image);
+                    maybePublishMetadata(delta, image, manifest);
+                } catch (Throwable e) {
+                    // This is a general catch-all block where we don't expect to end up;
+                    // failure-prone operations should have individual try/catch blocks around them.
+                    faultHandler.handleFault("Unhandled fault in MetadataLoader#handleLoadSnapshot. " +
+                            "Snapshot offset was " + reader.lastContainedLogOffset(), e);
+                } finally {
+                    reader.close();
+                }
+            });
+        }
     }
 
     /**

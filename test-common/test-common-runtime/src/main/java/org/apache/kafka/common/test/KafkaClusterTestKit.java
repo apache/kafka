@@ -45,6 +45,9 @@ import org.apache.kafka.raft.DynamicVoters;
 import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.Feature;
+import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.fault.FaultHandler;
@@ -479,6 +482,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 return;
             }
             formatter.setReleaseVersion(nodes.bootstrapMetadata().metadataVersion());
+            Feature.PRODUCTION_FEATURES.forEach(feature -> {
+                String featureName = feature.featureName();
+                if (!MetadataVersion.FEATURE_NAME.equals(featureName)
+                    && !KRaftVersion.FEATURE_NAME.equals(featureName)) {
+                    short level = nodes.bootstrapMetadata().featureLevel(featureName);
+                    formatter.setFeatureLevel(featureName, level);
+                }
+            });
             formatter.setUnstableFeatureVersionsEnabled(true);
             formatter.setIgnoreFormatted(false);
             formatter.setControllerListenerName(controllerListenerName);
