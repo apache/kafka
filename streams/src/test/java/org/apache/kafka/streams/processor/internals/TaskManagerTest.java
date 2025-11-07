@@ -85,7 +85,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -1928,7 +1927,7 @@ public class TaskManagerTest {
                 mkEntry(t1p1changelog2, OffsetCheckpoint.OFFSET_UNKNOWN)
             ));
         final TasksRegistry tasks = mock(TasksRegistry.class);
-        final TaskManager taskManager = setUpTaskManagerWithoutStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks, false);
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks, false);
         when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId01, restoringStatefulTask)));
         when(stateUpdater.tasks()).thenReturn(Set.of(restoringStatefulTask));
 
@@ -2180,7 +2179,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldReInitializeStreamsProducerOnHandleLostAllIfEosV2Enabled() {
-        final TaskManager taskManager = setUpTaskManagerWithoutStateUpdater(ProcessingMode.EXACTLY_ONCE_V2, null, false);
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.EXACTLY_ONCE_V2, null, false);
 
         taskManager.handleLostAll();
 
@@ -3323,94 +3322,31 @@ public class TaskManagerTest {
     }
 
     private void shouldCloseActiveTasksAndPropagateExceptionsOnCleanShutdown(final ProcessingMode processingMode) {
-        final TaskManager taskManager = setUpTaskManagerWithoutStateUpdater(processingMode, null, false);
 
-        final TopicPartition changelog = new TopicPartition("changelog", 0);
-        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
-            mkEntry(taskId00, taskId00Partitions),
-            mkEntry(taskId01, taskId01Partitions),
-            mkEntry(taskId02, taskId02Partitions),
-            mkEntry(taskId03, taskId03Partitions)
-        );
-        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
-            @Override
-            public Set<TopicPartition> changelogPartitions() {
-                return singleton(changelog);
-            }
-        };
-        final AtomicBoolean closedDirtyTask01 = new AtomicBoolean(false);
-        final AtomicBoolean closedDirtyTask02 = new AtomicBoolean(false);
-        final AtomicBoolean closedDirtyTask03 = new AtomicBoolean(false);
-        final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
-            @Override
-            public void suspend() {
-                super.suspend();
-                throw new TaskMigratedException("migrated", new RuntimeException("cause"));
-            }
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask task01 = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId01Partitions).build();
+        final StreamTask task02 = statefulTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId02Partitions).build();
+        final StreamTask task03 = statefulTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId03Partitions).build();
 
-            @Override
-            public void closeDirty() {
-                super.closeDirty();
-                closedDirtyTask01.set(true);
-            }
-        };
-        final Task task02 = new StateMachineTask(taskId02, taskId02Partitions, true, stateManager) {
-            @Override
-            public void suspend() {
-                super.suspend();
-                throw new RuntimeException("oops");
-            }
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(processingMode, tasks);
 
-            @Override
-            public void closeDirty() {
-                super.closeDirty();
-                closedDirtyTask02.set(true);
-            }
-        };
-        final Task task03 = new StateMachineTask(taskId03, taskId03Partitions, true, stateManager) {
-            @Override
-            public void suspend() {
-                super.suspend();
-                throw new RuntimeException("oops");
-            }
+        doThrow(new TaskMigratedException("migrated", new RuntimeException("cause")))
+            .when(task01).suspend();
+        doThrow(new RuntimeException("oops"))
+            .when(task02).suspend();
+        doThrow(new RuntimeException("oops"))
+            .when(task03).suspend();
 
-            @Override
-            public void closeDirty() {
-                super.closeDirty();
-                closedDirtyTask03.set(true);
-            }
-        };
-
-        when(activeTaskCreator.createTasks(any(), eq(assignment)))
-            .thenReturn(asList(task00, task01, task02, task03));
-
-        taskManager.handleAssignment(assignment, emptyMap());
-
-        assertThat(task00.state(), is(Task.State.CREATED));
-        assertThat(task01.state(), is(Task.State.CREATED));
-        assertThat(task02.state(), is(Task.State.CREATED));
-        assertThat(task03.state(), is(Task.State.CREATED));
-
-        taskManager.tryToCompleteRestoration(time.milliseconds(), null);
-
-        assertThat(task00.state(), is(Task.State.RESTORING));
-        assertThat(task01.state(), is(Task.State.RUNNING));
-        assertThat(task02.state(), is(Task.State.RUNNING));
-        assertThat(task03.state(), is(Task.State.RUNNING));
-        assertThat(
-            taskManager.activeTaskMap(),
-            Matchers.equalTo(
-                mkMap(
-                    mkEntry(taskId00, task00),
-                    mkEntry(taskId01, task01),
-                    mkEntry(taskId02, task02),
-                    mkEntry(taskId03, task03)
-                )
-            )
-        );
-        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-        verify(changeLogReader).enforceRestoreActive();
-        verify(changeLogReader).completedChangelogs();
+        when(tasks.activeTasks()).thenReturn(Set.of(task00, task01, task02, task03));
 
         final RuntimeException exception = assertThrows(
             RuntimeException.class,
@@ -3418,62 +3354,54 @@ public class TaskManagerTest {
         );
         assertThat(exception.getCause().getMessage(), is("oops"));
 
-        assertThat(closedDirtyTask01.get(), is(true));
-        assertThat(closedDirtyTask02.get(), is(true));
-        assertThat(closedDirtyTask03.get(), is(true));
-        assertThat(task00.state(), is(Task.State.CLOSED));
-        assertThat(task01.state(), is(Task.State.CLOSED));
-        assertThat(task02.state(), is(Task.State.CLOSED));
-        assertThat(task03.state(), is(Task.State.CLOSED));
+        // Verify tasks that threw exceptions were closed dirty
+        verify(task00).prepareCommit(true);
+        verify(task00).suspend();
+        verify(task00).closeClean();
+        verify(task01).prepareCommit(true);
+        verify(task01, times(2)).suspend();
+        verify(task01).closeDirty();
+        verify(task02).prepareCommit(true);
+        verify(task02, times(2)).suspend();
+        verify(task02).closeDirty();
+        verify(task03).prepareCommit(true);
+        verify(task03, times(2)).suspend();
+        verify(task03).closeDirty();
+
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-        // the active task creator should also get closed (so that it closes the thread producer if applicable)
         verify(activeTaskCreator).close();
+        verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
     }
 
     @Test
     public void shouldCloseActiveTasksAndPropagateStreamsProducerExceptionsOnCleanShutdown() {
-        final TopicPartition changelog = new TopicPartition("changelog", 0);
-        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
-            mkEntry(taskId00, taskId00Partitions)
-        );
-        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
-            @Override
-            public Set<TopicPartition> changelogPartitions() {
-                return singleton(changelog);
-            }
-        };
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions)
+            .build();
 
-        when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(singletonList(task00));
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
+
         doThrow(new RuntimeException("whatever")).when(activeTaskCreator).close();
 
-        taskManager.handleAssignment(assignment, emptyMap());
+        when(tasks.activeTasks()).thenReturn(Set.of(task00));
 
-        assertThat(task00.state(), is(Task.State.CREATED));
-
-        taskManager.tryToCompleteRestoration(time.milliseconds(), null);
-
-        assertThat(task00.state(), is(Task.State.RESTORING));
-        assertThat(
-            taskManager.activeTaskMap(),
-            Matchers.equalTo(
-                mkMap(
-                    mkEntry(taskId00, task00)
-                )
-            )
+        final RuntimeException exception = assertThrows(
+            RuntimeException.class,
+            () -> taskManager.shutdown(true)
         );
-        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-        verify(changeLogReader).enforceRestoreActive();
-        verify(changeLogReader).completedChangelogs();
 
-        final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.shutdown(true));
-
-        assertThat(task00.state(), is(Task.State.CLOSED));
         assertThat(exception.getMessage(), is("whatever"));
+
+        verify(task00).prepareCommit(true);
+        verify(task00).suspend();
+        verify(task00).closeClean();
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-        // the active task creator should also get closed (so that it closes the thread producer if applicable)
         verify(activeTaskCreator).close();
+        verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
     }
 
     @Test
@@ -3509,31 +3437,35 @@ public class TaskManagerTest {
 
     @Test
     public void shouldSuspendAllRevokedActiveTasksAndPropagateSuspendException() {
-        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
+        // will not be revoked
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions).build();
 
-        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager) {
-            @Override
-            public void suspend() {
-                super.suspend();
-                throw new RuntimeException("task 0_1 suspend boom!");
-            }
-        };
+        // will be revoked and throws exception during suspend
+        final StreamTask task01 = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId01Partitions).build();
+        doThrow(new RuntimeException("task 0_1 suspend boom!")).when(task01).suspend();
 
-        final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true, stateManager);
+        // will be revoked with no exception
+        final StreamTask task02 = statefulTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId02Partitions).build();
 
-        taskManager.addTask(task00);
-        taskManager.addTask(task01);
-        taskManager.addTask(task02);
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
 
+        when(tasks.allTasks()).thenReturn(Set.of(task00, task01, task02));
 
         final RuntimeException thrown = assertThrows(RuntimeException.class,
             () -> taskManager.handleRevocation(union(HashSet::new, taskId01Partitions, taskId02Partitions)));
+
         assertThat(thrown.getCause().getMessage(), is("task 0_1 suspend boom!"));
 
-        assertThat(task00.state(), is(Task.State.CREATED));
-        assertThat(task01.state(), is(Task.State.SUSPENDED));
-        assertThat(task02.state(), is(Task.State.SUSPENDED));
-
+        verify(task01).suspend();
+        verify(task02).suspend();
+        verify(task00, never()).suspend();
         verifyNoInteractions(activeTaskCreator);
     }
 
