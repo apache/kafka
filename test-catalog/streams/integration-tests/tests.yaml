@@ -9,6 +9,8 @@ org.apache.kafka.streams.integration.AdjustStreamThreadCountTest:
 - shouldnNotRemoveStreamThreadWithinTimeout
 - testConcurrentlyAccessThreads
 - testRebalanceHappensBeforeStreamThreadGetDown
+org.apache.kafka.streams.integration.AtLeastOnceDeliveryMessageLossIntegrationTest:
+- shouldCommitOffsetsAndProduceOutputRecordsWhenProducerFailsWithMessageTooLarge
 org.apache.kafka.streams.integration.ConsistencyVectorIntegrationTest:
 - shouldHaveSamePositionBoundActiveAndStandBy
 org.apache.kafka.streams.integration.DeadLetterQueueIntegrationTest:
