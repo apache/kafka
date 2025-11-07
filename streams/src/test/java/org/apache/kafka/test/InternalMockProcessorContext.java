@@ -322,7 +322,7 @@ public class InternalMockProcessorContext<KOut, VOut>
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
-        return schedule(null, interval, type, callback);
+        throw new UnsupportedOperationException("schedule() not supported.");
     }
 
     @Override

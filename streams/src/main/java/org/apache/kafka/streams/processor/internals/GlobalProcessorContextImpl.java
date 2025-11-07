@@ -131,7 +131,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext<Object,
      */
     @Override
     public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
-        return schedule(null, interval, type, callback);
+        throw new UnsupportedOperationException("this should not happen: schedule() not supported in global processor context.");
     }
 
     @Override

@@ -55,7 +55,9 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
 
     public MockApiProcessor(final PunctuationType punctuationType,
                             final long scheduleInterval) {
-        this(punctuationType, null, scheduleInterval);
+        this.punctuationType = punctuationType;
+        this.startTime = null;  // unanchored schedule so start time is undefined
+        this.scheduleInterval = scheduleInterval;
     }
 
     public MockApiProcessor(final PunctuationType punctuationType,
@@ -74,11 +76,17 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
     public void init(final ProcessorContext<KOut, VOut> context) {
         this.context = context;
         if (scheduleInterval > 0L) {
-            scheduleCancellable = context.schedule(
-                startTime,
-                Duration.ofMillis(scheduleInterval),
-                punctuationType,
-                (punctuationType == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime)::add
+            scheduleCancellable = (startTime == null)
+                    ? context.schedule(
+                    Duration.ofMillis(scheduleInterval),
+                    punctuationType,
+                    (punctuationType == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime)::add
+            )
+                    : context.schedule(
+                    startTime,
+                    Duration.ofMillis(scheduleInterval),
+                    punctuationType,
+                    (punctuationType == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime)::add
             );
         }
     }

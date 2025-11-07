@@ -308,8 +308,13 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
-        return schedule(null, interval, type, callback);
-    }
+        throwUnsupportedOperationExceptionIfStandby("schedule");
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(interval, "interval");
+        final long intervalMs = validateMillisecondDuration(interval, msgPrefix);
+        if (intervalMs < 1) {
+            throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
+        }
+        return streamTask.schedule(intervalMs, type, callback);    }
 
     @Override
     public Cancellable schedule(

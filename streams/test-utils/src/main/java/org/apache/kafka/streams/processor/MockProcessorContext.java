@@ -87,6 +87,13 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         private final Punctuator punctuator;
         private boolean cancelled = false;
 
+        private CapturedPunctuator(final long intervalMs, final PunctuationType type, final Punctuator punctuator) {
+            this.startTime = null;  // unanchored punctuator so start time is undefined
+            this.intervalMs = intervalMs;
+            this.type = type;
+            this.punctuator = punctuator;
+        }
+
         private CapturedPunctuator(final Instant startTime, final long intervalMs, final PunctuationType type, final Punctuator punctuator) {
             this.startTime = startTime;
             this.intervalMs = intervalMs;
@@ -466,8 +473,13 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
-        return schedule(null, interval, type, callback);
-    }
+        final long intervalMs = ApiUtils.validateMillisecondDuration(interval, "interval");
+        if (intervalMs < 1) {
+            throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
+        }
+        final CapturedPunctuator capturedPunctuator = new CapturedPunctuator(intervalMs, type, callback);
+        punctuators.add(capturedPunctuator);
+        return capturedPunctuator::cancel;    }
 
     @Override
     public Cancellable schedule(final Instant startTime,
@@ -479,9 +491,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
             throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
         }
         final CapturedPunctuator capturedPunctuator = new CapturedPunctuator(startTime, intervalMs, type, callback);
-
         punctuators.add(capturedPunctuator);
-
         return capturedPunctuator::cancel;
     }
 

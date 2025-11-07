@@ -1182,7 +1182,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @throws IllegalStateException if the current node is not null
      */
     public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator punctuator) {
-        return schedule(null, interval, type, punctuator);
+        switch (type) {
+            case STREAM_TIME:
+                // align punctuation to 0L, punctuate as soon as we have data
+                return schedule(0L, interval, type, punctuator, false);
+            case WALL_CLOCK_TIME:
+                // align punctuation to now, punctuate after interval has elapsed
+                return schedule(time.milliseconds() + interval, interval, type, punctuator, false);
+            default:
+                throw new IllegalArgumentException("Unrecognized PunctuationType: " + type);
+        }
     }
 
     /**
@@ -1194,18 +1203,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @throws IllegalStateException if the current node is not null
      */
     public Cancellable schedule(final Instant startTime, final long interval, final PunctuationType type, final Punctuator punctuator) {
-        if (startTime == null) {
-            switch (type) {
-                case STREAM_TIME:
-                    // align punctuation to 0L, punctuate as soon as we have data
-                    return schedule(0L, interval, type, punctuator, false);
-                case WALL_CLOCK_TIME:
-                    // align punctuation to now, punctuate after interval has elapsed
-                    return schedule(time.milliseconds() + interval, interval, type, punctuator, false);
-                default:
-                    throw new IllegalArgumentException("Unrecognized PunctuationType: " + type);
-            }
-        }
         return schedule(startTime.toEpochMilli(), interval, type, punctuator, true);
     }
 
