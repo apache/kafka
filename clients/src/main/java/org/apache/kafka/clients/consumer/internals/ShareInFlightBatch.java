@@ -129,37 +129,30 @@ public class ShareInFlightBatch<K, V> {
         return currentAcknowledgements;
     }
 
-    void renew(Acknowledgements acknowledgements) {
+    int renew(Acknowledgements acknowledgements) {
+        int recordsRenewed = 0;
+        boolean isCompletedExceptionally = acknowledgements.isCompletedExceptionally();
         if (acknowledgements.isCompleted()) {
-            if (acknowledgements.getAcknowledgeException() == null) {
-                Map<Long, AcknowledgeType> ackTypeMap = acknowledgements.getAcknowledgementsTypeMap();
-                ackTypeMap.forEach((offset, ackType) -> {
-                    if (ackType == AcknowledgeType.RENEW) {
-                        ConsumerRecord<K, V> record = renewingRecords.remove(offset);
-                        if (record != null) {
-                            inFlightRecords.put(offset, record);
-                        }
-                    } else {
-                        if (renewingRecords.get(offset) != null) {
-                            throw new IllegalStateException("Trying to renew a record incorrectly");
-                        }
+            Map<Long, AcknowledgeType> ackTypeMap = acknowledgements.getAcknowledgementsTypeMap();
+            for(Map.Entry<Long, AcknowledgeType> ackTypeEntry : ackTypeMap.entrySet()) {
+                long offset = ackTypeEntry.getKey();
+                AcknowledgeType ackType = ackTypeEntry.getValue();
+                if (ackType == AcknowledgeType.RENEW) {
+                    ConsumerRecord<K, V> record = renewingRecords.remove(offset);
+                    if (record != null && !isCompletedExceptionally) {
+                        inFlightRecords.put(offset, record);
+                        recordsRenewed++;
                     }
-                });
-            } else {
-                Map<Long, AcknowledgeType> ackTypeMap = acknowledgements.getAcknowledgementsTypeMap();
-                ackTypeMap.forEach((offset, ackType) -> {
-                    if (ackType == AcknowledgeType.RENEW) {
-                        renewingRecords.remove(offset);
-                    } else {
-                        if (renewingRecords.get(offset) != null) {
-                            throw new IllegalStateException("Trying to renew a record incorrectly");
-                        }
+                } else {
+                    if (renewingRecords.get(offset) != null) {
+                        throw new IllegalStateException("Trying to renew a record incorrectly");
                     }
-                });
+                }
             }
         } else {
             throw new IllegalStateException("Renewing with uncompleted acknowledgements");
         }
+        return recordsRenewed;
     }
 
     Acknowledgements getAcknowledgements() {

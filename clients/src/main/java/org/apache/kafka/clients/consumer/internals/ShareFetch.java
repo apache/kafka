@@ -196,8 +196,14 @@ public class ShareFetch<K, V> {
      *
      * @param acknowledgementsMap Map from topic-partition to acknowledgements for
      *                            completed renew acknowledgements
+     *
+     * @return The number of records renewed
      */
-    public void renew(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
-        acknowledgementsMap.forEach((tip, acknowledgements) -> batches.get(tip).renew(acknowledgements));
+    public int renew(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
+        int recordsRenewed = 0;
+        for (Map.Entry<TopicIdPartition, Acknowledgements> entry : acknowledgementsMap.entrySet()) {
+            recordsRenewed += batches.get(entry.getKey()).renew(entry.getValue());
+        }
+        return recordsRenewed;
     }
 }
