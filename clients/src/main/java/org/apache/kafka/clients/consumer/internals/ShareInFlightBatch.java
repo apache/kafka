@@ -134,7 +134,7 @@ public class ShareInFlightBatch<K, V> {
         boolean isCompletedExceptionally = acknowledgements.isCompletedExceptionally();
         if (acknowledgements.isCompleted()) {
             Map<Long, AcknowledgeType> ackTypeMap = acknowledgements.getAcknowledgementsTypeMap();
-            for(Map.Entry<Long, AcknowledgeType> ackTypeEntry : ackTypeMap.entrySet()) {
+            for (Map.Entry<Long, AcknowledgeType> ackTypeEntry : ackTypeMap.entrySet()) {
                 long offset = ackTypeEntry.getKey();
                 AcknowledgeType ackType = ackTypeEntry.getValue();
                 if (ackType == AcknowledgeType.RENEW) {
