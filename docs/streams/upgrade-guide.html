@@ -138,12 +138,12 @@
     </p>
 
     <p>
-        Kafka Streams now provides rebalance listener metrics to monitor the latency of rebalance callbacks.
+        Kafka Streams now provides rebalance listener metrics for "streams" groups to monitor the latency of rebalance callbacks.
         The following metrics are available at the thread level: <code>tasks-revoked-latency-avg</code>, <code>tasks-revoked-latency-max</code>,
         <code>tasks-assigned-latency-avg</code>, <code>tasks-assigned-latency-max</code>, <code>tasks-lost-latency-avg</code>, and <code>tasks-lost-latency-max</code>.
-        These metrics are particularly useful for applications using the new Streams Rebalance Protocol (KIP-1071).
+        Note that these metrics are only populated when the Streams Rebalance Protocol (KIP-1071) is enabled.
         Users migrating from the consumer rebalance listener metrics should update their monitoring dashboards and alerts to use these new streams-specific metrics.
-        More details can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1216%3A+Add+rebalance+listener+metrics+for+Kafka+Streams">KIP-1216</a>.
+        More details can be found in <a href="https://cwiki.apache.org/confluence/x/ywnxFg">KIP-1216</a>.
     </p>
 
     <h3><a id="streams_api_changes_410" href="#streams_api_changes_410">Streams API changes in 4.1.0</a></h3>
