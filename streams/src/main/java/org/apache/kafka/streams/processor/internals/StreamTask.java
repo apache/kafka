@@ -242,6 +242,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return partitionQueues;
     }
 
+    // For testing only
     void setLastNotReadyLogTime(final long lastNotReadyLogTime) {
         this.lastNotReadyLogTime = Optional.of(lastNotReadyLogTime);
     }

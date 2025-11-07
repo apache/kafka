@@ -1625,8 +1625,8 @@ public class StreamTaskTest {
             final long initialTime = time.milliseconds();
             task.setLastNotReadyLogTime(initialTime - 100_000L);
             
-            // Advance time by 19 seconds
-            long newTime = time.milliseconds() + 19_000L;
+            // Advance time by 19.999 seconds
+            long newTime = time.milliseconds() + 19_999L;
             
             // Should not trigger logging after being stale for 119 seconds
             assertFalse(task.isProcessable(newTime));

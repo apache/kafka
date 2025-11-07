@@ -4594,7 +4594,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(new ShareRequestMetadata(memberId, shareSessionEpoch), util.List.of(
+      new ShareSessionContext(shareSessionEpoch, util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)))
     )
 
