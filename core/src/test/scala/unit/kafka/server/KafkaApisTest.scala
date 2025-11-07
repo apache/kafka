@@ -10742,7 +10742,7 @@ class KafkaApisTest extends Logging {
   def testStreamsGroupHeartbeatReturnsUnsupportedVersion(): Unit = {
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
 
-    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest).build())
     metadataCache = {
       val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
       val delta = new MetadataDelta(MetadataImage.EMPTY)
@@ -10772,7 +10772,7 @@ class KafkaApisTest extends Logging {
 
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
 
-    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest).build())
 
     val future = new CompletableFuture[StreamsGroupHeartbeatResult]()
     when(groupCoordinator.streamsGroupHeartbeat(
@@ -10821,7 +10821,7 @@ class KafkaApisTest extends Logging {
         )
     )
 
-    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest).build())
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
     val acls = Map(
@@ -10870,7 +10870,7 @@ class KafkaApisTest extends Logging {
 
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
 
-    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest).build())
 
     val future = new CompletableFuture[StreamsGroupHeartbeatResult]()
     when(groupCoordinator.streamsGroupHeartbeat(
@@ -10895,7 +10895,7 @@ class KafkaApisTest extends Logging {
 
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
 
-    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest).build())
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
@@ -10936,7 +10936,7 @@ class KafkaApisTest extends Logging {
         )
     )
 
-    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest).build())
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
     val acls = Map(
@@ -10971,7 +10971,7 @@ class KafkaApisTest extends Logging {
 
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
 
-    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest).build())
 
     kafkaApis = createKafkaApis(
       overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,consumer")
@@ -10992,7 +10992,7 @@ class KafkaApisTest extends Logging {
 
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
 
-    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest).build())
 
     kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -11022,7 +11022,7 @@ class KafkaApisTest extends Logging {
         )
     )
 
-    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest).build())
 
     kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -11052,7 +11052,7 @@ class KafkaApisTest extends Logging {
         )
     )
 
-    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest).build())
 
     kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -11072,7 +11072,7 @@ class KafkaApisTest extends Logging {
 
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
 
-    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest).build())
 
     val future = new CompletableFuture[StreamsGroupHeartbeatResult]()
     when(groupCoordinator.streamsGroupHeartbeat(
@@ -11103,7 +11103,7 @@ class KafkaApisTest extends Logging {
 
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
 
-    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest).build())
 
     val future = new CompletableFuture[StreamsGroupHeartbeatResult]()
     when(groupCoordinator.streamsGroupHeartbeat(
@@ -11159,7 +11159,7 @@ class KafkaApisTest extends Logging {
     when(metadataCache.features()).thenReturn(features)
 
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
-    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest).build())
 
     val future = new CompletableFuture[StreamsGroupHeartbeatResult]()
     when(groupCoordinator.streamsGroupHeartbeat(
@@ -11390,7 +11390,7 @@ class KafkaApisTest extends Logging {
     val streamsGroupDescribeRequestData = new StreamsGroupDescribeRequestData()
       .setIncludeAuthorizedOperations(includeAuthorizedOperations)
     streamsGroupDescribeRequestData.groupIds.addAll(groupIds)
-    val requestChannelRequest = buildRequest(new StreamsGroupDescribeRequest.Builder(streamsGroupDescribeRequestData, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupDescribeRequest.Builder(streamsGroupDescribeRequestData).build())
 
     val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
     when(groupCoordinator.streamsGroupDescribe(
@@ -11463,7 +11463,7 @@ class KafkaApisTest extends Logging {
     val groupId = "group0"
     val streamsGroupDescribeRequestData = new StreamsGroupDescribeRequestData()
     streamsGroupDescribeRequestData.groupIds.add(groupId)
-    val requestChannelRequest = buildRequest(new StreamsGroupDescribeRequest.Builder(streamsGroupDescribeRequestData, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupDescribeRequest.Builder(streamsGroupDescribeRequestData).build())
 
     val errorCode = Errors.UNSUPPORTED_VERSION.code
     val expectedDescribedGroup = new StreamsGroupDescribeResponseData.DescribedGroup().setGroupId(groupId).setErrorCode(errorCode)
@@ -11496,7 +11496,7 @@ class KafkaApisTest extends Logging {
 
     val streamsGroupDescribeRequestData = new StreamsGroupDescribeRequestData()
     streamsGroupDescribeRequestData.groupIds.add("group-id")
-    val requestChannelRequest = buildRequest(new StreamsGroupDescribeRequest.Builder(streamsGroupDescribeRequestData, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupDescribeRequest.Builder(streamsGroupDescribeRequestData).build())
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
@@ -11527,7 +11527,7 @@ class KafkaApisTest extends Logging {
 
     val streamsGroupDescribeRequestData = new StreamsGroupDescribeRequestData()
     streamsGroupDescribeRequestData.groupIds.add("group-id")
-    val requestChannelRequest = buildRequest(new StreamsGroupDescribeRequest.Builder(streamsGroupDescribeRequestData, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupDescribeRequest.Builder(streamsGroupDescribeRequestData).build())
 
     val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
     when(groupCoordinator.streamsGroupDescribe(
@@ -11559,7 +11559,7 @@ class KafkaApisTest extends Logging {
     val streamsGroupDescribeRequestData = new StreamsGroupDescribeRequestData()
       .setIncludeAuthorizedOperations(includeAuthorizedOperations)
     streamsGroupDescribeRequestData.groupIds.addAll(groupIds)
-    val requestChannelRequest = buildRequest(new StreamsGroupDescribeRequest.Builder(streamsGroupDescribeRequestData, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupDescribeRequest.Builder(streamsGroupDescribeRequestData).build())
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
     val acls = Map(
