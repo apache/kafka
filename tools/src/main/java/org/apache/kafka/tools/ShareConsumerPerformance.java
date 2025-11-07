@@ -80,7 +80,7 @@ public class ShareConsumerPerformance {
                 if (options.threads() == 1) {
                     clientIds.add(options.props().getProperty(ConsumerConfig.CLIENT_ID_CONFIG));
                     shareConsumers.add(shareConsumerCreator.apply(options.props()));
-                    continue;
+                    break;
                 }
                 Properties shareConsumerProps = options.props();
                 String shareConsumerClientId = options.props().getProperty(ConsumerConfig.CLIENT_ID_CONFIG) + "-" + (i + 1);
