@@ -90,6 +90,7 @@ final class SchemaGenerator {
         }
 
         // Generate schemas for inline structures
+        // The top-level struct can never be null, so we pass Versions.NONE for schemaNullableVersions
         generateSchemas(message.dataClassName(), message.struct(),
             message.struct().versions(), Versions.NONE);
     }
