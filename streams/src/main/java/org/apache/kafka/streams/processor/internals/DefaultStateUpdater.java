@@ -208,11 +208,7 @@ public class DefaultStateUpdater implements StateUpdater {
                             addTask(taskAndAction.task());
                             break;
                         case REMOVE:
-                            if (taskAndAction.futureForRemove() == null) {
-                                removeTask(taskAndAction.taskId());
-                            } else {
-                                removeTask(taskAndAction.taskId(), taskAndAction.futureForRemove());
-                            }
+                            removeTask(taskAndAction.taskId(), taskAndAction.futureForRemove());
                             break;
                         default:
                             throw new IllegalStateException("Unknown action type " + action);
@@ -604,33 +600,6 @@ public class DefaultStateUpdater implements StateUpdater {
                 return false;
             } finally {
                 exceptionsAndFailedTasksLock.unlock();
-            }
-        }
-
-        private void removeTask(final TaskId taskId) {
-            final Task task;
-            if (updatingTasks.containsKey(taskId)) {
-                task = updatingTasks.get(taskId);
-                measureCheckpointLatency(() -> task.maybeCheckpoint(true));
-                final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
-                changelogReader.unregister(changelogPartitions);
-                removedTasks.add(task);
-                updatingTasks.remove(taskId);
-                if (task.isActive()) {
-                    transitToUpdateStandbysIfOnlyStandbysLeft();
-                }
-                log.info((task.isActive() ? "Active" : "Standby")
-                    + " task " + task.id() + " was removed from the updating tasks and added to the removed tasks.");
-            } else if (pausedTasks.containsKey(taskId)) {
-                task = pausedTasks.get(taskId);
-                final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
-                changelogReader.unregister(changelogPartitions);
-                removedTasks.add(task);
-                pausedTasks.remove(taskId);
-                log.info((task.isActive() ? "Active" : "Standby")
-                    + " task " + task.id() + " was removed from the paused tasks and added to the removed tasks.");
-            } else {
-                log.info("Task " + taskId + " was not removed since it is not updating or paused.");
             }
         }
 
