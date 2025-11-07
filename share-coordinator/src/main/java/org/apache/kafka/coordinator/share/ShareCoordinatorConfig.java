@@ -80,7 +80,7 @@ public class ShareCoordinatorConfig {
     public static final int COLD_PARTITION_SNAPSHOT_INTERVAL_MS_DEFAULT = 5 * 60 * 1000; // 5 minutes
     public static final String COLD_PARTITION_SNAPSHOT_INTERVAL_MS_DOC = "The duration in milliseconds that the share coordinator will wait between force snapshotting share partitions which are not being updated.";
 
-    public static final String APPEND_MAX_BUFFER_SIZE = "share.coordinator.append.max.buffer.size";
+    public static final String APPEND_MAX_BUFFER_SIZE_CONFIG = "share.coordinator.append.max.buffer.size";
     public static final int APPEND_MAX_BUFFER_SIZE_DEFAULT = 1024 * 1024;
     public static final String APPEND_MAX_BUFFER_SIZE_DOC = "The largest buffer size allowed by ShareCoordinator (It is recommended not to exceed the maximum allowed message size).";
 
@@ -97,7 +97,7 @@ public class ShareCoordinatorConfig {
         .define(WRITE_TIMEOUT_MS_CONFIG, INT, WRITE_TIMEOUT_MS_DEFAULT, atLeast(1), HIGH, WRITE_TIMEOUT_MS_DOC)
         .defineInternal(STATE_TOPIC_PRUNE_INTERVAL_MS_CONFIG, INT, STATE_TOPIC_PRUNE_INTERVAL_MS_DEFAULT, atLeast(1), LOW, STATE_TOPIC_PRUNE_INTERVAL_MS_DOC)
         .defineInternal(COLD_PARTITION_SNAPSHOT_INTERVAL_MS_CONFIG, INT, COLD_PARTITION_SNAPSHOT_INTERVAL_MS_DEFAULT, atLeast(1), LOW, COLD_PARTITION_SNAPSHOT_INTERVAL_MS_DOC)
-        .define(APPEND_MAX_BUFFER_SIZE, INT, APPEND_MAX_BUFFER_SIZE_DEFAULT, atLeast(512 * 1024), MEDIUM, APPEND_MAX_BUFFER_SIZE_DOC);
+        .define(APPEND_MAX_BUFFER_SIZE_CONFIG, INT, APPEND_MAX_BUFFER_SIZE_DEFAULT, atLeast(512 * 1024), MEDIUM, APPEND_MAX_BUFFER_SIZE_DOC);
 
     private final int stateTopicNumPartitions;
     private final short stateTopicReplicationFactor;
@@ -111,7 +111,8 @@ public class ShareCoordinatorConfig {
     private final int appendLingerMs;
     private final int pruneIntervalMs;
     private final int coldPartitionSnapshotIntervalMs;
-    private final int appendMaxBufferSize;
+
+    private final AbstractConfig config;
 
     public ShareCoordinatorConfig(AbstractConfig config) {
         stateTopicNumPartitions = config.getInt(STATE_TOPIC_NUM_PARTITIONS_CONFIG);
@@ -128,7 +129,7 @@ public class ShareCoordinatorConfig {
         appendLingerMs = config.getInt(APPEND_LINGER_MS_CONFIG);
         pruneIntervalMs = config.getInt(STATE_TOPIC_PRUNE_INTERVAL_MS_CONFIG);
         coldPartitionSnapshotIntervalMs = config.getInt(COLD_PARTITION_SNAPSHOT_INTERVAL_MS_CONFIG);
-        appendMaxBufferSize = config.getInt(APPEND_MAX_BUFFER_SIZE);
+        this.config = config;
         validate();
     }
 
@@ -181,7 +182,7 @@ public class ShareCoordinatorConfig {
     }
 
     public int shareCoordinatorAppendMaxBufferSize() {
-        return appendMaxBufferSize;
+        return config.getInt(APPEND_MAX_BUFFER_SIZE_CONFIG);
     }
 
     private void validate() {

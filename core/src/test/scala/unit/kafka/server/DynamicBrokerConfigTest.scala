@@ -31,6 +31,8 @@ import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetric, Metrics, MetricsReporter}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.DynamicThreadPool
@@ -1104,6 +1106,23 @@ class DynamicBrokerConfigTest {
     // Reporter implementing neither interface => nothing should be added
     updateReporter(classOf[MockMetricsReporter])
     verifyNoMoreInteractions(telemetryPlugin)
+  }
+
+  @Test
+  def testCoordinatorConfigBufferSizeUpdates(): Unit = {
+    val origProps = TestUtils.createBrokerConfig(0, port = 8181)
+    origProps.put(GroupCoordinatorConfig.APPEND_MAX_BUFFER_SIZE_CONFIG, "2097152")
+    origProps.put(ShareCoordinatorConfig.APPEND_MAX_BUFFER_SIZE_CONFIG, "3145728")
+    val ctx = new DynamicLogConfigContext(origProps)
+    assertEquals(2 * 1024 * 1024, ctx.config.groupCoordinatorConfig.appendMaxBufferSize())
+    assertEquals(3 * 1024 * 1024, ctx.config.shareCoordinatorConfig.shareCoordinatorAppendMaxBufferSize())
+
+    val props = new Properties()
+    props.put(GroupCoordinatorConfig.APPEND_MAX_BUFFER_SIZE_CONFIG, "4194304")
+    props.put(ShareCoordinatorConfig.APPEND_MAX_BUFFER_SIZE_CONFIG, "5242880")
+    ctx.config.dynamicConfig.updateDefaultConfig(props)
+    assertEquals(4 * 1024 * 1024, ctx.config.groupCoordinatorConfig.appendMaxBufferSize())
+    assertEquals(5 * 1024 * 1024, ctx.config.shareCoordinatorConfig.shareCoordinatorAppendMaxBufferSize())
   }
 }
 

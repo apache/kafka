@@ -64,6 +64,16 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     public static final String BATCH_FLUSH_TIME_METRIC_NAME = "batch-flush-time-ms";
 
     /**
+     * The coordinator append buffer size metric name.
+     */
+    public static final String APPEND_BUFFER_SIZE_METRIC_NAME = "coordinator-append-buffer-size-bytes";
+
+    /**
+     * The coordinator append buffer skip cache count metric name.
+     */
+    public static final String APPEND_BUFFER_SKIP_CACHE_COUNT_METRIC_NAME = "coordinator-append-buffer-skip-cache-count";
+
+    /**
      * Metric to count the number of partitions in Loading state.
      */
     private final MetricName numPartitionsLoading;
@@ -85,6 +95,17 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
      * Metric to count the size of the processor queue.
      */
     private final MetricName eventQueueSize;
+
+    /**
+     * Metric to count the size of the coordinator append buffer.
+     */
+    private final MetricName appendBufferSize;
+
+    /**
+     * Metric to count the number of over-sized append buffers that were discarded.
+     */
+    private final MetricName appendBufferSkipCacheCount;
+    private final AtomicLong appendBufferSkipCacheCounter = new AtomicLong(0);
 
     /**
      * The Kafka metrics registry.
@@ -145,6 +166,17 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
 
         this.eventQueueSize = kafkaMetricName("event-queue-size", "The event accumulator queue size.");
 
+        this.appendBufferSize = kafkaMetricName(
+            APPEND_BUFFER_SIZE_METRIC_NAME,
+            "The current total size in bytes of the append buffers being held in the coordinator's cache."
+        );
+
+        this.appendBufferSkipCacheCount = kafkaMetricName(
+            APPEND_BUFFER_SKIP_CACHE_COUNT_METRIC_NAME,
+            "The count of over-sized append buffers that were discarded instead of being cached upon release."
+        );
+
+        metrics.addMetric(appendBufferSkipCacheCount, (Gauge<Long>) (config, now) -> appendBufferSkipCacheCounter.get());
         metrics.addMetric(numPartitionsLoading, (Gauge<Long>) (config, now) -> numPartitionsLoadingCounter.get());
         metrics.addMetric(numPartitionsActive, (Gauge<Long>) (config, now) -> numPartitionsActiveCounter.get());
         metrics.addMetric(numPartitionsFailed, (Gauge<Long>) (config, now) -> numPartitionsFailedCounter.get());
@@ -226,7 +258,9 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
             numPartitionsLoading,
             numPartitionsActive,
             numPartitionsFailed,
-            eventQueueSize
+            eventQueueSize,
+            appendBufferSize,
+            appendBufferSkipCacheCount
         ).forEach(metrics::removeMetric);
 
         metrics.removeSensor(partitionLoadSensor.name());
@@ -307,5 +341,15 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     @Override
     public void registerEventQueueSizeGauge(Supplier<Integer> sizeSupplier) {
         metrics.addMetric(eventQueueSize, (Gauge<Long>) (config, now) -> (long) sizeSupplier.get());
+    }
+
+    @Override
+    public void registerAppendBufferSizeGauge(Supplier<Long> sizeSupplier) {
+        metrics.addMetric(appendBufferSize, (Gauge<Long>) (config, now) -> sizeSupplier.get());
+    }
+
+    @Override
+    public void recordAppendBufferDiscarded() {
+        appendBufferSkipCacheCounter.incrementAndGet();
     }
 }

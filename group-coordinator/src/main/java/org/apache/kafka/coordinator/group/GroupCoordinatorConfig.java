@@ -108,7 +108,7 @@ public class GroupCoordinatorConfig {
     public static final CompressionType OFFSETS_TOPIC_COMPRESSION_CODEC_DEFAULT = CompressionType.NONE;
     public static final String OFFSETS_TOPIC_COMPRESSION_CODEC_DOC = "Compression codec for the offsets topic - compression may be used to achieve \"atomic\" commits.";
 
-    public static final String APPEND_MAX_BUFFER_SIZE = "group.coordinator.append.max.buffer.size";
+    public static final String APPEND_MAX_BUFFER_SIZE_CONFIG = "group.coordinator.append.max.buffer.size";
     public static final int APPEND_MAX_BUFFER_SIZE_DEFAULT = 1024 * 1024;
     public static final String APPEND_MAX_BUFFER_SIZE_DOC = "The largest buffer size allowed by GroupCoordinator (It is recommended not to exceed the maximum allowed message size).";
 
@@ -311,7 +311,7 @@ public class GroupCoordinatorConfig {
         .define(OFFSETS_TOPIC_PARTITIONS_CONFIG, INT, OFFSETS_TOPIC_PARTITIONS_DEFAULT, atLeast(1), HIGH, OFFSETS_TOPIC_PARTITIONS_DOC)
         .define(OFFSETS_TOPIC_SEGMENT_BYTES_CONFIG, INT, OFFSETS_TOPIC_SEGMENT_BYTES_DEFAULT, atLeast(1), HIGH, OFFSETS_TOPIC_SEGMENT_BYTES_DOC)
         .define(OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, INT, (int) OFFSETS_TOPIC_COMPRESSION_CODEC_DEFAULT.id, HIGH, OFFSETS_TOPIC_COMPRESSION_CODEC_DOC)
-        .define(APPEND_MAX_BUFFER_SIZE, INT, APPEND_MAX_BUFFER_SIZE_DEFAULT, atLeast(512 * 1024), MEDIUM, APPEND_MAX_BUFFER_SIZE_DOC)
+        .define(APPEND_MAX_BUFFER_SIZE_CONFIG, INT, APPEND_MAX_BUFFER_SIZE_DEFAULT, atLeast(512 * 1024), MEDIUM, APPEND_MAX_BUFFER_SIZE_DOC)
 
         // Offset configs
         .define(OFFSET_METADATA_MAX_SIZE_CONFIG, INT, OFFSET_METADATA_MAX_SIZE_DEFAULT, HIGH, OFFSET_METADATA_MAX_SIZE_DOC)
@@ -373,7 +373,6 @@ public class GroupCoordinatorConfig {
     private final List<ConsumerGroupPartitionAssignor> consumerGroupAssignors;
     private final int offsetsTopicSegmentBytes;
     private final int offsetMetadataMaxSize;
-    private final int appendMaxBufferSize;
     private final int classicGroupMaxSize;
     private final int classicGroupInitialRebalanceDelayMs;
     private final int classicGroupMinSessionTimeoutMs;
@@ -412,6 +411,8 @@ public class GroupCoordinatorConfig {
     private final int streamsGroupNumStandbyReplicas;
     private final int streamsGroupMaxStandbyReplicas;
 
+    private final AbstractConfig config;
+
     @SuppressWarnings("this-escape")
     public GroupCoordinatorConfig(AbstractConfig config) {
         this.numThreads = config.getInt(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG);
@@ -422,7 +423,6 @@ public class GroupCoordinatorConfig {
         this.consumerGroupAssignors = consumerGroupAssignors(config);
         this.offsetsTopicSegmentBytes = config.getInt(GroupCoordinatorConfig.OFFSETS_TOPIC_SEGMENT_BYTES_CONFIG);
         this.offsetMetadataMaxSize = config.getInt(GroupCoordinatorConfig.OFFSET_METADATA_MAX_SIZE_CONFIG);
-        this.appendMaxBufferSize = config.getInt(GroupCoordinatorConfig.APPEND_MAX_BUFFER_SIZE);
         this.classicGroupMaxSize = config.getInt(GroupCoordinatorConfig.GROUP_MAX_SIZE_CONFIG);
         this.classicGroupInitialRebalanceDelayMs = config.getInt(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG);
         this.classicGroupMinSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
@@ -464,6 +464,7 @@ public class GroupCoordinatorConfig {
         this.streamsGroupMaxSize = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_SIZE_CONFIG);
         this.streamsGroupNumStandbyReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG);
         this.streamsGroupMaxStandbyReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_CONFIG);
+        this.config = config;
 
         // New group coordinator configs validation.
         require(consumerGroupMaxHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
@@ -707,7 +708,7 @@ public class GroupCoordinatorConfig {
      * The maximum buffer size that the coordinator can cache.
      */
     public int appendMaxBufferSize() {
-        return appendMaxBufferSize;
+        return config.getInt(GroupCoordinatorConfig.APPEND_MAX_BUFFER_SIZE_CONFIG);
     }
 
     /**

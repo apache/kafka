@@ -774,6 +774,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 bufferSupplier.release(currentBatch.builder.buffer());
             } else if (currentBatch.buffer.capacity() <= maxBufferSize) {
                 bufferSupplier.release(currentBatch.buffer);
+            } else {
+                runtimeMetrics.recordAppendBufferDiscarded();
             }
 
             currentBatch = null;
@@ -2082,6 +2084,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.appendLingerMs = appendLingerMs;
         this.executorService = executorService;
         this.appendMaxBufferSizeSupplied = appendMaxBufferSizeSupplier;
+        this.runtimeMetrics.registerAppendBufferSizeGauge(
+            () -> coordinators.values().stream().mapToLong(c -> c.bufferSupplier.size()).sum()
+        );
     }
 
     /**

@@ -198,6 +198,7 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 111);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, 222);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_CONFIG, 15 * 60 * 1000);
+        configs.put(GroupCoordinatorConfig.APPEND_MAX_BUFFER_SIZE_CONFIG, 2 * 1024 * 1024);
 
         GroupCoordinatorConfig config = createConfig(configs);
 
@@ -227,6 +228,7 @@ public class GroupCoordinatorConfigTest {
         assertEquals(111, config.consumerGroupMinHeartbeatIntervalMs());
         assertEquals(222, config.consumerGroupMaxHeartbeatIntervalMs());
         assertEquals(15 * 60 * 1000, config.consumerGroupRegexRefreshIntervalMs());
+        assertEquals(2 * 1024 * 1024, config.appendMaxBufferSize());
     }
 
     @Test
@@ -355,6 +357,7 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 5);
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 5);
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG, 1000);
+        configs.put(GroupCoordinatorConfig.APPEND_MAX_BUFFER_SIZE_CONFIG, 1024 * 1024);
 
         return createConfig(configs);
     }
