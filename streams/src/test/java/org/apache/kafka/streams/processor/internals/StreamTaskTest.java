@@ -94,7 +94,6 @@ import org.mockito.quality.Strictness;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;
@@ -1615,10 +1614,6 @@ public class StreamTaskTest {
         task.completeRestoration(noOpResetter -> { });
 
         task.addRecords(partition1, singleton(getConsumerRecordWithOffsetAsTimestamp(partition1, 0)));
-        
-        // Set lastNotReadyLogTime to simulate staleness
-        final Field lastNotReadyLogTimeField = StreamTask.class.getDeclaredField("lastNotReadyLogTime");
-        lastNotReadyLogTimeField.setAccessible(true);
 
         try (final LogCaptureAppender streamTaskAppender = LogCaptureAppender.createAndRegister(StreamTask.class);
              final LogCaptureAppender partitionGroupAppender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
@@ -1628,7 +1623,7 @@ public class StreamTaskTest {
             
             // Set lastNotReadyLogTime to 100 seconds ago
             final long initialTime = time.milliseconds();
-            lastNotReadyLogTimeField.set(task, Optional.of(initialTime - 100_000L));
+            task.setLastNotReadyLogTime(initialTime - 100_000L);
             
             // Advance time by approximately 5 seconds
             long newTime = time.milliseconds() + 5_000L;
@@ -1636,7 +1631,7 @@ public class StreamTaskTest {
             // Should not trigger logging after being stale for 105 seconds
             assertFalse(task.isProcessable(newTime));
             List<String> messages = streamTaskAppender.getMessages();
-            assertEquals(0, messages.size(), "No log message should be logged before 20 seconds");
+            assertEquals(0, messages.size(), "No log message should be logged before 120 seconds");
 
             // Advance time by approximately 20 seconds
             newTime = time.milliseconds() + 20_000L;

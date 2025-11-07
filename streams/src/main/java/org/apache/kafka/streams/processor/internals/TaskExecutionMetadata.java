@@ -74,16 +74,24 @@ public class TaskExecutionMetadata {
         
         if (!hasNamedTopologies) {
             // TODO implement error handling/backoff for non-named topologies (needs KIP)
-            logMessage = String.format("Task %s processing check for unnamed topology '%s'", task.id(), topologyName);
             canProcess = !pausedTopologies.contains(UNNAMED_TOPOLOGY);
+            if (canProcess) {
+                logMessage = String.format("Task %s can be processed: topology is not paused", task.id());
+            } else {
+                logMessage = String.format("Task %s can't be processed: topology is paused", task.id());
+            }
         } else {
             if (pausedTopologies.contains(topologyName)) {
                 canProcess = false;
                 logMessage = String.format("Task %s can't be processed: topology '%s' is paused", task.id(), topologyName);
             } else {
-                logMessage = String.format("Task %s processing check for named topology '%s'", task.id(), topologyName);
                 final NamedTopologyMetadata metadata = topologyNameToErrorMetadata.get(topologyName);
                 canProcess = metadata == null || (metadata.canProcess() && metadata.canProcessTask(task, now));
+                if (canProcess) {
+                    logMessage = String.format("Task %s can be processed for named topology '%s'", task.id(), topologyName);
+                } else {
+                    logMessage = String.format("Task %s can't be processed for named topology '%s'", task.id(), topologyName);
+                }
             }
         }
         
