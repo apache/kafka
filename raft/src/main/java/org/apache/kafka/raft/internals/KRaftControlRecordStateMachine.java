@@ -35,6 +35,8 @@ import org.apache.kafka.snapshot.SnapshotReader;
 
 import org.slf4j.Logger;
 
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 
@@ -75,6 +77,7 @@ public final class KRaftControlRecordStateMachine {
     private final KafkaRaftMetrics kafkaRaftMetrics;
     private final ExternalKRaftMetrics externalKRaftMetrics;
     private final VoterSet staticVoterSet;
+    private final List<Integer> initBootstrapNodes = new LinkedList<>();
 
     /**
      * Constructs an internal log listener
@@ -215,6 +218,14 @@ public final class KRaftControlRecordStateMachine {
             return kraftVersionHistory.valueAtOrBefore(offset).
                 orElse(KRaftVersion.KRAFT_VERSION_0);
         }
+    }
+
+    public void setInitBootstrapNode(VoterSet initBootstrapNode) {
+        initBootstrapNode.voterNodes().forEach(voterNode -> this.initBootstrapNodes.add(voterNode.voterKey().id()));
+    }
+
+    public List<Integer> initBootstrapNodes() {
+        return initBootstrapNodes;
     }
 
     private void checkOffsetIsValid(long offset) {
