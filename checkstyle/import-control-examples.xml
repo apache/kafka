@@ -34,7 +34,7 @@
   <allow pkg="org.apache.kafka.clients.consumer" />
   <allow pkg="org.apache.kafka.clients.producer" />
   <allow pkg="org.apache.kafka.clients.admin" />
-  <allow pkg="org.apache.kafka.common" />
+  <allow pkg="org.apache.kafka.common" exact-match="true" />
   <allow pkg="org.apache.kafka.common.errors" />
   <allow pkg="org.apache.kafka.common.serialization" />
   

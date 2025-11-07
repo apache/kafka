@@ -19,6 +19,8 @@ package kafka.server.share;
 import kafka.server.ReplicaManager;
 import kafka.server.share.SharePartitionManager.SharePartitionListener;
 
+import org.apache.kafka.clients.consumer.AcknowledgeType;
+import org.apache.kafka.clients.consumer.ShareAcquireMode;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
@@ -84,6 +86,7 @@ import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -136,6 +139,16 @@ public class SharePartition {
          */
         FENCED
     }
+
+    /**
+     * To provide static mapping between acknowledgement type bytes to RecordState.
+     */
+    private static final Map<Byte, RecordState> ACK_TYPE_TO_RECORD_STATE = Map.of(
+        (byte) 0, RecordState.ARCHIVED,                             // Represents gap
+        AcknowledgeType.ACCEPT.id, RecordState.ACKNOWLEDGED,
+        AcknowledgeType.RELEASE.id, RecordState.AVAILABLE,
+        AcknowledgeType.REJECT.id, RecordState.ARCHIVED
+    );
 
     /**
      * The group id of the share partition belongs to.
@@ -277,6 +290,12 @@ public class SharePartition {
     private final DelayedShareFetchKey delayedShareFetchKey;
 
     /**
+     * The deliveryCompleteCount tracks the number of terminal (ACKNOWLEDGED / ARCHIVED) records within the
+     * cachedState. This is used in the calculations for determining the current Share Partition lag.
+     */
+    private final AtomicInteger deliveryCompleteCount;
+
+    /**
      * The state epoch is used to track the version of the state of the share partition.
      */
     private int stateEpoch;
@@ -361,6 +380,7 @@ public class SharePartition {
         this.sharePartitionMetrics = sharePartitionMetrics;
         this.timeoutHandler = releaseAcquisitionLockOnTimeout();
         this.registerGaugeMetrics();
+        this.deliveryCompleteCount = new AtomicInteger(0);
     }
 
     /**
@@ -467,6 +487,11 @@ public class SharePartition {
                         stateBatch.lastOffset(), RecordState.forId(stateBatch.deliveryState()), stateBatch.deliveryCount(),
                         null, timeoutHandler, sharePartitionMetrics);
                     cachedState.put(stateBatch.firstOffset(), inFlightBatch);
+                    // During initialization, deliveryCompleteCount is updated with the number of records that are in the
+                    // ACKNOWLEDGED or ARCHIVED state.
+                    if (isStateTerminal(RecordState.forId(stateBatch.deliveryState()))) {
+                        deliveryCompleteCount.addAndGet((int) (stateBatch.lastOffset() - stateBatch.firstOffset() + 1));
+                    }
                     sharePartitionMetrics.recordInFlightBatchMessageCount(stateBatch.lastOffset() - stateBatch.firstOffset() + 1);
                 }
                 // Update the endOffset of the partition.
@@ -658,18 +683,20 @@ public class SharePartition {
      * batches from fetchOffset to first base offset of the fetch response are archived.
      *
      * @param memberId           The member id of the client that is fetching the record.
+     * @param shareAcquireMode   The share acquire mode to acquire the records.
      * @param batchSize          The number of records per acquired records batch.
      * @param maxFetchRecords    The maximum number of records that should be acquired, this is a soft
      *                           limit and the method might acquire more records than the maxFetchRecords,
      *                           if the records are already part of the same fetch batch.
      * @param fetchOffset        The fetch offset for which the records are fetched.
      * @param fetchPartitionData The fetched records for the share partition.
-     * @param isolationLevel      The isolation level for the share fetch request.
+     * @param isolationLevel     The isolation level for the share fetch request.
      * @return The acquired records for the share partition.
      */
     @SuppressWarnings({"cyclomaticcomplexity", "methodlength"}) // Consider refactoring to avoid suppression
     public ShareAcquiredRecords acquire(
         String memberId,
+        ShareAcquireMode shareAcquireMode,
         int batchSize,
         int maxFetchRecords,
         long fetchOffset,
@@ -677,6 +704,7 @@ public class SharePartition {
         FetchIsolation isolationLevel
     ) {
         log.trace("Received acquire request for share partition: {}-{} memberId: {}", groupId, topicIdPartition, memberId);
+        boolean isRecordLimitMode = isRecordLimitMode(shareAcquireMode);
         if (stateNotActive() || maxFetchRecords <= 0) {
             // Nothing to acquire.
             return ShareAcquiredRecords.empty();
@@ -748,7 +776,7 @@ public class SharePartition {
                     groupId, topicIdPartition);
                 // It's safe to use lastOffsetToAcquire instead of lastBatch.lastOffset() because there is no
                 // overlap hence the lastOffsetToAcquire is same as lastBatch.lastOffset() or before that.
-                ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
+                ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(), isRecordLimitMode,
                     firstBatch.baseOffset(), lastOffsetToAcquire, batchSize, maxRecordsToAcquire);
                 return maybeFilterAbortedTransactionalAcquiredRecords(fetchPartitionData, isolationLevel, shareAcquiredRecords);
             }
@@ -787,8 +815,9 @@ public class SharePartition {
                         // from 10-15 will be acquired later in the code. In other case, when
                         // fetch returns batches from 0-25, then the sub map will have 2 entries and
                         // gap will be computed correctly.
-                        ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
-                            maybeGapStartOffset, entry.getKey() - 1, batchSize, maxRecordsToAcquire);
+                        int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
+                        ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(), isRecordLimitMode,
+                            maybeGapStartOffset, entry.getKey() - 1, batchSize, numRecordsRemaining);
                         result.addAll(shareAcquiredRecords.acquiredRecords());
                         acquiredCount += shareAcquiredRecords.count();
                     }
@@ -803,8 +832,9 @@ public class SharePartition {
 
                 // Compute if the batch is a full match.
                 boolean fullMatch = checkForFullMatch(inFlightBatch, firstBatch.baseOffset(), lastOffsetToAcquire);
-
-                if (!fullMatch || inFlightBatch.offsetState() != null) {
+                int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
+                boolean recordLimitSubsetMatch = isRecordLimitMode && checkForRecordLimitSubsetMatch(inFlightBatch, maxRecordsToAcquire, acquiredCount);
+                if (!fullMatch || inFlightBatch.offsetState() != null || recordLimitSubsetMatch) {
                     log.trace("Subset or offset tracked batch record found for share partition,"
                             + " batch: {} request offsets - first: {}, last: {} for the share"
                             + " partition: {}-{}", inFlightBatch, firstBatch.baseOffset(),
@@ -825,10 +855,10 @@ public class SharePartition {
                         // the offsets state in the in-flight batch.
                         inFlightBatch.maybeInitializeOffsetStateUpdate();
                     }
-                    // Do not send max fetch records to acquireSubsetBatchRecords as we want to acquire
-                    // all the records from the batch as the batch will anyway be part of the file-records
-                    // response batch.
-                    int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, firstBatch.baseOffset(), lastOffsetToAcquire, inFlightBatch, result);
+                    // In record_limit mode, we need to ensure that we do not acquire more than
+                    // maxRecordsToAcquire. Hence, pass the remaining number of records that can
+                    // be acquired.
+                    int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, isRecordLimitMode, numRecordsRemaining, firstBatch.baseOffset(), lastOffsetToAcquire, inFlightBatch, result);
                     acquiredCount += acquiredSubsetCount;
                     continue;
                 }
@@ -862,9 +892,10 @@ public class SharePartition {
             // missing records as well.
             if (acquiredCount < maxRecordsToAcquire && subMap.lastEntry().getValue().lastOffset() < lastOffsetToAcquire) {
                 log.trace("There exists another batch which needs to be acquired as well");
-                ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
+                int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
+                ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(), isRecordLimitMode,
                     subMap.lastEntry().getValue().lastOffset() + 1,
-                    lastOffsetToAcquire, batchSize, maxRecordsToAcquire - acquiredCount);
+                    lastOffsetToAcquire, batchSize, numRecordsRemaining);
                 result.addAll(shareAcquiredRecords.acquiredRecords());
                 acquiredCount += shareAcquiredRecords.count();
             }
@@ -903,9 +934,9 @@ public class SharePartition {
             for (ShareAcknowledgementBatch batch : acknowledgementBatches) {
                 // Client can either send a single entry in acknowledgeTypes which represents the state
                 // of the complete batch or can send individual offsets state.
-                Map<Long, RecordState> recordStateMap;
+                Map<Long, Byte> ackTypeMap;
                 try {
-                    recordStateMap = fetchRecordStateMapForAcknowledgementBatch(batch);
+                    ackTypeMap = fetchAckTypeMapForBatch(batch);
                 } catch (IllegalArgumentException e) {
                     log.debug("Invalid acknowledge type: {} for share partition: {}-{}",
                         batch.acknowledgeTypes(), groupId, topicIdPartition);
@@ -933,7 +964,7 @@ public class SharePartition {
                 Optional<Throwable> ackThrowable = acknowledgeBatchRecords(
                     memberId,
                     batch,
-                    recordStateMap,
+                    ackTypeMap,
                     subMap,
                     persisterBatches
                 );
@@ -1042,6 +1073,9 @@ public class SharePartition {
                 // Successfully updated the state of the offset and created a persister state batch for write to persister.
                 persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(offsetState.getKey(),
                     offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount())));
+                if (offsetState.getKey() >= startOffset && isStateTerminal(updateResult.state())) {
+                    deliveryCompleteCount.incrementAndGet();
+                }
                 // Do not update the next fetch offset as the offset has not completed the transition yet.
             }
         }
@@ -1080,6 +1114,9 @@ public class SharePartition {
             // Successfully updated the state of the batch and created a persister state batch for write to persister.
             persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(inFlightBatch.firstOffset(),
                 inFlightBatch.lastOffset(), updateResult.state().id(), (short) updateResult.deliveryCount())));
+            if (isStateTerminal(updateResult.state())) {
+                deliveryCompleteCount.addAndGet(numInFlightRecordsInBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset()));
+            }
             // Do not update the next fetch offset as the batch has not completed the transition yet.
         }
         return Optional.empty();
@@ -1120,8 +1157,14 @@ public class SharePartition {
                 // This can occur during the initialization of share partition if LSO has moved.
                 startOffset = logStartOffset;
                 endOffset = logStartOffset;
+                deliveryCompleteCount.set(0);
                 return;
             }
+
+            // When LSO is moved forward, some Terminal records, that were previously in-flight, will now be removed.
+            // We need to reduce isAnyOffsetArchived by the number of such Terminal records that are moved out of in-flight.
+            // We cannot directly reduce it by new LSO - previous start offset, because there could be gap offsets as well.
+            int numTerminalRecordsRemoved = countTerminalRecordsUpToNewLSO(logStartOffset);
 
             // Archive the available records in the cached state that are before the new log start offset.
             boolean anyRecordArchived = archiveAvailableRecordsOnLsoMovement(logStartOffset);
@@ -1133,6 +1176,8 @@ public class SharePartition {
 
             // The new startOffset will be the log start offset.
             startOffset = logStartOffset;
+            // After the start offset has moved, update the deliveryCompleteCount.
+            deliveryCompleteCount.addAndGet((-1) * numTerminalRecordsRemoved);
             if (endOffset < startOffset) {
                 // This case means that the cached state is completely fresh now.
                 // Example scenario - batch of 0-10 in acquired state in cached state, then LSO moves to 15,
@@ -1185,7 +1230,7 @@ public class SharePartition {
 
             // Though such batches can be removed from the cache, but it is better to archive them so
             // that they are never acquired again.
-            boolean anyRecordArchived = archiveRecords(fetchOffset, baseOffset, subMap, RecordState.AVAILABLE);
+            boolean anyRecordArchived = archiveRecords(fetchOffset, baseOffset, subMap, RecordState.AVAILABLE, true);
 
             // If we have transitioned the state of any batch/offset from AVAILABLE to ARCHIVED,
             // then there is a chance that the next fetch offset can change.
@@ -1206,9 +1251,57 @@ public class SharePartition {
     private boolean archiveAvailableRecordsOnLsoMovement(long logStartOffset) {
         lock.writeLock().lock();
         try {
-            return archiveRecords(startOffset, logStartOffset, cachedState, RecordState.AVAILABLE);
+            return archiveRecords(startOffset, logStartOffset, cachedState, RecordState.AVAILABLE, false);
         } finally {
             lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * The method calculates the number of Terminal records before the given offset. This method is called whenever LSO is
+     * updated. Since that is a rare event, we can afford to do a linear scan of the cached state.
+     *
+     * @param newLSO The new LSO before which the Terminal record count is needed.
+     * @return The count of Terminal records before the given offset.
+     */
+    private int countTerminalRecordsUpToNewLSO(long newLSO) {
+        lock.readLock().lock();
+        try {
+            int count = 0;
+            NavigableMap<Long, InFlightBatch> headMap = cachedState.headMap(newLSO, false);
+
+            for (InFlightBatch inFlightBatch : headMap.values()) {
+                // This batch is not in-flight, hence skip.
+                if (inFlightBatch.lastOffset() < startOffset) {
+                    continue;
+                }
+
+                if (inFlightBatch.offsetState() == null) {
+                    if (isStateTerminal(inFlightBatch.batchState())) {
+                        // If the code reaches this point, this means that the current batch is Terminal and some of its
+                        // records lie beyond startOffset. Now we need to find how many of its records lie in-flight (
+                        // between startOffset and endOffset).
+                        long effectiveFirstOffset = Math.max(startOffset, inFlightBatch.firstOffset());
+                        long effectiveLastOffset = Math.min(newLSO - 1, inFlightBatch.lastOffset());
+
+                        if (effectiveFirstOffset <= effectiveLastOffset) {
+                            count += (int) (effectiveLastOffset - effectiveFirstOffset + 1);
+                        }
+                    }
+                } else {
+                    // The current batch has offset tracking enabled. In this case only Terminal records that lie between
+                    // startOffset and endOffset will be considered.
+                    for (Map.Entry<Long, InFlightState> offsetEntry : inFlightBatch.offsetState().entrySet()) {
+                        long offset = offsetEntry.getKey();
+                        if (offset >= startOffset && offset < newLSO && isStateTerminal(offsetEntry.getValue().state())) {
+                            count++;
+                        }
+                    }
+                }
+            }
+            return count;
+        } finally {
+            lock.readLock().unlock();
         }
     }
 
@@ -1219,9 +1312,15 @@ public class SharePartition {
      * @param endOffset The offset before which the records should be archived.
      * @param map The map containing the in-flight records.
      * @param initialState The initial state of the records to be archived.
+     * @param updateDeliveryCompleteCount A boolean which indicates whether the deliveryCompleteCount should be updated.
      * @return A boolean which indicates whether any record is archived or not.
      */
-    private boolean archiveRecords(long startOffset, long endOffset, NavigableMap<Long, InFlightBatch> map, RecordState initialState) {
+    private boolean archiveRecords(
+        long startOffset,
+        long endOffset,
+        NavigableMap<Long, InFlightBatch> map,
+        RecordState initialState,
+        boolean updateDeliveryCompleteCount) {
         lock.writeLock().lock();
         try {
             boolean isAnyOffsetArchived = false, isAnyBatchArchived = false;
@@ -1247,11 +1346,11 @@ public class SharePartition {
                         }
                         inFlightBatch.maybeInitializeOffsetStateUpdate();
                     }
-                    isAnyOffsetArchived = archivePerOffsetBatchRecords(inFlightBatch, startOffset, endOffset - 1, initialState) || isAnyOffsetArchived;
+                    isAnyOffsetArchived = archivePerOffsetBatchRecords(inFlightBatch, startOffset, endOffset - 1, initialState, updateDeliveryCompleteCount) || isAnyOffsetArchived;
                     continue;
                 }
                 // The in-flight batch is a full match hence change the state of the complete batch.
-                isAnyBatchArchived = archiveCompleteBatch(inFlightBatch, initialState) || isAnyBatchArchived;
+                isAnyBatchArchived = archiveCompleteBatch(inFlightBatch, initialState, updateDeliveryCompleteCount) || isAnyBatchArchived;
             }
             return isAnyOffsetArchived || isAnyBatchArchived;
         } finally {
@@ -1262,7 +1361,8 @@ public class SharePartition {
     private boolean archivePerOffsetBatchRecords(InFlightBatch inFlightBatch,
                                                  long startOffsetToArchive,
                                                  long endOffsetToArchive,
-                                                 RecordState initialState
+                                                 RecordState initialState,
+                                                 boolean updateDeliveryCompleteCount
     ) {
         lock.writeLock().lock();
         try {
@@ -1281,6 +1381,11 @@ public class SharePartition {
                 }
 
                 offsetState.getValue().archive();
+                if (updateDeliveryCompleteCount) {
+                    // If the record moves from a non-terminal state to a terminal state (in this case ARCHIVE), deliveryCompleteCount
+                    // needs to be incremented.
+                    deliveryCompleteCount.incrementAndGet();
+                }
                 isAnyOffsetArchived = true;
             }
             return isAnyOffsetArchived;
@@ -1289,13 +1394,21 @@ public class SharePartition {
         }
     }
 
-    private boolean archiveCompleteBatch(InFlightBatch inFlightBatch, RecordState initialState) {
+    private boolean archiveCompleteBatch(
+        InFlightBatch inFlightBatch,
+        RecordState initialState,
+        boolean updateDeliveryCompleteCount) {
         lock.writeLock().lock();
         try {
             log.trace("Archiving complete batch: {} for the share partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
             if (inFlightBatch.batchState() == initialState) {
                 // Change the state of complete batch since the same state exists for the entire inFlight batch.
                 inFlightBatch.archiveBatch();
+                if (updateDeliveryCompleteCount) {
+                    // If the records move from a non-terminal state to a terminal state (in this case ARCHIVE), deliveryCompleteCount
+                    // needs to be incremented by the number of records in the batch.
+                    deliveryCompleteCount.addAndGet((int) (inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1));
+                }
                 return true;
             }
         } finally {
@@ -1553,6 +1666,7 @@ public class SharePartition {
     private ShareAcquiredRecords acquireNewBatchRecords(
         String memberId,
         Iterable<? extends RecordBatch> batches,
+        boolean isRecordLimitMode,
         long firstOffset,
         long lastOffset,
         int batchSize,
@@ -1572,10 +1686,11 @@ public class SharePartition {
             // Check how many records can be acquired from the batch.
             long lastAcquiredOffset = lastOffset;
             if (maxFetchRecords < lastAcquiredOffset - firstAcquiredOffset + 1) {
-                // The max records to acquire is less than the complete available batches hence
-                // limit the acquired records. The last offset shall be the batches last offset
-                // which falls under the max records limit. As the max fetch records is the soft
-                // limit, the last offset can be higher than the max records.
+                // The max records to acquire is less than the complete available batches, so we
+                // limit the acquired records. Although shareAcquireMode is introduced, even in
+                // record_limit mode, the last offset should still be the batch's last offset
+                // that falls under the max records limit, because the InFlightBatch
+                // in cachedState should still reflect the complete batch.
                 lastAcquiredOffset = lastOffsetFromBatchWithRequestOffset(batches, firstAcquiredOffset + maxFetchRecords - 1);
                 // If the initial read gap offset window is active then it's not guaranteed that the
                 // batches align on batch boundaries. Hence, reset to last offset itself if the batch's
@@ -1594,7 +1709,7 @@ public class SharePartition {
             }
 
             // Create batches of acquired records.
-            List<AcquiredRecords> acquiredRecords = createBatches(memberId, batches, firstAcquiredOffset, lastAcquiredOffset, batchSize);
+            List<AcquiredRecords> acquiredRecords = createBatches(memberId, batches, isRecordLimitMode, maxFetchRecords, firstAcquiredOffset, lastAcquiredOffset, batchSize);
             // if the cachedState was empty before acquiring the new batches then startOffset needs to be updated
             if (cachedState.firstKey() == firstAcquiredOffset)  {
                 startOffset = firstAcquiredOffset;
@@ -1607,6 +1722,11 @@ public class SharePartition {
             if (lastAcquiredOffset > endOffset) {
                 endOffset = lastAcquiredOffset;
             }
+            // Update lastAcquireOffset to the last offset of acquired records in record_limit mode
+            // Since this is required to calculate the actual number of offsets acquired.
+            if (isRecordLimitMode) {
+                lastAcquiredOffset = acquiredRecords.get(0).lastOffset();
+            }
             maybeUpdatePersisterGapWindowStartOffset(lastAcquiredOffset + 1);
             return new ShareAcquiredRecords(acquiredRecords, (int) (lastAcquiredOffset - firstAcquiredOffset + 1));
         } finally {
@@ -1617,6 +1737,8 @@ public class SharePartition {
     private List<AcquiredRecords> createBatches(
         String memberId,
         Iterable<? extends RecordBatch> batches,
+        boolean isRecordLimitMode,
+        int maxFetchRecords,
         long firstAcquiredOffset,
         long lastAcquiredOffset,
         int batchSize
@@ -1625,9 +1747,10 @@ public class SharePartition {
         try {
             List<AcquiredRecords> result = new ArrayList<>();
             long currentFirstOffset = firstAcquiredOffset;
-            // No split of batches is required if the batch size is greater than records which
-            // can be acquired, else split the batch into multiple batches.
-            if (lastAcquiredOffset - firstAcquiredOffset + 1 > batchSize) {
+            // Batch splitting only occurs in batch_optimized mode when the number of records to acquire exceeds the batch size.
+            // If acquireMode is record_limit, or the batch size is greater than the number of records to acquire, no splitting is performed.
+            long recordCount = lastAcquiredOffset - firstAcquiredOffset + 1;
+            if (!isRecordLimitMode && recordCount > batchSize) {
                 // The batch is split into multiple batches considering batch size.
                 // Note: Try reading only the baseOffset of the batch and avoid reading the lastOffset
                 // as lastOffset call of RecordBatch is expensive (loads headers).
@@ -1656,10 +1779,57 @@ public class SharePartition {
                 .setLastOffset(lastAcquiredOffset)
                 .setDeliveryCount((short) 1));
 
-            result.forEach(acquiredRecords -> {
-                // Schedule acquisition lock timeout for the batch.
-                AcquisitionLockTimerTask timerTask = scheduleAcquisitionLockTimeout(memberId, acquiredRecords.firstOffset(), acquiredRecords.lastOffset());
-                // Add the new batch to the in-flight records along with the acquisition lock timeout task for the batch.
+            if (isRecordLimitMode) {
+                // In record_limit mode, there will always be only one single batch in the result.
+                AcquiredRecords acquiredRecords = result.get(0);
+                // When the count of acquired records exceeds the max fetch limit, only initialize and schedule acquisition lock for
+                // acquired records up to the max fetch boundary and remaining offsets should still in available state.
+                // i.e. acquired records are 10-19 (10 records) and max fetch records is 5, then only 10-14 should be acquired
+                // and offset 15-19 should still in available state.
+                if (acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1 > maxFetchRecords) {
+                    InFlightBatch inFlightBatch = new InFlightBatch(
+                        timer,
+                        time,
+                        memberId,
+                        acquiredRecords.firstOffset(),
+                        acquiredRecords.lastOffset(),
+                        RecordState.ACQUIRED,
+                        1,
+                        null,
+                        timeoutHandler,
+                        sharePartitionMetrics);
+                    int delayMs = recordLockDurationMsOrDefault(groupConfigManager, groupId, defaultRecordLockDurationMs);
+                    long lastOffset = acquiredRecords.firstOffset() + maxFetchRecords - 1;
+                    acquiredRecords.setLastOffset(lastOffset);
+                    inFlightBatch.maybeInitializeOffsetStateUpdate(lastOffset, delayMs);
+                    updateFindNextFetchOffset(true);
+
+                    cachedState.put(acquiredRecords.firstOffset(), inFlightBatch);
+                    sharePartitionMetrics.recordInFlightBatchMessageCount(
+                        acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1);
+                    return List.of(acquiredRecords);
+                }
+            }
+            addBatches(memberId, result);
+            return result;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Add the acquired record batches to the cache and schedule acquisition lock timeouts.
+     *
+     * @param memberId The member id for which the records are acquired.
+     * @param acquiredRecordsList The list of acquired records to add to cache state.
+     */
+    private void addBatches(String memberId, List<AcquiredRecords> acquiredRecordsList) {
+        lock.writeLock().lock();
+        try {
+            acquiredRecordsList.forEach(acquiredRecords -> {
+                AcquisitionLockTimerTask timerTask = scheduleAcquisitionLockTimeout(
+                    memberId, acquiredRecords.firstOffset(), acquiredRecords.lastOffset());
+
                 cachedState.put(acquiredRecords.firstOffset(), new InFlightBatch(
                     timer,
                     time,
@@ -1674,14 +1844,21 @@ public class SharePartition {
                 // Update the in-flight batch message count metrics for the share partition.
                 sharePartitionMetrics.recordInFlightBatchMessageCount(acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1);
             });
-            return result;
         } finally {
             lock.writeLock().unlock();
         }
     }
 
+    private boolean checkForRecordLimitSubsetMatch(InFlightBatch inFlightBatch, int maxRecordsToAcquire, int acquiredCount) {
+        long numRecordsInBatch = inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1;
+        int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
+        return numRecordsInBatch > numRecordsRemaining;
+    }
+
     private int acquireSubsetBatchRecords(
         String memberId,
+        boolean isRecordLimitMode,
+        long maxFetchRecords,
         long requestFirstOffset,
         long requestLastOffset,
         InFlightBatch inFlightBatch,
@@ -1727,6 +1904,10 @@ public class SharePartition {
                     .setLastOffset(offsetState.getKey())
                     .setDeliveryCount((short) offsetState.getValue().deliveryCount()));
                 acquiredCount++;
+                if (isRecordLimitMode && acquiredCount == maxFetchRecords) {
+                    // In record_limit mode, acquire only the requested number of records.
+                    break;
+                }
             }
         } finally {
             lock.writeLock().unlock();
@@ -1761,26 +1942,21 @@ public class SharePartition {
         return batchFirstOffset < localStartOffset && batchLastOffset >= localStartOffset;
     }
 
-    private Map<Long, RecordState> fetchRecordStateMapForAcknowledgementBatch(
-        ShareAcknowledgementBatch batch) {
+    // Visibility for test
+    static Map<Long, Byte> fetchAckTypeMapForBatch(ShareAcknowledgementBatch batch) {
         // Client can either send a single entry in acknowledgeTypes which represents the state
         // of the complete batch or can send individual offsets state. Construct a map with record state
         // for each offset in the batch, if single acknowledge type is sent, the map will have only one entry.
-        Map<Long, RecordState> recordStateMap = new HashMap<>();
+        Map<Long, Byte> ackTypeMap = new HashMap<>();
         for (int index = 0; index < batch.acknowledgeTypes().size(); index++) {
-            recordStateMap.put(batch.firstOffset() + index,
-                fetchRecordState(batch.acknowledgeTypes().get(index)));
+            byte ackType = batch.acknowledgeTypes().get(index);
+            // Validate
+            if (ackType != 0) {
+                AcknowledgeType.forId(ackType);
+            }
+            ackTypeMap.put(batch.firstOffset() + index, ackType);
         }
-        return recordStateMap;
-    }
-
-    private static RecordState fetchRecordState(byte acknowledgeType) {
-        return switch (acknowledgeType) {
-            case 1 /* ACCEPT */ -> RecordState.ACKNOWLEDGED;
-            case 2 /* RELEASE */ -> RecordState.AVAILABLE;
-            case 3, 0 /* REJECT / GAP */ -> RecordState.ARCHIVED;
-            default -> throw new IllegalArgumentException("Invalid acknowledge type: " + acknowledgeType);
-        };
+        return ackTypeMap;
     }
 
     private NavigableMap<Long, InFlightBatch> fetchSubMapForAcknowledgementBatch(
@@ -1835,7 +2011,7 @@ public class SharePartition {
     private Optional<Throwable> acknowledgeBatchRecords(
         String memberId,
         ShareAcknowledgementBatch batch,
-        Map<Long, RecordState> recordStateMap,
+        Map<Long, Byte> ackTypeMap,
         NavigableMap<Long, InFlightBatch> subMap,
         List<PersisterBatch> persisterBatches
     ) {
@@ -1899,11 +2075,11 @@ public class SharePartition {
                     }
 
                     throwable = acknowledgePerOffsetBatchRecords(memberId, batch, inFlightBatch,
-                        recordStateMap, persisterBatches);
+                        ackTypeMap, persisterBatches);
                 } else {
                     // The in-flight batch is a full match hence change the state of the complete batch.
                     throwable = acknowledgeCompleteBatch(batch, inFlightBatch,
-                        recordStateMap.get(batch.firstOffset()), persisterBatches);
+                        ackTypeMap.get(batch.firstOffset()), persisterBatches, memberId);
                 }
 
                 if (throwable.isPresent()) {
@@ -1939,14 +2115,11 @@ public class SharePartition {
         String memberId,
         ShareAcknowledgementBatch batch,
         InFlightBatch inFlightBatch,
-        Map<Long, RecordState> recordStateMap,
+        Map<Long, Byte> ackTypeMap,
         List<PersisterBatch> persisterBatches
     ) {
         lock.writeLock().lock();
         try {
-            // Fetch the first record state from the map to be used as default record state in case the
-            // offset record state is not provided by client.
-            RecordState recordStateDefault = recordStateMap.get(batch.firstOffset());
             for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState().entrySet()) {
 
                 // 1. For the first batch which might have offsets prior to the request base
@@ -1986,28 +2159,50 @@ public class SharePartition {
                         new InvalidRecordStateException("Member is not the owner of offset"));
                 }
 
-                // Determine the record state for the offset. If the per offset record state is not provided
-                // by the client, then use the batch record state.
-                RecordState recordState =
-                    recordStateMap.size() > 1 ? recordStateMap.get(offsetState.getKey()) :
-                        recordStateDefault;
-                InFlightState updateResult = offsetState.getValue().startStateTransition(
-                    recordState,
-                    DeliveryCountOps.NO_OP,
-                    this.maxDeliveryCount,
-                    EMPTY_MEMBER_ID
-                );
-                if (updateResult == null) {
-                    log.debug("Unable to acknowledge records for the offset: {} in batch: {}"
-                            + " for the share partition: {}-{}", offsetState.getKey(),
-                        inFlightBatch, groupId, topicIdPartition);
-                    return Optional.of(new InvalidRecordStateException(
-                        "Unable to acknowledge records for the batch"));
+                // In case of 0 size ackTypeMap, we have already validated the batch.acknowledgeTypes.
+                byte ackType = ackTypeMap.size() > 1 ? ackTypeMap.get(offsetState.getKey()) : batch.acknowledgeTypes().get(0);
+
+                if (ackType == AcknowledgeType.RENEW.id) {
+                    // If RENEW, renew the acquisition lock timer for this offset and continue without changing state.
+                    // We do not care about recordState map here.
+                    // Only valid for ACQUIRED offsets; the check above ensures this.
+                    long key = offsetState.getKey();
+                    InFlightState state = offsetState.getValue();
+                    log.debug("Renewing acq lock for {}-{} with offset {} in batch {} for member {}.",
+                        groupId, topicIdPartition, key, inFlightBatch, memberId);
+                    state.cancelAndClearAcquisitionLockTimeoutTask();
+                    AcquisitionLockTimerTask renewalTask = scheduleAcquisitionLockTimeout(memberId, key, key);
+                    state.updateAcquisitionLockTimeoutTask(renewalTask);
+                } else {
+                    // Determine the record state for the offset. If the per offset record state is not provided
+                    // by the client, then use the batch record state. This will always be present as it is a static
+                    // mapping between bytes and record state type. All ack types have been added except for RENEW which
+                    // has been handled above.
+                    RecordState recordState = ACK_TYPE_TO_RECORD_STATE.get(ackType);
+                    Objects.requireNonNull(recordState);
+
+                    InFlightState updateResult = offsetState.getValue().startStateTransition(
+                        recordState,
+                        DeliveryCountOps.NO_OP,
+                        this.maxDeliveryCount,
+                        EMPTY_MEMBER_ID
+                    );
+
+                    if (updateResult == null) {
+                        log.debug("Unable to acknowledge records for the offset: {} in batch: {}"
+                                + " for the share partition: {}-{}", offsetState.getKey(),
+                            inFlightBatch, groupId, topicIdPartition);
+                        return Optional.of(new InvalidRecordStateException(
+                            "Unable to acknowledge records for the batch"));
+                    }
+                    // Successfully updated the state of the offset and created a persister state batch for write to persister.
+                    persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(offsetState.getKey(),
+                        offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount())));
+                    if (isStateTerminal(updateResult.state())) {
+                        deliveryCompleteCount.incrementAndGet();
+                    }
+                    // Do not update the nextFetchOffset as the offset has not completed the transition yet.
                 }
-                // Successfully updated the state of the offset and created a persister state batch for write to persister.
-                persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(offsetState.getKey(),
-                    offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount())));
-                // Do not update the nextFetchOffset as the offset has not completed the transition yet.
             }
         } finally {
             lock.writeLock().unlock();
@@ -2018,8 +2213,9 @@ public class SharePartition {
     private Optional<Throwable> acknowledgeCompleteBatch(
         ShareAcknowledgementBatch batch,
         InFlightBatch inFlightBatch,
-        RecordState recordState,
-        List<PersisterBatch> persisterBatches
+        byte ackType,
+        List<PersisterBatch> persisterBatches,
+        String memberId
     ) {
         lock.writeLock().lock();
         try {
@@ -2033,10 +2229,30 @@ public class SharePartition {
                     "The batch cannot be acknowledged. The batch is not in the acquired state."));
             }
 
+            // If the request is a full-batch RENEW acknowledgement (ack type 4), then renew the
+            // acquisition lock without changing the state or persisting anything.
+            // Before reaching this point, it should be verified that it is full batch ack and
+            // not per offset ack as well as startOffset not moved.
+            if (ackType == AcknowledgeType.RENEW.id) {
+                // Renew the acquisition lock timer for the complete batch. We have already
+                // checked that the batchState is ACQUIRED above.
+                log.debug("Renewing acq lock for {}-{} with batch {}-{} for member {}.",
+                    groupId, topicIdPartition, inFlightBatch.firstOffset(), inFlightBatch.lastOffset(), memberId);
+                inFlightBatch.cancelAndClearAcquisitionLockTimeoutTask();
+                AcquisitionLockTimerTask renewalTask = scheduleAcquisitionLockTimeout(memberId,
+                    inFlightBatch.firstOffset(), inFlightBatch.lastOffset());
+                inFlightBatch.updateAcquisitionLockTimeout(renewalTask);
+                // Nothing to persist.
+                return Optional.empty();
+            }
+
             // Change the state of complete batch since the same state exists for the entire inFlight batch.
-            // The member id is reset to EMPTY_MEMBER_ID irrespective of the acknowledge type as the batch is
+            // The member id is reset to EMPTY_MEMBER_ID irrespective of the ack type as the batch is
             // either released or moved to a state where member id existence is not important. The member id
             // is only important when the batch is acquired.
+            RecordState recordState = ACK_TYPE_TO_RECORD_STATE.get(ackType);
+            Objects.requireNonNull(recordState);
+
             InFlightState updateResult = inFlightBatch.startBatchStateTransition(
                 recordState,
                 DeliveryCountOps.NO_OP,
@@ -2054,6 +2270,9 @@ public class SharePartition {
             // Successfully updated the state of the batch and created a persister state batch for write to persister.
             persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(inFlightBatch.firstOffset(),
                 inFlightBatch.lastOffset(), updateResult.state().id(), (short) updateResult.deliveryCount())));
+            if (isStateTerminal(updateResult.state())) {
+                deliveryCompleteCount.addAndGet((int) (inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1));
+            }
             // Do not update the next fetch offset as the batch has not completed the transition yet.
         } finally {
             lock.writeLock().unlock();
@@ -2108,6 +2327,13 @@ public class SharePartition {
                     if (persisterBatch.updatedState.state() == RecordState.AVAILABLE) {
                         updateFindNextFetchOffset(true);
                     }
+                    // If there is a failure, then update the deliveryCompleteCount only in case there are some records
+                    // which were in a Terminal state, but after rolling back they are in a non-Terminal state. We also
+                    // need to consider only those records that lie after the start offset, because LSO movement can happen
+                    // after local state transition begins but before writeState result is obtained.
+                    if (isStateTerminal(RecordState.forId(persisterBatch.stateBatch.deliveryState())) && !isStateTerminal(persisterBatch.updatedState.state())) {
+                        deliveryCompleteCount.addAndGet(-numInFlightRecordsInBatch(persisterBatch.stateBatch.firstOffset(), persisterBatch.stateBatch.lastOffset()));
+                    }
                 });
                 future.completeExceptionally(throwable);
                 return;
@@ -2135,9 +2361,16 @@ public class SharePartition {
                         // In case of failure when transition state is rolled back then it should be rolled
                         // back to ACQUIRED state, unless acquisition lock for the state has expired.
                         persisterBatches.forEach(persisterBatch -> {
-                            persisterBatch.updatedState.completeStateTransition(false);
-                            if (persisterBatch.updatedState.state() == RecordState.AVAILABLE) {
+                            persisterBatch.updatedState().completeStateTransition(false);
+                            if (persisterBatch.updatedState().state() == RecordState.AVAILABLE) {
                                 updateFindNextFetchOffset(true);
+                            }
+                            // If there is a failure, then update the deliveryCompleteCount only in case there are some records
+                            // which were in a Terminal state, but after rolling back they are in a non-Terminal state. We also
+                            // need to consider only those records that lie after the start offset, because LSO movement can happen
+                            // after local state transition begins but before writeState result is obtained.
+                            if (isStateTerminal(RecordState.forId(persisterBatch.stateBatch.deliveryState())) && !isStateTerminal(persisterBatch.updatedState.state())) {
+                                deliveryCompleteCount.addAndGet(-numInFlightRecordsInBatch(persisterBatch.stateBatch.firstOffset(), persisterBatch.stateBatch.lastOffset()));
                             }
                         });
                         future.completeExceptionally(exception);
@@ -2165,6 +2398,14 @@ public class SharePartition {
             });
     }
 
+    //  This method returns the number of records in the batch that are in-flight and thus lie after the start offset.
+    private int numInFlightRecordsInBatch(long batchFirstOffset, long batchEndOffset) {
+        if (batchEndOffset >= startOffset) {
+            return (int) (batchEndOffset - Math.max(startOffset, batchFirstOffset) + 1);
+        }
+        return 0;
+    }
+
     private boolean maybeUpdateCachedStateAndOffsets() {
         lock.writeLock().lock();
         try {
@@ -2174,7 +2415,8 @@ public class SharePartition {
 
             // This will help to find the next position for the startOffset.
             // The new position of startOffset will be lastOffsetAcknowledged + 1
-            long lastOffsetAcknowledged = findLastOffsetAcknowledged();
+            OffsetAndMetadata result = findLastOffsetAcknowledgedAndMetadata();
+            long lastOffsetAcknowledged = result.lastAcknowledgedOffset;
             // If lastOffsetAcknowledged is -1, this means we cannot move startOffset ahead
             if (lastOffsetAcknowledged == -1) {
                 return false;
@@ -2187,6 +2429,7 @@ public class SharePartition {
                 startOffset = lastCachedOffset + 1; // The next offset that will be fetched and acquired in the share partition
                 endOffset = lastCachedOffset + 1;
                 cachedState.clear();
+                deliveryCompleteCount.set(0);
                 // Nothing further to do.
                 return true;
             }
@@ -2207,7 +2450,10 @@ public class SharePartition {
             NavigableMap.Entry<Long, InFlightBatch> entry = cachedState.floorEntry(lastOffsetAcknowledged);
             // If the lastOffsetAcknowledged is equal to the last offset of entry, then the entire batch can potentially be removed.
             if (lastOffsetAcknowledged == entry.getValue().lastOffset()) {
-                startOffset = cachedState.higherKey(lastOffsetAcknowledged);
+                long lastOffsetAcknowledgedHigherKey = cachedState.higherKey(lastOffsetAcknowledged);
+                if (lastOffsetAcknowledgedHigherKey > startOffset) {
+                    startOffset = lastOffsetAcknowledgedHigherKey;
+                }
                 if (isPersisterReadGapWindowActive()) {
                     // This case will arise if we have a situation where there is an acquirable gap after the lastOffsetAcknowledged.
                     // Ex, the cachedState has following state batches -> {(0, 10), (11, 20), (31,40)} and all these batches are acked.
@@ -2221,8 +2467,11 @@ public class SharePartition {
                 lastKeyToRemove = entry.getKey();
             } else {
                 // The code will reach this point only if lastOffsetAcknowledged is in the middle of some stateBatch. In this case
-                // we can simply move the startOffset to the next offset of lastOffsetAcknowledged and should consider any read gap offsets.
-                startOffset = lastOffsetAcknowledged + 1;
+                // we can move the startOffset to the next offset of lastOffsetAcknowledged only if that offset is
+                // ahead of start offset and should consider any read gap offsets.
+                if (lastOffsetAcknowledged + 1 > startOffset) {
+                    startOffset = lastOffsetAcknowledged + 1;
+                }
                 if (entry.getKey().equals(cachedState.firstKey())) {
                     // If the first batch in cachedState has some records yet to be acknowledged,
                     // then nothing should be removed from cachedState
@@ -2231,7 +2480,7 @@ public class SharePartition {
                     lastKeyToRemove = cachedState.lowerKey(entry.getKey());
                 }
             }
-
+            deliveryCompleteCount.addAndGet((-1) * result.numTerminalRecords);
             if (lastKeyToRemove != -1) {
                 cachedState.subMap(firstKeyToRemove, true, lastKeyToRemove, true).clear();
             }
@@ -2278,7 +2527,7 @@ public class SharePartition {
         RecordState startOffsetState = isBatchState ?
             entry.getValue().batchState() :
             entry.getValue().offsetState().get(startOffset).state();
-        return isRecordStateAcknowledged(startOffsetState);
+        return isStateTerminal(startOffsetState);
     }
 
     private boolean isPersisterReadGapWindowActive() {
@@ -2286,47 +2535,62 @@ public class SharePartition {
     }
 
     /**
-     * The record state is considered acknowledged if it is either acknowledged or archived.
+     * The record state is considered terminal if it is either acknowledged or archived.
      * These are terminal states for the record.
      *
      * @param recordState The record state to check.
      *
      * @return True if the record state is acknowledged or archived, false otherwise.
      */
-    private boolean isRecordStateAcknowledged(RecordState recordState) {
+    private boolean isStateTerminal(RecordState recordState) {
         return recordState == RecordState.ACKNOWLEDGED || recordState == RecordState.ARCHIVED;
     }
 
-    // Visible for testing
-    long findLastOffsetAcknowledged() {
+    /**
+     * This method is used to find the new position for startOffset. If there are records in the cached state right after
+     * the current startOffset which are in terminal state (ACKNOWLEDGED or ARCHIVED), then the startOffset can be moved
+     * past these. The method iterates over the cached state and finds the last offset which is in terminal state which
+     * can be moved out of in-flight. The method also counts the number of records which are in terminal state which would
+     * be removed from in-flight if the startOffset is moved, in order to update the deliveryCompleteCount count.
+     *
+     * @return StartOffsetAdvanceResult, which contains the last offset post which the startOffset can move
+     * and the number of terminal records which be moved out of in-flight if the startOffset is moved.
+     */
+    // Visible for testing.
+    OffsetAndMetadata findLastOffsetAcknowledgedAndMetadata() {
         long lastOffsetAcknowledged = -1;
+        int numTerminalRecords = 0;
         lock.readLock().lock();
         try {
             for (NavigableMap.Entry<Long, InFlightBatch> entry : cachedState.entrySet()) {
                 InFlightBatch inFlightBatch = entry.getValue();
 
                 if (isPersisterReadGapWindowActive() && inFlightBatch.lastOffset() >= persisterReadResultGapWindow.gapStartOffset()) {
-                    return lastOffsetAcknowledged;
+                    return new OffsetAndMetadata(lastOffsetAcknowledged, numTerminalRecords);
                 }
 
                 if (inFlightBatch.offsetState() == null) {
-                    if (inFlightBatch.batchHasOngoingStateTransition() || !isRecordStateAcknowledged(inFlightBatch.batchState())) {
-                        return lastOffsetAcknowledged;
+                    if (inFlightBatch.batchHasOngoingStateTransition() || !isStateTerminal(inFlightBatch.batchState())) {
+                        return new OffsetAndMetadata(lastOffsetAcknowledged, numTerminalRecords);
                     }
                     lastOffsetAcknowledged = inFlightBatch.lastOffset();
+                    numTerminalRecords += numInFlightRecordsInBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset());
                 } else {
                     for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState().entrySet()) {
-                        if (offsetState.getValue().hasOngoingStateTransition() || !isRecordStateAcknowledged(offsetState.getValue().state())) {
-                            return lastOffsetAcknowledged;
+                        if (offsetState.getValue().hasOngoingStateTransition() || !isStateTerminal(offsetState.getValue().state())) {
+                            return new OffsetAndMetadata(lastOffsetAcknowledged, numTerminalRecords);
                         }
                         lastOffsetAcknowledged = offsetState.getKey();
+                        if (offsetState.getKey() >= startOffset) {
+                            numTerminalRecords++;
+                        }
                     }
                 }
             }
         } finally {
             lock.readLock().unlock();
         }
-        return lastOffsetAcknowledged;
+        return new OffsetAndMetadata(lastOffsetAcknowledged, numTerminalRecords);
     }
 
     /**
@@ -2364,7 +2628,7 @@ public class SharePartition {
                 .setGroupId(this.groupId)
                 .setTopicsData(List.of(new TopicData<>(topicIdPartition.topicId(),
                     List.of(PartitionFactory.newPartitionStateBatchData(
-                        topicIdPartition.partition(), stateEpoch, startOffset(), leaderEpoch, stateBatches))))
+                        topicIdPartition.partition(), stateEpoch, startOffset(), deliveryCompleteCount(), leaderEpoch, stateBatches))))
                 ).build()).build())
             .whenComplete((result, exception) -> {
                 if (exception != null) {
@@ -2542,6 +2806,14 @@ public class SharePartition {
             if (updateResult.state() != RecordState.ARCHIVED) {
                 updateFindNextFetchOffset(true);
             }
+            // If after acquisition lock timeout, a batch is moved to ARCHIVED state, then we have records moved from
+            // non-Terminal state to a Terminal state. Hence, we need to update deliveryCompleteCount. But there could
+            // be a situation where the batch was acquired, and LSO moved past. In that case, we only need to consider the
+            // records from the current batch that are greater than or equal to the new startOffset. For the records that
+            // lie before the new startOffset, they would have already been counted in deliveryCompleteCount when LSO moved.
+            if (isStateTerminal(updateResult.state())) {
+                deliveryCompleteCount.addAndGet(numInFlightRecordsInBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset()));
+            }
             return;
         }
         log.debug("The batch is not in acquired state while release of acquisition lock on timeout, skipping, batch: {}"
@@ -2588,6 +2860,13 @@ public class SharePartition {
             updateResult.cancelAndClearAcquisitionLockTimeoutTask();
             if (updateResult.state() != RecordState.ARCHIVED) {
                 updateFindNextFetchOffset(true);
+            }
+            // If after acquisition lock timeout, an offset state is moved to ARCHIVED, then we have records moved from
+            // non-Terminal state to a Terminal state. Hence, we need to update deliveryCompleteCount, but only if the
+            // records are past the startOffset. If the LSO was moved in between, then we don't need to care about the
+            // records that lie before the startOffset as they would have already been counted in deliveryCompleteCount.
+            if (offsetState.getKey() >= startOffset && isStateTerminal(updateResult.state())) {
+                deliveryCompleteCount.incrementAndGet();
             }
         }
     }
@@ -2649,7 +2928,7 @@ public class SharePartition {
         for (RecordBatch recordBatch : recordsToArchive) {
             // Archive the offsets/batches in the cached state.
             NavigableMap<Long, InFlightBatch> subMap = fetchSubMap(recordBatch);
-            archiveRecords(recordBatch.baseOffset(), recordBatch.lastOffset() + 1, subMap, RecordState.ACQUIRED);
+            archiveRecords(recordBatch.baseOffset(), recordBatch.lastOffset() + 1, subMap, RecordState.ACQUIRED, true);
         }
         return filterRecordBatchesFromAcquiredRecords(acquiredRecords, recordsToArchive);
     }
@@ -2829,6 +3108,10 @@ public class SharePartition {
         }
     }
 
+    private boolean isRecordLimitMode(ShareAcquireMode shareAcquireMode) {
+        return ShareAcquireMode.RECORD_LIMIT.equals(shareAcquireMode);
+    }
+
     // Visible for testing.
     void updateFindNextFetchOffset(boolean value) {
         lock.writeLock().lock();
@@ -2877,6 +3160,11 @@ public class SharePartition {
     // Visible for testing.
     Uuid fetchLock() {
         return fetchLock.get();
+    }
+
+    // Visible for testing.
+    int deliveryCompleteCount() {
+        return deliveryCompleteCount.get();
     }
 
     /**
@@ -2944,6 +3232,16 @@ public class SharePartition {
     ) { }
 
     /**
+     * OffsetAndMetadata class is used to record the last acknowledged offset post which the startOffset can be moved,
+     * and the number of Terminal records removed out of the in-flight state if the startOffset is advanced.
+     */
+    // Visible for testing
+    record OffsetAndMetadata(
+        long lastAcknowledgedOffset,
+        int numTerminalRecords
+    ) { }
+
+    /**
      * LastOffsetAndMaxRecords class is used to track the last offset to acquire and the maximum number
      * of records that can be acquired in a fetch request.
      */
@@ -2951,4 +3249,9 @@ public class SharePartition {
         long lastOffset,
         int maxRecords
     ) { }
+
+    // Visibility for testing
+    static Map<Byte, RecordState> ackTypeToRecordStateMapping() {
+        return ACK_TYPE_TO_RECORD_STATE;
+    }
 }

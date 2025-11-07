@@ -385,6 +385,7 @@ public class TopologyTestDriver implements Closeable {
                 metrics,
                 "test-client",
                 "processId",
+                "applicationId",
                 mockWallClockTime
         );
         TaskMetrics.droppedRecordsSensor(threadId, TASK_ID.toString(), streamsMetrics);

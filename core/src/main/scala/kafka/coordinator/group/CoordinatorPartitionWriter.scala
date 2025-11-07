@@ -16,7 +16,6 @@
  */
 package kafka.coordinator.group
 
-import kafka.cluster.PartitionListener
 import kafka.server.ReplicaManager
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
 import org.apache.kafka.common.protocol.Errors
@@ -25,7 +24,7 @@ import org.apache.kafka.coordinator.common.runtime.PartitionWriter
 import org.apache.kafka.server.ActionQueue
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, PartitionListener, VerificationGuard}
 
 import java.util.concurrent.CompletableFuture
 import scala.collection.Map
