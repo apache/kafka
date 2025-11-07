@@ -1641,7 +1641,7 @@ public class StreamTaskTest {
             
             // Validate INFO log from StreamTask about partition2 not being ready
             messages = streamTaskAppender.getMessages();
-            final String expectedNotReadyMessage = "stream-thread [Test worker] task [0_0] Partition topic2-0 has fetched lag for -1\n\tWaiting to fetch data for topic2-0";
+            final String expectedNotReadyMessage = "stream-thread [Test worker] task [0_0] Partition topic2-0 has fetched lag of -1\n\tWaiting to fetch data for topic2-0";
             final String expectedReadyMessage = "Partition topic1-0 has buffered data, ready for processing";
             assertThat("Should have logged not ready message", messages.size(), is(1));
             assertThat(
