@@ -1625,15 +1625,15 @@ public class StreamTaskTest {
             final long initialTime = time.milliseconds();
             task.setLastNotReadyLogTime(initialTime - 100_000L);
             
-            // Advance time by approximately 5 seconds
-            long newTime = time.milliseconds() + 5_000L;
+            // Advance time by 19 seconds
+            long newTime = time.milliseconds() + 19_000L;
             
-            // Should not trigger logging after being stale for 105 seconds
+            // Should not trigger logging after being stale for 119 seconds
             assertFalse(task.isProcessable(newTime));
             List<String> messages = streamTaskAppender.getMessages();
             assertEquals(0, messages.size(), "No log message should be logged before 120 seconds");
 
-            // Advance time by approximately 20 seconds
+            // Advance time by 20 seconds
             newTime = time.milliseconds() + 20_000L;
 
             // Should trigger logging after being stale for 120 seconds
