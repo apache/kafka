@@ -8233,6 +8233,7 @@ public class GroupMetadataManager {
      * Populates the record list passed in with record to update the state machine.
      * Validations are done in {@link GroupCoordinatorShard#deleteGroups(AuthorizableRequestContext, List)} by
      * calling {@link GroupMetadataManager#validateDeleteGroup(String)}.
+     * Cancels the Streams initial rebalance delay timer if it is scheduled.
      *
      * @param groupId The id of the group to be deleted. It has been checked in {@link GroupMetadataManager#validateDeleteGroup}.
      * @param records The record list to populate.
@@ -8243,11 +8244,11 @@ public class GroupMetadataManager {
     ) {
         // At this point, we have already validated the group id, so we know that the group exists and that no exception will be thrown.
         createGroupTombstoneRecords(group(groupId), records);
-        timer.cancel(streamsInitialRebalanceKey(groupId));
     }
 
     /**
      * Populates the record list passed in with record to update the state machine.
+     * Cancels the Streams initial rebalance delay timer if it is scheduled.
      *
      * @param group The group to be deleted.
      * @param records The record list to populate.
