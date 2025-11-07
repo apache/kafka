@@ -166,12 +166,12 @@ class KafkaApisTest extends Logging {
   }
 
   def createKafkaApis(
-    authorizer: Option[Authorizer] = None,
-    configRepository: ConfigRepository = new MockConfigRepository(),
-    overrideProperties: Map[String, String] = Map.empty,
-    featureVersions: Seq[FeatureVersion] = Seq.empty,
-    autoTopicCreationManager: Option[AutoTopicCreationManager] = None
-  ): KafkaApis = {
+                       authorizer: Option[Authorizer] = None,
+                       configRepository: ConfigRepository = new MockConfigRepository(),
+                       overrideProperties: Map[String, String] = Map.empty,
+                       featureVersions: Seq[FeatureVersion] = Seq.empty,
+                       autoTopicCreationManager: Option[AutoTopicCreationManager] = None
+                     ): KafkaApis = {
 
     val properties = TestUtils.createBrokerConfig(brokerId)
     properties.put(KRaftConfigs.NODE_ID_CONFIG, brokerId.toString)
@@ -514,9 +514,9 @@ class KafkaApisTest extends Logging {
   }
 
   private def testKraftForwarding(
-    apiKey: ApiKeys,
-    requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]
-  ): Unit = {
+                                   apiKey: ApiKeys,
+                                   requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]
+                                 ): Unit = {
     metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis()
     testForwardableApi(kafkaApis = kafkaApis,
@@ -526,10 +526,10 @@ class KafkaApisTest extends Logging {
   }
 
   private def testForwardableApi(
-    kafkaApis: KafkaApis,
-    apiKey: ApiKeys,
-    requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]
-  ): Unit = {
+                                  kafkaApis: KafkaApis,
+                                  apiKey: ApiKeys,
+                                  requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]
+                                ): Unit = {
     val topicHeader = new RequestHeader(apiKey, apiKey.latestVersion,
       clientId, 0)
 
@@ -604,7 +604,7 @@ class KafkaApisTest extends Logging {
     val resourceMap = configResources.map(configResource => {
       configResource -> Set(
         new AlterConfigOp(new ConfigEntry("foo", "bar"),
-        OpType.SET)).asJavaCollection
+          OpType.SET)).asJavaCollection
     }).toMap.asJava
 
     new IncrementalAlterConfigsRequest.Builder(resourceMap, false)
@@ -613,9 +613,9 @@ class KafkaApisTest extends Logging {
   @ParameterizedTest
   @CsvSource(value = Array("0,1500", "1500,0", "3000,1000"))
   def testKRaftControllerThrottleTimeEnforced(
-    controllerThrottleTimeMs: Int,
-    requestThrottleTimeMs: Int
-  ): Unit = {
+                                               controllerThrottleTimeMs: Int,
+                                               requestThrottleTimeMs: Int
+                                             ): Unit = {
     metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
 
     val topicToCreate = new CreatableTopic()
@@ -970,9 +970,9 @@ class KafkaApisTest extends Logging {
         ArgumentMatchers.eq(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA),
         capturedRequest.capture())).thenReturn(
         Seq(new MetadataResponseTopic()
-        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-        .setIsInternal(isInternal)
-        .setName(topicName))
+          .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+          .setIsInternal(isInternal)
+          .setName(topicName))
       )
     }
     capturedRequest
@@ -2387,11 +2387,11 @@ class KafkaApisTest extends Logging {
       }
 
       val produceRequest = ProduceRequest.builder(new ProduceRequestData()
-        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
-          util.List.of(produceData)
-            .iterator))
-        .setAcks(1.toShort)
-        .setTimeoutMs(5000))
+          .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+            util.List.of(produceData)
+              .iterator))
+          .setAcks(1.toShort)
+          .setTimeoutMs(5000))
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
@@ -2436,27 +2436,27 @@ class KafkaApisTest extends Logging {
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: String = Uuid.randomUuid().toString
     val groupId = "group"
-    
+
     // Create test principal and client address to verify quota tags
     val testPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user")
     val testClientAddress = InetAddress.getByName("192.168.1.100")
     val testClientId = "test-client-id"
-    
+
     // Mock share partition manager responses
     val records = memoryRecords(10, 0)
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setAcknowledgeErrorCode(Errors.NONE.code)
-            .setRecords(records)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setDeliveryCount(1)
-            ))))))
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setAcknowledgeErrorCode(Errors.NONE.code)
+          .setRecords(records)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(9)
+              .setDeliveryCount(1)
+          ))))))
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(0, util.List.of(
@@ -2467,7 +2467,7 @@ class KafkaApisTest extends Logging {
     val sessionCaptorFetch = ArgumentCaptor.forClass(classOf[Session])
     val clientIdCaptor = ArgumentCaptor.forClass(classOf[String])
     val requestCaptor = ArgumentCaptor.forClass(classOf[RequestChannel.Request])
-    
+
     // Mock quota manager responses and capture arguments
     when(quotas.fetch.maybeRecordAndGetThrottleTimeMs(
       sessionCaptorFetch.capture(), clientIdCaptor.capture(), anyDouble, anyLong)).thenReturn(0)
@@ -2488,12 +2488,12 @@ class KafkaApisTest extends Logging {
       ).iterator))
 
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
-    
+
     // Create request with custom principal and client address to test quota tags
     val requestHeader = new RequestHeader(shareFetchRequest.apiKey, shareFetchRequest.version, testClientId, 0)
-    val request = buildRequest(shareFetchRequest, testPrincipal, testClientAddress, 
+    val request = buildRequest(shareFetchRequest, testPrincipal, testClientAddress,
       ListenerName.forSecurityProtocol(SecurityProtocol.SSL), fromPrivilegedListener = false, Some(requestHeader), requestChannelMetrics)
-    
+
     // Test that the request itself contains the proper tags and information
     assertEquals(testClientId, request.header.clientId)
     assertEquals(testPrincipal, request.context.principal)
@@ -2504,17 +2504,17 @@ class KafkaApisTest extends Logging {
     kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     val response = verifyNoThrottling[ShareFetchResponse](request)
-    
+
     // Verify response is successful
     val responseData = response.data()
     assertEquals(Errors.NONE.code, responseData.errorCode)
-    
+
     // Verify that quota methods were called and captured session information
     verify(quotas.fetch, times(1)).maybeRecordAndGetThrottleTimeMs(
       any[Session](), anyString, anyDouble, anyLong)
     verify(quotas.request, times(1)).maybeRecordAndGetThrottleTimeMs(
       any[RequestChannel.Request](), anyLong)
-    
+
     // Verify the Session data passed to fetch quota manager is exactly what was defined in the test
     val capturedSession = sessionCaptorFetch.getValue
     assertNotNull(capturedSession)
@@ -2523,11 +2523,11 @@ class KafkaApisTest extends Logging {
     assertEquals("test-user", capturedSession.principal.getName)
     assertEquals(testClientAddress, capturedSession.clientAddress)
     assertEquals("test-user", capturedSession.sanitizedUser)
-    
+
     // Verify client ID passed to fetch quota manager matches what was defined
     val capturedClientId = clientIdCaptor.getValue
     assertEquals(testClientId, capturedClientId)
-    
+
     // Verify the Request data passed to request quota manager is exactly what was defined
     val capturedRequest = requestCaptor.getValue
     assertNotNull(capturedRequest)
@@ -2546,23 +2546,23 @@ class KafkaApisTest extends Logging {
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.randomUuid()
     val groupId = "group"
-    
+
     // Create test principal and client address to verify quota tags
     val testPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user")
     val testClientAddress = InetAddress.getByName("192.168.1.100")
     val testClientId = "test-client-id"
-    
+
     // Mock share partition manager acknowledge response
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(partitionIndex)
-            .setErrorCode(Errors.NONE.code))))
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(partitionIndex)
+          .setErrorCode(Errors.NONE.code))))
 
     // Create argument captors to verify session information passed to quota managers
     val requestCaptor = ArgumentCaptor.forClass(classOf[RequestChannel.Request])
-    
+
     // Mock quota manager responses and capture arguments
     // For ShareAcknowledge, we only verify Request quota (not fetch quota)
     when(quotas.request.maybeRecordAndGetThrottleTimeMs(
@@ -2589,12 +2589,12 @@ class KafkaApisTest extends Logging {
         ).iterator))
 
     val shareAcknowledgeRequest = new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData).build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
-    
+
     // Create request with custom principal and client address to test quota tags
     val requestHeader = new RequestHeader(shareAcknowledgeRequest.apiKey, shareAcknowledgeRequest.version, testClientId, 0)
     val request = buildRequest(shareAcknowledgeRequest, testPrincipal, testClientAddress,
       ListenerName.forSecurityProtocol(SecurityProtocol.SSL), fromPrivilegedListener = false, Some(requestHeader), requestChannelMetrics)
-    
+
     // Test that the request itself contains the proper tags and information
     assertEquals(testClientId, request.header.clientId)
     assertEquals(testPrincipal, request.context.principal)
@@ -2605,19 +2605,19 @@ class KafkaApisTest extends Logging {
     kafkaApis = createKafkaApis()
     kafkaApis.handleShareAcknowledgeRequest(request)
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
-    
+
     // Verify response is successful
     val responseData = response.data()
     assertEquals(Errors.NONE.code, responseData.errorCode)
-    
+
     // Verify that request quota method was called
     verify(quotas.request, times(1)).maybeRecordAndGetThrottleTimeMs(
       any[RequestChannel.Request](), anyLong)
-    
+
     // Verify that fetch quota method was NOT called (ShareAcknowledge only uses request quota)
     verify(quotas.fetch, times(0)).maybeRecordAndGetThrottleTimeMs(
       any[Session](), anyString, anyDouble, anyLong)
-    
+
     // Verify the Request data passed to request quota manager is exactly what was defined
     val capturedRequest = requestCaptor.getValue
     assertNotNull(capturedRequest)
@@ -2636,34 +2636,34 @@ class KafkaApisTest extends Logging {
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: String = Uuid.randomUuid().toString
     val groupId = "group"
-    
+
     // Create test principal and client address to verify quota tags
     val testPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user")
     val testClientAddress = InetAddress.getByName("192.168.1.100")
     val testClientId = "test-client-id"
-    
+
     // Mock share partition manager responses for both fetch and acknowledge
     val records = memoryRecords(10, 0)
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setAcknowledgeErrorCode(Errors.NONE.code)
-            .setRecords(records)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setDeliveryCount(1)
-            ))))))
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setAcknowledgeErrorCode(Errors.NONE.code)
+          .setRecords(records)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(9)
+              .setDeliveryCount(1)
+          ))))))
 
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(partitionIndex)
-            .setErrorCode(Errors.NONE.code))))
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(partitionIndex)
+          .setErrorCode(Errors.NONE.code))))
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(1, util.List.of(
@@ -2674,7 +2674,7 @@ class KafkaApisTest extends Logging {
     val sessionCaptorFetch = ArgumentCaptor.forClass(classOf[Session])
     val clientIdCaptor = ArgumentCaptor.forClass(classOf[String])
     val requestCaptor = ArgumentCaptor.forClass(classOf[RequestChannel.Request])
-    
+
     // Mock quota manager responses and capture arguments
     when(quotas.fetch.maybeRecordAndGetThrottleTimeMs(
       sessionCaptorFetch.capture(), clientIdCaptor.capture(), anyDouble, anyLong)).thenReturn(0)
@@ -2704,12 +2704,12 @@ class KafkaApisTest extends Logging {
       ).iterator))
 
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
-    
+
     // Create request with custom principal and client address to test quota tags
     val requestHeader = new RequestHeader(shareFetchRequest.apiKey, shareFetchRequest.version, testClientId, 0)
     val request = buildRequest(shareFetchRequest, testPrincipal, testClientAddress,
       ListenerName.forSecurityProtocol(SecurityProtocol.SSL), fromPrivilegedListener = false, Some(requestHeader), requestChannelMetrics)
-    
+
     // Test that the request itself contains the proper tags and information
     assertEquals(testClientId, request.header.clientId)
     assertEquals(testPrincipal, request.context.principal)
@@ -2720,17 +2720,17 @@ class KafkaApisTest extends Logging {
     kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     val response = verifyNoThrottling[ShareFetchResponse](request)
-    
+
     // Verify response is successful
     val responseData = response.data()
     assertEquals(Errors.NONE.code, responseData.errorCode)
-    
+
     // Verify that quota methods were called exactly once each (not twice despite having acknowledgements)
     verify(quotas.fetch, times(1)).maybeRecordAndGetThrottleTimeMs(
       any[Session](), anyString, anyDouble, anyLong)
     verify(quotas.request, times(1)).maybeRecordAndGetThrottleTimeMs(
       any[RequestChannel.Request](), anyLong)
-    
+
     // Verify the Session data passed to fetch quota manager is exactly what was defined in the test
     val capturedSession = sessionCaptorFetch.getValue
     assertNotNull(capturedSession)
@@ -2739,11 +2739,11 @@ class KafkaApisTest extends Logging {
     assertEquals("test-user", capturedSession.principal.getName)
     assertEquals(testClientAddress, capturedSession.clientAddress)
     assertEquals("test-user", capturedSession.sanitizedUser)
-    
+
     // Verify client ID passed to fetch quota manager matches what was defined
     val capturedClientId = clientIdCaptor.getValue
     assertEquals(testClientId, capturedClientId)
-    
+
     // Verify the Request data passed to request quota manager is exactly what was defined
     val capturedRequest = requestCaptor.getValue
     assertNotNull(capturedRequest)
@@ -2782,10 +2782,10 @@ class KafkaApisTest extends Logging {
         produceData.setName(tp.topic)
       }
       val produceRequest = ProduceRequest.builder(new ProduceRequestData()
-        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
-          util.List.of(produceData).iterator))
-        .setAcks(1.toShort)
-        .setTimeoutMs(5000))
+          .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+            util.List.of(produceData).iterator))
+          .setAcks(1.toShort)
+          .setTimeoutMs(5000))
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
@@ -2807,7 +2807,7 @@ class KafkaApisTest extends Logging {
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-       any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
+        any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
       kafkaApis = createKafkaApis()
       kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
 
@@ -2853,10 +2853,10 @@ class KafkaApisTest extends Logging {
         produceData.setName(tp.topic)
       }
       val produceRequest = ProduceRequest.builder(new ProduceRequestData()
-        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
-          util.List.of(produceData).iterator))
-        .setAcks(1.toShort)
-        .setTimeoutMs(5000))
+          .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+            util.List.of(produceData).iterator))
+          .setAcks(1.toShort)
+          .setTimeoutMs(5000))
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
@@ -2920,15 +2920,15 @@ class KafkaApisTest extends Logging {
       }
 
       val produceRequest = ProduceRequest.builder(new ProduceRequestData()
-        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
-          util.List.of(topicProduceData
-            .setPartitionData(util.List.of(
-            new ProduceRequestData.PartitionProduceData()
-              .setIndex(tp.partition)
-              .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes))))))
-            .iterator))
-        .setAcks(1.toShort)
-        .setTimeoutMs(5000))
+          .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+            util.List.of(topicProduceData
+                .setPartitionData(util.List.of(
+                  new ProduceRequestData.PartitionProduceData()
+                    .setIndex(tp.partition)
+                    .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes))))))
+              .iterator))
+          .setAcks(1.toShort)
+          .setTimeoutMs(5000))
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
@@ -2998,12 +2998,12 @@ class KafkaApisTest extends Logging {
         produceData.setName(tp.topic)
       }
       val produceRequest = ProduceRequest.builder(new ProduceRequestData()
-        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
-          util.List.of(produceData)
-            .iterator))
-        .setAcks(1.toShort)
-        .setTransactionalId(transactionalId)
-        .setTimeoutMs(5000))
+          .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+            util.List.of(produceData)
+              .iterator))
+          .setAcks(1.toShort)
+          .setTransactionalId(transactionalId)
+          .setTimeoutMs(5000))
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
@@ -3416,8 +3416,8 @@ class KafkaApisTest extends Logging {
   }
 
   private def normalize(
-    response: WriteTxnMarkersResponseData
-  ): WriteTxnMarkersResponseData = {
+                         response: WriteTxnMarkersResponseData
+                       ): WriteTxnMarkersResponseData = {
     val copy = response.duplicate()
     copy.markers.sort(
       Comparator.comparingLong[WriteTxnMarkersResponseData.WritableTxnMarkerResult](_.producerId)
@@ -4302,7 +4302,7 @@ class KafkaApisTest extends Logging {
     }
   }
 
-    /**
+  /**
    * Verifies that sending a fetch request with version 9 works correctly when
    * ReplicaManager.getLogConfig returns None.
    */
@@ -4504,16 +4504,16 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setAcknowledgeErrorCode(Errors.NONE.code)
-            .setRecords(records)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setDeliveryCount(1)
-            )))
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setAcknowledgeErrorCode(Errors.NONE.code)
+          .setRecords(records)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(9)
+              .setDeliveryCount(1)
+          )))
       ))
     )
 
@@ -4570,31 +4570,31 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setAcknowledgeErrorCode(Errors.NONE.code)
-            .setRecords(records)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(4)
-                .setDeliveryCount(1)
-            )))
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setAcknowledgeErrorCode(Errors.NONE.code)
+          .setRecords(records)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(4)
+              .setDeliveryCount(1)
+          )))
       ))
     )
 
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(partitionIndex)
-            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-            .setErrorMessage(ackErrorMessage)
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(partitionIndex)
+          .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+          .setErrorMessage(ackErrorMessage)
       ))
     )
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(shareSessionEpoch, util.List.of(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
+      new ShareSessionContext(new ShareRequestMetadata(memberId, shareSessionEpoch), util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)))
     )
 
@@ -4652,16 +4652,16 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setAcknowledgeErrorCode(Errors.NONE.code)
-            .setRecords(records)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setDeliveryCount(1)
-            )))
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setAcknowledgeErrorCode(Errors.NONE.code)
+          .setRecords(records)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(9)
+              .setDeliveryCount(1)
+          )))
       ))
     )
 
@@ -4688,11 +4688,11 @@ class KafkaApisTest extends Logging {
           new ShareFetchRequestData.FetchPartition()
             .setPartitionIndex(partitionIndex)
             .setAcknowledgementBatches(util.List.of(
-            new AcknowledgementBatch()
-              .setFirstOffset(0)
-              .setLastOffset(9)
-              .setAcknowledgeTypes(util.List.of(1.toByte))
-          ))
+              new AcknowledgementBatch()
+                .setFirstOffset(0)
+                .setLastOffset(9)
+                .setAcknowledgeTypes(util.List.of(1.toByte))
+            ))
         ).iterator))
       ).iterator))
 
@@ -4752,16 +4752,16 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setAcknowledgeErrorCode(Errors.NONE.code)
-            .setRecords(records)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setDeliveryCount(1)
-            )))
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setAcknowledgeErrorCode(Errors.NONE.code)
+          .setRecords(records)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(9)
+              .setDeliveryCount(1)
+          )))
       ))
     )
 
@@ -4774,9 +4774,9 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(partitionIndex)
-            .setErrorCode(Errors.NONE.code)
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(partitionIndex)
+          .setErrorCode(Errors.NONE.code)
       ))
     )
 
@@ -4896,15 +4896,15 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setRecords(records)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setDeliveryCount(1)
-            )))
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setRecords(records)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(9)
+              .setDeliveryCount(1)
+          )))
       ))
     )
 
@@ -5025,10 +5025,10 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.REPLICA_NOT_AVAILABLE.code)
-            .setRecords(records)
-            .setAcquiredRecords(new util.ArrayList(util.List.of))
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.REPLICA_NOT_AVAILABLE.code)
+          .setRecords(records)
+          .setAcquiredRecords(new util.ArrayList(util.List.of))
       ))
     )
 
@@ -5085,15 +5085,15 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, partitionIndex, topicName),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setRecords(records)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setDeliveryCount(1)
-            )))
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setRecords(records)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(9)
+              .setDeliveryCount(1)
+          )))
       ))
     )
 
@@ -5172,15 +5172,15 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setRecords(records)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setDeliveryCount(1)
-            )))
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setRecords(records)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(9)
+              .setDeliveryCount(1)
+          )))
       ))
     )
 
@@ -5291,59 +5291,59 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setRecords(records1)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setDeliveryCount(1)
-            )))
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setRecords(records1)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(9)
+              .setDeliveryCount(1)
+          )))
       ))
     ).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setAcknowledgeErrorCode(Errors.NONE.code)
-            .setRecords(records2)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(10)
-                .setLastOffset(19)
-                .setDeliveryCount(1)
-            )))
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setAcknowledgeErrorCode(Errors.NONE.code)
+          .setRecords(records2)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(10)
+              .setLastOffset(19)
+              .setDeliveryCount(1)
+          )))
       ))
     ).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setAcknowledgeErrorCode(Errors.NONE.code)
-            .setRecords(records3)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(20)
-                .setLastOffset(29)
-                .setDeliveryCount(1)
-            )))
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setAcknowledgeErrorCode(Errors.NONE.code)
+          .setRecords(records3)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(20)
+              .setLastOffset(29)
+              .setDeliveryCount(1)
+          )))
       ))
     )
 
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(partitionIndex)
-            .setErrorCode(Errors.NONE.code)
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(partitionIndex)
+          .setErrorCode(Errors.NONE.code)
       ))
     ).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(partitionIndex)
-            .setErrorCode(Errors.NONE.code)
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(partitionIndex)
+          .setErrorCode(Errors.NONE.code)
       ))
     )
 
@@ -5514,81 +5514,81 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId1, new TopicPartition(topicName1, 0)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setRecords(records_t1_p1_1)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setDeliveryCount(1)
-            ))),
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setRecords(records_t1_p1_1)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(9)
+              .setDeliveryCount(1)
+          ))),
         new TopicIdPartition(topicId1, new TopicPartition(topicName1, 1)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setRecords(records_t1_p2_1)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(10)
-                .setLastOffset(19)
-                .setDeliveryCount(1)
-            ))),
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setRecords(records_t1_p2_1)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(10)
+              .setLastOffset(19)
+              .setDeliveryCount(1)
+          ))),
         new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setRecords(records_t2_p1_1)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(43)
-                .setLastOffset(52)
-                .setDeliveryCount(1)
-            ))),
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setRecords(records_t2_p1_1)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(43)
+              .setLastOffset(52)
+              .setDeliveryCount(1)
+          ))),
         new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setRecords(records_t2_p2_1)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(17)
-                .setLastOffset(26)
-                .setDeliveryCount(1)
-            )))
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setRecords(records_t2_p2_1)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(17)
+              .setLastOffset(26)
+              .setDeliveryCount(1)
+          )))
       ))
     ).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId3, new TopicPartition(topicName3, 0)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setRecords(records_t3_p1_1)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(54)
-                .setLastOffset(73)
-                .setDeliveryCount(1)
-            )))
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setRecords(records_t3_p1_1)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(54)
+              .setLastOffset(73)
+              .setDeliveryCount(1)
+          )))
       ))
     ).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId3, new TopicPartition(topicName3, 0)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setRecords(records_t3_p1_2)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(74)
-                .setLastOffset(93)
-                .setDeliveryCount(1)
-            ))),
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setRecords(records_t3_p1_2)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(74)
+              .setLastOffset(93)
+              .setDeliveryCount(1)
+          ))),
         new TopicIdPartition(topicId4, new TopicPartition(topicName4, 0)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setRecords(records_t4_p1_1)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(10)
-                .setLastOffset(24)
-                .setDeliveryCount(1)
-            )))
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setRecords(records_t4_p1_1)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(10)
+              .setLastOffset(24)
+              .setDeliveryCount(1)
+          )))
       ))
     )
 
@@ -5633,42 +5633,42 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId3, new TopicPartition(topicName3, 0)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code),
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code),
         new TopicIdPartition(topicId4, new TopicPartition(topicName4, 0)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code)
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code)
       ))
     )
 
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId1, new TopicPartition(topicName1, 0)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code),
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code),
         new TopicIdPartition(topicId1, new TopicPartition(topicName1, 1)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(1)
-            .setErrorCode(Errors.NONE.code),
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(1)
+          .setErrorCode(Errors.NONE.code),
         new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code),
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code),
         new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(1)
-            .setErrorCode(Errors.NONE.code),
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(1)
+          .setErrorCode(Errors.NONE.code),
         new TopicIdPartition(topicId3, new TopicPartition(topicName3, 0)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code),
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code),
         new TopicIdPartition(topicId4, new TopicPartition(topicName4, 0)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code),
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code),
       ))
     )
 
@@ -5970,38 +5970,38 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         tp1,
-          new ShareFetchResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code)
-            .setRecords(records_t1_p1)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setDeliveryCount(1)
-            ))),
+        new ShareFetchResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code)
+          .setRecords(records_t1_p1)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(9)
+              .setDeliveryCount(1)
+          ))),
         tp2,
-          new ShareFetchResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code)
-            .setRecords(records_t2_p1)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(14)
-                .setDeliveryCount(1)
-            ))),
+        new ShareFetchResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code)
+          .setRecords(records_t2_p1)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(14)
+              .setDeliveryCount(1)
+          ))),
         tp3,
-          new ShareFetchResponseData.PartitionData()
-            .setPartitionIndex(1)
-            .setErrorCode(Errors.NONE.code)
-            .setRecords(records_t2_p2)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(19)
-                .setDeliveryCount(1)
-            ))),
+        new ShareFetchResponseData.PartitionData()
+          .setPartitionIndex(1)
+          .setErrorCode(Errors.NONE.code)
+          .setRecords(records_t2_p2)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(19)
+              .setDeliveryCount(1)
+          ))),
       ))
     )
 
@@ -6116,16 +6116,16 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         tp1,
-          new ShareFetchResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code)
-            .setRecords(records_t1_p1)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setDeliveryCount(1)
-            )))
+        new ShareFetchResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code)
+          .setRecords(records_t1_p1)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(9)
+              .setDeliveryCount(1)
+          )))
       ))
     )
 
@@ -6243,23 +6243,23 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         tp1,
-          new ShareFetchResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
-            .setRecords(emptyRecords)
-            .setAcquiredRecords(new util.ArrayList(util.List.of)),
+        new ShareFetchResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
+          .setRecords(emptyRecords)
+          .setAcquiredRecords(new util.ArrayList(util.List.of)),
         tp2,
-          new ShareFetchResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
-            .setRecords(emptyRecords)
-            .setAcquiredRecords(new util.ArrayList(util.List.of)),
+        new ShareFetchResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
+          .setRecords(emptyRecords)
+          .setAcquiredRecords(new util.ArrayList(util.List.of)),
         tp3,
-          new ShareFetchResponseData.PartitionData()
-            .setPartitionIndex(1)
-            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
-            .setRecords(emptyRecords)
-            .setAcquiredRecords(new util.ArrayList(util.List.of))
+        new ShareFetchResponseData.PartitionData()
+          .setPartitionIndex(1)
+          .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
+          .setRecords(emptyRecords)
+          .setAcquiredRecords(new util.ArrayList(util.List.of))
       ))
     )
 
@@ -6379,27 +6379,27 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         tp2,
-          new ShareFetchResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code)
-            .setRecords(records1)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setDeliveryCount(1)
-            ))),
+        new ShareFetchResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code)
+          .setRecords(records1)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(9)
+              .setDeliveryCount(1)
+          ))),
         tp3,
-          new ShareFetchResponseData.PartitionData()
-            .setPartitionIndex(1)
-            .setErrorCode(Errors.NONE.code)
-            .setRecords(records2)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(19)
-                .setDeliveryCount(1)
-            )))
+        new ShareFetchResponseData.PartitionData()
+          .setPartitionIndex(1)
+          .setErrorCode(Errors.NONE.code)
+          .setRecords(records2)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(19)
+              .setDeliveryCount(1)
+          )))
       ))
     )
 
@@ -6548,30 +6548,30 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setAcknowledgeErrorCode(Errors.NONE.code)
-            .setRecords(records1)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setDeliveryCount(1)
-            )))
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setAcknowledgeErrorCode(Errors.NONE.code)
+          .setRecords(records1)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(0)
+              .setLastOffset(9)
+              .setDeliveryCount(1)
+          )))
       ))
     ).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-          new ShareFetchResponseData.PartitionData()
-            .setErrorCode(Errors.NONE.code)
-            .setAcknowledgeErrorCode(Errors.NONE.code)
-            .setRecords(records2)
-            .setAcquiredRecords(new util.ArrayList(util.List.of(
-              new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(10)
-                .setLastOffset(19)
-                .setDeliveryCount(1)
-            )))
+        new ShareFetchResponseData.PartitionData()
+          .setErrorCode(Errors.NONE.code)
+          .setAcknowledgeErrorCode(Errors.NONE.code)
+          .setRecords(records2)
+          .setAcquiredRecords(new util.ArrayList(util.List.of(
+            new ShareFetchResponseData.AcquiredRecords()
+              .setFirstOffset(10)
+              .setLastOffset(19)
+              .setDeliveryCount(1)
+          )))
       ))
     )
 
@@ -6594,9 +6594,9 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code),
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code),
       ))
     )
 
@@ -6949,7 +6949,7 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareFetchRequest)
     kafkaApis = createKafkaApis(
       authorizer = Option(authorizer),
-      )
+    )
     kafkaApis.handleShareFetchRequest(request)
 
     val response = verifyNoThrottling[ShareFetchResponse](request)
@@ -6972,9 +6972,9 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code),
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code),
       ))
     )
 
@@ -7043,9 +7043,9 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code)
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code)
       ))
     )
 
@@ -7175,7 +7175,7 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareAcknowledgeRequest)
     kafkaApis = createKafkaApis(
       authorizer = Option(authorizer),
-      )
+    )
     kafkaApis.handleShareAcknowledgeRequest(request)
 
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
@@ -7354,9 +7354,9 @@ class KafkaApisTest extends Logging {
       any()
     )).thenReturn(CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
       new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
-        new ShareAcknowledgeResponseData.PartitionData()
-          .setPartitionIndex(partitionIndex)
-          .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code())
+      new ShareAcknowledgeResponseData.PartitionData()
+        .setPartitionIndex(partitionIndex)
+        .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code())
     )))
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
@@ -7466,9 +7466,9 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code)
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code)
       ))
     )
 
@@ -7477,9 +7477,9 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code)
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code)
       ))
     )
 
@@ -7535,9 +7535,9 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code)
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code)
       ))
     )
 
@@ -7872,17 +7872,17 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.acknowledge(any(), any(), any()))
       .thenReturn(CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         tp1,
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code),
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code),
         tp2,
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code),
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code),
         tp3,
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(1)
-            .setErrorCode(Errors.NONE.code)
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(1)
+          .setErrorCode(Errors.NONE.code)
       )))
 
     val acknowledgementData = mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]()
@@ -7949,17 +7949,17 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.acknowledge(any(), any(), any()))
       .thenReturn(CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId1, new TopicPartition("foo1", 0)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code),
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code),
         new TopicIdPartition(topicId2, new TopicPartition("foo2", 0)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code),
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code),
         new TopicIdPartition(topicId2, new TopicPartition("foo2", 1)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(1)
-            .setErrorCode(Errors.NONE.code)
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(1)
+          .setErrorCode(Errors.NONE.code)
       )))
 
     val acknowledgementData = mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]()
@@ -8026,17 +8026,17 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.acknowledge(any(), any(), any()))
       .thenReturn(CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId1, new TopicPartition("foo1", 0)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code),
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code),
         new TopicIdPartition(topicId2, new TopicPartition("foo2", 0)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code),
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code),
         new TopicIdPartition(topicId2, new TopicPartition("foo2", 1)),
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(1)
-            .setErrorCode(Errors.NONE.code)
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(1)
+          .setErrorCode(Errors.NONE.code)
       )))
 
     val acknowledgementData = mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]()
@@ -8104,13 +8104,13 @@ class KafkaApisTest extends Logging {
     when(sharePartitionManager.acknowledge(any(), any(), any()))
       .thenReturn(CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         tp1,
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code),
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code),
         tp2,
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code)
+        new ShareAcknowledgeResponseData.PartitionData()
+          .setPartitionIndex(0)
+          .setErrorCode(Errors.NONE.code)
       )))
 
     val acknowledgementData = mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]()
@@ -8274,9 +8274,9 @@ class KafkaApisTest extends Logging {
   }
 
   private def compareAcknowledgeResponsePartitionData(partitionIndex: Int,
-                                              ackErrorCode: Short,
-                                              partitionData: ShareAcknowledgeResponseData.PartitionData
-                                             ): Boolean = {
+                                                      ackErrorCode: Short,
+                                                      partitionData: ShareAcknowledgeResponseData.PartitionData
+                                                     ): Boolean = {
     if (partitionIndex == partitionData.partitionIndex() && ackErrorCode == partitionData.errorCode()) {
       return true
     }
@@ -9867,10 +9867,10 @@ class KafkaApisTest extends Logging {
   }
 
   def testListGroupsRequestFiltersUnauthorizedGroups(
-    authorizer: Authorizer,
-    groups: List[String],
-    expectedGroups: List[String],
-  ): Unit = {
+                                                      authorizer: Authorizer,
+                                                      groups: List[String],
+                                                      expectedGroups: List[String],
+                                                    ): Unit = {
     val listGroupsRequest = new ListGroupsRequestData()
 
     val requestChannelRequest = buildRequest(new ListGroupsRequest.Builder(listGroupsRequest).build())
@@ -9979,7 +9979,7 @@ class KafkaApisTest extends Logging {
 
     MetadataCacheTest.updateCache(metadataCache,
       Seq(new RegisterBrokerRecord().setBrokerId(0).setRack("rack").setFenced(false).setEndPoints(endpoints0),
-      new RegisterBrokerRecord().setBrokerId(1).setRack("rack").setFenced(false).setEndPoints(endpoints1))
+        new RegisterBrokerRecord().setBrokerId(1).setRack("rack").setFenced(false).setEndPoints(endpoints1))
     )
 
     (plaintextListener, anotherListener)
@@ -10107,13 +10107,13 @@ class KafkaApisTest extends Logging {
       fromPrivilegedListener, requestHeader, requestMetrics)
   }
 
-    private def buildRequest(request: AbstractRequest,
-                             principal: KafkaPrincipal,
-                             clientAddress: InetAddress,
-                             listenerName: ListenerName,
-                             fromPrivilegedListener: Boolean,
-                             requestHeader: Option[RequestHeader],
-                             requestMetrics: RequestChannelMetrics): RequestChannel.Request = {
+  private def buildRequest(request: AbstractRequest,
+                           principal: KafkaPrincipal,
+                           clientAddress: InetAddress,
+                           listenerName: ListenerName,
+                           fromPrivilegedListener: Boolean,
+                           requestHeader: Option[RequestHeader],
+                           requestMetrics: RequestChannelMetrics): RequestChannel.Request = {
     val buffer = request.serializeWithHeader(
       requestHeader.getOrElse(new RequestHeader(request.apiKey, request.version, clientId, 0)))
 
@@ -10131,8 +10131,8 @@ class KafkaApisTest extends Logging {
   }
 
   private def verifyNoThrottling[T <: AbstractResponse](
-    request: RequestChannel.Request
-  ): T = {
+                                                         request: RequestChannel.Request
+                                                       ): T = {
     val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
@@ -10152,8 +10152,8 @@ class KafkaApisTest extends Logging {
   }
 
   private def verifyNoThrottlingAndUpdateMetrics[T <: AbstractResponse](
-    request: RequestChannel.Request
-  ): T = {
+                                                                         request: RequestChannel.Request
+                                                                       ): T = {
     val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
@@ -10269,7 +10269,7 @@ class KafkaApisTest extends Logging {
       t0p0 -> "/foo",
       t0p1 -> "/foo",
       t0p2 -> "/foo"))))
-    .thenReturn(partitionResults)
+      .thenReturn(partitionResults)
     kafkaApis = createKafkaApis()
     kafkaApis.handleAlterReplicaLogDirsRequest(request)
 
@@ -10297,7 +10297,7 @@ class KafkaApisTest extends Logging {
             .setLastStableOffset(105)
             .setLogStartOffset(0)
             .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(100, raw.getBytes(StandardCharsets.UTF_8))))
-      }.toMap.asJava)
+        }.toMap.asJava)
 
       data.foreach{case (tp, _) =>
         topicIds.put(tp.topicPartition.topic, tp.topicId)
@@ -10310,7 +10310,7 @@ class KafkaApisTest extends Logging {
     val throttledData = Map(throttledPartition -> "throttledData")
     val expectedSize = FetchResponse.sizeOf(FetchResponseData.HIGHEST_SUPPORTED_VERSION,
       fetchResponse(throttledData).responseData(topicNames, FetchResponseData.HIGHEST_SUPPORTED_VERSION).entrySet.asScala.map( entry =>
-      (new TopicIdPartition(Uuid.ZERO_UUID, entry.getKey), entry.getValue)).toMap.asJava.entrySet.iterator)
+        (new TopicIdPartition(Uuid.ZERO_UUID, entry.getKey), entry.getValue)).toMap.asJava.entrySet.iterator)
 
     val response = fetchResponse(throttledData ++ Map(new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("nonThrottledData", 0)) -> "nonThrottledData"))
 
@@ -10388,9 +10388,9 @@ class KafkaApisTest extends Logging {
     assertEquals(Set("foo", "bar", "baz", "invalid;topic"), response.data.topics.asScala.map(_.name).toSet)
 
     def assertPartitionError(
-      topicPartition: TopicPartition,
-      error: Errors
-    ): DescribeProducersResponseData.PartitionResponse = {
+                              topicPartition: TopicPartition,
+                              error: Errors
+                            ): DescribeProducersResponseData.PartitionResponse = {
       val topicData = response.data.topics.asScala.find(_.name == topicPartition.topic).get
       val partitionData = topicData.partitions.asScala.find(_.partitionIndex == topicPartition.partition).get
       assertEquals(error, Errors.forCode(partitionData.errorCode))
@@ -10475,10 +10475,10 @@ class KafkaApisTest extends Logging {
       any[Long])).thenReturn(0)
 
     def expectDescribe(
-      resourceType: ResourceType,
-      transactionalId: String,
-      result: AuthorizationResult
-    ): Unit = {
+                        resourceType: ResourceType,
+                        transactionalId: String,
+                        result: AuthorizationResult
+                      ): Unit = {
       val pattern = new ResourcePattern(resourceType, transactionalId, PatternType.LITERAL)
       val action = new Action(AclOperation.DESCRIBE, pattern, 1, true, true)
       val actions = util.List.of(action)
@@ -10494,9 +10494,9 @@ class KafkaApisTest extends Logging {
     expectDescribe(ResourceType.TOPIC, "bar", AuthorizationResult.DENIED)
 
     def mkTopicData(
-      topic: String,
-      partitions: Seq[Int]
-    ): DescribeTransactionsResponseData.TopicData = {
+                     topic: String,
+                     partitions: Seq[Int]
+                   ): DescribeTransactionsResponseData.TopicData = {
       new DescribeTransactionsResponseData.TopicData()
         .setTopic(topic)
         .setPartitions(partitions.map(Int.box).asJava)
@@ -11271,17 +11271,17 @@ class KafkaApisTest extends Logging {
 
     future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, missingTopics))
     val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
-    
+
     assertEquals(Errors.NONE.code, response.data.errorCode())
     assertEquals(null, response.data.errorMessage())
-    
+
     // Verify that the cached error was appended to the existing status detail
     assertEquals(1, response.data.status().size())
     val status = response.data.status().get(0)
     assertEquals(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code(), status.statusCode())
     assertTrue(status.statusDetail().contains("Internal topics are missing: [test-topic]"))
     assertTrue(status.statusDetail().contains("Creation failed: test-topic (INVALID_REPLICATION_FACTOR)"))
-    
+
     // Verify that createStreamsInternalTopics was called
     verify(mockAutoTopicCreationManager).createStreamsInternalTopics(any(), any(), anyLong())
     verify(mockAutoTopicCreationManager).getStreamsInternalTopicCreationErrors(ArgumentMatchers.eq(Set("test-topic")), any())
@@ -11977,10 +11977,10 @@ class KafkaApisTest extends Logging {
     kafkaApis.handle(request, RequestLocal.noCaching)
     val response = verifyNoThrottling[ListConfigResourcesResponse](request)
     val expectedResponseData = new ListConfigResourcesResponseData()
-        .setConfigResources(
-          groupIds.stream().map(resource =>
-            new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource).setResourceType(ConfigResource.Type.GROUP.id)
-          ).collect(util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
+      .setConfigResources(
+        groupIds.stream().map(resource =>
+          new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource).setResourceType(ConfigResource.Type.GROUP.id)
+        ).collect(util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
     assertEquals(expectedResponseData, response.data)
 
     verify(metadataCache, never).getAllTopics
@@ -12001,10 +12001,10 @@ class KafkaApisTest extends Logging {
     kafkaApis.handle(request, RequestLocal.noCaching)
     val response = verifyNoThrottling[ListConfigResourcesResponse](request)
     val expectedResponseData = new ListConfigResourcesResponseData()
-        .setConfigResources(
-          clientMetrics.stream.map(resource =>
-            new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource).setResourceType(ConfigResource.Type.CLIENT_METRICS.id)
-          ).collect(util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
+      .setConfigResources(
+        clientMetrics.stream.map(resource =>
+          new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource).setResourceType(ConfigResource.Type.CLIENT_METRICS.id)
+        ).collect(util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
     assertEquals(expectedResponseData, response.data)
 
     verify(metadataCache, never).getAllTopics
@@ -12026,10 +12026,10 @@ class KafkaApisTest extends Logging {
     kafkaApis.handle(request, RequestLocal.noCaching)
     val response = verifyNoThrottling[ListConfigResourcesResponse](request)
     val expectedResponseData = new ListConfigResourcesResponseData()
-        .setConfigResources(
-          nodeIds.stream().map(resource =>
-            new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource.toString).setResourceType(ConfigResource.Type.BROKER_LOGGER.id)
-          ).collect(java.util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
+      .setConfigResources(
+        nodeIds.stream().map(resource =>
+          new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource.toString).setResourceType(ConfigResource.Type.BROKER_LOGGER.id)
+        ).collect(java.util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
     assertEquals(expectedResponseData, response.data)
 
     verify(metadataCache, never).getAllTopics
@@ -12051,10 +12051,10 @@ class KafkaApisTest extends Logging {
     kafkaApis.handle(request, RequestLocal.noCaching)
     val response = verifyNoThrottling[ListConfigResourcesResponse](request)
     val expectedResponseData = new ListConfigResourcesResponseData()
-        .setConfigResources(
-          nodeIds.stream().map(resource =>
-            new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource.toString).setResourceType(ConfigResource.Type.BROKER.id)
-          ).collect(java.util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
+      .setConfigResources(
+        nodeIds.stream().map(resource =>
+          new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource.toString).setResourceType(ConfigResource.Type.BROKER.id)
+        ).collect(java.util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
     assertEquals(expectedResponseData, response.data)
 
     verify(metadataCache, never).getAllTopics
@@ -12075,10 +12075,10 @@ class KafkaApisTest extends Logging {
     kafkaApis.handle(request, RequestLocal.noCaching)
     val response = verifyNoThrottling[ListConfigResourcesResponse](request)
     val expectedResponseData = new ListConfigResourcesResponseData()
-        .setConfigResources(
-          topics.stream().map(resource =>
-            new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource).setResourceType(ConfigResource.Type.TOPIC.id)
-          ).collect(java.util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
+      .setConfigResources(
+        topics.stream().map(resource =>
+          new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource).setResourceType(ConfigResource.Type.TOPIC.id)
+        ).collect(java.util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
     assertEquals(expectedResponseData, response.data)
 
     verify(groupConfigManager, never).groupIds
@@ -12357,7 +12357,7 @@ class KafkaApisTest extends Logging {
         .map(action => acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED))
         .toList
     }
-     val member0 = new ShareGroupDescribeResponseData.Member()
+    val member0 = new ShareGroupDescribeResponseData.Member()
       .setMemberId("member0")
       .setAssignment(new ShareGroupDescribeResponseData.Assignment()
         .setTopicPartitions(util.List.of(
@@ -13375,7 +13375,7 @@ class KafkaApisTest extends Logging {
           .setTopicId(topicId2)
           .setErrorMessage(null)
           .setErrorCode(Errors.NONE.code())
-          )
+      )
       )
 
     val expectedResponseTopics: util.List[DeleteShareGroupOffsetsResponseTopic] = new util.ArrayList[DeleteShareGroupOffsetsResponseTopic]()
@@ -13952,7 +13952,7 @@ class KafkaApisTest extends Logging {
         new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
           .setPartitionIndex(0)
           .setStartOffset(0L)
-        ).asJava))
+      ).asJava))
     )
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
