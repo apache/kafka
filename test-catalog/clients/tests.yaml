@@ -2151,6 +2151,7 @@ org.apache.kafka.clients.consumer.internals.ShareCompletedFetchTest:
 - testSoftMaxPollRecordLimit
 - testUnaligned
 org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManagerTest:
+- testAcknowledgeErrorMessagePropagatedFromFetchResponse
 - testAcknowledgeOnClose
 - testAcknowledgeOnCloseWithPendingCommitAsync
 - testAcknowledgeOnCloseWithPendingCommitSync
