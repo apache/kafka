@@ -258,6 +258,9 @@ class Tasks implements TasksRegistry {
 
     @Override
     public synchronized void clear() {
+        pendingTasksToInit.clear();
+        pendingActiveTasksToCreate.clear();
+        pendingStandbyTasksToCreate.clear();
         activeTasksPerId.clear();
         standbyTasksPerId.clear();
         activeTasksPerPartition.clear();
@@ -345,5 +348,13 @@ class Tasks implements TasksRegistry {
     @Override
     public boolean contains(final TaskId taskId) {
         return getTask(taskId) != null;
+    }
+
+    Map<TaskId, Set<TopicPartition>> pendingActiveTasksToCreate() {
+        return pendingActiveTasksToCreate;
+    }
+
+    Map<TaskId, Set<TopicPartition>> pendingStandbyTasksToCreate() {
+        return pendingStandbyTasksToCreate;
     }
 }

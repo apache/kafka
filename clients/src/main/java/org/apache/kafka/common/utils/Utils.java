@@ -33,6 +33,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
@@ -110,6 +112,9 @@ public final class Utils {
     public static final String NL = System.lineSeparator();
 
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
+
+    private static final VarHandle INT_HANDLE =
+            MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.LITTLE_ENDIAN);
 
     /**
      * Get a sorted list representation of a collection.
@@ -500,11 +505,11 @@ public final class Utils {
 
         // Initialize the hash to a random value
         int h = seed ^ length;
-        int length4 = length / 4;
+        int length4 = length >> 2;
 
         for (int i = 0; i < length4; i++) {
-            final int i4 = i * 4;
-            int k = (data[i4 + 0] & 0xff) + ((data[i4 + 1] & 0xff) << 8) + ((data[i4 + 2] & 0xff) << 16) + ((data[i4 + 3] & 0xff) << 24);
+            final int i4 = i << 2;
+            int k = (int) INT_HANDLE.get(data, i4);
             k *= m;
             k ^= k >>> r;
             k *= m;
@@ -513,13 +518,14 @@ public final class Utils {
         }
 
         // Handle the last few bytes of the input array
-        switch (length % 4) {
+        int index = length4 << 2;
+        switch (length - index) {
             case 3:
-                h ^= (data[(length & ~3) + 2] & 0xff) << 16;
+                h ^= (data[index + 2] & 0xff) << 16;
             case 2:
-                h ^= (data[(length & ~3) + 1] & 0xff) << 8;
+                h ^= (data[index + 1] & 0xff) << 8;
             case 1:
-                h ^= data[length & ~3] & 0xff;
+                h ^= data[index] & 0xff;
                 h *= m;
         }
 
@@ -857,7 +863,7 @@ public final class Utils {
     public static void delete(final File rootFile) throws IOException {
         if (rootFile == null)
             return;
-        Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<Path>() {
+        Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult visitFileFailed(Path path, IOException exc) throws IOException {
                 if (exc instanceof NoSuchFileException) {
@@ -1403,7 +1409,7 @@ public final class Utils {
      * @return new Collector<Map.Entry<K, V>, M, M>
      */
     public static <K, V, M extends Map<K, V>> Collector<Map.Entry<K, V>, M, M> entriesToMap(final Supplier<M> mapSupplier) {
-        return new Collector<Map.Entry<K, V>, M, M>() {
+        return new Collector<>() {
             @Override
             public Supplier<M> supplier() {
                 return mapSupplier;

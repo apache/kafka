@@ -43,7 +43,6 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -77,7 +76,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -114,6 +112,9 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.wa
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.allOf;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -161,8 +162,8 @@ public class RestoreIntegrationTest {
         CLUSTER.createTopic(inputStream, 2, 1);
     }
 
-    private Properties props(final boolean stateUpdaterEnabled) {
-        return props(mkObjectProperties(mkMap(mkEntry(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled))));
+    private Properties props() {
+        return props(mkObjectProperties(mkMap()));
     }
 
     private Properties props(final Properties extraProperties) {
@@ -267,17 +268,12 @@ public class RestoreIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-        "true,true",
-        "true,false", 
-        "false,true",
-        "false,false"
-    })
-    public void shouldRestoreStateFromSourceTopicForReadOnlyStore(final boolean stateUpdaterEnabled, final boolean useNewProtocol) throws Exception {
+    @ValueSource(booleans = {true, false})
+    public void shouldRestoreStateFromSourceTopicForReadOnlyStore(final boolean useNewProtocol) throws Exception {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final Topology topology = new Topology();
 
-        final Properties props = props(stateUpdaterEnabled);
+        final Properties props = props();
         if (useNewProtocol) {
             props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         }
@@ -338,17 +334,12 @@ public class RestoreIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-        "true,true",
-        "true,false",
-        "false,true",
-        "false,false"
-    })
-    public void shouldRestoreStateFromSourceTopicForGlobalTable(final boolean stateUpdaterEnabled, final boolean useNewProtocol) throws Exception {
+    @ValueSource(booleans = {true, false})
+    public void shouldRestoreStateFromSourceTopicForGlobalTable(final boolean useNewProtocol) throws Exception {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Properties props = props(stateUpdaterEnabled);
+        final Properties props = props();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         if (useNewProtocol) {
             props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
@@ -413,20 +404,15 @@ public class RestoreIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-        "true,true",
-        "true,false",
-        "false,true",
-        "false,false"
-    })
-    public void shouldRestoreStateFromChangelogTopic(final boolean stateUpdaterEnabled, final boolean useNewProtocol) throws Exception {
+    @ValueSource(booleans = {true, false})
+    public void shouldRestoreStateFromChangelogTopic(final boolean useNewProtocol) throws Exception {
         final String changelog = appId + "-store-changelog";
         CLUSTER.createTopic(changelog, 2, 1);
 
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Properties props = props(stateUpdaterEnabled);
+        final Properties props = props();
 
         if (useNewProtocol) {
             props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
@@ -474,13 +460,8 @@ public class RestoreIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-        "true,true",
-        "true,false",
-        "false,true",
-        "false,false"
-    })
-    public void shouldSuccessfullyStartWhenLoggingDisabled(final boolean stateUpdaterEnabled, final boolean useNewProtocol) throws InterruptedException {
+    @ValueSource(booleans = {true, false})
+    public void shouldSuccessfullyStartWhenLoggingDisabled(final boolean useNewProtocol) throws InterruptedException {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, Integer> stream = builder.stream(inputStream);
@@ -490,7 +471,7 @@ public class RestoreIntegrationTest {
                 Integer::sum,
                 Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("reduce-store").withLoggingDisabled()
             );
-        final Properties props = props(stateUpdaterEnabled);
+        final Properties props = props();
         if (useNewProtocol) {
             props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         }
@@ -503,13 +484,8 @@ public class RestoreIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-        "true,true",
-        "true,false",
-        "false,true",
-        "false,false"
-    })
-    public void shouldProcessDataFromStoresWithLoggingDisabled(final boolean stateUpdaterEnabled, final boolean useNewProtocol) throws InterruptedException {
+    @ValueSource(booleans = {true, false})
+    public void shouldProcessDataFromStoresWithLoggingDisabled(final boolean useNewProtocol) throws InterruptedException {
         IntegrationTestUtils.produceKeyValuesSynchronously(inputStream,
                 asList(KeyValue.pair(1, 1),
                         KeyValue.pair(2, 2),
@@ -537,7 +513,7 @@ public class RestoreIntegrationTest {
 
         final Topology topology = streamsBuilder.build();
 
-        final Properties props = props(stateUpdaterEnabled);
+        final Properties props = props();
 
         if (useNewProtocol) {
             props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
@@ -558,13 +534,8 @@ public class RestoreIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-        "true,true",
-        "true,false",
-        "false,true",
-        "false,false"
-    })
-    public void shouldRecycleStateFromStandbyTaskPromotedToActiveTaskAndNotRestore(final boolean stateUpdaterEnabled, final boolean useNewProtocol) throws Exception {
+    @ValueSource(booleans = {true, false})
+    public void shouldRecycleStateFromStandbyTaskPromotedToActiveTaskAndNotRestore(final boolean useNewProtocol) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table(
                 inputStream,
@@ -576,7 +547,7 @@ public class RestoreIntegrationTest {
             CLUSTER.setGroupStandbyReplicas(appId, 1);
         }
 
-        final Properties props1 = props(stateUpdaterEnabled);
+        final Properties props1 = props();
         props1.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props1.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-1").getPath());
         if (useNewProtocol) {
@@ -585,7 +556,7 @@ public class RestoreIntegrationTest {
         purgeLocalStreamsState(props1);
         final KafkaStreams streams1 = new KafkaStreams(builder.build(), props1);
 
-        final Properties props2 = props(stateUpdaterEnabled);
+        final Properties props2 = props();
         props2.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props2.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-2").getPath());
         if (useNewProtocol) {
@@ -714,6 +685,52 @@ public class RestoreIntegrationTest {
 
             assertTrue(kafkaStreams1StateRestoreListener.awaitUntilRestorationEnds());
             assertTrue(kafkaStreams2StateRestoreListener.awaitUntilRestorationEnds());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldRecordRestoreMetrics(final boolean useNewProtocol) throws Exception {
+        final AtomicInteger numReceived = new AtomicInteger(0);
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Properties props = props();
+
+        if (useNewProtocol) {
+            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        }
+
+        props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
+
+        createStateForRestoration(inputStream, 10000);
+
+        final CountDownLatch shutdownLatch = new CountDownLatch(1);
+        builder.table(inputStream, Consumed.with(Serdes.Integer(), Serdes.Integer()), Materialized.as("store"))
+                .toStream()
+                .foreach((key, value) -> {
+                    if (numReceived.incrementAndGet() == numberOfKeys) {
+                        shutdownLatch.countDown();
+                    }
+                });
+
+        kafkaStreams = new KafkaStreams(builder.build(), props);
+
+        final AtomicLong restored = new AtomicLong(0);
+        final TrackingStateRestoreListener restoreListener = new TrackingStateRestoreListener(restored);
+        kafkaStreams.setGlobalStateRestoreListener(restoreListener);
+        kafkaStreams.start();
+
+        assertTrue(shutdownLatch.await(30, TimeUnit.SECONDS));
+        assertThat(numReceived.get(), equalTo(numberOfKeys));
+
+        final Map<String, Long> taskIdToMetricValue = kafkaStreams.metrics().entrySet().stream()
+                .filter(e -> e.getKey().name().equals("restore-latency-max"))
+                .collect(Collectors.toMap(e -> e.getKey().tags().get("task-id"), e -> ((Double) e.getValue().metricValue()).longValue()));
+
+        for (final Map.Entry<TopicPartition, Long> entry : restoreListener.changelogToRestoreTime().entrySet()) {
+            final long lowerBound = entry.getValue() - TimeUnit.NANOSECONDS.convert(1, TimeUnit.SECONDS);
+            final long upperBound = entry.getValue() + TimeUnit.NANOSECONDS.convert(1, TimeUnit.SECONDS);
+            assertThat(taskIdToMetricValue.get("0_" + entry.getKey().partition()), allOf(greaterThanOrEqualTo(lowerBound), lessThanOrEqualTo(upperBound)));
         }
     }
 

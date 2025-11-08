@@ -656,6 +656,7 @@ public class PersisterStateManager {
         private final int stateEpoch;
         private final int leaderEpoch;
         private final long startOffset;
+        private final int deliveryCompleteCount;
         private final List<PersisterStateBatch> batches;
         private final CompletableFuture<WriteShareGroupStateResponse> result;
         private final BackoffManager writeStateBackoff;
@@ -667,6 +668,7 @@ public class PersisterStateManager {
             int stateEpoch,
             int leaderEpoch,
             long startOffset,
+            int deliveryCompleteCount,
             List<PersisterStateBatch> batches,
             CompletableFuture<WriteShareGroupStateResponse> result,
             long backoffMs,
@@ -677,6 +679,7 @@ public class PersisterStateManager {
             this.stateEpoch = stateEpoch;
             this.leaderEpoch = leaderEpoch;
             this.startOffset = startOffset;
+            this.deliveryCompleteCount = deliveryCompleteCount;
             this.batches = batches;
             this.result = result;
             this.writeStateBackoff = new BackoffManager(maxRPCRetryAttempts, backoffMs, backoffMaxMs);
@@ -689,6 +692,7 @@ public class PersisterStateManager {
             int stateEpoch,
             int leaderEpoch,
             long startOffset,
+            int deliveryCompleteCount,
             List<PersisterStateBatch> batches,
             CompletableFuture<WriteShareGroupStateResponse> result,
             Consumer<ClientResponse> onCompleteCallback
@@ -700,6 +704,7 @@ public class PersisterStateManager {
                 stateEpoch,
                 leaderEpoch,
                 startOffset,
+                deliveryCompleteCount,
                 batches,
                 result,
                 REQUEST_BACKOFF_MS,
@@ -1456,6 +1461,7 @@ public class PersisterStateManager {
                             .setStateEpoch(handler.stateEpoch)
                             .setLeaderEpoch(handler.leaderEpoch)
                             .setStartOffset(handler.startOffset)
+                            .setDeliveryCompleteCount(handler.deliveryCompleteCount)
                             .setStateBatches(handler.batches.stream()
                                 .map(batch -> new WriteShareGroupStateRequestData.StateBatch()
                                     .setFirstOffset(batch.firstOffset())

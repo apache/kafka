@@ -1825,7 +1825,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         persister.readSummary(ReadShareGroupStateSummaryParameters.from(readSummaryRequestData))
             .whenComplete((result, error) -> {
                 if (error != null) {
-                    log.error("Failed to read summary of the share partition");
+                    log.error("Failed to read summary of the share partition", error);
                     future.completeExceptionally(error);
                     return;
                 }

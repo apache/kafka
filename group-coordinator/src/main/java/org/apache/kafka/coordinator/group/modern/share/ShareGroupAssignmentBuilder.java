@@ -16,10 +16,16 @@
  */
 package org.apache.kafka.coordinator.group.modern.share;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
+import org.apache.kafka.coordinator.group.modern.TopicIds;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * The ShareGroupAssignmentBuilder class encapsulates the reconciliation engine of the
@@ -33,6 +39,11 @@ public class ShareGroupAssignmentBuilder {
     private final ShareGroupMember member;
 
     /**
+     * The metadata image.
+     */
+    private CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
+
+    /**
      * The target assignment epoch.
      */
     private int targetAssignmentEpoch;
@@ -43,6 +54,11 @@ public class ShareGroupAssignmentBuilder {
     private Assignment targetAssignment;
 
     /**
+     * Whether the member has changed its subscription on the current heartbeat.
+     */
+    private boolean hasSubscriptionChanged;
+
+    /**
      * Constructs the ShareGroupAssignmentBuilder based on the current state of the
      * provided share group member.
      *
@@ -50,6 +66,19 @@ public class ShareGroupAssignmentBuilder {
      */
     public ShareGroupAssignmentBuilder(ShareGroupMember member) {
         this.member = Objects.requireNonNull(member);
+    }
+
+    /**
+     * Sets the metadata image.
+     *
+     * @param metadataImage    The metadata image.
+     * @return This object.
+     */
+    public ShareGroupAssignmentBuilder withMetadataImage(
+        CoordinatorMetadataImage metadataImage
+    ) {
+        this.metadataImage = metadataImage;
+        return this;
     }
 
     /**
@@ -70,6 +99,19 @@ public class ShareGroupAssignmentBuilder {
     }
 
     /**
+     * Sets whether the member has changed its subscription on the current heartbeat.
+     *
+     * @param hasSubscriptionChanged If true, always removes unsubscribed topics from the current assignment.
+     * @return This object.
+     */
+    public ShareGroupAssignmentBuilder withHasSubscriptionChanged(
+        boolean hasSubscriptionChanged
+    ) {
+        this.hasSubscriptionChanged = hasSubscriptionChanged;
+        return this;
+    }
+
+    /**
      * Builds the next state for the member or keep the current one if it
      * is not possible to move forward with the current state.
      *
@@ -83,11 +125,38 @@ public class ShareGroupAssignmentBuilder {
             // when the member is updated.
             return new ShareGroupMember.Builder(member)
                 .setState(MemberState.STABLE)
-                .setAssignedPartitions(targetAssignment.partitions())
+                // If we have client-side assignors, the latest target assignment may not
+                // be consistent with the latest subscribed topics, so we must always
+                // filter the assigned partitions to ensure they are consistent with the
+                // subscribed topics.
+                .setAssignedPartitions(filterAssignedPartitions(targetAssignment.partitions(), member.subscribedTopicNames()))
                 .updateMemberEpoch(targetAssignmentEpoch)
                 .build();
+        } else if (hasSubscriptionChanged) {
+            return new ShareGroupMember.Builder(member)
+                .setAssignedPartitions(filterAssignedPartitions(targetAssignment.partitions(), member.subscribedTopicNames()))
+                .build();
+        } else {
+            return member;
         }
+    }
 
-        return member;
+    private Map<Uuid, Set<Integer>> filterAssignedPartitions(
+        Map<Uuid, Set<Integer>> partitions,
+        Set<String> subscribedTopicNames
+    ) {
+        TopicIds subscribedTopicIds = new TopicIds(subscribedTopicNames, metadataImage);
+
+        // Reuse the original map if no topics need to be removed.
+        Map<Uuid, Set<Integer>> filteredPartitions = partitions;
+        for (Map.Entry<Uuid, Set<Integer>> entry : partitions.entrySet()) {
+            if (!subscribedTopicIds.contains(entry.getKey())) {
+                if (filteredPartitions == partitions) {
+                    filteredPartitions = new HashMap<>(partitions);
+                }
+                filteredPartitions.remove(entry.getKey());
+            }
+        }
+        return filteredPartitions;
     }
 }

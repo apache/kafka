@@ -62,7 +62,7 @@ public class StreamsRebalanceDataTest {
     public void testTaskIdCompareTo() {
         final StreamsRebalanceData.TaskId task = new StreamsRebalanceData.TaskId("subtopologyId1", 1);
 
-        assertTrue(task.compareTo(new StreamsRebalanceData.TaskId(task.subtopologyId(), task.partitionId())) == 0);
+        assertEquals(0, task.compareTo(new StreamsRebalanceData.TaskId(task.subtopologyId(), task.partitionId())));
         assertTrue(task.compareTo(new StreamsRebalanceData.TaskId(task.subtopologyId() + "1", task.partitionId())) < 0);
         assertTrue(task.compareTo(new StreamsRebalanceData.TaskId(task.subtopologyId(), task.partitionId() + 1)) < 0);
         assertTrue(new StreamsRebalanceData.TaskId(task.subtopologyId() + "1", task.partitionId()).compareTo(task) > 0);
@@ -435,6 +435,43 @@ public class StreamsRebalanceDataTest {
         );
 
         assertTrue(streamsRebalanceData.statuses().isEmpty());
+    }
+
+    @Test
+    public void streamsRebalanceDataShouldBeConstructedWithHeartbeatIntervalMsSetToMinusOne() {
+        final UUID processId = UUID.randomUUID();
+        final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new
+                StreamsRebalanceData.HostInfo("localhost", 9090));
+        final Map<String, StreamsRebalanceData.Subtopology> subtopologies = Map.of();
+        final Map<String, String> clientTags = Map.of("clientTag1",
+                "clientTagValue1");
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+                processId,
+                endpoint,
+                subtopologies,
+                clientTags
+        );
+
+        assertEquals(-1, streamsRebalanceData.heartbeatIntervalMs());
+    }
+
+    @Test
+    public void streamsRebalanceDataShouldBeAbleToUpdateHeartbeatIntervalMs() {
+        final UUID processId = UUID.randomUUID();
+        final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new
+                StreamsRebalanceData.HostInfo("localhost", 9090));
+        final Map<String, StreamsRebalanceData.Subtopology> subtopologies = Map.of();
+        final Map<String, String> clientTags = Map.of("clientTag1",
+                "clientTagValue1");
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+                processId,
+                endpoint,
+                subtopologies,
+                clientTags
+        );
+
+        streamsRebalanceData.setHeartbeatIntervalMs(1000);
+        assertEquals(1000, streamsRebalanceData.heartbeatIntervalMs());
     }
 
 }
