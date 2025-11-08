@@ -110,7 +110,12 @@ public class ShareInFlightBatch<K, V> {
 
     Acknowledgements takeAcknowledgedRecords() {
         if (checkForRenewAcknowledgements) {
-            acknowledgedRecords.forEach(offset -> renewingRecords.put(offset, inFlightRecords.get(offset)));
+            Map<Long, AcknowledgeType> ackTypeMap = acknowledgements.getAcknowledgementsTypeMap();
+            acknowledgedRecords.forEach(offset -> {
+                if (ackTypeMap.get(offset) == AcknowledgeType.RENEW) {
+                    renewingRecords.put(offset, inFlightRecords.get(offset));
+                }
+            });
         }
 
         // Usually, all records will be acknowledged, so we can just clear the in-flight records leaving

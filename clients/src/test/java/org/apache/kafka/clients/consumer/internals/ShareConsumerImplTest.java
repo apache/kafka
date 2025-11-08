@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -30,6 +31,7 @@ import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCo
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackRegistrationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.SharePollEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareRenewAcknowledgementsCompleteEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
 import org.apache.kafka.clients.consumer.internals.events.StopFindCoordinatorOnCloseEvent;
@@ -459,6 +461,91 @@ public class ShareConsumerImplTest {
         
         // Reset mock to return new records
         doReturn(secondFetch)
+            .when(fetchCollector)
+            .collect(any(ShareFetchBuffer.class));
+
+        // Verify that poll succeeds and returns new records
+        ConsumerRecords<String, String> newRecords = consumer.poll(Duration.ofMillis(100));
+        assertEquals(2, newRecords.count(), "Should have received 2 new records");
+    }
+
+    @Test
+    public void testExplicitModeRenewAndAcknowledgeOnPoll() {
+        // Setup consumer with explicit acknowledgement mode
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(
+            mock(ShareFetchBuffer.class),
+            subscriptions,
+            "group-id",
+            "client-id",
+            "explicit");
+
+        // Setup test data
+        String topic = "test-topic";
+        int partition = 0;
+        TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), partition, topic);
+        ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip);
+        batch.addRecord(new ConsumerRecord<>(topic, partition, 0, "key1", "value1"));
+        batch.addRecord(new ConsumerRecord<>(topic, partition, 1, "key2", "value2"));
+
+        // Setup first fetch to return records
+        ShareFetch<String, String> firstFetch = ShareFetch.empty();
+        firstFetch.add(tip, batch);
+        doReturn(firstFetch)
+            .when(fetchCollector)
+            .collect(any(ShareFetchBuffer.class));
+
+        // Setup subscription
+        List<String> topics = Collections.singletonList(topic);
+        completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, topics);
+        consumer.subscribe(topics);
+
+        // First poll should succeed and return records
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+        assertEquals(2, records.count(), "Should have received 2 records");
+
+        // Renew the first record and accept the second
+        Iterator<ConsumerRecord<String, String>> iterator = records.iterator();
+        consumer.acknowledge(iterator.next(), AcknowledgeType.RENEW);
+        consumer.acknowledge(iterator.next(), AcknowledgeType.ACCEPT);
+
+        // Second poll should succeed and return the renewed record again
+        records = consumer.poll(Duration.ofMillis(100));
+        assertEquals(0, records.count(), "Should have received 1 record");
+        assertTrue(firstFetch.hasRenewals());
+
+        Acknowledgements acks = Acknowledgements.empty();
+        acks.add(0, AcknowledgeType.RENEW);
+        acks.complete(null);
+        ShareRenewAcknowledgementsCompleteEvent e = new ShareRenewAcknowledgementsCompleteEvent(Map.of(tip, acks));
+        backgroundEventQueue.add(e);
+
+        records = consumer.poll(Duration.ofMillis(100));
+        assertEquals(1, records.count(), "Should have received 1 record");
+        assertFalse(firstFetch.hasRenewals());
+        iterator = records.iterator();
+        ConsumerRecord<String, String> renewedRecord = iterator.next();
+        assertEquals(0, renewedRecord.offset());
+        consumer.acknowledge(renewedRecord);
+
+        // Setup next fetch to return no records
+        doReturn(ShareFetch.empty())
+            .when(fetchCollector)
+            .collect(any(ShareFetchBuffer.class));
+
+        // Third poll should return no records
+        records = consumer.poll(Duration.ofMillis(100));
+        assertTrue(records.isEmpty());
+
+        // Setup next fetch to return new records
+        ShareFetch<String, String> thirdFetch = ShareFetch.empty();
+        ShareInFlightBatch<String, String> newBatch = new ShareInFlightBatch<>(2, tip);
+        newBatch.addRecord(new ConsumerRecord<>(topic, partition, 2, "key3", "value3"));
+        newBatch.addRecord(new ConsumerRecord<>(topic, partition, 3, "key4", "value4"));
+        thirdFetch.add(tip, newBatch);
+
+        // Reset mock to return new records
+        doReturn(thirdFetch)
             .when(fetchCollector)
             .collect(any(ShareFetchBuffer.class));
 

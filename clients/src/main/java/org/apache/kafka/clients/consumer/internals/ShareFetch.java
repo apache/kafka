@@ -50,6 +50,8 @@ public class ShareFetch<K, V> {
         this.batches = batches;
     }
 
+    private int numRenewedRecords;
+
     /**
      * Add another {@link ShareInFlightBatch} to this one; all of its records will be added to this object's
      * {@link #records() records}.
@@ -122,6 +124,10 @@ public class ShareFetch<K, V> {
         return hasRenewals;
     }
 
+    public int numRenewedRecords() {
+        return numRenewedRecords;
+    }
+
     /**
      * Acknowledge a single record in the current batch.
      *
@@ -140,7 +146,9 @@ public class ShareFetch<K, V> {
     }
 
     /**
-     * Acknowledge a single record by its topic, partition and offset in the current batch.
+     * Acknowledge a single record which experienced an exception during its delivery by its topic, partition
+     * and offset in the current batch. This method is specifically for overriding the default acknowledge
+     * type for records whose delivery failed.
      *
      * @param topic     The topic of the record to acknowledge
      * @param partition The partition of the record
@@ -204,6 +212,7 @@ public class ShareFetch<K, V> {
         for (Map.Entry<TopicIdPartition, Acknowledgements> entry : acknowledgementsMap.entrySet()) {
             recordsRenewed += batches.get(entry.getKey()).renew(entry.getValue());
         }
+        numRenewedRecords = recordsRenewed;
         return recordsRenewed;
     }
 }

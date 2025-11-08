@@ -691,8 +691,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 sendShareAcknowledgeAsyncEvent(acknowledgementsMap);
             }
             if (acknowledgementMode == ShareAcknowledgementMode.EXPLICIT) {
-                // We cannot leave unacknowledged records in EXPLICIT acknowledgement mode, so we throw an exception to the application.
-                throw new IllegalStateException("All records must be acknowledged in explicit acknowledgement mode.");
+                // Renewed records are turned back into in-flight records when the acknowledgement completes.
+                if ((currentFetch.numRenewedRecords() == 0) || (currentFetch.numRecords() > currentFetch.numRenewedRecords())) {
+                    // We cannot leave unacknowledged records in EXPLICIT acknowledgement mode, so we throw an exception to the application.
+                    throw new IllegalStateException("All records must be acknowledged in explicit acknowledgement mode.");
+                }
             }
             return currentFetch;
         }
