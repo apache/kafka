@@ -3539,29 +3539,36 @@ public class TaskManagerTest {
 
     @Test
     public void shouldCloseStandbyTasksOnShutdown() {
-        final Map<TaskId, Set<TopicPartition>> assignment = singletonMap(taskId00, taskId00Partitions);
-        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, false, stateManager);
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final StandbyTask standbyTask00 = standbyTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions)
+            .build();
 
-        // `handleAssignment`
-        when(standbyTaskCreator.createTasks(assignment)).thenReturn(singletonList(task00));
+        when(stateUpdater.tasks()).thenReturn(Set.of(standbyTask00));
+        when(stateUpdater.standbyTasks()).thenReturn(Set.of(standbyTask00));
 
-        taskManager.handleAssignment(emptyMap(), assignment);
-        assertThat(task00.state(), is(Task.State.CREATED));
+        final CompletableFuture<StateUpdater.RemovedTaskResult> futureForStandbyTask = new CompletableFuture<>();
+        when(stateUpdater.remove(taskId00)).thenReturn(futureForStandbyTask);
 
-        taskManager.tryToCompleteRestoration(time.milliseconds(), null);
-        assertThat(task00.state(), is(Task.State.RUNNING));
-        assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
-        assertThat(taskManager.standbyTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        futureForStandbyTask.complete(new StateUpdater.RemovedTaskResult(standbyTask00)); // simulate successful removal
 
         taskManager.shutdown(true);
-        assertThat(task00.state(), is(Task.State.CLOSED));
-        assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
-        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
+
+        verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
+
+        verify(tasks).addTask(standbyTask00);
+
+        verify(standbyTask00).prepareCommit(true);
+        verify(standbyTask00).postCommit(true);
+        verify(standbyTask00).suspend();
+        verify(standbyTask00).closeClean();
+
         // the active task creator should also get closed (so that it closes the thread producer if applicable)
         verify(activeTaskCreator).close();
-        // `tryToCompleteRestoration`
-        verify(consumer).assignment();
-        verify(consumer).resume(eq(emptySet()));
+        verifyNoInteractions(consumer);
     }
 
     @Test
@@ -3671,36 +3678,29 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldInitializeNewActiveTasks() {
-        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
-        when(consumer.assignment()).thenReturn(assignment);
-
-        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment)))
-            .thenReturn(singletonList(task00));
-
-        taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
-
-        assertThat(task00.state(), is(Task.State.RUNNING));
-        assertThat(taskManager.activeTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
-        assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
-        // verifies that we actually resume the assignment at the end of restoration.
-        verify(consumer).resume(assignment);
-    }
-
-    @Test
     public void shouldInitialiseNewStandbyTasks() {
-        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false, stateManager);
+        final StandbyTask task01 = standbyTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.CREATED)
+            .withInputPartitions(taskId01Partitions)
+            .build();
 
-        when(consumer.assignment()).thenReturn(assignment);
-        when(standbyTaskCreator.createTasks(taskId01Assignment)).thenReturn(singletonList(task01));
+        final Map<TaskId, Set<TopicPartition>> assignment = taskId01Assignment;
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
 
-        taskManager.handleAssignment(emptyMap(), taskId01Assignment);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
+        when(standbyTaskCreator.createTasks(assignment)).thenReturn(singletonList(task01));
 
-        assertThat(task01.state(), is(Task.State.RUNNING));
-        assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
-        assertThat(taskManager.standbyTaskMap(), Matchers.equalTo(singletonMap(taskId01, task01)));
+        taskManager.handleAssignment(emptyMap(), assignment);
+
+        verify(tasks).addPendingTasksToInit(singletonList(task01));
+
+        when(tasks.drainPendingTasksToInit()).thenReturn(Set.of(task01));
+
+        taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
+
+        verify(task01).initializeIfNeeded();
+        verify(stateUpdater).add(task01);
+        verifyNoInteractions(consumer);
     }
 
     @Test
@@ -3877,14 +3877,25 @@ public class TaskManagerTest {
 
     @Test
     public void shouldCommitViaConsumerIfEosDisabled() {
-        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager);
+        final StreamTask task01 = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING)
+            .build();
         final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
-        task01.setCommittableOffsetsAndMetadata(offsets);
-        task01.setCommitNeeded();
-        taskManager.addTask(task01);
 
-        taskManager.commitAll();
+        when(task01.commitNeeded()).thenReturn(true);
+        when(task01.prepareCommit(true)).thenReturn(offsets);
 
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.allTasks()).thenReturn(Set.of(task01));
+
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        assertThat(taskManager.commitAll(), equalTo(1));
+
+        verify(task01, times(2)).commitNeeded();
+        verify(task01).prepareCommit(true);
+        verify(task01).postCommit(false);
         verify(consumer).commitSync(offsets);
     }
 
@@ -3939,50 +3950,48 @@ public class TaskManagerTest {
 
     @Test
     public void shouldPropagateExceptionFromActiveCommit() {
-        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
-            @Override
-            public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
-                throw new RuntimeException("opsh.");
-            }
-        };
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RUNNING)
+            .build();
 
-        when(consumer.assignment()).thenReturn(assignment);
-        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(task00.commitNeeded()).thenReturn(true);
+        when(task00.prepareCommit(true)).thenThrow(new RuntimeException("opsh."));
 
-        taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.allTasks()).thenReturn(Set.of(task00));
 
-        assertThat(task00.state(), is(Task.State.RUNNING));
-
-        task00.setCommitNeeded();
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
 
         final RuntimeException thrown =
-            assertThrows(RuntimeException.class, () -> taskManager.commitAll());
+            assertThrows(RuntimeException.class, taskManager::commitAll);
         assertThat(thrown.getMessage(), equalTo("opsh."));
+
+        verify(task00).commitNeeded();
+        verify(task00).prepareCommit(true);
     }
 
     @Test
     public void shouldPropagateExceptionFromStandbyCommit() {
-        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false, stateManager) {
-            @Override
-            public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
-                throw new RuntimeException("opsh.");
-            }
-        };
+        final StandbyTask task01 = standbyTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING)
+            .build();
 
-        when(consumer.assignment()).thenReturn(assignment);
-        when(standbyTaskCreator.createTasks(taskId01Assignment)).thenReturn(singletonList(task01));
+        when(task01.commitNeeded()).thenReturn(true);
+        when(task01.prepareCommit(true)).thenThrow(new RuntimeException("opsh."));
 
-        taskManager.handleAssignment(emptyMap(), taskId01Assignment);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.allTasks()).thenReturn(Set.of(task01));
 
-        assertThat(task01.state(), is(Task.State.RUNNING));
-
-        task01.setCommitNeeded();
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
 
         final RuntimeException thrown =
             assertThrows(RuntimeException.class, () -> taskManager.commitAll());
         assertThat(thrown.getMessage(), equalTo("opsh."));
+
+        verify(task01).commitNeeded();
+        verify(task01).prepareCommit(true);
     }
 
     @Test
