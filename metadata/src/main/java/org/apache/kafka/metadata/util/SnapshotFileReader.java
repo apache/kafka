@@ -141,8 +141,12 @@ public final class SnapshotFileReader implements AutoCloseable {
                             batch.partitionLeaderEpoch()
                         ));
                         break;
+                    // The following case is used for raft layer, and
+                    // it is not used in metadata cache, so we just ignore them.
                     case SNAPSHOT_HEADER:
                     case SNAPSHOT_FOOTER:
+                    case KRAFT_VERSION:
+                    case KRAFT_VOTERS:
                         break;
                     default:
                         log.error("Ignoring control record with type {} at offset {}",
