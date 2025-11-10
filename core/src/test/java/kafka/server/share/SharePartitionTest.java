@@ -11199,9 +11199,9 @@ public class SharePartitionTest {
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
                 PartitionFactory.newPartitionAllData(0, 3, 5L, Errors.NONE.code(), Errors.NONE.message(),
                     List.of(
-                        new PersisterStateBatch(15L, 19L, RecordState.AVAILABLE.id, (short) 1),
+                        new PersisterStateBatch(15L, 19L, RecordState.AVAILABLE.id, (short) 2),
                         new PersisterStateBatch(20L, 22L, RecordState.ARCHIVED.id, (short) 2),
-                        new PersisterStateBatch(26L, 30L, RecordState.AVAILABLE.id, (short) 2)))))));
+                        new PersisterStateBatch(26L, 30L, RecordState.AVAILABLE.id, (short) 3)))))));
         Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
@@ -11234,7 +11234,7 @@ public class SharePartitionTest {
             16);
 
         List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(7, 14, 1));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(15, 19, 2));
+        expectedAcquiredRecords.addAll(expectedAcquiredRecord(15, 19, 3));
         expectedAcquiredRecords.addAll(expectedAcquiredRecord(23, 25, 1));
 
         assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
@@ -11264,8 +11264,8 @@ public class SharePartitionTest {
             new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
                 PartitionFactory.newPartitionAllData(0, 3, 5L, Errors.NONE.code(), Errors.NONE.message(),
                     List.of(
-                        new PersisterStateBatch(15L, 19L, RecordState.AVAILABLE.id, (short) 2),
-                        new PersisterStateBatch(26L, 30L, RecordState.AVAILABLE.id, (short) 1)))))));
+                        new PersisterStateBatch(15L, 19L, RecordState.AVAILABLE.id, (short) 3),
+                        new PersisterStateBatch(26L, 30L, RecordState.AVAILABLE.id, (short) 2)))))));
         Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
 
@@ -11297,7 +11297,7 @@ public class SharePartitionTest {
                 FETCH_ISOLATION_HWM),
             1);
 
-        List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(15, 15, 3));
+        List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(15, 15, 4));
 
         assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
         assertEquals(16, sharePartition.nextFetchOffset());

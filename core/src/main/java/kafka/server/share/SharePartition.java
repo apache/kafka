@@ -154,7 +154,7 @@ public class SharePartition {
      * Records whose delivery count exceeds this are deemed abnormal,
      * and the batching of these records should be reduced.
      */
-    private static final int BAD_RECORD_DELIVERY_THRESHOLD = 2;
+    private static final int BAD_RECORD_DELIVERY_THRESHOLD = 3;
 
     /**
      * The group id of the share partition belongs to.
@@ -840,7 +840,8 @@ public class SharePartition {
                 boolean fullMatch = checkForFullMatch(inFlightBatch, firstBatch.baseOffset(), lastOffsetToAcquire);
                 int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
                 boolean recordLimitSubsetMatch = isRecordLimitMode && checkForRecordLimitSubsetMatch(inFlightBatch, maxRecordsToAcquire, acquiredCount);
-                if (!fullMatch || inFlightBatch.offsetState() != null || recordLimitSubsetMatch || inFlightBatch.batchDeliveryCount() >= 2) {
+                boolean deliveryCountExceed = checkForDeliveryCount(inFlightBatch);
+                if (!fullMatch || inFlightBatch.offsetState() != null || recordLimitSubsetMatch || deliveryCountExceed) {
                     log.trace("Subset or offset tracked batch record found for share partition,"
                             + " batch: {} request offsets - first: {}, last: {} for the share"
                             + " partition: {}-{}", inFlightBatch, firstBatch.baseOffset(),
@@ -1964,6 +1965,19 @@ public class SharePartition {
     private boolean checkForStartOffsetWithinBatch(long batchFirstOffset, long batchLastOffset) {
         long localStartOffset = startOffset();
         return batchFirstOffset < localStartOffset && batchLastOffset >= localStartOffset;
+    }
+
+    /**
+     * Check if the in-flight batch contains bad records based on delivery count.
+     *
+     * @param inFlightBatch The in-flight batch to check for bad records.
+     * @return True if the batch contains bad records (delivery count >= threshold), false otherwise.
+     */
+    private boolean checkForDeliveryCount(InFlightBatch inFlightBatch) {
+        if (inFlightBatch.offsetState() == null) {
+            return inFlightBatch.batchDeliveryCount() >= BAD_RECORD_DELIVERY_THRESHOLD;
+        }
+        return inFlightBatch.offsetState().values().stream().mapToInt(InFlightState::deliveryCount).max().orElse(0) >= BAD_RECORD_DELIVERY_THRESHOLD;
     }
 
     // Visibility for test
