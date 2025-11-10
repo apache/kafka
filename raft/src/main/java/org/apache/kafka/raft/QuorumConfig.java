@@ -105,7 +105,7 @@ public class QuorumConfig {
 
     public static final String QUORUM_AUTO_JOIN_ENABLE_CONFIG = QUORUM_PREFIX + "auto.join.enable";
     public static final String QUORUM_AUTO_JOIN_ENABLE_DOC = "Controls whether a KRaft controller should automatically " +
-        "join the cluster metadata partition for its cluster id.";
+        "join the cluster metadata partition for its cluster id when the node startup.";
     public static final boolean DEFAULT_QUORUM_AUTO_JOIN_ENABLE = false;
 
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
