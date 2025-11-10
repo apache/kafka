@@ -1843,8 +1843,7 @@ public class ShareConsumeRequestManagerTest {
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
-        assertTrue(partitionRecords.containsKey(tp0));
-        assertFalse(partitionRecords.containsKey(tp1));
+        assertTrue(partitionRecords.containsKey(tp0) && !partitionRecords.containsKey(tp1));
 
         List<ConsumerRecord<byte[], byte[]>> fetchedRecords = partitionRecords.get(tp0);
         assertEquals(1, fetchedRecords.size());
@@ -1859,10 +1858,8 @@ public class ShareConsumeRequestManagerTest {
         assertTrue(metadata.updateRequested());
 
         // Move the leadership of tp1 onto node 1
-        HashMap<TopicPartition, Metadata.LeaderIdAndEpoch> partitionLeaders = new HashMap<>();
-        partitionLeaders.put(tp1, new Metadata.LeaderIdAndEpoch(Optional.of(nodeId0.id()), Optional.of(validLeaderEpoch + 1)));
         LinkedList<Node> leaderNodes = new LinkedList<>(Arrays.asList(tp0Leader, tp1Leader));
-        metadata.updatePartitionLeadership(partitionLeaders, leaderNodes);
+        metadata.updatePartitionLeadership(Map.of(tp1, new Metadata.LeaderIdAndEpoch(Optional.of(nodeId0.id()), Optional.of(validLeaderEpoch + 1))), leaderNodes);
 
         assertNotEquals(startingClusterMetadata, metadata.fetch());
 
@@ -1882,13 +1879,9 @@ public class ShareConsumeRequestManagerTest {
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         partitionRecords = fetchRecords();
-        assertTrue(partitionRecords.containsKey(tp0));
-        assertTrue(partitionRecords.containsKey(tp1));
-
-        fetchedRecords = partitionRecords.get(tp0);
-        assertEquals(1, fetchedRecords.size());
-        fetchedRecords = partitionRecords.get(tp1);
-        assertEquals(1, fetchedRecords.size());
+        assertTrue(partitionRecords.containsKey(tp0) && partitionRecords.containsKey(tp1));
+        assertEquals(1, partitionRecords.get(tp0).size());
+        assertEquals(1, partitionRecords.get(tp1).size());
     }
 
     /**
@@ -1919,16 +1912,9 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(2, sendFetches());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
-        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionData = new LinkedHashMap<>();
-        partitionData.put(tip0,
-            new ShareFetchResponseData.PartitionData()
-                .setPartitionIndex(tip0.topicPartition().partition())
-                .setErrorCode(Errors.NONE.code())
-                .setRecords(records)
-                .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(1L, 1))
-                .setAcknowledgeErrorCode(Errors.NONE.code()));
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionData = buildPartitionDataMap(tip0, records, ShareCompletedFetchTest.acquiredRecords(1L, 1), Errors.NONE, Errors.NONE);
         client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, Collections.emptyList(), 0), nodeId0);
-        partitionData.clear();
+        partitionData = new LinkedHashMap<>();
         partitionData.put(tip1,
             new ShareFetchResponseData.PartitionData()
                 .setPartitionIndex(tip1.topicPartition().partition())
@@ -1941,8 +1927,7 @@ public class ShareConsumeRequestManagerTest {
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
-        assertTrue(partitionRecords.containsKey(tp0));
-        assertFalse(partitionRecords.containsKey(tp1));
+        assertTrue(partitionRecords.containsKey(tp0) && !partitionRecords.containsKey(tp1));
 
         List<ConsumerRecord<byte[], byte[]>> fetchedRecords = partitionRecords.get(tp0);
         assertEquals(1, fetchedRecords.size());
@@ -1961,14 +1946,7 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(1, sendFetches());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
-        partitionData.clear();
-        partitionData.put(tip0,
-            new ShareFetchResponseData.PartitionData()
-                .setPartitionIndex(tip0.topicPartition().partition())
-                .setErrorCode(Errors.NONE.code())
-                .setRecords(records)
-                .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(2L, 1))
-                .setAcknowledgeErrorCode(Errors.NONE.code()));
+        partitionData = buildPartitionDataMap(tip0, records, ShareCompletedFetchTest.acquiredRecords(2L, 1), Errors.NONE, Errors.NONE);
         partitionData.put(tip1,
             new ShareFetchResponseData.PartitionData()
                 .setPartitionIndex(tip1.topicPartition().partition())
@@ -1980,13 +1958,9 @@ public class ShareConsumeRequestManagerTest {
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         partitionRecords = fetchRecords();
-        assertTrue(partitionRecords.containsKey(tp0));
-        assertTrue(partitionRecords.containsKey(tp1));
-
-        fetchedRecords = partitionRecords.get(tp0);
-        assertEquals(1, fetchedRecords.size());
-        fetchedRecords = partitionRecords.get(tp1);
-        assertEquals(1, fetchedRecords.size());
+        assertTrue(partitionRecords.containsKey(tp0) && partitionRecords.containsKey(tp1));
+        assertEquals(1, partitionRecords.get(tp0).size());
+        assertEquals(1, partitionRecords.get(tp1).size());
     }
 
     /**
@@ -2029,8 +2003,7 @@ public class ShareConsumeRequestManagerTest {
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
-        assertTrue(partitionRecords.containsKey(tp0));
-        assertFalse(partitionRecords.containsKey(tp1));
+        assertTrue(partitionRecords.containsKey(tp0) && !partitionRecords.containsKey(tp1));
 
         List<ConsumerRecord<byte[], byte[]>> fetchedRecords = partitionRecords.get(tp0);
         assertEquals(1, fetchedRecords.size());
@@ -2042,9 +2015,7 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(startingClusterMetadata, metadata.fetch());
 
         // Move the leadership of tp0 onto node 1
-        HashMap<TopicPartition, Metadata.LeaderIdAndEpoch> partitionLeaders = new HashMap<>();
-        partitionLeaders.put(tp0, new Metadata.LeaderIdAndEpoch(Optional.of(nodeId1.id()), Optional.of(validLeaderEpoch + 1)));
-        metadata.updatePartitionLeadership(partitionLeaders, List.of());
+        metadata.updatePartitionLeadership(Map.of(tp0, new Metadata.LeaderIdAndEpoch(Optional.of(nodeId1.id()), Optional.of(validLeaderEpoch + 1))), List.of());
 
         assertNotEquals(startingClusterMetadata, metadata.fetch());
 
@@ -2074,13 +2045,9 @@ public class ShareConsumeRequestManagerTest {
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         partitionRecords = fetchRecords();
-        assertTrue(partitionRecords.containsKey(tp0));
-        assertTrue(partitionRecords.containsKey(tp1));
-
-        fetchedRecords = partitionRecords.get(tp0);
-        assertEquals(1, fetchedRecords.size());
-        fetchedRecords = partitionRecords.get(tp1);
-        assertEquals(1, fetchedRecords.size());
+        assertTrue(partitionRecords.containsKey(tp0) && partitionRecords.containsKey(tp1));
+        assertEquals(1, partitionRecords.get(tp0).size());
+        assertEquals(1, partitionRecords.get(tp1).size());
     }
 
     @Test
@@ -2106,23 +2073,9 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(2, sendFetches());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
-        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionData = new LinkedHashMap<>();
-        partitionData.put(tip0,
-                new ShareFetchResponseData.PartitionData()
-                        .setPartitionIndex(tip0.topicPartition().partition())
-                        .setErrorCode(Errors.NONE.code())
-                        .setRecords(records)
-                        .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(1L, 1))
-                        .setAcknowledgeErrorCode(Errors.NONE.code()));
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionData = buildPartitionDataMap(tip0, records, ShareCompletedFetchTest.acquiredRecords(1L, 1), Errors.NONE, Errors.NONE);
         client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, Collections.emptyList(), 0), nodeId0);
-        partitionData.clear();
-        partitionData.put(tip1,
-                new ShareFetchResponseData.PartitionData()
-                        .setPartitionIndex(tip1.topicPartition().partition())
-                        .setErrorCode(Errors.NONE.code())
-                        .setRecords(records)
-                        .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(1L, 2))
-                        .setAcknowledgeErrorCode(Errors.NONE.code()));
+        partitionData = buildPartitionDataMap(tip1, records, ShareCompletedFetchTest.acquiredRecords(1L, 2), Errors.NONE, Errors.NONE);
         client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, Collections.emptyList(), 0), nodeId1);
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
@@ -2148,9 +2101,7 @@ public class ShareConsumeRequestManagerTest {
         commitAcks.put(tip1, new NodeAcknowledgements(1, acknowledgementsTp1));
 
         // Move the leadership of tp0 onto node 1
-        HashMap<TopicPartition, Metadata.LeaderIdAndEpoch> partitionLeaders = new HashMap<>();
-        partitionLeaders.put(tp0, new Metadata.LeaderIdAndEpoch(Optional.of(nodeId1.id()), Optional.of(validLeaderEpoch + 1)));
-        metadata.updatePartitionLeadership(partitionLeaders, List.of());
+        metadata.updatePartitionLeadership(Map.of(tp0, new Metadata.LeaderIdAndEpoch(Optional.of(nodeId1.id()), Optional.of(validLeaderEpoch + 1))), List.of());
 
         assertNotEquals(startingClusterMetadata, metadata.fetch());
 
@@ -2191,23 +2142,9 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(2, sendFetches());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
-        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionData = new LinkedHashMap<>();
-        partitionData.put(tip0,
-                new ShareFetchResponseData.PartitionData()
-                        .setPartitionIndex(tip0.topicPartition().partition())
-                        .setErrorCode(Errors.NONE.code())
-                        .setRecords(records)
-                        .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(1L, 1))
-                        .setAcknowledgeErrorCode(Errors.NONE.code()));
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionData = buildPartitionDataMap(tip0, records, ShareCompletedFetchTest.acquiredRecords(1L, 1), Errors.NONE, Errors.NONE);
         client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, Collections.emptyList(), 0), nodeId0);
-        partitionData.clear();
-        partitionData.put(tip1,
-                new ShareFetchResponseData.PartitionData()
-                        .setPartitionIndex(tip1.topicPartition().partition())
-                        .setErrorCode(Errors.NONE.code())
-                        .setRecords(records)
-                        .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(1L, 2))
-                        .setAcknowledgeErrorCode(Errors.NONE.code()));
+        partitionData = buildPartitionDataMap(tip1, records, ShareCompletedFetchTest.acquiredRecords(1L, 2), Errors.NONE, Errors.NONE);
         client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, Collections.emptyList(), 0), nodeId1);
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
@@ -2233,9 +2170,7 @@ public class ShareConsumeRequestManagerTest {
         commitAcks.put(tip1, new NodeAcknowledgements(1, acknowledgementsTp1));
 
         // Move the leadership of tp0 onto node 1
-        HashMap<TopicPartition, Metadata.LeaderIdAndEpoch> partitionLeaders = new HashMap<>();
-        partitionLeaders.put(tp0, new Metadata.LeaderIdAndEpoch(Optional.of(nodeId1.id()), Optional.of(validLeaderEpoch + 1)));
-        metadata.updatePartitionLeadership(partitionLeaders, List.of());
+        metadata.updatePartitionLeadership(Map.of(tp0, new Metadata.LeaderIdAndEpoch(Optional.of(nodeId1.id()), Optional.of(validLeaderEpoch + 1))), List.of());
 
         assertNotEquals(startingClusterMetadata, metadata.fetch());
 
@@ -2281,23 +2216,9 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(2, sendFetches());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
-        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionData = new LinkedHashMap<>();
-        partitionData.put(tip0,
-                new ShareFetchResponseData.PartitionData()
-                        .setPartitionIndex(tip0.topicPartition().partition())
-                        .setErrorCode(Errors.NONE.code())
-                        .setRecords(records)
-                        .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(1L, 1))
-                        .setAcknowledgeErrorCode(Errors.NONE.code()));
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionData = buildPartitionDataMap(tip0, records, ShareCompletedFetchTest.acquiredRecords(1L, 1), Errors.NONE, Errors.NONE);
         client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, Collections.emptyList(), 0), nodeId0);
-        partitionData.clear();
-        partitionData.put(tip1,
-                new ShareFetchResponseData.PartitionData()
-                        .setPartitionIndex(tip1.topicPartition().partition())
-                        .setErrorCode(Errors.NONE.code())
-                        .setRecords(records)
-                        .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(1L, 2))
-                        .setAcknowledgeErrorCode(Errors.NONE.code()));
+        partitionData = buildPartitionDataMap(tip1, records, ShareCompletedFetchTest.acquiredRecords(1L, 2), Errors.NONE, Errors.NONE);
         client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, Collections.emptyList(), 0), nodeId1);
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
@@ -2321,9 +2242,7 @@ public class ShareConsumeRequestManagerTest {
         shareConsumeRequestManager.fetch(Map.of(tip1, new NodeAcknowledgements(1, acknowledgementsTp1)));
 
         // Move the leadership of tp0 onto node 1
-        HashMap<TopicPartition, Metadata.LeaderIdAndEpoch> partitionLeaders = new HashMap<>();
-        partitionLeaders.put(tp0, new Metadata.LeaderIdAndEpoch(Optional.of(nodeId1.id()), Optional.of(validLeaderEpoch + 1)));
-        metadata.updatePartitionLeadership(partitionLeaders, List.of());
+        metadata.updatePartitionLeadership(Map.of(tp0, new Metadata.LeaderIdAndEpoch(Optional.of(nodeId1.id()), Optional.of(validLeaderEpoch + 1))), List.of());
 
         assertNotEquals(startingClusterMetadata, metadata.fetch());
 
@@ -2393,8 +2312,7 @@ public class ShareConsumeRequestManagerTest {
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
-        assertTrue(partitionRecords.containsKey(tp0));
-        assertFalse(partitionRecords.containsKey(tp1));
+        assertTrue(partitionRecords.containsKey(tp0) && !partitionRecords.containsKey(tp1));
 
         List<ConsumerRecord<byte[], byte[]>> fetchedRecords = partitionRecords.get(tp0);
         assertEquals(1, fetchedRecords.size());
@@ -2442,9 +2360,7 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(1, fetchedRecords.size());
 
         // Move the leadership of tp0 onto node 1
-        HashMap<TopicPartition, Metadata.LeaderIdAndEpoch> partitionLeaders = new HashMap<>();
-        partitionLeaders.put(tp0, new Metadata.LeaderIdAndEpoch(Optional.of(nodeId1.id()), Optional.of(validLeaderEpoch + 1)));
-        metadata.updatePartitionLeadership(partitionLeaders, List.of());
+        metadata.updatePartitionLeadership(Map.of(tp0, new Metadata.LeaderIdAndEpoch(Optional.of(nodeId1.id()), Optional.of(validLeaderEpoch + 1))), List.of());
 
         assertNotEquals(startingClusterMetadata, metadata.fetch());
 
@@ -2514,13 +2430,13 @@ public class ShareConsumeRequestManagerTest {
                 .setErrorCode(Errors.NONE.code()));
         client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, List.of(), 0), nodeId0);
         partitionData = buildPartitionDataMap(tip1, records, ShareCompletedFetchTest.acquiredRecords(1L, 1), Errors.NONE, Errors.NONE);
+        
         client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, List.of(), 0), nodeId1);
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
-        assertTrue(partitionRecords.containsKey(tp1));
-        assertFalse(partitionRecords.containsKey(tp0));
+        assertTrue(partitionRecords.containsKey(tp1) && !partitionRecords.containsKey(tp0));
 
         List<ConsumerRecord<byte[], byte[]>> fetchedRecords = partitionRecords.get(tp1);
         assertEquals(1, fetchedRecords.size());
