@@ -835,7 +835,7 @@ public class LeaderState<T> implements EpochState {
         LogOffsetMetadata endOffsetMetadata,
         VoterSet lastVoterSet
     ) {
-        ReplicaState state = getOrCreateReplicaState(localVoterNode.voterKey());
+        ReplicaState state = getOrCreateObserverReplicaState(localVoterNode.voterKey());
         state.endOffset.ifPresent(currentEndOffset -> {
             if (currentEndOffset.offset() > endOffsetMetadata.offset()) {
                 throw new IllegalStateException("Detected non-monotonic update of local " +
@@ -872,7 +872,7 @@ public class LeaderState<T> implements EpochState {
             );
         }
 
-        ReplicaState state = getOrCreateReplicaState(replicaKey);
+        ReplicaState state = getOrCreateObserverReplicaState(replicaKey);
 
         state.endOffset.ifPresent(currentEndOffset -> {
             if (currentEndOffset.offset() > fetchOffsetMetadata.offset()) {
@@ -881,7 +881,7 @@ public class LeaderState<T> implements EpochState {
             }
         });
 
-        Optional<LogOffsetMetadata> leaderEndOffsetOpt = getOrCreateReplicaState(localVoterNode.voterKey()).endOffset;
+        Optional<LogOffsetMetadata> leaderEndOffsetOpt = getOrCreateObserverReplicaState(localVoterNode.voterKey()).endOffset;
 
         state.updateFollowerState(
             currentTimeMs,
@@ -908,11 +908,11 @@ public class LeaderState<T> implements EpochState {
         // Note: highWatermark is the offset will be written so it is exclusive.
         partitionState.voterSetAtOffset(highWatermark.offset() - 1).ifPresentOrElse(voterSet -> {
             for (VoterSet.VoterNode voterNode : voterSet.voterNodes()) {
-                newCommittedVoterStates.put(voterNode.voterKey().id(), getOrBuildReplicaState(voterNode));
+                newCommittedVoterStates.put(voterNode.voterKey().id(), getOrCreateVoterReplicaState(voterNode));
             }
         }, () -> {
             for (VoterSet.VoterNode voterNode : partitionState.staticVoterSet().voterNodes()) {
-                newCommittedVoterStates.put(voterNode.voterKey().id(), getOrBuildReplicaState(voterNode));
+                newCommittedVoterStates.put(voterNode.voterKey().id(), getOrCreateVoterReplicaState(voterNode));
             }
         });
         log.debug("Updating committed voter at high watermark={} and committedVoter={}", highWatermark, newCommittedVoterStates);
@@ -943,7 +943,7 @@ public class LeaderState<T> implements EpochState {
         return epochStartOffset;
     }
 
-    private ReplicaState getOrCreateReplicaState(ReplicaKey replicaKey) {
+    private ReplicaState getOrCreateObserverReplicaState(ReplicaKey replicaKey) {
         ReplicaState state = voterStates.get(replicaKey.id());
         if (state == null || !state.matchesKey(replicaKey)) {
             observerStates.putIfAbsent(replicaKey, new ReplicaState(replicaKey, false, Endpoints.empty()));
@@ -953,7 +953,7 @@ public class LeaderState<T> implements EpochState {
         return state;
     }
 
-    public ReplicaState getOrBuildReplicaState(VoterSet.VoterNode voterNode) {
+    public ReplicaState getOrCreateVoterReplicaState(VoterSet.VoterNode voterNode) {
         return getReplicaState(voterNode.voterKey()).orElse(new ReplicaState(voterNode.voterKey(), false, voterNode.listeners()));
     }
 
