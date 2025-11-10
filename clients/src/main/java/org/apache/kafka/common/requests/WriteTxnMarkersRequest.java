@@ -110,10 +110,18 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
         }
 
         public Builder(final List<TxnMarkerEntry> markers) {
+            this(markers, null);
+        }
+
+        public Builder(final List<TxnMarkerEntry> markers, final List<Byte> transactionVersions) {
             // version will be determined at build time based on broker capabilities
             super(ApiKeys.WRITE_TXN_MARKERS);
+            if (transactionVersions != null && transactionVersions.size() != markers.size()) {
+                throw new IllegalArgumentException("Transaction versions list size must match markers list size");
+            }
             List<WritableTxnMarker> dataMarkers = new ArrayList<>();
-            for (TxnMarkerEntry marker : markers) {
+            for (int i = 0; i < markers.size(); i++) {
+                TxnMarkerEntry marker = markers.get(i);
                 final Map<String, WritableTxnMarkerTopic> topicMap = new HashMap<>();
                 for (TopicPartition topicPartition : marker.partitions) {
                     WritableTxnMarkerTopic topic = topicMap.getOrDefault(topicPartition.topic(),
@@ -123,12 +131,22 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
                     topicMap.put(topicPartition.topic(), topic);
                 }
 
-                dataMarkers.add(new WritableTxnMarker()
-                                    .setProducerId(marker.producerId)
-                                    .setProducerEpoch(marker.producerEpoch)
-                                    .setCoordinatorEpoch(marker.coordinatorEpoch)
-                                    .setTransactionResult(marker.transactionResult().id)
-                                    .setTopics(new ArrayList<>(topicMap.values())));
+                WritableTxnMarker writableMarker = new WritableTxnMarker()
+                    .setProducerId(marker.producerId)
+                    .setProducerEpoch(marker.producerEpoch)
+                    .setCoordinatorEpoch(marker.coordinatorEpoch)
+                    .setTransactionResult(marker.transactionResult().id)
+                    .setTopics(new ArrayList<>(topicMap.values()));
+
+                // Always set transaction version (per marker). If not provided, use default value (0).
+                // Serialization will automatically omit TransactionVersion field in version 1 since it's ignorable.
+                if (transactionVersions != null) {
+                    writableMarker.setTransactionVersion(transactionVersions.get(i));
+                } else {
+                    writableMarker.setTransactionVersion((byte) 0);
+                }
+
+                dataMarkers.add(writableMarker);
             }
             this.data = new WriteTxnMarkersRequestData().setMarkers(dataMarkers);
         }
