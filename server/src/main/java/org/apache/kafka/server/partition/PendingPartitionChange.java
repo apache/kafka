@@ -14,26 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.storage.internals.log;
+package org.apache.kafka.server.partition;
 
-import org.apache.kafka.metadata.LeaderRecoveryState;
+import org.apache.kafka.metadata.LeaderAndIsr;
 
-import java.util.Set;
-
-public record CommittedPartitionState(Set<Integer> isr, LeaderRecoveryState leaderRecoveryState) implements PartitionState {
-
-    public CommittedPartitionState {
-        isr = Set.copyOf(isr);
-    }
-
-    @Override
-    public Set<Integer> maximalIsr() {
-        return isr;
-    }
-
-    @Override
-    public boolean isInflight() {
-        return false;
-    }
-
+/**
+ * Represents a partition state currently undergoing a change, such as an ISR expansion or shrinking.
+ */
+public interface PendingPartitionChange extends PartitionState {
+    /**
+     * Returns the last committed partition state before this pending change.
+     */
+    CommittedPartitionState lastCommittedState();
+    /**
+     * Returns the LeaderAndIsr object sent to the controller for this pending change.
+     */
+    LeaderAndIsr sentLeaderAndIsr();
 }

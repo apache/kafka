@@ -17,7 +17,6 @@
 
 package org.apache.kafka.server.share.session;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
@@ -196,7 +195,7 @@ public class ShareSessionCache {
      */
     public synchronized ShareSessionKey maybeCreateSession(
         String groupId,
-        Uuid memberId,
+        String memberId,
         ImplicitLinkedHashCollection<CachedSharePartition> partitionMap,
         String clientConnectionId
     ) {

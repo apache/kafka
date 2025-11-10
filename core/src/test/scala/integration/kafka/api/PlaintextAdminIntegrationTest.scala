@@ -2925,7 +2925,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       val tp1 = new TopicPartition(testTopicName, 0)
       val parts = client.listShareGroupOffsets(util.Map.of(testGroupId, new ListShareGroupOffsetsSpec().topicPartitions(util.List.of(tp1))))
-        .partitionsToOffsetAndMetadata(testGroupId)
+        .partitionsToOffsetInfo(testGroupId)
         .get()
       assertTrue(parts.containsKey(tp1))
       assertNull(parts.get(tp1))
@@ -2991,10 +2991,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertFutureThrows(classOf[UnknownTopicOrPartitionException], offsetAlterResult.partitionResult(tp2))
 
       val parts = client.listShareGroupOffsets(util.Map.of(testGroupId, new ListShareGroupOffsetsSpec().topicPartitions(util.List.of(tp1))))
-        .partitionsToOffsetAndMetadata(testGroupId)
+        .partitionsToOffsetInfo(testGroupId)
         .get()
       assertTrue(parts.containsKey(tp1))
-      assertEquals(0, parts.get(tp1).offset())
+      assertEquals(0, parts.get(tp1).startOffset())
     } finally {
       Utils.closeQuietly(client, "adminClient")
     }
@@ -3031,14 +3031,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         // Test listShareGroupOffsets
         TestUtils.waitUntilTrue(() => {
           val parts = client.listShareGroupOffsets(util.Map.of(testGroupId, new ListShareGroupOffsetsSpec()))
-            .partitionsToOffsetAndMetadata(testGroupId)
+            .partitionsToOffsetInfo(testGroupId)
             .get()
           parts.containsKey(tp1) && parts.containsKey(tp2)
         }, "Expected the result contains all partitions.")
 
         // Test listShareGroupOffsets with listShareGroupOffsetsSpec
         val groupSpecs = util.Map.of(testGroupId, new ListShareGroupOffsetsSpec().topicPartitions(util.List.of(tp1)))
-        val parts = client.listShareGroupOffsets(groupSpecs).partitionsToOffsetAndMetadata(testGroupId).get()
+        val parts = client.listShareGroupOffsets(groupSpecs).partitionsToOffsetInfo(testGroupId).get()
         assertTrue(parts.containsKey(tp1))
         assertFalse(parts.containsKey(tp2))
       } finally {
