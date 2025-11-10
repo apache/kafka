@@ -840,7 +840,7 @@ public class SharePartition {
                 boolean fullMatch = checkForFullMatch(inFlightBatch, firstBatch.baseOffset(), lastOffsetToAcquire);
                 int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
                 boolean recordLimitSubsetMatch = isRecordLimitMode && checkForRecordLimitSubsetMatch(inFlightBatch, maxRecordsToAcquire, acquiredCount);
-                boolean deliveryCountExceed = checkForDeliveryCount(inFlightBatch);
+                boolean deliveryCountExceed = checkForBadRecordsDeliveryCount(inFlightBatch);
                 if (!fullMatch || inFlightBatch.offsetState() != null || recordLimitSubsetMatch || deliveryCountExceed) {
                     log.trace("Subset or offset tracked batch record found for share partition,"
                             + " batch: {} request offsets - first: {}, last: {} for the share"
@@ -1973,7 +1973,7 @@ public class SharePartition {
      * @param inFlightBatch The in-flight batch to check for bad records.
      * @return True if the batch contains bad records (delivery count >= threshold), false otherwise.
      */
-    private boolean checkForDeliveryCount(InFlightBatch inFlightBatch) {
+    private boolean checkForBadRecordsDeliveryCount(InFlightBatch inFlightBatch) {
         if (inFlightBatch.offsetState() == null) {
             return inFlightBatch.batchDeliveryCount() >= BAD_RECORD_DELIVERY_THRESHOLD;
         }
