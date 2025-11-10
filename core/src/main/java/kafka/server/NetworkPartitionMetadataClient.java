@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.server;
 
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -33,16 +49,16 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.stream.Collectors;
 
-public class AdminPartitionMetadataClient implements PartitionMetadataClient {
+public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
 
-    private static final Logger log = LoggerFactory.getLogger(AdminPartitionMetadataClient.class);
+    private static final Logger log = LoggerFactory.getLogger(NetworkPartitionMetadataClient.class);
 
     private final MetadataCache metadataCache;
     private final SendThread sendThread;
     private final Time time;
     private final ListenerName listenerName;
 
-    public AdminPartitionMetadataClient(
+    public NetworkPartitionMetadataClient(
         MetadataCache metadataCache,
         KafkaClient networkClient,
         Time time,
@@ -52,7 +68,7 @@ public class AdminPartitionMetadataClient implements PartitionMetadataClient {
         this.time = time;
         this.listenerName = listenerName;
         this.sendThread = new SendThread(
-            "AdminPartitionMetadataClientSendThread",
+            "NetworkPartitionMetadataClientSendThread",
             networkClient,
             Math.toIntExact(CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS),  //30 seconds
             this.time
@@ -70,7 +86,7 @@ public class AdminPartitionMetadataClient implements PartitionMetadataClient {
 
         // Map to store futures for each TopicPartition
         Map<TopicPartition, CompletableFuture<ListOffsetsPartitionResponse>> futures = new HashMap<>();
-        
+
         // Group TopicPartitions by leader node
         Map<Node, List<TopicPartition>> partitionsByNode = new HashMap<>();
 
@@ -80,8 +96,8 @@ public class AdminPartitionMetadataClient implements PartitionMetadataClient {
 
             // Get leader node for this partition
             Optional<Node> leaderNodeOpt = metadataCache.getPartitionLeaderEndpoint(
-                tp.topic(), 
-                tp.partition(), 
+                tp.topic(),
+                tp.partition(),
                 listenerName
             );
 
@@ -108,10 +124,10 @@ public class AdminPartitionMetadataClient implements PartitionMetadataClient {
 
             // Create ListOffsetsRequest for this node
             ListOffsetsRequest.Builder requestBuilder = createListOffsetsRequest(partitions);
-            
+
             // Create pending request to track this request
             PendingRequest pendingRequest = new PendingRequest(node, partitions, partitionFutures, requestBuilder);
-            
+
             // Enqueue to send thread
             sendThread.enqueue(pendingRequest);
         }
@@ -120,7 +136,7 @@ public class AdminPartitionMetadataClient implements PartitionMetadataClient {
     }
 
     /**
-     * Creates a ListOffsetsRequest for the given partitions requesting latest offsets.
+     * Creates a ListOffsetsRequest Builder for the given partitions requesting latest offsets.
      */
     private ListOffsetsRequest.Builder createListOffsetsRequest(List<TopicPartition> partitions) {
         // Group partitions by topic name
@@ -131,7 +147,7 @@ public class AdminPartitionMetadataClient implements PartitionMetadataClient {
         for (Map.Entry<String, List<TopicPartition>> entry : partitionsByTopic.entrySet()) {
             String topicName = entry.getKey();
             ListOffsetsTopic topic = new ListOffsetsTopic().setName(topicName);
-            
+
             for (TopicPartition tp : entry.getValue()) {
                 topic.partitions().add(
                     new ListOffsetsPartition()
@@ -143,9 +159,10 @@ public class AdminPartitionMetadataClient implements PartitionMetadataClient {
             topics.add(topic);
         }
 
+        // Isolation level will always be READ_UNCOMMITTED when finding the partition end offset.
         return ListOffsetsRequest.Builder.forConsumer(
             true,
-            IsolationLevel.READ_UNCOMMITTED // Isolation level for latest offsets
+            IsolationLevel.READ_UNCOMMITTED
         ).setTargetTimes(topics);
     }
 
@@ -155,7 +172,7 @@ public class AdminPartitionMetadataClient implements PartitionMetadataClient {
             sendThread.shutdown();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.error("Interrupted while shutting down AdminPartitionMetadataClient", e);
+            log.error("Interrupted while shutting down NetworkPartitionMetadataClient", e);
         }
     }
 
