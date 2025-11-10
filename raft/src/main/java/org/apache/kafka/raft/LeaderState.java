@@ -713,6 +713,10 @@ public class LeaderState<T> implements EpochState {
     }
 
     Map<Integer, ReplicaState> committedVoterStates() {
+        if (highWatermark.isEmpty()) {
+            return Map.of();
+        }
+
         return committedVoterStates;
     }
 
