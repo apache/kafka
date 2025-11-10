@@ -345,19 +345,27 @@ public class TopicBasedRemoteLogMetadataManager implements BrokerReadyCallback, 
                     continue;
                 }
                 // Create producer and consumer managers.
+                ProducerManager tempProducerManager = null;
+                ConsumerManager tempConsumerManager = null;
                 lock.writeLock().lock();
                 try {
-                    producerManager = new ProducerManager(rlmmConfig, partitioner);
-                    consumerManager = new ConsumerManager(rlmmConfig, remotePartitionMetadataStore, partitioner, time);
-                    consumerManager.startConsumerThread();
+                    tempProducerManager = new ProducerManager(rlmmConfig, partitioner);
+                    tempConsumerManager = new ConsumerManager(rlmmConfig, remotePartitionMetadataStore, partitioner, time);
+                    tempConsumerManager.startConsumerThread();
                     if (!pendingAssignPartitions.isEmpty()) {
                         assignPartitions(pendingAssignPartitions);
                         pendingAssignPartitions.clear();
                     }
+                    // Only assign to instance variables after successful initialization
+                    producerManager = tempProducerManager;
+                    consumerManager = tempConsumerManager;
                     initialized.set(true);
                     log.info("Initialized topic-based RLMM resources successfully");
                 } catch (Exception e) {
                     log.error("Encountered error while initializing producer/consumer", e);
+                    // Clean up resources if initialization fails
+                    Utils.closeQuietly(tempConsumerManager, "ConsumerManager");
+                    Utils.closeQuietly(tempProducerManager, "ProducerManager");
                     initializationFailed = true;
                 } finally {
                     lock.writeLock().unlock();
