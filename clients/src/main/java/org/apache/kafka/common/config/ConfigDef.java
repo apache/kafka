@@ -1047,7 +1047,8 @@ public class ConfigDef {
             }
 
             if (Set.copyOf(values).size() != values.size()) {
-                throw new ConfigException("Configuration '" + name + "' values must not be duplicated.");
+                System.out.println("Configuration '" + name + "' has duplicate values: " + values +
+                        "this will be disallowed in Kafka5.0.");
             }
 
             validateIndividualValues(name, values);

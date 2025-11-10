@@ -223,7 +223,7 @@ class KafkaConfigTest {
 
     // but not duplicate names
     props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "HOST://localhost:9091,HOST://localhost:9091")
-    assertBadConfigContainingMessage(props, "Configuration 'advertised.listeners' values must not be duplicated.")
+    assertBadConfigContainingMessage(props, "Each listener must have a different name")
   }
 
   @Test
@@ -248,8 +248,8 @@ class KafkaConfigTest {
     assertTrue(caught.getMessage.contains("If you have two listeners on the same port then one needs to be IPv4 and the other IPv6"))
 
     props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,PLAINTEXT://127.0.0.1:9092")
-    val exception = assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
-    assertTrue(exception.getMessage.contains("values must not be duplicated."))
+    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("Each listener must have a different name"))
 
     props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9092,SASL_SSL://127.0.0.1:9092")
     caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
@@ -301,7 +301,7 @@ class KafkaConfigTest {
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
 
-    assertBadConfigContainingMessage(props, 
+    assertBadConfigContainingMessage(props,
       "Missing required configuration \"controller.listener.names\" which has no default value.")
 
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
@@ -322,7 +322,7 @@ class KafkaConfigTest {
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
 
     assertFalse(isValidKafkaConfig(props))
-    assertBadConfigContainingMessage(props, 
+    assertBadConfigContainingMessage(props,
       "Missing required configuration \"controller.listener.names\" which has no default value.")
 
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
