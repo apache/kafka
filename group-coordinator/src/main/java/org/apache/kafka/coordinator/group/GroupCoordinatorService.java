@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
@@ -1886,63 +1885,53 @@ public class GroupCoordinatorService implements GroupCoordinator {
         Map<TopicPartition, CompletableFuture<Long>> partitionLatestOffsets = partitionsToComputeLag.isEmpty() ? Map.of() :
                 partitionMetadataClient.listLatestOffsets(partitionsToComputeLag);
 
-        // This map stores the final DescribeShareGroupOffsetsResponsePartition, including the lag, for all the partitions.
-        Map<TopicIdPartition, DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition> partitionsResponses = new HashMap<>();
+        // This map groups partitions by topicId for building the final response.
+        Map<Uuid, List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition>> topicToPartitionResults = new HashMap<>();
 
         CompletableFuture.allOf(partitionLatestOffsets.values().toArray(new CompletableFuture<?>[0]))
             .whenComplete((result, error) -> {
                 readSummaryResult.topicsData().forEach(topicData -> {
                     topicData.partitions().forEach(partitionData -> {
                         TopicPartition tp = new TopicPartition(requestTopicIdToNameMapping.get(topicData.topicId()), partitionData.partition());
-                        TopicIdPartition tip = new TopicIdPartition(topicData.topicId(), tp);
                         // Return -1 (uninitialized offset) for the situation where the persister returned an error.
                         // This is consistent with OffsetFetch for situations in which there is no offset information to fetch.
                         // It's treated as absence of data, rather than an error. Also, the persister returns startOffset
                         // as -1 (uninitialized offset) for share partitions for which consumption hasn't begun yet. Thus,
                         // lag computation is not needed in these situations, and -1 (uninitialized lag) is returned.
+                        DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition partitionResponse;
                         if (partitionData.errorCode() != Errors.NONE.code() || partitionData.startOffset() == PartitionFactory.UNINITIALIZED_START_OFFSET) {
-                            partitionsResponses.put(
-                                tip,
-                                new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
-                                    .setPartitionIndex(partitionData.partition())
-                                    .setStartOffset(PartitionFactory.UNINITIALIZED_START_OFFSET)
-                                    .setLeaderEpoch(PartitionFactory.DEFAULT_LEADER_EPOCH)
-                                    .setLag(PartitionFactory.UNINITIALIZED_LAG)
-                            );
+                            partitionResponse = new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
+                                .setPartitionIndex(partitionData.partition())
+                                .setStartOffset(PartitionFactory.UNINITIALIZED_START_OFFSET)
+                                .setLeaderEpoch(PartitionFactory.DEFAULT_LEADER_EPOCH)
+                                .setLag(PartitionFactory.UNINITIALIZED_LAG);
                         } else {
-                            // The partitions that fail this check are already handled above, and their corresponding DescribeShareGroupOffsetsResponsePartition
-                            // is already present in partitionsResponses.
                             try {
                                 // This code is reached when allOf above is complete, which happens when all the
                                 // individual futures are complete. Thus, the call to join() here is safe.
                                 long partitionLatestOffset = partitionLatestOffsets.get(tp).join();
                                 // Compute lag as (partition end offset - startOffset + 1 - deliveryCompleteCount)
                                 long lag = partitionLatestOffset - partitionData.startOffset() + 1 - partitionData.deliveryCompleteCount();
-                                partitionsResponses.put(
-                                    tip,
-                                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
-                                        .setPartitionIndex(partitionData.partition())
-                                        .setStartOffset(partitionData.startOffset())
-                                        .setLeaderEpoch(partitionData.leaderEpoch())
-                                        .setLag(lag)
-                                );
+                                partitionResponse = new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
+                                    .setPartitionIndex(partitionData.partition())
+                                    .setStartOffset(partitionData.startOffset())
+                                    .setLeaderEpoch(partitionData.leaderEpoch())
+                                    .setLag(lag);
                             } catch (CompletionException e) {
                                 // If fetching latest offset for a partition failed, return the error in the response for that partition.
-                                partitionsResponses.put(
-                                    tip,
-                                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
-                                        .setPartitionIndex(partitionData.partition())
-                                        .setErrorCode(Errors.forException(e.getCause()).code())
-                                        .setErrorMessage(e.getCause().getMessage())
-                                );
+                                partitionResponse = new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
+                                    .setPartitionIndex(partitionData.partition())
+                                    .setErrorCode(Errors.forException(e.getCause()).code())
+                                    .setErrorMessage(e.getCause().getMessage());
                             }
                         }
+                        topicToPartitionResults.computeIfAbsent(topicData.topicId(), k -> new ArrayList<>()).add(partitionResponse);
                     });
                 });
 
                 // Build the final response and complete the future.
                 responseFuture.complete(buildDescribeShareGroupOffsetsResponse(
-                    partitionsResponses,
+                    topicToPartitionResults,
                     requestTopicIdToNameMapping,
                     describeShareGroupOffsetsResponseTopicList,
                     groupId
@@ -1951,18 +1940,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     private DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup buildDescribeShareGroupOffsetsResponse(
-        Map<TopicIdPartition, DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition> partitionsResponses,
+        Map<Uuid, List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition>> topicToPartitionResults,
         Map<Uuid, String> requestTopicIdToNameMapping,
         List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic> describeShareGroupOffsetsResponseTopicList,
         String groupId
     ) {
-        // This map groups partitions by topicId for building the final response.
-        Map<Uuid, List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition>> topicToPartitionResults = new HashMap<>();
-        for (Map.Entry<TopicIdPartition, DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition> entry : partitionsResponses.entrySet()) {
-            Uuid topicId = entry.getKey().topicId();
-            topicToPartitionResults.computeIfAbsent(topicId, k -> new ArrayList<>()).add(entry.getValue());
-        }
-
         List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic> responseTopics = new ArrayList<>();
         for (Map.Entry<Uuid, List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition>> entry : topicToPartitionResults.entrySet()) {
             DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic topic =
