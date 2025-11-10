@@ -3299,15 +3299,15 @@ class KafkaApis(val requestChannel: RequestChannel,
           acknowledgeMap: Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]) => {
           val shareFetchResponse = processShareFetchResponse(fetchMap, request, topicIdNames, shareFetchContext)
           // The outer map has topicId as the key and the inner map has partitionIndex as the key.
-          val topicPartitionAcknowledgements: mutable.Map[Uuid, mutable.Map[Int, Short]] = mutable.Map()
+          val topicPartitionAcknowledgements: mutable.Map[Uuid, mutable.Map[Int, ShareAcknowledgeResponseData.PartitionData]] = mutable.Map()
           if (acknowledgeMap != null && acknowledgeMap.nonEmpty) {
             acknowledgeMap.foreach { case (tp, partitionData) =>
               topicPartitionAcknowledgements.get(tp.topicId) match {
                 case Some(subMap) =>
-                  subMap += tp.partition -> partitionData.errorCode
+                  subMap += tp.partition -> partitionData
                 case None =>
-                  val partitionAcknowledgementsMap: mutable.Map[Int, Short] = mutable.Map()
-                  partitionAcknowledgementsMap += tp.partition -> partitionData.errorCode
+                  val partitionAcknowledgementsMap: mutable.Map[Int, ShareAcknowledgeResponseData.PartitionData] = mutable.Map()
+                  partitionAcknowledgementsMap += tp.partition -> partitionData
                   topicPartitionAcknowledgements += tp.topicId -> partitionAcknowledgementsMap
               }
             }
@@ -3320,7 +3320,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 topic.partitions.forEach { partition =>
                   subMap.get(partition.partitionIndex) match {
                     case Some(value) =>
-                      partition.setAcknowledgeErrorCode(value)
+                      partition.setAcknowledgeErrorCode(value.errorCode)
+                      partition.setAcknowledgeErrorMessage(value.errorMessage)
                       // Delete the element.
                       subMap.remove(partition.partitionIndex)
                     case None =>
@@ -3331,7 +3332,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                   val fetchPartitionData = new ShareFetchResponseData.PartitionData()
                     .setPartitionIndex(partitionIndex)
                     .setErrorCode(Errors.NONE.code)
-                    .setAcknowledgeErrorCode(value)
+                    .setAcknowledgeErrorCode(value.errorCode)
+                    .setAcknowledgeErrorMessage(value.errorMessage)
                     .setRecords(MemoryRecords.EMPTY)
                   topic.partitions.add(fetchPartitionData)
                 }
@@ -3347,7 +3349,8 @@ class KafkaApis(val requestChannel: RequestChannel,
               val fetchPartitionData = new ShareFetchResponseData.PartitionData()
                 .setPartitionIndex(partitionIndex)
                 .setErrorCode(Errors.NONE.code)
-                .setAcknowledgeErrorCode(value)
+                .setAcknowledgeErrorCode(value.errorCode)
+                .setAcknowledgeErrorMessage(value.errorMessage)
                 .setRecords(MemoryRecords.EMPTY)
               topicData.partitions.add(fetchPartitionData)
             }

@@ -14,35 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.storage.internals.log;
+package org.apache.kafka.server.partition;
 
 import org.apache.kafka.metadata.LeaderRecoveryState;
 
 import java.util.Set;
 
-/**
- * Represents the state of a partition, including its In-Sync Replicas (ISR) and leader recovery state.
- */
-public interface PartitionState {
-    /**
-     * Includes only the in-sync replicas which have been committed to Controller.
-     */
-    Set<Integer> isr();
+public record CommittedPartitionState(Set<Integer> isr, LeaderRecoveryState leaderRecoveryState) implements PartitionState {
 
-    /**
-     * This set may include uncommitted ISR members following an expansion. This "effective" ISR is used for advancing
-     * the high watermark as well as determining which replicas are required for acks=all produce requests.*
-     */
-    Set<Integer> maximalIsr();
+    public CommittedPartitionState {
+        isr = Set.copyOf(isr);
+    }
 
-    /**
-     * The leader recovery state. See the description for LeaderRecoveryState for details on the different values.
-     */
-    LeaderRecoveryState leaderRecoveryState();
+    @Override
+    public Set<Integer> maximalIsr() {
+        return isr;
+    }
 
-    /**
-     * Indicates if we have an AlterPartition request inflight.
-     */
-    boolean isInflight();
+    @Override
+    public boolean isInflight() {
+        return false;
+    }
 
 }
