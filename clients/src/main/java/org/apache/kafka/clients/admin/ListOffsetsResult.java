@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.HashMap;
@@ -29,17 +30,44 @@ import java.util.concurrent.ExecutionException;
  */
 public class ListOffsetsResult {
 
-    private final Map<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> futures;
+    private final Map<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> nameFutures;
+    private final Map<TopicIdPartition, KafkaFuture<ListOffsetsResultInfo>> topicIdFutures;
 
-    public ListOffsetsResult(Map<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> futures) {
-        this.futures = futures;
+    private ListOffsetsResult(Map<TopicIdPartition, KafkaFuture<ListOffsetsResultInfo>> topicIdfutures,
+                             Map<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> nameFutures) {
+        if (topicIdfutures != null && nameFutures != null)
+            throw new IllegalArgumentException("topicIdFutures and nameFutures cannot both be specified.");
+        if (topicIdfutures == null && nameFutures == null)
+            throw new IllegalArgumentException("topicIdFutures and nameFutures cannot both be null.");
+        this.topicIdFutures = topicIdfutures;
+        this.nameFutures = nameFutures;
+    }
+
+    static ListOffsetsResult ofTopicIds(Map<TopicIdPartition, KafkaFuture<ListOffsetsResultInfo>> topicIdFutures) {
+        return new ListOffsetsResult(topicIdFutures, null);
+    }
+
+    static ListOffsetsResult ofTopicNames(Map<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> nameFutures) {
+        return new ListOffsetsResult(null, nameFutures);
     }
 
     /**
     * Return a future which can be used to check the result for a given partition.
     */
     public KafkaFuture<ListOffsetsResultInfo> partitionResult(final TopicPartition partition) {
-        KafkaFuture<ListOffsetsResultInfo> future = futures.get(partition);
+        KafkaFuture<ListOffsetsResultInfo> future = nameFutures.get(partition);
+        if (future == null) {
+            throw new IllegalArgumentException(
+                    "List Offsets for partition \"" + partition + "\" was not attempted");
+        }
+        return future;
+    }
+
+    /**
+     * Return a future which can be used to check the result for a given partition.
+     */
+    public KafkaFuture<ListOffsetsResultInfo> partitionResult(final TopicIdPartition partition) {
+        KafkaFuture<ListOffsetsResultInfo> future = topicIdFutures.get(partition);
         if (future == null) {
             throw new IllegalArgumentException(
                     "List Offsets for partition \"" + partition + "\" was not attempted");
@@ -52,10 +80,10 @@ public class ListOffsetsResult {
      * retrieved.
      */
     public KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]))
+        return KafkaFuture.allOf(nameFutures.values().toArray(new KafkaFuture<?>[0]))
                 .thenApply(v -> {
-                    Map<TopicPartition, ListOffsetsResultInfo> offsets = new HashMap<>(futures.size());
-                    for (Map.Entry<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> entry : futures.entrySet()) {
+                    Map<TopicPartition, ListOffsetsResultInfo> offsets = new HashMap<>(nameFutures.size());
+                    for (Map.Entry<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> entry : nameFutures.entrySet()) {
                         try {
                             offsets.put(entry.getKey(), entry.getValue().get());
                         } catch (InterruptedException | ExecutionException e) {

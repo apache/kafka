@@ -42,7 +42,9 @@
   // Version 10 enables async remote list offsets support (KIP-1075)
   //
   // Version 11 enables listing offsets by earliest pending upload offset (KIP-1023)
-  "validVersions": "1-11",
+  //
+  // Version 12 replaces topic names with topic IDs (KIP-516). May return UNKNOWN_TOPIC_ID error code.
+  "validVersions": "1-12",
   "flexibleVersions": "6+",
   "latestVersionUnstable": false,
   "fields": [
@@ -54,6 +56,7 @@
       "about": "Each topic in the request.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
+      { "name": "TopicId", "type": "uuid", "versions": "12+", "ignorable": true, "about": "The unique topic ID."},
       { "name": "Partitions", "type": "[]ListOffsetsPartition", "versions": "0+",
         "about": "Each partition in the request.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",

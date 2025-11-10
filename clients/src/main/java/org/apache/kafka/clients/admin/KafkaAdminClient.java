@@ -80,6 +80,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.TopicCollection.TopicIdCollection;
 import org.apache.kafka.common.TopicCollection.TopicNameCollection;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.TopicPartitionReplica;
@@ -408,6 +409,7 @@ public class KafkaAdminClient extends AdminClient {
     private final ExponentialBackoff retryBackoff;
     private final MetadataRecoveryStrategy metadataRecoveryStrategy;
     private final Map<TopicPartition, Integer> partitionLeaderCache;
+    private final Map<TopicIdPartition, Integer> topicIdPartitionLeaderCache;
     private final AdminFetchMetricsManager adminFetchMetricsManager;
     private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
 
@@ -632,6 +634,7 @@ public class KafkaAdminClient extends AdminClient {
         this.clientTelemetryReporter = clientTelemetryReporter;
         this.metadataRecoveryStrategy = MetadataRecoveryStrategy.forName(config.getString(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG));
         this.partitionLeaderCache = new HashMap<>();
+        this.topicIdPartitionLeaderCache = new HashMap<>();
         this.adminFetchMetricsManager = new AdminFetchMetricsManager(metrics);
         config.logUnused();
         AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
@@ -4264,7 +4267,7 @@ public class KafkaAdminClient extends AdminClient {
             .collect(Collectors.toMap(Map.Entry::getKey, e -> getOffsetFromSpec(e.getValue())));
         ListOffsetsHandler handler = new ListOffsetsHandler(offsetQueriesByPartition, options, logContext, defaultApiTimeoutMs);
         invokeDriver(handler, future, options.timeoutMs);
-        return new ListOffsetsResult(future.all());
+        return ListOffsetsResult.ofTopicNames(future.all());
     }
 
     @Override
