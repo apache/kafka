@@ -16,8 +16,8 @@
  */
 package kafka.server;
 
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
@@ -35,6 +35,7 @@ import org.apache.kafka.coordinator.group.metrics.PartitionMetadataClient;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.util.InterBrokerSendThread;
 import org.apache.kafka.server.util.RequestAndCompletionHandler;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
