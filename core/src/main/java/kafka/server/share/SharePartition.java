@@ -870,7 +870,7 @@ public class SharePartition {
                     // to prevent acquiring any new records afterwards.
                     if (acquiredSubsetCount < 0) {
                         maxRecordsToAcquire = -1;
-                        acquiredCount += -1 * acquiredSubsetCount;
+                        acquiredCount += acquiredSubsetCount == Integer.MIN_VALUE ? 0 : -1 * acquiredSubsetCount;
                         break;
                     }
                     acquiredCount += acquiredSubsetCount;
@@ -1902,7 +1902,7 @@ public class SharePartition {
 
                 // If the record has any pending deliveries, return immediately and do not deliver the current bad record.
                 if (offsetState.getValue().deliveryCount() >= BAD_RECORD_DELIVERY_THRESHOLD && (hasBeenAcquired > 0 || acquiredCount > 0)) {
-                    return -acquiredCount;
+                    return acquiredCount > 0 ? -acquiredCount : Integer.MIN_VALUE;
                 }
 
                 InFlightState updateResult =  offsetState.getValue().tryUpdateState(RecordState.ACQUIRED, DeliveryCountOps.INCREASE,
