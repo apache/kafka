@@ -1870,34 +1870,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
         CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> responseFuture,
         String groupId
     ) {
-
         // This set keeps track of the partitions for which lag computation is needed.
         Set<TopicPartition> partitionsToComputeLag = new HashSet<>();
 
-        // This map stores the final DescribeShareGroupOffsetsResponsePartition, including the lag, for all the partitions.
-        Map<TopicIdPartition, DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition> partitionsResponses = new HashMap<>();
-
         readSummaryResult.topicsData().forEach(topicData -> {
             topicData.partitions().forEach(partitionData -> {
-                TopicIdPartition tp = new TopicIdPartition(
-                    topicData.topicId(),
-                    new TopicPartition(requestTopicIdToNameMapping.get(topicData.topicId()), partitionData.partition())
-                );
-                // Return -1 (uninitialized offset) for the situation where the persister returned an error.
-                // This is consistent with OffsetFetch for situations in which there is no offset information to fetch.
-                // It's treated as absence of data, rather than an error. Also, the persister returns startOffset
-                // as -1 (uninitialized offset) for share partitions for which consumption hasn't begun yet. Thus,
-                // lag computation is not needed in these situations, and -1 (uninitialized lag) is returned.
-                if (partitionData.errorCode() != Errors.NONE.code() || partitionData.startOffset() == PartitionFactory.UNINITIALIZED_START_OFFSET) {
-                    partitionsResponses.put(
-                        tp,
-                        new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
-                            .setPartitionIndex(partitionData.partition())
-                            .setStartOffset(PartitionFactory.UNINITIALIZED_START_OFFSET)
-                            .setLeaderEpoch(PartitionFactory.DEFAULT_LEADER_EPOCH)
-                            .setLag(PartitionFactory.UNINITIALIZED_LAG)
-                    );
-                } else {
+                if (partitionData.errorCode() == Errors.NONE.code() && partitionData.startOffset() != PartitionFactory.UNINITIALIZED_START_OFFSET) {
                     // If the readSummaryResult is successful for a partition, we need to compute lag.
                     partitionsToComputeLag.add(new TopicPartition(requestTopicIdToNameMapping.get(topicData.topicId()), partitionData.partition()));
                 }
@@ -1905,18 +1883,35 @@ public class GroupCoordinatorService implements GroupCoordinator {
         });
 
         // Fetch latest offsets for all partitions that need lag computation.
-        Map<TopicPartition, CompletableFuture<Long>> partitionLatestOffsets = partitionsToComputeLag.isEmpty() ? new HashMap<>() :
+        Map<TopicPartition, CompletableFuture<Long>> partitionLatestOffsets = partitionsToComputeLag.isEmpty() ? Map.of() :
                 partitionMetadataClient.listLatestOffsets(partitionsToComputeLag);
+
+        // This map stores the final DescribeShareGroupOffsetsResponsePartition, including the lag, for all the partitions.
+        Map<TopicIdPartition, DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition> partitionsResponses = new HashMap<>();
 
         CompletableFuture.allOf(partitionLatestOffsets.values().toArray(new CompletableFuture<?>[0]))
             .whenComplete((result, error) -> {
                 readSummaryResult.topicsData().forEach(topicData -> {
                     topicData.partitions().forEach(partitionData -> {
-                        // The partitions that fail this check are already handled above, and their corresponding DescribeShareGroupOffsetsResponsePartition
-                        // is already present in partitionsResponses.
-                        if (partitionData.errorCode() == Errors.NONE.code() && partitionData.startOffset() != PartitionFactory.UNINITIALIZED_START_OFFSET) {
-                            TopicPartition tp = new TopicPartition(requestTopicIdToNameMapping.get(topicData.topicId()), partitionData.partition());
-                            TopicIdPartition tip = new TopicIdPartition(topicData.topicId(), tp);
+                        TopicPartition tp = new TopicPartition(requestTopicIdToNameMapping.get(topicData.topicId()), partitionData.partition());
+                        TopicIdPartition tip = new TopicIdPartition(topicData.topicId(), tp);
+                        // Return -1 (uninitialized offset) for the situation where the persister returned an error.
+                        // This is consistent with OffsetFetch for situations in which there is no offset information to fetch.
+                        // It's treated as absence of data, rather than an error. Also, the persister returns startOffset
+                        // as -1 (uninitialized offset) for share partitions for which consumption hasn't begun yet. Thus,
+                        // lag computation is not needed in these situations, and -1 (uninitialized lag) is returned.
+                        if (partitionData.errorCode() != Errors.NONE.code() || partitionData.startOffset() == PartitionFactory.UNINITIALIZED_START_OFFSET) {
+                            partitionsResponses.put(
+                                tip,
+                                new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
+                                    .setPartitionIndex(partitionData.partition())
+                                    .setStartOffset(PartitionFactory.UNINITIALIZED_START_OFFSET)
+                                    .setLeaderEpoch(PartitionFactory.DEFAULT_LEADER_EPOCH)
+                                    .setLag(PartitionFactory.UNINITIALIZED_LAG)
+                            );
+                        } else {
+                            // The partitions that fail this check are already handled above, and their corresponding DescribeShareGroupOffsetsResponsePartition
+                            // is already present in partitionsResponses.
                             try {
                                 // This code is reached when allOf above is complete, which happens when all the
                                 // individual futures are complete. Thus, the call to join() here is safe.
@@ -1946,7 +1941,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 });
 
                 // Build the final response and complete the future.
-                responseFuture.complete(BuildDescribeShareGroupOffsetsResponse(
+                responseFuture.complete(buildDescribeShareGroupOffsetsResponse(
                     partitionsResponses,
                     requestTopicIdToNameMapping,
                     describeShareGroupOffsetsResponseTopicList,
@@ -1955,7 +1950,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             });
     }
 
-    private DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup BuildDescribeShareGroupOffsetsResponse(
+    private DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup buildDescribeShareGroupOffsetsResponse(
         Map<TopicIdPartition, DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition> partitionsResponses,
         Map<Uuid, String> requestTopicIdToNameMapping,
         List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic> describeShareGroupOffsetsResponseTopicList,
