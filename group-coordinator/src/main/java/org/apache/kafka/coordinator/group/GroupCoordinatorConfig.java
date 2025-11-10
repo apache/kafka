@@ -648,7 +648,7 @@ public class GroupCoordinatorConfig {
     }
 
     /**
-     * The number of threads for event loops running.
+     * The number of threads or event loops running.
      */
     public int numThreads() {
         return numThreads;

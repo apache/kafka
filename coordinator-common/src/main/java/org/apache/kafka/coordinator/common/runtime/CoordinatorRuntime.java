@@ -768,7 +768,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             currentBatch.lingerTimeoutTask.ifPresent(TimerTask::cancel);
 
             // Release the buffer only if it is not larger than the max buffer size.
-            int maxBufferSize = appendMaxBufferSizeSupplied.get();
+            int maxBufferSize = appendMaxBufferSizeSupplier.get();
 
             if (currentBatch.builder.buffer().capacity() <= maxBufferSize) {
                 bufferSupplier.release(currentBatch.builder.buffer());
@@ -2016,7 +2016,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * The maximum buffer size that the coordinator can cache.
      */
-    private final Supplier<Integer> appendMaxBufferSizeSupplied;
+    private final Supplier<Integer> appendMaxBufferSizeSupplier;
 
     /**
      * Atomic boolean indicating whether the runtime is running.
@@ -2083,7 +2083,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.compression = compression;
         this.appendLingerMs = appendLingerMs;
         this.executorService = executorService;
-        this.appendMaxBufferSizeSupplied = appendMaxBufferSizeSupplier;
+        this.appendMaxBufferSizeSupplier = appendMaxBufferSizeSupplier;
         this.runtimeMetrics.registerAppendBufferSizeGauge(
             () -> coordinators.values().stream().mapToLong(c -> c.bufferSupplier.size()).sum()
         );

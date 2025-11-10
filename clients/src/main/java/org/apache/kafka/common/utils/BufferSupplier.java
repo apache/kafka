@@ -20,8 +20,8 @@ package org.apache.kafka.common.utils;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Simple non-threadsafe interface for caching byte buffers. This is suitable for simple cases like ensuring that
@@ -75,7 +75,7 @@ public abstract class BufferSupplier implements AutoCloseable {
 
     private static class DefaultSupplier extends BufferSupplier {
         // We currently use a single block size, so optimise for that case
-        private final Map<Integer, Deque<ByteBuffer>> bufferMap = new HashMap<>(1);
+        private final Map<Integer, Deque<ByteBuffer>> bufferMap = new ConcurrentHashMap<>(1);
 
         @Override
         public ByteBuffer get(int size) {
@@ -110,7 +110,7 @@ public abstract class BufferSupplier implements AutoCloseable {
      * monotonically as needed to fulfill the allocation request.
      */
     public static class GrowableBufferSupplier extends BufferSupplier {
-        private ByteBuffer cachedBuffer;
+        private volatile ByteBuffer cachedBuffer;
 
         @Override
         public ByteBuffer get(int minCapacity) {
@@ -132,7 +132,7 @@ public abstract class BufferSupplier implements AutoCloseable {
 
         @Override
         public long size() {
-            return cachedBuffer.capacity();
+            return cachedBuffer == null ? 0 : cachedBuffer.capacity();
         }
 
         @Override
@@ -140,5 +140,4 @@ public abstract class BufferSupplier implements AutoCloseable {
             cachedBuffer = null;
         }
     }
-
 }
