@@ -241,8 +241,8 @@ public class ProducerPerformance {
                 .action(store())
                 .required(false)
                 .type(String.class)
-                .metavar("BOOTSTRAP-SERVERS")
-                .dest("bootstrapServers")
+                .metavar("BOOTSTRAP-SERVER")
+                .dest("bootstrapServer")
                 .help("The server(s) to connect to. This config takes precedence over bootstrap.servers specified " +
                         "via --command-property or --command-config.");
 
@@ -566,7 +566,7 @@ public class ProducerPerformance {
     }
 
     static final class ConfigPostProcessor {
-        final String bootstrapServers;
+        final String bootstrapServer;
         final String topicName;
         final long numRecords;
         final long warmupRecords;
@@ -582,7 +582,7 @@ public class ProducerPerformance {
 
         public ConfigPostProcessor(ArgumentParser parser, String[] args) throws IOException, ArgumentParserException {
             Namespace namespace = parser.parseArgs(args);
-            this.bootstrapServers = namespace.getString("bootstrapServers");
+            this.bootstrapServer = namespace.getString("bootstrapServer");
             this.topicName = namespace.getString("topic");
             this.numRecords = namespace.getLong("numRecords");
             this.warmupRecords = Math.max(namespace.getLong("warmupRecords"), 0);
@@ -608,7 +608,7 @@ public class ProducerPerformance {
             if (recordSize != null && recordSize <= 0) {
                 throw new ArgumentParserException("--record-size should be greater than zero.", parser);
             }
-            if (bootstrapServers == null && commandProperties == null && producerConfigs == null && producerConfigFile == null && commandConfigFile == null) {
+            if (bootstrapServer == null && commandProperties == null && producerConfigs == null && producerConfigFile == null && commandConfigFile == null) {
                 throw new ArgumentParserException("At least one of --bootstrap-server, --command-property, --producer-props, --producer.config or --command-config must be specified.", parser);
             }
             if (commandProperties != null && producerConfigs != null) {
@@ -637,8 +637,8 @@ public class ProducerPerformance {
                 commandConfigFile = producerConfigFile;
             }
             this.producerProps = readProps(commandProperties, commandConfigFile);
-            if (bootstrapServers != null) {
-                producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+            if (bootstrapServer != null) {
+                producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
             }
             // setup transaction related configs
             this.transactionsEnabled = transactionDurationMsArg != null

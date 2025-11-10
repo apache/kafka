@@ -60,6 +60,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ShareCompletedFetchTest {
     private static final String TOPIC_NAME = "test";
@@ -354,6 +355,63 @@ public class ShareCompletedFetchTest {
 
         records = completedFetch.fetchRecords(deserializers, 10, true).getInFlightRecords();
         assertEquals(0, records.size());
+    }
+
+    @Test
+    public void testOverlappingAcquiredRecordsLogsErrorAndRetainsFirstOccurrence() {
+        int startingOffset = 0;
+        int numRecords = 20;        // Records for 0-19
+
+        // Create overlapping acquired records: [0-9] and [5-14]
+        // Offsets 5-9 will be duplicates
+        List<ShareFetchResponseData.AcquiredRecords> acquiredRecords = new ArrayList<>();
+        acquiredRecords.add(new ShareFetchResponseData.AcquiredRecords()
+                .setFirstOffset(0L)
+                .setLastOffset(9L)
+                .setDeliveryCount((short) 1));
+        acquiredRecords.add(new ShareFetchResponseData.AcquiredRecords()
+                .setFirstOffset(5L)
+                .setLastOffset(14L)
+                .setDeliveryCount((short) 2));
+
+        ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
+                .setRecords(newRecords(startingOffset, numRecords))
+                .setAcquiredRecords(acquiredRecords);
+
+        ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
+
+        Deserializers<String, String> deserializers = newStringDeserializers();
+
+        // Fetch records and verify that only 15 unique records are returned (0-14)
+        ShareInFlightBatch<String, String> batch = completedFetch.fetchRecords(deserializers, 20, true);
+        List<ConsumerRecord<String, String>> records = batch.getInFlightRecords();
+        
+        // Should get 15 unique records: 0-9 from first range (with deliveryCount=1)
+        // and 10-14 from second range (with deliveryCount=2)
+        assertEquals(15, records.size());
+        
+        // Verify first occurrence (offset 5 should have deliveryCount=1 from first range)
+        ConsumerRecord<String, String> record5 = records.stream()
+                .filter(r -> r.offset() == 5L)
+                .findFirst()
+                .orElse(null);
+        assertNotNull(record5);
+        assertEquals(Optional.of((short) 1), record5.deliveryCount());
+        
+        // Verify offset 10 has deliveryCount=2 from second range
+        ConsumerRecord<String, String> record10 = records.stream()
+                .filter(r -> r.offset() == 10L)
+                .findFirst()
+                .orElse(null);
+        assertNotNull(record10);
+        assertEquals(Optional.of((short) 2), record10.deliveryCount());
+        
+        // Verify all offsets are unique
+        Set<Long> offsetSet = new HashSet<>();
+        for (ConsumerRecord<String, String> record : records) {
+            assertTrue(offsetSet.add(record.offset()), 
+                    "Duplicate offset found in results: " + record.offset());
+        }
     }
 
     private ShareCompletedFetch newShareCompletedFetch(ShareFetchResponseData.PartitionData partitionData) {

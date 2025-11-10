@@ -101,6 +101,11 @@ public interface ShareConsumer<K, V> extends Closeable {
     Uuid clientInstanceId(Duration timeout);
 
     /**
+     * @see KafkaShareConsumer#acquisitionLockTimeoutMs()
+     */
+    Optional<Integer> acquisitionLockTimeoutMs();
+
+    /**
      * @see KafkaShareConsumer#metrics()
      */
     Map<MetricName, ? extends Metric> metrics();
