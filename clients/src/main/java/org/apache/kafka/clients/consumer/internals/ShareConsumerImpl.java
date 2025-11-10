@@ -585,6 +585,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             // If using implicit acknowledgement, acknowledge the previously fetched records
             acknowledgeBatchIfImplicitAcknowledgement();
 
+            // If using explicit acknowledgement, make sure all in-flight records have been acknowledged
+            ensureInFlightAcknowledgedIfExplicitAcknowledgement();
+
             kafkaShareConsumerMetrics.recordPollStart(timer.currentTimeMs());
 
             if (subscriptions.hasNoSubscriptionOrUserAssignment()) {
@@ -663,7 +666,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     }
 
     private ShareFetch<K, V> collect(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
-        if (currentFetch.isEmpty() || currentFetch.hasRenewals()) {
+        if (currentFetch.isEmpty() && !currentFetch.hasRenewals()) {
             final ShareFetch<K, V> fetch = fetchCollector.collect(fetchBuffer);
             if (fetch.isEmpty()) {
                 Map<TopicIdPartition, NodeAcknowledgements> controlRecordAcknowledgements = fetch.takeAcknowledgedRecords();
@@ -685,17 +688,26 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 sendShareAcknowledgeAsyncEvent(acknowledgementsMap);
             }
             return fetch;
+        } else if (currentFetch.hasRenewals()) {
+            // First, take any records which have been renewed and move them back into in-flight records.
+            currentFetch.takeRenewedRecords();
+
+            // If some records are in renewing state...
+            if (currentFetch.hasRenewals()) {
+                // We only send one ShareFetchEvent per poll call.
+                if (shouldSendShareFetchEvent) {
+                    // Check for any acknowledgements which could have come from control records (GAP) and include them.
+                    applicationEventHandler.add(new ShareFetchEvent(acknowledgementsMap));
+                    shouldSendShareFetchEvent = false;
+                    // Notify the network thread to wake up and start the next round of fetching
+                    applicationEventHandler.wakeupNetworkThread();
+                }
+            }
+            return currentFetch;
         } else {
             if (!acknowledgementsMap.isEmpty()) {
                 // Asynchronously commit any waiting acknowledgements
                 sendShareAcknowledgeAsyncEvent(acknowledgementsMap);
-            }
-            if (acknowledgementMode == ShareAcknowledgementMode.EXPLICIT) {
-                // Renewed records are turned back into in-flight records when the acknowledgement completes.
-                if ((currentFetch.numRenewedRecords() == 0) || (currentFetch.numRecords() > currentFetch.numRenewedRecords())) {
-                    // We cannot leave unacknowledged records in EXPLICIT acknowledgement mode, so we throw an exception to the application.
-                    throw new IllegalStateException("All records must be acknowledged in explicit acknowledgement mode.");
-                }
             }
             return currentFetch;
         }
@@ -1116,6 +1128,18 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         // If IMPLICIT, acknowledge all records
         if (acknowledgementMode == ShareAcknowledgementMode.IMPLICIT) {
             currentFetch.acknowledgeAll(AcknowledgeType.ACCEPT);
+        }
+    }
+
+    /**
+     * If the acknowledgement mode is EXPLICIT, ensure that all in-flight records have been acknowledged.
+     */
+    private void ensureInFlightAcknowledgedIfExplicitAcknowledgement() {
+        if (acknowledgementMode == ShareAcknowledgementMode.EXPLICIT) {
+            if (!currentFetch.checkAllInFlightAreAcknowledged()) {
+                // We cannot leave unacknowledged records in EXPLICIT acknowledgement mode, so we throw an exception to the application.
+                throw new IllegalStateException("All records must be acknowledged in explicit acknowledgement mode.");
+            }
         }
     }
 
