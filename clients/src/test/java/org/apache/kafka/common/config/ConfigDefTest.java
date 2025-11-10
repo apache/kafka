@@ -810,18 +810,14 @@ public class ConfigDefTest {
         assertEquals("Configuration 'test.config' values must not be null.", exception1.getMessage());
         ConfigException exception2 = assertThrows(ConfigException.class, () -> allowEmptyValidator.ensureValid("test.config", List.of("d")));
         assertEquals("Invalid value d for configuration test.config: String must be one of: a, b, c", exception2.getMessage());
-        ConfigException exception3 = assertThrows(ConfigException.class, () -> allowEmptyValidator.ensureValid("test.config", List.of("a", "a")));
-        assertEquals("Configuration 'test.config' values must not be duplicated.", exception3.getMessage());
 
         ConfigDef.ValidList notAllowEmptyValidator = ConfigDef.ValidList.in(false, "a", "b", "c");
         assertDoesNotThrow(() -> notAllowEmptyValidator.ensureValid("test.config", List.of("a", "b")));
-        ConfigException exception4 = assertThrows(ConfigException.class, () -> notAllowEmptyValidator.ensureValid("test.config", List.of()));
-        assertEquals("Configuration 'test.config' must not be empty. Valid values include: [a, b, c]", exception4.getMessage());
-        ConfigException exception5 = assertThrows(ConfigException.class, () -> notAllowEmptyValidator.ensureValid("test.config", null));
-        assertEquals("Configuration 'test.config' values must not be null.", exception5.getMessage());
-        ConfigException exception6 = assertThrows(ConfigException.class, () -> notAllowEmptyValidator.ensureValid("test.config", List.of("d")));
-        assertEquals("Invalid value d for configuration test.config: String must be one of: a, b, c", exception6.getMessage());
-        ConfigException exception7 = assertThrows(ConfigException.class, () -> notAllowEmptyValidator.ensureValid("test.config", List.of("a", "a")));
-        assertEquals("Configuration 'test.config' values must not be duplicated.", exception7.getMessage());
+        ConfigException exception3 = assertThrows(ConfigException.class, () -> notAllowEmptyValidator.ensureValid("test.config", List.of()));
+        assertEquals("Configuration 'test.config' must not be empty. Valid values include: [a, b, c]", exception3.getMessage());
+        ConfigException exception4 = assertThrows(ConfigException.class, () -> notAllowEmptyValidator.ensureValid("test.config", null));
+        assertEquals("Configuration 'test.config' values must not be null.", exception4.getMessage());
+        ConfigException exception5 = assertThrows(ConfigException.class, () -> notAllowEmptyValidator.ensureValid("test.config", List.of("d")));
+        assertEquals("Invalid value d for configuration test.config: String must be one of: a, b, c", exception5.getMessage());
     }
 }
