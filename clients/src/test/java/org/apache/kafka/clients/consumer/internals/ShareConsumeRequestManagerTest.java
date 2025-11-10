@@ -24,6 +24,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ShareAcquireMode;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackEvent;
@@ -36,6 +37,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
@@ -119,6 +121,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -819,6 +822,51 @@ public class ShareConsumeRequestManagerTest {
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
         assertEquals(3.0,
                 metrics.metrics().get(metrics.metricInstance(shareFetchMetricsRegistry.acknowledgementSendTotal)).metricValue());
+    }
+
+    @Test
+    public void testAcknowledgeErrorMessagePropagatedFromFetchResponse() {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        assignFromSubscribed(Collections.singleton(tp0));
+        sendFetchAndVerifyResponse(records, acquiredRecords, Errors.NONE);
+
+        fetchRecords();
+
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT);
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
+
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        String acknowledgeErrorMessage = "ack failure with broker context";
+        ShareFetchResponse response = fullFetchResponse(
+            tip0,
+            records,
+            acquiredRecords,
+            Errors.NONE,
+            Errors.UNKNOWN_SERVER_ERROR
+        );
+        response.data().responses().forEach(topicResponse ->
+            topicResponse.partitions().forEach(partition ->
+                partition.setAcknowledgeErrorMessage(acknowledgeErrorMessage)
+            )
+        );
+
+        client.prepareResponse(response);
+        networkClientDelegate.poll(time.timer(0));
+
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+        fetchRecords();
+
+        assertEquals(1, completedAcknowledgements.size());
+        Map<TopicIdPartition, Acknowledgements> acknowledgementsMap = completedAcknowledgements.get(0);
+        assertSame(acknowledgements, acknowledgementsMap.get(tip0));
+
+        KafkaException acknowledgeException = acknowledgementsMap.get(tip0).getAcknowledgeException();
+        assertInstanceOf(ApiException.class, acknowledgeException);
+        assertEquals(acknowledgeErrorMessage, acknowledgeException.getMessage());
     }
 
     @Test
@@ -2639,7 +2687,7 @@ public class ShareConsumeRequestManagerTest {
         int maxBytes = Integer.MAX_VALUE;
         int fetchSize = 1000;
         int minBytes = 1;
-        FetchConfig fetchConfig = new FetchConfig(
+        ShareFetchConfig shareFetchConfig = new ShareFetchConfig(
                 minBytes,
                 maxBytes,
                 maxWaitMs,
@@ -2647,11 +2695,12 @@ public class ShareConsumeRequestManagerTest {
                 Integer.MAX_VALUE,
                 true, // check crc
                 CommonClientConfigs.DEFAULT_CLIENT_RACK,
-                IsolationLevel.READ_UNCOMMITTED);
+                IsolationLevel.READ_UNCOMMITTED,
+                ShareAcquireMode.BATCH_OPTIMIZED);
         ShareFetchCollector<K, V> shareFetchCollector = new ShareFetchCollector<>(logContext,
                 metadata,
                 subscriptions,
-                fetchConfig,
+                shareFetchConfig,
                 deserializers);
         BackgroundEventHandler backgroundEventHandler = new TestableBackgroundEventHandler(time, completedAcknowledgements);
         shareConsumeRequestManager = spy(new TestableShareConsumeRequestManager<>(
@@ -2659,7 +2708,7 @@ public class ShareConsumeRequestManagerTest {
                 groupId,
                 metadata,
                 subscriptionState,
-                fetchConfig,
+                shareFetchConfig,
                 new ShareFetchBuffer(logContext),
                 backgroundEventHandler,
                 metricsManager,
@@ -2698,12 +2747,12 @@ public class ShareConsumeRequestManagerTest {
                                                   String groupId,
                                                   ShareConsumerMetadata metadata,
                                                   SubscriptionState subscriptions,
-                                                  FetchConfig fetchConfig,
+                                                  ShareFetchConfig shareFetchConfig,
                                                   ShareFetchBuffer shareFetchBuffer,
                                                   BackgroundEventHandler backgroundEventHandler,
                                                   ShareFetchMetricsManager metricsManager,
                                                   ShareFetchCollector<K, V> fetchCollector) {
-            super(time, logContext, groupId, metadata, subscriptions, fetchConfig, shareFetchBuffer,
+            super(time, logContext, groupId, metadata, subscriptions, shareFetchConfig, shareFetchBuffer,
                     backgroundEventHandler, metricsManager, retryBackoffMs, 1000);
             this.shareFetchCollector = fetchCollector;
             onMemberEpochUpdated(Optional.empty(), Uuid.randomUuid().toString());

@@ -49,7 +49,7 @@ import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandl
 import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
 import org.apache.kafka.server.log.remote.metadata.storage.BrokerReadyCallback
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
-import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
+import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpStatePersister, Persister, PersisterStateManager}
 import org.apache.kafka.server.share.session.ShareSessionCache
@@ -189,9 +189,9 @@ class BrokerServer(
 
       info("Starting broker")
 
-      val clientMetricsReceiverPlugin = new ClientMetricsReceiverPlugin()
+      val clientTelemetryExporterPlugin = new ClientTelemetryExporterPlugin()
 
-      config.dynamicConfig.initialize(Some(clientMetricsReceiverPlugin))
+      config.dynamicConfig.initialize(Some(clientTelemetryExporterPlugin))
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-", ProcessRole.BrokerRole.toString)
       DynamicBrokerConfig.readDynamicBrokerConfigsFromSnapshot(raftManager, config, quotaManagers, logContext)
 
@@ -244,7 +244,7 @@ class BrokerServer(
       )
       clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager, metrics)
-      clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config.clientTelemetryMaxBytes, time, metrics)
+      clientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, config.clientTelemetryMaxBytes, time, metrics)
 
       val apiVersionManager = new DefaultApiVersionManager(
         ListenerType.BROKER,

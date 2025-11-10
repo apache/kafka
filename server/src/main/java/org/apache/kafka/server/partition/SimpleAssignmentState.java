@@ -14,34 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.storage.internals.log;
+package org.apache.kafka.server.partition;
 
 import java.util.List;
 
-/**
- * Represents the current assignment of replicas for a partition. This can be a simple assignment
- * or an ongoing reassignment.
- */
-public interface AssignmentState {
+public record SimpleAssignmentState(List<Integer> replicas) implements AssignmentState {
+    public SimpleAssignmentState {
+        replicas = List.copyOf(replicas);
+    }
 
-    /**
-     * An ordered sequence of all the broker ids that were assigned to this topic partition.
-     * @return the list of broker ids
-     */
-    List<Integer> replicas();
+    @Override
+    public int replicationFactor() {
+        return replicas().size();
+    }
 
-    /**
-     * The number of replicas in the assignment.
-     * @return the replication factor
-     */
-    int replicationFactor();
-
-    /**
-     * Check whether a replica is being added to the assignment.
-     * The simple assignment returns false permanently.
-     *
-     * @param brokerId the broker id to check
-     * @return true if the broker is being added
-     */
-    boolean isAddingReplica(int brokerId);
+    @Override
+    public boolean isAddingReplica(int brokerId) {
+        return false;
+    }
 }

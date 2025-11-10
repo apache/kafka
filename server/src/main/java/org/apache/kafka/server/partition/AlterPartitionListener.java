@@ -14,20 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.storage.internals.log;
-
-import org.apache.kafka.metadata.LeaderAndIsr;
+package org.apache.kafka.server.partition;
 
 /**
- * Represents a partition state currently undergoing a change, such as an ISR expansion or shrinking.
+ * A listener that is invoked when the ISR of a partition is altered. Implementations of this
+ * interface can be used to track metrics related to ISR changes.
  */
-public interface PendingPartitionChange extends PartitionState {
+public interface AlterPartitionListener {
     /**
-     * Returns the last committed partition state before this pending change.
+     * Callback invoked when the ISR is expanded.
      */
-    CommittedPartitionState lastCommittedState();
+    void markIsrExpand();
+
     /**
-     * Returns the LeaderAndIsr object sent to the controller for this pending change.
+     * Callback invoked when the ISR is shrunk.
      */
-    LeaderAndIsr sentLeaderAndIsr();
+    void markIsrShrink();
+
+    /**
+     * Callback invoked when an AlterPartition request fails.
+     */
+    void markFailed();
 }

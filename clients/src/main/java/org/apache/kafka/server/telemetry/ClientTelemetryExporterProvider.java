@@ -14,22 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.storage.internals.log;
 
-import java.util.List;
+package org.apache.kafka.server.telemetry;
 
-public record SimpleAssignmentState(List<Integer> replicas) implements AssignmentState {
-    public SimpleAssignmentState {
-        replicas = List.copyOf(replicas);
-    }
+import org.apache.kafka.common.metrics.MetricsReporter;
 
-    @Override
-    public int replicationFactor() {
-        return replicas().size();
-    }
+/**
+ * A {@link MetricsReporter} may implement this interface to indicate support for collecting client
+ * telemetry on the server side using the new exporter API.
+ */
+public interface ClientTelemetryExporterProvider {
 
-    @Override
-    public boolean isAddingReplica(int brokerId) {
-        return false;
-    }
+    /**
+     * Called by the broker to fetch instance of {@link ClientTelemetryExporter}.
+     * <p>
+     * This instance may be cached by the broker.
+     *
+     * @return broker side instance of {@link ClientTelemetryExporter}
+     */
+    ClientTelemetryExporter clientTelemetryExporter();
 }

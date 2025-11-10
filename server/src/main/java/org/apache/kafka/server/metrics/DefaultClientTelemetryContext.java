@@ -14,25 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.storage.internals.log;
+package org.apache.kafka.server.metrics;
+
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
+import org.apache.kafka.server.telemetry.ClientTelemetryContext;
 
 /**
- * A listener that is invoked when the ISR of a partition is altered. Implementations of this
- * interface can be used to track metrics related to ISR changes.
+ * Default implementation of {@link ClientTelemetryContext}.
  */
-public interface AlterPartitionListener {
-    /**
-     * Callback invoked when the ISR is expanded.
-     */
-    void markIsrExpand();
+public record DefaultClientTelemetryContext(int pushIntervalMs,
+                                            AuthorizableRequestContext authorizableRequestContext) implements ClientTelemetryContext {
 
-    /**
-     * Callback invoked when the ISR is shrunk.
-     */
-    void markIsrShrink();
-
-    /**
-     * Callback invoked when an AlterPartition request fails.
-     */
-    void markFailed();
 }
