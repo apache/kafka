@@ -238,7 +238,7 @@ public class TimestampedWindowStoreBuilderTest {
         when(supplier.metricsScope()).thenReturn(null);
         final Exception e = assertThrows(NullPointerException.class,
             () -> new TimestampedWindowStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
-        assertEquals(e.getMessage(), "storeSupplier's metricsScope can't be null");
+        assertEquals("storeSupplier's metricsScope can't be null", e.getMessage());
     }
 
 }

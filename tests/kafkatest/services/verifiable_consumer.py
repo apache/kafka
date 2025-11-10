@@ -42,7 +42,8 @@ class ConsumerEventHandler(object):
 
     def __init__(self, node, verify_offsets, idx, state=ConsumerState.Dead,
                  revoked_count=0, assigned_count=0, assignment=None,
-                 position=None, committed=None, total_consumed=0):
+                 position=None, committed=None, total_consumed=0,
+                 shutdown_complete=False):
         self.node = node
         self.verify_offsets = verify_offsets
         self.idx = idx
@@ -53,11 +54,13 @@ class ConsumerEventHandler(object):
         self.position = position if position is not None else {}
         self.committed = committed if committed is not None else {}
         self.total_consumed = total_consumed
+        self.shutdown_complete = shutdown_complete
 
     def handle_shutdown_complete(self, node=None, logger=None):
         self.state = ConsumerState.Dead
         self.assignment = []
         self.position = {}
+        self.shutdown_complete = True 
 
         if node is not None and logger is not None:
             logger.debug("Shut down %s" % node.account.hostname)
@@ -277,7 +280,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                                      assignment=existing_handler.assignment,
                                      position=existing_handler.position,
                                      committed=existing_handler.committed,
-                                     total_consumed=existing_handler.total_consumed)
+                                     total_consumed=existing_handler.total_consumed,
+                                     shutdown_complete=existing_handler.shutdown_complete)
             else:
                 return handler_class(node, self.verify_offsets, idx)
         existing_handler = self.event_handlers[node] if node in self.event_handlers else None
@@ -292,6 +296,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         with self.lock:
             self.event_handlers[node] = self.create_event_handler(idx, node)
             handler = self.event_handlers[node]
+            handler.shutdown_complete = False
 
         node.account.ssh("mkdir -p %s" % VerifiableConsumer.PERSISTENT_ROOT, allow_fail=False)
 
@@ -525,6 +530,11 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         with self.lock:
             return [handler.node for handler in self.event_handlers.values()
                     if handler.state != ConsumerState.Dead]
+
+    def shutdown_complete_nodes(self):
+        with self.lock:
+            return [handler.node for handler in self.event_handlers.values()
+                    if handler.shutdown_complete]
 
     def is_consumer_group_protocol_enabled(self):
         return self.group_protocol and self.group_protocol.lower() == consumer_group.consumer_group_protocol

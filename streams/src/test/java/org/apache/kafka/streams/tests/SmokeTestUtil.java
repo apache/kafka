@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 
 import java.time.Instant;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class SmokeTestUtil {
 
@@ -39,6 +40,10 @@ public class SmokeTestUtil {
     }
 
     static ProcessorSupplier<Object, Object, Void, Void> printProcessorSupplier(final String topic, final String name) {
+        return printProcessorSupplier(topic, name, new AtomicInteger());
+    }
+
+    static ProcessorSupplier<Object, Object, Void, Void> printProcessorSupplier(final String topic, final String name, final AtomicInteger totalRecordsProcessed) {
         return () -> new ContextualProcessor<>() {
             private int numRecordsProcessed = 0;
             private long smallestOffset = Long.MAX_VALUE;
@@ -84,6 +89,7 @@ public class SmokeTestUtil {
                 }
                 System.out.println("offset " + smallestOffset + " to " + largestOffset + " -> processed " + processed);
                 System.out.flush();
+                totalRecordsProcessed.addAndGet(numRecordsProcessed);
             }
         };
     }

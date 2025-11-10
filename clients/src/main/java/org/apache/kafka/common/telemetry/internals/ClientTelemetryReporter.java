@@ -21,6 +21,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
@@ -529,13 +530,13 @@ public class ClientTelemetryReporter implements MetricsReporter {
         @Override
         public void handleFailedGetTelemetrySubscriptionsRequest(KafkaException maybeFatalException) {
             log.debug("The broker generated an error for the get telemetry network API request", maybeFatalException);
-            handleFailedRequest(isRetryable(maybeFatalException));
+            handleFailedRequest(maybeFatalException);
         }
 
         @Override
         public void handleFailedPushTelemetryRequest(KafkaException maybeFatalException) {
             log.debug("The broker generated an error for the push telemetry network API request", maybeFatalException);
-            handleFailedRequest(isRetryable(maybeFatalException));
+            handleFailedRequest(maybeFatalException);
         }
 
         @Override
@@ -850,7 +851,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
             }
         }
 
-        private void handleFailedRequest(boolean shouldWait) {
+        private void handleFailedRequest(KafkaException maybeFatalException) {
             final long nowMs = time.milliseconds();
             lock.writeLock().lock();
             try {
@@ -868,10 +869,12 @@ public class ClientTelemetryReporter implements MetricsReporter {
                  again. We may disconnect from the broker and connect to a broker that supports client
                  telemetry.
                 */
-                if (shouldWait) {
+                if (isRetryable(maybeFatalException)) {
                     updateErrorResult(DEFAULT_PUSH_INTERVAL_MS, nowMs);
                 } else {
-                    log.warn("Received unrecoverable error from broker, disabling telemetry");
+                    if (!(maybeFatalException instanceof UnsupportedVersionException)) {
+                        log.warn("Received unrecoverable error from broker, disabling telemetry");
+                    }
                     updateErrorResult(Integer.MAX_VALUE, nowMs);
                 }
 

@@ -78,9 +78,9 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private final Logger log;
     private final LogContext logContext;
     private final String groupId;
-    private final ConsumerMetadata metadata;
+    private final ShareConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
-    private final FetchConfig fetchConfig;
+    private final ShareFetchConfig shareFetchConfig;
     protected final ShareFetchBuffer shareFetchBuffer;
     private final BackgroundEventHandler backgroundEventHandler;
     private final Map<Integer, ShareSessionHandler> sessionHandlers;
@@ -103,9 +103,9 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     ShareConsumeRequestManager(final Time time,
                                final LogContext logContext,
                                final String groupId,
-                               final ConsumerMetadata metadata,
+                               final ShareConsumerMetadata metadata,
                                final SubscriptionState subscriptions,
-                               final FetchConfig fetchConfig,
+                               final ShareFetchConfig shareFetchConfig,
                                final ShareFetchBuffer shareFetchBuffer,
                                final BackgroundEventHandler backgroundEventHandler,
                                final ShareFetchMetricsManager metricsManager,
@@ -117,7 +117,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         this.groupId = groupId;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
-        this.fetchConfig = fetchConfig;
+        this.shareFetchConfig = shareFetchConfig;
         this.shareFetchBuffer = shareFetchBuffer;
         this.backgroundEventHandler = backgroundEventHandler;
         this.metricsManager = metricsManager;
@@ -244,7 +244,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             ShareSessionHandler handler = entry.getValue();
 
             log.trace("Building ShareFetch request to send to node {}", target.id());
-            ShareFetchRequest.Builder requestBuilder = handler.newShareFetchBuilder(groupId, fetchConfig);
+            ShareFetchRequest.Builder requestBuilder = handler.newShareFetchBuilder(groupId, shareFetchConfig);
 
             nodesWithPendingRequests.add(target.id());
 
@@ -283,16 +283,14 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         }
     }
 
-    public void fetch(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap,
-                      Map<TopicIdPartition, NodeAcknowledgements> controlRecordAcknowledgements) {
+    public void fetch(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
         if (!fetchMoreRecords) {
             log.debug("Fetch more data");
             fetchMoreRecords = true;
         }
 
-        // Process both acknowledgement maps and sends them in the next ShareFetch.
+        // Store the acknowledgements and send them in the next ShareFetch.
         processAcknowledgementsMap(acknowledgementsMap);
-        processAcknowledgementsMap(controlRecordAcknowledgements);
     }
 
     private void processAcknowledgementsMap(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
@@ -785,6 +783,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             final Set<TopicPartition> partitions = responseData.keySet().stream().map(TopicIdPartition::topicPartition).collect(Collectors.toSet());
             final ShareFetchMetricsAggregator shareFetchMetricsAggregator = new ShareFetchMetricsAggregator(metricsManager, partitions);
 
+            List<ShareCompletedFetch> completedFetches = new ArrayList<>(responseData.size());
             Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo = new HashMap<>();
             for (Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData> entry : responseData.entrySet()) {
                 TopicIdPartition tip = entry.getKey();
@@ -800,7 +799,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         if (partitionData.acknowledgeErrorCode() != Errors.NONE.code()) {
                             metricsManager.recordFailedAcknowledgements(acks.size());
                         }
-                        acks.complete(Errors.forCode(partitionData.acknowledgeErrorCode()).exception());
+                        acks.complete(Errors.forCode(partitionData.acknowledgeErrorCode())
+                                .exception(partitionData.acknowledgeErrorMessage()));
                         Map<TopicIdPartition, Acknowledgements> acksMap = Map.of(tip, acks);
                         maybeSendShareAcknowledgeCommitCallbackEvent(acksMap);
                     }
@@ -815,19 +815,24 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     }
                 }
 
-                ShareCompletedFetch completedFetch = new ShareCompletedFetch(
+                completedFetches.add(
+                    new ShareCompletedFetch(
                         logContext,
                         BufferSupplier.create(),
                         fetchTarget.id(),
                         tip,
                         partitionData,
                         shareFetchMetricsAggregator,
-                        requestVersion);
-                shareFetchBuffer.add(completedFetch);
+                        requestVersion)
+                );
 
                 if (!partitionData.acquiredRecords().isEmpty()) {
                     fetchMoreRecords = false;
                 }
+            }
+
+            if (!completedFetches.isEmpty()) {
+                shareFetchBuffer.add(completedFetches);
             }
 
             // Handle any acknowledgements which were not received in the response for this node.
@@ -1187,7 +1192,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 sessionHandler.addPartitionToFetch(entry.getKey(), entry.getValue());
             }
 
-            ShareAcknowledgeRequest.Builder requestBuilder = sessionHandler.newShareAcknowledgeBuilder(groupId, fetchConfig);
+            ShareAcknowledgeRequest.Builder requestBuilder = sessionHandler.newShareAcknowledgeBuilder(groupId, shareFetchConfig);
 
             isProcessed = false;
             Node nodeToSend = metadata.fetch().nodeById(nodeId);
