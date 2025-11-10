@@ -72,6 +72,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RaftUtilTest {
@@ -646,6 +647,30 @@ public class RaftUtilTest {
         );
     }
 
+    @Test
+    public void testAddVoterResponse() {
+        for (Errors error : Errors.values()) {
+            AddRaftVoterResponseData addRaftVoterResponseData = RaftUtil.addVoterResponse(error, null);
+            assertEquals(error.code(), addRaftVoterResponseData.errorCode());
+            if (Errors.NONE.equals(error))
+                assertNull(addRaftVoterResponseData.errorMessage());
+            else
+                assertEquals(error.message(), addRaftVoterResponseData.errorMessage());
+        }
+    }
+
+    @Test
+    public void testRemoveVoterResponse() {
+        for (Errors error : Errors.values()) {
+            RemoveRaftVoterResponseData removeRaftVoterResponseData = RaftUtil.removeVoterResponse(error, null);
+            assertEquals(error.code(), removeRaftVoterResponseData.errorCode());
+            if (Errors.NONE.equals(error))
+                assertNull(removeRaftVoterResponseData.errorMessage());
+            else
+                assertEquals(error.message(), removeRaftVoterResponseData.errorMessage());
+        }
+    }
+
     private Records createRecords() {
         ByteBuffer allocate = ByteBuffer.allocate(1024);
 
@@ -660,32 +685,10 @@ public class RaftUtilTest {
         }
     }
 
-    private static class FetchRequestTestCase {
-        private final Uuid replicaDirectoryId;
-        private final short version;
-        private final short lastFetchedEpoch;
-        private final String expectedJson;
-
-        private FetchRequestTestCase(Uuid replicaDirectoryId, short version,
-                                     short lastFetchedEpoch, String expectedJson) {
-            this.replicaDirectoryId = replicaDirectoryId;
-            this.version = version;
-            this.lastFetchedEpoch = lastFetchedEpoch;
-            this.expectedJson = expectedJson;
-        }
+    private record FetchRequestTestCase(Uuid replicaDirectoryId, short version, short lastFetchedEpoch,
+                                        String expectedJson) {
     }
 
-    private static class FetchResponseTestCase {
-        private final short version;
-        private final int preferredReadReplicaId;
-        private final String expectedJson;
-
-        private FetchResponseTestCase(short version,
-                                      int preferredReadReplicaId,
-                                      String expectedJson) {
-            this.version = version;
-            this.preferredReadReplicaId = preferredReadReplicaId;
-            this.expectedJson = expectedJson;
-        }
+    private record FetchResponseTestCase(short version, int preferredReadReplicaId, String expectedJson) {
     }
 }

@@ -179,6 +179,7 @@ public class WorkerSinkTaskTest {
     public void setUp() {
         time = new MockTime();
         Map<String, String> workerProps = new HashMap<>();
+        workerProps.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");

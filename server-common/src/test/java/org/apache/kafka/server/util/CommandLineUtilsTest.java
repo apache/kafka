@@ -83,7 +83,7 @@ public class CommandLineUtilsTest {
 
         assertEquals("=first", props.getProperty("first.property"), "Value of first property should be '=first'");
         assertEquals("second=", props.getProperty("second.property"), "Value of second property should be 'second='");
-        assertEquals("thi=rd", props.getProperty("third.property"), "Value of second property should be 'thi=rd'");
+        assertEquals("thi=rd", props.getProperty("third.property"), "Value of third property should be 'thi=rd'");
     }
 
     Properties props = new Properties();

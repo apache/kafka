@@ -647,12 +647,7 @@ public class StreamsResetter {
 
             try {
                 options = parser.parse(args);
-                if (CommandLineUtils.isPrintHelpNeeded(this)) {
-                    CommandLineUtils.printUsageAndExit(parser, USAGE);
-                }
-                if (CommandLineUtils.isPrintVersionNeeded(this)) {
-                    CommandLineUtils.printVersionAndExit();
-                }
+                CommandLineUtils.maybePrintHelpOrVersion(this, USAGE);
                 CommandLineUtils.checkInvalidArgs(parser, options, toOffsetOption, toDatetimeOption, byDurationOption, toEarliestOption, toLatestOption, fromFileOption, shiftByOption);
                 CommandLineUtils.checkInvalidArgs(parser, options, toDatetimeOption, toOffsetOption, byDurationOption, toEarliestOption, toLatestOption, fromFileOption, shiftByOption);
                 CommandLineUtils.checkInvalidArgs(parser, options, byDurationOption, toOffsetOption, toDatetimeOption, toEarliestOption, toLatestOption, fromFileOption, shiftByOption);

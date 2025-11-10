@@ -287,7 +287,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     private final HeartbeatMetricsManager metricsManager;
 
-    private StreamsRebalanceData streamsRebalanceData;
+    private final StreamsRebalanceData streamsRebalanceData;
 
     /**
      * Timer for tracking the time since the last consumer poll.  If the timer expires, the consumer will stop
@@ -527,6 +527,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         heartbeatRequestState.updateHeartbeatIntervalMs(data.heartbeatIntervalMs());
         heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
         heartbeatState.setEndpointInformationEpoch(data.endpointInformationEpoch());
+        streamsRebalanceData.setHeartbeatIntervalMs(data.heartbeatIntervalMs());
 
         if (data.partitionsByUserEndpoint() != null) {
             streamsRebalanceData.setPartitionsByHost(convertHostInfoMap(data));

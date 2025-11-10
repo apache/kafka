@@ -990,7 +990,7 @@ public class ExactlyOnceSourceIntegrationTest {
     }
 
     private ConfigInfo findConfigInfo(String property, ConfigInfos validationResult) {
-        return validationResult.values().stream()
+        return validationResult.configs().stream()
                 .filter(info -> property.equals(info.configKey().name()))
                 .findAny()
                 .orElseThrow(() -> new AssertionError("Failed to find configuration validation result for property '" + property + "'"));

@@ -487,7 +487,7 @@ public class AbstractHerderTest {
                 SourceConnectorConfig.TOPIC_CREATION_GROUP, SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_GROUP,
                 SourceConnectorConfig.OFFSETS_TOPIC_GROUP), result.groups());
         assertEquals(2, result.errorCount());
-        Map<String, ConfigInfo> infos = result.values().stream()
+        Map<String, ConfigInfo> infos = result.configs().stream()
                 .collect(Collectors.toMap(info -> info.configKey().name(), Function.identity()));
         // Base connector config has 15 fields, connector's configs add 7
         assertEquals(26, infos.size());
@@ -571,6 +571,7 @@ public class AbstractHerderTest {
 
         // 2 transform aliases defined -> 2 plugin lookups
         Mockito.lenient().when(plugins.transformations()).thenReturn(Set.of(transformationPluginDesc()));
+        Mockito.lenient().when(plugins.connectorLoader(any(), any())).thenReturn(classLoader);
         Mockito.lenient().when(plugins.newPlugin(SampleTransformation.class.getName(), null, classLoader)).thenReturn(new SampleTransformation());
 
         // Define 2 transformations. One has a class defined and so can get embedded configs, the other is missing
@@ -602,7 +603,7 @@ public class AbstractHerderTest {
         );
         assertEquals(expectedGroups, result.groups());
         assertEquals(1, result.errorCount());
-        Map<String, ConfigInfo> infos = result.values().stream()
+        Map<String, ConfigInfo> infos = result.configs().stream()
                 .collect(Collectors.toMap(info -> info.configKey().name(), Function.identity()));
         assertEquals(33, infos.size());
         // Should get 2 type fields from the transforms, first adds its own config since it has a valid class
@@ -626,6 +627,8 @@ public class AbstractHerderTest {
 
         Mockito.lenient().when(plugins.transformations()).thenReturn(Set.of(transformationPluginDesc()));
         Mockito.lenient().when(plugins.predicates()).thenReturn(Set.of(predicatePluginDesc()));
+        Mockito.lenient().when(plugins.connectorLoader(any(), any())).thenReturn(classLoader);
+        Mockito.lenient().when(plugins.newPlugin(SampleTransformation.class.getName(), null, classLoader)).thenReturn(new SampleTransformation());
         Mockito.lenient().when(plugins.newPlugin(SampleTransformation.class.getName(), null, classLoader)).thenReturn(new SampleTransformation());
         Mockito.lenient().when(plugins.newPlugin(SamplePredicate.class.getName(), null, classLoader)).thenReturn(new SamplePredicate());
 
@@ -662,7 +665,7 @@ public class AbstractHerderTest {
         );
         assertEquals(expectedGroups, result.groups());
         assertEquals(1, result.errorCount());
-        Map<String, ConfigInfo> infos = result.values().stream()
+        Map<String, ConfigInfo> infos = result.configs().stream()
                 .collect(Collectors.toMap(info -> info.configKey().name(), Function.identity()));
         assertEquals(36, infos.size());
         // Should get 2 type fields from the transforms, first adds its own config since it has a valid class
@@ -726,10 +729,10 @@ public class AbstractHerderTest {
         assertEquals(expectedGroups, result.groups());
         assertEquals(1, result.errorCount());
         // Base connector config has 19 fields, connector's configs add 7, and 2 producer overrides
-        assertEquals(28, result.values().size());
-        assertTrue(result.values().stream().anyMatch(
+        assertEquals(28, result.configs().size());
+        assertTrue(result.configs().stream().anyMatch(
             configInfo -> ackConfigKey.equals(configInfo.configValue().name()) && !configInfo.configValue().errors().isEmpty()));
-        assertTrue(result.values().stream().anyMatch(
+        assertTrue(result.configs().stream().anyMatch(
             configInfo -> saslConfigKey.equals(configInfo.configValue().name()) && configInfo.configValue().errors().isEmpty()));
 
         verifyValidationIsolation();
@@ -770,7 +773,7 @@ public class AbstractHerderTest {
         assertEquals(ConnectorType.SOURCE, herder.connectorType(config));
 
         Map<String, String> validatedOverriddenClientConfigs = new HashMap<>();
-        for (ConfigInfo configInfo : result.values()) {
+        for (ConfigInfo configInfo : result.configs()) {
             String configName = configInfo.configKey().name();
             if (overriddenClientConfigs.contains(configName)) {
                 validatedOverriddenClientConfigs.put(configName, configInfo.configValue().value());
@@ -854,7 +857,7 @@ public class AbstractHerderTest {
     }
 
     private void assertErrorForKey(ConfigInfos configInfos, String testKey) {
-        final List<String> errorsForKey = configInfos.values().stream()
+        final List<String> errorsForKey = configInfos.configs().stream()
                 .map(ConfigInfo::configValue)
                 .filter(configValue -> configValue.name().equals(testKey))
                 .map(ConfigValueInfo::errors)
@@ -899,7 +902,7 @@ public class AbstractHerderTest {
         ConfigInfos infos = AbstractHerder.generateResult(name, keys, values, groups);
         assertEquals(name, infos.name());
         assertEquals(groups, infos.groups());
-        assertEquals(values.size(), infos.values().size());
+        assertEquals(values.size(), infos.configs().size());
         assertEquals(0, infos.errorCount());
         assertInfoKey(infos, "config.a1", null);
         assertInfoKey(infos, "config.b1", "group B");
@@ -930,7 +933,7 @@ public class AbstractHerderTest {
         ConfigInfos infos = AbstractHerder.generateResult(name, keys, values, groups);
         assertEquals(name, infos.name());
         assertEquals(groups, infos.groups());
-        assertEquals(values.size(), infos.values().size());
+        assertEquals(values.size(), infos.configs().size());
         assertEquals(1, infos.errorCount());
         assertInfoKey(infos, "config.a1", null);
         assertInfoKey(infos, "config.b1", "group B");
@@ -963,7 +966,7 @@ public class AbstractHerderTest {
         ConfigInfos infos = AbstractHerder.generateResult(name, keys, values, groups);
         assertEquals(name, infos.name());
         assertEquals(groups, infos.groups());
-        assertEquals(values.size(), infos.values().size());
+        assertEquals(values.size(), infos.configs().size());
         assertEquals(2, infos.errorCount());
         assertInfoKey(infos, "config.a1", null);
         assertInfoKey(infos, "config.b1", "group B");
@@ -996,7 +999,7 @@ public class AbstractHerderTest {
         ConfigInfos infos = AbstractHerder.generateResult(name, keys, values, groups);
         assertEquals(name, infos.name());
         assertEquals(groups, infos.groups());
-        assertEquals(values.size(), infos.values().size());
+        assertEquals(values.size(), infos.configs().size());
         assertEquals(2, infos.errorCount());
         assertNoInfoKey(infos, "config.a1");
         assertNoInfoKey(infos, "config.b1");
@@ -1279,7 +1282,7 @@ public class AbstractHerderTest {
     }
 
     protected ConfigInfo findInfo(ConfigInfos infos, String name) {
-        return infos.values()
+        return infos.configs()
                     .stream()
                     .filter(i -> i.configValue().name().equals(name))
                     .findFirst()
@@ -1341,7 +1344,7 @@ public class AbstractHerderTest {
         when(workerConfig.getClass(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG)).thenReturn((Class) SimpleHeaderConverter.class);
         when(worker.config()).thenReturn(workerConfig);
         when(plugins.newConnector(anyString(), any())).thenReturn(connector);
-        when(plugins.pluginLoader(connectorClass, null)).thenReturn(classLoader);
+        when(plugins.connectorLoader(any(), any())).thenReturn(classLoader);
         when(plugins.withClassLoader(classLoader)).thenReturn(loaderSwap);
     }
 

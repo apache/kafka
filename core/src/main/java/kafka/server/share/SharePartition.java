@@ -373,7 +373,7 @@ public class SharePartition {
      *         or completes with an exception if the share partition is in non-initializable state.
      */
     public CompletableFuture<Void> maybeInitialize() {
-        log.debug("Maybe initialize share partition: {}-{}", groupId, topicIdPartition);
+        log.trace("Maybe initialize share partition: {}-{}", groupId, topicIdPartition);
         // Check if the share partition is already initialized.
         try {
             if (initializedOrThrowException()) return CompletableFuture.completedFuture(null);
@@ -487,6 +487,8 @@ public class SharePartition {
                 }
                 // Set the partition state to Active and complete the future.
                 partitionState = SharePartitionState.ACTIVE;
+                log.debug("Initialized share partition: {}-{} with persister read state: {}, cached state: {}",
+                    groupId, topicIdPartition, result.topicsData(), cachedState);
             } catch (Exception e) {
                 throwable = e;
             } finally {
@@ -738,16 +740,16 @@ public class SharePartition {
                 baseOffset = floorEntry.getKey();
             }
             // Validate if the fetch records are already part of existing batches and if available.
-            NavigableMap<Long, InFlightBatch> subMap = cachedState.subMap(baseOffset, true, lastBatch.lastOffset(), true);
+            NavigableMap<Long, InFlightBatch> subMap = cachedState.subMap(baseOffset, true, lastOffsetToAcquire, true);
             // No overlap with request offsets in the cache for in-flight records. Acquire the complete
             // batch.
             if (subMap.isEmpty()) {
                 log.trace("No cached data exists for the share partition for requested fetch batch: {}-{}",
                     groupId, topicIdPartition);
-                // Do not send the lastOffsetToAcquire as when the subMap is empty, it means that
-                // there isn't any overlap itself.
+                // It's safe to use lastOffsetToAcquire instead of lastBatch.lastOffset() because there is no
+                // overlap hence the lastOffsetToAcquire is same as lastBatch.lastOffset() or before that.
                 ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
-                    firstBatch.baseOffset(), lastBatch.lastOffset(), batchSize, maxRecordsToAcquire);
+                    firstBatch.baseOffset(), lastOffsetToAcquire, batchSize, maxRecordsToAcquire);
                 return maybeFilterAbortedTransactionalAcquiredRecords(fetchPartitionData, isolationLevel, shareAcquiredRecords);
             }
 
@@ -776,6 +778,15 @@ public class SharePartition {
                     // If nextBatchStartOffset is less than the key of the entry, this means the fetch happened for a gap in the cachedState.
                     // Thus, a new batch needs to be acquired for the gap.
                     if (maybeGapStartOffset < entry.getKey()) {
+                        // It's safe to use entry.getKey() - 1 as the last offset to acquire for the
+                        // gap as the sub map should contain either the next batch or this line should
+                        // not have been executed i.e. say there is a gap from 10-20 and cache contains
+                        // [0-9, 21-30], when fetch returns single/multiple batches from 0-15, then
+                        // first sub map entry has no gap and there exists only 1 entry in sub map.
+                        // Hence, for next batch the following code will not be executed and records
+                        // from 10-15 will be acquired later in the code. In other case, when
+                        // fetch returns batches from 0-25, then the sub map will have 2 entries and
+                        // gap will be computed correctly.
                         ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
                             maybeGapStartOffset, entry.getKey() - 1, batchSize, maxRecordsToAcquire);
                         result.addAll(shareAcquiredRecords.acquiredRecords());
@@ -791,13 +802,13 @@ public class SharePartition {
                 }
 
                 // Compute if the batch is a full match.
-                boolean fullMatch = checkForFullMatch(inFlightBatch, firstBatch.baseOffset(), lastBatch.lastOffset());
+                boolean fullMatch = checkForFullMatch(inFlightBatch, firstBatch.baseOffset(), lastOffsetToAcquire);
 
                 if (!fullMatch || inFlightBatch.offsetState() != null) {
                     log.trace("Subset or offset tracked batch record found for share partition,"
                             + " batch: {} request offsets - first: {}, last: {} for the share"
                             + " partition: {}-{}", inFlightBatch, firstBatch.baseOffset(),
-                        lastBatch.lastOffset(), groupId, topicIdPartition);
+                        lastOffsetToAcquire, groupId, topicIdPartition);
                     if (inFlightBatch.offsetState() == null) {
                         // Though the request is a subset of in-flight batch but the offset
                         // tracking has not been initialized yet which means that we could only
@@ -884,8 +895,7 @@ public class SharePartition {
 
         CompletableFuture<Void> future = new CompletableFuture<>();
         Throwable throwable = null;
-        List<InFlightState> updatedStates = new ArrayList<>();
-        List<PersisterStateBatch> stateBatches = new ArrayList<>();
+        List<PersisterBatch> persisterBatches = new ArrayList<>();
         lock.writeLock().lock();
         try {
             // Avoided using enhanced for loop as need to check if the last batch have offsets
@@ -925,8 +935,7 @@ public class SharePartition {
                     batch,
                     recordStateMap,
                     subMap,
-                    updatedStates,
-                    stateBatches
+                    persisterBatches
                 );
 
                 if (ackThrowable.isPresent()) {
@@ -939,7 +948,7 @@ public class SharePartition {
         }
         // If the acknowledgement is successful then persist state, complete the state transition
         // and update the cached state for start offset. Else rollback the state transition.
-        rollbackOrProcessStateUpdates(future, throwable, updatedStates, stateBatches);
+        rollbackOrProcessStateUpdates(future, throwable, persisterBatches);
         return future;
     }
 
@@ -955,8 +964,7 @@ public class SharePartition {
 
         CompletableFuture<Void> future = new CompletableFuture<>();
         Throwable throwable = null;
-        List<InFlightState> updatedStates = new ArrayList<>();
-        List<PersisterStateBatch> stateBatches = new ArrayList<>();
+        List<PersisterBatch> persisterBatches = new ArrayList<>();
 
         lock.writeLock().lock();
         try {
@@ -975,14 +983,14 @@ public class SharePartition {
                 }
 
                 if (inFlightBatch.offsetState() != null) {
-                    Optional<Throwable> releaseAcquiredRecordsThrowable = releaseAcquiredRecordsForPerOffsetBatch(memberId, inFlightBatch, recordState, updatedStates, stateBatches);
+                    Optional<Throwable> releaseAcquiredRecordsThrowable = releaseAcquiredRecordsForPerOffsetBatch(memberId, inFlightBatch, recordState, persisterBatches);
                     if (releaseAcquiredRecordsThrowable.isPresent()) {
                         throwable = releaseAcquiredRecordsThrowable.get();
                         break;
                     }
                     continue;
                 }
-                Optional<Throwable> releaseAcquiredRecordsThrowable = releaseAcquiredRecordsForCompleteBatch(memberId, inFlightBatch, recordState, updatedStates, stateBatches);
+                Optional<Throwable> releaseAcquiredRecordsThrowable = releaseAcquiredRecordsForCompleteBatch(memberId, inFlightBatch, recordState, persisterBatches);
                 if (releaseAcquiredRecordsThrowable.isPresent()) {
                     throwable = releaseAcquiredRecordsThrowable.get();
                     break;
@@ -993,7 +1001,7 @@ public class SharePartition {
         }
         // If the release acquired records is successful then persist state, complete the state transition
         // and update the cached state for start offset. Else rollback the state transition.
-        rollbackOrProcessStateUpdates(future, throwable, updatedStates, stateBatches);
+        rollbackOrProcessStateUpdates(future, throwable, persisterBatches);
         return future;
     }
 
@@ -1004,8 +1012,7 @@ public class SharePartition {
     private Optional<Throwable> releaseAcquiredRecordsForPerOffsetBatch(String memberId,
                                                                         InFlightBatch inFlightBatch,
                                                                         RecordState recordState,
-                                                                        List<InFlightState> updatedStates,
-                                                                        List<PersisterStateBatch> stateBatches) {
+                                                                        List<PersisterBatch> persisterBatches) {
 
         log.trace("Offset tracked batch record found, batch: {} for the share partition: {}-{}", inFlightBatch,
                 groupId, topicIdPartition);
@@ -1032,10 +1039,9 @@ public class SharePartition {
                     return Optional.of(new InvalidRecordStateException("Unable to release acquired records for the offset"));
                 }
 
-                // Successfully updated the state of the offset.
-                updatedStates.add(updateResult);
-                stateBatches.add(new PersisterStateBatch(offsetState.getKey(), offsetState.getKey(),
-                        updateResult.state().id(), (short) updateResult.deliveryCount()));
+                // Successfully updated the state of the offset and created a persister state batch for write to persister.
+                persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(offsetState.getKey(),
+                    offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount())));
                 // Do not update the next fetch offset as the offset has not completed the transition yet.
             }
         }
@@ -1045,8 +1051,7 @@ public class SharePartition {
     private Optional<Throwable> releaseAcquiredRecordsForCompleteBatch(String memberId,
                                                                        InFlightBatch inFlightBatch,
                                                                        RecordState recordState,
-                                                                       List<InFlightState> updatedStates,
-                                                                       List<PersisterStateBatch> stateBatches) {
+                                                                       List<PersisterBatch> persisterBatches) {
 
         // Check if member id is the owner of the batch.
         if (!inFlightBatch.batchMemberId().equals(memberId) && !inFlightBatch.batchMemberId().equals(EMPTY_MEMBER_ID)) {
@@ -1072,10 +1077,9 @@ public class SharePartition {
                 return Optional.of(new InvalidRecordStateException("Unable to release acquired records for the batch"));
             }
 
-            // Successfully updated the state of the batch.
-            updatedStates.add(updateResult);
-            stateBatches.add(new PersisterStateBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset(),
-                    updateResult.state().id(), (short) updateResult.deliveryCount()));
+            // Successfully updated the state of the batch and created a persister state batch for write to persister.
+            persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(inFlightBatch.firstOffset(),
+                inFlightBatch.lastOffset(), updateResult.state().id(), (short) updateResult.deliveryCount())));
             // Do not update the next fetch offset as the batch has not completed the transition yet.
         }
         return Optional.empty();
@@ -1525,8 +1529,15 @@ public class SharePartition {
                     // in-flight records limit. This can happen when the fetch is happening in-between
                     // the in-flight batches and the share partition has reached the max in-flight records limit.
                     maxRecordsToAcquire = Math.min(maxFetchRecords, (int) (endOffset() - fetchOffset + 1));
-                    // Adjust the last offset to acquire to the endOffset of the share partition.
-                    lastOffsetToAcquire = endOffset();
+                    // Adjust the last offset to acquire to the minimum of fetched data's last or
+                    // endOffset of the share partition. This is required as partition fetch bytes
+                    // are dynamic and subsequent fetches can fetch lesser data i.e. lastOffset can
+                    // be lesser than endOffset.
+                    lastOffsetToAcquire = Math.min(lastOffset, endOffset());
+                    log.debug("Share partition {}-{} is at max in-flight records limit: {}. "
+                            + "However, fetch is happening in-between the in-flight batches, hence adjusting "
+                            + "last offset to: {} and max records to: {}", groupId, topicIdPartition,
+                        maxInFlightRecords, lastOffsetToAcquire, maxRecordsToAcquire);
                 } else {
                     // The share partition is already at max in-flight records, hence cannot acquire more records.
                     log.debug("Share partition {}-{} has reached max in-flight records limit: {}. Cannot acquire more records, inflight records count: {}",
@@ -1826,8 +1837,7 @@ public class SharePartition {
         ShareAcknowledgementBatch batch,
         Map<Long, RecordState> recordStateMap,
         NavigableMap<Long, InFlightBatch> subMap,
-        final List<InFlightState> updatedStates,
-        List<PersisterStateBatch> stateBatches
+        List<PersisterBatch> persisterBatches
     ) {
         Optional<Throwable> throwable;
         lock.writeLock().lock();
@@ -1889,11 +1899,11 @@ public class SharePartition {
                     }
 
                     throwable = acknowledgePerOffsetBatchRecords(memberId, batch, inFlightBatch,
-                        recordStateMap, updatedStates, stateBatches);
+                        recordStateMap, persisterBatches);
                 } else {
                     // The in-flight batch is a full match hence change the state of the complete batch.
                     throwable = acknowledgeCompleteBatch(batch, inFlightBatch,
-                        recordStateMap.get(batch.firstOffset()), updatedStates, stateBatches);
+                        recordStateMap.get(batch.firstOffset()), persisterBatches);
                 }
 
                 if (throwable.isPresent()) {
@@ -1930,8 +1940,7 @@ public class SharePartition {
         ShareAcknowledgementBatch batch,
         InFlightBatch inFlightBatch,
         Map<Long, RecordState> recordStateMap,
-        List<InFlightState> updatedStates,
-        List<PersisterStateBatch> stateBatches
+        List<PersisterBatch> persisterBatches
     ) {
         lock.writeLock().lock();
         try {
@@ -1995,10 +2004,9 @@ public class SharePartition {
                     return Optional.of(new InvalidRecordStateException(
                         "Unable to acknowledge records for the batch"));
                 }
-                // Successfully updated the state of the offset.
-                updatedStates.add(updateResult);
-                stateBatches.add(new PersisterStateBatch(offsetState.getKey(), offsetState.getKey(),
-                    updateResult.state().id(), (short) updateResult.deliveryCount()));
+                // Successfully updated the state of the offset and created a persister state batch for write to persister.
+                persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(offsetState.getKey(),
+                    offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount())));
                 // Do not update the nextFetchOffset as the offset has not completed the transition yet.
             }
         } finally {
@@ -2011,8 +2019,7 @@ public class SharePartition {
         ShareAcknowledgementBatch batch,
         InFlightBatch inFlightBatch,
         RecordState recordState,
-        List<InFlightState> updatedStates,
-        List<PersisterStateBatch> stateBatches
+        List<PersisterBatch> persisterBatches
     ) {
         lock.writeLock().lock();
         try {
@@ -2044,11 +2051,9 @@ public class SharePartition {
                     new InvalidRecordStateException("Unable to acknowledge records for the batch"));
             }
 
-            // Successfully updated the state of the batch.
-            updatedStates.add(updateResult);
-            stateBatches.add(
-                new PersisterStateBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset(),
-                    updateResult.state().id(), (short) updateResult.deliveryCount()));
+            // Successfully updated the state of the batch and created a persister state batch for write to persister.
+            persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(inFlightBatch.firstOffset(),
+                inFlightBatch.lastOffset(), updateResult.state().id(), (short) updateResult.deliveryCount())));
             // Do not update the next fetch offset as the batch has not completed the transition yet.
         } finally {
             lock.writeLock().unlock();
@@ -2090,8 +2095,7 @@ public class SharePartition {
     void rollbackOrProcessStateUpdates(
         CompletableFuture<Void> future,
         Throwable throwable,
-        List<InFlightState> updatedStates,
-        List<PersisterStateBatch> stateBatches
+        List<PersisterBatch> persisterBatches
     ) {
         lock.writeLock().lock();
         try {
@@ -2099,9 +2103,9 @@ public class SharePartition {
                 // Log in DEBUG to avoid flooding of logs for a faulty client.
                 log.debug("Request failed for updating state, rollback any changed state"
                     + " for the share partition: {}-{}", groupId, topicIdPartition);
-                updatedStates.forEach(state -> {
-                    state.completeStateTransition(false);
-                    if (state.state() == RecordState.AVAILABLE) {
+                persisterBatches.forEach(persisterBatch -> {
+                    persisterBatch.updatedState.completeStateTransition(false);
+                    if (persisterBatch.updatedState.state() == RecordState.AVAILABLE) {
                         updateFindNextFetchOffset(true);
                     }
                 });
@@ -2109,7 +2113,7 @@ public class SharePartition {
                 return;
             }
 
-            if (stateBatches.isEmpty() && updatedStates.isEmpty()) {
+            if (persisterBatches.isEmpty()) {
                 future.complete(null);
                 return;
             }
@@ -2117,47 +2121,48 @@ public class SharePartition {
             lock.writeLock().unlock();
         }
 
-        writeShareGroupState(stateBatches).whenComplete((result, exception) -> {
-            // There can be a pending delayed share fetch requests for the share partition which are waiting
-            // on the startOffset to move ahead, hence track if the state is updated in the cache. If
-            // yes, then notify the delayed share fetch purgatory to complete the pending requests.
-            boolean cacheStateUpdated = false;
-            lock.writeLock().lock();
-            try {
-                if (exception != null) {
-                    log.debug("Failed to write state to persister for the share partition: {}-{}",
-                        groupId, topicIdPartition, exception);
-                    // In case of failure when transition state is rolled back then it should be rolled
-                    // back to ACQUIRED state, unless acquisition lock for the state has expired.
-                    updatedStates.forEach(state -> {
-                        state.completeStateTransition(false);
-                        if (state.state() == RecordState.AVAILABLE) {
+        writeShareGroupState(persisterBatches.stream().map(PersisterBatch::stateBatch).toList())
+            .whenComplete((result, exception) -> {
+                // There can be a pending delayed share fetch requests for the share partition which are waiting
+                // on the startOffset to move ahead, hence track if the state is updated in the cache. If
+                // yes, then notify the delayed share fetch purgatory to complete the pending requests.
+                boolean cacheStateUpdated = false;
+                lock.writeLock().lock();
+                try {
+                    if (exception != null) {
+                        log.debug("Failed to write state to persister for the share partition: {}-{}",
+                            groupId, topicIdPartition, exception);
+                        // In case of failure when transition state is rolled back then it should be rolled
+                        // back to ACQUIRED state, unless acquisition lock for the state has expired.
+                        persisterBatches.forEach(persisterBatch -> {
+                            persisterBatch.updatedState.completeStateTransition(false);
+                            if (persisterBatch.updatedState.state() == RecordState.AVAILABLE) {
+                                updateFindNextFetchOffset(true);
+                            }
+                        });
+                        future.completeExceptionally(exception);
+                        return;
+                    }
+
+                    log.trace("State change request successful for share partition: {}-{}",
+                        groupId, topicIdPartition);
+                    persisterBatches.forEach(persisterBatch -> {
+                        persisterBatch.updatedState.completeStateTransition(true);
+                        if (persisterBatch.updatedState.state() == RecordState.AVAILABLE) {
                             updateFindNextFetchOffset(true);
                         }
                     });
-                    future.completeExceptionally(exception);
-                    return;
+                    // Update the cached state and start and end offsets after acknowledging/releasing the acquired records.
+                    cacheStateUpdated = maybeUpdateCachedStateAndOffsets();
+                    future.complete(null);
+                } finally {
+                    lock.writeLock().unlock();
+                    // Maybe complete the delayed share fetch request if the state has been changed in cache
+                    // which might have moved start offset ahead. Hence, the pending delayed share fetch
+                    // request can be completed. The call should be made outside the lock to avoid deadlock.
+                    maybeCompleteDelayedShareFetchRequest(cacheStateUpdated);
                 }
-
-                log.trace("State change request successful for share partition: {}-{}",
-                    groupId, topicIdPartition);
-                updatedStates.forEach(state -> {
-                    state.completeStateTransition(true);
-                    if (state.state() == RecordState.AVAILABLE) {
-                        updateFindNextFetchOffset(true);
-                    }
-                });
-                // Update the cached state and start and end offsets after acknowledging/releasing the acquired records.
-                cacheStateUpdated = maybeUpdateCachedStateAndOffsets();
-                future.complete(null);
-            } finally {
-                lock.writeLock().unlock();
-                // Maybe complete the delayed share fetch request if the state has been changed in cache
-                // which might have moved start offset ahead. Hence, the pending delayed share fetch
-                // request can be completed. The call should be made outside the lock to avoid deadlock.
-                maybeCompleteDelayedShareFetchRequest(cacheStateUpdated);
-            }
-        });
+            });
     }
 
     private boolean maybeUpdateCachedStateAndOffsets() {
@@ -2928,6 +2933,15 @@ public class SharePartition {
             this.offsetMetadata = offsetMetadata;
         }
     }
+
+    /**
+     * PersisterBatch class is used to record the state updates for a batch or an offset.
+     * It contains the updated in-flight state and the persister state batch to be sent to persister.
+     */
+    private record PersisterBatch(
+        InFlightState updatedState,
+        PersisterStateBatch stateBatch
+    ) { }
 
     /**
      * LastOffsetAndMaxRecords class is used to track the last offset to acquire and the maximum number

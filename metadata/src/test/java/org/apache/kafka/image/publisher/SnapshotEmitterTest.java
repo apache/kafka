@@ -17,6 +17,8 @@
 
 package org.apache.kafka.image.publisher;
 
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.image.FakeSnapshotWriter;
 import org.apache.kafka.image.MetadataImageTest;
@@ -71,6 +73,11 @@ public class SnapshotEmitterTest {
         @Override
         public OptionalInt nodeId() {
             return OptionalInt.empty();
+        }
+
+        @Override
+        public Optional<Node> voterNode(int id, ListenerName listenerName) {
+            return Optional.empty();
         }
 
         @Override

@@ -40,6 +40,7 @@
             <allow pkg="org.apache.kafka.common.test.api" />
             <allow pkg="org.apache.kafka.test" />
             <allow pkg="org.slf4j" />
+            <allow pkg="kafka.coordinator.transaction" />
             <subpackage name="generated">
                 <allow pkg="org.apache.kafka.common.protocol" />
                 <allow pkg="org.apache.kafka.common.errors" />

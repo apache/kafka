@@ -78,7 +78,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private final Logger log;
     private final LogContext logContext;
     private final String groupId;
-    private final ConsumerMetadata metadata;
+    private final ShareConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final FetchConfig fetchConfig;
     protected final ShareFetchBuffer shareFetchBuffer;
@@ -103,7 +103,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     ShareConsumeRequestManager(final Time time,
                                final LogContext logContext,
                                final String groupId,
-                               final ConsumerMetadata metadata,
+                               final ShareConsumerMetadata metadata,
                                final SubscriptionState subscriptions,
                                final FetchConfig fetchConfig,
                                final ShareFetchBuffer shareFetchBuffer,

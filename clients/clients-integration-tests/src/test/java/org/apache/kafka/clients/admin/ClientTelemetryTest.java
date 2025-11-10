@@ -46,6 +46,7 @@ import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -54,7 +55,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.clients.admin.AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG;
@@ -123,13 +123,12 @@ public class ClientTelemetryTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
     public void testIntervalMsParser(ClusterInstance clusterInstance) {
         List<String> alterOpts = asList("--bootstrap-server", clusterInstance.bootstrapServers(),
                 "--alter", "--entity-type", "client-metrics", "--entity-name", "test", "--add-config", "interval.ms=bbb");
         try (Admin client = clusterInstance.admin()) {
-            ConfigCommand.ConfigCommandOptions addOpts = new ConfigCommand.ConfigCommandOptions(toArray(alterOpts));
+            ConfigCommand.ConfigCommandOptions addOpts = new ConfigCommand.ConfigCommandOptions(toArray(Set.of(alterOpts)));
 
             Throwable e = assertThrows(ExecutionException.class, () -> ConfigCommand.alterConfig(client, addOpts));
             assertTrue(e.getMessage().contains(InvalidConfigurationException.class.getSimpleName()));
@@ -153,9 +152,8 @@ public class ClientTelemetryTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private static String[] toArray(List<String>... lists) {
-        return Stream.of(lists).flatMap(List::stream).toArray(String[]::new);
+    private static String[] toArray(Collection<List<String>> lists) {
+        return lists.stream().flatMap(List::stream).toArray(String[]::new);
     }
 
     /**
@@ -163,6 +161,7 @@ public class ClientTelemetryTest {
      * {@link org.apache.kafka.common.protocol.ApiKeys#GET_TELEMETRY_SUBSCRIPTIONS} command will not be supported
      * by the server
      **/
+    @SuppressWarnings("unused")
     public static class GetIdClientTelemetry implements ClientTelemetry, MetricsReporter {
 
 

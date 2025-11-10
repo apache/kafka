@@ -167,8 +167,8 @@ public class ConnectorPluginsResourceTest {
         List<ConfigValue> partialConnectorConfigValues = connectorConfigDef.validate(PARTIAL_PROPS);
         ConfigInfos result = AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), connectorConfigDef.configKeys(), connectorConfigValues, List.of());
         ConfigInfos partialResult = AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), connectorConfigDef.configKeys(), partialConnectorConfigValues, List.of());
-        List<ConfigInfo> configs = new LinkedList<>(result.values());
-        List<ConfigInfo> partialConfigs = new LinkedList<>(partialResult.values());
+        List<ConfigInfo> configs = new LinkedList<>(result.configs());
+        List<ConfigInfo> partialConfigs = new LinkedList<>(partialResult.configs());
 
         ConfigKeyInfo configKeyInfo = new ConfigKeyInfo("test.string.config", "STRING", true, null, "HIGH", "Test configuration for string type.", null, -1, "NONE", "test.string.config", List.of());
         ConfigValueInfo configValueInfo = new ConfigValueInfo("test.string.config", "testString", List.of(), List.of(), true);
@@ -256,8 +256,8 @@ public class ConnectorPluginsResourceTest {
         assertEquals(PARTIAL_CONFIG_INFOS.errorCount(), configInfos.errorCount());
         assertEquals(PARTIAL_CONFIG_INFOS.groups(), configInfos.groups());
         assertEquals(
-            new HashSet<>(PARTIAL_CONFIG_INFOS.values()),
-            new HashSet<>(configInfos.values())
+            new HashSet<>(PARTIAL_CONFIG_INFOS.configs()),
+            new HashSet<>(configInfos.configs())
         );
         verify(herder).validateConnectorConfig(eq(PARTIAL_PROPS), any(), anyBoolean());
     }
@@ -298,7 +298,7 @@ public class ConnectorPluginsResourceTest {
         assertEquals(CONFIG_INFOS.name(), configInfos.name());
         assertEquals(0, configInfos.errorCount());
         assertEquals(CONFIG_INFOS.groups(), configInfos.groups());
-        assertEquals(new HashSet<>(CONFIG_INFOS.values()), new HashSet<>(configInfos.values()));
+        assertEquals(new HashSet<>(CONFIG_INFOS.configs()), new HashSet<>(configInfos.configs()));
         verify(herder).validateConnectorConfig(eq(PROPS), any(), anyBoolean());
     }
 
@@ -338,7 +338,7 @@ public class ConnectorPluginsResourceTest {
         assertEquals(CONFIG_INFOS.name(), configInfos.name());
         assertEquals(0, configInfos.errorCount());
         assertEquals(CONFIG_INFOS.groups(), configInfos.groups());
-        assertEquals(new HashSet<>(CONFIG_INFOS.values()), new HashSet<>(configInfos.values()));
+        assertEquals(new HashSet<>(CONFIG_INFOS.configs()), new HashSet<>(configInfos.configs()));
         verify(herder).validateConnectorConfig(eq(PROPS), any(), anyBoolean());
     }
 
@@ -372,8 +372,8 @@ public class ConnectorPluginsResourceTest {
         ClassLoader classLoader = ConnectorPluginsResourceTest.class.getClassLoader();
         PluginInfo sinkInfo = new PluginInfo(new PluginDesc<>(SampleSinkConnector.class, SampleSinkConnector.VERSION, PluginType.SINK, classLoader));
         PluginInfo sourceInfo = new PluginInfo(new PluginDesc<>(SampleSourceConnector.class, SampleSourceConnector.VERSION, PluginType.SOURCE, classLoader));
-        assertEquals(PluginType.SINK.toString(), sinkInfo.type());
-        assertEquals(PluginType.SOURCE.toString(), sourceInfo.type());
+        assertEquals(PluginType.SINK.toString(), sinkInfo.type().toString());
+        assertEquals(PluginType.SOURCE.toString(), sourceInfo.type().toString());
         assertEquals(SampleSinkConnector.VERSION, sinkInfo.version());
         assertEquals(SampleSourceConnector.VERSION, sourceInfo.version());
         assertEquals(SampleSinkConnector.class.getName(), sinkInfo.className());
