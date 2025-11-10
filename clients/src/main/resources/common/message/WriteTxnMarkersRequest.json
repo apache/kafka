@@ -21,7 +21,7 @@
   // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
   //
   // Version 1 enables flexible versions.
-  // Version 2 adds TransactionVersion field to WritableTxnMarker.
+  // Version 2 adds TransactionVersion field to the WritableTxnMarker (KIP-1228).
   "validVersions": "1-2",
   "flexibleVersions": "1+",
   "fields": [
