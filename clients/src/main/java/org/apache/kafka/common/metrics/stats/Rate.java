@@ -34,7 +34,7 @@ public class Rate implements MeasurableStat {
 
     protected final TimeUnit unit;
     protected final SampledStat stat;
-    protected final long window;
+    protected final long timeWindowMs;
 
     public Rate() {
         this(TimeUnit.SECONDS);
@@ -55,7 +55,12 @@ public class Rate implements MeasurableStat {
     public Rate(TimeUnit unit, SampledStat stat, long window) {
         this.unit = unit;
         this.stat = stat;
-        this.window = window;
+        if (window > 0) {
+            this.timeWindowMs = TimeUnit.MILLISECONDS.convert(window, unit);
+            this.stat.withTimeWindow(window, unit);
+        } else  {
+            this.timeWindowMs = -1;
+        }
     }
 
     public String unitName() {
@@ -64,16 +69,11 @@ public class Rate implements MeasurableStat {
 
     @Override
     public void record(MetricConfig config, double value, long timeMs) {
-        if (window != -1)
-            config = new MetricConfig(config).timeWindow(window, unit);
         this.stat.record(config, value, timeMs);
     }
 
     @Override
     public double measure(MetricConfig config, long now) {
-        if (window != -1)
-            config = new MetricConfig(config).timeWindow(window, unit);
-
         double value = stat.measure(config, now);
         return value / convert(windowSize(config, now), unit);
     }
@@ -97,13 +97,15 @@ public class Rate implements MeasurableStat {
          * if the oldest sample started before the window while overlapping it.
          */
         long totalElapsedTimeMs = now - stat.oldest(now).startTimeMs;
+        // If explicit time window is provided, use that instead of the config value.
+        long windowMs = timeWindowMs > 0 ? timeWindowMs : config.timeWindowMs();
         // Check how many full windows of data we have currently retained
-        int numFullWindows = (int) (totalElapsedTimeMs / config.timeWindowMs());
+        int numFullWindows = (int) (totalElapsedTimeMs / windowMs);
         int minFullWindows = config.samples() - 1;
 
         // If the available windows are less than the minimum required, add the difference to the totalElapsedTime
         if (numFullWindows < minFullWindows)
-            totalElapsedTimeMs += (minFullWindows - numFullWindows) * config.timeWindowMs();
+            totalElapsedTimeMs += (minFullWindows - numFullWindows) * windowMs;
 
         // If window size is being calculated at the exact beginning of the window with no prior samples, the window size
         // will result in a value of 0. Calculation of rate over a window is size 0 is undefined, hence, we assume the
