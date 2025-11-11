@@ -644,7 +644,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
         // If data is available already, return it immediately
         final ShareFetch<K, V> fetch = collect(acknowledgementsMap);
-        if (!fetch.isEmpty() && !fetch.hasRenewals()) {
+        if (!fetch.isEmpty()) {
             return fetch;
         }
 
@@ -666,26 +666,31 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     }
 
     private ShareFetch<K, V> collect(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
+        Map<TopicIdPartition, NodeAcknowledgements> acksToSend = acknowledgementsMap;
+
         if (currentFetch.isEmpty() && !currentFetch.hasRenewals()) {
             final ShareFetch<K, V> fetch = fetchCollector.collect(fetchBuffer);
             if (fetch.isEmpty()) {
+                // Check for any acknowledgements which could have come from control records (GAP) and send them.
                 Map<TopicIdPartition, NodeAcknowledgements> controlRecordAcknowledgements = fetch.takeAcknowledgedRecords();
-
                 if (!controlRecordAcknowledgements.isEmpty()) {
                     // Asynchronously commit any waiting acknowledgements from control records.
                     sendShareAcknowledgeAsyncEvent(controlRecordAcknowledgements);
                 }
+
                 // We only send one ShareFetchEvent per poll call.
                 if (shouldSendShareFetchEvent) {
-                    // Check for any acknowledgements which could have come from control records (GAP) and include them.
-                    applicationEventHandler.add(new ShareFetchEvent(acknowledgementsMap));
+                    applicationEventHandler.add(new ShareFetchEvent(acksToSend));
                     shouldSendShareFetchEvent = false;
                     // Notify the network thread to wake up and start the next round of fetching
                     applicationEventHandler.wakeupNetworkThread();
+                    acksToSend = Map.of();
                 }
-            } else if (!acknowledgementsMap.isEmpty()) {
+            }
+
+            if (!acksToSend.isEmpty()) {
                 // Asynchronously commit any waiting acknowledgements
-                sendShareAcknowledgeAsyncEvent(acknowledgementsMap);
+                sendShareAcknowledgeAsyncEvent(acksToSend);
             }
             return fetch;
         } else if (currentFetch.hasRenewals()) {
@@ -696,21 +701,20 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             if (currentFetch.hasRenewals()) {
                 // We only send one ShareFetchEvent per poll call.
                 if (shouldSendShareFetchEvent) {
-                    // Check for any acknowledgements which could have come from control records (GAP) and include them.
-                    applicationEventHandler.add(new ShareFetchEvent(acknowledgementsMap));
+                    applicationEventHandler.add(new ShareFetchEvent(acksToSend));
                     shouldSendShareFetchEvent = false;
                     // Notify the network thread to wake up and start the next round of fetching
                     applicationEventHandler.wakeupNetworkThread();
+                    acksToSend = Map.of();
                 }
             }
-            return currentFetch;
-        } else {
-            if (!acknowledgementsMap.isEmpty()) {
-                // Asynchronously commit any waiting acknowledgements
-                sendShareAcknowledgeAsyncEvent(acknowledgementsMap);
-            }
-            return currentFetch;
         }
+
+        if (!acksToSend.isEmpty()) {
+            // Asynchronously commit any waiting acknowledgements
+            sendShareAcknowledgeAsyncEvent(acksToSend);
+        }
+        return currentFetch;
     }
 
     private void sendShareAcknowledgeAsyncEvent(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
