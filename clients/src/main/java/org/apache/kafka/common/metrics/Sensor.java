@@ -166,10 +166,6 @@ public final class Sensor {
         return this.name;
     }
 
-    public MetricConfig metricConfig() {
-        return this.config;
-    }
-
     List<Sensor> parents() {
         return unmodifiableList(asList(parents));
     }
