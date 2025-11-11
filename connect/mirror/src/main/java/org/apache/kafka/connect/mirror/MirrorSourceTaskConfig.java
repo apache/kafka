@@ -55,7 +55,7 @@ public class MirrorSourceTaskConfig extends MirrorSourceConfig {
             TASK_TOPIC_PARTITIONS,
             ConfigDef.Type.LIST,
             ConfigDef.NO_DEFAULT_VALUE,
-            ConfigDef.ValidList.anyValues(false, false),
+            ConfigDef.ValidList.anyNonDuplicateValues(false, false),
             ConfigDef.Importance.LOW,
             TASK_TOPIC_PARTITIONS_DOC)
         .define(TASK_INDEX,

@@ -55,7 +55,7 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(FIELDS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE,
-                    ConfigDef.ValidList.anyValues(false, false),
+                    ConfigDef.ValidList.anyNonDuplicateValues(false, false),
                     ConfigDef.Importance.HIGH, "Names of fields to mask.")
             .define(REPLACEMENT_CONFIG, ConfigDef.Type.STRING, null, new ConfigDef.NonEmptyString(),
                     ConfigDef.Importance.LOW, "Custom value replacement, that will be applied to all"

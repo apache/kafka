@@ -50,7 +50,7 @@ public class MirrorCheckpointTaskConfig extends MirrorCheckpointConfig {
                     TASK_CONSUMER_GROUPS,
                     ConfigDef.Type.LIST,
                     ConfigDef.NO_DEFAULT_VALUE,
-                    ConfigDef.ValidList.anyValues(false, false),
+                    ConfigDef.ValidList.anyNonDuplicateValues(false, false),
                     ConfigDef.Importance.LOW,
                     TASK_CONSUMER_GROUPS_DOC)
             .define(TASK_INDEX,

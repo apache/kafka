@@ -200,7 +200,7 @@ public class WorkerConfig extends AbstractConfig {
     protected static ConfigDef baseConfigDef() {
         ConfigDef result = new ConfigDef()
                 .define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, ConfigDef.NO_DEFAULT_VALUE,
-                        ConfigDef.ValidList.anyValues(false, false),
+                        ConfigDef.ValidList.anyNonDuplicateValues(false, false),
                         Importance.HIGH, BOOTSTRAP_SERVERS_DOC)
                 .define(CLIENT_DNS_LOOKUP_CONFIG,
                         Type.STRING,
@@ -227,7 +227,7 @@ public class WorkerConfig extends AbstractConfig {
                 .define(PLUGIN_PATH_CONFIG,
                         Type.LIST,
                         null,
-                        ConfigDef.ValidList.anyValues(false, true),
+                        ConfigDef.ValidList.anyNonDuplicateValues(false, true),
                         Importance.LOW,
                         PLUGIN_PATH_DOC)
                 .define(PLUGIN_DISCOVERY_CONFIG,
@@ -249,7 +249,7 @@ public class WorkerConfig extends AbstractConfig {
                         CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
                 .define(METRIC_REPORTER_CLASSES_CONFIG, Type.LIST,
                         JmxReporter.class.getName(),
-                        ConfigDef.ValidList.anyValues(true, false),
+                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                         Importance.LOW,
                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
                 .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS,
@@ -260,7 +260,7 @@ public class WorkerConfig extends AbstractConfig {
                 .define(CONFIG_PROVIDERS_CONFIG,
                         Type.LIST,
                         List.of(),
-                        ConfigDef.ValidList.anyValues(true, false),
+                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                         Importance.LOW, CONFIG_PROVIDERS_DOC)
                 .define(CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, Type.STRING, CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT,
                         Importance.MEDIUM, CONNECTOR_CLIENT_POLICY_CLASS_DOC)

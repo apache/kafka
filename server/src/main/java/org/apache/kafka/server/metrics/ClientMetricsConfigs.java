@@ -105,14 +105,14 @@ public class ClientMetricsConfigs extends AbstractConfig {
         .define(METRICS_CONFIG,
                 Type.LIST,
                 METRICS_DEFAULT,
-                ConfigDef.ValidList.anyValues(true, false),
+                ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                 Importance.MEDIUM,
                 "Telemetry metric name prefix list")
         .define(INTERVAL_MS_CONFIG, Type.INT, INTERVAL_MS_DEFAULT, Importance.MEDIUM, "Metrics push interval in milliseconds")
         .define(MATCH_CONFIG,
                 Type.LIST,
                 MATCH_DEFAULT,
-                ConfigDef.ValidList.anyValues(true, false),
+                ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                 Importance.MEDIUM,
                 "Client match criteria");
 

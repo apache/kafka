@@ -1022,7 +1022,7 @@ public class ConfigDef {
             this.isNullAllowed = isNullAllowed;
         }
 
-        public static ValidList anyValues(boolean isEmptyAllowed, boolean isNullAllowed) {
+        public static ValidList anyNonDuplicateValues(boolean isEmptyAllowed, boolean isNullAllowed) {
             return new ValidList(List.of(), isEmptyAllowed, isNullAllowed);
         }
 
@@ -1051,6 +1051,10 @@ public class ConfigDef {
             if (!isEmptyAllowed && values.isEmpty()) {
                 String validString = this.validString.validStrings.isEmpty() ? "any non-empty value" : this.validString.toString();
                 throw new ConfigException("Configuration '" + name + "' must not be empty. Valid values include: " + validString);
+            }
+
+            if (Set.copyOf(values).size() != values.size()) {
+                throw new ConfigException("Configuration '" + name + "' values must not be duplicated.");
             }
 
             validateIndividualValues(name, values);

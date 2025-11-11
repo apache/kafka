@@ -119,7 +119,7 @@ public class MirrorClientConfig extends AbstractConfig {
         .define(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
             Type.LIST,
             NO_DEFAULT_VALUE,
-            ConfigDef.ValidList.anyValues(false, false),
+            ConfigDef.ValidList.anyNonDuplicateValues(false, false),
             Importance.HIGH,
             CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
         // security support
@@ -136,7 +136,7 @@ public class MirrorClientConfig extends AbstractConfig {
         .define(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
             Type.LIST,
             NO_DEFAULT_VALUE,
-            ConfigDef.ValidList.anyValues(false, false),
+            ConfigDef.ValidList.anyNonDuplicateValues(false, false),
             Importance.HIGH,
             CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
         .define(

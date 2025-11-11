@@ -41,7 +41,7 @@ public class DropHeaders<R extends ConnectRecord<R>> implements Transformation<R
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(HEADERS_FIELD, ConfigDef.Type.LIST,
                     NO_DEFAULT_VALUE,
-                    ConfigDef.ValidList.anyValues(false, false),
+                    ConfigDef.ValidList.anyNonDuplicateValues(false, false),
                     ConfigDef.Importance.HIGH,
                     "The name of the headers to be removed.");
 

@@ -58,13 +58,13 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
             .define(ConfigName.EXCLUDE,
                     ConfigDef.Type.LIST,
                     List.of(),
-                    ConfigDef.ValidList.anyValues(true, false),
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                     ConfigDef.Importance.MEDIUM,
                     "Fields to exclude. This takes precedence over the fields to include.")
             .define(ConfigName.INCLUDE,
                     ConfigDef.Type.LIST,
                     List.of(),
-                    ConfigDef.ValidList.anyValues(true, false),
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                     ConfigDef.Importance.MEDIUM,
                     "Fields to include. If specified, only these fields will be used.")
             .define(ConfigName.RENAMES, ConfigDef.Type.LIST, List.of(),

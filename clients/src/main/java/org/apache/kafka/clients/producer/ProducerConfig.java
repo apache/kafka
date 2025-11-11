@@ -376,7 +376,7 @@ public class ProducerConfig extends AbstractConfig {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
                                         NO_DEFAULT_VALUE,
-                                        ConfigDef.ValidList.anyValues(false, false),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(false, false),
                                         Importance.HIGH,
                                         CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(CLIENT_DNS_LOOKUP_CONFIG,
@@ -467,7 +467,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
                                         JmxReporter.class.getName(),
-                                        ConfigDef.ValidList.anyValues(true, false),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.LOW,
                                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
                                 .define(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
@@ -507,7 +507,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(INTERCEPTOR_CLASSES_CONFIG,
                                         Type.LIST,
                                         List.of(),
-                                        ConfigDef.ValidList.anyValues(true, false),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.LOW,
                                         INTERCEPTOR_CLASSES_DOC)
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
@@ -561,7 +561,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(CONFIG_PROVIDERS_CONFIG,
                                         ConfigDef.Type.LIST,
                                         List.of(),
-                                        ConfigDef.ValidList.anyValues(true, false),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         ConfigDef.Importance.LOW,
                                         CONFIG_PROVIDERS_DOC);
     }
