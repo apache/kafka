@@ -1113,7 +1113,7 @@ class ReplicaManager(val config: KafkaConfig,
                    _: KafkaStorageException) =>
             (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(e)))
           case e: OffsetOutOfRangeException =>
-            debug("Error processing delete records operation on partition %s. %s".format(topicPartition, e.getMessage))
+            debug("Error processing delete records operation on partition %s".format(topicPartition), e)
             (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(e)))
           case t: Throwable =>
             error("Error processing delete records operation on partition %s".format(topicPartition), t)
