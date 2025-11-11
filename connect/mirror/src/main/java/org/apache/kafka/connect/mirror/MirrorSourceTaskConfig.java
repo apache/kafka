@@ -49,13 +49,13 @@ public class MirrorSourceTaskConfig extends MirrorSourceConfig {
     String entityLabel() {
         return super.entityLabel() + "-" + (getInt(TASK_INDEX) == null ? "?" : getInt(TASK_INDEX));
     }
- 
+
     protected static final ConfigDef TASK_CONFIG_DEF = new ConfigDef(CONNECTOR_CONFIG_DEF)
         .define(
             TASK_TOPIC_PARTITIONS,
             ConfigDef.Type.LIST,
             ConfigDef.NO_DEFAULT_VALUE,
-            ConfigDef.ValidList.anyNonDuplicateValues(false, false),
+            ConfigDef.ValidList.anyValues(false, false),
             ConfigDef.Importance.LOW,
             TASK_TOPIC_PARTITIONS_DOC)
         .define(TASK_INDEX,

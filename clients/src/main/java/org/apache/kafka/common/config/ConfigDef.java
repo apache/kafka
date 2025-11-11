@@ -512,6 +512,10 @@ public class ConfigDef {
      * the appropriate type (int, string, etc).
      */
     public Map<String, Object> parse(Map<?, ?> props) {
+        return parse(props, false);
+    }
+
+    Map<String, Object> parse(Map<?, ?> props, boolean allowDuplicateValueInList) {
         // Check all configurations are defined
         List<String> undefinedConfigKeys = undefinedDependentConfigs();
         if (!undefinedConfigKeys.isEmpty()) {
@@ -521,11 +525,11 @@ public class ConfigDef {
         // parse all known keys
         Map<String, Object> values = new HashMap<>();
         for (ConfigKey key : configKeys.values())
-            values.put(key.name, parseValue(key, props.get(key.name), props.containsKey(key.name)));
+            values.put(key.name, parseValue(key, props.get(key.name), props.containsKey(key.name), allowDuplicateValueInList));
         return values;
     }
 
-    Object parseValue(ConfigKey key, Object value, boolean isSet) {
+    Object parseValue(ConfigKey key, Object value, boolean isSet, boolean allowDuplicateValueInList) {
         Object parsedValue;
         if (isSet) {
             parsedValue = parseType(key.name, value, key.type);
@@ -535,6 +539,9 @@ public class ConfigDef {
         } else {
             // otherwise assign setting its default value
             parsedValue = key.defaultValue;
+        }
+        if (!allowDuplicateValueInList && parsedValue instanceof List) {
+            parsedValue = ((List<?>) parsedValue).stream().distinct().collect(Collectors.toList());
         }
         if (key.validator != null) {
             key.validator.ensureValid(key.name, parsedValue);
@@ -1015,7 +1022,7 @@ public class ConfigDef {
             this.isNullAllowed = isNullAllowed;
         }
 
-        public static ValidList anyNonDuplicateValues(boolean isEmptyAllowed, boolean isNullAllowed) {
+        public static ValidList anyValues(boolean isEmptyAllowed, boolean isNullAllowed) {
             return new ValidList(List.of(), isEmptyAllowed, isNullAllowed);
         }
 
@@ -1044,11 +1051,6 @@ public class ConfigDef {
             if (!isEmptyAllowed && values.isEmpty()) {
                 String validString = this.validString.validStrings.isEmpty() ? "any non-empty value" : this.validString.toString();
                 throw new ConfigException("Configuration '" + name + "' must not be empty. Valid values include: " + validString);
-            }
-
-            if (Set.copyOf(values).size() != values.size()) {
-                System.out.println("Configuration '" + name + "' has duplicate values: " + values +
-                        "this will be disallowed in Kafka5.0.");
             }
 
             validateIndividualValues(name, values);

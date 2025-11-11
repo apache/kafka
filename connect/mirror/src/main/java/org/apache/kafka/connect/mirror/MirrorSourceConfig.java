@@ -209,21 +209,21 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                         TOPICS,
                         ConfigDef.Type.LIST,
                         TOPICS_DEFAULT,
-                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                        ConfigDef.ValidList.anyValues(true, false),
                         ConfigDef.Importance.HIGH,
                         TOPICS_DOC)
                 .define(
                         TOPICS_EXCLUDE,
                         ConfigDef.Type.LIST,
                         TOPICS_EXCLUDE_DEFAULT,
-                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                        ConfigDef.ValidList.anyValues(true, false),
                         ConfigDef.Importance.HIGH,
                         TOPICS_EXCLUDE_DOC)
                 .define(
                         CONFIG_PROPERTIES_EXCLUDE,
                         ConfigDef.Type.LIST,
                         CONFIG_PROPERTIES_EXCLUDE_DEFAULT,
-                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                        ConfigDef.ValidList.anyValues(true, false),
                         ConfigDef.Importance.HIGH,
                         CONFIG_PROPERTIES_EXCLUDE_DOC)
                 .define(
@@ -323,7 +323,7 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
 
     protected static final ConfigDef CONNECTOR_CONFIG_DEF = defineSourceConfig(new ConfigDef(BASE_CONNECTOR_CONFIG_DEF));
 
-    public static void main(String[] args) {        
+    public static void main(String[] args) {
         System.out.println(defineSourceConfig(new ConfigDef()).toHtml(4, config -> "mirror_source_" + config));
     }
 }
