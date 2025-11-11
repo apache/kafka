@@ -109,7 +109,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -134,6 +133,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class ShareConsumerTest {
     private final ClusterInstance cluster;
     private final TopicPartition tp = new TopicPartition("topic", 0);
+    private Uuid tpId;
     private final TopicPartition tp2 = new TopicPartition("topic2", 0);
     private final TopicPartition warmupTp = new TopicPartition("warmup", 0);
     private List<TopicPartition> sgsTopicPartitions;
@@ -152,7 +152,7 @@ public class ShareConsumerTest {
     public void setup() {
         try {
             this.cluster.waitForReadyBrokers();
-            createTopic("topic");
+            tpId = createTopic("topic");
             createTopic("topic2");
             sgsTopicPartitions = IntStream.range(0, 3)
                 .mapToObj(part -> new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, part))
@@ -2983,7 +2983,7 @@ public class ShareConsumerTest {
                 }
                 result = shareConsumer.commitSync();
                 assertEquals(1, result.size());
-                assertNull(result.get(0));
+                assertEquals(Optional.empty(), result.get(new TopicIdPartition(tpId, tp.partition(), tp.topic())));
                 count++;
             }
 
