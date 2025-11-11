@@ -362,6 +362,8 @@ org.apache.kafka.clients.consumer.ShareConsumerTest:
 - testPollThrowsInterruptExceptionIfInterrupted
 - testReadCommittedIsolationLevel
 - testReadUncommittedIsolationLevel
+- testRenewAcknowledgementOnCommitSync
+- testRenewAcknowledgementOnPoll
 - testShareAutoOffsetResetByDuration
 - testShareAutoOffsetResetByDurationInvalidFormat
 - testShareAutoOffsetResetDefaultValue

@@ -1092,6 +1092,8 @@ org.apache.kafka.clients.consumer.internals.AcknowledgementCommitCallbackHandler
 - testNoException
 - testUnauthorizedTopic
 org.apache.kafka.clients.consumer.internals.AcknowledgementsTest:
+- testCompleteException
+- testCompleteSuccess
 - testEmptyBatch
 - testMultiGap
 - testMultiStateMultiGap
@@ -2198,6 +2200,7 @@ org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManagerTest:
 - testShareAcknowledgeInvalidResponse
 - testShareFetchAndCloseMultipleNodes
 - testShareFetchInvalidResponse
+- testShareFetchWithRenewAcknowledgement
 - testShareFetchWithSubscriptionChange
 - testShareFetchWithSubscriptionChangeMultipleNodes
 - testShareFetchWithSubscriptionChangeMultipleNodesEmptyAcknowledgements
@@ -2217,6 +2220,7 @@ org.apache.kafka.clients.consumer.internals.ShareConsumerImplTest:
 - testCompleteQuietly
 - testControlRecordsOnEmptyFetch
 - testEnsurePollEventSentOnConsumerPoll
+- testExplicitModeRenewAndAcknowledgeOnPoll
 - testExplicitModeUnacknowledgedRecords
 - testFailConstructor
 - testFailOnClosedConsumer
@@ -2256,6 +2260,7 @@ org.apache.kafka.clients.consumer.internals.ShareFetchCollectorTest:
 - testFetchWithTopicAuthorizationFailed
 - testFetchWithUnknownLeaderEpoch
 - testFetchWithUnknownServerError
+- testWithRenew
 org.apache.kafka.clients.consumer.internals.ShareFetchMetricsManagerTest:
 - testAcknowledgements
 - testBytesFetched
