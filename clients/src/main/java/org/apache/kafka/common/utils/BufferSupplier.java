@@ -20,8 +20,9 @@ package org.apache.kafka.common.utils;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Simple non-threadsafe interface for caching byte buffers. This is suitable for simple cases like ensuring that
@@ -30,6 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * iterating over the records in the batch.
  */
 public abstract class BufferSupplier implements AutoCloseable {
+    protected AtomicLong cachedSize = new AtomicLong();
 
     public static final BufferSupplier NO_CACHING = new BufferSupplier() {
         @Override
@@ -75,7 +77,7 @@ public abstract class BufferSupplier implements AutoCloseable {
 
     private static class DefaultSupplier extends BufferSupplier {
         // We currently use a single block size, so optimise for that case
-        private final Map<Integer, Deque<ByteBuffer>> bufferMap = new ConcurrentHashMap<>(1);
+        private final Map<Integer, Deque<ByteBuffer>> bufferMap = new HashMap<>(1);
 
         @Override
         public ByteBuffer get(int size) {
@@ -92,16 +94,18 @@ public abstract class BufferSupplier implements AutoCloseable {
             // We currently keep a single buffer in flight, so optimise for that case
             Deque<ByteBuffer> bufferQueue = bufferMap.computeIfAbsent(buffer.capacity(), k -> new ArrayDeque<>(1));
             bufferQueue.addLast(buffer);
+            cachedSize.addAndGet(buffer.capacity());
         }
 
         @Override
         public long size() {
-            return bufferMap.entrySet().stream().mapToLong(entry -> (long) entry.getKey() * entry.getValue().size()).sum();
+            return cachedSize.get();
         }
 
         @Override
         public void close() {
             bufferMap.clear();
+            cachedSize.set(0);
         }
     }
 
@@ -110,7 +114,7 @@ public abstract class BufferSupplier implements AutoCloseable {
      * monotonically as needed to fulfill the allocation request.
      */
     public static class GrowableBufferSupplier extends BufferSupplier {
-        private volatile ByteBuffer cachedBuffer;
+        private ByteBuffer cachedBuffer;
 
         @Override
         public ByteBuffer get(int minCapacity) {
@@ -128,16 +132,18 @@ public abstract class BufferSupplier implements AutoCloseable {
         public void release(ByteBuffer buffer) {
             buffer.clear();
             cachedBuffer = buffer;
+            cachedSize.set(buffer.capacity());
         }
 
         @Override
         public long size() {
-            return cachedBuffer == null ? 0 : cachedBuffer.capacity();
+            return cachedSize.get();
         }
 
         @Override
         public void close() {
             cachedBuffer = null;
+            cachedSize.set(0);
         }
     }
 }
