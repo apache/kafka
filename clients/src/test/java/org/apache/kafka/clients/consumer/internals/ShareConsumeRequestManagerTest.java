@@ -37,6 +37,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
@@ -120,6 +121,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -820,6 +822,51 @@ public class ShareConsumeRequestManagerTest {
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
         assertEquals(3.0,
                 metrics.metrics().get(metrics.metricInstance(shareFetchMetricsRegistry.acknowledgementSendTotal)).metricValue());
+    }
+
+    @Test
+    public void testAcknowledgeErrorMessagePropagatedFromFetchResponse() {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        assignFromSubscribed(Collections.singleton(tp0));
+        sendFetchAndVerifyResponse(records, acquiredRecords, Errors.NONE);
+
+        fetchRecords();
+
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT);
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
+
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        String acknowledgeErrorMessage = "ack failure with broker context";
+        ShareFetchResponse response = fullFetchResponse(
+            tip0,
+            records,
+            acquiredRecords,
+            Errors.NONE,
+            Errors.UNKNOWN_SERVER_ERROR
+        );
+        response.data().responses().forEach(topicResponse ->
+            topicResponse.partitions().forEach(partition ->
+                partition.setAcknowledgeErrorMessage(acknowledgeErrorMessage)
+            )
+        );
+
+        client.prepareResponse(response);
+        networkClientDelegate.poll(time.timer(0));
+
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+        fetchRecords();
+
+        assertEquals(1, completedAcknowledgements.size());
+        Map<TopicIdPartition, Acknowledgements> acknowledgementsMap = completedAcknowledgements.get(0);
+        assertSame(acknowledgements, acknowledgementsMap.get(tip0));
+
+        KafkaException acknowledgeException = acknowledgementsMap.get(tip0).getAcknowledgeException();
+        assertInstanceOf(ApiException.class, acknowledgeException);
+        assertEquals(acknowledgeErrorMessage, acknowledgeException.getMessage());
     }
 
     @Test

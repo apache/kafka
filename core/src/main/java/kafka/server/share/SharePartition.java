@@ -109,7 +109,7 @@ public class SharePartition {
     /**
      * empty member id used to indicate when a record is not acquired by any member.
      */
-    static final String EMPTY_MEMBER_ID = Uuid.ZERO_UUID.toString();
+    static final String EMPTY_MEMBER_ID = "";
 
     /**
      * The SharePartitionState is used to track the state of the share partition. The state of the

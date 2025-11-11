@@ -50,8 +50,6 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
 
 /**
  * A client that consumes records from a Kafka cluster using a share group.
- * <p>
- *     <em>This is a preview feature introduced by KIP-932. It is not yet recommended for production use.</em>
  *
  * <h3>Cross-Version Compatibility</h3>
  * This client can communicate with brokers that are a version that supports share groups. You will receive an
