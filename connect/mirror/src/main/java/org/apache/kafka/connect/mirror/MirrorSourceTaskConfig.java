@@ -49,7 +49,7 @@ public class MirrorSourceTaskConfig extends MirrorSourceConfig {
     String entityLabel() {
         return super.entityLabel() + "-" + (getInt(TASK_INDEX) == null ? "?" : getInt(TASK_INDEX));
     }
-
+ 
     protected static final ConfigDef TASK_CONFIG_DEF = new ConfigDef(CONNECTOR_CONFIG_DEF)
         .define(
             TASK_TOPIC_PARTITIONS,

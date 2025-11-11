@@ -54,7 +54,7 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
     private static final String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(FIELDS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE,
+            .define(FIELDS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, 
                     ConfigDef.ValidList.anyNonDuplicateValues(false, false),
                     ConfigDef.Importance.HIGH, "Names of fields to mask.")
             .define(REPLACEMENT_CONFIG, ConfigDef.Type.STRING, null, new ConfigDef.NonEmptyString(),

@@ -102,18 +102,18 @@ public class ClientMetricsConfigs extends AbstractConfig {
     );
 
     private static final ConfigDef CONFIG = new ConfigDef()
-        .define(METRICS_CONFIG,
-                Type.LIST,
-                METRICS_DEFAULT,
-                ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                Importance.MEDIUM,
+        .define(METRICS_CONFIG, 
+                Type.LIST, 
+                METRICS_DEFAULT, 
+                ConfigDef.ValidList.anyNonDuplicateValues(true, false), 
+                Importance.MEDIUM, 
                 "Telemetry metric name prefix list")
         .define(INTERVAL_MS_CONFIG, Type.INT, INTERVAL_MS_DEFAULT, Importance.MEDIUM, "Metrics push interval in milliseconds")
-        .define(MATCH_CONFIG,
-                Type.LIST,
+        .define(MATCH_CONFIG, 
+                Type.LIST, 
                 MATCH_DEFAULT,
                 ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                Importance.MEDIUM,
+                Importance.MEDIUM, 
                 "Client match criteria");
 
     public ClientMetricsConfigs(Properties props) {

@@ -169,11 +169,11 @@ public final class MirrorMakerConfig extends AbstractConfig {
                 props.putIfAbsent(k, v);
             }
         }
-
+ 
         return props;
     }
 
-    // loads worker configs based on properties of the form x.y.z and cluster.x.y.z
+    // loads worker configs based on properties of the form x.y.z and cluster.x.y.z 
     public Map<String, String> workerConfig(SourceAndTarget sourceAndTarget) {
         Map<String, String> props = new HashMap<>();
         props.putAll(clusterProps(sourceAndTarget.target()));
@@ -184,8 +184,8 @@ public final class MirrorMakerConfig extends AbstractConfig {
         props.putAll(stringsWithPrefix("offset.storage"));
         props.putAll(stringsWithPrefix("config.storage"));
         props.putAll(stringsWithPrefix("status.storage"));
-        props.putAll(stringsWithPrefix("key.converter"));
-        props.putAll(stringsWithPrefix("value.converter"));
+        props.putAll(stringsWithPrefix("key.converter")); 
+        props.putAll(stringsWithPrefix("value.converter")); 
         props.putAll(stringsWithPrefix("header.converter"));
         props.putAll(stringsWithPrefix("task"));
         props.putAll(stringsWithPrefix("worker"));
@@ -204,8 +204,8 @@ public final class MirrorMakerConfig extends AbstractConfig {
                 + sourceAndTarget.source() + ".internal");
         props.putIfAbsent(DistributedConfig.CONFIG_TOPIC_CONFIG, "mm2-configs."
                 + sourceAndTarget.source() + ".internal");
-        props.putIfAbsent(KEY_CONVERTER_CLASS_CONFIG, BYTE_ARRAY_CONVERTER_CLASS);
-        props.putIfAbsent(VALUE_CONVERTER_CLASS_CONFIG, BYTE_ARRAY_CONVERTER_CLASS);
+        props.putIfAbsent(KEY_CONVERTER_CLASS_CONFIG, BYTE_ARRAY_CONVERTER_CLASS); 
+        props.putIfAbsent(VALUE_CONVERTER_CLASS_CONFIG, BYTE_ARRAY_CONVERTER_CLASS); 
         props.putIfAbsent(HEADER_CONVERTER_CLASS_CONFIG, BYTE_ARRAY_CONVERTER_CLASS);
 
         return props;
@@ -225,7 +225,7 @@ public final class MirrorMakerConfig extends AbstractConfig {
 
         props.putAll(rawProperties);
         props.keySet().retainAll(allConfigNames());
-
+        
         props.putAll(stringsWithPrefix(CONFIG_PROVIDERS_CONFIG));
         props.putAll(stringsWithPrefix("replication.policy"));
 
@@ -257,7 +257,7 @@ public final class MirrorMakerConfig extends AbstractConfig {
 
     List<String> configProviders() {
         return getList(CONFIG_PROVIDERS_CONFIG);
-    }
+    } 
 
     Map<String, String> transform(Map<String, String> props) {
         // transform worker config according to config.providers

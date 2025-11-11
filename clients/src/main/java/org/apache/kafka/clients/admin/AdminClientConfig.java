@@ -285,11 +285,11 @@ public class AdminClientConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.LOW,
                                         METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
-                                .define(CONFIG_PROVIDERS_CONFIG,
+                                .define(CONFIG_PROVIDERS_CONFIG, 
                                         ConfigDef.Type.LIST,
                                         List.of(),
                                         ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                                        ConfigDef.Importance.LOW,
+                                        ConfigDef.Importance.LOW, 
                                         CONFIG_PROVIDERS_DOC);
     }
 

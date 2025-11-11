@@ -325,7 +325,7 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
                     ConfigDef.Type.LIST,
                     List.of(),
                     ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                    ConfigDef.Importance.LOW,
+                    ConfigDef.Importance.LOW, 
                     CONFIG_PROVIDERS_DOC)
             .withClientSslSupport()
             .withClientSaslSupport();

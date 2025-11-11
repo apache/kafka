@@ -139,6 +139,9 @@
                 <ul>
                     <li>Null values are no longer accepted for most LIST-type configurations, except those that explicitly
                         allow a null default value or where a null value has a well-defined semantic meaning.</li>
+                    <li>Most LIST-type configurations no longer accept duplicate entries, except in cases where duplicates
+                        are explicitly supported. However, if users configure duplicate entries, the internal deduplication
+                        logic will still handle them</li>
                     <li>Empty lists are no longer allowed, except in configurations where an empty list has a well-defined
                         semantic meaning.</li>
                 </ul>

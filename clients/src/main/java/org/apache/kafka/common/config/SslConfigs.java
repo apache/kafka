@@ -50,8 +50,8 @@ public class SslConfigs {
     public static final String SSL_ENABLED_PROTOCOLS_DOC = "The list of protocols enabled for SSL connections. "
         + "The default is 'TLSv1.2,TLSv1.3'. This means that clients and servers will prefer TLSv1.3 if both support it "
         + "and fallback to TLSv1.2 otherwise (assuming both support at least TLSv1.2). This default should be fine for most use "
-        + "cases. If this configuration is set to an empty list, Kafka will use the protocols enabled by default in the underlying SSLEngine, "
-        + "which may include additional protocols depending on the JVM version. "
+        + "cases. If this configuration is set to an empty list, Kafka will use the protocols enabled by default in the underlying SSLEngine, " 
+        + "which may include additional protocols depending on the JVM version. " 
         + "Also see the config documentation for <code>ssl.protocol</code> to understand how it can impact the TLS version negotiation behavior.";
     public static final String DEFAULT_SSL_ENABLED_PROTOCOLS = "TLSv1.2,TLSv1.3";
 

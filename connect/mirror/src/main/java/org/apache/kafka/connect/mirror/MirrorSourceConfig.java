@@ -323,7 +323,7 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
 
     protected static final ConfigDef CONNECTOR_CONFIG_DEF = defineSourceConfig(new ConfigDef(BASE_CONNECTOR_CONFIG_DEF));
 
-    public static void main(String[] args) {
+    public static void main(String[] args) {        
         System.out.println(defineSourceConfig(new ConfigDef()).toHtml(4, config -> "mirror_source_" + config));
     }
 }
