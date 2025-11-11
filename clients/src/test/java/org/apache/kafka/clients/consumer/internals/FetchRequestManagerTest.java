@@ -872,7 +872,8 @@ public class FetchRequestManagerTest {
         int partitionLeaderEpoch = 0;
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        MemoryRecordsBuilder builder = MemoryRecords.idempotentBuilder(buffer, Compression.NONE, 0L, producerId,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
+                TimestampType.CREATE_TIME, 0L, System.currentTimeMillis(), producerId,
                 producerEpoch, baseSequence);
         builder.append(0L, "key".getBytes(), null);
         builder.close();

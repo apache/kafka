@@ -158,6 +158,7 @@ public class DescribeConsumerGroupsHandlerTest {
             new MemberDescription(
                 "memberId",
                 Optional.of("instanceId"),
+                Optional.of("rackId"),
                 "clientId",
                 "host",
                 new MemberAssignment(Set.of(
@@ -172,6 +173,7 @@ public class DescribeConsumerGroupsHandlerTest {
             new MemberDescription(
                 "memberId-classic",
                 Optional.of("instanceId-classic"),
+                Optional.empty(),
                 "clientId-classic",
                 "host",
                 new MemberAssignment(Set.of(
@@ -215,7 +217,7 @@ public class DescribeConsumerGroupsHandlerTest {
                                     .setClientHost("host")
                                     .setClientId("clientId")
                                     .setMemberEpoch(10)
-                                    .setRackId("rackid")
+                                    .setRackId("rackId")
                                     .setSubscribedTopicNames(singletonList("foo"))
                                     .setSubscribedTopicRegex("regex")
                                     .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
@@ -239,7 +241,7 @@ public class DescribeConsumerGroupsHandlerTest {
                                     .setClientHost("host")
                                     .setClientId("clientId-classic")
                                     .setMemberEpoch(9)
-                                    .setRackId("rackid")
+                                    .setRackId(null)
                                     .setSubscribedTopicNames(singletonList("bar"))
                                     .setSubscribedTopicRegex("regex")
                                     .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
@@ -268,6 +270,7 @@ public class DescribeConsumerGroupsHandlerTest {
     public void testSuccessfulHandleClassicGroupResponse() {
         Collection<MemberDescription> members = singletonList(new MemberDescription(
                 "memberId",
+                Optional.empty(),
                 Optional.empty(),
                 "clientId",
                 "host",

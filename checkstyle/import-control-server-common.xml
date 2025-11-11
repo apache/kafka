@@ -39,7 +39,7 @@
     <disallow pkg="kafka" />
 
     <!-- anyone can use public classes -->
-    <allow pkg="org.apache.kafka.common" />
+    <allow pkg="org.apache.kafka.common" exact-match="true" />
     <allow pkg="org.apache.kafka.common.security" />
     <allow pkg="org.apache.kafka.common.serialization" />
     <allow pkg="org.apache.kafka.common.utils" />
@@ -68,8 +68,6 @@
         <allow pkg="org.apache.kafka.common.config" />
         <allow pkg="org.apache.kafka.common.config.types" />
         <allow pkg="org.apache.kafka.server.util" />
-        <allow pkg="javax.crypto" />
-        <allow pkg="javax.crypto.spec" />
     </subpackage>
 
     <subpackage name="server">
@@ -141,6 +139,10 @@
 
     <subpackage name="admin">
         <allow pkg="org.apache.kafka.server.common" />
+    </subpackage>
+
+    <subpackage name="config">
+        <allow class="org.apache.kafka.common.config.AbstractConfig" />
     </subpackage>
 
 </import-control>

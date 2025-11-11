@@ -332,7 +332,7 @@ public class RequestManagers implements Closeable {
             protected RequestManagers create() {
                 long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
                 long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-                FetchConfig fetchConfig = new FetchConfig(config);
+                ShareFetchConfig shareFetchConfig = new ShareFetchConfig(config);
 
                 CoordinatorRequestManager coordinator = new CoordinatorRequestManager(
                         logContext,
@@ -369,7 +369,7 @@ public class RequestManagers implements Closeable {
                         groupRebalanceConfig.groupId,
                         metadata,
                         subscriptions,
-                        fetchConfig,
+                        shareFetchConfig,
                         fetchBuffer,
                         backgroundEventHandler,
                         shareFetchMetricsManager,

@@ -130,7 +130,7 @@ class ControllerServer(
     try {
       this.logIdent = logContext.logPrefix()
       info("Starting controller")
-      config.dynamicConfig.initialize(clientMetricsReceiverPluginOpt = None)
+      config.dynamicConfig.initialize(clientTelemetryExporterPluginOpt = None)
 
       maybeChangeStatus(STARTING, STARTED)
 
@@ -286,13 +286,14 @@ class ControllerServer(
         registrationsPublisher,
         apiVersionManager,
         metadataCache)
-      controllerApisHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
+      controllerApisHandlerPool = sharedServer.requestHandlerPoolFactory.createPool(
+        config.nodeId,
         socketServer.dataPlaneRequestChannel,
         controllerApis,
         time,
         config.numIoThreads,
-        "RequestHandlerAvgIdlePercent",
-        "controller")
+        "controller"
+      )
 
       // Set up the metadata cache publisher.
       metadataPublishers.add(metadataCachePublisher)
