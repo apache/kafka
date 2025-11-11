@@ -3392,7 +3392,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             // If we are an observer, then we can shutdown immediately. We want to
             // skip potentially sending any add or remove voter RPCs.
             return 0;
-        } else if (shouldSendRemoveVoterRequest(state, currentTimeMs)) {
+        } else if (nodeId().isPresent() && shouldSendRemoveVoterRequest(state, currentTimeMs)) {
             final var localReplicaKey = quorum.localReplicaKeyOrThrow();
             final var voters = partitionState.lastVoterSet();
             /* The replica's id is in the voter set but the replica is not a voter because
@@ -3409,7 +3409,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 state.resetUpdateVoterSetPeriod(currentTimeMs);
             }
             return sendResult.timeToWaitMs();
-        } else if (shouldSendAddVoterRequest(state, currentTimeMs)) {
+        } else if (nodeId().isPresent() && shouldSendAddVoterRequest(state, currentTimeMs)) {
             sendResult = maybeSendAddVoterRequest(state, currentTimeMs);
             if (sendResult.requestSent()) {
                 state.resetUpdateVoterSetPeriod(currentTimeMs);
