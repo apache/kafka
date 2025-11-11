@@ -1667,6 +1667,7 @@ public class CommitRequestManagerTest {
         assertEquals(numRes, res.unsentRequests.size());
         if (shouldUseTopicIds) {
             res.unsentRequests.stream()
+                .peek(req -> assertTrue(req.requestBuilder().latestAllowedVersion() > 9))
                 .flatMap(request -> ((OffsetCommitRequestData) request.requestBuilder().build().data()).topics().stream())
                 .forEach(topic -> assertNotEquals(Uuid.ZERO_UUID, topic.topicId()));
         }
