@@ -18,6 +18,8 @@ package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -81,7 +83,7 @@ import java.util.stream.Collectors;
 public class ConfigDef {
 
     private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
-
+    private static final Logger LOGGER = LoggerFactory.getLogger(ConfigDef.class);
     /**
      * A unique Java object which represents the lack of a default value.
      */
@@ -541,7 +543,10 @@ public class ConfigDef {
             parsedValue = key.defaultValue;
         }
         if (!allowDuplicateValueInList && parsedValue instanceof List) {
-            parsedValue = ((List<?>) parsedValue).stream().distinct().collect(Collectors.toList());
+            List<?> originalListValue = (List<?>) parsedValue;
+            parsedValue = originalListValue.stream().distinct().collect(Collectors.toList());
+            LOGGER.warn("Duplicate configuration \"{}\" values are found. Duplicates will be removed. The original value " +
+                            "is: {}, the updated value is: {}", key.name, originalListValue, parsedValue);
         }
         if (key.validator != null) {
             key.validator.ensureValid(key.name, parsedValue);
