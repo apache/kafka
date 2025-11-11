@@ -26,6 +26,12 @@
 <h5><a id="upgrade_420_notable" href="#upgrade_420_notable">Notable changes in 4.2.0</a></h5>
 <ul>
     <li>
+        Queues for Kafka (<a href="https://cwiki.apache.org/confluence/x/4hA0Dw">KIP-932</a>) is production-ready in Apache Kafka 4.2. This feature introduces a new kind of group called
+        share groups, as an alternative to consumer groups. Consumers in a share group cooperatively consume records from topics, without assigning each partition to just one consumer.
+        Share groups also introduce per-record acknowledgement and counting of delivery attempts. Use share groups in cases where records are processed one at a time, rather than as part
+        of an ordered stream.
+    </li>
+    <li>
         The <code>org.apache.kafka.common.header.internals.RecordHeader</code> class has been updated to be read thread-safe. See <a href="https://cwiki.apache.org/confluence/x/nYmhFg">KIP-1205</a> for details.
         In other words, each individual <code>Header</code> object within a <code>ConsumerRecord</code>'s <code>headers</code> can now be safely read from multiple threads concurrently.
     </li>

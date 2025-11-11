@@ -443,6 +443,79 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldNotAllowAutoCreateTopicsForConsumers_WithCommonConsumerPrefix() {
+        // Test with generic consumer.* prefix (affects all consumer types)
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.ERROR);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+            // Main consumer - verify override is ignored
+            final Map<String, Object> mainConfigs = streamsConfig.getMainConsumerConfigs("group", "client", 0);
+            assertEquals("false", mainConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
+                    "Main consumer should not allow auto topic creation with consumer.* override");
+
+            // Restore consumer - verify override is ignored
+            final Map<String, Object> restoreConfigs = streamsConfig.getRestoreConsumerConfigs("client");
+            assertEquals("false", restoreConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
+                    "Restore consumer should not allow auto topic creation with consumer.* override");
+
+            // Global consumer - verify override is ignored
+            final Map<String, Object> globalConfigs = streamsConfig.getGlobalConsumerConfigs("client");
+            assertEquals("false", globalConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
+                    "Global consumer should not allow auto topic creation with consumer.* override");
+
+            // Verify exactly 1 error is logged (consumer.* prefix is validated once in getCommonConsumerConfigs for each type of consumer)
+            final List<String> errorMessages = appender.getMessages();
+            final long errorCount = errorMessages.stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified consumer config 'allow.auto.create.topics' found"))
+                    .count();
+            assertEquals(3, errorCount,
+                    "Should log exactly 3 error for consumer.* prefix");
+        }
+    }
+
+    @Test
+    public void shouldNotAllowAutoCreateTopicsForConsumers_WithSpecificConsumerPrefixes() {
+        // Test with specific prefixes for each consumer type
+        props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
+        props.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
+        props.put(StreamsConfig.globalConsumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.ERROR);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+            // Main consumer - verify override is ignored
+            final Map<String, Object> mainConfigs = streamsConfig.getMainConsumerConfigs("group", "client", 0);
+            assertEquals("false", mainConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
+                    "Main consumer should not allow auto topic creation with main.consumer.* override");
+
+            // Restore consumer - verify override is ignored
+            final Map<String, Object> restoreConfigs = streamsConfig.getRestoreConsumerConfigs("client");
+            assertEquals("false", restoreConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
+                    "Restore consumer should not allow auto topic creation with restore.consumer.* override");
+
+            // Global consumer - verify override is ignored
+            final Map<String, Object> globalConfigs = streamsConfig.getGlobalConsumerConfigs("client");
+            assertEquals("false", globalConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
+                    "Global consumer should not allow auto topic creation with global.consumer.* override");
+
+            // Verify exactly 3 errors are logged (one for each specific prefix)
+            final List<String> errorMessages = appender.getMessages();
+            final long errorCount = errorMessages.stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified consumer config 'allow.auto.create.topics' found"))
+                    .count();
+            assertEquals(3, errorCount,
+                    "Should log exactly 3 errors: one for main.consumer.*, one for restore.consumer.*, one for global.consumer.*");
+        }
+    }
+
+
+    @Test
     public void shouldSupportNonPrefixedAdminConfigs() {
         props.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 10);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
