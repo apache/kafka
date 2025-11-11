@@ -4555,6 +4555,88 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testHandleShareFetchRequestPropagatesAcknowledgementErrorMessage(): Unit = {
+    val topicName = "foo"
+    val topicId = Uuid.randomUuid()
+    val partitionIndex = 0
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
+    addTopicToMetadataCache(topicName, 1, topicId = topicId)
+    val memberId: Uuid = Uuid.randomUuid()
+    val groupId = "group"
+    val shareSessionEpoch = 1
+    val records = memoryRecords(5, 0)
+    val ackErrorMessage = "custom acknowledgement error"
+
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
+      CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
+        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
+          new ShareFetchResponseData.PartitionData()
+            .setErrorCode(Errors.NONE.code)
+            .setAcknowledgeErrorCode(Errors.NONE.code)
+            .setRecords(records)
+            .setAcquiredRecords(new util.ArrayList(util.List.of(
+              new ShareFetchResponseData.AcquiredRecords()
+                .setFirstOffset(0)
+                .setLastOffset(4)
+                .setDeliveryCount(1)
+            )))
+      ))
+    )
+
+    when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
+      CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
+        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
+          new ShareAcknowledgeResponseData.PartitionData()
+            .setPartitionIndex(partitionIndex)
+            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+            .setErrorMessage(ackErrorMessage)
+      ))
+    )
+
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
+      new ShareSessionContext(shareSessionEpoch, util.List.of(
+        new TopicIdPartition(topicId, partitionIndex, topicName)))
+    )
+
+    when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
+
+    val shareFetchRequestData = new ShareFetchRequestData()
+      .setGroupId(groupId)
+      .setMemberId(memberId.toString)
+      .setShareSessionEpoch(shareSessionEpoch)
+      .setMaxWaitMs(100)
+      .setMinBytes(1)
+      .setMaxBytes(1000000)
+      .setTopics(new ShareFetchRequestData.FetchTopicCollection(util.List.of(new ShareFetchRequestData.FetchTopic()
+        .setTopicId(topicId)
+        .setPartitions(new ShareFetchRequestData.FetchPartitionCollection(util.List.of(
+          new ShareFetchRequestData.FetchPartition()
+            .setPartitionIndex(partitionIndex)
+            .setAcknowledgementBatches(util.List.of(
+              new ShareFetchRequestData.AcknowledgementBatch()
+                .setFirstOffset(0)
+                .setLastOffset(4)
+                .setAcknowledgeTypes(util.List.of(1.toByte))
+            ))
+        ).iterator))
+      ).iterator))
+
+    val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
+    val request = buildRequest(shareFetchRequest)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleShareFetchRequest(request)
+    val response = verifyNoThrottling[ShareFetchResponse](request)
+
+    val topicResponses = response.data.responses()
+    val topicResponse = topicResponses.stream.findFirst.get
+    val partitionResponse = topicResponse.partitions.get(0)
+    assertEquals(Errors.NONE.code, partitionResponse.errorCode)
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, partitionResponse.acknowledgeErrorCode)
+    assertEquals(ackErrorMessage, partitionResponse.acknowledgeErrorMessage)
+  }
+
+  @Test
   def testHandleShareFetchRequestInvalidRequestOnInitialEpoch(): Unit = {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
@@ -12635,18 +12717,21 @@ class KafkaApisTest extends Logging {
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(1)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0),
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(2)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0),
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(3)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0)
@@ -12658,12 +12743,14 @@ class KafkaApisTest extends Logging {
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(10)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0),
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(20)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0)
@@ -12680,6 +12767,7 @@ class KafkaApisTest extends Logging {
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(0)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0)
@@ -12779,18 +12867,21 @@ class KafkaApisTest extends Logging {
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(1)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0),
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(2)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0),
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(3)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0)
@@ -12802,12 +12893,14 @@ class KafkaApisTest extends Logging {
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(10)
               .setStartOffset(-1)
+              .setLag(-1)
               .setLeaderEpoch(0)
               .setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message)
               .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code),
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(20)
               .setStartOffset(-1)
+              .setLag(-1)
               .setLeaderEpoch(0)
               .setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message)
               .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
@@ -12824,6 +12917,7 @@ class KafkaApisTest extends Logging {
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(0)
               .setStartOffset(-1)
+              .setLag(-1)
               .setLeaderEpoch(0)
               .setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message)
               .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
@@ -12844,18 +12938,21 @@ class KafkaApisTest extends Logging {
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(1)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0),
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(2)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0),
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(3)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0)
@@ -12940,18 +13037,21 @@ class KafkaApisTest extends Logging {
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(1)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0),
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(2)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0),
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(3)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0)
@@ -12973,18 +13073,21 @@ class KafkaApisTest extends Logging {
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(1)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0),
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(2)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0),
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(3)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0)
@@ -12996,12 +13099,14 @@ class KafkaApisTest extends Logging {
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(10)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0),
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(20)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0)
@@ -13018,6 +13123,7 @@ class KafkaApisTest extends Logging {
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(0)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0)
@@ -13078,18 +13184,21 @@ class KafkaApisTest extends Logging {
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(1)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0),
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(2)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0),
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(3)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0)
@@ -13101,12 +13210,14 @@ class KafkaApisTest extends Logging {
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(10)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0),
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(20)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0)
@@ -13123,6 +13234,7 @@ class KafkaApisTest extends Logging {
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(0)
               .setStartOffset(0)
+              .setLag(0)
               .setLeaderEpoch(1)
               .setErrorMessage(null)
               .setErrorCode(0)
