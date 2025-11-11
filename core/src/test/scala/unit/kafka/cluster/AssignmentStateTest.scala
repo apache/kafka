@@ -16,9 +16,9 @@
   */
 package kafka.cluster
 
-import org.apache.kafka.storage.internals.log.SimpleAssignmentState
 import org.apache.kafka.common.DirectoryId
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
+import org.apache.kafka.server.partition.SimpleAssignmentState
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
