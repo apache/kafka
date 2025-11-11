@@ -222,6 +222,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private volatile RemoveVoterHandler removeVoterHandler;
     private volatile UpdateVoterHandler updateVoterHandler;
 
+    // When the node is a startup node, we need a flag to join the
+    // cluster once it is removed.
     private volatile boolean skipFirstAutoJoinAttempt = false;
     private volatile boolean hasJoin = false;
 
