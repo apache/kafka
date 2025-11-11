@@ -2103,7 +2103,7 @@ public class GroupMetadataManager {
             response.setPartitionsByUserEndpoint(maybeBuildEndpointToPartitions(group, updatedMember));
         }
         if (groups.containsKey(group.groupId())) {
-            // If we just created the group and the endpoint information epoch will not be persisted, so return epoch 0.
+            // If we just created the group, the endpoint information epoch will not be persisted, so return epoch 0.
             // Otherwise, return the bumped epoch.
             response.setEndpointInformationEpoch(group.endpointInformationEpoch());
         }
