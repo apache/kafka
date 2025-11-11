@@ -185,11 +185,4 @@ public final class RemoveVoterHandler {
             })
         );
     }
-
-    public void printVoterSet(VoterSet voterSet) {
-        voterSet.voterNodes().stream().forEach(node -> {
-            System.err.println(node.voterKey());
-            }
-        );
-    }
 }
