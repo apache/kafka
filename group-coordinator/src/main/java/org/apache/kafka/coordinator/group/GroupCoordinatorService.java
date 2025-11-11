@@ -1897,6 +1897,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         CompletableFuture.allOf(partitionLatestOffsets.values().toArray(new CompletableFuture<?>[0]))
             .whenComplete((result, error) -> {
+                // The error variable will not be null when one or more of the partitionLatestOffsets futures get completed exceptionally.
+                // If that is the case, then the same exception would be caught in the try catch executed below when .join() is called.
+                // Thus, we do not need to check error != null here.
                 readSummaryResult.topicsData().forEach(topicData -> {
                     // Build response for each topic.
                     DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic topic =
@@ -1925,8 +1928,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
                                 // This code is reached when allOf above is complete, which happens when all the
                                 // individual futures are complete. Thus, the call to join() here is safe.
                                 long partitionLatestOffset = partitionLatestOffsets.get(tp).join();
-                                // Compute lag as (partition end offset - startOffset + 1 - deliveryCompleteCount)
-                                long lag = partitionLatestOffset - partitionData.startOffset() + 1 - partitionData.deliveryCompleteCount();
+                                // Compute lag as (partition end offset - startOffset - deliveryCompleteCount).
+                                // Note, partition end offset, which is retrieved from partitionMetadataClient, is the offset of
+                                // the next message to be produced, not the last message offset. Thus, the formula for lag computation
+                                // does not need a +1 adjustment.
+                                long lag = partitionLatestOffset - partitionData.startOffset() - partitionData.deliveryCompleteCount();
                                 partitionResponses.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
                                     .setPartitionIndex(partitionData.partition())
                                     .setStartOffset(partitionData.startOffset())
