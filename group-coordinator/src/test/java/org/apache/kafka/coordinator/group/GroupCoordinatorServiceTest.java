@@ -3742,7 +3742,7 @@ public class GroupCoordinatorServiceTest {
 
         Set<TopicPartition> partitionsToComputeLag = new HashSet<>(Set.of(new TopicPartition(TOPIC_NAME, 1)));
         when(partitionMetadataClient.listLatestOffsets(partitionsToComputeLag))
-            .thenReturn(Map.of(new TopicPartition(TOPIC_NAME, 1), CompletableFuture.completedFuture(40L)));
+            .thenReturn(Map.of(new TopicPartition(TOPIC_NAME, 1), CompletableFuture.completedFuture(41L)));
 
         int partition = 1;
         DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData = new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup()
@@ -4126,7 +4126,7 @@ public class GroupCoordinatorServiceTest {
 
         Set<TopicPartition> partitionsToComputeLag = new HashSet<>(Set.of(new TopicPartition(TOPIC_NAME, 1)));
         when(partitionMetadataClient.listLatestOffsets(partitionsToComputeLag))
-            .thenReturn(Map.of(new TopicPartition(TOPIC_NAME, 1), CompletableFuture.completedFuture(40L)));
+            .thenReturn(Map.of(new TopicPartition(TOPIC_NAME, 1), CompletableFuture.completedFuture(41L)));
 
         MetadataImage image = new MetadataImageBuilder()
             .addTopic(TOPIC_ID, TOPIC_NAME, 3)
