@@ -4003,27 +4003,24 @@ public class TaskManagerTest {
 
         final InOrder inOrder = inOrder(adminClient);
 
-        final Map<TopicPartition, Long> purgableOffsets = new HashMap<>();
-        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
-            @Override
-            public Map<TopicPartition, Long> purgeableOffsets() {
-                return purgableOffsets;
-            }
-        };
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RUNNING)
+            .build();
 
-        when(consumer.assignment()).thenReturn(assignment);
-        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(task00.purgeableOffsets())
+            .thenReturn(new HashMap<>())
+            .thenReturn(singletonMap(t1p1, 5L))
+            .thenReturn(singletonMap(t1p1, 17L));
 
-        taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.allTasks()).thenReturn(Set.of(task00));
 
-        assertThat(task00.state(), is(Task.State.RUNNING));
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
 
-        purgableOffsets.put(t1p1, 5L);
-        taskManager.maybePurgeCommittedRecords();
-
-        purgableOffsets.put(t1p1, 17L);
-        taskManager.maybePurgeCommittedRecords();
+        taskManager.maybePurgeCommittedRecords(); // no-op
+        taskManager.maybePurgeCommittedRecords(); // sends purge for offset 5L
+        taskManager.maybePurgeCommittedRecords(); // sends purge for offset 17L
 
         inOrder.verify(adminClient).deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(5L)));
         inOrder.verify(adminClient).deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(17L)));
@@ -4036,29 +4033,27 @@ public class TaskManagerTest {
         when(adminClient.deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(5L))))
             .thenReturn(new DeleteRecordsResult(singletonMap(t1p1, futureDeletedRecords)));
 
-        final Map<TopicPartition, Long> purgableOffsets = new HashMap<>();
-        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
-            @Override
-            public Map<TopicPartition, Long> purgeableOffsets() {
-                return purgableOffsets;
-            }
-        };
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RUNNING)
+            .build();
 
-        when(consumer.assignment()).thenReturn(assignment);
-        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
+        when(task00.purgeableOffsets())
+            .thenReturn(new HashMap<>())
+            .thenReturn(singletonMap(t1p1, 5L))
+            .thenReturn(singletonMap(t1p1, 17L));
 
-        taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.allTasks()).thenReturn(Set.of(task00));
 
-        assertThat(task00.state(), is(Task.State.RUNNING));
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
 
-        purgableOffsets.put(t1p1, 5L);
+        taskManager.maybePurgeCommittedRecords();
         taskManager.maybePurgeCommittedRecords();
 
         // this call should be a no-op.
-        // this is verified, as there is no expectation on adminClient for this second call,
+        // this is verified, as there is no expectation on adminClient for this third call,
         // so it would fail verification if we invoke the admin client again.
-        purgableOffsets.put(t1p1, 17L);
         taskManager.maybePurgeCommittedRecords();
     }
 
@@ -4366,7 +4361,6 @@ public class TaskManagerTest {
 
     @Test
     public void shouldPunctuateActiveTasks() {
-
         final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .withInputPartitions(taskId00Partitions)
             .inState(State.RUNNING)
@@ -4759,45 +4753,66 @@ public class TaskManagerTest {
 
     @Test
     public void shouldConvertActiveTaskToStandbyTask() {
-        final StreamTask activeTask = mock(StreamTask.class);
-        when(activeTask.id()).thenReturn(taskId00);
-        when(activeTask.inputPartitions()).thenReturn(taskId00Partitions);
-        when(activeTask.isActive()).thenReturn(true);
+        final StreamTask activeTaskToRecycle = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StandbyTask recycledStandbyTask = standbyTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.CREATED)
+            .withInputPartitions(taskId00Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
 
-        final StandbyTask standbyTask = mock(StandbyTask.class);
-        when(standbyTask.id()).thenReturn(taskId00);
+        when(activeTaskCreator.createTasks(consumer, taskId00Assignment)).thenReturn(singletonList(activeTaskToRecycle));
+        when(standbyTaskCreator.createStandbyTaskFromActive(activeTaskToRecycle, taskId00Partitions))
+            .thenReturn(recycledStandbyTask);
 
-        when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(activeTask));
-        when(standbyTaskCreator.createStandbyTaskFromActive(any(), eq(taskId00Partitions))).thenReturn(standbyTask);
-
+        // create active task
         taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
+
+        // convert active to standby
+        when(stateUpdater.tasks()).thenReturn(Set.of(activeTaskToRecycle));
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
+        when(stateUpdater.remove(activeTaskToRecycle.id())).thenReturn(future);
+        future.complete(new StateUpdater.RemovedTaskResult(activeTaskToRecycle));
+
         taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
 
-        verify(activeTaskCreator).createTasks(any(), eq(emptyMap()));
+        verify(activeTaskCreator).createTasks(consumer, emptyMap());
         verify(standbyTaskCreator, times(2)).createTasks(Collections.emptyMap());
-        verifyNoInteractions(consumer);
+        verify(standbyTaskCreator).createStandbyTaskFromActive(activeTaskToRecycle, taskId00Partitions);
+        verify(tasks).addPendingTasksToInit(Collections.singleton(recycledStandbyTask));
     }
 
     @Test
     public void shouldConvertStandbyTaskToActiveTask() {
-        final StandbyTask standbyTask = mock(StandbyTask.class);
-        when(standbyTask.id()).thenReturn(taskId00);
-        when(standbyTask.isActive()).thenReturn(false);
-        when(standbyTask.prepareCommit(true)).thenReturn(Collections.emptyMap());
+        final StandbyTask standbyTaskToRecycle = standbyTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask recycledActiveTask = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.CREATED)
+            .withInputPartitions(taskId00Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
 
-        final StreamTask activeTask = mock(StreamTask.class);
-        when(activeTask.id()).thenReturn(taskId00);
-        when(activeTask.inputPartitions()).thenReturn(taskId00Partitions);
-        when(standbyTaskCreator.createTasks(taskId00Assignment)).thenReturn(singletonList(standbyTask));
-        when(activeTaskCreator.createActiveTaskFromStandby(eq(standbyTask), eq(taskId00Partitions), any()))
-            .thenReturn(activeTask);
+        when(standbyTaskCreator.createTasks(taskId00Assignment)).thenReturn(singletonList(standbyTaskToRecycle));
+        when(activeTaskCreator.createActiveTaskFromStandby(standbyTaskToRecycle, taskId00Partitions, consumer))
+            .thenReturn(recycledActiveTask);
 
+        // create standby task
         taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
+
+        // convert standby to active
+        when(stateUpdater.tasks()).thenReturn(Set.of(standbyTaskToRecycle));
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
+        when(stateUpdater.remove(standbyTaskToRecycle.id())).thenReturn(future);
+        future.complete(new StateUpdater.RemovedTaskResult(standbyTaskToRecycle));
+
         taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
 
-        verify(activeTaskCreator, times(2)).createTasks(any(), eq(emptyMap()));
+        verify(activeTaskCreator, times(2)).createTasks(consumer, emptyMap());
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
-        verifyNoInteractions(consumer);
+        verify(activeTaskCreator).createActiveTaskFromStandby(standbyTaskToRecycle, taskId00Partitions, consumer);
+        verify(tasks).addPendingTasksToInit(Collections.singleton(recycledActiveTask));
     }
 
     @Test
