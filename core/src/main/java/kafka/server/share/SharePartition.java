@@ -151,12 +151,6 @@ public class SharePartition {
     );
 
     /**
-     * Records whose delivery count exceeds this are deemed abnormal,
-     * and the batching of these records should be reduced.
-     */
-    private static final int BAD_RECORD_DELIVERY_THRESHOLD = 3;
-
-    /**
      * The group id of the share partition belongs to.
      */
     private final String groupId;
@@ -207,6 +201,11 @@ public class SharePartition {
      */
     private final int maxDeliveryCount;
 
+    /**
+     * Records whose delivery count exceeds this are deemed abnormal,
+     * and the batching of these records should be reduced.
+     */
+    private final int badRecordDeliveryThreshold;
     /**
      * The group config manager is used to retrieve the values for dynamic group configurations
      */
@@ -368,6 +367,7 @@ public class SharePartition {
         this.leaderEpoch = leaderEpoch;
         this.maxInFlightRecords = maxInFlightRecords;
         this.maxDeliveryCount = maxDeliveryCount;
+        this.badRecordDeliveryThreshold = (int) Math.ceil((double) maxDeliveryCount / 2);
         this.cachedState = new ConcurrentSkipListMap<>();
         this.lock = new ReentrantReadWriteLock();
         this.findNextFetchOffset = false;
@@ -841,6 +841,12 @@ public class SharePartition {
                 int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
                 boolean recordLimitSubsetMatch = isRecordLimitMode && checkForRecordLimitSubsetMatch(inFlightBatch, maxRecordsToAcquire, acquiredCount);
                 boolean deliveryCountExceed = checkForBadRecordsDeliveryCount(inFlightBatch);
+                // Stop acquiring more records if bad record found after acquiring some data to
+                // prevent affecting already acquired records
+                if (deliveryCountExceed && acquiredCount > 0) {
+                    maxRecordsToAcquire = -1;
+                    break;
+                }
                 if (!fullMatch || inFlightBatch.offsetState() != null || recordLimitSubsetMatch || deliveryCountExceed) {
                     log.trace("Subset or offset tracked batch record found for share partition,"
                             + " batch: {} request offsets - first: {}, last: {} for the share"
@@ -865,12 +871,12 @@ public class SharePartition {
                     // In record_limit mode, we need to ensure that we do not acquire more than
                     // maxRecordsToAcquire. Hence, pass the remaining number of records that can
                     // be acquired.
-                    int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, isRecordLimitMode, numRecordsRemaining, firstBatch.baseOffset(), lastOffsetToAcquire, acquiredCount, inFlightBatch, result);
+                    int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, isRecordLimitMode, numRecordsRemaining, firstBatch.baseOffset(), lastOffsetToAcquire, inFlightBatch, result);
                     // If a bad record is present, return immediately and set `maxRecordsToAcquire = -1`
                     // to prevent acquiring any new records afterwards.
                     if (acquiredSubsetCount < 0) {
                         maxRecordsToAcquire = -1;
-                        acquiredCount += acquiredSubsetCount == Integer.MIN_VALUE ? 0 : -1 * acquiredSubsetCount;
+                        acquiredCount += -1 * acquiredSubsetCount;
                         break;
                     }
                     acquiredCount += acquiredSubsetCount;
@@ -1875,12 +1881,13 @@ public class SharePartition {
         long maxFetchRecords,
         long requestFirstOffset,
         long requestLastOffset,
-        long hasBeenAcquired,
         InFlightBatch inFlightBatch,
         List<AcquiredRecords> result
     ) {
         lock.writeLock().lock();
         int acquiredCount = 0;
+        long maxFetchRecordsWhileBadRecord = -1;
+        boolean hasBadRecord = false;
         try {
             for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState().entrySet()) {
                 // For the first batch which might have offsets prior to the request base
@@ -1900,12 +1907,21 @@ public class SharePartition {
                     continue;
                 }
 
-                // If the record has any pending deliveries, return immediately and do not deliver the current bad record.
-                if (offsetState.getValue().deliveryCount() >= BAD_RECORD_DELIVERY_THRESHOLD && (hasBeenAcquired > 0 || acquiredCount > 0)) {
-                    return acquiredCount > 0 ? -acquiredCount : Integer.MIN_VALUE;
+                int recordDeliveryCount = offsetState.getValue().deliveryCount();
+                // On last delivery attempt, submit acquired records,
+                // bad record will be delivered alone next time
+                if (recordDeliveryCount == maxDeliveryCount - 1 && acquiredCount > 0) {
+                    hasBadRecord = true;
+                    break;
                 }
 
-                InFlightState updateResult =  offsetState.getValue().tryUpdateState(RecordState.ACQUIRED, DeliveryCountOps.INCREASE,
+                // On repeated delivery failures (>= badRecordDeliveryThreshold), progressively reduce batch size to isolate bad record
+                if (recordDeliveryCount >= badRecordDeliveryThreshold && maxFetchRecordsWhileBadRecord < 0) {
+                    maxFetchRecordsWhileBadRecord = Math.max(1, (long) inFlightBatch.offsetState().size() >> (recordDeliveryCount - badRecordDeliveryThreshold + 1));
+                    hasBadRecord = true;
+                }
+
+                InFlightState updateResult = offsetState.getValue().tryUpdateState(RecordState.ACQUIRED, DeliveryCountOps.INCREASE,
                     maxDeliveryCount, memberId);
                 if (updateResult == null || updateResult.state() != RecordState.ACQUIRED) {
                     log.trace("Unable to acquire records for the offset: {} in batch: {}"
@@ -1925,19 +1941,23 @@ public class SharePartition {
                     .setDeliveryCount((short) offsetState.getValue().deliveryCount()));
                 acquiredCount++;
 
-                // If the record is the first pending one, deliver only this record.
-                if (offsetState.getValue().deliveryCount() - 1 >= BAD_RECORD_DELIVERY_THRESHOLD) {
-                    return -acquiredCount;
+                // Delivered alone.
+                if (offsetState.getValue().deliveryCount() == maxDeliveryCount) {
+                    hasBadRecord = true;
+                    break;
                 }
                 if (isRecordLimitMode && acquiredCount == maxFetchRecords) {
                     // In record_limit mode, acquire only the requested number of records.
+                    break;
+                }
+                if (hasBadRecord && acquiredCount == maxFetchRecordsWhileBadRecord) {
                     break;
                 }
             }
         } finally {
             lock.writeLock().unlock();
         }
-        return acquiredCount;
+        return hasBadRecord ? -acquiredCount : acquiredCount;
     }
 
     /**
@@ -1975,9 +1995,9 @@ public class SharePartition {
      */
     private boolean checkForBadRecordsDeliveryCount(InFlightBatch inFlightBatch) {
         if (inFlightBatch.offsetState() == null) {
-            return inFlightBatch.batchDeliveryCount() >= BAD_RECORD_DELIVERY_THRESHOLD;
+            return inFlightBatch.batchDeliveryCount() >= badRecordDeliveryThreshold;
         }
-        return inFlightBatch.offsetState().values().stream().mapToInt(InFlightState::deliveryCount).max().orElse(0) >= BAD_RECORD_DELIVERY_THRESHOLD;
+        return inFlightBatch.offsetState().values().stream().mapToInt(InFlightState::deliveryCount).max().orElse(0) >= badRecordDeliveryThreshold;
     }
 
     // Visibility for test
