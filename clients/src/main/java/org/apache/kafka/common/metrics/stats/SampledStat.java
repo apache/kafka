@@ -72,7 +72,7 @@ public abstract class SampledStat implements MeasurableStat {
     }
 
     protected Sample newSample(long timeMs) {
-        return this.timeWindowMs != -1 ? new Sample(this.initialValue, timeMs) : new Sample(this.initialValue, timeMs, this.timeWindowMs);
+        return this.timeWindowMs > 0 ? new Sample(this.initialValue, timeMs, this.timeWindowMs) : new Sample(this.initialValue, timeMs);
     }
 
     @Override
