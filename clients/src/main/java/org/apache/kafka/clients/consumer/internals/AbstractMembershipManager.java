@@ -117,18 +117,6 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     protected final Logger log;
 
     /**
-     * Local cache of assigned topic IDs and names. Topics are added here when received in a
-     * target assignment, as we discover their names in the Metadata cache, and removed when the
-     * topic is not in the subscription anymore. The purpose of this cache is to avoid metadata
-     * requests in cases where a currently assigned topic is in the target assignment (new
-     * partition assigned, or revoked), but it is not present the Metadata cache at that moment.
-     * The cache is cleared when the subscription changes ({@link #transitionToJoining()}, the
-     * member fails ({@link #transitionToFatal()} or leaves the group
-     * ({@link #leaveGroup()}/{@link #leaveGroupOnClose(CloseOptions.GroupMembershipOperation)}).
-     */
-    private final Map<Uuid, String> assignedTopicNamesCache;
-
-    /**
      * Topic IDs and partitions received in the last target assignment, together with its local epoch.
      *
      * This member variable is reassigned every time a new assignment is received.
@@ -214,7 +202,6 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         this.state = MemberState.UNSUBSCRIBED;
         this.subscriptions = subscriptions;
         this.metadata = metadata;
-        this.assignedTopicNamesCache = new HashMap<>();
         this.currentTargetAssignment = LocalAssignment.NONE;
         this.currentAssignment = LocalAssignment.NONE;
         this.log = log;
@@ -1104,14 +1091,15 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         if (nameFromMetadataCache != null) {
             // Add topic name to local cache, so it can be reused if included in a next target
             // assignment if metadata cache not available.
-            assignedTopicNamesCache.put(topicId, nameFromMetadataCache);
+            subscriptions.putAssignedTopicNames(topicId, nameFromMetadataCache);
             return Optional.of(nameFromMetadataCache);
         } else {
             // Topic ID was not found in metadata. Check if the topic name is in the local
             // cache of topics currently assigned. This will avoid a metadata request in the
             // case where the metadata cache may have been flushed right before the
             // revocation of a previously assigned topic.
-            String nameFromSubscriptionCache = assignedTopicNamesCache.getOrDefault(topicId, null);
+
+            String nameFromSubscriptionCache = subscriptions.getAssignTopicNamesFromCacheOrDefault(topicId, null);
             return Optional.ofNullable(nameFromSubscriptionCache);
         }
     }
@@ -1222,7 +1210,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
         // Clear topic names cache, removing topics that are not assigned to the member anymore.
         Set<String> assignedTopics = assignedPartitions.topicNames();
-        assignedTopicNamesCache.values().retainAll(assignedTopics);
+        subscriptions.removeNotAssignedTopicsFromCache(assignedTopics);
 
         return result;
     }
@@ -1276,7 +1264,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      */
     private void clearPendingAssignmentsAndLocalNamesCache() {
         currentTargetAssignment = LocalAssignment.NONE;
-        assignedTopicNamesCache.clear();
+        subscriptions.clearAssignedTopicNamesCache();
     }
 
     protected void resetEpoch() {
