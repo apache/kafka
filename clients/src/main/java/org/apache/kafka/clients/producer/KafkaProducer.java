@@ -1266,11 +1266,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 if (metadata.getError(topic) != null && metadata.getError(topic).exception() instanceof RetriableException) {
                     throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
                 }
-                if (metadata.getError(topic) != null) {
-                    throw new TimeoutException(errorMessage,
-                            new KafkaException(METADATA_TIMEOUT_MSG + "; " + metadata.getError(topic).message()));
-                }
-                throw new TimeoutException(errorMessage, new KafkaException(METADATA_TIMEOUT_MSG));
+                throw new TimeoutException(errorMessage);
             }
             metadata.maybeThrowExceptionForTopic(topic);
             remainingWaitMs = maxWaitMs - elapsed;

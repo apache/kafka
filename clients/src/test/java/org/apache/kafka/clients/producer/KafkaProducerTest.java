@@ -894,9 +894,7 @@ public class KafkaProducerTest {
         verify(metadata, times(5)).fetch();
         try {
             var e = assertThrows(ExecutionException.class, future::get);
-            var timeout = assertInstanceOf(TimeoutException.class, e.getCause());
-            var kafkaEx = assertInstanceOf(KafkaException.class, timeout.getCause());
-            assertEquals(METADATA_TIMEOUT_MSG, kafkaEx.getMessage());
+            assertInstanceOf(TimeoutException.class, e.getCause());
         } finally {
             producer.close(Duration.ofMillis(0));
         }
@@ -964,9 +962,7 @@ public class KafkaProducerTest {
         verify(metadata, times(5)).fetch();
         try {
             var e = assertThrows(ExecutionException.class, future::get);
-            var timeout = assertInstanceOf(TimeoutException.class, e.getCause());
-            var kafkaEx = assertInstanceOf(KafkaException.class, timeout.getCause());
-            assertEquals(METADATA_TIMEOUT_MSG, kafkaEx.getMessage());
+            assertInstanceOf(TimeoutException.class, e.getCause());
         } finally {
             producer.close(Duration.ofMillis(0));
         }
