@@ -3357,7 +3357,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private boolean autoJoinEnable(FollowerState state, long currentTimeMs) {
+    private boolean maybeSendAutoJoinRequest(FollowerState state, long currentTimeMs) {
         /* When the cluster supports reconfiguration, only replicas that can become a voter
          * and are configured to auto join should attempt to automatically join the voter
          * set for the configured topic partition.
@@ -3367,7 +3367,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private boolean shouldSendAddVoterRequest(FollowerState state, long currentTimeMs) {
-        return canJoin && autoJoinEnable(state, currentTimeMs);
+        return canJoin && maybeSendAutoJoinRequest(state, currentTimeMs);
     }
 
     private boolean shouldSendRemoveVoterRequest(FollowerState state, long currentTimeMs) {
@@ -3375,7 +3375,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         final var voters = partitionState.lastVoterSet();
 
         if (voters.voterIds().contains(localReplicaKey.id())) {
-            if (autoJoinEnable(state, currentTimeMs)) {
+            if (maybeSendAutoJoinRequest(state, currentTimeMs)) {
                 // When the bootstrap controller needs to update directory id,
                 // it should be removed and then rejoining to cluster
                 // In such a case, we should set canJoin to true, and it will
