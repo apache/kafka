@@ -751,7 +751,7 @@ public abstract class TopicCommand {
                     KAFKA_CONFIGS_CLI_SUPPORTS_ALTERING_TOPIC_CONFIGS);
             describeOpt = parser.accepts("describe", "List details for the given topics.");
             topicOpt = parser.accepts("topic", "The topic to create, alter, describe or delete. It also accepts a regular " +
-                            "expression, except for --create option. Put topic name in double quotes; e.g. \"test.*\".")
+                            "expression, except for --create option.")
                 .withRequiredArg()
                 .describedAs("topic")
                 .ofType(String.class);
