@@ -2655,6 +2655,7 @@ org.apache.kafka.streams.processor.internals.StreamTaskTest:
 - shouldFailOnCommitIfTaskIsClosed
 - shouldFlushStateManagerAndRecordCollector
 - shouldInitTaskTimeoutAndEventuallyThrow
+- shouldLogNotReadyWhenStaleAfterThreshold
 - shouldMaybeReturnOffsetsForRepartitionTopicsForPurging
 - shouldNotAttemptToLockIfNoStores
 - shouldNotCheckpointAfterRestorationWhenExactlyOnceEnabled
