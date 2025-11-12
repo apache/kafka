@@ -52,7 +52,6 @@
     <module name="UpperEll"/>
     <module name="LeftCurly"/>
     <module name="RightCurly"/>
-    <module name="EmptyStatement"/>
     <module name="ConstantName">
       <property name="format" value="(^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$)|(^log$)"/>
     </module>

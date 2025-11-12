@@ -166,7 +166,7 @@ public class MockProcessorContextStateStoreTest {
             final MockProcessorContext<Void, Void> context = new MockProcessorContext<>(
                 mkProperties(mkMap(
                     mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, ""),
-                    mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "")
+                    mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "mock-localhost:9092")
                 )),
                 new TaskId(0, 0),
                 stateDir
