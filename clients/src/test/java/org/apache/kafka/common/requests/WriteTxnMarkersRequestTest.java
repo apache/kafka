@@ -53,9 +53,9 @@ public class WriteTxnMarkersRequestTest {
     }
 
     @Test
-    public void testConstructors() {
-        // Test single-arg constructor (default - transactionVersions = null)
-        WriteTxnMarkersRequest.Builder builder = new WriteTxnMarkersRequest.Builder(markers);
+    public void testConstructor() {
+        // Test constructor with transactionVersions = null
+        WriteTxnMarkersRequest.Builder builder = new WriteTxnMarkersRequest.Builder(markers, null);
         for (short version : ApiKeys.WRITE_TXN_MARKERS.allVersions()) {
             WriteTxnMarkersRequest request = builder.build(version);
             assertEquals(1, request.markers().size());
@@ -69,7 +69,7 @@ public class WriteTxnMarkersRequestTest {
             assertEquals((byte) 0, request.data().markers().get(0).transactionVersion());
         }
         
-        // Test two-arg constructor (with a transactionVersions list)
+        // Test constructor with a transactionVersions list
         List<Byte> transactionVersions = new ArrayList<>();
         transactionVersions.add((byte) 2);
         WriteTxnMarkersRequest.Builder builderWithVersions = new WriteTxnMarkersRequest.Builder(markers, transactionVersions);
@@ -89,7 +89,7 @@ public class WriteTxnMarkersRequestTest {
 
     @Test
     public void testGetErrorResponse() {
-        WriteTxnMarkersRequest.Builder builder = new WriteTxnMarkersRequest.Builder(markers);
+        WriteTxnMarkersRequest.Builder builder = new WriteTxnMarkersRequest.Builder(markers, null);
         for (short version : ApiKeys.WRITE_TXN_MARKERS.allVersions()) {
             WriteTxnMarkersRequest request = builder.build(version);
             WriteTxnMarkersResponse errorResponse =

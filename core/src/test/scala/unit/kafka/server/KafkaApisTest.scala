@@ -3110,7 +3110,11 @@ class KafkaApisTest extends Logging {
     val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
       util.List.of(
         new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, util.List.of(topicPartition)),
-        new TxnMarkerEntry(2, 1.toShort, 0, TransactionResult.COMMIT, util.List.of(topicPartition)),
+        new TxnMarkerEntry(2, 1.toShort, 0, TransactionResult.COMMIT, util.List.of(topicPartition))
+      ),
+      util.List.of(
+        TransactionVersion.TV_2.featureLevel().toByte,
+        TransactionVersion.TV_2.featureLevel().toByte
       )).build()
     val request = buildRequest(writeTxnMarkersRequest)
     val capturedResponse: ArgumentCaptor[WriteTxnMarkersResponse] = ArgumentCaptor.forClass(classOf[WriteTxnMarkersResponse])
@@ -3254,6 +3258,10 @@ class KafkaApisTest extends Logging {
           TransactionResult.ABORT,
           util.List.of(offset1, foo1)
         )
+      ),
+      util.List.of(
+        TransactionVersion.TV_2.featureLevel().toByte,
+        TransactionVersion.TV_2.featureLevel().toByte
       )
     ).build()
 
@@ -3370,6 +3378,9 @@ class KafkaApisTest extends Logging {
           TransactionResult.COMMIT,
           util.List.of(offset0)
         )
+      ),
+      util.List.of(
+        TransactionVersion.TV_2.featureLevel().toByte
       )
     ).build()
 
@@ -10094,7 +10105,8 @@ class KafkaApisTest extends Logging {
 
   private def createWriteTxnMarkersRequest(partitions: util.List[TopicPartition]) = {
     val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
-      util.List.of(new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, partitions))).build()
+      util.List.of(new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, partitions)),
+      util.List.of(TransactionVersion.TV_2.featureLevel().toByte)).build()
     (writeTxnMarkersRequest, buildRequest(writeTxnMarkersRequest))
   }
 

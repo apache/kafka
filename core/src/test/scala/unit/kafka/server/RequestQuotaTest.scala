@@ -468,7 +468,7 @@ class RequestQuotaTest extends BaseRequestTest {
           )
 
         case ApiKeys.WRITE_TXN_MARKERS =>
-          new WriteTxnMarkersRequest.Builder(java.util.List.of[WriteTxnMarkersRequest.TxnMarkerEntry])
+          new WriteTxnMarkersRequest.Builder(java.util.List.of[WriteTxnMarkersRequest.TxnMarkerEntry], null)
 
         case ApiKeys.TXN_OFFSET_COMMIT =>
           new TxnOffsetCommitRequest.Builder(

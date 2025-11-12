@@ -109,10 +109,14 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
             this.data = data;
         }
 
-        public Builder(final List<TxnMarkerEntry> markers) {
-            this(markers, null);
-        }
-
+        /**
+         * Creates a builder with the given markers and their associated transaction versions.
+         *
+         * @param markers the list of transaction marker entries
+         * @param transactionVersions the list of transaction versions, corresponding to each marker. If {@code null},
+         *                            the default transaction version (0) will be used for all markers.
+         *                            If not {@code null}, the size must match the size of {@code markers}.
+         */
         public Builder(final List<TxnMarkerEntry> markers, final List<Byte> transactionVersions) {
             // version will be determined at build time based on broker capabilities
             super(ApiKeys.WRITE_TXN_MARKERS);
