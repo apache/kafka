@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.common.runtime;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
@@ -51,6 +52,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -4293,6 +4295,268 @@ public class CoordinatorRuntimeTest {
     }
 
     @Test
+    public void testCompressibleRecordTriggersFlushAndSucceeds() throws Exception {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+        Compression compression = Compression.gzip().build();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withCompression(compression)
+                .withSerializer(new StringSerializer())
+                .withAppendLingerMs(10)
+                .withExecutorService(mock(ExecutorService.class))
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertNull(ctx.currentBatch);
+
+        // Get the max batch size.
+        int maxBatchSize = writer.config(TP).maxMessageSize();
+
+        // Create 2 records with a quarter of the max batch size each. 
+        List<String> records = Stream.of('1', '2').map(c -> {
+            char[] payload = new char[maxBatchSize / 4];
+            Arrays.fill(payload, c);
+            return new String(payload);
+        }).collect(Collectors.toList());
+
+        // Write #1 with the small records, batch will be about half full
+        long firstBatchTimestamp = timer.time().milliseconds();
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(50),
+            state -> new CoordinatorResult<>(records, "response1")
+        );
+
+        // A batch has been created.
+        assertNotNull(ctx.currentBatch);
+
+        // Verify the state - batch is not yet flushed
+        assertEquals(List.of(), writer.entries(TP));
+
+        // Create a record of highly compressible data
+        List<String> largeRecord = List.of("a".repeat((int) (0.75 * maxBatchSize)));
+
+        // Write #2 with the large record. This record is too large to go into the previous batch
+        // uncompressed but fits in a new buffer, so we should flush the previous batch and allocate
+        // a new one. 
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(50),
+            state -> new CoordinatorResult<>(largeRecord, "response2")
+        );
+
+        // Verify the state. The first batch has flushed but the second is pending.
+        assertEquals(2L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, records.get(0)),
+            new MockCoordinatorShard.RecordAndMetadata(1, records.get(1)),
+            new MockCoordinatorShard.RecordAndMetadata(2, largeRecord.get(0))
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(
+            records(firstBatchTimestamp, compression, records)
+        ), writer.entries(TP));
+
+        // Advance past the linger time
+        timer.advanceClock(11);
+
+        // Commit and verify that the second batch is completed
+        writer.commit(TP);
+        assertTrue(write1.isDone());
+        assertTrue(write2.isDone());
+        assertEquals(3L, ctx.coordinator.lastCommittedOffset());
+        assertEquals("response1", write1.get(5, TimeUnit.SECONDS));
+        assertEquals("response2", write2.get(5, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testLargeCompressibleRecordTriggersFlushAndSucceeds() throws Exception {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+        Compression compression = Compression.gzip().build();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withCompression(compression)
+                .withSerializer(new StringSerializer())
+                .withAppendLingerMs(10)
+                .withExecutorService(mock(ExecutorService.class))
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertNull(ctx.currentBatch);
+
+        // Get the max batch size.
+        int maxBatchSize = writer.config(TP).maxMessageSize();
+
+        // Create 2 records with a quarter of the max batch size each. 
+        List<String> records = Stream.of('1', '2').map(c -> {
+            char[] payload = new char[maxBatchSize / 4];
+            Arrays.fill(payload, c);
+            return new String(payload);
+        }).collect(Collectors.toList());
+
+        // Write #1 with the small records, batch will be about half full
+        long firstBatchTimestamp = timer.time().milliseconds();
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(50),
+            state -> new CoordinatorResult<>(records, "response1")
+        );
+
+        // A batch has been created.
+        assertNotNull(ctx.currentBatch);
+
+        // Verify the state - batch is not yet flushed
+        assertEquals(List.of(), writer.entries(TP));
+
+        // Create a large record of highly compressible data
+        List<String> largeRecord = List.of("a".repeat(3 * maxBatchSize));
+
+        // Write #2 with the large record. This record is too large to go into the previous batch
+        // uncompressed but will fit in the new buffer once compressed, so we should flush the
+        // previous batch and successfully allocate a new batch for this record. The new batch
+        // will also trigger an immediate flush.
+        long secondBatchTimestamp = timer.time().milliseconds();
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(50),
+            state -> new CoordinatorResult<>(largeRecord, "response2")
+        );
+
+        // Verify the state.
+        assertEquals(3L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, records.get(0)),
+            new MockCoordinatorShard.RecordAndMetadata(1, records.get(1)),
+            new MockCoordinatorShard.RecordAndMetadata(2, largeRecord.get(0))
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(
+            records(firstBatchTimestamp, compression, records),
+            records(secondBatchTimestamp, compression, largeRecord)
+        ), writer.entries(TP));
+
+        // Commit and verify that writes are completed.
+        writer.commit(TP);
+        assertTrue(write1.isDone());
+        assertTrue(write2.isDone());
+        assertEquals(3L, ctx.coordinator.lastCommittedOffset());
+        assertEquals("response1", write1.get(5, TimeUnit.SECONDS));
+        assertEquals("response2", write2.get(5, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testLargeUncompressibleRecordTriggersFlushAndFails() throws Exception {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+        Compression compression = Compression.gzip().build();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withCompression(compression)
+                .withSerializer(new StringSerializer())
+                .withAppendLingerMs(10)
+                .withExecutorService(mock(ExecutorService.class))
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertNull(ctx.currentBatch);
+
+        // Get the max batch size.
+        int maxBatchSize = writer.config(TP).maxMessageSize();
+
+        // Create 2 records with a quarter of the max batch size each. 
+        List<String> records = Stream.of('1', '2').map(c -> {
+            char[] payload = new char[maxBatchSize / 4];
+            Arrays.fill(payload, c);
+            return new String(payload);
+        }).collect(Collectors.toList());
+
+        // Write #1 with the small records, batch will be about half full
+        long firstBatchTimestamp = timer.time().milliseconds();
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(50),
+            state -> new CoordinatorResult<>(records, "response1")
+        );
+
+        // A batch has been created.
+        assertNotNull(ctx.currentBatch);
+
+        // Verify the state - batch is not yet flushed
+        assertEquals(List.of(), writer.entries(TP));
+
+        // Create a large record of not very compressible data
+        char[] payload = new char[3 * maxBatchSize];
+        Random offset = new Random();
+        for (int i = 0; i < payload.length; i++) {
+            payload[i] = (char) ('a' + ((char) offset.nextInt() % 26));
+        }
+        List<String> largeRecord = List.of(new String(payload));
+
+        // Write #2 with the large record. This record is too large to go into the previous batch
+        // and is not compressible so it should be flushed. It is also too large to fit in a new batch
+        // so the write should fail with RecordTooLargeException
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(50),
+            state -> new CoordinatorResult<>(largeRecord, "response2")
+        );
+
+        // Check that write2 fails with RecordTooLargeException
+        assertFutureThrows(RecordTooLargeException.class, write2);
+
+        // Verify the state. The first batch was flushed and the largeRecord
+        // write failed.
+        assertEquals(2L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, records.get(0)),
+            new MockCoordinatorShard.RecordAndMetadata(1, records.get(1))
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(
+            records(firstBatchTimestamp, compression, records)
+        ), writer.entries(TP));
+
+        // Commit and verify that writes are completed.
+        writer.commit(TP);
+        assertTrue(write1.isDone());
+        assertTrue(write2.isDone());
+        assertEquals(2L, ctx.coordinator.lastCommittedOffset());
+        assertEquals("response1", write1.get(5, TimeUnit.SECONDS));
+    } 
+
+    @Test
     public void testRecordEventPurgatoryTime() throws Exception {
         Duration writeTimeout = Duration.ofMillis(1000);
         MockTimer timer = new MockTimer();
@@ -4515,6 +4779,7 @@ public class CoordinatorRuntimeTest {
         assertTrue(write1.isCompletedExceptionally());
         verify(runtimeMetrics, times(1)).recordEventPurgatoryTime(writeTimeout.toMillis() + 1L);
     }
+
     @Test
     public void testCoordinatorExecutor() {
         Duration writeTimeout = Duration.ofMillis(1000);
@@ -4600,6 +4865,81 @@ public class CoordinatorRuntimeTest {
         writer.commit(TP);
         processor.poll();
         assertTrue(write1.isDone());
+    }
+
+    @Test
+    public void testLingerTimeComparisonInMaybeFlushCurrentBatch() throws Exception {
+        // Provides the runtime clock; we will advance it.
+        MockTimer clockTimer = new MockTimer();
+        // Used for scheduling timer tasks; we won't advance it to avoid a timer-triggered batch flush.
+        MockTimer schedulerTimer = new MockTimer();
+
+        MockPartitionWriter writer = new MockPartitionWriter();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(clockTimer.time())
+                .withTimer(schedulerTimer)
+                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withAppendLingerMs(10)
+                .withExecutorService(mock(ExecutorService.class))
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(ACTIVE, ctx.state);
+        assertNull(ctx.currentBatch);
+
+        // Write #1.
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+            state -> new CoordinatorResult<>(List.of("record1"), "response1")
+        );
+        assertFalse(write1.isDone());
+        assertNotNull(ctx.currentBatch);
+        assertEquals(0, writer.entries(TP).size());
+
+        // Verify that the linger timeout task is created; there will also be a default write timeout task.
+        assertEquals(2, schedulerTimer.size());
+
+        // Advance past the linger time.
+        clockTimer.advanceClock(11);
+
+        // At this point, there are still two scheduled tasks; the linger task has not fired
+        // because we did not advance the schedulerTimer.
+        assertEquals(2, schedulerTimer.size());
+
+        // Write #2.
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+            state -> new CoordinatorResult<>(List.of("record2"), "response2")
+        );
+
+        // The batch should have been flushed.
+        assertEquals(1, writer.entries(TP).size());
+
+        // Because flushing the batch cancels the linger task, there should now be two write timeout tasks.
+        assertEquals(2, schedulerTimer.size());
+
+        // Verify batch contains both two records
+        MemoryRecords batch = writer.entries(TP).get(0);
+        RecordBatch recordBatch = batch.firstBatch();
+        assertEquals(2, recordBatch.countOrNull());
+
+        // Commit and verify that writes are completed.
+        writer.commit(TP);
+        assertTrue(write1.isDone());
+        assertTrue(write2.isDone());
+        // Now that all scheduled tasks have been cancelled, the scheduler queue should be empty.
+        assertEquals(0, schedulerTimer.size());
     }
 
     private static <S extends CoordinatorShard<U>, U> ArgumentMatcher<CoordinatorPlayback<U>> coordinatorMatcher(

@@ -166,8 +166,10 @@ class TransactionMarkerChannelManager(
   time: Time
 ) extends InterBrokerSendThread("TxnMarkerSenderThread-" + config.brokerId, networkClient, config.requestTimeoutMs, time)
   with Logging {
-
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+  private val metricsPackage = "kafka.coordinator.transaction"
+  private val metricsClassName = "TransactionMarkerChannelManager"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   this.logIdent = "[Transaction Marker Channel Manager " + config.brokerId + "]: "
 

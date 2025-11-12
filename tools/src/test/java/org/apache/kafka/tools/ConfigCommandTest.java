@@ -424,8 +424,8 @@ public class ConfigCommandTest {
     public void testExpectedEntityTypeNames(List<String> expectedTypes, List<String> expectedNames, List<String> connectOpts, String... args) {
         ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(List.of(connectOpts.get(0), connectOpts.get(1), "--describe"), List.of(args)));
         createOpts.checkArgs();
-        assertEquals(createOpts.entityTypes().toSeq(), seq(expectedTypes));
-        assertEquals(createOpts.entityNames().toSeq(), seq(expectedNames));
+        assertEquals(seq(expectedTypes), createOpts.entityTypes().toSeq());
+        assertEquals(seq(expectedNames), createOpts.entityNames().toSeq());
     }
 
     @Test
@@ -1177,8 +1177,8 @@ public class ConfigCommandTest {
             public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
                 assertEquals(1, resources.size());
                 ConfigResource res = resources.iterator().next();
-                assertEquals(res.type(), ConfigResource.Type.TOPIC);
-                assertEquals(res.name(), resourceName);
+                assertEquals(ConfigResource.Type.TOPIC, res.type());
+                assertEquals(resourceName, res.name());
                 return describeResult;
             }
         };

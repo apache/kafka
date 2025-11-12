@@ -20,8 +20,8 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerImpl;
+import org.apache.kafka.clients.consumer.internals.ShareConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -80,7 +80,7 @@ public class KafkaShareConsumerMetricsTest {
 
     @Test
     public void testPollTimeMetrics() {
-        ConsumerMetadata metadata = createMetadata(subscription);
+        ShareConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 1));
 
@@ -125,7 +125,7 @@ public class KafkaShareConsumerMetricsTest {
 
     @Test
     public void testPollIdleRatio() {
-        ConsumerMetadata metadata = createMetadata(subscription);
+        ShareConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 1));
 
@@ -172,7 +172,7 @@ public class KafkaShareConsumerMetricsTest {
     @Test
     public void testClosingConsumerUnregistersConsumerMetrics() {
         Time time = new MockTime(1L);
-        ConsumerMetadata metadata = createMetadata(subscription);
+        ShareConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 1));
 
@@ -190,7 +190,7 @@ public class KafkaShareConsumerMetricsTest {
     @Test
     public void testRegisteringCustomMetricsDoesntAffectConsumerMetrics() {
         Time time = new MockTime(1L);
-        ConsumerMetadata metadata = createMetadata(subscription);
+        ShareConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 1));
 
@@ -207,7 +207,7 @@ public class KafkaShareConsumerMetricsTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             appender.setClassLogger(ShareConsumerImpl.class, Level.DEBUG);
             Time time = new MockTime(1L);
-            ConsumerMetadata metadata = createMetadata(subscription);
+            ShareConsumerMetadata metadata = createMetadata(subscription);
             MockClient client = new MockClient(time, metadata);
             initMetadata(client, Collections.singletonMap(topic, 1));
 
@@ -224,7 +224,7 @@ public class KafkaShareConsumerMetricsTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             appender.setClassLogger(ShareConsumerImpl.class, Level.DEBUG);
             Time time = new MockTime(1L);
-            ConsumerMetadata metadata = createMetadata(subscription);
+            ShareConsumerMetadata metadata = createMetadata(subscription);
             MockClient client = new MockClient(time, metadata);
             initMetadata(client, Collections.singletonMap(topic, 1));
 
@@ -244,7 +244,7 @@ public class KafkaShareConsumerMetricsTest {
             mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
 
             Time time = new MockTime(1L);
-            ConsumerMetadata metadata = createMetadata(subscription);
+            ShareConsumerMetadata metadata = createMetadata(subscription);
             MockClient client = new MockClient(time, metadata);
             initMetadata(client, Collections.singletonMap(topic, 1));
 
@@ -265,7 +265,7 @@ public class KafkaShareConsumerMetricsTest {
             mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
 
             Time time = new MockTime(1L);
-            ConsumerMetadata metadata = createMetadata(subscription);
+            ShareConsumerMetadata metadata = createMetadata(subscription);
             MockClient client = new MockClient(time, metadata);
             initMetadata(client, Collections.singletonMap(topic, 1));
 
@@ -280,7 +280,7 @@ public class KafkaShareConsumerMetricsTest {
     @Test
     public void testUnregisteringNonexistingMetricsDoesntCauseError() {
         Time time = new MockTime(1L);
-        ConsumerMetadata metadata = createMetadata(subscription);
+        ShareConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 1));
 
@@ -291,15 +291,15 @@ public class KafkaShareConsumerMetricsTest {
         customMetrics.forEach((name, metric) -> assertDoesNotThrow(() -> consumer.unregisterMetricFromSubscription(metric)));
     }
 
-    private ConsumerMetadata createMetadata(SubscriptionState subscription) {
-        return new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
+    private ShareConsumerMetadata createMetadata(SubscriptionState subscription) {
+        return new ShareConsumerMetadata(0, 0, Long.MAX_VALUE, false,
                 subscription, new LogContext(), new ClusterResourceListeners());
     }
 
     private KafkaShareConsumer<String, String> newShareConsumer(Time time,
                                                                 KafkaClient client,
                                                                 SubscriptionState subscription,
-                                                                ConsumerMetadata metadata) {
+                                                                ShareConsumerMetadata metadata) {
         return newShareConsumer(
                 time,
                 client,
@@ -313,7 +313,7 @@ public class KafkaShareConsumerMetricsTest {
     private KafkaShareConsumer<String, String> newShareConsumer(Time time,
                                                                 KafkaClient client,
                                                                 SubscriptionState subscriptions,
-                                                                ConsumerMetadata metadata,
+                                                                ShareConsumerMetadata metadata,
                                                                 String groupId,
                                                                 Optional<Deserializer<String>> valueDeserializerOpt) {
         String clientId = "mock-consumer";

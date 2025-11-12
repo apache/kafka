@@ -2685,9 +2685,9 @@ public class KafkaConsumerTest {
         }
         // poll once again, which should send the list-offset request
         consumer.seek(tp0, 50L);
-        consumer.poll(Duration.ofMillis(0));
         // requests: list-offset, fetch
         TestUtils.waitForCondition(() -> {
+            consumer.poll(Duration.ofMillis(0));
             boolean hasListOffsetRequest = requestGenerated(client, ApiKeys.LIST_OFFSETS);
             boolean hasFetchRequest = requestGenerated(client, ApiKeys.FETCH);
             return hasListOffsetRequest && hasFetchRequest;

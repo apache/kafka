@@ -17,7 +17,10 @@
   "apiKey": 87,
   "type": "response",
   "name": "ReadShareGroupStateSummaryResponse",
-  "validVersions": "0",
+  // Version 0 is the initial version (KIP-932).
+  //
+  // Version 1 introduces DeliveryCompleteCount (KIP-1226).
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   // - NOT_COORDINATOR (version 0+)
   // - COORDINATOR_NOT_AVAILABLE (version 0+)
@@ -44,7 +47,9 @@
         { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
           "about": "The leader epoch of the share-partition." },
         { "name": "StartOffset", "type": "int64", "versions": "0+",
-          "about": "The share-partition start offset." }
+          "about": "The share-partition start offset." },
+        { "name": "DeliveryCompleteCount", "type": "int32", "versions": "1+", "ignorable": "true", "default": "-1",
+          "about": "The number of offsets greater than or equal to share-partition start offset for which delivery has been completed." }
       ]}
     ]}
   ]

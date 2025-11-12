@@ -33,8 +33,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -75,8 +76,9 @@ public class HandlingSourceTopicDeletionIntegrationTest {
         CLUSTER.deleteTopics(INPUT_TOPIC, OUTPUT_TOPIC);
     }
 
-    @Test
-    public void shouldThrowErrorAfterSourceTopicDeleted(final TestInfo testName) throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldThrowErrorAfterSourceTopicDeleted(final String groupProtocol, final TestInfo testName) throws InterruptedException {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.String()))
             .to(OUTPUT_TOPIC, Produced.with(Serdes.Integer(), Serdes.String()));
@@ -91,6 +93,7 @@ public class HandlingSourceTopicDeletionIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
         streamsConfiguration.put(StreamsConfig.METADATA_MAX_AGE_CONFIG, 2000);
+        streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
 
         final Topology topology = builder.build();
         final AtomicBoolean calledUncaughtExceptionHandler1 = new AtomicBoolean(false);

@@ -31,6 +31,10 @@ public class ConsumerGroupMetadata {
     private final String memberId;
     private final Optional<String> groupInstanceId;
 
+    /**
+     * @deprecated Since 4.2, please use {@link KafkaConsumer#groupMetadata()} instead. This class will be an interface in Kafka 5.0.
+     */
+    @Deprecated(since = "4.2", forRemoval = true)
     public ConsumerGroupMetadata(String groupId,
                                  int generationId,
                                  String memberId,
@@ -41,6 +45,10 @@ public class ConsumerGroupMetadata {
         this.groupInstanceId = Objects.requireNonNull(groupInstanceId, "group.instance.id can't be null");
     }
 
+    /**
+     * @deprecated Since 4.2, please use {@link KafkaConsumer#groupMetadata()} instead. This class will be an interface in Kafka 5.0.
+     */
+    @Deprecated(since = "4.2", forRemoval = true)
     public ConsumerGroupMetadata(String groupId) {
         this(groupId,
             JoinGroupRequest.UNKNOWN_GENERATION_ID,
