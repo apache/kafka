@@ -1243,6 +1243,8 @@ org.apache.kafka.clients.consumer.internals.CommitRequestManagerTest:
 - testCommitSyncFailsWithCommitFailedExceptionIfUnknownMemberId
 - testCommitSyncFailsWithCommitFailedExceptionOnStaleMemberEpoch
 - testCommitSyncRetriedAfterExpectedRetriableException
+- testCommitSyncShouldSucceedWithTopicId
+- testCommitSyncShouldSucceedWithUnknownOffsetAndMetadata
 - testCommitSyncWithEmptyOffsets
 - testEnsureBackoffRetryOnOffsetCommitRequestTimeout
 - testEnsureCommitSensorRecordsMetric
