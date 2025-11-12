@@ -24,7 +24,7 @@ import java.lang.{Long => JLong}
 import java.time.{Duration => JDuration}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
-import java.util.{Collections, Locale, Optional, Properties}
+import java.util.{Collections, Optional, Properties}
 import java.{time, util}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
@@ -35,7 +35,7 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer
-import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
+import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, ConsumerRecords, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, SslConfigs, TopicConfig}
@@ -568,8 +568,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       try {
         consumer.assign(util.Set.of(tp))
         consumer.seekToBeginning(util.Set.of(tp))
-        val records = consumer.poll(time.Duration.ofSeconds(3))
-        assertEquals(expectedNumber, records.count())
+        def verifyRecordCount(records: ConsumerRecords[Array[Byte], Array[Byte]]): Boolean = {
+          expectedNumber == records.count()
+        }
+        TestUtils.pollRecordsUntilTrue(
+          consumer,
+          verifyRecordCount,
+          s"Consumer.poll() did not return the expected number of records ($expectedNumber) within the timeout",
+          pollTimeoutMs = 3000
+        )
       } finally consumer.close()
     }
 
@@ -2318,7 +2325,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
-
   /**
    * Test the consumer group APIs for member removal.
    */
@@ -2355,9 +2361,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       defaultConsumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
       defaultConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
       defaultConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
-      // We need to set internal.leave.group.on.close to validate dynamic member removal, but it only works for ClassicConsumer
-      // After KIP-1092, we can control dynamic member removal for both ClassicConsumer and AsyncConsumer
-      defaultConsumerConfig.setProperty("internal.leave.group.on.close", "false")
 
       val backgroundConsumerSet = new BackgroundConsumerSet(defaultConsumerConfig)
       groupInstanceSet.zip(topicSet).foreach { case (groupInstanceId, topic) =>
@@ -2406,14 +2409,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         var testGroupDescription = describeTestGroupResult.describedGroups().get(testGroupId).get()
         assertEquals(testGroupId, testGroupDescription.groupId)
         assertFalse(testGroupDescription.isSimpleConsumerGroup)
-
-        // Although we set `internal.leave.group.on.close` in the consumer, it only works for ClassicConsumer.
-        // After KIP-1092, we can control dynamic member removal in consumer.close()
-        if (groupProtocol == GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT)) {
-          assertEquals(3, testGroupDescription.members().size())
-        } else if (groupProtocol == GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT)) {
-          assertEquals(2, testGroupDescription.members().size())
-        }
+        assertEquals(2, testGroupDescription.members().size())
 
         // Test delete one static member
         removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId,
@@ -2426,11 +2422,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
         testGroupDescription = describeTestGroupResult.describedGroups().get(testGroupId).get()
 
-        if (groupProtocol == GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT)) {
-          assertEquals(2, testGroupDescription.members().size())
-        } else if (groupProtocol == GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT)) {
-          assertEquals(1, testGroupDescription.members().size())
-        }
+        assertEquals(1, testGroupDescription.members().size())
 
         // Delete all active members remaining
         removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions())
@@ -2601,7 +2593,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val shareGroup = createShareConsumer(configOverrides = shareGroupConfig)
 
     val streamsGroup = createStreamsGroup(
-      inputTopic = testTopicName,
+      inputTopics = Set(testTopicName),
+      changelogTopics = Set(testTopicName + "-changelog"),
       streamsGroupId = streamsGroupId
     )
 
@@ -2932,7 +2925,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       val tp1 = new TopicPartition(testTopicName, 0)
       val parts = client.listShareGroupOffsets(util.Map.of(testGroupId, new ListShareGroupOffsetsSpec().topicPartitions(util.List.of(tp1))))
-        .partitionsToOffsetAndMetadata(testGroupId)
+        .partitionsToOffsetInfo(testGroupId)
         .get()
       assertTrue(parts.containsKey(tp1))
       assertNull(parts.get(tp1))
@@ -2948,7 +2941,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val testTopicName = "test_topic"
     val testGroupId = "test_group_id"
     val testClientId = "test_client_id"
-    val fakeGroupId = "fake_group_id"
+    val nonexistentGroupId = "nonexistent_group_id"
     val fakeTopicName = "foo"
 
     val tp1 = new TopicPartition(testTopicName, 0)
@@ -2982,12 +2975,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         assertFutureThrows(classOf[GroupNotEmptyException], offsetAlterResult.partitionResult(tp1))
         assertFutureThrows(classOf[GroupNotEmptyException], offsetAlterResult.partitionResult(tp2))
 
-        // Test the fake group ID
-        val fakeAlterResult = client.alterShareGroupOffsets(fakeGroupId, util.Map.of(tp1, 0, tp2, 0))
+        // Test the non-existent group ID
+        val nonexistentAlterResult = client.alterShareGroupOffsets(nonexistentGroupId, util.Map.of(tp1, 0, tp2, 0))
 
-        assertFutureThrows(classOf[GroupIdNotFoundException], fakeAlterResult.all())
-        assertFutureThrows(classOf[GroupIdNotFoundException], fakeAlterResult.partitionResult(tp1))
-        assertFutureThrows(classOf[GroupIdNotFoundException], fakeAlterResult.partitionResult(tp2))
+        assertFutureThrows(classOf[UnknownTopicOrPartitionException], nonexistentAlterResult.all())
+        assertNull(nonexistentAlterResult.partitionResult(tp1).get())
+        assertFutureThrows(classOf[UnknownTopicOrPartitionException], nonexistentAlterResult.partitionResult(tp2))
       }
 
       // Test offset alter when group is empty
@@ -2998,10 +2991,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertFutureThrows(classOf[UnknownTopicOrPartitionException], offsetAlterResult.partitionResult(tp2))
 
       val parts = client.listShareGroupOffsets(util.Map.of(testGroupId, new ListShareGroupOffsetsSpec().topicPartitions(util.List.of(tp1))))
-        .partitionsToOffsetAndMetadata(testGroupId)
+        .partitionsToOffsetInfo(testGroupId)
         .get()
       assertTrue(parts.containsKey(tp1))
-      assertEquals(0, parts.get(tp1).offset())
+      assertEquals(0, parts.get(tp1).startOffset())
     } finally {
       Utils.closeQuietly(client, "adminClient")
     }
@@ -3038,14 +3031,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         // Test listShareGroupOffsets
         TestUtils.waitUntilTrue(() => {
           val parts = client.listShareGroupOffsets(util.Map.of(testGroupId, new ListShareGroupOffsetsSpec()))
-            .partitionsToOffsetAndMetadata(testGroupId)
+            .partitionsToOffsetInfo(testGroupId)
             .get()
           parts.containsKey(tp1) && parts.containsKey(tp2)
         }, "Expected the result contains all partitions.")
 
         // Test listShareGroupOffsets with listShareGroupOffsetsSpec
         val groupSpecs = util.Map.of(testGroupId, new ListShareGroupOffsetsSpec().topicPartitions(util.List.of(tp1)))
-        val parts = client.listShareGroupOffsets(groupSpecs).partitionsToOffsetAndMetadata(testGroupId).get()
+        val parts = client.listShareGroupOffsets(groupSpecs).partitionsToOffsetInfo(testGroupId).get()
         assertTrue(parts.containsKey(tp1))
         assertFalse(parts.containsKey(tp2))
       } finally {
@@ -4426,7 +4419,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     prepareRecords(testTopicName)
 
     val streams = createStreamsGroup(
-      inputTopic = testTopicName,
+      inputTopics = Set(testTopicName),
+      changelogTopics = Set(testTopicName + "-changelog"),
       streamsGroupId = streamsGroupId
     )
     streams.poll(JDuration.ofMillis(500L))
@@ -4436,7 +4430,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         val firstGroup = client.listGroups().all().get().stream()
           .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
         firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
-      }, "Stream group not stable yet")
+      }, "Streams group did not transition to STABLE before timeout")
 
       // Verify the describe call works correctly
       val describedGroups = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get()
@@ -4472,7 +4466,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client = Admin.create(config)
 
     val streams = createStreamsGroup(
-      inputTopic = testTopicName,
+      inputTopics = Set(testTopicName),
+      changelogTopics = Set(testTopicName + "-changelog"),
       streamsGroupId = streamsGroupId
     )
     streams.poll(JDuration.ofMillis(500L))
@@ -4482,7 +4477,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         val firstGroup = client.listGroups().all().get().stream()
           .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
         firstGroup.groupState().orElse(null) == GroupState.NOT_READY && firstGroup.groupId() == streamsGroupId
-      }, "Stream group not NOT_READY yet")
+      }, "Streams group did not transition to NOT_READY before timeout")
 
       // Verify the describe call works correctly
       val describedGroups = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get()
@@ -4505,6 +4500,55 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @Test
+  def testDescribeStreamsGroupsForStatelessTopology(): Unit = {
+    val streamsGroupId = "stream_group_id"
+    val testTopicName = "test_topic"
+    val testNumPartitions = 1
+
+    val config = createConfig
+    client = Admin.create(config)
+
+    prepareTopics(List(testTopicName), testNumPartitions)
+    prepareRecords(testTopicName)
+
+    val streams = createStreamsGroup(
+      inputTopics = Set(testTopicName),
+      streamsGroupId = streamsGroupId
+    )
+    streams.poll(JDuration.ofMillis(500L))
+
+    try {
+      TestUtils.waitUntilTrue(() => {
+        val firstGroup = client.listGroups().all().get().stream().findFirst().orElse(null)
+        firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
+      }, "Streams group did not transition to STABLE before timeout")
+
+      // Verify the describe call works correctly
+      val describedGroups = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get()
+      val group = describedGroups.get(streamsGroupId)
+      assertNotNull(group)
+      assertEquals(streamsGroupId, group.groupId())
+      assertFalse(group.members().isEmpty)
+      assertNotNull(group.subtopologies())
+      assertFalse(group.subtopologies().isEmpty)
+
+      // Verify the topology contains the expected source and sink topics
+      val subtopologies = group.subtopologies().asScala
+      assertTrue(subtopologies.exists(subtopology =>
+        subtopology.sourceTopics().contains(testTopicName)))
+
+      // Test describing a non-existing group
+      val nonExistingGroup = "non_existing_stream_group"
+      val describedNonExistingGroupResponse = client.describeStreamsGroups(util.List.of(nonExistingGroup))
+      assertFutureThrows(classOf[GroupIdNotFoundException], describedNonExistingGroupResponse.all())
+
+    } finally {
+      Utils.closeQuietly(streams, "streams")
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
+  
+  @Test
   def testDeleteStreamsGroups(): Unit = {
     val testTopicName = "test_topic"
     val testNumPartitions = 3
@@ -4526,7 +4570,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         val streamsGroupId = s"stream_group_id_$i"
 
         val streams = createStreamsGroup(
-          inputTopic = testTopicName,
+          inputTopics = Set(testTopicName),
+          changelogTopics = Set(testTopicName + "-changelog"),
           streamsGroupId = streamsGroupId,
         )
         streams.poll(JDuration.ofMillis(500L))
@@ -4599,7 +4644,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     prepareRecords(testTopicName)
 
     // Producer sends messages
-    for (i <- 1 to 20) {
+    val numRecords = 20
+
+    for (i <- 1 to numRecords) {
       TestUtils.waitUntilTrue(() => {
         val producerRecord = producer.send(
             new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
@@ -4608,24 +4655,35 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       }, "Fail to produce record to topic")
     }
 
+    val consumerConfig = new Properties();
+    consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+
     val streams = createStreamsGroup(
-      inputTopic = testTopicName,
+      configOverrides = consumerConfig,
+      inputTopics = Set(testTopicName),
+      changelogTopics = Set(testTopicName + "-changelog"),
       streamsGroupId = streamsGroupId,
     )
 
     try {
-      TestUtils.waitUntilTrue(() => {
-        streams.poll(JDuration.ofMillis(100L))
-        !streams.assignment().isEmpty
-      }, "Consumer not assigned to partitions")
+      var counter = 0
 
-      streams.poll(JDuration.ofMillis(1000L))
+      def verifyRecordCount(records: ConsumerRecords[Nothing, Nothing]): Boolean = {
+        counter += records.count()
+        counter >= numRecords
+      }
+      TestUtils.pollRecordsUntilTrue(
+        streams,
+        verifyRecordCount,
+        s"Consumer not assigned to partitions"
+      )
+
       streams.commitSync()
 
       TestUtils.waitUntilTrue(() => {
         val firstGroup = client.listGroups().all().get().stream().findFirst().orElse(null)
         firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
-      }, "Stream group not stable yet")
+      }, "Streams group did not transition to STABLE before timeout")
 
       val allTopicPartitions = client.listStreamsGroupOffsets(
         util.Map.of(streamsGroupId, new ListStreamsGroupOffsetsSpec())
@@ -4659,7 +4717,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     prepareTopics(List(testTopicName), testNumPartitions)
     prepareRecords(testTopicName)
     // Producer sends messages
-    for (i <- 1 to 20) {
+    val numRecords = 20
+
+    for (i <- 1 to numRecords) {
       TestUtils.waitUntilTrue(() => {
         val producerRecord = producer.send(
             new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
@@ -4668,18 +4728,29 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       }, "Fail to produce record to topic")
     }
 
+    val consumerConfig = new Properties();
+    consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+
     val streams = createStreamsGroup(
-      inputTopic = testTopicName,
+      configOverrides = consumerConfig,
+      inputTopics = Set(testTopicName),
+      changelogTopics = Set(testTopicName + "-changelog"),
       streamsGroupId = streamsGroupId,
     )
 
     try {
-      TestUtils.waitUntilTrue(() => {
-        streams.poll(JDuration.ofMillis(100L))
-        !streams.assignment().isEmpty
-      }, "Consumer not assigned to partitions")
+      var counter = 0
 
-      streams.poll(JDuration.ofMillis(1000L))
+      def verifyRecordCount(records: ConsumerRecords[Nothing, Nothing]): Boolean = {
+        counter += records.count()
+        counter >= numRecords
+      }
+      TestUtils.pollRecordsUntilTrue(
+        streams,
+        verifyRecordCount,
+        s"Consumer not assigned to partitions"
+      )
+
       streams.commitSync()
 
       // List streams group offsets
@@ -4736,7 +4807,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     prepareRecords(testTopicName)
 
     // Producer sends messages
-    for (i <- 1 to 20) {
+    val numRecords = 20
+
+    for (i <- 1 to numRecords) {
       TestUtils.waitUntilTrue(() => {
         val producerRecord = producer.send(
             new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
@@ -4745,18 +4818,29 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       }, "Fail to produce record to topic")
     }
 
+    val consumerConfig = new Properties();
+    consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+
     val streams = createStreamsGroup(
-      inputTopic = testTopicName,
+      configOverrides = consumerConfig,
+      inputTopics = Set(testTopicName),
+      changelogTopics = Set(testTopicName + "-changelog"),
       streamsGroupId = streamsGroupId,
     )
 
     try {
-      TestUtils.waitUntilTrue(() => {
-        streams.poll(JDuration.ofMillis(100L))
-        !streams.assignment().isEmpty
-      }, "Consumer not assigned to partitions")
+      var counter = 0
 
-      streams.poll(JDuration.ofMillis(1000L))
+      def verifyRecordCount(records: ConsumerRecords[Nothing, Nothing]): Boolean = {
+        counter += records.count()
+        counter >= numRecords
+      }
+      TestUtils.pollRecordsUntilTrue(
+        streams,
+        verifyRecordCount,
+        s"Consumer not assigned to partitions"
+      )
+
       streams.commitSync()
 
       // List streams group offsets

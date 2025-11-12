@@ -17,6 +17,7 @@
 
 package org.apache.kafka.image.loader.metrics;
 
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.controller.metrics.ControllerMetricsTestUtils;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.common.KRaftVersion;
@@ -44,6 +45,7 @@ public class MetadataLoaderMetricsTest {
         final AtomicInteger batchSize = new AtomicInteger(0);
         final AtomicReference<MetadataProvenance> provenance =
             new AtomicReference<>(MetadataProvenance.EMPTY);
+        final MockTime time = new MockTime();
         final MetadataLoaderMetrics metrics;
 
         FakeMetadataLoaderMetrics(MetricsRegistry registry) {
@@ -73,7 +75,8 @@ public class MetadataLoaderMetricsTest {
                     Set.of(
                         "kafka.server:type=MetadataLoader,name=CurrentControllerId",
                         "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
-                        "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount"
+                        "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount",
+                        "kafka.server:type=MetadataLoader,name=AvgIdleRatio"
                     )
                 );
 
@@ -86,6 +89,7 @@ public class MetadataLoaderMetricsTest {
                         "kafka.server:type=MetadataLoader,name=CurrentControllerId",
                         "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
                         "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount",
+                        "kafka.server:type=MetadataLoader,name=AvgIdleRatio",
                         "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=metadataVersion",
                         "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=kraftVersion"
                     )
@@ -180,7 +184,8 @@ public class MetadataLoaderMetricsTest {
                     Set.of(
                         "kafka.server:type=MetadataLoader,name=CurrentControllerId",
                         "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
-                        "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount"
+                        "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount",
+                        "kafka.server:type=MetadataLoader,name=AvgIdleRatio"
                     )
                 );
 
@@ -213,6 +218,7 @@ public class MetadataLoaderMetricsTest {
                         "kafka.server:type=MetadataLoader,name=CurrentControllerId",
                         "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
                         "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount",
+                        "kafka.server:type=MetadataLoader,name=AvgIdleRatio",
                         "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=metadataVersion",
                         "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=kraftVersion",
                         "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=transactionVersion"
@@ -227,6 +233,7 @@ public class MetadataLoaderMetricsTest {
                         "kafka.server:type=MetadataLoader,name=CurrentControllerId",
                         "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
                         "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount",
+                        "kafka.server:type=MetadataLoader,name=AvgIdleRatio",
                         "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=kraftVersion",
                         "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=metadataVersion"
                     )
@@ -244,6 +251,7 @@ public class MetadataLoaderMetricsTest {
                         "kafka.server:type=MetadataLoader,name=CurrentControllerId",
                         "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
                         "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount",
+                        "kafka.server:type=MetadataLoader,name=AvgIdleRatio",
                         "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=metadataVersion",
                         "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=kraftVersion",
                         "kafka.server:type=MetadataLoader,name=FinalizedLevel,featureName=transactionVersion"
@@ -252,6 +260,33 @@ public class MetadataLoaderMetricsTest {
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
                 Set.of());
+        } finally {
+            registry.shutdown();
+        }
+    }
+    @Test
+    public void testAvgIdleRatio() {
+        final double delta = 0.001;
+        MetricsRegistry registry = new MetricsRegistry();
+        try (FakeMetadataLoaderMetrics fakeMetrics = new FakeMetadataLoaderMetrics(registry)) {
+            @SuppressWarnings("unchecked")
+            Gauge<Double> avgIdleRatio = (Gauge<Double>) registry.allMetrics().get(metricName("MetadataLoader", "AvgIdleRatio"));
+
+            // No idle time recorded yet; returns default ratio of 1.0
+            assertEquals(1.0, avgIdleRatio.value(), delta);
+
+            // The first updateIdleTime call is ignored by the TimeRatio sensor.
+            // This establishes the baseline timestamp for subsequent measurements.
+            fakeMetrics.metrics.updateIdleTime(10, fakeMetrics.time.milliseconds());
+            fakeMetrics.time.sleep(40);
+            fakeMetrics.metrics.updateIdleTime(20, fakeMetrics.time.milliseconds());
+            // avgIdleRatio = (20ms idle) / (40ms interval) = 0.5
+            assertEquals(0.5, avgIdleRatio.value(), delta);
+
+            fakeMetrics.time.sleep(20);
+            fakeMetrics.metrics.updateIdleTime(1, fakeMetrics.time.milliseconds());
+            // avgIdleRatio = (1ms idle) / (20ms interval) = 0.05
+            assertEquals(0.05, avgIdleRatio.value(), delta);
         } finally {
             registry.shutdown();
         }

@@ -19,10 +19,17 @@ package org.apache.kafka.common.header.internals;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -265,4 +272,41 @@ public class RecordHeadersTest {
         assertArrayEquals(value.getBytes(), actual.value());
     }
 
+    private void assertRecordHeaderReadThreadSafe(RecordHeader header) {
+        int threadCount = 16;
+        CountDownLatch startLatch = new CountDownLatch(1);
+
+        var futures = IntStream.range(0, threadCount)
+            .mapToObj(i -> CompletableFuture.runAsync(() -> {
+                try {
+                    startLatch.await();
+                    header.key();
+                    header.value();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
+                }
+            })).collect(Collectors.toUnmodifiableList());
+
+        startLatch.countDown();
+        futures.forEach(CompletableFuture::join);
+    }
+
+    @RepeatedTest(100)
+    public void testRecordHeaderIsReadThreadSafe() throws Exception {
+        RecordHeader header = new RecordHeader(
+            ByteBuffer.wrap("key".getBytes(StandardCharsets.UTF_8)),
+            ByteBuffer.wrap("value".getBytes(StandardCharsets.UTF_8))
+        );
+        assertRecordHeaderReadThreadSafe(header);
+    }
+
+    @RepeatedTest(100)
+    public void testRecordHeaderWithNullValueIsReadThreadSafe() throws Exception {
+        RecordHeader header = new RecordHeader(
+            ByteBuffer.wrap("key".getBytes(StandardCharsets.UTF_8)),
+            null
+        );
+        assertRecordHeaderReadThreadSafe(header);
+    }
 }

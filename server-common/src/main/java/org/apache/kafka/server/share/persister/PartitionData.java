@@ -30,16 +30,18 @@ public class PartitionData implements
     private final int partition;
     private final int stateEpoch;
     private final long startOffset;
+    private final int deliveryCompleteCount;
     private final short errorCode;
     private final String errorMessage;
     private final int leaderEpoch;
     private final List<PersisterStateBatch> stateBatches;
 
-    public PartitionData(int partition, int stateEpoch, long startOffset, short errorCode,
+    public PartitionData(int partition, int stateEpoch, long startOffset, int deliveryCompleteCount, short errorCode,
                          String errorMessage, int leaderEpoch, List<PersisterStateBatch> stateBatches) {
         this.partition = partition;
         this.stateEpoch = stateEpoch;
         this.startOffset = startOffset;
+        this.deliveryCompleteCount = deliveryCompleteCount;
         this.errorCode = errorCode;
         this.leaderEpoch = leaderEpoch;
         this.errorMessage = errorMessage;
@@ -56,6 +58,10 @@ public class PartitionData implements
 
     public long startOffset() {
         return startOffset;
+    }
+
+    public int deliveryCompleteCount() {
+        return deliveryCompleteCount;
     }
 
     public short errorCode() {
@@ -82,6 +88,7 @@ public class PartitionData implements
         return Objects.equals(partition, that.partition) &&
                 Objects.equals(stateEpoch, that.stateEpoch) &&
                 Objects.equals(startOffset, that.startOffset) &&
+                Objects.equals(deliveryCompleteCount, that.deliveryCompleteCount) &&
                 Objects.equals(errorCode, that.errorCode) &&
                 Objects.equals(errorMessage, that.errorMessage) &&
                 Objects.equals(leaderEpoch, that.leaderEpoch) &&
@@ -90,13 +97,14 @@ public class PartitionData implements
 
     @Override
     public int hashCode() {
-        return Objects.hash(partition, stateEpoch, startOffset, errorCode, leaderEpoch, errorMessage, stateBatches);
+        return Objects.hash(partition, stateEpoch, startOffset, deliveryCompleteCount, errorCode, leaderEpoch, errorMessage, stateBatches);
     }
 
     public static class Builder {
         private int partition;
         private int stateEpoch;
         private long startOffset;
+        private int deliveryCompleteCount;
         private short errorCode;
         private String errorMessage;
         private int leaderEpoch;
@@ -114,6 +122,11 @@ public class PartitionData implements
 
         public Builder setStartOffset(long startOffset) {
             this.startOffset = startOffset;
+            return this;
+        }
+
+        public Builder setDeliveryCompleteCount(int deliveryCompleteCount) {
+            this.deliveryCompleteCount = deliveryCompleteCount;
             return this;
         }
 
@@ -138,7 +151,7 @@ public class PartitionData implements
         }
 
         public PartitionData build() {
-            return new PartitionData(partition, stateEpoch, startOffset, errorCode, errorMessage, leaderEpoch, stateBatches);
+            return new PartitionData(partition, stateEpoch, startOffset, deliveryCompleteCount, errorCode, errorMessage, leaderEpoch, stateBatches);
         }
     }
 
@@ -148,6 +161,7 @@ public class PartitionData implements
                 "partition=" + partition + "," +
                 "stateEpoch=" + stateEpoch + "," +
                 "startOffset=" + startOffset + "," +
+                "deliveryCompleteCount=" + deliveryCompleteCount + "," +
                 "errorCode=" + errorCode + "," +
                 "errorMessage=" + errorMessage + "," +
                 "leaderEpoch=" + leaderEpoch + "," +

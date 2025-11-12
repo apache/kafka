@@ -107,7 +107,7 @@ public class CoordinatorExecutorImpl<S extends CoordinatorShard<U>, U> implement
                         "the coordinator is not active.", key, exception.getMessage());
                 } else {
                     log.error("The write event for the task {} failed due to {}. Ignoring it. ",
-                        key, exception.getMessage());
+                        key, exception.getMessage(), exception);
                 }
 
                 return null;
