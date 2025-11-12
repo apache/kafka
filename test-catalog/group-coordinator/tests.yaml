@@ -554,6 +554,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testStreamsGroupDescribeOnShareGroup
 - testStreamsGroupDescribeWithErrors
 - testStreamsGroupDynamicConfigs
+- testStreamsGroupEndpointInformationIncludesNewMember
 - testStreamsGroupEndpointInformationOnlyWhenEpochGreater
 - testStreamsGroupEpochIncreaseWithAssignmentConfigChanges
 - testStreamsGroupHeartbeatOnConsumerGroup
