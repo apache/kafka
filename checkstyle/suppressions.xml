@@ -133,6 +133,7 @@
 
     <suppress checks="(WhitespaceAround|LocalVariableName|ImportControl|AvoidStarImport)"
               files="Murmur3Test.java"/>
+    <suppress checks="ImportControl" files="AbstractConfigTest.java"/>
 
     <!-- Connect -->
     <suppress checks="ClassFanOutComplexity"

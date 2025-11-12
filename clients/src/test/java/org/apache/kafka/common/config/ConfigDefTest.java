@@ -768,7 +768,7 @@ public class ConfigDefTest {
         assertEquals("Configuration 'test.config' values must not be duplicated.", exception1.getMessage());
         ConfigException exception2 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValuesAndEmptyListAndNull.ensureValid("test.config", List.of("")));
         assertEquals("Configuration 'test.config' values must not be empty.", exception2.getMessage());
-        ConfigException exception3 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValuesAndEmptyListAndNull.ensureValid("test.config", List.of("a", "", "a")));
+        ConfigException exception3 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValuesAndEmptyListAndNull.ensureValid("test.config", List.of("a", "", "b")));
         assertEquals("Configuration 'test.config' values must not be empty.", exception3.getMessage());
 
         ConfigDef.ValidList allowAnyNonDuplicateValuesAndNull = ConfigDef.ValidList.anyNonDuplicateValues(false, true);
@@ -780,7 +780,7 @@ public class ConfigDefTest {
         assertEquals("Configuration 'test.config' values must not be duplicated.", exception5.getMessage());
         ConfigException exception6 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValuesAndNull.ensureValid("test.config", List.of("")));
         assertEquals("Configuration 'test.config' values must not be empty.", exception6.getMessage());
-        ConfigException exception7 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValuesAndNull.ensureValid("test.config", List.of("a", "", "a")));
+        ConfigException exception7 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValuesAndNull.ensureValid("test.config", List.of("a", "", "b")));
         assertEquals("Configuration 'test.config' values must not be empty.", exception7.getMessage());
 
 
@@ -793,7 +793,7 @@ public class ConfigDefTest {
         assertEquals("Configuration 'test.config' values must not be duplicated.", exception9.getMessage());
         ConfigException exception10 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValuesAndEmptyList.ensureValid("test.config", List.of("")));
         assertEquals("Configuration 'test.config' values must not be empty.", exception10.getMessage());
-        ConfigException exception11 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValuesAndEmptyList.ensureValid("test.config", List.of("a", "", "a")));
+        ConfigException exception11 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValuesAndEmptyList.ensureValid("test.config", List.of("a", "", "b")));
         assertEquals("Configuration 'test.config' values must not be empty.", exception11.getMessage());
 
 
@@ -803,11 +803,11 @@ public class ConfigDefTest {
         assertEquals("Configuration 'test.config' values must not be null.", exception12.getMessage());
         ConfigException exception13 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValues.ensureValid("test.config", List.of()));
         assertEquals("Configuration 'test.config' must not be empty. Valid values include: any non-empty value", exception13.getMessage());
-        ConfigException exception14 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValues.ensureValid("test.config", List.of("a", "", "a")));
+        ConfigException exception14 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValues.ensureValid("test.config", List.of("a", "", "b")));
         assertEquals("Configuration 'test.config' values must not be empty.", exception14.getMessage());
         ConfigException exception15 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValues.ensureValid("test.config", List.of("")));
         assertEquals("Configuration 'test.config' values must not be empty.", exception15.getMessage());
-        ConfigException exception16 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValues.ensureValid("test.config", List.of("a", "", "a")));
+        ConfigException exception16 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValues.ensureValid("test.config", List.of("a", "", "b")));
         assertEquals("Configuration 'test.config' values must not be empty.", exception16.getMessage());
     }
 

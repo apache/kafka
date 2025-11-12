@@ -16,7 +16,11 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.clients.consumer.ConsumerInterceptor;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.provider.EnvVarConfigProvider;
@@ -42,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -292,22 +297,23 @@ public class AbstractConfigTest {
 
         try {
             Map<String, String> props = new HashMap<>();
-            String threeConsumerInterceptors = MockConsumerInterceptor.class.getName() + ", "
-                    + MockConsumerInterceptor.class.getName() + ", "
+            String threeConsumerInterceptors = CloseInterceptor.class.getName() + ", "
                     + MockConsumerInterceptor.class.getName();
             props.put(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, threeConsumerInterceptors);
             props.put("client.id", "test");
             TestConfig testConfig = new TestConfig(props);
 
-            MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(3);
+            MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(1);
             assertThrows(
                     Exception.class,
                     () -> testConfig.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, Object.class)
             );
-            assertEquals(3, MockConsumerInterceptor.CONFIG_COUNT.get());
-            assertEquals(3, MockConsumerInterceptor.CLOSE_COUNT.get());
+            assertEquals(1, MockConsumerInterceptor.CONFIG_COUNT.get());
+            assertEquals(1, MockConsumerInterceptor.CLOSE_COUNT.get());
+            assertEquals(1, CloseInterceptor.CLOSE_COUNT.get());
         } finally {
             MockConsumerInterceptor.resetCounters();
+            CloseInterceptor.resetCounters();
         }
     }
 
@@ -744,6 +750,35 @@ public class AbstractConfigTest {
             // Calling get() should have the side effect of marking that config as used.
             // this is required by testUnusedConfigs
             configs.get(EXTRA_CONFIG);
+        }
+    }
+
+    public static class CloseInterceptor implements ConsumerInterceptor<String, String> {
+
+        public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
+
+        @Override
+        public ConsumerRecords<String, String> onConsume(ConsumerRecords<String, String> records) {
+            return null;
+        }
+
+        @Override
+        public void onCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+            // no-op
+        }
+
+        @Override
+        public void close() {
+            CLOSE_COUNT.incrementAndGet();
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            // no-op
+        }
+
+        public static void resetCounters() {
+            CLOSE_COUNT.set(0);
         }
     }
 }
