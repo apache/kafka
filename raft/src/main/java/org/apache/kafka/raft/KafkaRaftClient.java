@@ -3376,6 +3376,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         if (voters.voterIds().contains(localReplicaKey.id())) {
             if (autoJoinEnable(state, currentTimeMs)) {
+                // When the bootstrap controller needs to update directory id,
+                // it should be removed and then rejoining to cluster
+                // In such a case, we should set canJoin to true, and it will
+                // be removed from the cluster, update directory id and rejoin
+                // to the cluster.
                 canJoin = true;
                 return true;
             }
