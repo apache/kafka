@@ -255,8 +255,6 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
         metrics = new StreamsMetricsImpl(
             new Metrics(metricConfig),
             threadId,
-            "processId",
-            "applicationId",
             Time.SYSTEM
         );
         TaskMetrics.droppedRecordsSensor(threadId, taskId.toString(), metrics);

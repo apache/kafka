@@ -106,7 +106,7 @@ class DefaultStateUpdaterTest {
 
     // need an auto-tick timer to work for draining with timeout
     private final Time time = new MockTime(1L);
-    private final StreamsMetricsImpl metrics = new StreamsMetricsImpl(new Metrics(time), "", "", "", time);
+    private final StreamsMetricsImpl metrics = new StreamsMetricsImpl(new Metrics(time), "", time);
     private final StreamsConfig config = new StreamsConfig(configProps(COMMIT_INTERVAL));
     private final ChangelogReader changelogReader = mock(ChangelogReader.class);
     private final TopologyMetadata topologyMetadata = unnamedTopology().build();
