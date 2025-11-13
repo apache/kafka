@@ -155,6 +155,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
+import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
@@ -1451,6 +1452,8 @@ public class GroupMetadataManager {
      * it owns any other tasks.
      *
      * @param ownedTasks    The tasks provided by the streams group member in the request.
+     *                      If this is null, it indicates that we do not know which
+     *                      tasks are owned by the member, so we return false.
      * @param assignedTasks The tasks that the member should have.
      *
      * @return A boolean indicating whether the owned partitions are a subset or not.
@@ -1466,6 +1469,32 @@ public class GroupMetadataManager {
             if (partitions == null) return false;
             for (Integer partitionId : ownedTasksOfSubtopology.partitions()) {
                 if (!partitions.contains(partitionId)) return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Checks whether all the tasks contained in the list are included in the provided assignment with epochs.
+     *
+     * @param ownedTasks              The tasks provided by the streams group member in the request.
+     *                                If this is null, it indicates that we do not know which
+     *                                tasks are owned by the member, so we return false.
+     * @param assignedTasksWithEpochs The tasks that the member should have (with epochs).
+     * @return A boolean indicating whether the owned partitions are a subset or not.
+     */
+    private static boolean areOwnedTasksContainedInAssignedTasksWithEpochs(
+        List<StreamsGroupHeartbeatRequestData.TaskIds> ownedTasks,
+        Map<String, Map<Integer, Integer>> assignedTasksWithEpochs
+    ) {
+        if (ownedTasks == null) return false;
+
+        for (StreamsGroupHeartbeatRequestData.TaskIds ownedTasksOfSubtopology : ownedTasks) {
+            Map<Integer, Integer> partitionsWithEpochs = assignedTasksWithEpochs.get(ownedTasksOfSubtopology.subtopologyId());
+            if (partitionsWithEpochs == null) return false;
+            for (Integer partitionId : ownedTasksOfSubtopology.partitions()) {
+                if (!partitionsWithEpochs.containsKey(partitionId)) return false;
             }
         }
 
@@ -1686,7 +1715,7 @@ public class GroupMetadataManager {
             // If the member comes with the previous epoch and has a subset of the current assignment partitions,
             // we accept it because the response with the bumped epoch may have been lost.
             if (receivedMemberEpoch != member.previousMemberEpoch()
-                || !areOwnedTasksContainedInAssignedTasks(ownedActiveTasks, member.assignedTasks().activeTasks())
+                || !areOwnedTasksContainedInAssignedTasksWithEpochs(ownedActiveTasks, member.assignedTasks().activeTasksWithEpochs())
                 || !areOwnedTasksContainedInAssignedTasks(ownedStandbyTasks, member.assignedTasks().standbyTasks())
                 || !areOwnedTasksContainedInAssignedTasks(ownedWarmupTasks, member.assignedTasks().warmupTasks())) {
                 throw new FencedMemberEpochException("The streams group member has a smaller member "
@@ -2060,10 +2089,12 @@ public class GroupMetadataManager {
         // 1. The member is joining.
         // 2. The member's assignment has been updated.
         if (memberEpoch == 0 || hasAssignedTasksChanged(member, updatedMember)) {
-            response.setActiveTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().activeTasks()));
+            response.setActiveTasks(createStreamsGroupHeartbeatResponseTaskIdsFromEpochs(updatedMember.assignedTasks().activeTasksWithEpochs()));
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().standbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().warmupTasks()));
-            if (memberEpoch != 0 || !updatedMember.assignedTasks().isEmpty()) {
+            if (updatedMember.userEndpoint().isPresent()) {
+                // If no user endpoint is defined, there is no change in the endpoint information.
+                // Otherwise, bump the endpoint information epoch
                 group.setEndpointInformationEpoch(group.endpointInformationEpoch() + 1);
             }
         }
@@ -2071,7 +2102,11 @@ public class GroupMetadataManager {
         if (group.endpointInformationEpoch() != memberEndpointEpoch) {
             response.setPartitionsByUserEndpoint(maybeBuildEndpointToPartitions(group, updatedMember));
         }
-        response.setEndpointInformationEpoch(group.endpointInformationEpoch());
+        if (groups.containsKey(group.groupId())) {
+            // If we just created the group, the endpoint information epoch will not be persisted, so return epoch 0.
+            // Otherwise, return the bumped epoch.
+            response.setEndpointInformationEpoch(group.endpointInformationEpoch());
+        }
 
         Map<String, CreatableTopic> internalTopicsToBeCreated = Collections.emptyMap();
         if (updatedConfiguredTopology.topicConfigurationException().isPresent()) {
@@ -2165,7 +2200,7 @@ public class GroupMetadataManager {
         }
     }
 
-    private List<StreamsGroupHeartbeatResponseData.TaskIds> createStreamsGroupHeartbeatResponseTaskIds(final Map<String, Set<Integer>> taskIds) {
+    private static List<StreamsGroupHeartbeatResponseData.TaskIds> createStreamsGroupHeartbeatResponseTaskIds(final Map<String, Set<Integer>> taskIds) {
         return taskIds.entrySet().stream()
             .map(entry -> new StreamsGroupHeartbeatResponseData.TaskIds()
                 .setSubtopologyId(entry.getKey())
@@ -2173,24 +2208,34 @@ public class GroupMetadataManager {
             .collect(Collectors.toList());
     }
 
+    private static List<StreamsGroupHeartbeatResponseData.TaskIds> createStreamsGroupHeartbeatResponseTaskIdsFromEpochs(
+        final Map<String, Map<Integer, Integer>> taskIdsWithEpochs
+    ) {
+        return taskIdsWithEpochs.entrySet().stream()
+            .map(entry -> new StreamsGroupHeartbeatResponseData.TaskIds()
+                .setSubtopologyId(entry.getKey())
+                .setPartitions(entry.getValue().keySet().stream().sorted().toList()))
+            .collect(Collectors.toList());
+    }
+
     private List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> maybeBuildEndpointToPartitions(StreamsGroup group,
                                                                                                         StreamsGroupMember updatedMember) {
         List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList = new ArrayList<>();
         final Map<String, StreamsGroupMember> members = group.members();
+        // Build endpoint information for all members except the updated member
         for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
-            final String memberIdForAssignment = entry.getKey();
-            final Optional<StreamsGroupMemberMetadataValue.Endpoint> endpointOptional = members.get(memberIdForAssignment).userEndpoint();
-            StreamsGroupMember groupMember = updatedMember != null && memberIdForAssignment.equals(updatedMember.memberId()) ? updatedMember : members.get(memberIdForAssignment);
-            if (endpointOptional.isPresent()) {
-                final StreamsGroupMemberMetadataValue.Endpoint endpoint = endpointOptional.get();
-                final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
-                responseEndpoint.setHost(endpoint.host());
-                responseEndpoint.setPort(endpoint.port());
-                StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = EndpointToPartitionsManager.endpointToPartitions(groupMember, responseEndpoint, group, metadataImage);
-                endpointToPartitionsList.add(endpointToPartitions);
+            if (updatedMember != null && entry.getKey().equals(updatedMember.memberId())) {
+                continue;
             }
+            EndpointToPartitionsManager.maybeEndpointToPartitions(entry.getValue(), group, metadataImage)
+                .ifPresent(endpointToPartitionsList::add);
         }
-        return endpointToPartitionsList.isEmpty() ? null : endpointToPartitionsList;
+        // Always build endpoint information for the updated member (whether new or existing)
+        if (updatedMember != null) {
+            EndpointToPartitionsManager.maybeEndpointToPartitions(updatedMember, group, metadataImage)
+                .ifPresent(endpointToPartitionsList::add);
+        }
+        return endpointToPartitionsList;
     }
 
     /**
@@ -3418,7 +3463,7 @@ public class GroupMetadataManager {
     ) {
         if (exception != null) {
             log.error("[GroupId {}] Couldn't update regular expression due to: {}",
-                groupId, exception.getMessage());
+                groupId, exception.getMessage(), exception);
             return new CoordinatorResult<>(List.of());
         }
 
@@ -3894,7 +3939,7 @@ public class GroupMetadataManager {
         } catch (PartitionAssignorException ex) {
             String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
                 groupEpoch, ex.getMessage());
-            log.error("[GroupId {}] {}.", group.groupId(), msg);
+            log.error("[GroupId {}] {}.", group.groupId(), msg, ex);
             throw new UnknownServerException(msg, ex);
         }
     }
@@ -3955,7 +4000,7 @@ public class GroupMetadataManager {
         } catch (PartitionAssignorException ex) {
             String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
                 groupEpoch, ex.getMessage());
-            log.error("[GroupId {}] {}.", group.groupId(), msg);
+            log.error("[GroupId {}] {}.", group.groupId(), msg, ex);
             throw new UnknownServerException(msg, ex);
         }
     }
@@ -4014,7 +4059,7 @@ public class GroupMetadataManager {
         } catch (TaskAssignorException ex) {
             String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
                 groupEpoch, ex.getMessage());
-            log.error("[GroupId {}] {}.", group.groupId(), msg);
+            log.error("[GroupId {}] {}.", group.groupId(), msg, ex);
             throw new UnknownServerException(msg, ex);
         }
     }
@@ -5726,8 +5771,8 @@ public class GroupMetadataManager {
             StreamsGroupMember newMember = new StreamsGroupMember.Builder(oldMember)
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
                 .setPreviousMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
-                .setAssignedTasks(TasksTuple.EMPTY)
-                .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
+                .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
                 .build();
             streamsGroup.updateMember(newMember);
         }

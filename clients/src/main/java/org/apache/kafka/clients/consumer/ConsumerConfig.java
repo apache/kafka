@@ -380,6 +380,16 @@ public class ConsumerConfig extends AbstractConfig {
             " If set to <code>explicit</code>, the acknowledgement mode of the consumer is explicit and it must use" +
             " <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records.";
 
+    /**
+     * <code>share.acquire.mode</code>
+     */
+    public static final String SHARE_ACQUIRE_MODE_CONFIG = "share.acquire.mode";
+    private static final String SHARE_ACQUIRE_MODE_DOC = "Controls the acquire mode for a share consumer." +
+            " If set to <code>record_limit</code>, the number of records returned in each poll() will not exceed the value of <code>max.poll.records</code>." +
+            " If set to <code>batch_optimized</code>, the number of records returned in each poll() call may exceed <code>max.poll.records</code>" +
+            " to align with batch boundaries for optimization.";
+    public static final String DEFAULT_SHARE_ACQUIRE_MODE = ShareAcquireMode.BATCH_OPTIMIZED.name();
+
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
     /**
@@ -387,7 +397,8 @@ public class ConsumerConfig extends AbstractConfig {
      */
     private static final List<String> CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
             GROUP_REMOTE_ASSIGNOR_CONFIG,
-            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
+            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
+            SHARE_ACQUIRE_MODE_CONFIG
     );
 
     /**
@@ -397,7 +408,8 @@ public class ConsumerConfig extends AbstractConfig {
             PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
             HEARTBEAT_INTERVAL_MS_CONFIG,
             SESSION_TIMEOUT_MS_CONFIG,
-            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
+            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
+            SHARE_ACQUIRE_MODE_CONFIG
     );
 
     static {
@@ -683,6 +695,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         new ShareAcknowledgementMode.Validator(),
                                         Importance.MEDIUM,
                                         ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_DOC)
+                                .define(ConsumerConfig.SHARE_ACQUIRE_MODE_CONFIG,
+                                        Type.STRING,
+                                        DEFAULT_SHARE_ACQUIRE_MODE,
+                                        new ShareAcquireMode.Validator(),
+                                        Importance.MEDIUM,
+                                        ConsumerConfig.SHARE_ACQUIRE_MODE_DOC)
                                 .define(CONFIG_PROVIDERS_CONFIG,
                                         ConfigDef.Type.LIST,
                                         List.of(),

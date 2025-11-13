@@ -14,20 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.metadata.LeaderAndIsr;
+package org.apache.kafka.server.telemetry;
+
+import org.apache.kafka.common.metrics.MetricsReporter;
 
 /**
- * Represents a partition state currently undergoing a change, such as an ISR expansion or shrinking.
+ * A {@link MetricsReporter} may implement this interface to indicate support for collecting client
+ * telemetry on the server side using the new exporter API.
  */
-public interface PendingPartitionChange extends PartitionState {
+public interface ClientTelemetryExporterProvider {
+
     /**
-     * Returns the last committed partition state before this pending change.
+     * Called by the broker to fetch instance of {@link ClientTelemetryExporter}.
+     * <p>
+     * This instance may be cached by the broker.
+     *
+     * @return broker side instance of {@link ClientTelemetryExporter}
      */
-    CommittedPartitionState lastCommittedState();
-    /**
-     * Returns the LeaderAndIsr object sent to the controller for this pending change.
-     */
-    LeaderAndIsr sentLeaderAndIsr();
+    ClientTelemetryExporter clientTelemetryExporter();
 }
