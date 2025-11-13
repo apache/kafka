@@ -210,11 +210,11 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         }
     }
 
-     public <T> void addClientLevelMutableMetric(final String name,
+    public <T> void addClientLevelMutableMetric(final String name,
                                                 final String description,
                                                 final RecordingLevel recordingLevel,
                                                 final Gauge<T> valueProvider) {
-         addClientLevelMutableMetric(name, description, Collections.emptyMap(), recordingLevel, valueProvider);
+        addClientLevelMutableMetric(name, description, Collections.emptyMap(), recordingLevel, valueProvider);
     }
 
     public <T> void addClientLevelMutableMetric(final String name,
