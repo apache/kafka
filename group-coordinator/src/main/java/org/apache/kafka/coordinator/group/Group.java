@@ -71,7 +71,8 @@ public interface Group {
         
         static String[] documentValidValues() {
             return Arrays.stream(GroupType.values())
-                .filter(type -> type != UNKNOWN)
+                // This config no longer controls share group enablement
+                .filter(type -> type != UNKNOWN && type != SHARE) //
                 .map(GroupType::toString)
                 .toArray(String[]::new);
         }
