@@ -1637,7 +1637,7 @@ KStream&lt;String, String&gt; joined = left.leftJoin(right,
                                                 </div></blockquote>
                                         </li>
                                         <li><p class="first">For each input record on the left side that does not have any match on the right side, the <code class="docutils literal"><span class="pre">ValueJoiner</span></code> will be called with <code class="docutils literal"><span class="pre">ValueJoiner#apply(leftRecord.value,</span> <span class="pre">null)</span></code>;
-                                            this explains the row with timestamp=60 and timestampe=80 in the table below, which lists <code class="docutils literal"><span class="pre">[E,</span> <span class="pre">null]</span></code> and <code class="docutils literal"><span class="pre">[F,</span> <span class="pre">null]</span></code>in the LEFT JOIN column.
+                                            this explains the row with timestamp=60 and timestamp=80 in the table below, which lists <code class="docutils literal"><span class="pre">[E,</span> <span class="pre">null]</span></code> and <code class="docutils literal"><span class="pre">[F,</span> <span class="pre">null]</span></code>in the LEFT JOIN column.
                                             Note that these left results are emitted after the specified grace period passed. <strong>Caution:</strong> using the deprecated <code class="docutils literal"><span class="pre">JoinWindows.of(...).grace(...)</span></code> API might result in eagerly emitted spurious left results.</p>
                                         </li>
                                     </ul>
