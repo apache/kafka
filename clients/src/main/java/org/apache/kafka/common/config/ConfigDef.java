@@ -546,8 +546,10 @@ public class ConfigDef {
         if (!allowDuplicateValueInList && parsedValue instanceof List) {
             List<?> originalListValue = (List<?>) parsedValue;
             parsedValue = originalListValue.stream().distinct().collect(Collectors.toList());
-            LOGGER.warn("Duplicate configuration \"{}\" values are found. Duplicates will be removed. The original value " +
-                            "is: {}, the updated value is: {}", key.name, originalListValue, parsedValue);
+            if (originalListValue.size() != ((List<?>) parsedValue).size()) {
+                LOGGER.warn("Duplicate configuration \"{}\" values are found. Duplicates will be removed. The original value " +
+                        "is: {}, the updated value is: {}", key.name, originalListValue, parsedValue);
+            }
         }
         if (key.validator != null) {
             key.validator.ensureValid(key.name, parsedValue);
