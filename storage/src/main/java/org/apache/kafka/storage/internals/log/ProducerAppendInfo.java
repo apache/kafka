@@ -88,7 +88,7 @@ public class ProducerAppendInfo {
 
     private void maybeValidateDataBatch(short producerEpoch, int firstSeq, long offset) {
         // Default transaction version 0 is passed for data batches.
-        checkProducerEpoch(producerEpoch, offset, 0);
+        checkProducerEpoch(producerEpoch, offset, (short) 0);
         if (origin == AppendOrigin.CLIENT) {
             checkSequence(producerEpoch, firstSeq, offset);
         }
@@ -112,9 +112,8 @@ public class ProducerAppendInfo {
      * @param offset the offset where the marker will be written
      * @param transactionVersion the transaction version (0/1 = legacy, 2+ = TV2)
      */
-    private void checkProducerEpoch(short producerEpoch, long offset, int transactionVersion) {
+    private void checkProducerEpoch(short producerEpoch, long offset, short transactionVersion) {
         short current = updatedEntry.producerEpoch();
-        short marker = producerEpoch;
 
         // Legacy (TV0/TV1): Markers use the same epoch as transactional records, so we accept markerEpoch >= currentEpoch.
         // This creates a correctness gap: leaders cannot distinguish between active markers and late/duplicate ones.
@@ -126,8 +125,8 @@ public class ProducerAppendInfo {
         // Any marker with markerEpoch <= currentEpoch is a late or duplicate marker and must be rejected.
         // This closes the long-standing gap and prevents multiple transactions from being conflated under the same epoch.(KIP-1228)
         if (transactionVersion >= 2) {
-            if (marker <= current) {
-                String message = "Reject late/dup TV2 marker: markerEpoch=" + marker + " <= currentEpoch=" + current +
+            if (producerEpoch <= current) {
+                String message = "Reject late/dup TV2 marker: markerEpoch=" + producerEpoch + " <= currentEpoch=" + current +
                         " for producer " + producerId + " at offset " + offset + " in " + topicPartition;
                 if (origin == AppendOrigin.REPLICATION) {
                     log.warn(message);
@@ -136,7 +135,7 @@ public class ProducerAppendInfo {
                 }
             }
         } else {
-            if (marker < current) {
+            if (producerEpoch < current) {
                 String message = "Epoch of producer " + producerId + " at offset " + offset + " in " + topicPartition +
                         " is " + producerEpoch + ", " + "which is smaller than the last seen epoch " + updatedEntry.producerEpoch();
 
@@ -197,10 +196,10 @@ public class ProducerAppendInfo {
     }
 
     public Optional<CompletedTxn> append(RecordBatch batch, Optional<LogOffsetMetadata> firstOffsetMetadataOpt) {
-        return append(batch, firstOffsetMetadataOpt, 0);
+        return append(batch, firstOffsetMetadataOpt, (short) 0);
     }
 
-    public Optional<CompletedTxn> append(RecordBatch batch, Optional<LogOffsetMetadata> firstOffsetMetadataOpt, int transactionVersion) {
+    public Optional<CompletedTxn> append(RecordBatch batch, Optional<LogOffsetMetadata> firstOffsetMetadataOpt, short transactionVersion) {
         if (batch.isControlBatch()) {
             Iterator<Record> recordIterator = batch.iterator();
             if (recordIterator.hasNext()) {
@@ -260,7 +259,7 @@ public class ProducerAppendInfo {
             short producerEpoch,
             long offset,
             long timestamp,
-            int transactionVersion) {
+            short transactionVersion) {
         checkProducerEpoch(producerEpoch, offset, transactionVersion);
         checkCoordinatorEpoch(endTxnMarker, offset);
 

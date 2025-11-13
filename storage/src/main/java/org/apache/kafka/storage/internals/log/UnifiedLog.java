@@ -997,7 +997,7 @@ public class UnifiedLog implements AutoCloseable {
      * @param leaderEpoch the epoch of the replica appending
      */
     public LogAppendInfo appendAsLeader(MemoryRecords records, int leaderEpoch) throws IOException {
-        return appendAsLeader(records, leaderEpoch, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, 0);
+        return appendAsLeader(records, leaderEpoch, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, (short) 0);
     }
 
     /**
@@ -1008,7 +1008,7 @@ public class UnifiedLog implements AutoCloseable {
      * @param origin Declares the origin of the append which affects required validations
      */
     public LogAppendInfo appendAsLeader(MemoryRecords records, int leaderEpoch, AppendOrigin origin) throws IOException {
-        return appendAsLeader(records, leaderEpoch, origin, RequestLocal.noCaching(), VerificationGuard.SENTINEL, 0);
+        return appendAsLeader(records, leaderEpoch, origin, RequestLocal.noCaching(), VerificationGuard.SENTINEL, (short) 0);
     }
 
     /**
@@ -1029,7 +1029,7 @@ public class UnifiedLog implements AutoCloseable {
                                         AppendOrigin origin,
                                         RequestLocal requestLocal,
                                         VerificationGuard verificationGuard,
-                                        int transactionVersion) {
+                                        short transactionVersion) {
         boolean validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER;
         return append(records, origin, validateAndAssignOffsets, leaderEpoch, Optional.of(requestLocal), verificationGuard, false, RecordBatch.CURRENT_MAGIC_VALUE, transactionVersion);
     }
@@ -1046,7 +1046,7 @@ public class UnifiedLog implements AutoCloseable {
      */
     public LogAppendInfo appendAsLeaderWithRecordVersion(MemoryRecords records, int leaderEpoch, RecordVersion recordVersion) {
         return append(records, AppendOrigin.CLIENT, true, leaderEpoch, Optional.of(RequestLocal.noCaching()),
-                VerificationGuard.SENTINEL, false, recordVersion.value, 0);
+                VerificationGuard.SENTINEL, false, recordVersion.value, (short) 0);
     }
 
     /**
@@ -1066,7 +1066,7 @@ public class UnifiedLog implements AutoCloseable {
                       VerificationGuard.SENTINEL,
                       true,
                       RecordBatch.CURRENT_MAGIC_VALUE,
-                      0);
+                      (short) 0);
     }
 
     /**
@@ -1098,7 +1098,7 @@ public class UnifiedLog implements AutoCloseable {
                                  VerificationGuard verificationGuard,
                                  boolean ignoreRecordSize,
                                  byte toMagic,
-                                 int transactionVersion) {
+                                 short transactionVersion) {
         // We want to ensure the partition metadata file is written to the log dir before any log data is written to disk.
         // This will ensure that any log data can be recovered with the correct topic ID in the case of failure.
         maybeFlushMetadataFile();
@@ -1366,7 +1366,7 @@ public class UnifiedLog implements AutoCloseable {
                                                                                   MemoryRecords records,
                                                                                   AppendOrigin origin,
                                                                                   VerificationGuard requestVerificationGuard,
-                                                                                  int transactionVersion) {
+                                                                                  short transactionVersion) {
         Map<Long, ProducerAppendInfo> updatedProducers = new HashMap<>();
         List<CompletedTxn> completedTxns = new ArrayList<>();
         int relativePositionInSegment = appendOffsetMetadata.relativePositionInSegment;
@@ -2617,7 +2617,7 @@ public class UnifiedLog implements AutoCloseable {
                         loadedProducers,
                         Optional.empty(),
                         AppendOrigin.REPLICATION,
-                        0);
+                        (short) 0);
                 maybeCompletedTxn.ifPresent(completedTxns::add);
             }
         });
@@ -2630,7 +2630,7 @@ public class UnifiedLog implements AutoCloseable {
                                                          Map<Long, ProducerAppendInfo> producers,
                                                          Optional<LogOffsetMetadata> firstOffsetMetadata,
                                                          AppendOrigin origin,
-                                                         int transactionVersion) {
+                                                         short transactionVersion) {
         long producerId = batch.producerId();
         ProducerAppendInfo appendInfo = producers.computeIfAbsent(producerId, __ -> producerStateManager.prepareUpdate(producerId, origin));
         Optional<CompletedTxn> completedTxn = appendInfo.append(batch, firstOffsetMetadata, transactionVersion);

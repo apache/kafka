@@ -38,14 +38,14 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
         private final int coordinatorEpoch;
         private final TransactionResult result;
         private final List<TopicPartition> partitions;
-        private final int transactionVersion;
+        private final short transactionVersion;
 
         public TxnMarkerEntry(long producerId,
                               short producerEpoch,
                               int coordinatorEpoch,
                               TransactionResult result,
                               List<TopicPartition> partitions,
-                              int transactionVersion) {
+                              short transactionVersion) {
             this.producerId = producerId;
             this.producerEpoch = producerEpoch;
             this.coordinatorEpoch = coordinatorEpoch;
@@ -74,20 +74,20 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
             return partitions;
         }
 
-        public int transactionVersion() {
+        public short transactionVersion() {
             return transactionVersion;
         }
 
         @Override
         public String toString() {
             return "TxnMarkerEntry{" +
-                       "producerId=" + producerId +
-                       ", producerEpoch=" + producerEpoch +
-                       ", coordinatorEpoch=" + coordinatorEpoch +
-                       ", result=" + result +
-                       ", partitions=" + partitions +
-                       ", transactionVersion=" + transactionVersion +
-                       '}';
+                "producerId=" + producerId +
+                ", producerEpoch=" + producerEpoch +
+                ", coordinatorEpoch=" + coordinatorEpoch +
+                ", result=" + result +
+                ", partitions=" + partitions +
+                ", transactionVersion=" + transactionVersion +
+                '}';
         }
 
         @Override
@@ -96,11 +96,11 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
             if (o == null || getClass() != o.getClass()) return false;
             final TxnMarkerEntry that = (TxnMarkerEntry) o;
             return producerId == that.producerId &&
-                       producerEpoch == that.producerEpoch &&
-                       coordinatorEpoch == that.coordinatorEpoch &&
-                       result == that.result &&
-                       transactionVersion == that.transactionVersion &&
-                       Objects.equals(partitions, that.partitions);
+                producerEpoch == that.producerEpoch &&
+                coordinatorEpoch == that.coordinatorEpoch &&
+                result == that.result &&
+                transactionVersion == that.transactionVersion &&
+                Objects.equals(partitions, that.partitions);
         }
 
         @Override
@@ -118,6 +118,11 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
             this.data = data;
         }
 
+        /**
+         * Creates a builder with the given markers. Transaction versions are read from each marker entry.
+         *
+         * @param markers the list of transaction marker entries
+         */
         public Builder(final List<TxnMarkerEntry> markers) {
             // version will be determined at build time based on broker capabilities
             super(ApiKeys.WRITE_TXN_MARKERS);
@@ -126,18 +131,24 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
                 final Map<String, WritableTxnMarkerTopic> topicMap = new HashMap<>();
                 for (TopicPartition topicPartition : marker.partitions) {
                     WritableTxnMarkerTopic topic = topicMap.getOrDefault(topicPartition.topic(),
-                                                                         new WritableTxnMarkerTopic()
-                                                                             .setName(topicPartition.topic()));
+                        new WritableTxnMarkerTopic()
+                            .setName(topicPartition.topic()));
                     topic.partitionIndexes().add(topicPartition.partition());
                     topicMap.put(topicPartition.topic(), topic);
                 }
 
-                dataMarkers.add(new WritableTxnMarker()
-                                    .setProducerId(marker.producerId)
-                                    .setProducerEpoch(marker.producerEpoch)
-                                    .setCoordinatorEpoch(marker.coordinatorEpoch)
-                                    .setTransactionResult(marker.transactionResult().id)
-                                    .setTopics(new ArrayList<>(topicMap.values())));
+                WritableTxnMarker writableMarker = new WritableTxnMarker()
+                    .setProducerId(marker.producerId)
+                    .setProducerEpoch(marker.producerEpoch)
+                    .setCoordinatorEpoch(marker.coordinatorEpoch)
+                    .setTransactionResult(marker.transactionResult().id)
+                    .setTopics(new ArrayList<>(topicMap.values()));
+
+                // Set transaction version from the marker entry (KIP-1228).
+                // Serialization will automatically omit TransactionVersion field in version 1 since it's ignorable.
+                writableMarker.setTransactionVersion((byte) marker.transactionVersion);
+
+                dataMarkers.add(writableMarker);
             }
             this.data = new WriteTxnMarkersRequestData().setMarkers(dataMarkers);
         }
@@ -188,11 +199,11 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
                 }
             }
             // Read transactionVersion from raw marker data (only available in version 2+)
-            int transactionVersion = 0;
+            short transactionVersion = 0;
             if (version() >= 2) {
-                Byte tv = markerEntry.transactionVersion();
-                transactionVersion = (tv != null) ? tv.intValue() : 0;
+                transactionVersion = markerEntry.transactionVersion();
             }
+
             markers.add(new TxnMarkerEntry(
                 markerEntry.producerId(),
                 markerEntry.producerEpoch(),
