@@ -246,14 +246,14 @@ public class AbstractCoordinatorTest {
         assertEquals(3.0d, getMetric("rebalance-latency-avg").metricValue());
         assertEquals(6.0d, getMetric("rebalance-latency-max").metricValue());
         assertEquals(9.0d, getMetric("rebalance-latency-total").metricValue());
-        assertEquals(360.0d, getMetric("rebalance-rate-per-hour").metricValue());
+        assertEquals(3.0d, getMetric("rebalance-rate-per-hour").metricValue());
         assertEquals(3.0d, getMetric("rebalance-total").metricValue());
 
         metrics.sensor("failed-rebalance").record(1.0d);
         metrics.sensor("failed-rebalance").record(6.0d);
         metrics.sensor("failed-rebalance").record(2.0d);
 
-        assertEquals(360.0d, getMetric("failed-rebalance-rate-per-hour").metricValue());
+        assertEquals(3.0d, getMetric("failed-rebalance-rate-per-hour").metricValue());
         assertEquals(3.0d, getMetric("failed-rebalance-total").metricValue());
 
         assertEquals(-1.0d, getMetric("last-rebalance-seconds-ago").metricValue());
@@ -261,6 +261,16 @@ public class AbstractCoordinatorTest {
         assertEquals(0.0d, getMetric("last-rebalance-seconds-ago").metricValue());
         mockTime.sleep(10 * 1000L);
         assertEquals(10.0d, getMetric("last-rebalance-seconds-ago").metricValue());
+
+        long windowLength = metrics.config().samples() * 3600_000L;
+        mockTime.sleep(windowLength - 10 * 1000L - 1);
+        assertEquals(3d / metrics.config().samples(), (double) getMetric("failed-rebalance-rate-per-hour").metricValue(), 0.1d);
+        assertEquals(3d / metrics.config().samples(), (double) getMetric("rebalance-rate-per-hour").metricValue(), 0.1d);
+
+        // WindowLength have passed, triggering metric reset
+        mockTime.sleep(1L);
+        assertEquals(0d, getMetric("failed-rebalance-rate-per-hour").metricValue());
+        assertEquals(0d, getMetric("rebalance-rate-per-hour").metricValue());
     }
 
     private KafkaMetric getMetric(final String name) {

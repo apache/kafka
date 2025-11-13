@@ -34,12 +34,14 @@ import java.util.Objects;
 public class ShareGroupOffset {
     public static final int NO_TIMESTAMP = 0;
     public static final int UNINITIALIZED_EPOCH = 0;
+    public static final int UNINITIALIZED_DELIVERY_COMPLETE_COUNT = -1;
     public static final int DEFAULT_EPOCH = 0;
 
     private final int snapshotEpoch;
     private final int stateEpoch;
     private final int leaderEpoch;
     private final long startOffset;
+    private final int deliveryCompleteCount;
     private final List<PersisterStateBatch> stateBatches;
     private final long createTimestamp;
     private final long writeTimestamp;
@@ -49,6 +51,7 @@ public class ShareGroupOffset {
         int stateEpoch,
         int leaderEpoch,
         long startOffset,
+        int deliveryCompleteCount,
         List<PersisterStateBatch> stateBatches,
         long createTimestamp,
         long writeTimestamp
@@ -57,6 +60,7 @@ public class ShareGroupOffset {
         this.stateEpoch = stateEpoch;
         this.leaderEpoch = leaderEpoch;
         this.startOffset = startOffset;
+        this.deliveryCompleteCount = deliveryCompleteCount;
         this.stateBatches = stateBatches;
         this.createTimestamp = createTimestamp;
         this.writeTimestamp = writeTimestamp;
@@ -76,6 +80,10 @@ public class ShareGroupOffset {
 
     public long startOffset() {
         return startOffset;
+    }
+
+    public int deliveryCompleteCount() {
+        return deliveryCompleteCount;
     }
 
     public long createTimestamp() {
@@ -104,6 +112,7 @@ public class ShareGroupOffset {
             record.stateEpoch(),
             record.leaderEpoch(),
             record.startOffset(),
+            record.deliveryCompleteCount(),
             record.stateBatches().stream()
                 .map(ShareGroupOffset::toPersisterOffsetsStateBatch)
                 .toList(),
@@ -118,6 +127,7 @@ public class ShareGroupOffset {
             UNINITIALIZED_EPOCH,
             record.leaderEpoch(),
             record.startOffset(),
+            record.deliveryCompleteCount(),
             record.stateBatches().stream()
                 .map(ShareGroupOffset::toPersisterOffsetsStateBatch)
                 .toList(),
@@ -136,6 +146,7 @@ public class ShareGroupOffset {
             data.stateEpoch(),
             data.leaderEpoch(),
             data.startOffset(),
+            data.deliveryCompleteCount(),
             data.stateBatches().stream()
                 .map(PersisterStateBatch::from)
                 .toList(),
@@ -149,11 +160,14 @@ public class ShareGroupOffset {
     }
 
     public static ShareGroupOffset fromRequest(InitializeShareGroupStateRequestData.PartitionData data, int snapshotEpoch, long timestamp) {
+        // This method is invoked during InitializeShareGroupStateRequest. Since the deliveryCompleteCount is not yet
+        // known at this stage, it is initialized to its default value.
         return new ShareGroupOffset(
             snapshotEpoch,
             data.stateEpoch(),
             UNINITIALIZED_EPOCH,
             data.startOffset(),
+            UNINITIALIZED_DELIVERY_COMPLETE_COUNT,
             List.of(),
             timestamp,
             timestamp
@@ -165,6 +179,7 @@ public class ShareGroupOffset {
         private int stateEpoch;
         private int leaderEpoch;
         private long startOffset;
+        private int deliveryCompleteCount;
         private List<PersisterStateBatch> stateBatches;
         private long createTimestamp = NO_TIMESTAMP;
         private long writeTimestamp = NO_TIMESTAMP;
@@ -189,6 +204,11 @@ public class ShareGroupOffset {
             return this;
         }
 
+        public Builder setDeliveryCompleteCount(int deliveryCompleteCount) {
+            this.deliveryCompleteCount = deliveryCompleteCount;
+            return this;
+        }
+
         public Builder setStateBatches(List<PersisterStateBatch> stateBatches) {
             this.stateBatches = stateBatches == null ? List.of() : stateBatches.stream().toList();
             return this;
@@ -205,7 +225,7 @@ public class ShareGroupOffset {
         }
 
         public ShareGroupOffset build() {
-            return new ShareGroupOffset(snapshotEpoch, stateEpoch, leaderEpoch, startOffset, stateBatches, createTimestamp, writeTimestamp);
+            return new ShareGroupOffset(snapshotEpoch, stateEpoch, leaderEpoch, startOffset, deliveryCompleteCount, stateBatches, createTimestamp, writeTimestamp);
         }
     }
 
@@ -218,6 +238,7 @@ public class ShareGroupOffset {
             stateEpoch == that.stateEpoch &&
             leaderEpoch == that.leaderEpoch &&
             startOffset == that.startOffset &&
+            deliveryCompleteCount == that.deliveryCompleteCount &&
             Objects.equals(stateBatches, that.stateBatches) &&
             createTimestamp == that.createTimestamp &&
             writeTimestamp == that.writeTimestamp;
@@ -225,7 +246,7 @@ public class ShareGroupOffset {
 
     @Override
     public int hashCode() {
-        return Objects.hash(snapshotEpoch, stateEpoch, leaderEpoch, startOffset, stateBatches, createTimestamp, writeTimestamp);
+        return Objects.hash(snapshotEpoch, stateEpoch, leaderEpoch, startOffset, deliveryCompleteCount, stateBatches, createTimestamp, writeTimestamp);
     }
 
     @Override
@@ -235,6 +256,7 @@ public class ShareGroupOffset {
             ", stateEpoch=" + stateEpoch +
             ", leaderEpoch=" + leaderEpoch +
             ", startOffset=" + startOffset +
+            ", deliveryCompleteCount=" + deliveryCompleteCount +
             ", createTimestamp=" + createTimestamp +
             ", writeTimestamp=" + writeTimestamp +
             ", stateBatches=" + stateBatches +
@@ -247,6 +269,7 @@ public class ShareGroupOffset {
             .setStateEpoch(stateEpoch())
             .setLeaderEpoch(leaderEpoch())
             .setStartOffset(startOffset())
+            .setDeliveryCompleteCount(deliveryCompleteCount())
             .setStateBatches(stateBatches())
             .setCreateTimestamp(createTimestamp())
             .setWriteTimestamp(writeTimestamp());

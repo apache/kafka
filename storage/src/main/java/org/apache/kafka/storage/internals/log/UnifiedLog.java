@@ -1214,6 +1214,8 @@ public class UnifiedLog implements AutoCloseable {
                                 appendInfo.setLastOffset(duplicate.lastOffset());
                                 appendInfo.setLogAppendTime(duplicate.timestamp());
                                 appendInfo.setLogStartOffset(logStartOffset);
+                                logger.trace("Duplicate batch detected, returning AppendInfo from duplicate batch with last offset: {}, first offset: {}, next offset: {}, skipped messages: {}",
+                                        appendInfo.lastOffset(), appendInfo.firstOffset(), localLog.logEndOffset(), validRecords);
                             } else {
                                 // Append the records, and increment the local log end offset immediately after the append because a
                                 // write to the transaction index below may fail, and we want to ensure that the offsets

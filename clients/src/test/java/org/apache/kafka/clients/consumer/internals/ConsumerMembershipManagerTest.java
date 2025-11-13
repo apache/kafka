@@ -2396,10 +2396,20 @@ public class ConsumerMembershipManagerTest {
         assertEquals((double) reconciliationDurationMs, getMetricValue(metrics, rebalanceMetricsManager.rebalanceLatencyAvg));
         assertEquals((double) reconciliationDurationMs, getMetricValue(metrics, rebalanceMetricsManager.rebalanceLatencyMax));
         assertEquals(1d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceTotal));
-        assertEquals(120d, 1d, (double) getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour));
+        assertEquals(1d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour));
         assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
         assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceTotal));
         assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.lastRebalanceSecondsAgo));
+
+        long windowLength = metrics.config().samples() * 3600_000L;
+        time.sleep(windowLength - reconciliationDurationMs - 1);
+        assertEquals(1d / metrics.config().samples(), (double) getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour), 0.1d);
+        assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
+
+        // WindowLength have passed, triggering metric reset
+        time.sleep(windowLength);
+        assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour));
+        assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
     }
 
     @Test
@@ -2494,9 +2504,17 @@ public class ConsumerMembershipManagerTest {
 
         assertEquals((double) 0, getMetricValue(metrics, rebalanceMetricsManager.rebalanceLatencyTotal));
         assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceTotal));
-        assertEquals(120d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
+        assertEquals(1d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
         assertEquals(1d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceTotal));
         assertEquals(-1d, getMetricValue(metrics, rebalanceMetricsManager.lastRebalanceSecondsAgo));
+
+        long windowLength = metrics.config().samples() * 3600_000L;
+        time.sleep(windowLength - 2300 - 1);
+        assertEquals(1d / metrics.config().samples(), (double) getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate), 0.1d);
+
+        // WindowLength have passed, triggering metric reset
+        time.sleep(windowLength);
+        assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
     }
 
     @Test
