@@ -1634,7 +1634,7 @@ public class CommitRequestManagerTest {
             final Set<TopicPartition> partitions,
             int numRequest,
             final Errors error) {
-            return sendAndVerifyDuplicatedOffsetFetchRequests(commitRequestManager, partitions, numRequest, error, false);
+        return sendAndVerifyDuplicatedOffsetFetchRequests(commitRequestManager, partitions, numRequest, error, false);
     }
 
     private List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> sendAndVerifyDuplicatedOffsetFetchRequests(
