@@ -1195,6 +1195,7 @@ org.apache.kafka.coordinator.group.streams.assignor.MockAssignorTest:
 - testBasicScenario
 - testDoubleAssignment
 - testSingleMember
+- testToStringReturnsName
 - testTwoMembersTwoSubtopologies
 - testTwoMembersTwoSubtopologiesStickiness
 - testZeroMembers
@@ -1249,6 +1250,7 @@ org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignorTest:
 - shouldReBalanceTasksAcrossClientsWhenCapacityLessThanTaskCount
 - shouldReassignTasksWhenNewNodeJoinsWithExistingActiveAndStandbyAssignments
 - shouldRebalanceTasksToClientsBasedOnCapacity
+- testToStringReturnsName
 org.apache.kafka.coordinator.group.streams.topics.ChangelogTopicsTest:
 - shouldContainBothTypesOfPreExistingChangelogs
 - shouldContainNonSourceBasedChangelogs
