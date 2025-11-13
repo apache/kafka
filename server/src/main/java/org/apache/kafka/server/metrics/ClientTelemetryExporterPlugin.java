@@ -18,6 +18,7 @@ package org.apache.kafka.server.metrics;
 
 import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.server.telemetry.ClientTelemetryExporter;
 import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
 
 import java.util.ArrayList;
@@ -25,33 +26,51 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Plugin to register client telemetry receivers and export metrics. This class is used by the Kafka
- * server to export client metrics to the registered receivers.
+ * Plugin to register client telemetry receivers/exporters and export metrics. This class is used by the Kafka
+ * server to export client metrics to the registered receivers and exporters, supporting both the deprecated
+ * {@link ClientTelemetryReceiver} and the new {@link ClientTelemetryExporter} interfaces.
  */
-public class ClientMetricsReceiverPlugin {
+@SuppressWarnings({"deprecation", "overloads", "removal"})
+public class ClientTelemetryExporterPlugin {
 
     private final List<ClientTelemetryReceiver> receivers;
+    private final List<ClientTelemetryExporter> exporters;
 
-    public ClientMetricsReceiverPlugin() {
+    public ClientTelemetryExporterPlugin() {
         this.receivers = Collections.synchronizedList(new ArrayList<>());
+        this.exporters = Collections.synchronizedList(new ArrayList<>());
     }
 
     public boolean isEmpty() {
-        return receivers.isEmpty();
+        return receivers.isEmpty() && exporters.isEmpty();
     }
 
     public void add(ClientTelemetryReceiver receiver) {
         receivers.add(receiver);
     }
 
+    public void add(ClientTelemetryExporter exporter) {
+        exporters.add(exporter);
+    }
+
     public DefaultClientTelemetryPayload getPayLoad(PushTelemetryRequest request) {
         return new DefaultClientTelemetryPayload(request);
     }
 
-    public void exportMetrics(RequestContext context, PushTelemetryRequest request) {
+    public void exportMetrics(RequestContext context, PushTelemetryRequest request, int pushIntervalMs) {
         DefaultClientTelemetryPayload payload = getPayLoad(request);
+
+        // Export to deprecated receivers
         for (ClientTelemetryReceiver receiver : receivers) {
             receiver.exportMetrics(context, payload);
+        }
+
+        // Export to new exporters with push interval context
+        if (!exporters.isEmpty()) {
+            DefaultClientTelemetryContext telemetryContext = new DefaultClientTelemetryContext(pushIntervalMs, context);
+            for (ClientTelemetryExporter exporter : exporters) {
+                exporter.exportMetrics(telemetryContext, payload);
+            }
         }
     }
 }

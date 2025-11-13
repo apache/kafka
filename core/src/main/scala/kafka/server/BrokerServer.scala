@@ -36,7 +36,7 @@ import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.common.runtime.{CoordinatorLoaderImpl, CoordinatorRecord}
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
-import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService}
+import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService, PartitionMetadataClient}
 import org.apache.kafka.coordinator.share.metrics.{ShareCoordinatorMetrics, ShareCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRecordSerde, ShareCoordinatorService}
 import org.apache.kafka.coordinator.transaction.ProducerIdManager
@@ -49,7 +49,7 @@ import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandl
 import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
 import org.apache.kafka.server.log.remote.metadata.storage.BrokerReadyCallback
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
-import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
+import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpStatePersister, Persister, PersisterStateManager}
 import org.apache.kafka.server.share.session.ShareSessionCache
@@ -118,6 +118,8 @@ class BrokerServer(
 
   var credentialProvider: CredentialProvider = _
   var tokenCache: DelegationTokenCache = _
+
+  var partitionMetadataClient: PartitionMetadataClient = _
 
   @volatile var groupCoordinator: GroupCoordinator = _
 
@@ -189,9 +191,9 @@ class BrokerServer(
 
       info("Starting broker")
 
-      val clientMetricsReceiverPlugin = new ClientMetricsReceiverPlugin()
+      val clientTelemetryExporterPlugin = new ClientTelemetryExporterPlugin()
 
-      config.dynamicConfig.initialize(Some(clientMetricsReceiverPlugin))
+      config.dynamicConfig.initialize(Some(clientTelemetryExporterPlugin))
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-", ProcessRole.BrokerRole.toString)
       DynamicBrokerConfig.readDynamicBrokerConfigsFromSnapshot(raftManager, config, quotaManagers, logContext)
 
@@ -244,7 +246,7 @@ class BrokerServer(
       )
       clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager, metrics)
-      clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config.clientTelemetryMaxBytes, time, metrics)
+      clientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, config.clientTelemetryMaxBytes, time, metrics)
 
       val apiVersionManager = new DefaultApiVersionManager(
         ListenerType.BROKER,
@@ -370,6 +372,8 @@ class BrokerServer(
 
       /* create persister */
       persister = createShareStatePersister()
+
+      partitionMetadataClient = createPartitionMetadataClient()
 
       groupCoordinator = createGroupCoordinator()
 
@@ -620,6 +624,25 @@ class BrokerServer(
     }
   }
 
+  private def createPartitionMetadataClient(): PartitionMetadataClient = {
+    // This is a no-op implementation of PartitionMetadataClient. It always returns -1 as the latest offset for any
+    // requested topic partition.
+    // TODO: KAFKA-19800: Implement a real PartitionMetadataClient that can fetch latest offsets via InterBrokerSendThread.
+    new PartitionMetadataClient {
+      override def listLatestOffsets(topicPartitions: util.Set[TopicPartition]
+                                    ): util.Map[TopicPartition, util.concurrent.CompletableFuture[java.lang.Long]] = {
+        topicPartitions.asScala
+          .map { tp =>
+            tp -> CompletableFuture.completedFuture(java.lang.Long.valueOf(-1L))
+          }
+          .toMap
+          .asJava
+      }
+
+      override def close(): Unit = {}
+    }
+  }
+
   private def createGroupCoordinator(): GroupCoordinator = {
     // Create group coordinator, but don't start it until we've started replica manager.
     // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good
@@ -651,6 +674,7 @@ class BrokerServer(
       .withGroupConfigManager(groupConfigManager)
       .withPersister(persister)
       .withAuthorizerPlugin(authorizerPlugin.toJava)
+      .withPartitionMetadataClient(partitionMetadataClient)
       .build()
   }
 

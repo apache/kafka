@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.metrics.OffsetCommitMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -708,15 +709,22 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         public NetworkClientDelegate.UnsentRequest toUnsentRequest() {
+            Map<String, Uuid> topicIds = metadata.topicIds();
+            boolean canUseTopicIds = true;
             Map<String, OffsetCommitRequestData.OffsetCommitRequestTopic> requestTopicDataMap = new HashMap<>();
             for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
                 TopicPartition topicPartition = entry.getKey();
                 OffsetAndMetadata offsetAndMetadata = entry.getValue();
+                Uuid topicId = topicIds.getOrDefault(topicPartition.topic(), Uuid.ZERO_UUID);
+                if (topicId.equals(Uuid.ZERO_UUID)) {
+                    canUseTopicIds = false;
+                }
 
                 OffsetCommitRequestData.OffsetCommitRequestTopic topic = requestTopicDataMap
                     .getOrDefault(topicPartition.topic(),
                         new OffsetCommitRequestData.OffsetCommitRequestTopic()
                             .setName(topicPartition.topic())
+                            .setTopicId(topicId)
                     );
 
                 topic.partitions().add(new OffsetCommitRequestData.OffsetCommitRequestPartition()
@@ -740,7 +748,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 lastEpochSentOnCommit = Optional.empty();
             }
 
-            OffsetCommitRequest.Builder builder = OffsetCommitRequest.Builder.forTopicNames(data);
+            OffsetCommitRequest.Builder builder = canUseTopicIds
+                    ? OffsetCommitRequest.Builder.forTopicIdsOrNames(data, true)
+                    : OffsetCommitRequest.Builder.forTopicNames(data);
 
             return buildRequestWithResponseHandling(builder);
         }
@@ -752,6 +762,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          *   - fail the future with a non-recoverable KafkaException for all unexpected errors (even if retriable)
          */
         @Override
+        @SuppressWarnings("NPathComplexity")
         public void onResponse(final ClientResponse response) {
             metricsManager.recordRequestLatency(response.requestLatencyMs());
             long currentTimeMs = response.receivedTimeMs();
@@ -760,13 +771,22 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             boolean failedRequestRegistered = false;
             for (OffsetCommitResponseData.OffsetCommitResponseTopic topic : commitResponse.data().topics()) {
                 for (OffsetCommitResponseData.OffsetCommitResponsePartition partition : topic.partitions()) {
-                    TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
+                    // Version 10 drops topic name, and supports topic id.
+                    // We need to find offsetAndMetadata based on topic id and partition index only as
+                    // topic name in the response will be emtpy.
+                    // For older versions, topic id is zero, and we will find the offsetAndMetadata based on the topic name.
+                    TopicPartition tp = (!Uuid.ZERO_UUID.equals(topic.topicId()) && metadata.topicNames().containsKey(topic.topicId())) ?
+                        new TopicPartition(metadata.topicNames().get(topic.topicId()), partition.partitionIndex()) :
+                        new TopicPartition(topic.name(), partition.partitionIndex());
 
                     Errors error = Errors.forCode(partition.errorCode());
                     if (error == Errors.NONE) {
                         OffsetAndMetadata offsetAndMetadata = offsets.get(tp);
-                        long offset = offsetAndMetadata.offset();
-                        log.debug("OffsetCommit completed successfully for offset {} partition {}", offset, tp);
+                        if (offsetAndMetadata == null) {
+                            log.debug("Can't find metadata for partition {}", tp);
+                        } else {
+                            log.debug("OffsetCommit completed successfully for offset {} partition {}", offsetAndMetadata.offset(), tp);
+                        }
                         continue;
                     }
 
@@ -789,7 +809,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         future.completeExceptionally(error.exception());
                         return;
                     } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS ||
-                        error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                        error == Errors.UNKNOWN_TOPIC_OR_PARTITION ||
+                        error == Errors.UNKNOWN_TOPIC_ID) {
                         // just retry
                         future.completeExceptionally(error.exception());
                         return;

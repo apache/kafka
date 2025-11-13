@@ -3737,6 +3737,7 @@ public class RequestResponseTest {
                     .setPartition(0)
                     .setStateEpoch(0)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(0)
                     .setStateBatches(singletonList(new WriteShareGroupStateRequestData.StateBatch()
                         .setFirstOffset(0)
                         .setLastOffset(0)
@@ -3840,6 +3841,7 @@ public class RequestResponseTest {
                     .setPartitionIndex(0)
                     .setErrorCode(Errors.NONE.code())
                     .setStartOffset(0)
+                    .setLag(0)
                     .setLeaderEpoch(0)))))));
         return new DescribeShareGroupOffsetsResponse(data);
     }

@@ -14,26 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.storage.internals.log;
+package org.apache.kafka.server.partition;
 
-import org.apache.kafka.metadata.LeaderRecoveryState;
+import java.util.List;
 
-import java.util.Set;
+public record OngoingReassignmentState(
+        List<Integer> addingReplicas,
+        List<Integer> removingReplicas,
+        List<Integer> replicas
+) implements AssignmentState {
 
-public record CommittedPartitionState(Set<Integer> isr, LeaderRecoveryState leaderRecoveryState) implements PartitionState {
-
-    public CommittedPartitionState {
-        isr = Set.copyOf(isr);
+    public OngoingReassignmentState {
+        addingReplicas = List.copyOf(addingReplicas);
+        removingReplicas = List.copyOf(removingReplicas);
+        replicas = List.copyOf(replicas);
     }
 
     @Override
-    public Set<Integer> maximalIsr() {
-        return isr;
+    public int replicationFactor() {
+        // Keep the size of the original replicas. Replicas may also include those currently being added.
+        return (int) replicas.stream().filter(r -> !addingReplicas.contains(r)).count();
     }
 
     @Override
-    public boolean isInflight() {
-        return false;
+    public boolean isAddingReplica(int brokerId) {
+        return addingReplicas.contains(brokerId);
     }
-
 }

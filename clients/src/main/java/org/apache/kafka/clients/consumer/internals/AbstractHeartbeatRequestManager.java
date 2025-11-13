@@ -20,6 +20,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
+import org.apache.kafka.clients.consumer.internals.events.AsyncPollEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
@@ -241,7 +242,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
      * are sent, so blocking for longer than the heartbeat interval might mean the application thread is not
      * responsive to changes.
      *
-     * <p>Similarly, we may have to unblock the application thread to send a `PollApplicationEvent` to make sure
+     * <p>Similarly, we may have to unblock the application thread to send a {@link AsyncPollEvent} to make sure
      * our poll timer will not expire while we are polling.
      *
      * <p>In the event that heartbeats are currently being skipped, this still returns the next heartbeat
