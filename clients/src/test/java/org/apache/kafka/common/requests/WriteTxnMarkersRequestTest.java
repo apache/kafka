@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.WriteTxnMarkersRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -29,7 +30,6 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class WriteTxnMarkersRequestTest {
 
@@ -121,24 +121,35 @@ public class WriteTxnMarkersRequestTest {
         );
         WriteTxnMarkersRequest.Builder builder = new WriteTxnMarkersRequest.Builder(markersWithVersion);
         
-        // Test version 2 - TransactionVersion should be included.
+        // Test request version 2 - TransactionVersion should be included.
         WriteTxnMarkersRequest requestV2 = builder.build((short) 2);
         assertNotNull(requestV2);
         assertEquals(1, requestV2.markers().size());
+
         // Verify TransactionVersion is set to 2 in the request data.
         assertEquals((byte) 2, requestV2.data().markers().get(0).transactionVersion());
         // Verify the request can be serialized for version 2 (TransactionVersion field included).
         // This should not throw an exception.
-        requestV2.serialize();
-        int sizeV2 = requestV2.sizeInBytes();
-        // Verify TransactionVersion is set to 2 in the marker entry (markers() reads the field for version >= 2).
-        // This is what the broker sees when receiving the request - markers() is called on the partition leader side.
-        assertEquals((short) 2, requestV2.markers().get(0).transactionVersion());
+        ByteBufferAccessor serializedV2 = requestV2.serialize();
+        assertNotNull(serializedV2, "Serialization should succeed without error for version 2");
+        // Test deserialization for version 2 - verify TransactionVersion field was included during serialization.
+        // Use the already serialized request and parse it back to verify the field is present.
+        serializedV2.buffer().rewind();
+        RequestAndSize requestAndSizeV2 = AbstractRequest.parseRequest(
+            ApiKeys.WRITE_TXN_MARKERS, (short) 2, serializedV2);
+        WriteTxnMarkersRequest parsedRequestV2 = (WriteTxnMarkersRequest) requestAndSizeV2.request;
+        assertNotNull(parsedRequestV2);
+        assertEquals(1, parsedRequestV2.markers().size());
+        // After deserialization, TransactionVersion should be 2 because it was included during serialization.
+        assertEquals((short) 2, parsedRequestV2.markers().get(0).transactionVersion());
+        // Verify the data also shows 2 (since it was read from serialized bytes with the field).
+        assertEquals((byte) 2, parsedRequestV2.data().markers().get(0).transactionVersion());
 
-        // Test version 1 - TransactionVersion should be omitted (ignorable field).
+        // Test request version 1 - TransactionVersion should be omitted (ignorable field).
         WriteTxnMarkersRequest requestV1 = builder.build((short) 1);
         assertNotNull(requestV1);
         assertEquals(1, requestV1.markers().size());
+
         // Verify TransactionVersion is still set to 2 in the request data (even for version 1).
         // This is what the coordinator has when building the request - data() is used before serialization.
         // The field value is preserved in the data, but will be omitted during serialization.
@@ -146,20 +157,21 @@ public class WriteTxnMarkersRequestTest {
         // Verify the request can be serialized for version 1 (TransactionVersion field omitted).
         // This should not throw an exception even though TransactionVersion is set to 2
         // because the field is marked as ignorable.
-        requestV1.serialize();
-        int sizeV1 = requestV1.sizeInBytes();
-        // After serialization, verify TransactionVersion is 0 in the marker entry for version 1 (field not read for version < 2).
-        // This is what the broker sees when receiving the request - markers() is called on the partition leader side.
-        assertEquals((short) 0, requestV1.markers().get(0).transactionVersion());
-
-        // Verify that version 2 is larger than version 1 because it includes TransactionVersion field.
-        // TransactionVersion is int8 (1 byte), so version 2 should be at least 1 byte larger.
-        // This check ensures that the serialization logic correctly includes/excludes the field.
-        assertTrue(sizeV2 > sizeV1, 
-            String.format("Version 2 (%d bytes) should be larger than version 1 (%d bytes) " +
-                "because it includes the TransactionVersion field", sizeV2, sizeV1
-            )
-        );
+        ByteBufferAccessor serializedV1 = requestV1.serialize();
+        assertNotNull(serializedV1, "Serialization should succeed without error for version 1 even with TransactionVersion set");
+        // Test deserialization for version 1 - verify TransactionVersion field was omitted during serialization.
+        // Use the already serialized request and parse it back to verify the field is not present.
+        serializedV1.buffer().rewind();
+        RequestAndSize requestAndSizeV1 = AbstractRequest.parseRequest(
+            ApiKeys.WRITE_TXN_MARKERS, (short) 1, serializedV1);
+        WriteTxnMarkersRequest parsedRequestV1 = (WriteTxnMarkersRequest) requestAndSizeV1.request;
+        assertNotNull(parsedRequestV1);
+        assertEquals(1, parsedRequestV1.markers().size());
+        // After deserialization, TransactionVersion should be 0 because it was omitted during serialization.
+        // The field is not present in the serialized bytes for version 1, so it defaults to 0.
+        assertEquals((short) 0, parsedRequestV1.markers().get(0).transactionVersion());
+        // Verify the data also shows 0 (since it was read from serialized bytes without the field).
+        assertEquals((byte) 0, parsedRequestV1.data().markers().get(0).transactionVersion());
     }
 
     @Test
