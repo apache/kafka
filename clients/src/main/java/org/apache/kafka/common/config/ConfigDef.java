@@ -515,10 +515,6 @@ public class ConfigDef {
      * the appropriate type (int, string, etc).
      */
     public Map<String, Object> parse(Map<?, ?> props) {
-        return parse(props, false);
-    }
-
-    Map<String, Object> parse(Map<?, ?> props, boolean allowDuplicateValueInList) {
         // Check all configurations are defined
         List<String> undefinedConfigKeys = undefinedDependentConfigs();
         if (!undefinedConfigKeys.isEmpty()) {
@@ -528,11 +524,11 @@ public class ConfigDef {
         // parse all known keys
         Map<String, Object> values = new HashMap<>();
         for (ConfigKey key : configKeys.values())
-            values.put(key.name, parseValue(key, props.get(key.name), props.containsKey(key.name), allowDuplicateValueInList));
+            values.put(key.name, parseValue(key, props.get(key.name), props.containsKey(key.name)));
         return values;
     }
 
-    Object parseValue(ConfigKey key, Object value, boolean isSet, boolean allowDuplicateValueInList) {
+    Object parseValue(ConfigKey key, Object value, boolean isSet) {
         Object parsedValue;
         if (isSet) {
             parsedValue = parseType(key.name, value, key.type);
@@ -543,7 +539,7 @@ public class ConfigDef {
             // otherwise assign setting its default value
             parsedValue = key.defaultValue;
         }
-        if (!allowDuplicateValueInList && parsedValue instanceof List) {
+        if (key.validator instanceof ValidList && parsedValue instanceof List) {
             List<?> originalListValue = (List<?>) parsedValue;
             parsedValue = originalListValue.stream().distinct().collect(Collectors.toList());
             if (originalListValue.size() != ((List<?>) parsedValue).size()) {
@@ -1062,7 +1058,8 @@ public class ConfigDef {
             }
 
             if (Set.copyOf(values).size() != values.size()) {
-                throw new ConfigException("Configuration '" + name + "' values must not be duplicated.");
+                System.out.println("Configuration '" + name + "' has duplicate values: " + values +
+                        "this will be disallowed in Kafka5.0.");
             }
 
             validateIndividualValues(name, values);

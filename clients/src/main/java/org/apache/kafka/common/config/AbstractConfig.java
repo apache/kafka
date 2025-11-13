@@ -65,7 +65,7 @@ public class AbstractConfig {
     public static final String AUTOMATIC_CONFIG_PROVIDERS_PROPERTY = "org.apache.kafka.automatic.config.providers";
 
     public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
-    public static final String CONFIG_PROVIDERS_DOC =
+    public static final String CONFIG_PROVIDERS_DOC = 
             "Comma-separated alias names for classes implementing the <code>ConfigProvider</code> interface. " +
             "This enables loading configuration data (such as passwords, API keys, and other credentials) from external " +
             "sources. For example, see <a href=\"https://kafka.apache.org/documentation/#config_providers\">Configuration Providers</a>.";
@@ -115,10 +115,10 @@ public class AbstractConfig {
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
         Map<String, Object> originalMap = preProcessParsedConfig(Collections.unmodifiableMap(Utils.castToStringObjectMap(originals)));
         this.originals = resolveConfigVariables(configProviderProps, originalMap);
-        this.values = definition.parse(this.originals, allowDuplicateValueInList());
+        this.values = definition.parse(this.originals);
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
         this.values.putAll(configUpdates);
-        definition.parse(this.values, allowDuplicateValueInList());
+        definition.parse(this.values);
         this.definition = definition;
         if (doLog)
             logAll();
@@ -316,20 +316,16 @@ public class AbstractConfig {
                 String keyWithNoPrefix = entry.getKey().substring(prefix.length());
                 ConfigDef.ConfigKey configKey = definition.configKeys().get(keyWithNoPrefix);
                 if (configKey != null)
-                    result.put(keyWithNoPrefix, definition.parseValue(configKey, entry.getValue(), true, allowDuplicateValueInList()));
+                    result.put(keyWithNoPrefix, definition.parseValue(configKey, entry.getValue(), true));
                 else {
                     String keyWithNoSecondaryPrefix = keyWithNoPrefix.substring(keyWithNoPrefix.indexOf('.') + 1);
                     configKey = definition.configKeys().get(keyWithNoSecondaryPrefix);
                     if (configKey != null)
-                        result.put(keyWithNoPrefix, definition.parseValue(configKey, entry.getValue(), true, allowDuplicateValueInList()));
+                        result.put(keyWithNoPrefix, definition.parseValue(configKey, entry.getValue(), true));
                 }
             }
         }
         return result;
-    }
-
-    protected boolean allowDuplicateValueInList() {
-        return false;
     }
 
     /**
@@ -350,7 +346,7 @@ public class AbstractConfig {
             for (Map.Entry<String, ?> entry : withPrefix.entrySet()) {
                 ConfigDef.ConfigKey configKey = definition.configKeys().get(entry.getKey());
                 if (configKey != null)
-                    result.put(entry.getKey(), definition.parseValue(configKey, entry.getValue(), true, allowDuplicateValueInList()));
+                    result.put(entry.getKey(), definition.parseValue(configKey, entry.getValue(), true));
             }
 
             return result;

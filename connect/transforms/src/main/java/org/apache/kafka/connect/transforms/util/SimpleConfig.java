@@ -30,8 +30,4 @@ public class SimpleConfig extends AbstractConfig {
         super(configDef, originals, false);
     }
 
-    @Override
-    protected boolean allowDuplicateValueInList() {
-        return true;
-    }
 }
