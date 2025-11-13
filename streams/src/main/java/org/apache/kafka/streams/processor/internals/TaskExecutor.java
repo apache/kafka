@@ -177,26 +177,44 @@ public class TaskExecutor {
 
         if (executionMetadata.processingMode() == EXACTLY_ONCE_V2) {
             if (!offsetsPerTask.isEmpty() || taskManager.streamsProducer().transactionInFlight()) {
+                // This will be replaced with an internal config
+                final int maxCommitAttempts = 2;
+
                 final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
                     .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+              for (int currentAttempt = 1; currentAttempt <= maxCommitAttempts; currentAttempt++) {
+                   try {
+                       taskManager.streamsProducer().commitTransaction(allOffsets, taskManager.consumerGroupMetadata());
+                       updateTaskCommitMetadata(allOffsets);
+                       if (currentAttempt > 1) {
+                           log.info("Committing task offsets succeeded after {} retries", currentAttempt - 1);
+                       }
+                       break;
+                   } catch (final TimeoutException timeoutException) {
+                       final String failedCommitTasksMessage = String.format("Committing task(s) %s failed.",
+                           offsetsPerTask
+                               .keySet()
+                               .stream()
+                               .map(t -> t.id().toString())
+                               .collect(Collectors.joining(", ")));
+                       if (currentAttempt < maxCommitAttempts) {
+                            log.warn(failedCommitTasksMessage + " but will retry", timeoutException);
+                            try {
+                                // The amount of time for backoff will also be internal config or backoff.retry.config
+                                Thread.sleep(1000);
+                            } catch (final InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                throw new StreamsException("Thread interrupted while waiting to retry committing offsets", e);
+                            }
+                       } else {
+                           log.error(failedCommitTasksMessage + " and all retries exhausted.", timeoutException);
 
-                try {
-                    taskManager.streamsProducer().commitTransaction(allOffsets, taskManager.consumerGroupMetadata());
-                    updateTaskCommitMetadata(allOffsets);
-                } catch (final TimeoutException timeoutException) {
-                    log.error(
-                        String.format("Committing task(s) %s failed.",
-                                      offsetsPerTask
-                                          .keySet()
-                                          .stream()
-                                          .map(t -> t.id().toString())
-                                          .collect(Collectors.joining(", "))),
-                        timeoutException
-                    );
-                    offsetsPerTask
-                        .keySet()
-                        .forEach(task -> corruptedTasks.add(task.id()));
-                }
+                           offsetsPerTask
+                               .keySet()
+                               .forEach(task -> corruptedTasks.add(task.id()));
+                       }
+                   }
+               }
             }
         } else {
             // processingMode == ALOS
