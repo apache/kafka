@@ -38,7 +38,7 @@ public class RestExceptionMapperTest {
     public void testToResponseNotFound() {
         RestExceptionMapper mapper = new RestExceptionMapper();
         Response resp = mapper.toResponse(new NotFoundException());
-        assertEquals(resp.getStatus(), Response.Status.NOT_FOUND.getStatusCode());
+        assertEquals(Response.Status.NOT_FOUND.getStatusCode(), resp.getStatus());
     }
 
     @Test
@@ -47,7 +47,7 @@ public class RestExceptionMapperTest {
         JsonParser parser = null;
         JavaType type = null;
         Response resp = mapper.toResponse(InvalidTypeIdException.from(parser, "dummy msg", type, "dummy typeId"));
-        assertEquals(resp.getStatus(), Response.Status.NOT_IMPLEMENTED.getStatusCode());
+        assertEquals(Response.Status.NOT_IMPLEMENTED.getStatusCode(), resp.getStatus());
     }
 
     @Test
@@ -55,35 +55,35 @@ public class RestExceptionMapperTest {
         RestExceptionMapper mapper = new RestExceptionMapper();
         JsonParser parser = null;
         Response resp = mapper.toResponse(JsonMappingException.from(parser, "dummy msg"));
-        assertEquals(resp.getStatus(), Response.Status.BAD_REQUEST.getStatusCode());
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), resp.getStatus());
     }
 
     @Test
     public void testToResponseClassNotFoundException() {
         RestExceptionMapper mapper = new RestExceptionMapper();
         Response resp = mapper.toResponse(new ClassNotFoundException());
-        assertEquals(resp.getStatus(), Response.Status.NOT_IMPLEMENTED.getStatusCode());
+        assertEquals(Response.Status.NOT_IMPLEMENTED.getStatusCode(), resp.getStatus());
     }
 
     @Test
     public void testToResponseSerializationException() {
         RestExceptionMapper mapper = new RestExceptionMapper();
         Response resp = mapper.toResponse(new SerializationException());
-        assertEquals(resp.getStatus(), Response.Status.BAD_REQUEST.getStatusCode());
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), resp.getStatus());
     }
 
     @Test
     public void testToResponseInvalidRequestException() {
         RestExceptionMapper mapper = new RestExceptionMapper();
         Response resp = mapper.toResponse(new InvalidRequestException("invalid request"));
-        assertEquals(resp.getStatus(), Response.Status.BAD_REQUEST.getStatusCode());
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), resp.getStatus());
     }
 
     @Test
     public void testToResponseUnknownException() {
         RestExceptionMapper mapper = new RestExceptionMapper();
         Response resp = mapper.toResponse(new Exception("Unknown exception"));
-        assertEquals(resp.getStatus(), Response.Status.INTERNAL_SERVER_ERROR.getStatusCode());
+        assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), resp.getStatus());
     }
 
     @Test
