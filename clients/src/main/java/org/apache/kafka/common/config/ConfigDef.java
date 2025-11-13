@@ -1058,8 +1058,7 @@ public class ConfigDef {
             }
 
             if (Set.copyOf(values).size() != values.size()) {
-                System.out.println("Configuration '" + name + "' has duplicate values: " + values +
-                        "this will be disallowed in Kafka5.0.");
+                throw new ConfigException("Configuration '" + name + "' values must not be duplicated.");
             }
 
             validateIndividualValues(name, values);
@@ -1082,8 +1081,15 @@ public class ConfigDef {
         }
 
         public String toString() {
-            return validString + (isEmptyAllowed ? " (empty config allowed)" : " (empty not allowed)") +
-                    (isNullAllowed ? " (null config allowed)" : " (null not allowed)");
+            String base = validString.validStrings.isEmpty() ? "any non-duplicate values" : validString.toString();
+
+            List<String> modifiers = new ArrayList<>();
+            if (isEmptyAllowed)
+                modifiers.add("empty list");
+            if (isNullAllowed)
+                modifiers.add("null");
+
+            return modifiers.isEmpty() ? base : base + ", " + String.join(", ", modifiers);
         }
     }
 
