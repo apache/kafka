@@ -190,7 +190,7 @@ Deletion of requested consumer groups ('my-group', 'my-other-group') was success
   </ul>
 
   <p>
-  --reset-offsets also has the following scenarios to choose from (at least one scenario must be selected):
+  --reset-offsets also has the following scenarios to choose from:
   <ul>
     <li>
       --to-datetime &lt;String: datetime&gt; : Reset offsets to offsets from datetime. Format: 'YYYY-MM-DDThh:mm:ss.sss'
@@ -237,11 +237,11 @@ topic1                         0          0</code></pre>
   <pre><code class="language-bash">$ bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --list
 my-share-group</code></pre>
 
-  To view the current start offset, use the "--describe" option:
+  To view the current start offset and lag, use the "--describe" option:
 
   <pre><code class="language-bash">$ bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --describe --group my-share-group
-GROUP           TOPIC           PARTITION  START-OFFSET
-my-share-group  topic1          0          4</code></pre>
+GROUP           TOPIC           PARTITION  START-OFFSET  LAG
+my-share-group  topic1          0          4             0</code></pre>
 
   NOTE: The admin client needs DESCRIBE access to all the topics used in the group.
 
@@ -261,6 +261,40 @@ GROUP           COORDINATOR (ID)          STATE           #MEMBERS
 my-share-group  localhost:9092  (1)       Stable          2</code></pre>
     </li>
   </ul>
+
+  <p>To reset the offsets of a share group, use the "--reset-offsets" option:
+
+  <p>
+    It has 2 execution options:
+  <ul>
+    <li>
+      --dry-run: to display which offsets to reset.
+    </li>
+    <li>
+      --execute : to execute --reset-offsets process.
+    </li>
+  </ul>
+
+  <p>
+    --reset-offsets also has the following scenarios to choose from:
+  <ul>
+    <li>
+      --to-datetime &lt;String: datetime&gt; : Reset offsets to offsets from datetime. Format: 'YYYY-MM-DDThh:mm:ss.sss'
+    </li>
+    <li>
+      --to-earliest : Reset offsets to earliest offset.
+    </li>
+    <li>
+      --to-latest : Reset offsets to latest offset.
+    </li>
+  </ul>
+
+  <p>
+    For example, to reset offsets of a share group to the latest offset:
+
+  <pre><code class="language-bash">$ bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --reset-offsets --group my-share-group --topic topic1 --to-latest --execute
+GROUP           TOPIC           PARTITION  NEW-OFFSET
+my-share-group  topic1          0          10</code></pre>
 
   <p>To delete the offsets of individual topics in the share group, use the "--delete-offsets" option:
 
