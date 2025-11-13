@@ -48,32 +48,30 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.function.Supplier;
 
 public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
 
     private static final Logger log = LoggerFactory.getLogger(NetworkPartitionMetadataClient.class);
 
     private final MetadataCache metadataCache;
-    private final SendThread sendThread;
+    private final Supplier<KafkaClient> networkClientSupplier;
+    private volatile SendThread sendThread;
     private final Time time;
     private final ListenerName listenerName;
+    private final Object initializationLock = new Object();
 
     public NetworkPartitionMetadataClient(
         MetadataCache metadataCache,
-        KafkaClient networkClient,
+        Supplier<KafkaClient> networkClientSupplier,
         Time time,
         ListenerName listenerName
     ) {
         this.metadataCache = metadataCache;
+        this.networkClientSupplier = networkClientSupplier;
         this.time = time;
         this.listenerName = listenerName;
-        this.sendThread = new SendThread(
-            "NetworkPartitionMetadataClientSendThread",
-            networkClient,
-            Math.toIntExact(CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS),  //30 seconds
-            this.time
-        );
-        this.sendThread.start();
+        this.sendThread = null;
     }
 
     @Override
@@ -83,6 +81,9 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
         if (topicPartitions == null || topicPartitions.isEmpty()) {
             return Map.of();
         }
+
+        // Initialize sendThread lazily on first call
+        ensureSendThreadInitialized();
 
         // Map to store futures for each TopicPartition
         Map<TopicPartition, CompletableFuture<OffsetResponse>> futures = new HashMap<>();
@@ -126,6 +127,45 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
         return futures;
     }
 
+
+    @Override
+    public void close() {
+        // Only close sendThread if it was initialized. Note, clos is called only during broker shutdown, so need
+        // for further synchronization here.
+        if (sendThread != null) {
+            try {
+                sendThread.shutdown();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.error("Interrupted while shutting down NetworkPartitionMetadataClient", e);
+            }
+        }
+    }
+
+    /**
+     * Ensures that the sendThread is initialized. This method is thread-safe and will only
+     * initialize the sendThread once, even if called concurrently.
+     */
+    // Visible for testing.
+    void ensureSendThreadInitialized() {
+        if (sendThread == null) {
+            synchronized (initializationLock) {
+                if (sendThread == null) {
+                    KafkaClient networkClient = networkClientSupplier.get();
+                    SendThread thread = new SendThread(
+                        "NetworkPartitionMetadataClientSendThread",
+                        networkClient,
+                        Math.toIntExact(CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS),  //30 seconds
+                        this.time
+                    );
+                    thread.start();
+                    sendThread = thread;
+                    log.debug("NetworkPartitionMetadataClient sendThread initialized and started");
+                }
+            }
+        }
+    }
+
     /**
      * Creates a ListOffsetsRequest Builder for the given partitions requesting latest offsets.
      */
@@ -149,16 +189,6 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
             true,
             IsolationLevel.READ_UNCOMMITTED
         ).setTargetTimes(List.copyOf(topicsMap.values()));
-    }
-
-    @Override
-    public void close() {
-        try {
-            sendThread.shutdown();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.error("Interrupted while shutting down NetworkPartitionMetadataClient", e);
-        }
     }
 
     /**

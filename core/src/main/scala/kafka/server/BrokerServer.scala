@@ -627,7 +627,7 @@ class BrokerServer(
   private def createPartitionMetadataClient(metadataCache: MetadataCache): PartitionMetadataClient = {
     new NetworkPartitionMetadataClient(
       metadataCache,
-      NetworkUtils.buildNetworkClient(
+      () => NetworkUtils.buildNetworkClient(
         "NetworkPartitionMetadataClient",
         config,
         metrics,
