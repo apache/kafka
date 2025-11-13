@@ -28,6 +28,7 @@ public class PartitionFactory {
     public static final int DEFAULT_STATE_EPOCH = 0;
     public static final int UNINITIALIZED_START_OFFSET = -1;
     public static final int UNINITIALIZED_DELIVERY_COMPLETE_COUNT = -1;
+    public static final long UNINITIALIZED_LAG = -1;
     public static final short DEFAULT_ERROR_CODE = Errors.NONE.code();
     public static final int DEFAULT_LEADER_EPOCH = 0;
     public static final String DEFAULT_ERR_MESSAGE = Errors.NONE.message();

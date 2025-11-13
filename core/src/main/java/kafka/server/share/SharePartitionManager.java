@@ -623,8 +623,8 @@ public class SharePartitionManager implements AutoCloseable {
 
     // Visible for testing.
     void processShareFetch(ShareFetch shareFetch) {
-        if (shareFetch.topicIdPartitions().isEmpty()) {
-            // If there are no partitions to fetch then complete the future with an empty map.
+        if (shareFetch.topicIdPartitions().isEmpty() || shareFetch.maxFetchRecords() == 0 || shareFetch.fetchParams().maxBytes == 0) {
+            // If there are no partitions or no data requested to fetch then complete the future with an empty map.
             shareFetch.maybeComplete(Map.of());
             return;
         }

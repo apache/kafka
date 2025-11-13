@@ -165,6 +165,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -16447,8 +16448,7 @@ public class GroupMetadataManagerTest {
                 .setWarmupTasks(List.of())
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.MISSING_SOURCE_TOPICS.code())
-                    .setStatusDetail("Source topics bar are missing.")))
-                .setEndpointInformationEpoch(-1),
+                    .setStatusDetail("Source topics bar are missing."))),
             result.response().data()
         );
 
@@ -16533,8 +16533,7 @@ public class GroupMetadataManagerTest {
                 .setWarmupTasks(List.of())
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.MISSING_INTERNAL_TOPICS.code())
-                    .setStatusDetail("Internal topics are missing: [bar]")))
-                .setEndpointInformationEpoch(-1),
+                    .setStatusDetail("Internal topics are missing: [bar]"))),
             result.response().data()
         );
 
@@ -16616,8 +16615,7 @@ public class GroupMetadataManagerTest {
                 .setWarmupTasks(List.of())
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.INCORRECTLY_PARTITIONED_TOPICS.code())
-                    .setStatusDetail("Following topics do not have the same number of partitions: [{bar=3, foo=6}]")))
-                .setEndpointInformationEpoch(-1),
+                    .setStatusDetail("Following topics do not have the same number of partitions: [{bar=3, foo=6}]"))),
             result.response().data()
         );
 
@@ -16714,8 +16712,7 @@ public class GroupMetadataManagerTest {
                 .setWarmupTasks(List.of())
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.STALE_TOPOLOGY.code())
-                    .setStatusDetail("The member's topology epoch 0 is behind the group's topology epoch 1.")))
-                .setEndpointInformationEpoch(-1),
+                    .setStatusDetail("The member's topology epoch 0 is behind the group's topology epoch 1."))),
             result.response().data()
         );
 
@@ -16809,8 +16806,7 @@ public class GroupMetadataManagerTest {
                     new StreamsGroupHeartbeatResponseData.Status()
                         .setStatusCode(Status.SHUTDOWN_APPLICATION.code())
                         .setStatusDetail(statusDetail)
-                ))
-                .setEndpointInformationEpoch(-1),
+                )),
             result1.response().data()
         );
         assertRecordsEquals(List.of(), result1.records());
@@ -16831,8 +16827,7 @@ public class GroupMetadataManagerTest {
                     new StreamsGroupHeartbeatResponseData.Status()
                         .setStatusCode(Status.SHUTDOWN_APPLICATION.code())
                         .setStatusDetail(statusDetail)
-                ))
-                .setEndpointInformationEpoch(-1),
+                )),
             result2.response().data()
         );
 
@@ -16924,8 +16919,7 @@ public class GroupMetadataManagerTest {
                     new StreamsGroupHeartbeatResponseData.Status()
                         .setStatusCode(Status.SHUTDOWN_APPLICATION.code())
                         .setStatusDetail(statusDetail)
-                ))
-                .setEndpointInformationEpoch(-1),
+                )),
             result2.response().data()
         );
     }
@@ -17263,8 +17257,7 @@ public class GroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of())
-                .setEndpointInformationEpoch(-1),
+                .setWarmupTasks(List.of()),
 
             result.response().data()
         );
@@ -17404,8 +17397,7 @@ public class GroupMetadataManagerTest {
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId)
                 .setMemberEpoch(1)
-                .setHeartbeatIntervalMs(5000)
-                .setEndpointInformationEpoch(-1),
+                .setHeartbeatIntervalMs(5000),
             result.response().data()
         );
     }
@@ -17513,8 +17505,7 @@ public class GroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of())
-                .setEndpointInformationEpoch(-1),
+                .setWarmupTasks(List.of()),
             result.response().data()
         );
 
@@ -17555,8 +17546,7 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of())
-                .setEndpointInformationEpoch(0),
+                .setWarmupTasks(List.of()),
             result.response().data()
         );
 
@@ -17601,8 +17591,7 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(2))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of())
-                .setEndpointInformationEpoch(1),
+                .setWarmupTasks(List.of()),
             result.response().data()
         );
 
@@ -17635,8 +17624,7 @@ public class GroupMetadataManagerTest {
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
                 .setMemberEpoch(11)
-                .setHeartbeatIntervalMs(5000)
-                .setEndpointInformationEpoch(1),
+                .setHeartbeatIntervalMs(5000),
             result.response().data()
         );
 
@@ -17675,8 +17663,7 @@ public class GroupMetadataManagerTest {
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
                 .setMemberEpoch(11)
-                .setHeartbeatIntervalMs(5000)
-                .setEndpointInformationEpoch(1),
+                .setHeartbeatIntervalMs(5000),
             result.response().data()
         );
 
@@ -17705,8 +17692,7 @@ public class GroupMetadataManagerTest {
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
                 .setMemberEpoch(10)
-                .setHeartbeatIntervalMs(5000)
-                .setEndpointInformationEpoch(1),
+                .setHeartbeatIntervalMs(5000),
             result.response().data()
         );
 
@@ -17732,8 +17718,7 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology2)
                         .setPartitions(List.of(1))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of())
-                .setEndpointInformationEpoch(2),
+                .setWarmupTasks(List.of()),
             result.response().data()
         );
 
@@ -17763,8 +17748,7 @@ public class GroupMetadataManagerTest {
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
                 .setMemberEpoch(11)
-                .setHeartbeatIntervalMs(5000)
-                .setEndpointInformationEpoch(2),
+                .setHeartbeatIntervalMs(5000),
             result.response().data()
         );
 
@@ -17806,8 +17790,7 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(2))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of())
-                .setEndpointInformationEpoch(3),
+                .setWarmupTasks(List.of()),
             result.response().data()
         );
 
@@ -17853,8 +17836,7 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology2)
                         .setPartitions(List.of(1))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of())
-                .setEndpointInformationEpoch(4),
+                .setWarmupTasks(List.of()),
             result.response().data()
         );
 
@@ -18192,8 +18174,7 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2, 3, 4, 5))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of())
-                .setEndpointInformationEpoch(1),
+                .setWarmupTasks(List.of()),
             result.response().data()
         );
 
@@ -18454,8 +18435,7 @@ public class GroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of())
-                .setEndpointInformationEpoch(-1),
+                .setWarmupTasks(List.of()),
             result.response().data()
         );
 
@@ -18483,8 +18463,7 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology1)
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of())
-                .setEndpointInformationEpoch(0),
+                .setWarmupTasks(List.of()),
             result.response().data()
         );
 
@@ -18616,8 +18595,7 @@ public class GroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of())
-                .setEndpointInformationEpoch(-1),
+                .setWarmupTasks(List.of()),
             result.response().data()
         );
 
@@ -18644,8 +18622,7 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology1)
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of())
-                .setEndpointInformationEpoch(0),
+                .setWarmupTasks(List.of()),
             result.response().data()
         );
 
@@ -18810,6 +18787,11 @@ public class GroupMetadataManagerTest {
                         .setUserEndpoint(new StreamsGroupHeartbeatRequestData.Endpoint().setHost("localhost").setPort(9092))
                         .setEndpointInformationEpoch(0));
 
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions expectedEndpointToPartitions = new StreamsGroupHeartbeatResponseData.EndpointToPartitions()
+            .setUserEndpoint(new StreamsGroupHeartbeatResponseData.Endpoint().setHost("localhost").setPort(9092))
+            .setActivePartitions(List.of(new StreamsGroupHeartbeatResponseData.TopicPartition().setTopic("foo").setPartitions(List.of(0, 1))))
+            .setStandbyPartitions(List.of());
+
         assertResponseEquals(
                 new StreamsGroupHeartbeatResponseData()
                         .setMemberId(memberId)
@@ -18821,36 +18803,9 @@ public class GroupMetadataManagerTest {
                                         .setPartitions(List.of(0, 1))))
                         .setStandbyTasks(List.of())
                         .setWarmupTasks(List.of())
-                        .setPartitionsByUserEndpoint(null),
+                        .setPartitionsByUserEndpoint(List.of(expectedEndpointToPartitions)),
                 result.response().data()
         );
-
-        assertNull(result.response().data().partitionsByUserEndpoint());
-
-        context.groupMetadataManager.streamsGroup(groupId).setEndpointInformationEpoch(1);
-
-        StreamsGroupHeartbeatResponseData.EndpointToPartitions expectedEndpointToPartitions = new StreamsGroupHeartbeatResponseData.EndpointToPartitions()
-                .setUserEndpoint(new StreamsGroupHeartbeatResponseData.Endpoint().setHost("localhost").setPort(9092))
-                .setActivePartitions(List.of(new StreamsGroupHeartbeatResponseData.TopicPartition().setTopic("foo").setPartitions(List.of(0, 1))))
-                .setStandbyPartitions(List.of());
-
-        result = context.streamsGroupHeartbeat(
-                new StreamsGroupHeartbeatRequestData()
-                        .setGroupId(groupId)
-                        .setMemberId(memberId)
-                        .setUserEndpoint(new StreamsGroupHeartbeatRequestData.Endpoint().setHost("localhost").setPort(9092))
-                        .setMemberEpoch(result.response().data().memberEpoch()));
-
-        assertNotNull(result.response().data().partitionsByUserEndpoint());
-        StreamsGroupHeartbeatResponseData.EndpointToPartitions actualEndpointToPartitions = result.response().data().partitionsByUserEndpoint().get(0);
-        assertEquals(expectedEndpointToPartitions.userEndpoint(), actualEndpointToPartitions.userEndpoint());
-        StreamsGroupHeartbeatResponseData.TopicPartition expectedEndpointTopicPartitions = expectedEndpointToPartitions.activePartitions().get(0);
-        StreamsGroupHeartbeatResponseData.TopicPartition actualEndpointTopicPartitions = actualEndpointToPartitions.activePartitions().get(0);
-
-        assertEquals(expectedEndpointTopicPartitions.topic(), actualEndpointTopicPartitions.topic());
-        List<Integer> actualPartitions = actualEndpointTopicPartitions.partitions();
-        Collections.sort(actualPartitions);
-        assertEquals(expectedEndpointTopicPartitions.partitions(), actualPartitions);
 
         result = context.streamsGroupHeartbeat(
                 new StreamsGroupHeartbeatRequestData()
@@ -18861,6 +18816,97 @@ public class GroupMetadataManagerTest {
                         .setEndpointInformationEpoch(result.response().data().endpointInformationEpoch()));
 
         assertNull(result.response().data().partitionsByUserEndpoint());
+    }
+
+    @Test
+    public void testStreamsGroupEndpointInformationIncludesNewMember() {
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+                new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+                .withStreamsGroupTaskAssignors(List.of(assignor))
+                .withMetadataImage(new MetadataImageBuilder()
+                        .addTopic(fooTopicId, fooTopicName, 4)
+                        .buildCoordinatorMetadataImage())
+                .build();
+
+        // Prepare assignment for first member
+        assignor.prepareGroupAssignment(
+                Map.of(memberId1, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
+
+        // First member joins
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+                new StreamsGroupHeartbeatRequestData()
+                        .setGroupId(groupId)
+                        .setMemberId(memberId1)
+                        .setMemberEpoch(0)
+                        .setRebalanceTimeoutMs(1500)
+                        .setTopology(topology)
+                        .setActiveTasks(List.of())
+                        .setStandbyTasks(List.of())
+                        .setWarmupTasks(List.of())
+                        .setUserEndpoint(new StreamsGroupHeartbeatRequestData.Endpoint().setHost("host1").setPort(9092))
+                        .setEndpointInformationEpoch(0));
+
+        assertEquals(1, result.response().data().memberEpoch());
+
+        // Prepare assignment for both members
+        assignor.prepareGroupAssignment(
+                Map.of(
+                        memberId1, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1)),
+                        memberId2, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 2, 3))
+                ));
+
+        // Second member joins
+        result = context.streamsGroupHeartbeat(
+                new StreamsGroupHeartbeatRequestData()
+                        .setGroupId(groupId)
+                        .setMemberId(memberId2)
+                        .setMemberEpoch(0)
+                        .setRebalanceTimeoutMs(1500)
+                        .setTopology(topology)
+                        .setActiveTasks(List.of())
+                        .setStandbyTasks(List.of())
+                        .setWarmupTasks(List.of())
+                        .setUserEndpoint(new StreamsGroupHeartbeatRequestData.Endpoint().setHost("host2").setPort(9093)));
+
+        // The response should include endpoint information because the member's epoch (0) differs from the group's (1)
+        assertNotNull(result.response().data().partitionsByUserEndpoint());
+        List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointsList = result.response().data().partitionsByUserEndpoint();
+        assertEquals(2, endpointsList.size(), "Should include both members in endpoint information");
+
+        // Sort by port for consistent ordering
+        endpointsList.sort(Comparator.comparingInt(e -> e.userEndpoint().port()));
+
+        // Verify first member's endpoint
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions member1Endpoint = endpointsList.get(0);
+        assertEquals("host1", member1Endpoint.userEndpoint().host());
+        assertEquals(9092, member1Endpoint.userEndpoint().port());
+        assertEquals(1, member1Endpoint.activePartitions().size());
+        StreamsGroupHeartbeatResponseData.TopicPartition member1Topic = member1Endpoint.activePartitions().get(0);
+        assertEquals("foo", member1Topic.topic());
+        List<Integer> member1Partitions = new ArrayList<>(member1Topic.partitions());
+        Collections.sort(member1Partitions);
+        assertEquals(List.of(0, 1), member1Partitions);
+
+        // Verify second member's endpoint (the new member)
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions member2Endpoint = endpointsList.get(1);
+        assertEquals("host2", member2Endpoint.userEndpoint().host());
+        assertEquals(9093, member2Endpoint.userEndpoint().port());
+        assertEquals(1, member2Endpoint.activePartitions().size());
+        StreamsGroupHeartbeatResponseData.TopicPartition member2Topic = member2Endpoint.activePartitions().get(0);
+        assertEquals("foo", member2Topic.topic());
+        List<Integer> member2Partitions = new ArrayList<>(member2Topic.partitions());
+        Collections.sort(member2Partitions);
+        assertEquals(List.of(2, 3), member2Partitions);
     }
 
     @Test
