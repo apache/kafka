@@ -1022,34 +1022,19 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         .collect(Collectors.toList())));
             }
 
-            boolean finalCanUseTopicIds = canUseTopicIds;
-            OffsetFetchRequest.Builder builder = memberInfo.memberEpoch
-                .map(epoch -> {
-                    OffsetFetchRequestData data = new OffsetFetchRequestData()
-                        .setRequireStable(true)
-                        .setGroups(List.of(
-                            new OffsetFetchRequestData.OffsetFetchRequestGroup()
-                                .setGroupId(groupId)
-                                .setMemberId(memberInfo.memberId)
-                                .setMemberEpoch(epoch)
-                                .setTopics(topics)));
-                    return finalCanUseTopicIds
-                        ? OffsetFetchRequest.Builder.forTopicIdsOrNames(data, throwOnFetchStableOffsetUnsupported, true)
-                        : OffsetFetchRequest.Builder.forTopicNames(data, throwOnFetchStableOffsetUnsupported);
-                })
-                // Building request without passing member ID/epoch to leave the logic to choose
-                // default values when not present on the request builder.
-                .orElseGet(() -> {
-                    OffsetFetchRequestData data = new OffsetFetchRequestData()
-                        .setRequireStable(true)
-                        .setGroups(List.of(
-                            new OffsetFetchRequestData.OffsetFetchRequestGroup()
-                                .setGroupId(groupId)
-                                .setTopics(topics)));
-                    return finalCanUseTopicIds
-                        ? OffsetFetchRequest.Builder.forTopicIdsOrNames(data, throwOnFetchStableOffsetUnsupported, true)
-                        : OffsetFetchRequest.Builder.forTopicNames(data, throwOnFetchStableOffsetUnsupported);
-                });
+            OffsetFetchRequestData.OffsetFetchRequestGroup groupData = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId(groupId)
+                .setTopics(topics);
+            if (memberInfo.memberEpoch.isPresent()) {
+                groupData = groupData.setMemberId(memberInfo.memberId)
+                    .setMemberEpoch(memberInfo.memberEpoch.get());
+            }
+            OffsetFetchRequestData data = new OffsetFetchRequestData()
+                .setRequireStable(true)
+                .setGroups(List.of(groupData));
+            OffsetFetchRequest.Builder builder = canUseTopicIds
+                ? OffsetFetchRequest.Builder.forTopicIdsOrNames(data, throwOnFetchStableOffsetUnsupported, true)
+                : OffsetFetchRequest.Builder.forTopicNames(data, throwOnFetchStableOffsetUnsupported);
             return buildRequestWithResponseHandling(builder);
         }
 

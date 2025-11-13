@@ -764,7 +764,8 @@ public class CommitRequestManagerTest {
             commitRequestManager,
             partitions,
             2,
-            Errors.NONE);
+            Errors.NONE,
+            true);
         futures.forEach(f -> {
             assertTrue(f.isDone());
             assertFalse(f.isCompletedExceptionally());
@@ -1633,6 +1634,15 @@ public class CommitRequestManagerTest {
             final Set<TopicPartition> partitions,
             int numRequest,
             final Errors error) {
+            return sendAndVerifyDuplicatedOffsetFetchRequests(commitRequestManager, partitions, numRequest, error, false);
+    }
+
+    private List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> sendAndVerifyDuplicatedOffsetFetchRequests(
+            final CommitRequestManager commitRequestManager,
+            final Set<TopicPartition> partitions,
+            int numRequest,
+            final Errors error,
+            final boolean shouldUseTopicIds) {
         List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures = new ArrayList<>();
         long deadlineMs = time.milliseconds() + defaultApiTimeoutMs;
         for (int i = 0; i < numRequest; i++) {
@@ -1641,6 +1651,12 @@ public class CommitRequestManagerTest {
 
         NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
+
+        assertEquals(shouldUseTopicIds, res.unsentRequests.get(0).requestBuilder().latestAllowedVersion() >= 10);
+        ((OffsetFetchRequestData) res.unsentRequests.get(0).requestBuilder().build().data()).groups()
+            .forEach(group -> group.topics()
+                .forEach(topic -> assertEquals(shouldUseTopicIds, !topic.topicId().equals(Uuid.ZERO_UUID))));
+
         res.unsentRequests.get(0).handler().onComplete(buildOffsetFetchClientResponse(res.unsentRequests.get(0),
             partitions, error));
         res = commitRequestManager.poll(time.milliseconds());
