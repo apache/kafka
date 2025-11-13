@@ -48,7 +48,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.stream.Collectors;
 
 public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
 
@@ -87,14 +86,9 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
 
         // Map to store futures for each TopicPartition
         Map<TopicPartition, CompletableFuture<OffsetResponse>> futures = new HashMap<>();
-
         // Group TopicPartitions by leader node
         Map<Node, List<TopicPartition>> partitionsByNode = new HashMap<>();
-
         for (TopicPartition tp : topicPartitions) {
-            CompletableFuture<OffsetResponse> future = new CompletableFuture<>();
-            futures.put(tp, future);
-
             // Get leader node for this partition
             Optional<Node> leaderNodeOpt = metadataCache.getPartitionLeaderEndpoint(
                 tp.topic(),
@@ -104,35 +98,30 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
 
             if (leaderNodeOpt.isEmpty() || leaderNodeOpt.get().isEmpty()) {
                 // No leader available - complete with error
-
-                future.complete(new OffsetResponse(-1, Errors.LEADER_NOT_AVAILABLE));
+                futures.put(tp, CompletableFuture.completedFuture(new OffsetResponse(-1, Errors.LEADER_NOT_AVAILABLE)));
                 continue;
             }
 
-            Node leaderNode = leaderNodeOpt.get();
-            partitionsByNode.computeIfAbsent(leaderNode, k -> new ArrayList<>()).add(tp);
+            partitionsByNode.computeIfAbsent(leaderNodeOpt.get(), k -> new ArrayList<>()).add(tp);
         }
 
         // Create and enqueue requests for each node
-        for (Map.Entry<Node, List<TopicPartition>> entry : partitionsByNode.entrySet()) {
-            Node node = entry.getKey();
-            List<TopicPartition> partitions = entry.getValue();
-
-            // Create a map of futures only for partitions in this request
-            Map<TopicPartition, CompletableFuture<OffsetResponse>> partitionFutures = new HashMap<>();
-            for (TopicPartition tp : partitions) {
-                partitionFutures.put(tp, futures.get(tp));
+        partitionsByNode.forEach((node, partitionsByLeader) -> {
+            // All partitions with the same leader node will be included in the same ListOffsetsRequest.
+            Map<TopicPartition, CompletableFuture<OffsetResponse>> partitionFuturesByLeader = new HashMap<>();
+            for (TopicPartition tp : partitionsByLeader) {
+                CompletableFuture<OffsetResponse> future = new CompletableFuture<>();
+                futures.put(tp, future);
+                partitionFuturesByLeader.put(tp, future);
             }
 
             // Create ListOffsetsRequest for this node
-            ListOffsetsRequest.Builder requestBuilder = createListOffsetsRequest(partitions);
-
+            ListOffsetsRequest.Builder requestBuilder = createListOffsetsRequest(partitionsByLeader);
             // Create pending request to track this request
-            PendingRequest pendingRequest = new PendingRequest(node, partitions, partitionFutures, requestBuilder);
-
+            PendingRequest pendingRequest = new PendingRequest(node, partitionFuturesByLeader, requestBuilder);
             // Enqueue to send thread
             sendThread.enqueue(pendingRequest);
-        }
+        });
 
         return futures;
     }
@@ -141,31 +130,25 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
      * Creates a ListOffsetsRequest Builder for the given partitions requesting latest offsets.
      */
     private ListOffsetsRequest.Builder createListOffsetsRequest(List<TopicPartition> partitions) {
-        // Group partitions by topic name
-        Map<String, List<TopicPartition>> partitionsByTopic = partitions.stream()
-            .collect(Collectors.groupingBy(TopicPartition::topic));
-
-        List<ListOffsetsTopic> topics = new ArrayList<>();
-        for (Map.Entry<String, List<TopicPartition>> entry : partitionsByTopic.entrySet()) {
-            String topicName = entry.getKey();
-            ListOffsetsTopic topic = new ListOffsetsTopic().setName(topicName);
-
-            for (TopicPartition tp : entry.getValue()) {
-                topic.partitions().add(
-                    new ListOffsetsPartition()
-                        .setPartitionIndex(tp.partition())
-                        .setTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP)
-                        .setCurrentLeaderEpoch(-1) // Will be set by broker if needed
-                );
+        Map<String, ListOffsetsTopic> topicsMap = new HashMap<>();
+        partitions.forEach(tp -> {
+            if (!topicsMap.containsKey(tp.topic())) {
+                ListOffsetsTopic topic = new ListOffsetsTopic().setName(tp.topic());
+                topicsMap.put(tp.topic(), topic);
             }
-            topics.add(topic);
-        }
-
+            ListOffsetsTopic topic = topicsMap.get(tp.topic());
+            topic.partitions().add(
+                new ListOffsetsPartition()
+                    .setPartitionIndex(tp.partition())
+                    .setTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP)
+                    .setCurrentLeaderEpoch(-1) // Will be set by broker if needed
+            );
+        });
         // Isolation level will always be READ_UNCOMMITTED when finding the partition end offset.
         return ListOffsetsRequest.Builder.forConsumer(
             true,
             IsolationLevel.READ_UNCOMMITTED
-        ).setTargetTimes(topics);
+        ).setTargetTimes(List.copyOf(topicsMap.values()));
     }
 
     @Override
@@ -183,7 +166,6 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
      */
     private record PendingRequest(
         Node node,
-        List<TopicPartition> partitions,
         Map<TopicPartition, CompletableFuture<OffsetResponse>> futures,
         ListOffsetsRequest.Builder requestBuilder
     ) { }
@@ -215,7 +197,7 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
 
                 // Create completion handler
                 RequestAndCompletionHandler requestHandler = new RequestAndCompletionHandler(
-                    time.milliseconds(),
+                    time.hiResClockMs(),
                     current.node,
                     requestBuilder,
                     response -> handleResponse(current, response)
@@ -236,17 +218,15 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
                 return;
             }
 
-            log.debug("ListOffsets response received - {}", clientResponse);
-
-            // Parse the response
+            log.debug("ListOffsets response received successfully - {}", clientResponse);
             ListOffsetsResponse response = (ListOffsetsResponse) clientResponse.responseBody();
             
             for (ListOffsetsTopicResponse topicResponse : response.topics()) {
                 String topicName = topicResponse.name();
                 for (ListOffsetsPartitionResponse partitionResponse : topicResponse.partitions()) {
                     TopicPartition tp = new TopicPartition(topicName, partitionResponse.partitionIndex());
-                    // Remove the corresponding future from the map and complete it.
-                    CompletableFuture<OffsetResponse> future = pendingRequest.futures.remove(tp);
+                    // Get the corresponding future from the map and complete it.
+                    CompletableFuture<OffsetResponse> future = pendingRequest.futures.get(tp);
                     if (future != null) {
                         future.complete(new OffsetResponse(partitionResponse.offset(), Errors.forCode(partitionResponse.errorCode())));
                     }
@@ -254,8 +234,10 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
             }
 
             pendingRequest.futures.forEach((tp, future) -> {
-                // If any partition was not included in the response, complete with error
-                future.complete(new OffsetResponse(-1, Errors.UNKNOWN_TOPIC_OR_PARTITION));
+                // If future is not completed yet hence topic-partition was not included in the response, complete with error
+                if (!future.isDone()) {
+                    future.complete(new OffsetResponse(-1, Errors.UNKNOWN_TOPIC_OR_PARTITION));
+                }
             });
         }
 
@@ -265,18 +247,18 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
         private void handleErrorResponse(PendingRequest pendingRequest, ClientResponse clientResponse) {
             Errors error = Errors.UNKNOWN_SERVER_ERROR;
             if (clientResponse == null) {
-                log.debug("Response for ListOffsets for topicPartitions: {} is null", pendingRequest.partitions);
-            } else if (!clientResponse.hasResponse()) {
-                log.debug("Response for ListOffsets for topicPartitions: {} is invalid - {}", pendingRequest.partitions, clientResponse);
+                log.debug("Response for ListOffsets for topicPartitions: {} is null", pendingRequest.futures.keySet());
+            } else {
+                log.debug("Response for ListOffsets for topicPartitions: {} is invalid - {}", pendingRequest.futures.keySet(), clientResponse);
                 if (clientResponse.wasDisconnected()) {
-                    log.error("ListOffsets for TopicPartitions: {} was disconnected - {}.", pendingRequest.partitions, clientResponse);
+                    log.error("ListOffsets for TopicPartitions: {} was disconnected - {}.", pendingRequest.futures.keySet(), clientResponse);
                     error = Errors.NETWORK_EXCEPTION;
                 } else if (clientResponse.wasTimedOut()) {
-                    log.error("Response for ListOffsets for TopicPartitions: {} timed out - {}.", pendingRequest.partitions, clientResponse);
+                    log.error("Response for ListOffsets for TopicPartitions: {} timed out - {}.", pendingRequest.futures.keySet(), clientResponse);
                     error = Errors.REQUEST_TIMED_OUT;
                 }
             }
-            for (TopicPartition tp : pendingRequest.partitions) {
+            for (TopicPartition tp : pendingRequest.futures.keySet()) {
                 CompletableFuture<OffsetResponse> future = pendingRequest.futures.get(tp);
                 if (future != null) {
                     future.complete(new OffsetResponse(-1, error));

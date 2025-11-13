@@ -373,7 +373,7 @@ class BrokerServer(
       /* create persister */
       persister = createShareStatePersister()
 
-      partitionMetadataClient = createNetworkPartitionMetadataClient(metadataCache)
+      partitionMetadataClient = createPartitionMetadataClient(metadataCache)
 
       groupCoordinator = createGroupCoordinator()
 
@@ -624,7 +624,7 @@ class BrokerServer(
     }
   }
 
-  private def createNetworkPartitionMetadataClient(metadataCache: MetadataCache): PartitionMetadataClient = {
+  private def createPartitionMetadataClient(metadataCache: MetadataCache): PartitionMetadataClient = {
     new NetworkPartitionMetadataClient(
       metadataCache,
       NetworkUtils.buildNetworkClient(
