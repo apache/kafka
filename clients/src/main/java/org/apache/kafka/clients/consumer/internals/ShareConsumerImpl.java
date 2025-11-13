@@ -625,6 +625,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 final ShareFetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
                     currentFetch = fetch;
+                    handleCompletedAcknowledgements();
                     return new ConsumerRecords<>(fetch.records(), Map.of());
                 }
 
@@ -635,14 +636,13 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 // We will wait for retryBackoffMs
             } while (timer.notExpired());
 
+            handleCompletedAcknowledgements();
             return ConsumerRecords.empty();
         } catch (ShareFetchException e) {
             currentFetch = (ShareFetch<K, V>) e.shareFetch();
             throw e.cause();
         } finally {
             kafkaShareConsumerMetrics.recordPollEnd(timer.currentTimeMs());
-
-            handleCompletedAcknowledgements();
 
             release();
         }
@@ -975,6 +975,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 this::stopFindCoordinatorOnClose, firstException);
         swallow(log, Level.ERROR, "Failed invoking acknowledgement commit callback",
                 this::handleCompletedAcknowledgements, firstException);
+        swallow(log, Level.ERROR, "Failed processing background events",
+                this::processBackgroundEventsOnClose, firstException);
         if (applicationEventHandler != null)
             closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
         closeTimer.update();
@@ -1125,8 +1127,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 if (acknowledgementCommitCallbackHandler != null) {
                     acknowledgementCommitCallbackHandler.onComplete(completedAcknowledgements);
                 }
-            } catch (Exception e) {
-                log.warn("Exception thrown in acknowledgement commit callback", e);
             } finally {
                 completedAcknowledgements.clear();
             }
@@ -1192,6 +1192,23 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     log.warn("An error occurred when processing the acknowledgement event: {}", e.getMessage(), e);
                 }
             }
+        }
+    }
+
+    /**
+     * Process background events on close. Except some expected exceptions which might occur
+     * during close, exceptions encountered are thrown.
+     */
+    void processBackgroundEventsOnClose() {
+        if (backgroundEventQueue == null || backgroundEventHandler == null) {
+            return;
+        }
+
+        try {
+            processBackgroundEvents();
+        } catch (Exception e) {
+            if (!(e instanceof GroupAuthorizationException || e instanceof TopicAuthorizationException || e instanceof InvalidTopicException))
+                throw e;
         }
     }
 
