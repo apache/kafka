@@ -26,7 +26,6 @@ import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ImmutableMetricValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.test.StreamsTestUtils;
 
@@ -681,33 +680,110 @@ public class StreamsMetricsImplTest {
 
     @Test
     public void shouldAddClientLevelImmutableMetric() {
-        final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
-        final MetricConfig metricConfig = new MetricConfig().recordLevel(recordingLevel);
         final String value = "immutable-value";
-        final ImmutableMetricValue immutableValue = new ImmutableMetricValue<>(value);
-        when(metrics.metricName(METRIC_NAME1, CLIENT_LEVEL_GROUP, DESCRIPTION1, clientLevelTags))
-            .thenReturn(metricName1);
-        doNothing().when(metrics).addMetric(eq(metricName1), eqMetricConfig(metricConfig), eq(immutableValue));
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
 
-        streamsMetrics.addClientLevelImmutableMetric(METRIC_NAME1, DESCRIPTION1, recordingLevel, value);
+        final StreamsMetricsImpl streamsMetrics
+            = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
+
+        streamsMetrics.addClientLevelImmutableMetric(
+            METRIC_NAME1,
+            DESCRIPTION1,
+            recordingLevel,
+            value
+        );
+
+        final MetricName name = metrics.metricName(
+            METRIC_NAME1,
+            CLIENT_LEVEL_GROUP,
+            mkMap(
+                mkEntry("client-id", CLIENT_ID)
+            )
+        );
+        assertThat(metrics.metric(name), notNullValue());
+        assertThat(metrics.metric(name).metricValue(), equalTo(value));
+    }
+
+    @Test
+    public void shouldAddClientLevelImmutableMetricWithAdditionalTags() {
+        final RecordingLevel recordingLevel = RecordingLevel.INFO;
+        final String value = "immutable-value";
+
+        final StreamsMetricsImpl streamsMetrics
+            = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
+
+        streamsMetrics.addClientLevelImmutableMetric(
+            METRIC_NAME1,
+            DESCRIPTION1,
+            Collections.singletonMap("additional-tag", "additional-value"),
+            recordingLevel,
+            value
+        );
+
+        final MetricName name = metrics.metricName(
+            METRIC_NAME1,
+            CLIENT_LEVEL_GROUP,
+            mkMap(
+                mkEntry("client-id", CLIENT_ID),
+                mkEntry("additional-tag", "additional-value")
+            )
+        );
+        assertThat(metrics.metric(name), notNullValue());
+        assertThat(metrics.metric(name).metricValue(), equalTo(value));
     }
 
     @Test
     public void shouldAddClientLevelMutableMetric() {
-        final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
-        final MetricConfig metricConfig = new MetricConfig().recordLevel(recordingLevel);
-        final Gauge<String> valueProvider = (config, now) -> "mutable-value";
-        when(metrics.metricName(METRIC_NAME1, CLIENT_LEVEL_GROUP, DESCRIPTION1, clientLevelTags))
-            .thenReturn(metricName1);
-        doNothing().when(metrics).addMetric(eq(metricName1), eqMetricConfig(metricConfig), eq(valueProvider));
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final String value = "mutable-value";
 
-        streamsMetrics.addClientLevelMutableMetric(METRIC_NAME1, DESCRIPTION1, recordingLevel, valueProvider);
+        final StreamsMetricsImpl streamsMetrics
+            = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
+
+        streamsMetrics.addClientLevelMutableMetric(
+            METRIC_NAME1,
+            DESCRIPTION1,
+            recordingLevel,
+            (c, t) -> value
+        );
+
+        final MetricName name = metrics.metricName(
+            METRIC_NAME1,
+            CLIENT_LEVEL_GROUP,
+            mkMap(
+                mkEntry("client-id", CLIENT_ID)
+            )
+        );
+        assertThat(metrics.metric(name), notNullValue());
+        assertThat(metrics.metric(name).metricValue(), equalTo(value));
+    }
+
+    @Test
+    public void shouldAddClientLevelMutableMetricWithAdditionalTags() {
+        final RecordingLevel recordingLevel = RecordingLevel.INFO;
+        final String value = "mutable-value";
+
+        final StreamsMetricsImpl streamsMetrics
+            = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
+
+        streamsMetrics.addClientLevelMutableMetric(
+            METRIC_NAME1,
+            DESCRIPTION1,
+            Collections.singletonMap("additional-tag", "additional-value"),
+            recordingLevel,
+            (c, t) -> value
+        );
+
+        final MetricName name = metrics.metricName(
+            METRIC_NAME1,
+            CLIENT_LEVEL_GROUP,
+            mkMap(
+                mkEntry("client-id", CLIENT_ID),
+                mkEntry("additional-tag", "additional-value")
+            )
+        );
+        assertThat(metrics.metric(name), notNullValue());
+        assertThat(metrics.metric(name).metricValue(), equalTo(value));
     }
 
     @Test
@@ -1166,7 +1242,8 @@ public class StreamsMetricsImplTest {
         verifyMetric(metricNamePrefix + "-rate", DESCRIPTION1, valueToRecord1, valueToRecord2, expectedRateMetricValue);
         assertThat(metrics.metrics().size(), equalTo(1 + 1)); // one metric is added automatically in the constructor of Metrics
     }
- @Test
+
+    @Test
     public void shouldAddValue() {
         StreamsMetricsImpl.addValueMetricToSensor(sensor, group, tags, metricNamePrefix, DESCRIPTION1);
 

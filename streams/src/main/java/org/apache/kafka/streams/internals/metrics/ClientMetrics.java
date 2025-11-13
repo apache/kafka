@@ -131,11 +131,11 @@ public class ClientMetrics {
         );
     }
 
-    public static void addClientStateTelemetryMetric(String processId,
-                                                     String applicationId,
+    public static void addClientStateTelemetryMetric(final String processId,
+                                                     final String applicationId,
                                                      final StreamsMetricsImpl streamsMetrics,
                                                      final Gauge<Integer> stateProvider) {
-        Map<String, String> additionalTags = new LinkedHashMap<>();
+        final Map<String, String> additionalTags = new LinkedHashMap<>();
         additionalTags.put(PROCESS_ID_TAG, processId);
         additionalTags.put(APPLICATION_ID_TAG, applicationId);
 
@@ -148,7 +148,7 @@ public class ClientMetrics {
         );
     }
 
-    public static void addClientRecordingLevelMetric(String processId,
+    public static void addClientRecordingLevelMetric(final String processId,
                                                      final StreamsMetricsImpl streamsMetrics,
                                                      final int recordingLevel) {
         streamsMetrics.addClientLevelImmutableMetric(
