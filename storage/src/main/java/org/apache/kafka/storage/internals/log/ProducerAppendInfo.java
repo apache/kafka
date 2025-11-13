@@ -87,24 +87,67 @@ public class ProducerAppendInfo {
     }
 
     private void maybeValidateDataBatch(short producerEpoch, int firstSeq, long offset) {
-        checkProducerEpoch(producerEpoch, offset);
+        // Default transaction version 0 is passed for data batches.
+        checkProducerEpoch(producerEpoch, offset, 0);
         if (origin == AppendOrigin.CLIENT) {
             checkSequence(producerEpoch, firstSeq, offset);
         }
     }
 
-    private void checkProducerEpoch(short producerEpoch, long offset) {
-        if (producerEpoch < updatedEntry.producerEpoch()) {
-            String message = "Epoch of producer " + producerId + " at offset " + offset + " in " + topicPartition +
-                    " is " + producerEpoch + ", " + "which is smaller than the last seen epoch " + updatedEntry.producerEpoch();
+    /**
+     * Validates the producer epoch for transaction markers based on the transaction version.
+     * 
+     * <p>For Transaction Version 2 (TV2) and above (KIP-1228), the coordinator always increments
+     * the producer epoch by one before writing the final transaction marker. This establishes a
+     * clear invariant: a valid TV2 marker must have an epoch strictly greater than the producer's
+     * current epoch at the leader. Any marker with markerEpoch <= currentEpoch is a late or duplicate
+     * marker and must be rejected to prevent conflating multiple transactions under the same epoch,
+     * which would threaten exactly-once semantics (EOS) guarantees.
+     * 
+     * <p>For legacy transaction versions (TV0/TV1), markers were written with the same epoch as
+     * the transactional records, so we accept markers when markerEpoch >= currentEpoch. This
+     * preserves backward compatibility but cannot distinguish between active and stale markers.
+     * 
+     * @param producerEpoch the epoch from the transaction marker
+     * @param offset the offset where the marker will be written
+     * @param transactionVersion the transaction version (0/1 = legacy, 2+ = TV2)
+     */
+    private void checkProducerEpoch(short producerEpoch, long offset, int transactionVersion) {
+        short current = updatedEntry.producerEpoch();
+        short marker = producerEpoch;
 
-            if (origin == AppendOrigin.REPLICATION) {
-                log.warn(message);
-            } else {
-                // Starting from 2.7, we replaced ProducerFenced error with InvalidProducerEpoch in the
-                // producer send response callback to differentiate from the former fatal exception,
-                // letting client abort the ongoing transaction and retry.
-                throw new InvalidProducerEpochException(message);
+        // Legacy (TV0/TV1): Markers use the same epoch as transactional records, so we accept markerEpoch >= currentEpoch.
+        // This creates a correctness gap: leaders cannot distinguish between active markers and late/duplicate ones.
+        // If a duplicate marker arrives after a new transaction begins with the same epoch, it could mistakenly
+        // commit or abort records from the newer transaction, threatening exactly-once semantics (EOS) guarantees.
+        //
+        // With TV2, the coordinator always bumps the producer epoch by +1 before writing the final
+        // marker, establishing a clear invariant: a valid TV2 marker must have markerEpoch > currentEpoch (strictly greater).
+        // Any marker with markerEpoch <= currentEpoch is a late or duplicate marker and must be rejected.
+        // This closes the long-standing gap and prevents multiple transactions from being conflated under the same epoch.(KIP-1228)
+        if (transactionVersion >= 2) {
+            if (marker <= current) {
+                String message = "Reject late/dup TV2 marker: markerEpoch=" + marker + " <= currentEpoch=" + current +
+                        " for producer " + producerId + " at offset " + offset + " in " + topicPartition;
+                if (origin == AppendOrigin.REPLICATION) {
+                    log.warn(message);
+                } else {
+                    throw new InvalidProducerEpochException(message);
+                }
+            }
+        } else {
+            if (marker < current) {
+                String message = "Epoch of producer " + producerId + " at offset " + offset + " in " + topicPartition +
+                        " is " + producerEpoch + ", " + "which is smaller than the last seen epoch " + updatedEntry.producerEpoch();
+
+                if (origin == AppendOrigin.REPLICATION) {
+                    log.warn(message);
+                } else {
+                    // Starting from 2.7, we replaced ProducerFenced error with InvalidProducerEpoch in the
+                    // producer send response callback to differentiate from the former fatal exception,
+                    // letting client abort the ongoing transaction and retry.
+                    throw new InvalidProducerEpochException(message);
+                }
             }
         }
     }
@@ -154,12 +197,16 @@ public class ProducerAppendInfo {
     }
 
     public Optional<CompletedTxn> append(RecordBatch batch, Optional<LogOffsetMetadata> firstOffsetMetadataOpt) {
+        return append(batch, firstOffsetMetadataOpt, 0);
+    }
+
+    public Optional<CompletedTxn> append(RecordBatch batch, Optional<LogOffsetMetadata> firstOffsetMetadataOpt, int transactionVersion) {
         if (batch.isControlBatch()) {
             Iterator<Record> recordIterator = batch.iterator();
             if (recordIterator.hasNext()) {
                 Record record = recordIterator.next();
                 EndTransactionMarker endTxnMarker = EndTransactionMarker.deserialize(record);
-                return appendEndTxnMarker(endTxnMarker, batch.producerEpoch(), batch.baseOffset(), record.timestamp());
+                return appendEndTxnMarker(endTxnMarker, batch.producerEpoch(), batch.baseOffset(), record.timestamp(), transactionVersion);
             } else {
                 // An empty control batch means the entire transaction has been cleaned from the log, so no need to append
                 return Optional.empty();
@@ -212,8 +259,9 @@ public class ProducerAppendInfo {
             EndTransactionMarker endTxnMarker,
             short producerEpoch,
             long offset,
-            long timestamp) {
-        checkProducerEpoch(producerEpoch, offset);
+            long timestamp,
+            int transactionVersion) {
+        checkProducerEpoch(producerEpoch, offset, transactionVersion);
         checkCoordinatorEpoch(endTxnMarker, offset);
 
         // Only emit the `CompletedTxn` for non-empty transactions. A transaction marker

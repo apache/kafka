@@ -1216,7 +1216,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   def appendRecordsToLeader(records: MemoryRecords, origin: AppendOrigin, requiredAcks: Int,
-                            requestLocal: RequestLocal, verificationGuard: VerificationGuard = VerificationGuard.SENTINEL): LogAppendInfo = {
+                            requestLocal: RequestLocal, verificationGuard: VerificationGuard = VerificationGuard.SENTINEL, transactionVersion: Int = 0): LogAppendInfo = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       leaderLogIfLocal match {
         case Some(leaderLog) =>
@@ -1230,7 +1230,7 @@ class Partition(val topicPartition: TopicPartition,
               s"live replica(s) broker.id are : $inSyncReplicaIds")
           }
 
-          val info = leaderLog.appendAsLeader(records, this.leaderEpoch, origin, requestLocal, verificationGuard)
+          val info = leaderLog.appendAsLeader(records, this.leaderEpoch, origin, requestLocal, verificationGuard, transactionVersion)
 
           // we may need to increment high watermark since ISR could be down to 1
           (info, maybeIncrementLeaderHW(leaderLog))

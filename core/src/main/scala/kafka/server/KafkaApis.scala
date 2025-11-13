@@ -1780,6 +1780,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
 
         val controlRecords = mutable.Map.empty[TopicIdPartition, MemoryRecords]
+        val markerTransactionVersion = marker.transactionVersion()
+
         partitionsWithCompatibleMessageFormat.foreach { partition =>
           if (partition.topic == GROUP_METADATA_TOPIC_NAME) {
             groupCoordinator.completeTransaction(
@@ -1828,7 +1830,8 @@ class KafkaApis(val requestChannel: RequestChannel,
               errors.foreachEntry { (topicIdPartition, partitionResponse) =>
                 addResultAndMaybeComplete(topicIdPartition.topicPartition(), partitionResponse.error)
               }
-            }
+            },
+            transactionVersion = markerTransactionVersion
           )
         }
       }

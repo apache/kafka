@@ -38,17 +38,20 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
         private final int coordinatorEpoch;
         private final TransactionResult result;
         private final List<TopicPartition> partitions;
+        private final int transactionVersion;
 
         public TxnMarkerEntry(long producerId,
                               short producerEpoch,
                               int coordinatorEpoch,
                               TransactionResult result,
-                              List<TopicPartition> partitions) {
+                              List<TopicPartition> partitions,
+                              int transactionVersion) {
             this.producerId = producerId;
             this.producerEpoch = producerEpoch;
             this.coordinatorEpoch = coordinatorEpoch;
             this.result = result;
             this.partitions = partitions;
+            this.transactionVersion = transactionVersion;
         }
 
         public long producerId() {
@@ -71,6 +74,10 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
             return partitions;
         }
 
+        public int transactionVersion() {
+            return transactionVersion;
+        }
+
         @Override
         public String toString() {
             return "TxnMarkerEntry{" +
@@ -79,6 +86,7 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
                        ", coordinatorEpoch=" + coordinatorEpoch +
                        ", result=" + result +
                        ", partitions=" + partitions +
+                       ", transactionVersion=" + transactionVersion +
                        '}';
         }
 
@@ -91,12 +99,13 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
                        producerEpoch == that.producerEpoch &&
                        coordinatorEpoch == that.coordinatorEpoch &&
                        result == that.result &&
+                       transactionVersion == that.transactionVersion &&
                        Objects.equals(partitions, that.partitions);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(producerId, producerEpoch, coordinatorEpoch, result, partitions);
+            return Objects.hash(producerId, producerEpoch, coordinatorEpoch, result, partitions, transactionVersion);
         }
     }
 
@@ -178,12 +187,19 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
                     topicPartitions.add(new TopicPartition(topic.name(), partitionIdx));
                 }
             }
+            // Read transactionVersion from raw marker data (only available in version 2+)
+            int transactionVersion = 0;
+            if (version() >= 2) {
+                Byte tv = markerEntry.transactionVersion();
+                transactionVersion = (tv != null) ? tv.intValue() : 0;
+            }
             markers.add(new TxnMarkerEntry(
                 markerEntry.producerId(),
                 markerEntry.producerEpoch(),
                 markerEntry.coordinatorEpoch(),
                 TransactionResult.forId(markerEntry.transactionResult()),
-                topicPartitions)
+                topicPartitions,
+                transactionVersion)
             );
         }
         return markers;

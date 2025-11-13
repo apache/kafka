@@ -621,6 +621,8 @@ class ReplicaManager(val config: KafkaConfig,
    *                                      thread calling this method
    * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
    * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
+   * @param transactionVersion            the transaction version for the records (0/1 for legacy TV0/TV1, 2 for TV2, etc.).
+   *                                      Defaults to 0 (legacy behavior). Used for epoch validation of transaction markers.
    */
   def appendRecordsToLeader(
     requiredAcks: Short,
@@ -629,7 +631,8 @@ class ReplicaManager(val config: KafkaConfig,
     entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
     requestLocal: RequestLocal = RequestLocal.noCaching,
     actionQueue: ActionQueue = this.defaultActionQueue,
-    verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty
+    verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
+    transactionVersion: Int = 0
   ): Map[TopicIdPartition, LogAppendResult] = {
     val startTimeMs = time.milliseconds
     val localProduceResultsWithTopicId = appendToLocalLog(
@@ -638,7 +641,8 @@ class ReplicaManager(val config: KafkaConfig,
       entriesPerPartition,
       requiredAcks,
       requestLocal,
-      verificationGuards.toMap
+      verificationGuards.toMap,
+      transactionVersion
     )
     debug("Produce to local log in %d ms".format(time.milliseconds - startTimeMs))
 
@@ -677,7 +681,8 @@ class ReplicaManager(val config: KafkaConfig,
                     responseCallback: Map[TopicIdPartition, PartitionResponse] => Unit,
                     recordValidationStatsCallback: Map[TopicIdPartition, RecordValidationStats] => Unit = _ => (),
                     requestLocal: RequestLocal = RequestLocal.noCaching,
-                    verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
+                    verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
+                    transactionVersion: Int = 0): Unit = {
     if (!isValidRequiredAcks(requiredAcks)) {
       sendInvalidRequiredAcksResponse(entriesPerPartition, responseCallback)
       return
@@ -690,7 +695,8 @@ class ReplicaManager(val config: KafkaConfig,
       entriesPerPartition,
       requestLocal,
       defaultActionQueue,
-      verificationGuards
+      verificationGuards,
+      transactionVersion
     )
 
     val produceStatus = buildProducePartitionStatus(localProduceResults)
@@ -1382,7 +1388,8 @@ class ReplicaManager(val config: KafkaConfig,
                                entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
                                requiredAcks: Short,
                                requestLocal: RequestLocal,
-                               verificationGuards: Map[TopicPartition, VerificationGuard]):
+                               verificationGuards: Map[TopicPartition, VerificationGuard],
+                               transactionVersion: Int):
   Map[TopicIdPartition, LogAppendResult] = {
     val traceEnabled = isTraceEnabled
     def processFailedRecord(topicIdPartition: TopicIdPartition, t: Throwable) = {
@@ -1416,7 +1423,7 @@ class ReplicaManager(val config: KafkaConfig,
         try {
           val partition = getPartitionOrException(topicIdPartition)
           val info = partition.appendRecordsToLeader(records, origin, requiredAcks, requestLocal,
-            verificationGuards.getOrElse(topicIdPartition.topicPartition(), VerificationGuard.SENTINEL))
+            verificationGuards.getOrElse(topicIdPartition.topicPartition(), VerificationGuard.SENTINEL), transactionVersion)
           val numAppendedMessages = info.numMessages
 
           // update stats for successfully appended bytes and messages as bytesInRate and messageInRate
