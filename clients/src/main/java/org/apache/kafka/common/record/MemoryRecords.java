@@ -492,16 +492,6 @@ public class MemoryRecords extends AbstractRecords {
             false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, maxSize);
     }
 
-    public static MemoryRecordsBuilder idempotentBuilder(ByteBuffer buffer,
-                                                         Compression compression,
-                                                         long baseOffset,
-                                                         long producerId,
-                                                         short producerEpoch,
-                                                         int baseSequence) {
-        return builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compression, TimestampType.CREATE_TIME,
-                baseOffset, System.currentTimeMillis(), producerId, producerEpoch, baseSequence);
-    }
-
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
                                                byte magic,
                                                Compression compression,

@@ -367,6 +367,30 @@ public class GetOffsetShellTest {
         }
     }
 
+    @ClusterTemplate("withRemoteStorage")
+    public void testGetOffsetsByEarliestTieredSpec() throws InterruptedException {
+        setUp();
+        setUpRemoteLogTopics();
+
+        for (String time : new String[] {"-6", "earliest-pending-upload"}) {
+            // test topics disable remote log storage
+            // as remote log disabled, broker returns unknown offset of each topic partition and these
+            // unknown offsets are ignore by GetOffsetShell, hence we have empty result here.
+            assertEquals(List.of(),
+                executeAndParse("--topic-partitions", "topic\\d+:0", "--time", time));
+
+            // test topics enable remote log storage
+            TestUtils.waitForCondition(() ->
+                    List.of(
+                            new Row("topicRLS1", 0, 0L),
+                            new Row("topicRLS2", 0, 1L),
+                            new Row("topicRLS3", 0, 2L),
+                            new Row("topicRLS4", 0, 3L))
+                            .equals(executeAndParse("--topic-partitions", "topicRLS.*:0", "--time", time)),
+                    "testGetOffsetsByEarliestTieredSpec result not match");
+        }
+    }
+
     @ClusterTest
     public void testGetOffsetsByTimestamp() {
         setUp();

@@ -282,7 +282,7 @@ public class ClientsTestUtils {
         TestUtils.waitForCondition(() -> {
             consumer.poll(Duration.ofMillis(100));
             return consumer.assignment().equals(expectedAssignment);
-        }, "Timed out while awaiting expected assignment " + expectedAssignment + ". " +
+        }, () -> "Timed out while awaiting expected assignment " + expectedAssignment + ". " +
                 "The current assignment is " + consumer.assignment()
         );
     }
@@ -311,7 +311,7 @@ public class ClientsTestUtils {
         Optional<Map<TopicPartition, OffsetAndMetadata>> offsetsOpt
     ) throws InterruptedException {
 
-        var commitCallback = new RetryCommitCallback(consumer, offsetsOpt);
+        var commitCallback = new RetryCommitCallback<>(consumer, offsetsOpt);
         sendAsyncCommit(consumer, commitCallback, offsetsOpt);
 
         TestUtils.waitForCondition(() -> {

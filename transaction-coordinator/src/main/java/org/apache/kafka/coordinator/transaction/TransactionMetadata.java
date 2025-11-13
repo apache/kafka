@@ -117,6 +117,7 @@ public class TransactionMetadata {
         }
     }
 
+    // VisibleForTesting
     public void addPartitions(Collection<TopicPartition> partitions) {
         topicPartitions.addAll(partitions);
     }
@@ -500,6 +501,7 @@ public class TransactionMetadata {
         return transactionalId;
     }
 
+    // VisibleForTesting
     public void setProducerId(long producerId) {
         this.producerId = producerId;
     }
@@ -507,6 +509,7 @@ public class TransactionMetadata {
         return producerId;
     }
 
+    // VisibleForTesting
     public void setPrevProducerId(long prevProducerId) {
         this.prevProducerId = prevProducerId;
     }
@@ -534,6 +537,7 @@ public class TransactionMetadata {
         return txnTimeoutMs;
     }
 
+    // VisibleForTesting
     public void state(TransactionState state) {
         this.state = state;
     }
@@ -550,6 +554,7 @@ public class TransactionMetadata {
         return txnStartTimestamp;
     }
 
+    // VisibleForTesting
     public void txnLastUpdateTimestamp(long txnLastUpdateTimestamp) {
         this.txnLastUpdateTimestamp = txnLastUpdateTimestamp;
     }

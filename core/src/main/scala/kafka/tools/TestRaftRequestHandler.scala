@@ -18,7 +18,6 @@
 package kafka.tools
 
 import kafka.network.RequestChannel
-import kafka.raft.RaftManager
 import kafka.server.ApiRequestHandler
 import kafka.utils.Logging
 import org.apache.kafka.common.internals.FatalExitError
@@ -26,6 +25,7 @@ import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumE
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BeginQuorumEpochResponse, EndQuorumEpochResponse, FetchResponse, FetchSnapshotResponse, VoteResponse}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.raft.RaftManager
 import org.apache.kafka.server.ApiVersionManager
 import org.apache.kafka.server.common.RequestLocal
 

@@ -30,29 +30,10 @@ import java.util.Properties;
 
 /**
  * Represents the configuration of a resource.
- *
+ * <p>
  * This class is thread-safe.
  */
-public final class ConfigurationImage {
-    private final ConfigResource resource;
-
-    private final Map<String, String> data;
-
-    public ConfigurationImage(
-        ConfigResource resource,
-        Map<String, String> data
-    ) {
-        this.resource = resource;
-        this.data = data;
-    }
-
-    public ConfigResource resource() {
-        return resource;
-    }
-
-    public Map<String, String> data() {
-        return data;
-    }
+public record ConfigurationImage(ConfigResource resource, Map<String, String> data) {
 
     public boolean isEmpty() {
         return data.isEmpty();

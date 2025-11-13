@@ -49,8 +49,8 @@ import java.util.stream.Collectors;
  * @param userEndpoint                  The user endpoint exposed for Interactive Queries by the Streams client that
  *                                      contains the member.
  * @param clientTags                    Tags of the client of the member used for rack-aware assignment.
- * @param assignedTasks                 Tasks assigned to the member.
- * @param tasksPendingRevocation        Tasks owned by the member pending revocation.
+ * @param assignedTasks                 Tasks assigned to the member, including assignment epochs for active tasks.
+ * @param tasksPendingRevocation        Tasks owned by the member pending revocation, including assignment epochs for active tasks.
  */
 @SuppressWarnings("checkstyle:JavaNCSS")
 public record StreamsGroupMember(String memberId,
@@ -66,8 +66,8 @@ public record StreamsGroupMember(String memberId,
                                  String processId,
                                  Optional<StreamsGroupMemberMetadataValue.Endpoint> userEndpoint,
                                  Map<String, String> clientTags,
-                                 TasksTuple assignedTasks,
-                                 TasksTuple tasksPendingRevocation) {
+                                 TasksTupleWithEpochs assignedTasks,
+                                 TasksTupleWithEpochs tasksPendingRevocation) {
 
     public StreamsGroupMember {
         Objects.requireNonNull(memberId, "memberId cannot be null");
@@ -94,8 +94,8 @@ public record StreamsGroupMember(String memberId,
         private String processId = null;
         private Optional<StreamsGroupMemberMetadataValue.Endpoint> userEndpoint = null;
         private Map<String, String> clientTags = null;
-        private TasksTuple assignedTasks = null;
-        private TasksTuple tasksPendingRevocation = null;
+        private TasksTupleWithEpochs assignedTasks = null;
+        private TasksTupleWithEpochs tasksPendingRevocation = null;
 
         public Builder(String memberId) {
             this.memberId = Objects.requireNonNull(memberId, "memberId cannot be null");
@@ -223,12 +223,12 @@ public record StreamsGroupMember(String memberId,
             return this;
         }
 
-        public Builder setAssignedTasks(TasksTuple assignedTasks) {
+        public Builder setAssignedTasks(TasksTupleWithEpochs assignedTasks) {
             this.assignedTasks = assignedTasks;
             return this;
         }
 
-        public Builder setTasksPendingRevocation(TasksTuple tasksPendingRevocation) {
+        public Builder setTasksPendingRevocation(TasksTupleWithEpochs tasksPendingRevocation) {
             this.tasksPendingRevocation = tasksPendingRevocation;
             return this;
         }
@@ -254,28 +254,22 @@ public record StreamsGroupMember(String memberId,
             setPreviousMemberEpoch(record.previousMemberEpoch());
             setState(MemberState.fromValue(record.state()));
             setAssignedTasks(
-                new TasksTuple(
-                    assignmentFromTaskIds(record.activeTasks()),
-                    assignmentFromTaskIds(record.standbyTasks()),
-                    assignmentFromTaskIds(record.warmupTasks())
+                TasksTupleWithEpochs.fromCurrentAssignmentRecord(
+                    record.activeTasks(),
+                    record.standbyTasks(),
+                    record.warmupTasks(),
+                    record.memberEpoch()
                 )
             );
             setTasksPendingRevocation(
-                new TasksTuple(
-                    assignmentFromTaskIds(record.activeTasksPendingRevocation()),
-                    assignmentFromTaskIds(record.standbyTasksPendingRevocation()),
-                    assignmentFromTaskIds(record.warmupTasksPendingRevocation())
+                TasksTupleWithEpochs.fromCurrentAssignmentRecord(
+                    record.activeTasksPendingRevocation(),
+                    record.standbyTasksPendingRevocation(),
+                    record.warmupTasksPendingRevocation(),
+                    record.memberEpoch()
                 )
             );
             return this;
-        }
-
-        private static Map<String, Set<Integer>> assignmentFromTaskIds(
-            List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> topicPartitionsList
-        ) {
-            return topicPartitionsList.stream().collect(Collectors.toMap(
-                StreamsGroupCurrentMemberAssignmentValue.TaskIds::subtopologyId,
-                taskIds -> Set.copyOf(taskIds.partitions())));
         }
 
         public static Builder withDefaults(String memberId) {
@@ -284,12 +278,14 @@ public record StreamsGroupMember(String memberId,
                 .setTopologyEpoch(-1)
                 .setInstanceId(null)
                 .setRackId(null)
+                .setClientId("")
+                .setClientHost("")
                 .setProcessId("")
                 .setClientTags(Collections.emptyMap())
                 .setState(MemberState.STABLE)
                 .setMemberEpoch(0)
-                .setAssignedTasks(TasksTuple.EMPTY)
-                .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
+                .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
                 .setUserEndpoint(null);
         }
 
@@ -344,7 +340,7 @@ public record StreamsGroupMember(String memberId,
             .setMemberId(memberId)
             .setAssignment(
                 new StreamsGroupDescribeResponseData.Assignment()
-                    .setActiveTasks(taskIdsFromMap(assignedTasks.activeTasks()))
+                    .setActiveTasks(taskIdsFromMapWithEpochs(assignedTasks.activeTasksWithEpochs()))
                     .setStandbyTasks(taskIdsFromMap(assignedTasks.standbyTasks()))
                     .setWarmupTasks(taskIdsFromMap(assignedTasks.warmupTasks())))
             .setTargetAssignment(describedTargetAssignment)
@@ -374,6 +370,16 @@ public record StreamsGroupMember(String memberId,
             taskIds.add(new StreamsGroupDescribeResponseData.TaskIds()
                 .setSubtopologyId(subtopologyId)
                 .setPartitions(tasks.get(subtopologyId).stream().sorted().toList()));
+        });
+        return taskIds;
+    }
+
+    private static List<StreamsGroupDescribeResponseData.TaskIds> taskIdsFromMapWithEpochs(Map<String, Map<Integer, Integer>> tasksWithEpochs) {
+        List<StreamsGroupDescribeResponseData.TaskIds> taskIds = new ArrayList<>();
+        tasksWithEpochs.keySet().stream().sorted().forEach(subtopologyId -> {
+            taskIds.add(new StreamsGroupDescribeResponseData.TaskIds()
+                .setSubtopologyId(subtopologyId)
+                .setPartitions(tasksWithEpochs.get(subtopologyId).keySet().stream().sorted().toList()));
         });
         return taskIds;
     }

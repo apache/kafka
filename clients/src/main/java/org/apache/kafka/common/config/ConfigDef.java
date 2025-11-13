@@ -1006,26 +1006,72 @@ public class ConfigDef {
     public static class ValidList implements Validator {
 
         final ValidString validString;
+        final boolean isEmptyAllowed;
+        final boolean isNullAllowed;
 
-        private ValidList(List<String> validStrings) {
+        private ValidList(List<String> validStrings, boolean isEmptyAllowed, boolean isNullAllowed) {
             this.validString = new ValidString(validStrings);
+            this.isEmptyAllowed = isEmptyAllowed;
+            this.isNullAllowed = isNullAllowed;
+        }
+
+        public static ValidList anyNonDuplicateValues(boolean isEmptyAllowed, boolean isNullAllowed) {
+            return new ValidList(List.of(), isEmptyAllowed, isNullAllowed);
         }
 
         public static ValidList in(String... validStrings) {
-            return new ValidList(Arrays.asList(validStrings));
+            return new ValidList(List.of(validStrings), true, false);
+        }
+
+        public static ValidList in(boolean isEmptyAllowed, String... validStrings) {
+            if (!isEmptyAllowed && validStrings.length == 0) {
+                throw new IllegalArgumentException("At least one valid string must be provided when empty values are not allowed");
+            }
+            return new ValidList(List.of(validStrings), isEmptyAllowed, false);
         }
 
         @Override
         public void ensureValid(final String name, final Object value) {
+            if (value == null) {
+                if (isNullAllowed)
+                    return;
+                else
+                    throw new ConfigException("Configuration '" + name + "' values must not be null.");
+            }
+
             @SuppressWarnings("unchecked")
-            List<String> values = (List<String>) value;
-            for (String string : values) {
-                validString.ensureValid(name, string);
+            List<Object> values = (List<Object>) value;
+            if (!isEmptyAllowed && values.isEmpty()) {
+                String validString = this.validString.validStrings.isEmpty() ? "any non-empty value" : this.validString.toString();
+                throw new ConfigException("Configuration '" + name + "' must not be empty. Valid values include: " + validString);
+            }
+
+            if (Set.copyOf(values).size() != values.size()) {
+                throw new ConfigException("Configuration '" + name + "' values must not be duplicated.");
+            }
+
+            validateIndividualValues(name, values);
+        }
+
+        private void validateIndividualValues(String name, List<Object> values) {
+            boolean hasValidStrings = !validString.validStrings.isEmpty();
+
+            for (Object value : values) {
+                if (value instanceof String) {
+                    String string = (String) value;
+                    if (string.isEmpty()) {
+                        throw new ConfigException("Configuration '" + name + "' values must not be empty.");
+                    }
+                    if (hasValidStrings) {
+                        validString.ensureValid(name, value);
+                    }
+                }
             }
         }
 
         public String toString() {
-            return validString.toString();
+            return validString + (isEmptyAllowed ? " (empty config allowed)" : " (empty not allowed)") +
+                    (isNullAllowed ? " (null config allowed)" : " (null not allowed)");
         }
     }
 

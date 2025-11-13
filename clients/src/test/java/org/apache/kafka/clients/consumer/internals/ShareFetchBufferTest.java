@@ -33,6 +33,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -87,8 +88,7 @@ public class ShareFetchBufferTest {
         try (ShareFetchBuffer fetchBuffer = new ShareFetchBuffer(logContext)) {
             ShareCompletedFetch completedFetch = completedFetch(topicAPartition0);
             assertTrue(fetchBuffer.isEmpty());
-            fetchBuffer.add(completedFetch);
-            assertTrue(fetchBuffer.hasCompletedFetches(p -> true));
+            fetchBuffer.add(List.of(completedFetch));
             assertFalse(fetchBuffer.isEmpty());
             assertNotNull(fetchBuffer.peek());
             assertSame(completedFetch, fetchBuffer.peek());
@@ -111,7 +111,7 @@ public class ShareFetchBufferTest {
             assertNull(fetchBuffer.nextInLineFetch());
             assertTrue(fetchBuffer.isEmpty());
 
-            fetchBuffer.add(completedFetch(topicAPartition0));
+            fetchBuffer.add(List.of(completedFetch(topicAPartition0)));
             assertFalse(fetchBuffer.isEmpty());
 
             fetchBuffer.setNextInLineFetch(completedFetch(topicAPartition0));
@@ -132,8 +132,7 @@ public class ShareFetchBufferTest {
     public void testBufferedPartitions() {
         try (ShareFetchBuffer fetchBuffer = new ShareFetchBuffer(logContext)) {
             fetchBuffer.setNextInLineFetch(completedFetch(topicAPartition0));
-            fetchBuffer.add(completedFetch(topicAPartition1));
-            fetchBuffer.add(completedFetch(topicAPartition2));
+            fetchBuffer.add(List.of(completedFetch(topicAPartition1), completedFetch(topicAPartition2)));
             assertEquals(allPartitions, fetchBuffer.bufferedPartitions());
 
             fetchBuffer.setNextInLineFetch(null);

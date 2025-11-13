@@ -103,12 +103,17 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
             .stream()
             .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
 
+        boolean requireEarliestPendingUploadTimestamp = keys
+            .stream()
+            .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
+
         int timeoutMs = options.timeoutMs() != null ? options.timeoutMs() : defaultApiTimeoutMs;
         return ListOffsetsRequest.Builder.forConsumer(true,
                         options.isolationLevel(),
                         supportsMaxTimestamp,
                         requireEarliestLocalTimestamp,
-                        requireTieredStorageTimestamp)
+                        requireTieredStorageTimestamp,
+                        requireEarliestPendingUploadTimestamp)
                 .setTargetTimes(new ArrayList<>(topicsByName.values()))
                 .setTimeoutMs(timeoutMs);
     }
@@ -197,7 +202,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     public Map<TopicPartition, Throwable> handleUnsupportedVersionException(
         int brokerId, UnsupportedVersionException exception, Set<TopicPartition> keys
     ) {
-        log.warn("Broker " + brokerId + " does not support MAX_TIMESTAMP offset specs");
+        log.warn("Broker {} does not support MAX_TIMESTAMP offset specs", brokerId);
         Map<TopicPartition, Throwable> maxTimestampPartitions = new HashMap<>();
         for (TopicPartition topicPartition : keys) {
             Long offsetTimestamp = offsetTimestampsByPartition.get(topicPartition);

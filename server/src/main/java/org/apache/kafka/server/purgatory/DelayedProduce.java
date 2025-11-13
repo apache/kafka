@@ -133,7 +133,10 @@ public class DelayedProduce extends DelayedOperation {
     }
 
     private static final class DelayedProduceMetrics {
-        private static final KafkaMetricsGroup METRICS_GROUP = new KafkaMetricsGroup(DelayedProduceMetrics.class);
+        // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+        private static final String METRICS_PACKAGE = "kafka.server";
+        private static final String METRICS_CLASS_NAME = "DelayedProduceMetrics";
+        private static final KafkaMetricsGroup METRICS_GROUP = new KafkaMetricsGroup(METRICS_PACKAGE, METRICS_CLASS_NAME);
         private static final Meter AGGREGATE_EXPIRATION_METER = METRICS_GROUP.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS);
         private static final ConcurrentHashMap<TopicPartition, Meter> PARTITION_EXPIRATION_METERS = new ConcurrentHashMap<>();
 

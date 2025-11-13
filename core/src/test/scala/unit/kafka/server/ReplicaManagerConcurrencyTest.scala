@@ -451,7 +451,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
       delta.replay(new PartitionChangeRecord()
         .setTopicId(topic.topicId)
         .setPartitionId(partitionId)
-        .setIsr(leaderAndIsr.isr)
+        .setIsr(util.List.copyOf(leaderAndIsr.isr))
         .setLeader(leaderAndIsr.leader)
       )
       this.registration = delta.topicsDelta

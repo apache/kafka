@@ -13,7 +13,7 @@
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-We build and test Apache Kafka with 17 and 24. The `release` parameter in javac is set to `11` for the clients 
+We build and test Apache Kafka with 17 and 25. The `release` parameter in javac is set to `11` for the clients 
 and streams modules, and `17` for the rest, ensuring compatibility with their respective
 minimum Java versions. Similarly, the `release` parameter in scalac is set to `11` for the streams modules and `17`
 for the rest.
@@ -29,7 +29,7 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew srcJar
 
 ### Build aggregated javadoc ###
-    ./gradlew aggregatedJavadoc
+    ./gradlew aggregatedJavadoc --no-parallel
 
 ### Build javadoc and scaladoc ###
     ./gradlew javadoc
@@ -52,6 +52,7 @@ Follow instructions in https://kafka.apache.org/quickstart
 
 ### Running a particular unit/integration test ###
     ./gradlew clients:test --tests RequestResponseTest
+    ./gradlew streams:integration-tests:test --tests RestoreIntegrationTest
 
 ### Repeatedly running a particular unit/integration test with specific times by setting N ###
     N=500; I=0; while [ $I -lt $N ] && ./gradlew clients:test --tests RequestResponseTest --rerun --fail-fast; do (( I=$I+1 )); echo "Completed run: $I"; sleep 1; done
@@ -59,6 +60,7 @@ Follow instructions in https://kafka.apache.org/quickstart
 ### Running a particular test method within a unit/integration test ###
     ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
     ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testTimeToNextUpdate
+    ./gradlew streams:integration-tests:test --tests org.apache.kafka.streams.integration.RestoreIntegrationTest.shouldRestoreNullRecord
 
 ### Running a particular unit/integration test with log4j output ###
 By default, there will be only small number of logs output while testing. You can adjust it by changing the `log4j2.yaml` file in the module's `src/test/resources` directory.
@@ -77,7 +79,7 @@ The following example declares -PmaxTestRetries=1 and -PmaxTestRetryFailures=3 t
 
     ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=3
 
-See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for and [build.yml](.github/workflows/build.yml) more details.
+See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) and [build.yml](.github/workflows/build.yml) for more details.
 
 ### Generating test coverage reports ###
 Generate coverage reports for the whole project:
@@ -87,7 +89,13 @@ Generate coverage reports for the whole project:
 Generate coverage for a single module, i.e.: 
 
     ./gradlew clients:reportCoverage -PenableTestCoverage=true -Dorg.gradle.parallel=false
-    
+
+Coverage reports are located within the module's build directory, categorized by module type:
+
+Core Module (:core): `core/build/reports/scoverageTest/index.html`
+
+Other Modules: `<module>/build/reports/jacoco/test/html/index.html`
+
 ### Building a binary release gzipped tar ball ###
     ./gradlew clean releaseTarGz
 
@@ -230,7 +238,7 @@ Alternatively, use the `allDeps` or `allDepInsight` tasks for recursively iterat
 These take the same arguments as the builtin variants.
 
 ### Determining if any dependencies could be updated ###
-    ./gradlew dependencyUpdates
+    ./gradlew dependencyUpdates --no-parallel
 
 ### Common build options ###
 
