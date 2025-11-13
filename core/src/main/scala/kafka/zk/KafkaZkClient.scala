@@ -1734,20 +1734,32 @@ class KafkaZkClient private[zk] (
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     getDataResponse.resultCode match {
       case Code.OK =>
-        MigrationZNode.decode(getDataResponse.data, getDataResponse.stat.getVersion, getDataResponse.stat.getMtime)
+        Option(getDataResponse.data) match {
+          case Some(data) =>
+            MigrationZNode.decode(data, getDataResponse.stat.getVersion, getDataResponse.stat.getMtime)
+          case None =>
+            info("Migration znode exists with null data, recreating initial migration state")           
+            createInitialMigrationState(initialState, removeFirst = true)
+        }
       case Code.NONODE =>
         createInitialMigrationState(initialState)
       case _ => throw getDataResponse.resultException.get
     }
   }
 
-  private def createInitialMigrationState(initialState: ZkMigrationLeadershipState): ZkMigrationLeadershipState = {
-    val createRequest = CreateRequest(
+  private def createInitialMigrationState(initialState: ZkMigrationLeadershipState, removeFirst: Boolean = false): ZkMigrationLeadershipState = {
+    val createOp = CreateOp(
       MigrationZNode.path,
       MigrationZNode.encode(initialState),
       defaultAcls(MigrationZNode.path),
       CreateMode.PERSISTENT)
-    val response = retryRequestUntilConnected(createRequest)
+    val deleteOp = DeleteOp(MigrationZNode.path, ZkVersion.MatchAnyVersion)
+    val multi = if (removeFirst) {
+      MultiRequest(Seq(deleteOp, createOp))
+    } else {
+      MultiRequest(Seq(createOp))
+    }
+    val response = retryRequestUntilConnected(multi)
     response.maybeThrow()
     initialState.withMigrationZkVersion(0)
   }

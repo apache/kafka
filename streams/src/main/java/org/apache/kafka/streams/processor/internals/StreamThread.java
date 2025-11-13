@@ -537,7 +537,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             final String name = clientId + "-StateUpdater-" + threadIdx;
             final StateUpdater stateUpdater = new DefaultStateUpdater(
                 name,
-                streamsMetrics.metricsRegistry(),
+                streamsMetrics,
                 streamsConfig,
                 restoreConsumer,
                 changelogReader,

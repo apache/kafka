@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.List;
@@ -36,6 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class RoundRobinPartitioner implements Partitioner {
     private final ConcurrentMap<String, AtomicInteger> topicCounterMap = new ConcurrentHashMap<>();
+    private final ThreadLocal<TopicPartition> previousPartition = new ThreadLocal<>();
 
     public void configure(Map<String, ?> configs) {}
 
@@ -51,6 +53,14 @@ public class RoundRobinPartitioner implements Partitioner {
      */
     @Override
     public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster) {
+        TopicPartition prevPartition = previousPartition.get();
+        if (prevPartition != null) {
+            previousPartition.remove();
+            if (topic.equals(prevPartition.topic())) {
+                return prevPartition.partition();
+            }
+        }
+
         int nextValue = nextValue(topic);
         List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
         if (!availablePartitions.isEmpty()) {
@@ -68,6 +78,11 @@ public class RoundRobinPartitioner implements Partitioner {
         return counter.getAndIncrement();
     }
 
-    public void close() {}
+    @SuppressWarnings("deprecation")
+    @Override
+    public void onNewBatch(String topic, Cluster cluster, int prevPartition) {
+        previousPartition.set(new TopicPartition(topic, prevPartition));
+    }
 
+    public void close() {}
 }

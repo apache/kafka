@@ -321,10 +321,16 @@ public final class ProducerBatch {
     }
 
     public Deque<ProducerBatch> split(int splitBatchSize) {
-        Deque<ProducerBatch> batches = new ArrayDeque<>();
-        MemoryRecords memoryRecords = recordsBuilder.build();
+        RecordBatch recordBatch = validateAndGetRecordBatch();
+        Deque<ProducerBatch> batches = splitRecordsIntoBatches(recordBatch, splitBatchSize);
+        finalizeSplitBatches(batches);
+        return batches;
+    }
 
+    private RecordBatch validateAndGetRecordBatch() {
+        MemoryRecords memoryRecords = recordsBuilder.build();
         Iterator<MutableRecordBatch> recordBatchIter = memoryRecords.batches().iterator();
+
         if (!recordBatchIter.hasNext())
             throw new IllegalStateException("Cannot split an empty producer batch.");
 
@@ -336,6 +342,11 @@ public final class ProducerBatch {
         if (recordBatchIter.hasNext())
             throw new IllegalArgumentException("A producer batch should only have one record batch.");
 
+        return recordBatch;
+    }
+
+    private Deque<ProducerBatch> splitRecordsIntoBatches(RecordBatch recordBatch, int splitBatchSize) {
+        Deque<ProducerBatch> batches = new ArrayDeque<>();
         Iterator<Thunk> thunkIter = thunks.iterator();
         // We always allocate batch size because we are already splitting a big batch.
         // And we also Retain the create time of the original batch.
@@ -362,9 +373,23 @@ public final class ProducerBatch {
             batch.closeForRecordAppends();
         }
 
+        return batches;
+    }
+
+    private void finalizeSplitBatches(Deque<ProducerBatch> batches) {
+        // Chain all split batch ProduceRequestResults to the original batch's produceFuture
+        // Ensures the original batch's future doesn't complete until all split batches complete
+        for (ProducerBatch splitBatch : batches) {
+            produceFuture.addDependent(splitBatch.produceFuture);
+        }
+
         produceFuture.set(ProduceResponse.INVALID_OFFSET, NO_TIMESTAMP, index -> new RecordBatchTooLargeException());
         produceFuture.done();
 
+        assignProducerStateToBatches(batches);
+    }
+
+    private void assignProducerStateToBatches(Deque<ProducerBatch> batches) {
         if (hasSequence()) {
             int sequence = baseSequence();
             ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId(), producerEpoch());
@@ -373,7 +398,6 @@ public final class ProducerBatch {
                 sequence += newBatch.recordCount;
             }
         }
-        return batches;
     }
 
     private ProducerBatch createBatchOffAccumulatorForRecord(Record record, int batchSize) {

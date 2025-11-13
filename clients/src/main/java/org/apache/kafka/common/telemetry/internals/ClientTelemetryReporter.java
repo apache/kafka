@@ -41,7 +41,6 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
@@ -719,8 +718,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
             byte[] compressedPayload;
             try {
                 compressedPayload = ClientTelemetryUtils.compress(payload, compressionType);
-            } catch (IOException e) {
-                log.info("Failed to compress telemetry payload for compression: {}, sending uncompressed data", compressionType);
+            } catch (Throwable e) {
+                log.debug("Failed to compress telemetry payload for compression: {}, sending uncompressed data", compressionType);
                 compressedPayload = payload;
                 compressionType = CompressionType.NONE;
             }

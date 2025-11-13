@@ -19,7 +19,7 @@ package kafka.log
 
 import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.remote.RemoteLogManager
-import kafka.server.{BrokerTopicStats, KafkaConfig}
+import kafka.server.{BrokerTopicStats, KafkaConfig, RequestLocal}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
@@ -4665,6 +4665,51 @@ class UnifiedLogTest {
     }
 
     (log, segmentWithOverflow)
+  }
+
+  @Test
+  def testStaleProducerEpochReturnsRecoverableError(): Unit = {
+    // Producer epoch gets incremented (coordinator fail over, completed transaction, etc.)
+    // and client has stale cached epoch. Fix prevents fatal InvalidTxnStateException.
+
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
+
+    val producerId = 123L
+    val oldEpoch = 5.toShort
+    val newEpoch = 6.toShort
+
+    // Step 1: Simulate a scenario where producer epoch was incremented to fence the producer
+    val previousRecords = MemoryRecords.withTransactionalRecords(
+      Compression.NONE, producerId, newEpoch, 0,
+      new SimpleRecord("previous-key".getBytes, "previous-value".getBytes)
+    )
+    val previousGuard = log.maybeStartTransactionVerification(producerId, 0, newEpoch)
+    log.appendAsLeader(previousRecords, leaderEpoch = 0, origin = AppendOrigin.CLIENT, requestLocal = RequestLocal.NoCaching, verificationGuard = previousGuard)
+
+    // Complete the transaction normally (commits do update producer state with current epoch)
+    val commitMarker = MemoryRecords.withEndTransactionMarker(
+      producerId, newEpoch, new EndTransactionMarker(ControlRecordType.COMMIT, 0)
+    )
+    log.appendAsLeader(commitMarker, leaderEpoch = 0, origin = AppendOrigin.COORDINATOR, requestLocal = RequestLocal.NoCaching, verificationGuard = VerificationGuard.SENTINEL)
+
+    // Step 2: TV1 client tries to write with stale cached epoch (before learning about epoch increment)
+    val staleEpochRecords = MemoryRecords.withTransactionalRecords(
+      Compression.NONE, producerId, oldEpoch, 0,
+      new SimpleRecord("stale-epoch-key".getBytes, "stale-epoch-value".getBytes)
+    )
+
+    // Step 3: Verify our fix - should get InvalidProducerEpochException (recoverable), not InvalidTxnStateException (fatal)
+    val exception = assertThrows(classOf[InvalidProducerEpochException], () => {
+      val staleGuard = log.maybeStartTransactionVerification(producerId, 0, oldEpoch)
+      log.appendAsLeader(staleEpochRecords, leaderEpoch = 0, origin = AppendOrigin.CLIENT, requestLocal = RequestLocal.NoCaching, verificationGuard = staleGuard)
+    })
+
+    // Verify the error message indicates epoch mismatch
+    assertTrue(exception.getMessage.contains("smaller than the last seen epoch"))
+    assertTrue(exception.getMessage.contains(s"$oldEpoch"))
+    assertTrue(exception.getMessage.contains(s"$newEpoch"))
   }
 }
 

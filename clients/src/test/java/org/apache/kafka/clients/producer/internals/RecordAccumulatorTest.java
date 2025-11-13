@@ -41,6 +41,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
@@ -71,7 +72,9 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -80,6 +83,7 @@ import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -1086,6 +1090,41 @@ public class RecordAccumulatorTest {
         assertEquals(1, future2.get().offset());
     }
 
+    // here I am testing the hasRoomFor() behaviour
+    // It allows the first record no matter the size
+    // but does not allow the second record
+    @Test
+    public void testHasRoomForAllowsOversizedFirstRecordButRejectsSubsequentRecords() {
+        long now = time.milliseconds();
+        int smallBatchSize = 1024;
+
+        // Create a large record that exceeds batch size limit
+        byte[] largeValue = new byte[4 * 1024]; // 4KB > 1KB
+
+        // Create a small buffer that cannot fit the large record
+        ByteBuffer buffer = ByteBuffer.allocate(smallBatchSize);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE, TimestampType.CREATE_TIME, 0L);
+
+        // testing existing code:
+        // hasRoomFor() should return true for first record regardless of size
+        boolean hasRoomForFirst = builder.hasRoomFor(now, ByteBuffer.wrap(key), ByteBuffer.wrap(largeValue), Record.EMPTY_HEADERS);
+        assertTrue(hasRoomForFirst, "hasRoomFor() should return true for first record regardless of size when numRecords == 0");
+
+        // append the first oversized record - should succeed
+        builder.append(now, ByteBuffer.wrap(key), ByteBuffer.wrap(largeValue), Record.EMPTY_HEADERS);
+        assertEquals(1, builder.numRecords(), "Should have successfully appended the first oversized record");
+
+        // now append another large record when numRecords > 0
+        boolean hasRoomForSecond = builder.hasRoomFor(now, ByteBuffer.wrap(key), ByteBuffer.wrap(largeValue), Record.EMPTY_HEADERS);
+        assertFalse(hasRoomForSecond, "hasRoomFor() should return false for oversized record when numRecords > 0");
+
+        // Now append with a smaller record that would normally fit but
+        // this too should be rejected due to limited buffer space
+        byte[] smallValue = new byte[100]; // Small record
+        boolean hasRoomForSmall = builder.hasRoomFor(now, ByteBuffer.wrap(key), ByteBuffer.wrap(smallValue), Record.EMPTY_HEADERS);
+        assertFalse(hasRoomForSmall, "hasRoomFor() should return false for any record when buffer is full from oversized first record");
+    }
+
     @Test
     public void testSplitBatchOffAccumulator() throws InterruptedException {
         long seed = System.currentTimeMillis();
@@ -1778,5 +1817,66 @@ public class RecordAccumulatorTest {
         int randomPartition() {
             return mockRandom == null ? super.randomPartition() : mockRandom.getAndIncrement();
         }
+    }
+
+    @Test
+    public void testProduceRequestResultAwaitAllDependents() throws Exception {
+        ProduceRequestResult parent = new ProduceRequestResult(tp1);
+
+        // make two dependent ProduceRequestResults -- mimicking split batches
+        ProduceRequestResult dependent1 = new ProduceRequestResult(tp1);
+        ProduceRequestResult dependent2 = new ProduceRequestResult(tp1);
+
+        // add dependents
+        parent.addDependent(dependent1);
+        parent.addDependent(dependent2);
+
+        parent.set(0L, RecordBatch.NO_TIMESTAMP, null);
+        parent.done();
+
+        // parent.completed() should return true (only checks latch)
+        assertTrue(parent.completed(), "Parent should be completed after done()");
+
+        // awaitAllDependents() should block because dependents are not complete
+        final AtomicBoolean awaitCompleted = new AtomicBoolean(false);
+        final AtomicReference<Exception> awaitException = new AtomicReference<>();
+
+        // to prove awaitAllDependents() is blocking, we run it in a separate thread
+        Thread awaitThread = new Thread(() -> {
+            try {
+                parent.awaitAllDependents();
+                awaitCompleted.set(true);
+            } catch (Exception e) {
+                awaitException.set(e);
+            }
+        });
+        awaitThread.start();
+        Thread.sleep(5);
+
+        // verify awaitAllDependents() is blocking
+        assertFalse(awaitCompleted.get(),
+            "awaitAllDependents() should block because dependents are not complete");
+
+        // now complete the first dependent
+        dependent1.set(0L, RecordBatch.NO_TIMESTAMP, null);
+        dependent1.done();
+
+        Thread.sleep(5);
+
+        // this should still be blocking because dependent2 is not complete
+        assertFalse(awaitCompleted.get(),
+            "awaitAllDependents() should still block because dependent2 is not complete");
+
+        // now complete the second dependent
+        dependent2.set(0L, RecordBatch.NO_TIMESTAMP, null);
+        dependent2.done();
+
+        // now awaitAllDependents() should complete
+        awaitThread.join(5000);
+
+        assertNull(awaitException.get(), "awaitAllDependents() should not throw exception");
+        assertTrue(awaitCompleted.get(),
+            "awaitAllDependents() should complete after all dependents are done");
+        assertFalse(awaitThread.isAlive(), "await thread should have completed");
     }
 }
