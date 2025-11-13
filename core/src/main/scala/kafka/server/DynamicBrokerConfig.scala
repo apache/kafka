@@ -327,7 +327,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     }
     addReconfigurable(new DynamicClientQuotaCallback(controller.quotaManagers, controller.config))
     addBrokerReconfigurable(new ControllerDynamicThreadPool(controller))
-    // TODO: addBrokerReconfigurable(new DynamicListenerConfig(controller))
+    addBrokerReconfigurable(new DynamicControllerListenerConfig(controller))
     addBrokerReconfigurable(controller.socketServer)
   }
 
@@ -961,16 +961,21 @@ class DynamicClientQuotaCallback(
   }
 }
 
-class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable with Logging {
+abstract class BaseDynamicListenerConfig extends BrokerReconfigurable with Logging {
 
   override def reconfigurableConfigs: Set[String] = {
     DynamicListenerConfig.ReconfigurableConfigs
   }
 
+  protected def getConfig: KafkaConfig
+  protected def getSocketServer: SocketServer
+  protected def getAdvertisedListeners(config: KafkaConfig): Seq[Endpoint]
+  protected def getRestartMessage: String
+
   def validateReconfiguration(newConfig: KafkaConfig): Unit = {
-    val oldConfig = server.config
+    val oldConfig = getConfig
     val newListeners = newConfig.listeners.map(l => ListenerName.normalised(l.listener)).toSet
-    val oldAdvertisedListeners = oldConfig.effectiveAdvertisedBrokerListeners.map(l => ListenerName.normalised(l.listener)).toSet
+    val oldAdvertisedListeners = getAdvertisedListeners(oldConfig).map(l => ListenerName.normalised(l.listener)).toSet
     val oldListeners = oldConfig.listeners.map(l => ListenerName.normalised(l.listener)).toSet
     if (!oldAdvertisedListeners.subsetOf(newListeners))
       throw new ConfigException(s"Advertised listeners '$oldAdvertisedListeners' must be a subset of listeners '$newListeners'")
@@ -985,7 +990,7 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
       }
       if (immutableListenerConfigs(newConfig, listenerName.configPrefix) != immutableListenerConfigs(oldConfig, listenerName.configPrefix))
         throw new ConfigException(s"Configs cannot be updated dynamically for existing listener $listenerName, " +
-          "restart broker or create a new listener for update")
+          s"$getRestartMessage or create a new listener for update")
       if (oldConfig.effectiveListenerSecurityProtocolMap.get(listenerName) != newConfig.effectiveListenerSecurityProtocolMap.get(listenerName))
         throw new ConfigException(s"Security protocol cannot be updated for existing listener $listenerName")
     }
@@ -1000,14 +1005,28 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     val listenersAdded = newListeners.filterNot(e => oldListenerMap.contains(ListenerName.normalised(e.listener)))
     if (listenersRemoved.nonEmpty || listenersAdded.nonEmpty) {
       LoginManager.closeAll() // Clear SASL login cache to force re-login
-      if (listenersRemoved.nonEmpty) server.socketServer.removeListeners(listenersRemoved)
-      if (listenersAdded.nonEmpty) server.socketServer.addListeners(listenersAdded)
+      if (listenersRemoved.nonEmpty) getSocketServer.removeListeners(listenersRemoved)
+      if (listenersAdded.nonEmpty) getSocketServer.addListeners(listenersAdded)
     }
   }
 
   private def listenersToMap(listeners: Seq[Endpoint]): Map[ListenerName, Endpoint] =
     listeners.map(e => (ListenerName.normalised(e.listener), e)).toMap
 
+}
+
+class DynamicListenerConfig(server: KafkaBroker) extends BaseDynamicListenerConfig {
+  override protected def getConfig: KafkaConfig = server.config
+  override protected def getSocketServer: SocketServer = server.socketServer
+  override protected def getAdvertisedListeners(config: KafkaConfig): Seq[Endpoint] = config.effectiveAdvertisedBrokerListeners
+  override protected def getRestartMessage: String = "restart broker"
+}
+
+class DynamicControllerListenerConfig(controller: ControllerServer) extends BaseDynamicListenerConfig {
+  override protected def getConfig: KafkaConfig = controller.config
+  override protected def getSocketServer: SocketServer = controller.socketServer
+  override protected def getAdvertisedListeners(config: KafkaConfig): Seq[Endpoint] = config.effectiveAdvertisedControllerListeners
+  override protected def getRestartMessage: String = "restart controller"
 }
 
 class DynamicRemoteLogConfig(server: KafkaBroker) extends BrokerReconfigurable with Logging {
