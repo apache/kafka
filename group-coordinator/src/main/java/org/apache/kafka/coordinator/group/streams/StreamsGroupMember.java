@@ -284,14 +284,9 @@ public record StreamsGroupMember(String memberId,
                 .setClientTags(Collections.emptyMap())
                 .setState(MemberState.STABLE)
                 .setMemberEpoch(0)
-<<<<<<< HEAD
                 .setPreviousMemberEpoch(0)
                 .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
                 .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
-=======
-                .setAssignedTasks(TasksTuple.EMPTY)
-                .setTasksPendingRevocation(TasksTuple.EMPTY)
->>>>>>> b581df2ff0 (fix)
                 .setUserEndpoint(null);
         }
 

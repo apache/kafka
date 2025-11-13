@@ -16337,7 +16337,7 @@ public class GroupMetadataManagerTest {
             .setClientId(DEFAULT_CLIENT_ID)
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
             .setRebalanceTimeoutMs(1500)
-            .setAssignedTasks(mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 1,
+            .setAssignedTasks(mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 2,
                 TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5),
                 TaskAssignmentTestUtil.mkTasks(subtopology2, 0, 1, 2)))
             
@@ -17456,7 +17456,7 @@ public class GroupMetadataManagerTest {
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId)
                 .setMemberEpoch(2)
-                .setHeartbeatIntervalMs(5000)
+                .setHeartbeatIntervalMs(5000),
             result.response().data()
         );
     }
@@ -17503,7 +17503,7 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setPartitionsByUserEndpoint(null)
-                .setEndpointInformationEpoch(-1),
+                .setEndpointInformationEpoch(0),
             result.response().data()
         );
 
@@ -18976,6 +18976,7 @@ public class GroupMetadataManagerTest {
                 .withMetadataImage(new MetadataImageBuilder()
                         .addTopic(fooTopicId, fooTopicName, 4)
                         .buildCoordinatorMetadataImage())
+                .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
                 .build();
 
         // Prepare assignment for first member
@@ -18996,7 +18997,7 @@ public class GroupMetadataManagerTest {
                         .setUserEndpoint(new StreamsGroupHeartbeatRequestData.Endpoint().setHost("host1").setPort(9092))
                         .setEndpointInformationEpoch(0));
 
-        assertEquals(1, result.response().data().memberEpoch());
+        assertEquals(2, result.response().data().memberEpoch());
 
         // Prepare assignment for both members
         assignor.prepareGroupAssignment(
