@@ -1072,7 +1072,7 @@ KTable&lt;String, Long&gt; aggregatedTable = groupedTable.reduce(
                                     <li>When the first non-<code class="docutils literal"><span class="pre">null</span></code> value is received for a key (e.g.,  INSERT), then only the adder is called.</li>
                                     <li>When subsequent non-<code class="docutils literal"><span class="pre">null</span></code> values are received for a key (e.g.,  UPDATE), then (1) the subtractor is
                                         called with the old value as stored in the table and (2) the adder is called with the new value of the
-                                        input record that was just received. The subtractor is guaranteed be called before the adder if the extracted grouping key of the old and new value is the same.
+                                        input record that was just received. The subtractor is guaranteed to be called before the adder if the extracted grouping key of the old and new value is the same.
                                         The detection of this case depends on the correct implementation of the equals() method of the extracted key type. Otherwise, the order of execution for the subtractor
                                         and adder is not defined.</li>
                                     <li>When a tombstone record &#8211; i.e. a record with a <code class="docutils literal"><span class="pre">null</span></code> value &#8211; is received for a key (e.g.,  DELETE),
@@ -1095,7 +1095,7 @@ KTable&lt;String, Long&gt; aggregatedTable = groupedTable.reduce(
                                 The result value type cannot be changed, unlike <code class="docutils literal"><span class="pre">aggregate</span></code>.
                                 (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/TimeWindowedKStream.html">TimeWindowedKStream details</a>,
                                 <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/SessionWindowedKStream.html">SessionWindowedKStream details</a>)</p>
-                                <p>The windowed <code class="docutils literal"><span class="pre">reduce</span></code> turns a turns a <code class="docutils literal"><span class="pre">TimeWindowedKStream&lt;K,</span> <span class="pre">V&gt;</span></code> or a <code class="docutils literal"><span class="pre">SessionWindowedKStream&lt;K,</span> <span class="pre">V&gt;</span></code>
+                                <p>The windowed <code class="docutils literal"><span class="pre">reduce</span></code> turns a <code class="docutils literal"><span class="pre">TimeWindowedKStream&lt;K,</span> <span class="pre">V&gt;</span></code> or a <code class="docutils literal"><span class="pre">SessionWindowedKStream&lt;K,</span> <span class="pre">V&gt;</span></code>
                                     into a windowed <code class="docutils literal"><span class="pre">KTable&lt;Windowed&lt;K&gt;,</span> <span class="pre">V&gt;</span></code>.</p>
                                 <p>Several variants of <code class="docutils literal"><span class="pre">reduce</span></code> exist, see Javadocs for details.</p>
                                 <pre class="line-numbers"><code class="language-java">import java.time.Duration;
@@ -1567,7 +1567,7 @@ KeyValue&lt;K, JV&gt; joinOutputRecord = KeyValue.pair(
                                     <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#join-org.apache.kafka.streams.kstream.KStream-org.apache.kafka.streams.kstream.ValueJoiner-org.apache.kafka.streams.kstream.JoinWindows-">(details)</a></p>
                                     <p><strong>Data must be co-partitioned</strong>: The input data for both sides must be <a class="reference internal" href="#streams-developer-guide-dsl-joins-co-partitioning"><span class="std std-ref">co-partitioned</span></a>.</p>
                                     <p><strong>Causes data re-partitioning of a stream if and only if the stream was marked for re-partitioning (if both are marked, both are re-partitioned).</strong></p>
-                                    <p>Several variants of <code class="docutils literal"><span class="pre">join</span></code> exists, see the Javadocs for details.</p>
+                                    <p>Several variants of <code class="docutils literal"><span class="pre">join</span></code> exist, see the Javadocs for details.</p>
                                     <pre class="line-numbers"><code class="language-java">import java.time.Duration;
 KStream&lt;String, Long&gt; left = ...;
 KStream&lt;String, Double&gt; right = ...;
