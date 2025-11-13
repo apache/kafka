@@ -127,13 +127,13 @@ public class WriteTxnMarkersRequestTest {
         assertEquals(1, requestV2.markers().size());
         // Verify TransactionVersion is set to 2 in the request data.
         assertEquals((byte) 2, requestV2.data().markers().get(0).transactionVersion());
-        // Verify TransactionVersion is set to 2 in the marker entry (markers() reads the field for version >= 2).
-        // This is what the broker would see when receiving the request - markers() is called on the broker side.
-        assertEquals((short) 2, requestV2.markers().get(0).transactionVersion());
         // Verify the request can be serialized for version 2 (TransactionVersion field included).
         // This should not throw an exception.
         requestV2.serialize();
         int sizeV2 = requestV2.sizeInBytes();
+        // Verify TransactionVersion is set to 2 in the marker entry (markers() reads the field for version >= 2).
+        // This is what the broker sees when receiving the request - markers() is called on the partition leader side.
+        assertEquals((short) 2, requestV2.markers().get(0).transactionVersion());
 
         // Test version 1 - TransactionVersion should be omitted (ignorable field).
         WriteTxnMarkersRequest requestV1 = builder.build((short) 1);
