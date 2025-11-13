@@ -1407,7 +1407,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     this.metricGrpName,
                     "The number of successful rebalance events per hour, each event is composed of " +
                         "several failed re-trials until it succeeded"),
-                new Rate(TimeUnit.HOURS, new WindowedCount())
+                new Rate(TimeUnit.HOURS, new WindowedCount(), 1)
             );
 
             this.failedRebalanceSensor = metrics.sensor("failed-rebalance");
@@ -1422,7 +1422,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     "failed-rebalance-rate-per-hour",
                     this.metricGrpName,
                     "The number of failed rebalance events per hour"),
-                new Rate(TimeUnit.HOURS, new WindowedCount())
+                new Rate(TimeUnit.HOURS, new WindowedCount(), 1)
             );
 
             Measurable lastRebalance = (config, now) -> {

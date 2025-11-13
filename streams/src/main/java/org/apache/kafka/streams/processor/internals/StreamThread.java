@@ -1587,11 +1587,15 @@ public class StreamThread extends Thread implements ProcessingThread {
     }
 
     private void handleMissingSourceTopicsWithTimeout(final String missingTopicsDetail) {
+        // Use 2 * heartbeatIntervalMs as the timeout ensures at least one heartbeat is sent before raising the exception
+        final int heartbeatIntervalMs = streamsRebalanceData.get().heartbeatIntervalMs();
+        final long timeoutMs = 2L * heartbeatIntervalMs;
+
         // Start timeout tracking on first encounter with missing topics
         if (topicsReadyTimer == null) {
-            topicsReadyTimer = time.timer(maxPollTimeMs);
+            topicsReadyTimer = time.timer(timeoutMs);
             log.info("Missing source topics detected: {}. Will wait up to {}ms before failing.",
-                missingTopicsDetail, maxPollTimeMs);
+                missingTopicsDetail, timeoutMs);
         } else {
             topicsReadyTimer.update();
         }

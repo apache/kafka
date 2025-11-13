@@ -56,9 +56,9 @@ public class StreamsAssignorBenchmarkUtils {
             memberSpecs.put(memberId, new AssignmentMemberSpec(
                 member.instanceId(),
                 member.rackId(),
-                member.assignedTasks().activeTasks(),
-                member.assignedTasks().standbyTasks(),
-                member.assignedTasks().warmupTasks(),
+                Map.of(),
+                Map.of(),
+                Map.of(),
                 member.processId(),
                 member.clientTags(),
                 Map.of(),

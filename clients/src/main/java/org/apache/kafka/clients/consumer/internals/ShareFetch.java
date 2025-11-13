@@ -89,7 +89,9 @@ public class ShareFetch<K, V> {
                 Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> entry = iterator.next();
                 ShareInFlightBatch<K, V> batch = entry.getValue();
                 if (batch.isEmpty()) {
-                    iterator.remove();
+                    if (!batch.hasRenewals()) {
+                        iterator.remove();
+                    }
                 } else {
                     numRecords += batch.numRecords();
                 }
@@ -104,6 +106,29 @@ public class ShareFetch<K, V> {
      */
     public boolean isEmpty() {
         return numRecords() == 0;
+    }
+
+    /**
+     * @return {@code true} if this fetch contains records being renewed
+     */
+    public boolean hasRenewals() {
+        boolean hasRenewals = false;
+        for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> entry : batches.entrySet()) {
+            if (entry.getValue().hasRenewals()) {
+                hasRenewals = true;
+                break;
+            }
+        }
+        return hasRenewals;
+    }
+
+    /**
+     * Take any renewed records and move them back into in-flight state.
+     */
+    public void takeRenewedRecords() {
+        for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> entry : batches.entrySet()) {
+            entry.getValue().takeRenewals();
+        }
     }
 
     /**
@@ -124,7 +149,9 @@ public class ShareFetch<K, V> {
     }
 
     /**
-     * Acknowledge a single record by its topic, partition and offset in the current batch.
+     * Acknowledge a single record which experienced an exception during its delivery by its topic, partition
+     * and offset in the current batch. This method is specifically for overriding the default acknowledge
+     * type for records whose delivery failed.
      *
      * @param topic     The topic of the record to acknowledge
      * @param partition The partition of the record
@@ -157,6 +184,23 @@ public class ShareFetch<K, V> {
     }
 
     /**
+     * Checks whether all in-flight records have been acknowledged. This is required for explicit
+     * acknowledgement mode.
+     *
+     * @return Whether all in-flight records have been acknowledged
+     */
+    public boolean checkAllInFlightAreAcknowledged() {
+        boolean allInFlightAreAcknowledged = true;
+        for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> entry : batches.entrySet()) {
+            if (!entry.getValue().checkAllInFlightAreAcknowledged()) {
+                allInFlightAreAcknowledged = false;
+                break;
+            }
+        }
+        return allInFlightAreAcknowledged;
+    }
+
+    /**
      * Removes all acknowledged records from the in-flight records and returns the map of acknowledgements
      * to send. If some records were not acknowledged, the in-flight records will not be empty after this
      * method.
@@ -172,5 +216,22 @@ public class ShareFetch<K, V> {
                 acknowledgementMap.put(tip, new NodeAcknowledgements(nodeId, acknowledgements));
         });
         return acknowledgementMap;
+    }
+
+    /**
+     * Handles completed renew acknowledgements by returning successfully renewed records
+     * to the set of in-flight records.
+     *
+     * @param acknowledgementsMap Map from topic-partition to acknowledgements for
+     *                            completed renew acknowledgements
+     *
+     * @return The number of records renewed
+     */
+    public int renew(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
+        int recordsRenewed = 0;
+        for (Map.Entry<TopicIdPartition, Acknowledgements> entry : acknowledgementsMap.entrySet()) {
+            recordsRenewed += batches.get(entry.getKey()).renew(entry.getValue());
+        }
+        return recordsRenewed;
     }
 }
