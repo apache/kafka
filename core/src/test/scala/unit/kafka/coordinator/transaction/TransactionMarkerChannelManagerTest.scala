@@ -300,20 +300,13 @@ class TransactionMarkerChannelManagerTest {
 
     val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(
       util.List.of(
-        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition1)),
-        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition1))
-      ),
-      util.List.of(
-        TransactionVersion.TV_2.featureLevel().toByte,
-        TransactionVersion.TV_2.featureLevel().toByte
+        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition1), TransactionVersion.TV_2.featureLevel()),
+        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition1), TransactionVersion.TV_2.featureLevel())
       )
     ).build()
     val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(
       util.List.of(
-        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition2))
-      ),
-      util.List.of(
-        TransactionVersion.TV_2.featureLevel().toByte
+        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition2), TransactionVersion.TV_2.featureLevel())
       )
     ).build()
 
@@ -383,20 +376,13 @@ class TransactionMarkerChannelManagerTest {
 
     val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(
       util.List.of(
-        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition1)),
-        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition1))
-      ),
-      util.List.of(
-        TransactionVersion.TV_2.featureLevel().toByte,
-        TransactionVersion.TV_2.featureLevel().toByte
+        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition1), TransactionVersion.TV_2.featureLevel()),
+        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition1), TransactionVersion.TV_2.featureLevel())
       )
     ).build()
     val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(
       util.List.of(
-        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition2))
-      ),
-      util.List.of(
-        TransactionVersion.TV_2.featureLevel().toByte
+        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, util.List.of(partition2), TransactionVersion.TV_2.featureLevel())
       )
     ).build()
 
