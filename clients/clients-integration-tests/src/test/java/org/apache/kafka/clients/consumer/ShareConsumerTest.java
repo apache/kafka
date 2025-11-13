@@ -58,16 +58,15 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.server.share.SharePartitionKey;
+import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
 
@@ -1621,10 +1620,9 @@ public class ShareConsumerTest {
     }
 
     /**
-     * Test to verify that the acknowledgement commit callback can throw an exception, and it is propagated
+     * Test to verify that the acknowledgement commit callback can throw an exception, and it is not propagated
      * to the caller of poll().
      */
-    @Flaky("KAFKA-19840") // https://issues.apache.org/jira/browse/KAFKA-19840
     @ClusterTest
     public void testAcknowledgementCommitCallbackThrowsException() throws InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
@@ -1635,28 +1633,35 @@ public class ShareConsumerTest {
             producer.send(record);
             producer.flush();
 
-            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallbackThrows<>());
+            AtomicBoolean callbackCalled = new AtomicBoolean(false);
+            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallbackThrows<>(callbackCalled));
             shareConsumer.subscribe(Set.of(tp.topic()));
 
             TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
                 DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records for share consumer");
 
-            AtomicBoolean exceptionThrown = new AtomicBoolean(false);
             TestUtils.waitForCondition(() -> {
                 try {
                     shareConsumer.poll(Duration.ofMillis(500));
-                } catch (org.apache.kafka.common.errors.OutOfOrderSequenceException e) {
-                    exceptionThrown.set(true);
+                } catch (Exception e) {
+                    throw new NoRetryException(e);
                 }
-                return exceptionThrown.get();
+                return callbackCalled.get();
             }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to receive expected exception");
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
     private static class TestableAcknowledgementCommitCallbackThrows<K, V> implements AcknowledgementCommitCallback {
+        private final AtomicBoolean callbackCalled;
+
+        public TestableAcknowledgementCommitCallbackThrows(AtomicBoolean callbackCalled) {
+            this.callbackCalled = callbackCalled;
+        }
+
         @Override
         public void onComplete(Map<TopicIdPartition, Set<Long>> offsetsMap, Exception exception) {
+            callbackCalled.set(true);
             throw new org.apache.kafka.common.errors.OutOfOrderSequenceException("Exception thrown in TestableAcknowledgementCommitCallbackThrows.onComplete");
         }
     }
@@ -2339,7 +2344,6 @@ public class ShareConsumerTest {
         verifyShareGroupStateTopicRecordsProduced();
     }
 
-    @Disabled("KAFKA-19840") // https://issues.apache.org/jira/browse/KAFKA-19840
     @ClusterTest(
         brokers = 1,
         serverProperties = {

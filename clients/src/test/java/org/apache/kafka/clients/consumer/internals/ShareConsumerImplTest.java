@@ -27,11 +27,10 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeAsyncEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeOnCloseEvent;
-import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackRegistrationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.SharePollEvent;
-import org.apache.kafka.clients.consumer.internals.events.ShareRenewAcknowledgementsCompleteEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
 import org.apache.kafka.clients.consumer.internals.events.StopFindCoordinatorOnCloseEvent;
@@ -41,6 +40,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -107,6 +107,7 @@ public class ShareConsumerImplTest {
     private final ShareFetchCollector<String, String> fetchCollector = mock(ShareFetchCollector.class);
     private final ShareConsumerMetadata metadata = mock(ShareConsumerMetadata.class);
     private final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
+    private final LinkedBlockingQueue<ShareAcknowledgementEvent> acknowledgementEventQueue = new LinkedBlockingQueue<>();
     private final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
     private final CompletableEventReaper backgroundEventReaper = mock(CompletableEventReaper.class);
 
@@ -147,6 +148,7 @@ public class ShareConsumerImplTest {
                 (a, b, c, d, e, f, g, h) -> applicationEventHandler,
                 a -> backgroundEventReaper,
                 (a, b, c, d, e) -> fetchCollector,
+                acknowledgementEventQueue,
                 backgroundEventQueue
         );
     }
@@ -181,6 +183,7 @@ public class ShareConsumerImplTest {
                 fetchCollector,
                 time,
                 applicationEventHandler,
+                acknowledgementEventQueue,
                 backgroundEventQueue,
                 backgroundEventReaper,
                 new Metrics(),
@@ -517,8 +520,8 @@ public class ShareConsumerImplTest {
         Acknowledgements acks = Acknowledgements.empty();
         acks.add(0, AcknowledgeType.RENEW);
         acks.complete(null);
-        ShareRenewAcknowledgementsCompleteEvent e = new ShareRenewAcknowledgementsCompleteEvent(Map.of(tip, acks));
-        backgroundEventQueue.add(e);
+        ShareAcknowledgementEvent e = new ShareAcknowledgementEvent(Map.of(tip, acks), true);
+        acknowledgementEventQueue.add(e);
 
         records = consumer.poll(Duration.ofMillis(100));
         assertEquals(1, records.count(), "Should have received 1 record");
@@ -898,13 +901,13 @@ public class ShareConsumerImplTest {
         Metrics metrics = consumer.metricsRegistry();
         AsyncConsumerMetrics asyncConsumerMetrics = consumer.asyncConsumerMetrics();
 
-        ShareAcknowledgementCommitCallbackEvent event = new ShareAcknowledgementCommitCallbackEvent(Map.of());
+        ErrorEvent event = new ErrorEvent(new InvalidRecordStateException("The record is in the wrong state"));
         backgroundEventQueue.add(event);
         asyncConsumerMetrics.recordBackgroundEventQueueSize(1);
 
         assertEquals(1, (double) metrics.metric(metrics.metricName("background-event-queue-size", CONSUMER_SHARE_METRIC_GROUP)).metricValue());
 
-        consumer.processBackgroundEvents();
+        assertThrows(InvalidRecordStateException.class, () -> consumer.processBackgroundEvents());
         assertEquals(0, (double) metrics.metric(metrics.metricName("background-event-queue-size", CONSUMER_SHARE_METRIC_GROUP)).metricValue());
     }
 
