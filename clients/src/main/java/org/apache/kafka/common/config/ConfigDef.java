@@ -1082,14 +1082,9 @@ public class ConfigDef {
 
         public String toString() {
             String base = validString.validStrings.isEmpty() ? "any non-duplicate values" : validString.toString();
-
-            List<String> modifiers = new ArrayList<>();
-            if (isEmptyAllowed)
-                modifiers.add("empty list");
-            if (isNullAllowed)
-                modifiers.add("null");
-
-            return modifiers.isEmpty() ? base : base + ", " + String.join(", ", modifiers);
+            String emptyList = isEmptyAllowed ? ", empty list" : "";
+            String nullValue = isNullAllowed ? ", null" : "";
+            return base + emptyList + nullValue;
         }
     }
 
