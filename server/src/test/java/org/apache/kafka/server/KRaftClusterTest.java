@@ -595,6 +595,7 @@ public class KRaftClusterTest {
         TestUtils.waitForCondition(() -> {
             Set<String> topicNames = admin.listTopics().names().get();
             topicsNotFound.removeAll(topicNames);
+            extraTopics.clear();
             extraTopics.addAll(topicNames.stream().filter(expectedAbsent::contains).collect(Collectors.toSet()));
             return topicsNotFound.isEmpty() && extraTopics.isEmpty();
         }, String.format("Failed to find topic(s): %s and NOT find topic(s): %s", topicsNotFound, extraTopics));
