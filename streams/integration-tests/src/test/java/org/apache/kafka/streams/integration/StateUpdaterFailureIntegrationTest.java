@@ -40,8 +40,8 @@ import org.junit.jupiter.api.TestInfo;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -97,7 +97,7 @@ public class StateUpdaterFailureIntegrationTest {
     @Test
     public void correctlyHandleFlushErrorsDuringRebalance() throws Exception {
         final AtomicInteger numberOfStoreInits = new AtomicInteger();
-        final AtomicReference<KafkaStreams.State> currentState = new AtomicReference<>();
+        final CountDownLatch pendingShutdownLatch = new CountDownLatch(1);
 
         final StoreBuilder<KeyValueStore<Object, Object>> storeBuilder = new AbstractStoreBuilder<>("testStateStore", Serdes.Integer(), Serdes.ByteArray(), new MockTime()) {
 
@@ -117,7 +117,7 @@ public class StateUpdaterFailureIntegrationTest {
                         // we use waitForCondition to wait until the current state is PENDING_SHUTDOWN to make sure the Stream Thread will not handle the exception and we can get to in TaskManager#shutdownStateUpdater
                         if (numberOfStoreInits.get() == 9) {
                             try {
-                                TestUtils.waitForCondition(() -> currentState.get() == KafkaStreams.State.PENDING_SHUTDOWN, "Streams never reached PENDING_SHUTDOWN state");
+                                pendingShutdownLatch.await();
                             } catch (final InterruptedException e) {
                                 throw new RuntimeException(e);
                             }
@@ -134,10 +134,14 @@ public class StateUpdaterFailureIntegrationTest {
         topology.addStateStore(storeBuilder, "my-processor");
 
         streams = new KafkaStreams(topology, streamsConfiguration);
-        streams.setStateListener((newState, oldState) -> currentState.set(newState));
+        streams.setStateListener((newState, oldState) -> {
+            if (newState == KafkaStreams.State.PENDING_SHUTDOWN) {
+                pendingShutdownLatch.countDown();
+            }
+        });
         streams.start();
 
-        TestUtils.waitForCondition(() -> currentState.get() == KafkaStreams.State.RUNNING, "Streams never reached RUNNING state");
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, "Streams never reached RUNNING state");
 
         streams.removeStreamThread();
 
