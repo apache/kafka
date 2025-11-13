@@ -198,11 +198,9 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
                     topicPartitions.add(new TopicPartition(topic.name(), partitionIdx));
                 }
             }
-            // Read transactionVersion from raw marker data (only available in version 2+)
-            short transactionVersion = 0;
-            if (version() >= 2) {
-                transactionVersion = markerEntry.transactionVersion();
-            }
+            // Read transactionVersion from raw marker data.
+            // For request version 1, this field is set to 0 during deserialization since it's ignorable.
+            short transactionVersion = markerEntry.transactionVersion();
 
             markers.add(new TxnMarkerEntry(
                 markerEntry.producerId(),
