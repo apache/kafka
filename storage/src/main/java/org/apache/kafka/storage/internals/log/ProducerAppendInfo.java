@@ -110,20 +110,11 @@ public class ProducerAppendInfo {
      * 
      * @param producerEpoch the epoch from the transaction marker
      * @param offset the offset where the marker will be written
-     * @param transactionVersion the transaction version (0/1 = legacy, 2+ = TV2)
+     * @param transactionVersion the transaction version (0/1 = legacy, 2 = TV2)
      */
     private void checkProducerEpoch(short producerEpoch, long offset, short transactionVersion) {
         short current = updatedEntry.producerEpoch();
 
-        // Legacy (TV0/TV1): Markers use the same epoch as transactional records, so we accept markerEpoch >= currentEpoch.
-        // This creates a correctness gap: leaders cannot distinguish between active markers and late/duplicate ones.
-        // If a duplicate marker arrives after a new transaction begins with the same epoch, it could mistakenly
-        // commit or abort records from the newer transaction, threatening exactly-once semantics (EOS) guarantees.
-        //
-        // With TV2, the coordinator always bumps the producer epoch by +1 before writing the final
-        // marker, establishing a clear invariant: a valid TV2 marker must have markerEpoch > currentEpoch (strictly greater).
-        // Any marker with markerEpoch <= currentEpoch is a late or duplicate marker and must be rejected.
-        // This closes the long-standing gap and prevents multiple transactions from being conflated under the same epoch.(KIP-1228)
         if (transactionVersion >= 2) {
             if (producerEpoch <= current) {
                 String message = "Reject late/dup TV2 marker: markerEpoch=" + producerEpoch + " <= currentEpoch=" + current +
@@ -254,12 +245,11 @@ public class ProducerAppendInfo {
         }
     }
 
-    public Optional<CompletedTxn> appendEndTxnMarker(
-            EndTransactionMarker endTxnMarker,
-            short producerEpoch,
-            long offset,
-            long timestamp,
-            short transactionVersion) {
+    public Optional<CompletedTxn> appendEndTxnMarker(EndTransactionMarker endTxnMarker,
+                                                     short producerEpoch,
+                                                     long offset,
+                                                     long timestamp,
+                                                     short transactionVersion) {
         checkProducerEpoch(producerEpoch, offset, transactionVersion);
         checkCoordinatorEpoch(endTxnMarker, offset);
 

@@ -1019,8 +1019,8 @@ public class UnifiedLog implements AutoCloseable {
      * @param origin Declares the origin of the append which affects required validations
      * @param requestLocal request local instance
      * @param verificationGuard verification guard for transaction verification
-     * @param transactionVersion the transaction version for the records (0/1 for legacy TV0/TV1, 2 for TV2, etc.).
-     *                           Defaults to 0 (legacy behavior). Used for epoch validation of transaction markers.
+     * @param transactionVersion the transaction version for the records (1 for TV1, 2 for TV2, etc.).
+     *                           Defaults to 0 (legacy behavior). Used for epoch validation of transaction markers (KIP-1228).
      * @throws KafkaStorageException If the append fails due to an I/O error.
      * @return Information about the appended messages including the first and last offset.
      */
@@ -1031,7 +1031,8 @@ public class UnifiedLog implements AutoCloseable {
                                         VerificationGuard verificationGuard,
                                         short transactionVersion) {
         boolean validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER;
-        return append(records, origin, validateAndAssignOffsets, leaderEpoch, Optional.of(requestLocal), verificationGuard, false, RecordBatch.CURRENT_MAGIC_VALUE, transactionVersion);
+        return append(records, origin, validateAndAssignOffsets, leaderEpoch, Optional.of(requestLocal),
+            verificationGuard, false, RecordBatch.CURRENT_MAGIC_VALUE, transactionVersion);
     }
 
     /**
@@ -1083,8 +1084,9 @@ public class UnifiedLog implements AutoCloseable {
      * @param verificationGuard verification guard for transaction verification
      * @param ignoreRecordSize true to skip validation of record size.
      * @param toMagic the record version magic value
-     * @param transactionVersion the transaction version for the records (0/1 for legacy TV0/TV1, 2 for TV2, etc.).
-     *                           Used for epoch validation of transaction markers.
+     * @param transactionVersion the transaction version for the records (1 for TV1, 2 for TV2, etc.).
+     *                           Used for epoch validation of transaction markers (KIP-1228).
+     *
      * @throws KafkaStorageException If the append fails due to an I/O error.
      * @throws OffsetsOutOfOrderException If out of order offsets found in 'records'
      * @throws UnexpectedAppendOffsetException If the first or last offset in append is less than next offset
@@ -1219,7 +1221,12 @@ public class UnifiedLog implements AutoCloseable {
                             // now that we have valid records, offsets assigned, and timestamps updated, we need to
                             // validate the idempotent/transactional state of the producers and collect some metadata
                             AnalyzeAndValidateProducerStateResult result = analyzeAndValidateProducerState(
-                                    logOffsetMetadata, validRecords, origin, verificationGuard, transactionVersion);
+                                logOffsetMetadata,
+                                validRecords,
+                                origin,
+                                verificationGuard,
+                                transactionVersion
+                            );
 
                             if (result.maybeDuplicate.isPresent()) {
                                 BatchMetadata duplicate = result.maybeDuplicate.get();
@@ -1423,7 +1430,13 @@ public class UnifiedLog implements AutoCloseable {
                     ? Optional.of(new LogOffsetMetadata(batch.baseOffset(), appendOffsetMetadata.segmentBaseOffset, relativePositionInSegment))
                     : Optional.empty();
 
-                Optional<CompletedTxn> maybeCompletedTxn = UnifiedLog.updateProducers(producerStateManager, batch, updatedProducers, firstOffsetMetadata, origin, transactionVersion);
+                Optional<CompletedTxn> maybeCompletedTxn = UnifiedLog.updateProducers(
+                    producerStateManager,
+                    batch, updatedProducers,
+                    firstOffsetMetadata,
+                    origin,
+                    transactionVersion
+                );
                 maybeCompletedTxn.ifPresent(completedTxns::add);
             }
 

@@ -1215,8 +1215,14 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def appendRecordsToLeader(records: MemoryRecords, origin: AppendOrigin, requiredAcks: Int,
-                            requestLocal: RequestLocal, verificationGuard: VerificationGuard = VerificationGuard.SENTINEL, transactionVersion: Short = 0): LogAppendInfo = {
+  def appendRecordsToLeader(
+    records: MemoryRecords,
+    origin: AppendOrigin,
+    requiredAcks: Int,
+    requestLocal: RequestLocal,
+    verificationGuard: VerificationGuard = VerificationGuard.SENTINEL,
+    transactionVersion: Short = 0
+  ): LogAppendInfo = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       leaderLogIfLocal match {
         case Some(leaderLog) =>

@@ -621,8 +621,8 @@ class ReplicaManager(val config: KafkaConfig,
    *                                      thread calling this method
    * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
    * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
-   * @param transactionVersion            the transaction version for the records (0/1 for legacy TV0/TV1, 2 for TV2, etc.).
-   *                                      Defaults to 0 (legacy behavior). Used for epoch validation of transaction markers.
+   * @param transactionVersion            the transaction version for the records (1 for TV1, 2 for TV2, etc.).
+   *                                      Defaults to 0 (legacy behavior). Used for epoch validation of transaction markers (KIP-1228).
    */
   def appendRecordsToLeader(
     requiredAcks: Short,
@@ -672,6 +672,7 @@ class ReplicaManager(val config: KafkaConfig,
    * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
    *                                      thread calling this method
    * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
+   * @param transactionVersion            the transaction version for the records (1 for TV1, 2 for TV2, etc.).
    */
   def appendRecords(timeout: Long,
                     requiredAcks: Short,
