@@ -399,7 +399,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             schedule(key, retryBackoff, TimeUnit.MILLISECONDS, true, retryBackoff, operation);
                         } else {
                             log.error("The write event {} for the timer {} failed due to {}. Ignoring it. ",
-                                event.name, key, ex.getMessage());
+                                event.name, key, ex.getMessage(), ex);
                         }
 
                         return null;
@@ -717,7 +717,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             }
                         } catch (Throwable ex) {
                             log.error("Failed to load metadata from {} with epoch {} due to {}.",
-                                tp, epoch, ex.toString());
+                                tp, epoch, ex.getMessage(), ex);
                             context.transitionTo(CoordinatorState.FAILED);
                         }
                     } else {
@@ -820,7 +820,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     // Free up the current batch.
                     freeCurrentBatch();
                 } catch (Throwable t) {
-                    log.error("Writing records to {} failed due to: {}.", tp, t.getMessage());
+                    log.error("Writing records to {} failed due to: {}.", tp, t.getMessage(), t);
                     failCurrentBatch(t);
                     // We rethrow the exception for the caller to handle it too.
                     throw t;
@@ -1057,7 +1057,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         currentBatch.builder.append(recordToAppend);
                         currentBatch.nextOffset++;
                     } catch (Throwable t) {
-                        log.error("Replaying record {} to {} failed due to: {}.", recordToReplay, tp, t.getMessage());
+                        log.error("Replaying record {} to {} failed due to: {}.", recordToReplay, tp, t.getMessage(), t);
 
                         // Add the event to the list of pending events associated with the last
                         // batch in order to fail it too.
@@ -2446,7 +2446,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             // It's very unlikely that we will ever see an exception here, since we
                             // already make an effort to catch exceptions in the unload method.
                             log.error("Failed to unload metadata for {} with epoch {} due to {}.",
-                                tp, partitionEpoch, ex.toString());
+                                tp, partitionEpoch, ex.getMessage(), ex);
                         } finally {
                             // Always remove the coordinator context, otherwise the coordinator
                             // shard could be permanently stuck.

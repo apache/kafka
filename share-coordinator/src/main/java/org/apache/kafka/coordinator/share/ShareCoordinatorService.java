@@ -472,6 +472,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                                     .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                                         .setPartition(partitionData.partition())
                                         .setStartOffset(partitionData.startOffset())
+                                        .setDeliveryCompleteCount(partitionData.deliveryCompleteCount())
                                         .setLeaderEpoch(partitionData.leaderEpoch())
                                         .setStateEpoch(partitionData.stateEpoch())
                                         .setStateBatches(partitionData.stateBatches())))))))

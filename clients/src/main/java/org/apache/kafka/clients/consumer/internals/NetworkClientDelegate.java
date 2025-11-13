@@ -471,4 +471,33 @@ public class NetworkClientDelegate implements AutoCloseable {
             }
         };
     }
+
+    /**
+     * Creates a {@link Supplier} for deferred creation during invocation by
+     * {@link ConsumerNetworkThread}.
+     */
+    public static Supplier<NetworkClientDelegate> supplier(final Time time,
+                                                           final ConsumerConfig config,
+                                                           final LogContext logContext,
+                                                           final KafkaClient client,
+                                                           final Metadata metadata,
+                                                           final BackgroundEventHandler backgroundEventHandler,
+                                                           final boolean notifyMetadataErrorsViaErrorQueue,
+                                                           final AsyncConsumerMetrics asyncConsumerMetrics) {
+        return new CachedSupplier<>() {
+            @Override
+            protected NetworkClientDelegate create() {
+                return new NetworkClientDelegate(
+                    time,
+                    config,
+                    logContext,
+                    client,
+                    metadata,
+                    backgroundEventHandler,
+                    notifyMetadataErrorsViaErrorQueue,
+                    asyncConsumerMetrics
+                );
+            }
+        };
+    }
 }
