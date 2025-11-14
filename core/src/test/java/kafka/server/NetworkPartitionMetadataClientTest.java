@@ -29,7 +29,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.PartitionMetadataClient;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.util.MockTime;
@@ -76,8 +75,6 @@ class NetworkPartitionMetadataClientTest {
     private static class NetworkPartitionMetadataClientBuilder {
         private MetadataCache metadataCache = METADATA_CACHE;
         private Supplier<KafkaClient> kafkaClientSupplier = KAFKA_CLIENT_SUPPLIER;
-        private Time time = MOCK_TIME;
-        private ListenerName listenerName = LISTENER_NAME;
 
         NetworkPartitionMetadataClientBuilder withMetadataCache(MetadataCache metadataCache) {
             this.metadataCache = metadataCache;
@@ -89,22 +86,12 @@ class NetworkPartitionMetadataClientTest {
             return this;
         }
 
-        NetworkPartitionMetadataClientBuilder withTime(Time time) {
-            this.time = time;
-            return this;
-        }
-
-        NetworkPartitionMetadataClientBuilder withListenerName(ListenerName listenerName) {
-            this.listenerName = listenerName;
-            return this;
-        }
-
-        public static NetworkPartitionMetadataClientBuilder bulider() {
+        static NetworkPartitionMetadataClientBuilder builder() {
             return new NetworkPartitionMetadataClientBuilder();
         }
 
-        public NetworkPartitionMetadataClient build() {
-            return new NetworkPartitionMetadataClient(metadataCache, kafkaClientSupplier, time, listenerName);
+        NetworkPartitionMetadataClient build() {
+            return new NetworkPartitionMetadataClient(metadataCache, kafkaClientSupplier, MOCK_TIME, LISTENER_NAME);
         }
     }
 
@@ -158,7 +145,7 @@ class NetworkPartitionMetadataClientTest {
                 ))
         ), LEADER_NODE);
 
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.bulider()
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
             .withMetadataCache(metadataCache)
             .withKafkaClientSupplier(() -> client)
             .build();
@@ -189,7 +176,7 @@ class NetworkPartitionMetadataClientTest {
         when(metadataCache.getPartitionLeaderEndpoint(TOPIC, PARTITION, LISTENER_NAME))
             .thenReturn(Optional.empty());
 
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.bulider()
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
             .withMetadataCache(metadataCache)
             .build();
 
@@ -218,7 +205,7 @@ class NetworkPartitionMetadataClientTest {
         when(metadataCache.getPartitionLeaderEndpoint(TOPIC, PARTITION, LISTENER_NAME))
             .thenReturn(Optional.of(Node.noNode()));
 
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.bulider()
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
             .withMetadataCache(metadataCache)
             .build();
 
@@ -259,7 +246,7 @@ class NetworkPartitionMetadataClientTest {
             return false;
         }, null, LEADER_NODE);
 
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.bulider()
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
             .withMetadataCache(metadataCache)
             .withKafkaClientSupplier(() -> client)
             .build();
@@ -293,7 +280,7 @@ class NetworkPartitionMetadataClientTest {
         // Set node as unreachable to simulate disconnect
         client.setUnreachable(LEADER_NODE, REQUEST_TIMEOUT_MS + 1);
 
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.bulider()
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
             .withMetadataCache(metadataCache)
             .withKafkaClientSupplier(() -> client)
             .build();
@@ -359,7 +346,7 @@ class NetworkPartitionMetadataClientTest {
                 ))
         ), LEADER_NODE);
 
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.bulider()
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
             .withMetadataCache(metadataCache)
             .withKafkaClientSupplier(() -> client)
             .build();
@@ -457,7 +444,7 @@ class NetworkPartitionMetadataClientTest {
                 ))
         ), leaderNode2);
 
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.bulider()
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
             .withMetadataCache(metadataCache)
             .withKafkaClientSupplier(() -> client)
             .build();
@@ -536,7 +523,7 @@ class NetworkPartitionMetadataClientTest {
                 ))
         ), LEADER_NODE);
 
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.bulider()
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
             .withMetadataCache(metadataCache)
             .withKafkaClientSupplier(() -> client)
             .build();
@@ -568,7 +555,7 @@ class NetworkPartitionMetadataClientTest {
 
     @Test
     public void testListLatestOffsetsNullPartitions() {
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.bulider().build();
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder().build();
 
         Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures =
             networkPartitionMetadataClient.listLatestOffsets(null);
@@ -579,7 +566,7 @@ class NetworkPartitionMetadataClientTest {
 
     @Test
     public void testListLatestOffsetsEmptyPartitions() {
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.bulider().build();
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder().build();
 
         Set<TopicPartition> partitions = new HashSet<>();
 
@@ -622,7 +609,7 @@ class NetworkPartitionMetadataClientTest {
                 ))
         ), LEADER_NODE);
 
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.bulider()
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
             .withMetadataCache(metadataCache)
             .withKafkaClientSupplier(() -> client)
             .build();
@@ -671,7 +658,7 @@ class NetworkPartitionMetadataClientTest {
                 ))
         ), LEADER_NODE);
 
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.bulider()
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
             .withMetadataCache(metadataCache)
             .withKafkaClientSupplier(() -> client)
             .build();
@@ -695,7 +682,7 @@ class NetworkPartitionMetadataClientTest {
     @Test
     public void testClose() {
         KafkaClient client = mock(KafkaClient.class);
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.bulider()
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
             .withKafkaClientSupplier(() -> client)
             .build();
         try {
@@ -751,7 +738,7 @@ class NetworkPartitionMetadataClientTest {
                 ))
         ), LEADER_NODE);
 
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.bulider()
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
             .withMetadataCache(metadataCache)
             .withKafkaClientSupplier(kafkaClientSupplier)
             .build();
@@ -777,7 +764,7 @@ class NetworkPartitionMetadataClientTest {
             return client;
         };
 
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.bulider()
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
             .withKafkaClientSupplier(clientSupplier)
             .build();
 
@@ -799,7 +786,7 @@ class NetworkPartitionMetadataClientTest {
             return mock(KafkaClient.class);
         };
 
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.bulider()
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
             .withMetadataCache(metadataCache)
             .withKafkaClientSupplier(clientSupplier)
             .build();
@@ -820,7 +807,7 @@ class NetworkPartitionMetadataClientTest {
             return mock(KafkaClient.class);
         };
 
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.bulider()
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
             .withMetadataCache(metadataCache)
             .withKafkaClientSupplier(clientSupplier)
             .build();
@@ -895,7 +882,7 @@ class NetworkPartitionMetadataClientTest {
                 ))
         ), LEADER_NODE);
 
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.bulider()
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
             .withMetadataCache(metadataCache)
             .withKafkaClientSupplier(clientSupplier)
             .build();

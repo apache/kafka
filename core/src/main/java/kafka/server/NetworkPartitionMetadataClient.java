@@ -56,10 +56,10 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
 
     private final MetadataCache metadataCache;
     private final Supplier<KafkaClient> networkClientSupplier;
-    private volatile SendThread sendThread;
     private final Time time;
     private final ListenerName listenerName;
     private final Object initializationLock = new Object();
+    private volatile SendThread sendThread;
 
     public NetworkPartitionMetadataClient(
         MetadataCache metadataCache,
@@ -71,7 +71,6 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
         this.networkClientSupplier = networkClientSupplier;
         this.time = time;
         this.listenerName = listenerName;
-        this.sendThread = null;
     }
 
     @Override
@@ -160,7 +159,7 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
                     );
                     thread.start();
                     sendThread = thread;
-                    log.debug("NetworkPartitionMetadataClient sendThread initialized and started");
+                    log.info("NetworkPartitionMetadataClient sendThread initialized and started");
                 }
             }
         }
