@@ -1,4 +1,5 @@
 org.apache.kafka.coordinator.common.runtime.CoordinatorExecutorImplTest:
+- testCancelAllTasks
 - testTaskCancelledAfterBeingExecutedButBeforeWriteOperationIsExecuted
 - testTaskCancelledBeforeBeingExecuted
 - testTaskFailedLifecycle
@@ -30,6 +31,7 @@ org.apache.kafka.coordinator.common.runtime.CoordinatorResultTest:
 org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImplTest:
 - testEventQueueSize
 - testEventQueueSizeMetricsGroupIsolation
+- testFlushRateSensor
 - testHistogramMetrics
 - testHistogramMetricsGroupIsolation
 - testMetricNames
