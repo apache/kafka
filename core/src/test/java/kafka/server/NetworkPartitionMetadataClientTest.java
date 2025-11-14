@@ -302,7 +302,7 @@ class NetworkPartitionMetadataClientTest {
         assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
         PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
         assertEquals(-1, response.offset());
-        assertEquals(Errors.forException(authenticationException).code(), response.error().code());
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.error().code());
     }
 
     @Test
@@ -323,7 +323,7 @@ class NetworkPartitionMetadataClientTest {
         assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
         PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
         assertEquals(-1, response.offset());
-        assertEquals(Errors.forException(unsupportedVersionException).code(), response.error().code());
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.error().code());
     }
 
     @Test

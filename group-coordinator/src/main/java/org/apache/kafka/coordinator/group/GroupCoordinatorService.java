@@ -1924,34 +1924,27 @@ public class GroupCoordinatorService implements GroupCoordinator {
                                 .setLeaderEpoch(partitionData.errorCode() == Errors.NONE.code() ? partitionData.leaderEpoch() : PartitionFactory.DEFAULT_LEADER_EPOCH)
                                 .setLag(PartitionFactory.UNINITIALIZED_LAG));
                         } else {
-                            try {
-                                // This code is reached when allOf above is complete, which happens when all the
-                                // individual futures are complete. Thus, the call to join() here is safe.
-                                PartitionMetadataClient.OffsetResponse offsetResponse = partitionLatestOffsets.get(tp).join();
-                                if (offsetResponse.error().code() != Errors.NONE.code()) {
-                                    // If there was an error during fetching latest offset for a partition, return the error in the response for that partition.
-                                    partitionResponses.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
-                                        .setPartitionIndex(partitionData.partition())
-                                        .setErrorCode(offsetResponse.error().code())
-                                        .setErrorMessage(offsetResponse.error().message()));
-                                } else {
-                                    // Compute lag as (partition end offset - startOffset - deliveryCompleteCount).
-                                    // Note, partition end offset, which is retrieved from partitionMetadataClient, is the offset of
-                                    // the next message to be produced, not the last message offset. Thus, the formula for lag computation
-                                    // does not need a +1 adjustment.
-                                    long lag = offsetResponse.offset() - partitionData.startOffset() - partitionData.deliveryCompleteCount();
-                                    partitionResponses.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
-                                        .setPartitionIndex(partitionData.partition())
-                                        .setStartOffset(partitionData.startOffset())
-                                        .setLeaderEpoch(partitionData.leaderEpoch())
-                                        .setLag(lag));
-                                }
-                            } catch (CompletionException e) {
-                                // If fetching latest offset for a partition failed, return the error in the response for that partition.
+                            // This code is reached when allOf above is complete, which happens when all the
+                            // individual futures are complete. Thus, the call to join() here is safe.
+                            PartitionMetadataClient.OffsetResponse offsetResponse = partitionLatestOffsets.get(tp).join();
+                            if (offsetResponse.error().code() != Errors.NONE.code()) {
+                                // If there was an error during fetching latest offset for a partition, return the error in the response for that partition.
+                                log.error("Failed to retrieve partition end offset while calculating share partition lag for topicPartition: {}", tp);
                                 partitionResponses.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
                                     .setPartitionIndex(partitionData.partition())
-                                    .setErrorCode(Errors.forException(e.getCause()).code())
-                                    .setErrorMessage(e.getCause().getMessage()));
+                                    .setErrorCode(offsetResponse.error().code())
+                                    .setErrorMessage(offsetResponse.error().message()));
+                            } else {
+                                // Compute lag as (partition end offset - startOffset - deliveryCompleteCount).
+                                // Note, partition end offset, which is retrieved from partitionMetadataClient, is the offset of
+                                // the next message to be produced, not the last message offset. Thus, the formula for lag computation
+                                // does not need a +1 adjustment.
+                                long lag = offsetResponse.offset() - partitionData.startOffset() - partitionData.deliveryCompleteCount();
+                                partitionResponses.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
+                                    .setPartitionIndex(partitionData.partition())
+                                    .setStartOffset(partitionData.startOffset())
+                                    .setLeaderEpoch(partitionData.leaderEpoch())
+                                    .setLag(lag));
                             }
                         }
                     });

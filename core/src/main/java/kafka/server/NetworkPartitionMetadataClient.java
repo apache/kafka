@@ -194,7 +194,7 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
     // Visible for Testing.
     void handleResponse(Map<TopicPartition, CompletableFuture<OffsetResponse>> partitionFutures, ClientResponse clientResponse) {
         // Handle error responses first
-        if (handleErrorResponse(partitionFutures, clientResponse)) {
+        if (maybeHandleErrorResponse(partitionFutures, clientResponse)) {
             return;
         }
 
@@ -225,17 +225,17 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
      * Handles error responses by completing all associated futures with an error. Returns true if an error was
      * handled. Otherwise, returns false.
      */
-    private boolean handleErrorResponse(Map<TopicPartition, CompletableFuture<OffsetResponse>> partitionFutures, ClientResponse clientResponse) {
+    private boolean maybeHandleErrorResponse(Map<TopicPartition, CompletableFuture<OffsetResponse>> partitionFutures, ClientResponse clientResponse) {
         Errors error;
         if (clientResponse == null) {
             log.debug("Response for ListOffsets for topicPartitions: {} is null", partitionFutures.keySet());
             error = Errors.UNKNOWN_SERVER_ERROR;
         } else if (clientResponse.authenticationException() != null) {
             log.error("Authentication exception", clientResponse.authenticationException());
-            error = Errors.forException(clientResponse.authenticationException());
+            error = Errors.UNKNOWN_SERVER_ERROR;
         } else if (clientResponse.versionMismatch() != null) {
             log.error("Version mismatch exception", clientResponse.versionMismatch());
-            error = Errors.forException(clientResponse.versionMismatch());
+            error = Errors.UNKNOWN_SERVER_ERROR;
         } else if (clientResponse.wasDisconnected()) {
             log.error("Response for ListOffsets for TopicPartitions: {} was disconnected - {}.", partitionFutures.keySet(), clientResponse);
             error = Errors.NETWORK_EXCEPTION;
