@@ -16,6 +16,8 @@ org.apache.kafka.coordinator.group.GroupCoordinatorConfigTest:
 - testInvalidConfigs
 - testShareGroupAssignorFullClassNames
 - testShareGroupAssignors
+- testStreamsGroupInitialRebalanceDelayCustomValue
+- testStreamsGroupInitialRebalanceDelayDefaultValue
 org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpersTest:
 - testEmptyGroupMetadataRecord
 - testNewConsumerGroupCurrentAssignmentRecord
@@ -548,6 +550,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testStaticMembersLeaveUnknownGroup
 - testStaticMembersUnknownInstanceBatchLeaveGroup
 - testStaticMembersValidBatchLeaveGroup
+- testStreamsGroupDeleteCancelsInitialRebalanceTimer
 - testStreamsGroupDescribeBeforeAndAfterCommittingOffset
 - testStreamsGroupDescribeNoErrors
 - testStreamsGroupDescribeOnConsumerGroup
@@ -569,6 +572,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testStreamsGroupMemberJoiningWithStaleTopology
 - testStreamsGroupMemberRequestingShutdownApplication
 - testStreamsGroupMemberRequestingShutdownApplicationUponLeaving
+- testStreamsInitialRebalanceDelayEmptyDuringDelayAssignsAfterTimer
 - testStreamsLeavingMemberRemovesMemberAndBumpsGroupEpoch
 - testStreamsNewJoiningMemberTriggersNewTargetAssignment
 - testStreamsNewMemberIsRejectedWithMaximumMembersIsReached
