@@ -4481,6 +4481,8 @@ org.apache.kafka.common.requests.UpdateFeaturesResponseTest:
 org.apache.kafka.common.requests.WriteTxnMarkersRequestTest:
 - testConstructor
 - testGetErrorResponse
+- testRequestWithMultipleMarkersDifferentTransactionVersions
+- testTransactionVersion
 org.apache.kafka.common.requests.WriteTxnMarkersResponseTest:
 - testConstructor
 org.apache.kafka.common.resource.ResourceTypeTest:
