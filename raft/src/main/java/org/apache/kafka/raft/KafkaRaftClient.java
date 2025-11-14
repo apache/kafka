@@ -222,7 +222,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private volatile RemoveVoterHandler removeVoterHandler;
     private volatile UpdateVoterHandler updateVoterHandler;
 
-    private volatile boolean canJoin = true;
+    private volatile boolean canAutoJoin = true;
 
     /**
      * Create a new instance.
@@ -506,7 +506,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (nodeId.isPresent()) {
             // if starting voters contain node id, it can't join to the cluster
             // because it already in.
-            canJoin = !partitionState.lastVoterSet().voterIds().contains(nodeId.getAsInt());
+            canAutoJoin = !partitionState.lastVoterSet().voterIds().contains(nodeId.getAsInt());
         }
 
         if (requestManager == null) {
@@ -2344,7 +2344,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
          */
         if (error == Errors.NONE) {
             quorum.followerStateOrThrow().resetUpdateVoterSetPeriod(currentTimeMs);
-            canJoin = false;
+            canAutoJoin = false;
             return true;
         } else if (error == Errors.DUPLICATE_VOTER || error == Errors.REQUEST_TIMED_OUT) {
             quorum.followerStateOrThrow().resetUpdateVoterSetPeriod(currentTimeMs);
@@ -3367,7 +3367,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private boolean shouldSendAddVoterRequest(FollowerState state, long currentTimeMs) {
-        return canJoin && maybeSendAutoJoinRequest(state, currentTimeMs);
+        return canAutoJoin && maybeSendAutoJoinRequest(state, currentTimeMs);
     }
 
     private boolean shouldSendRemoveVoterRequest(FollowerState state, long currentTimeMs) {
@@ -3378,10 +3378,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             if (maybeSendAutoJoinRequest(state, currentTimeMs)) {
                 // When the bootstrap controller needs to update directory id,
                 // it should be removed and then rejoining to cluster
-                // In such a case, we should set canJoin to true, and it will
+                // In such a case, we should set canAutoJoin to true, and it will
                 // be removed from the cluster, update directory id and rejoin
                 // to the cluster.
-                canJoin = true;
+                canAutoJoin = true;
                 return true;
             }
         }
