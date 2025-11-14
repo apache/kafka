@@ -242,8 +242,8 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
          * Handles the response from a ListOffsets request.
          */
         private void handleResponse(PendingRequest pendingRequest, ClientResponse clientResponse) {
-            if (clientResponse == null || !clientResponse.hasResponse()) {
-                handleErrorResponse(pendingRequest, clientResponse);
+            // Handle error responses first
+            if (handleErrorResponse(pendingRequest, clientResponse)) {
                 return;
             }
 
@@ -271,21 +271,26 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
         }
 
         /**
-         * Handles error scenarios for ListOffsets responses.
+         * Handles error responses by completing all associated futures with an error. Returns true if an error was
+         * handled. Otherwise, returns false.
          */
-        private void handleErrorResponse(PendingRequest pendingRequest, ClientResponse clientResponse) {
-            Errors error = Errors.UNKNOWN_SERVER_ERROR;
+        private boolean handleErrorResponse(PendingRequest pendingRequest, ClientResponse clientResponse) {
+            Errors error = Errors.NONE;
             if (clientResponse == null) {
                 log.debug("Response for ListOffsets for topicPartitions: {} is null", pendingRequest.futures.keySet());
-            } else {
-                log.debug("Response for ListOffsets for topicPartitions: {} is invalid - {}", pendingRequest.futures.keySet(), clientResponse);
-                if (clientResponse.wasDisconnected()) {
-                    log.error("ListOffsets for TopicPartitions: {} was disconnected - {}.", pendingRequest.futures.keySet(), clientResponse);
-                    error = Errors.NETWORK_EXCEPTION;
-                } else if (clientResponse.wasTimedOut()) {
-                    log.error("Response for ListOffsets for TopicPartitions: {} timed out - {}.", pendingRequest.futures.keySet(), clientResponse);
-                    error = Errors.REQUEST_TIMED_OUT;
-                }
+                error = Errors.UNKNOWN_SERVER_ERROR;
+            } else if (clientResponse.wasDisconnected()) {
+                log.error("Response for ListOffsets for TopicPartitions: {} was disconnected - {}.", pendingRequest.futures.keySet(), clientResponse);
+                error = Errors.NETWORK_EXCEPTION;
+            } else if (clientResponse.wasTimedOut()) {
+                log.error("Response for ListOffsets for TopicPartitions: {} timed out - {}.", pendingRequest.futures.keySet(), clientResponse);
+                error = Errors.REQUEST_TIMED_OUT;
+            } else if (!clientResponse.hasResponse()) {
+                log.error("Response for ListOffsets for TopicPartitions: {} has no response - {}.", pendingRequest.futures.keySet(), clientResponse);
+                error = Errors.UNKNOWN_SERVER_ERROR;
+            }
+            if (error == Errors.NONE) {
+                return false;
             }
             for (TopicPartition tp : pendingRequest.futures.keySet()) {
                 CompletableFuture<OffsetResponse> future = pendingRequest.futures.get(tp);
@@ -293,6 +298,7 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
                     future.complete(new OffsetResponse(-1, error));
                 }
             }
+            return true;
         }
     }
 }
