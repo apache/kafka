@@ -269,7 +269,8 @@ public class TestLinearWriteSpeed {
                 0,
                 AppendOrigin.CLIENT,
                 RequestLocal.noCaching(),
-                VerificationGuard.SENTINEL
+                VerificationGuard.SENTINEL,
+                (short) 0
             );
             return messages.sizeInBytes();
         }

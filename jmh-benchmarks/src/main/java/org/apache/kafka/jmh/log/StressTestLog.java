@@ -164,7 +164,8 @@ public class StressTestLog {
                     0,
                     AppendOrigin.CLIENT,
                     RequestLocal.noCaching(),
-                    VerificationGuard.SENTINEL);
+                    VerificationGuard.SENTINEL,
+                    (short) 0);
 
             if ((logAppendInfo.firstOffset() != -1 && logAppendInfo.firstOffset() != currentOffset)
                 || logAppendInfo.lastOffset() != currentOffset) {
