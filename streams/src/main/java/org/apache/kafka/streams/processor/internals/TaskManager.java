@@ -1595,7 +1595,8 @@ public class TaskManager {
             final Set<Task> tasksToCloseClean = new HashSet<>();
             final Set<Task> tasksToCloseDirty = new HashSet<>();
             addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
-            stateUpdater.shutdown(Duration.ofMillis(Long.MAX_VALUE));
+            // at this point we removed all tasks, so the shutdown should not take a lot of time
+            stateUpdater.shutdown(Duration.ofMinutes(1L));
 
             for (final Task task : tasksToCloseClean) {
                 tasks.addTask(task);
@@ -1618,7 +1619,7 @@ public class TaskManager {
 
     private void shutdownSchedulingTaskManager() {
         if (schedulingTaskManager != null) {
-            schedulingTaskManager.shutdown(Duration.ofMillis(Long.MAX_VALUE));
+            schedulingTaskManager.shutdown(Duration.ofMinutes(5L));
         }
     }
 

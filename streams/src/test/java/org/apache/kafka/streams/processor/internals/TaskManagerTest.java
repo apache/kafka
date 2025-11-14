@@ -3673,7 +3673,7 @@ public class TaskManagerTest {
         taskManager.shutdown(true);
 
         verify(activeTaskCreator).close();
-        verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        verify(stateUpdater).shutdown(Duration.ofMinutes(1L));
         verify(failedStatefulTask).prepareCommit(false);
         verify(failedStatefulTask).suspend();
         verify(failedStatefulTask).closeDirty();
@@ -3686,7 +3686,7 @@ public class TaskManagerTest {
 
         taskManager.shutdown(true);
 
-        verify(schedulingTaskManager).shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        verify(schedulingTaskManager).shutdown(Duration.ofMinutes(5L));
     }
 
     @Test
@@ -3746,7 +3746,7 @@ public class TaskManagerTest {
 
         taskManager.shutdown(true);
 
-        verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        verify(stateUpdater).shutdown(Duration.ofMinutes(1L));
         verify(tasks).addTask(removedStatefulTask);
         verify(tasks).addTask(removedStandbyTask);
         verify(removedFailedStatefulTask).prepareCommit(false);
