@@ -182,8 +182,8 @@ public class LoggersTest {
         );
 
         assertEquals(
-            loggers.lookupLogger(""),
             loggers.rootLogger(),
+            loggers.lookupLogger(""),
             "Empty string lookup should match direct root logger access"
         );
     }

@@ -116,11 +116,11 @@ public class MirrorCheckpointConfigTest {
         Map<String, String> configValues = MirrorCheckpointConfig.validate(makeProps(
                 MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "false",
                 MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED, "false"));
-        assertEquals(configValues.keySet(), Set.of(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED));
+        assertEquals(Set.of(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED), configValues.keySet());
 
         configValues = MirrorCheckpointConfig.validate(makeProps(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",
                 MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED, "false"));
-        assertEquals(configValues.keySet(), Set.of(MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED));
+        assertEquals(Set.of(MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED), configValues.keySet());
 
         configValues = MirrorCheckpointConfig.validate(makeProps(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",
                 MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",

@@ -96,8 +96,8 @@ public class MirrorClientTest {
         MirrorClient client = new FakeMirrorClient(List.of("topic1", "topic2", "heartbeats",
             "source1.heartbeats", "source2.source1.heartbeats", "source3.heartbeats"));
         Set<String> heartbeatTopics = client.heartbeatTopics();
-        assertEquals(heartbeatTopics, Set.of("heartbeats", "source1.heartbeats",
-            "source2.source1.heartbeats", "source3.heartbeats"));
+        assertEquals(Set.of("heartbeats", "source1.heartbeats",
+            "source2.source1.heartbeats", "source3.heartbeats"), heartbeatTopics);
     }
 
     @Test
