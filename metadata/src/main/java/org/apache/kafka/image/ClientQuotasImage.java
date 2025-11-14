@@ -55,22 +55,22 @@ public final class ClientQuotasImage {
 
     // Map from entity type to entity name to set of entries. The entity type could be "user", "client-id", and "ip".
     // {
-    //   "user": { "user1": [entry1, entry2], "user2": [entry3] },
-    //   "client-id": { "client-id1": [entry4], "client-id2": [entry5] },
-    //   "ip": { "ip1": [entry6], "ip2": [entry7] }
+    //   "user": { "user1": {entity1: image1}, "user2": {entity2: image2} },
+    //   "client-id": { "client-id1": {entity3: image3}, "client-id2": {entity4: image4} },
+    //   "ip": { "ip1": {entyty5: image5}, "ip2": {entyty6: image6} }
     // }
-    private final Map<String, Map<String, Set<Entry<ClientQuotaEntity, ClientQuotaImage>>>> entitiesByType;
+    private final Map<String, Map<String, Map<ClientQuotaEntity, ClientQuotaImage>>> entitiesByType;
 
     public ClientQuotasImage(Map<ClientQuotaEntity, ClientQuotaImage> entities) {
         this.entities = Collections.unmodifiableMap(entities);
-        Map<String, Map<String, Set<Entry<ClientQuotaEntity, ClientQuotaImage>>>> entitiesByType = new HashMap<>();
+        Map<String, Map<String, Map<ClientQuotaEntity, ClientQuotaImage>>> entitiesByType = new HashMap<>();
         for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
             ClientQuotaEntity entity = entry.getKey();
             for (Entry<String, String> entityEntry : entity.entries().entrySet()) {
                 entitiesByType
                     .computeIfAbsent(entityEntry.getKey(), k -> new HashMap<>())
-                    .computeIfAbsent(entityEntry.getValue(), k -> new HashSet<>())
-                    .add(entry);
+                    .computeIfAbsent(entityEntry.getValue(), k -> new HashMap<>())
+                    .putIfAbsent(entity, entry.getValue());
             }
         }
         this.entitiesByType = Collections.unmodifiableMap(entitiesByType);
@@ -148,7 +148,7 @@ public final class ClientQuotasImage {
         for (Entry<String, String> exactMatchEntry : exactMatch.entrySet()) {
             String entityType = exactMatchEntry.getKey();
             String entityName = exactMatchEntry.getValue();
-            for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entitiesByType.getOrDefault(entityType, Map.of()).getOrDefault(entityName, Set.of())) {
+            for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entitiesByType.getOrDefault(entityType, Map.of()).getOrDefault(entityName, Map.of()).entrySet()) {
                 if (request.strict() && !entry.getKey().entries().equals(exactMatch)) {
                     continue;
                 }
@@ -157,8 +157,8 @@ public final class ClientQuotasImage {
         }
 
         for (String type : typeMatch) {
-            for (Set<Entry<ClientQuotaEntity, ClientQuotaImage>> entrySet : entitiesByType.getOrDefault(type, Map.of()).values()) {
-                for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entrySet) {
+            for (Map<ClientQuotaEntity, ClientQuotaImage> entityToImage : entitiesByType.getOrDefault(type, Map.of()).values()) {
+                for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entityToImage.entrySet()) {
                     addEntryToResponse(response, addedEntities, entry, typeMatch.size(), exactMatch.size(), request.strict());
                 }
             }
