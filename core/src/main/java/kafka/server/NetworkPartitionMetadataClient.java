@@ -48,6 +48,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
@@ -58,7 +59,7 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
     private final Supplier<KafkaClient> networkClientSupplier;
     private final Time time;
     private final ListenerName listenerName;
-    private final Object initializationLock = new Object();
+    private final AtomicBoolean initialized = new AtomicBoolean(false);
     private volatile SendThread sendThread;
 
     public NetworkPartitionMetadataClient(
@@ -129,8 +130,11 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
 
     @Override
     public void close() {
-        // Only close sendThread if it was initialized. Note, clos is called only during broker shutdown, so need
+        // Only close sendThread if it was initialized. Note, close is called only during broker shutdown, so need
         // for further synchronization here.
+        if (!initialized.get()) {
+            return;
+        }
         if (sendThread != null) {
             try {
                 sendThread.shutdown();
@@ -147,21 +151,16 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
      */
     // Visible for testing.
     void ensureSendThreadInitialized() {
-        if (sendThread == null) {
-            synchronized (initializationLock) {
-                if (sendThread == null) {
-                    KafkaClient networkClient = networkClientSupplier.get();
-                    SendThread thread = new SendThread(
-                        "NetworkPartitionMetadataClientSendThread",
-                        networkClient,
-                        Math.toIntExact(CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS),  //30 seconds
-                        this.time
-                    );
-                    thread.start();
-                    sendThread = thread;
-                    log.info("NetworkPartitionMetadataClient sendThread initialized and started");
-                }
-            }
+        if (initialized.compareAndSet(false, true)) {
+            KafkaClient networkClient = networkClientSupplier.get();
+            sendThread = new SendThread(
+                "NetworkPartitionMetadataClientSendThread",
+                networkClient,
+                Math.toIntExact(CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS),  //30 seconds
+                this.time
+            );
+            sendThread.start();
+            log.info("NetworkPartitionMetadataClient sendThread initialized and started");
         }
     }
 
