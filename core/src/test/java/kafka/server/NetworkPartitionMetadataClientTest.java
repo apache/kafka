@@ -16,11 +16,13 @@
  */
 package kafka.server;
 
-import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsTopic;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
@@ -68,8 +70,7 @@ class NetworkPartitionMetadataClientTest {
     private static final String TOPIC = "test-topic";
     private static final int PARTITION = 0;
     private static final Node LEADER_NODE = new Node(1, HOST, PORT);
-    private static final long REQUEST_TIMEOUT_MS = CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS;
-    
+
     private NetworkPartitionMetadataClient networkPartitionMetadataClient;
 
     private static class NetworkPartitionMetadataClientBuilder {
@@ -268,37 +269,104 @@ class NetworkPartitionMetadataClientTest {
     }
 
     @Test
+    public void testListLatestOffsetsNullResponse() throws ExecutionException, InterruptedException {
+        TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
+        CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
+            tp,
+            partitionFuture
+        );
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder().build();
+        // Pass null as clientResponse.
+        networkPartitionMetadataClient.handleResponse(futures, null);
+        assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
+        PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
+        assertEquals(-1, response.offset());
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.error().code());
+    }
+
+    @Test
+    public void testListLatestOffsetsAuthenticationError() throws ExecutionException, InterruptedException {
+        TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
+        CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
+            tp,
+            partitionFuture
+        );
+        AuthenticationException authenticationException = new AuthenticationException("Test authentication exception");
+        ClientResponse clientResponse = mock(ClientResponse.class);
+        // Mock authentication exception in client response.
+        when(clientResponse.authenticationException()).thenReturn(authenticationException);
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder().build();
+        networkPartitionMetadataClient.handleResponse(futures, clientResponse);
+        assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
+        PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
+        assertEquals(-1, response.offset());
+        assertEquals(Errors.forException(authenticationException).code(), response.error().code());
+    }
+
+    @Test
+    public void testListLatestOffsetsVersionMismatch() throws ExecutionException, InterruptedException {
+        TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
+        CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
+            tp,
+            partitionFuture
+        );
+        UnsupportedVersionException unsupportedVersionException = new UnsupportedVersionException("Test unsupportedVersionException exception");
+        ClientResponse clientResponse = mock(ClientResponse.class);
+        when(clientResponse.authenticationException()).thenReturn(null);
+        // Mock version mismatch exception in client response.
+        when(clientResponse.versionMismatch()).thenReturn(unsupportedVersionException);
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder().build();
+        networkPartitionMetadataClient.handleResponse(futures, clientResponse);
+        assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
+        PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
+        assertEquals(-1, response.offset());
+        assertEquals(Errors.forException(unsupportedVersionException).code(), response.error().code());
+    }
+
+    @Test
     public void testListLatestOffsetsDisconnected() throws ExecutionException, InterruptedException {
         TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
-        MetadataCache metadataCache = mock(MetadataCache.class);
-        MockClient client = new MockClient(MOCK_TIME);
-
-        // Mock metadata cache to return leader node
-        when(metadataCache.getPartitionLeaderEndpoint(TOPIC, PARTITION, LISTENER_NAME))
-            .thenReturn(Optional.of(LEADER_NODE));
-
-        // Set node as unreachable to simulate disconnect
-        client.setUnreachable(LEADER_NODE, REQUEST_TIMEOUT_MS + 1);
-
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
-            .withMetadataCache(metadataCache)
-            .withKafkaClientSupplier(() -> client)
-            .build();
-
-        Set<TopicPartition> partitions = new HashSet<>();
-        partitions.add(tp);
-
-        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures =
-            networkPartitionMetadataClient.listLatestOffsets(partitions);
-
-        assertNotNull(futures);
-        assertEquals(1, futures.size());
-        assertTrue(futures.containsKey(tp));
-
-        PartitionMetadataClient.OffsetResponse response = futures.get(tp).get();
-        assertTrue(futures.get(tp).isDone() && !futures.get(tp).isCompletedExceptionally());
-        assertNotNull(response);
+        CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
+            tp,
+            partitionFuture
+        );
+        ClientResponse clientResponse = mock(ClientResponse.class);
+        when(clientResponse.authenticationException()).thenReturn(null);
+        when(clientResponse.versionMismatch()).thenReturn(null);
+        // Mock disconnected in client response.
+        when(clientResponse.wasDisconnected()).thenReturn(true);
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder().build();
+        networkPartitionMetadataClient.handleResponse(futures, clientResponse);
+        assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
+        PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
+        assertEquals(-1, response.offset());
         assertEquals(Errors.NETWORK_EXCEPTION.code(), response.error().code());
+    }
+
+    @Test
+    public void testListLatestOffsetsTimedOut() throws ExecutionException, InterruptedException {
+        TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
+        CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
+            tp,
+            partitionFuture
+        );
+        ClientResponse clientResponse = mock(ClientResponse.class);
+        when(clientResponse.authenticationException()).thenReturn(null);
+        when(clientResponse.versionMismatch()).thenReturn(null);
+        when(clientResponse.wasDisconnected()).thenReturn(false);
+        // Mock timed out in client response.
+        when(clientResponse.wasTimedOut()).thenReturn(true);
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder().build();
+        networkPartitionMetadataClient.handleResponse(futures, clientResponse);
+        assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
+        PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
+        assertEquals(-1, response.offset());
+        assertEquals(Errors.REQUEST_TIMED_OUT.code(), response.error().code());
     }
 
     @Test

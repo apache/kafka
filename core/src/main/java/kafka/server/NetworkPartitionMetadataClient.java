@@ -127,7 +127,6 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
         return futures;
     }
 
-
     @Override
     public void close() {
         // Only close sendThread if it was initialized. Note, close is called only during broker shutdown, so need
@@ -190,6 +189,72 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
     }
 
     /**
+     * Handles the response from a ListOffsets request.
+     */
+    // Visible for Testing.
+    void handleResponse(Map<TopicPartition, CompletableFuture<OffsetResponse>> partitionFutures, ClientResponse clientResponse) {
+        // Handle error responses first
+        if (handleErrorResponse(partitionFutures, clientResponse)) {
+            return;
+        }
+
+        log.debug("ListOffsets response received successfully - {}", clientResponse);
+        ListOffsetsResponse response = (ListOffsetsResponse) clientResponse.responseBody();
+
+        for (ListOffsetsTopicResponse topicResponse : response.topics()) {
+            String topicName = topicResponse.name();
+            for (ListOffsetsPartitionResponse partitionResponse : topicResponse.partitions()) {
+                TopicPartition tp = new TopicPartition(topicName, partitionResponse.partitionIndex());
+                // Get the corresponding future from the map and complete it.
+                CompletableFuture<OffsetResponse> future = partitionFutures.get(tp);
+                if (future != null) {
+                    future.complete(new OffsetResponse(partitionResponse.offset(), Errors.forCode(partitionResponse.errorCode())));
+                }
+            }
+        }
+
+        partitionFutures.forEach((tp, future) -> {
+            // If future is not completed yet hence topic-partition was not included in the response, complete with error
+            if (!future.isDone()) {
+                future.complete(new OffsetResponse(-1, Errors.UNKNOWN_TOPIC_OR_PARTITION));
+            }
+        });
+    }
+
+    /**
+     * Handles error responses by completing all associated futures with an error. Returns true if an error was
+     * handled. Otherwise, returns false.
+     */
+    private boolean handleErrorResponse(Map<TopicPartition, CompletableFuture<OffsetResponse>> partitionFutures, ClientResponse clientResponse) {
+        Errors error;
+        if (clientResponse == null) {
+            log.debug("Response for ListOffsets for topicPartitions: {} is null", partitionFutures.keySet());
+            error = Errors.UNKNOWN_SERVER_ERROR;
+        } else if (clientResponse.authenticationException() != null) {
+            log.error("Authentication exception", clientResponse.authenticationException());
+            error = Errors.forException(clientResponse.authenticationException());
+        } else if (clientResponse.versionMismatch() != null) {
+            log.error("Version mismatch exception", clientResponse.versionMismatch());
+            error = Errors.forException(clientResponse.versionMismatch());
+        } else if (clientResponse.wasDisconnected()) {
+            log.error("Response for ListOffsets for TopicPartitions: {} was disconnected - {}.", partitionFutures.keySet(), clientResponse);
+            error = Errors.NETWORK_EXCEPTION;
+        } else if (clientResponse.wasTimedOut()) {
+            log.error("Response for ListOffsets for TopicPartitions: {} timed out - {}.", partitionFutures.keySet(), clientResponse);
+            error = Errors.REQUEST_TIMED_OUT;
+        } else if (!clientResponse.hasResponse()) {
+            log.error("Response for ListOffsets for TopicPartitions: {} has no response - {}.", partitionFutures.keySet(), clientResponse);
+            error = Errors.UNKNOWN_SERVER_ERROR;
+        } else {
+            // No error to handle, returning false instantly.
+            return false;
+        }
+
+        partitionFutures.forEach((tp, future) -> future.complete(new OffsetResponse(-1, error)));
+        return true;
+    }
+
+    /**
      * Tracks a pending ListOffsets request and its associated futures.
      */
     private record PendingRequest(
@@ -216,7 +281,7 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
         @Override
         public Collection<RequestAndCompletionHandler> generateRequests() {
             List<RequestAndCompletionHandler> requests = new ArrayList<>();
-            
+
             // Process all pending requests
             PendingRequest pending;
             while ((pending = pendingRequests.poll()) != null) {
@@ -228,76 +293,13 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
                     time.hiResClockMs(),
                     current.node,
                     requestBuilder,
-                    response -> handleResponse(current, response)
+                    response -> handleResponse(current.futures, response)
                 );
 
                 requests.add(requestHandler);
             }
 
             return requests;
-        }
-
-        /**
-         * Handles the response from a ListOffsets request.
-         */
-        private void handleResponse(PendingRequest pendingRequest, ClientResponse clientResponse) {
-            // Handle error responses first
-            if (handleErrorResponse(pendingRequest, clientResponse)) {
-                return;
-            }
-
-            log.debug("ListOffsets response received successfully - {}", clientResponse);
-            ListOffsetsResponse response = (ListOffsetsResponse) clientResponse.responseBody();
-            
-            for (ListOffsetsTopicResponse topicResponse : response.topics()) {
-                String topicName = topicResponse.name();
-                for (ListOffsetsPartitionResponse partitionResponse : topicResponse.partitions()) {
-                    TopicPartition tp = new TopicPartition(topicName, partitionResponse.partitionIndex());
-                    // Get the corresponding future from the map and complete it.
-                    CompletableFuture<OffsetResponse> future = pendingRequest.futures.get(tp);
-                    if (future != null) {
-                        future.complete(new OffsetResponse(partitionResponse.offset(), Errors.forCode(partitionResponse.errorCode())));
-                    }
-                }
-            }
-
-            pendingRequest.futures.forEach((tp, future) -> {
-                // If future is not completed yet hence topic-partition was not included in the response, complete with error
-                if (!future.isDone()) {
-                    future.complete(new OffsetResponse(-1, Errors.UNKNOWN_TOPIC_OR_PARTITION));
-                }
-            });
-        }
-
-        /**
-         * Handles error responses by completing all associated futures with an error. Returns true if an error was
-         * handled. Otherwise, returns false.
-         */
-        private boolean handleErrorResponse(PendingRequest pendingRequest, ClientResponse clientResponse) {
-            Errors error = Errors.NONE;
-            if (clientResponse == null) {
-                log.debug("Response for ListOffsets for topicPartitions: {} is null", pendingRequest.futures.keySet());
-                error = Errors.UNKNOWN_SERVER_ERROR;
-            } else if (clientResponse.wasDisconnected()) {
-                log.error("Response for ListOffsets for TopicPartitions: {} was disconnected - {}.", pendingRequest.futures.keySet(), clientResponse);
-                error = Errors.NETWORK_EXCEPTION;
-            } else if (clientResponse.wasTimedOut()) {
-                log.error("Response for ListOffsets for TopicPartitions: {} timed out - {}.", pendingRequest.futures.keySet(), clientResponse);
-                error = Errors.REQUEST_TIMED_OUT;
-            } else if (!clientResponse.hasResponse()) {
-                log.error("Response for ListOffsets for TopicPartitions: {} has no response - {}.", pendingRequest.futures.keySet(), clientResponse);
-                error = Errors.UNKNOWN_SERVER_ERROR;
-            }
-            if (error == Errors.NONE) {
-                return false;
-            }
-            for (TopicPartition tp : pendingRequest.futures.keySet()) {
-                CompletableFuture<OffsetResponse> future = pendingRequest.futures.get(tp);
-                if (future != null) {
-                    future.complete(new OffsetResponse(-1, error));
-                }
-            }
-            return true;
         }
     }
 }
