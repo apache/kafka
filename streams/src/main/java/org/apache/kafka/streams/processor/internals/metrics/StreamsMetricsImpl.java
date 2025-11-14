@@ -201,8 +201,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                   final Map<String, String> additionalTags,
                                                   final RecordingLevel recordingLevel,
                                                   final T value) {
-        final MetricName metricName = metrics.metricName(name, CLIENT_LEVEL_GROUP, description,
-            clientLevelTagMap(additionalTags));
+        final MetricName metricName = metrics.metricName(
+            name,
+            CLIENT_LEVEL_GROUP,
+            description,
+            clientLevelTagMap(additionalTags)
+        );
         final MetricConfig metricConfig = new MetricConfig().recordLevel(recordingLevel);
         synchronized (clientLevelMetrics) {
             metrics.addMetric(metricName, metricConfig, new ImmutableMetricValue<>(value));
@@ -222,8 +226,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                 final Map<String, String> additionalTags,
                                                 final RecordingLevel recordingLevel,
                                                 final Gauge<T> valueProvider) {
-        final MetricName metricName = metrics.metricName(name, CLIENT_LEVEL_GROUP, description,
-            clientLevelTagMap(additionalTags));
+        final MetricName metricName = metrics.metricName(
+            name,
+            CLIENT_LEVEL_GROUP,
+            description,
+            clientLevelTagMap(additionalTags)
+        );
         final MetricConfig metricConfig = new MetricConfig().recordLevel(recordingLevel);
         synchronized (clientLevelMetrics) {
             metrics.addMetric(metricName, metricConfig, valueProvider);

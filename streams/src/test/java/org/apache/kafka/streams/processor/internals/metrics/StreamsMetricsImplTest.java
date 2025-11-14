@@ -253,8 +253,7 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         setupGetNewSensorTest(metrics);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         final Sensor actualSensor = streamsMetrics.threadLevelSensor(THREAD_ID1, SENSOR_NAME_1, recordingLevel);
 
@@ -266,8 +265,7 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         setupGetExistingSensorTest(metrics);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         final Sensor actualSensor = streamsMetrics.threadLevelSensor(THREAD_ID1, SENSOR_NAME_1, recordingLevel);
 
@@ -279,8 +277,7 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         setupGetNewSensorTest(metrics);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         final Sensor actualSensor = streamsMetrics.taskLevelSensor(
             THREAD_ID1,
@@ -297,8 +294,7 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         setupGetExistingSensorTest(metrics);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         final Sensor actualSensor = streamsMetrics.taskLevelSensor(
             THREAD_ID1,
@@ -315,8 +311,7 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         setupGetNewSensorTest(metrics);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         final Sensor actualSensor = streamsMetrics.topicLevelSensor(
             THREAD_ID1,
@@ -335,8 +330,7 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         setupGetExistingSensorTest(metrics);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         final Sensor actualSensor = streamsMetrics.topicLevelSensor(
             THREAD_ID1,
@@ -355,8 +349,7 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         final ArgumentCaptor<String> sensorKeys = setupGetNewSensorTest(metrics);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         final Sensor actualSensor = streamsMetrics.storeLevelSensor(
             TASK_ID1,
@@ -374,8 +367,7 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         setupGetExistingSensorTest(metrics);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         final Sensor actualSensor = streamsMetrics.storeLevelSensor(
             TASK_ID1,
@@ -391,8 +383,7 @@ public class StreamsMetricsImplTest {
     public void shouldUseSameStoreLevelSensorKeyWithTwoDifferentSensorNames() {
         final Metrics metrics = mock(Metrics.class);
         final ArgumentCaptor<String> sensorKeys = setUpSensorKeyTests(metrics);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_2, INFO_RECORDING_LEVEL);
@@ -404,8 +395,7 @@ public class StreamsMetricsImplTest {
     public void shouldNotUseSameStoreLevelSensorKeyWithDifferentTaskIds() {
         final Metrics metrics = mock(Metrics.class);
         final ArgumentCaptor<String> sensorKeys = setUpSensorKeyTests(metrics);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
         streamsMetrics.storeLevelSensor(TASK_ID2, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
@@ -417,8 +407,7 @@ public class StreamsMetricsImplTest {
     public void shouldNotUseSameStoreLevelSensorKeyWithDifferentStoreNames() {
         final Metrics metrics = mock(Metrics.class);
         final ArgumentCaptor<String> sensorKeys = setUpSensorKeyTests(metrics);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME2, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
@@ -430,8 +419,7 @@ public class StreamsMetricsImplTest {
     public void shouldNotUseSameStoreLevelSensorKeyWithDifferentThreadIds() throws InterruptedException {
         final Metrics metrics = mock(Metrics.class);
         final ArgumentCaptor<String> sensorKeys = setUpSensorKeyTests(metrics);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
         final Thread otherThread =
@@ -446,8 +434,7 @@ public class StreamsMetricsImplTest {
     public void shouldUseSameStoreLevelSensorKeyWithSameSensorNames() {
         final Metrics metrics = mock(Metrics.class);
         final ArgumentCaptor<String> sensorKeys = setUpSensorKeyTests(metrics);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
@@ -471,8 +458,7 @@ public class StreamsMetricsImplTest {
             .thenReturn(metricName);
         when(metrics.metric(metricName)).thenReturn(null);
         when(metrics.addMetricIfAbsent(eq(metricName), eqMetricConfig(metricConfig), eq(VALUE_PROVIDER))).thenReturn(null);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         streamsMetrics.addStoreLevelMutableMetric(
             TASK_ID1,
@@ -505,8 +491,7 @@ public class StreamsMetricsImplTest {
         when(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP))
             .thenReturn(metricName);
         when(metrics.metric(metricName)).thenReturn(null);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         streamsMetrics.addStoreLevelMutableMetric(
             TASK_ID1,
@@ -556,8 +541,7 @@ public class StreamsMetricsImplTest {
     @Test
     public void shouldRemoveStateStoreLevelSensors() {
         final Metrics metrics = mock(Metrics.class);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
         final MetricName metricName1 =
             new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
         final MetricName metricName2 =
@@ -580,8 +564,7 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         setupGetNewSensorTest(metrics);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         final Sensor actualSensor = streamsMetrics.nodeLevelSensor(
             THREAD_ID1,
@@ -599,8 +582,7 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         setupGetExistingSensorTest(metrics);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         final Sensor actualSensor = streamsMetrics.nodeLevelSensor(
             THREAD_ID1,
@@ -619,8 +601,7 @@ public class StreamsMetricsImplTest {
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         final String processorCacheName = "processorNodeName";
         setupGetNewSensorTest(metrics);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         final Sensor actualSensor = streamsMetrics.cacheLevelSensor(
             THREAD_ID1,
@@ -639,8 +620,7 @@ public class StreamsMetricsImplTest {
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         final String processorCacheName = "processorNodeName";
         setupGetExistingSensorTest(metrics);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         final Sensor actualSensor = streamsMetrics.cacheLevelSensor(
             THREAD_ID1, TASK_ID1,
@@ -657,8 +637,7 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         setupGetNewSensorTest(metrics);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         final Sensor actualSensor = streamsMetrics.clientLevelSensor(SENSOR_NAME_1, recordingLevel);
 
@@ -670,8 +649,7 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         setupGetExistingSensorTest(metrics);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
         final Sensor actualSensor = streamsMetrics.clientLevelSensor(SENSOR_NAME_1, recordingLevel);
 
@@ -700,7 +678,7 @@ public class StreamsMetricsImplTest {
                 mkEntry("client-id", CLIENT_ID)
             )
         );
-        assertThat(metrics.metric(name), notNullValue());
+        assertThat(metrics.metric(name).metricName().name(), equalTo(METRIC_NAME1));
         assertThat(metrics.metric(name).metricValue(), equalTo(value));
     }
 
@@ -728,7 +706,7 @@ public class StreamsMetricsImplTest {
                 mkEntry("additional-tag", "additional-value")
             )
         );
-        assertThat(metrics.metric(name), notNullValue());
+        assertThat(metrics.metric(name).metricName().name(), equalTo(METRIC_NAME1));
         assertThat(metrics.metric(name).metricValue(), equalTo(value));
     }
 
@@ -754,7 +732,7 @@ public class StreamsMetricsImplTest {
                 mkEntry("client-id", CLIENT_ID)
             )
         );
-        assertThat(metrics.metric(name), notNullValue());
+        assertThat(metrics.metric(name).metricName().name(), equalTo(METRIC_NAME1));
         assertThat(metrics.metric(name).metricValue(), equalTo(value));
     }
 
@@ -782,7 +760,7 @@ public class StreamsMetricsImplTest {
                 mkEntry("additional-tag", "additional-value")
             )
         );
-        assertThat(metrics.metric(name), notNullValue());
+        assertThat(metrics.metric(name).metricName().name(), equalTo(METRIC_NAME1));
         assertThat(metrics.metric(name).metricValue(), equalTo(value));
     }
 
@@ -802,8 +780,7 @@ public class StreamsMetricsImplTest {
     @Test
     public void shouldRemoveClientLevelMetricsAndSensors() {
         final Metrics metrics = mock(Metrics.class);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
         final ArgumentCaptor<String> sensorKeys = addSensorsOnAllLevels(metrics, streamsMetrics);
 
         doNothing().when(metrics).removeSensor(sensorKeys.getAllValues().get(0));
@@ -816,8 +793,7 @@ public class StreamsMetricsImplTest {
     @Test
     public void shouldRemoveThreadLevelSensors() {
         final Metrics metrics = mock(Metrics.class);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
         addSensorsOnAllLevels(metrics, streamsMetrics);
         setupRemoveSensorsTest(metrics, THREAD_ID1);
 
@@ -999,8 +975,7 @@ public class StreamsMetricsImplTest {
 
     @Test
     public void shouldAddLatencyRateTotalSensor() {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
         shouldAddCustomSensor(
             streamsMetrics.addLatencyRateTotalSensor(SCOPE_NAME, ENTITY_NAME, OPERATION_NAME, RecordingLevel.DEBUG),
             streamsMetrics,
@@ -1015,8 +990,7 @@ public class StreamsMetricsImplTest {
 
     @Test
     public void shouldAddRateTotalSensor() {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,
-            time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
         shouldAddCustomSensor(
             streamsMetrics.addRateTotalSensor(SCOPE_NAME, ENTITY_NAME, OPERATION_NAME, RecordingLevel.DEBUG),
             streamsMetrics,
@@ -1376,51 +1350,53 @@ public class StreamsMetricsImplTest {
     @Test
     public void shouldAddThreadLevelMutableMetric() {
         final int measuredValue = 123;
+        final String name = "foobar";
         final StreamsMetricsImpl streamsMetrics
             = new StreamsMetricsImpl(metrics, THREAD_ID1, time);
 
         streamsMetrics.addThreadLevelMutableMetric(
-            "foobar",
+            name,
             "test metric",
             "t1",
             (c, t) -> measuredValue
         );
 
-        final MetricName name = metrics.metricName(
-            "foobar",
+        final MetricName metricName = metrics.metricName(
+            name,
             THREAD_LEVEL_GROUP,
             mkMap(
                 mkEntry("thread-id", "t1")
             )
         );
-        assertThat(metrics.metric(name), notNullValue());
-        assertThat(metrics.metric(name).metricValue(), equalTo(measuredValue));
+        assertThat(metrics.metric(metricName).metricName().name(), equalTo(name));
+        assertThat(metrics.metric(metricName).metricValue(), equalTo(measuredValue));
     }
 
     @Test
     public void shouldAddThreadLevelMutableMetricWithAdditionalTags() {
         final int measuredValue = 123;
+        final String name = "foobar";
         final StreamsMetricsImpl streamsMetrics
             = new StreamsMetricsImpl(metrics, THREAD_ID1, time);
 
         streamsMetrics.addThreadLevelMutableMetric(
-            "foobar",
+            name,
             "test metric",
             "t1",
             Collections.singletonMap("additional-tag", "additional-value"),
             (c, t) -> measuredValue
         );
 
-        final MetricName name = metrics.metricName(
-            "foobar",
+        final MetricName metricName = metrics.metricName(
+            name,
             THREAD_LEVEL_GROUP,
             mkMap(
                 mkEntry("thread-id", "t1"),
                 mkEntry("additional-tag", "additional-value")
             )
         );
-        assertThat(metrics.metric(name), notNullValue());
-        assertThat(metrics.metric(name).metricValue(), equalTo(measuredValue));
+        assertThat(metrics.metric(metricName).metricName().name(), equalTo(name));
+        assertThat(metrics.metric(metricName).metricValue(), equalTo(measuredValue));
     }
 
     @Test
