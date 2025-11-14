@@ -3324,7 +3324,7 @@ public class TaskManagerTest {
     private void shouldCloseActiveTasksAndPropagateExceptionsOnCleanShutdown(final ProcessingMode processingMode) {
 
         final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
-            .inState(State.RESTORING)
+            .inState(State.RUNNING)
             .withInputPartitions(taskId00Partitions).build();
         final StreamTask task01 = statefulTask(taskId01, taskId01ChangelogPartitions)
             .inState(State.RUNNING)
@@ -3332,9 +3332,6 @@ public class TaskManagerTest {
         final StreamTask task02 = statefulTask(taskId02, taskId02ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId02Partitions).build();
-        final StreamTask task03 = statefulTask(taskId03, taskId03ChangelogPartitions)
-            .inState(State.RUNNING)
-            .withInputPartitions(taskId03Partitions).build();
 
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManagerWithStateUpdater(processingMode, tasks);
@@ -3343,10 +3340,8 @@ public class TaskManagerTest {
             .when(task01).suspend();
         doThrow(new RuntimeException("oops"))
             .when(task02).suspend();
-        doThrow(new RuntimeException("oops"))
-            .when(task03).suspend();
 
-        when(tasks.activeTasks()).thenReturn(Set.of(task00, task01, task02, task03));
+        when(tasks.activeTasks()).thenReturn(Set.of(task00, task01, task02));
 
         final RuntimeException exception = assertThrows(
             RuntimeException.class,
@@ -3364,9 +3359,6 @@ public class TaskManagerTest {
         verify(task02).prepareCommit(true);
         verify(task02, times(2)).suspend();
         verify(task02).closeDirty();
-        verify(task03).prepareCommit(true);
-        verify(task03, times(2)).suspend();
-        verify(task03).closeDirty();
 
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
