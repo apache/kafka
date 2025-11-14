@@ -45,7 +45,7 @@ public class WriteTxnMarkersRequestTest {
         markers = Collections.singletonList(
              new WriteTxnMarkersRequest.TxnMarkerEntry(
                  PRODUCER_ID, PRODUCER_EPOCH, COORDINATOR_EPOCH,
-                 RESULT, Collections.singletonList(TOPIC_PARTITION))
+                 RESULT, Collections.singletonList(TOPIC_PARTITION), (short) 0)
         );
     }
 
@@ -61,6 +61,7 @@ public class WriteTxnMarkersRequestTest {
             assertEquals(COORDINATOR_EPOCH, marker.coordinatorEpoch());
             assertEquals(RESULT, marker.transactionResult());
             assertEquals(Collections.singletonList(TOPIC_PARTITION), marker.partitions());
+            assertEquals(0, marker.transactionVersion());
         }
     }
 

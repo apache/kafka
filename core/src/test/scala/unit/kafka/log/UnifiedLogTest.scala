@@ -4295,7 +4295,7 @@ class UnifiedLogTest {
 
     // Now write the transactional records
     assertTrue(log.verificationGuard(producerId).verify(verificationGuard))
-    log.appendAsLeader(transactionalRecords, 0, appendOrigin, RequestLocal.noCaching(), verificationGuard)
+    log.appendAsLeader(transactionalRecords, 0, appendOrigin, RequestLocal.noCaching(), verificationGuard, 0)
     assertTrue(log.hasOngoingTransaction(producerId, producerEpoch))
     // VerificationGuard should be cleared now.
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
@@ -4372,7 +4372,7 @@ class UnifiedLogTest {
 
     // Now write the transactional records
     assertTrue(log.verificationGuard(producerId).verify(verificationGuard))
-    log.appendAsLeader(transactionalRecords, 0, appendOrigin, RequestLocal.noCaching(), verificationGuard)
+    log.appendAsLeader(transactionalRecords, 0, appendOrigin, RequestLocal.noCaching(), verificationGuard, 2)
     assertTrue(log.hasOngoingTransaction(producerId, producerEpoch))
     // VerificationGuard should be cleared now.
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
@@ -4505,7 +4505,7 @@ class UnifiedLogTest {
     val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true)
     assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
 
-    log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, verificationGuard)
+    log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, verificationGuard, 1)
     assertTrue(log.hasOngoingTransaction(producerId, producerEpoch))
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
   }
@@ -4537,12 +4537,12 @@ class UnifiedLogTest {
       val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true)
       // Should reject non-zero sequences when there's no existing producer state
       assertThrows(classOf[OutOfOrderSequenceException], () => 
-        log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, verificationGuard))
+        log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, verificationGuard, 2))
     } else {
       // TV1 behavior: Create verification state with supportsEpochBump=false
       val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, false)
       // Should allow non-zero sequences with non-zero epoch
-      log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, verificationGuard)
+      log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, verificationGuard, 1)
       assertTrue(log.hasOngoingTransaction(producerId, producerEpoch))
     }
   }
@@ -5085,13 +5085,13 @@ class UnifiedLogTest {
       new SimpleRecord("previous-key".getBytes, "previous-value".getBytes)
     )
     val previousGuard = log.maybeStartTransactionVerification(producerId, 0, newEpoch, false)  // TV1 = supportsEpochBump = false
-    log.appendAsLeader(previousRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, previousGuard)
+    log.appendAsLeader(previousRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, previousGuard, 1)
     
     // Complete the transaction normally (commits do update producer state with current epoch)
     val commitMarker = MemoryRecords.withEndTransactionMarker(
       producerId, newEpoch, new EndTransactionMarker(ControlRecordType.COMMIT, 0)
     )
-    log.appendAsLeader(commitMarker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching, VerificationGuard.SENTINEL)
+    log.appendAsLeader(commitMarker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching, VerificationGuard.SENTINEL, 1)
     
     // Step 2: TV1 client tries to write with stale cached epoch (before learning about epoch increment)  
     val staleEpochRecords = MemoryRecords.withTransactionalRecords(
@@ -5102,7 +5102,7 @@ class UnifiedLogTest {
     // Step 3: Verify our fix - should get InvalidProducerEpochException (recoverable), not InvalidTxnStateException (fatal)
     val exception = assertThrows(classOf[InvalidProducerEpochException], () => {
       val staleGuard = log.maybeStartTransactionVerification(producerId, 0, oldEpoch, false)  
-      log.appendAsLeader(staleEpochRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, staleGuard)
+      log.appendAsLeader(staleEpochRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, staleGuard, 1)
      })
      
      // Verify the error message indicates epoch mismatch  
@@ -5129,14 +5129,14 @@ class UnifiedLogTest {
       new SimpleRecord("ks-initial-key".getBytes, "ks-initial-value".getBytes)
     )
     val initialGuard = log.maybeStartTransactionVerification(producerId, 0, originalEpoch, true)  // TV2 = supportsEpochBump = true
-    log.appendAsLeader(initialRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, initialGuard)
+    log.appendAsLeader(initialRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, initialGuard, 2)
     
     // Step 2: Coordinator times out and aborts transaction
     // TV2 (KIP-890): Coordinator bumps epoch from 3 → 4 and sends abort marker with epoch 4
     val abortMarker = MemoryRecords.withEndTransactionMarker(
       producerId, bumpedEpoch, new EndTransactionMarker(ControlRecordType.ABORT, 0)
     )
-    log.appendAsLeader(abortMarker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching, VerificationGuard.SENTINEL)
+    log.appendAsLeader(abortMarker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching, VerificationGuard.SENTINEL, 2)
     
     // Step 3: TV2 transactional producer tries to append with stale epoch (timeout recovery scenario)
     val staleEpochRecords = MemoryRecords.withTransactionalRecords(
@@ -5147,7 +5147,7 @@ class UnifiedLogTest {
     // Step 4: Verify our fix works for TV2 - should get InvalidProducerEpochException (recoverable), not InvalidTxnStateException (fatal)
     val exception = assertThrows(classOf[InvalidProducerEpochException], () => {
       val staleGuard = log.maybeStartTransactionVerification(producerId, 0, originalEpoch, true)  // TV2 = supportsEpochBump = true
-      log.appendAsLeader(staleEpochRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, staleGuard)
+      log.appendAsLeader(staleEpochRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, staleGuard, 0)
      })
      
      // Verify the error message indicates epoch mismatch (3 < 4)
