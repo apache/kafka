@@ -199,6 +199,7 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 111);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, 222);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_CONFIG, 15 * 60 * 1000);
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 5000);
 
         GroupCoordinatorConfig config = createConfig(configs);
 
@@ -228,6 +229,7 @@ public class GroupCoordinatorConfigTest {
         assertEquals(111, config.consumerGroupMinHeartbeatIntervalMs());
         assertEquals(222, config.consumerGroupMaxHeartbeatIntervalMs());
         assertEquals(15 * 60 * 1000, config.consumerGroupRegexRefreshIntervalMs());
+        assertEquals(5000, config.streamsGroupInitialRebalanceDelayMs());
     }
 
     @Test
@@ -324,6 +326,11 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG, 50000);
         assertEquals("group.streams.heartbeat.interval.ms must be less than group.streams.session.timeout.ms",
             assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, -1);
+        assertEquals("Invalid value -1 for configuration group.streams.initial.rebalance.delay.ms: Value must be at least 0",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
     }
 
     @Test
@@ -370,6 +377,23 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG, 1000);
 
         return createConfig(configs);
+    }
+
+    @Test
+    public void testStreamsGroupInitialRebalanceDelayDefaultValue() {
+        Map<String, Object> configs = new HashMap<>();
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals(3000, config.streamsGroupInitialRebalanceDelayMs());
+        assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT,
+            config.streamsGroupInitialRebalanceDelayMs());
+    }
+
+    @Test
+    public void testStreamsGroupInitialRebalanceDelayCustomValue() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 7000);
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals(7000, config.streamsGroupInitialRebalanceDelayMs());
     }
 
     public static GroupCoordinatorConfig createConfig(Map<String, Object> configs) {

@@ -2352,6 +2352,57 @@ public class CoordinatorRuntimeTest {
     }
 
     @Test
+    public void testTimerIsScheduled() throws InterruptedException {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .build();
+
+        runtime.scheduleLoadOperation(TP, 10);
+
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0, ctx.timer.size());
+
+        assertFalse(ctx.timer.isScheduled("timer-1"));
+
+        ctx.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, false,
+            () -> new CoordinatorResult<>(List.of("record1"), null));
+
+        assertTrue(ctx.timer.isScheduled("timer-1"));
+        assertFalse(ctx.timer.isScheduled("timer-2"));
+        assertEquals(1, ctx.timer.size());
+
+        ctx.timer.schedule("timer-2", 20, TimeUnit.MILLISECONDS, false,
+            () -> new CoordinatorResult<>(List.of("record2"), null));
+
+        assertTrue(ctx.timer.isScheduled("timer-1"));
+        assertTrue(ctx.timer.isScheduled("timer-2"));
+        assertEquals(2, ctx.timer.size());
+
+        ctx.timer.cancel("timer-1");
+
+        assertFalse(ctx.timer.isScheduled("timer-1"));
+        assertTrue(ctx.timer.isScheduled("timer-2"));
+        assertEquals(1, ctx.timer.size());
+
+        timer.advanceClock(21);
+
+        assertFalse(ctx.timer.isScheduled("timer-2"));
+        assertEquals(0, ctx.timer.size());
+    }
+
+    @Test
     public void testStateChanges() throws Exception {
         MockTimer timer = new MockTimer();
         MockPartitionWriter writer = mock(MockPartitionWriter.class);
@@ -4629,6 +4680,119 @@ public class CoordinatorRuntimeTest {
         // Commit and verify that writes are completed.
         writer.commit(TP);
         assertNull(complete1.get(5, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testRecordAppendLingerTime() throws Exception {
+        MockTimer timer = new MockTimer();
+
+        // Writer sleeps for 10ms before appending records.
+        MockPartitionWriter writer = new MockPartitionWriter(timer.time(), Integer.MAX_VALUE, false);
+        CoordinatorRuntimeMetrics runtimeMetrics = mock(CoordinatorRuntimeMetrics.class);
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(runtimeMetrics)
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withAppendLingerMs(10)
+                .withExecutorService(mock(ExecutorService.class))
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertNull(ctx.currentBatch);
+
+        // Get the max batch size.
+        int maxBatchSize = writer.config(TP).maxMessageSize();
+
+        // Create records with a quarter of the max batch size each. Keep in mind that
+        // each batch has a header so it is not possible to have those four records
+        // in one single batch.
+        List<String> records = Stream.of('1', '2', '3', '4').map(c -> {
+            char[] payload = new char[maxBatchSize / 4];
+            Arrays.fill(payload, c);
+            return new String(payload);
+        }).collect(Collectors.toList());
+
+        // Write #1 with two records.
+        long firstBatchTimestamp = timer.time().milliseconds();
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(50),
+            state -> new CoordinatorResult<>(records.subList(0, 2), "response1")
+        );
+
+        // A batch has been created.
+        assertNotNull(ctx.currentBatch);
+
+        // Write #2 with one record.
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(50),
+            state -> new CoordinatorResult<>(records.subList(2, 3), "response2")
+        );
+
+        // Verify the state. Records are replayed but no batch written.
+        assertEquals(List.of(), writer.entries(TP));
+        verify(runtimeMetrics, times(0)).recordFlushTime(10);
+
+        // Write #3 with one record. This one cannot go into the existing batch
+        // so the existing batch should be flushed and a new one should be created.
+        long secondBatchTimestamp = timer.time().milliseconds();
+        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP, Duration.ofMillis(50),
+            state -> new CoordinatorResult<>(records.subList(3, 4), "response3")
+        );
+
+        // Verify the state. Records are replayed. The previous batch
+        // got flushed with all the records but the new one from #3.
+        // The new batch's timestamp comes from before the flush.
+        assertEquals(3L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, records.get(0)),
+            new MockCoordinatorShard.RecordAndMetadata(1, records.get(1)),
+            new MockCoordinatorShard.RecordAndMetadata(2, records.get(2)),
+            new MockCoordinatorShard.RecordAndMetadata(3, records.get(3))
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(
+            records(firstBatchTimestamp, records.subList(0, 3))
+        ), writer.entries(TP));
+        verify(runtimeMetrics, times(1)).recordLingerTime(0);
+
+        // Advance past the linger time.
+        timer.advanceClock(11);
+
+        // Verify the state. The pending batch is flushed.
+        assertEquals(4L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, records.get(0)),
+            new MockCoordinatorShard.RecordAndMetadata(1, records.get(1)),
+            new MockCoordinatorShard.RecordAndMetadata(2, records.get(2)),
+            new MockCoordinatorShard.RecordAndMetadata(3, records.get(3))
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(
+            records(secondBatchTimestamp, records.subList(0, 3)),
+            records(secondBatchTimestamp, records.subList(3, 4))
+        ), writer.entries(TP));
+        verify(runtimeMetrics, times(1)).recordLingerTime(21);
+
+        // Commit and verify that writes are completed.
+        writer.commit(TP);
+        assertTrue(write1.isDone());
+        assertTrue(write2.isDone());
+        assertTrue(write3.isDone());
+        assertEquals(4L, ctx.coordinator.lastCommittedOffset());
+        assertEquals("response1", write1.get(5, TimeUnit.SECONDS));
+        assertEquals("response2", write2.get(5, TimeUnit.SECONDS));
+        assertEquals("response3", write3.get(5, TimeUnit.SECONDS));
     }
 
     @Test

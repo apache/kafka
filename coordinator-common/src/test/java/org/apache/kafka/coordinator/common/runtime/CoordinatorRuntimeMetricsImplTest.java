@@ -32,6 +32,7 @@ import java.util.Set;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.BATCH_FLUSH_TIME_METRIC_NAME;
+import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.BATCH_LINGER_TIME_METRIC_NAME;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.EVENT_PROCESSING_TIME_METRIC_NAME;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.EVENT_PURGATORY_TIME_METRIC_NAME;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.EVENT_QUEUE_TIME_METRIC_NAME;
@@ -74,6 +75,11 @@ public class CoordinatorRuntimeMetricsImplTest {
             kafkaMetricName(metrics, "event-purgatory-time-ms-p95"),
             kafkaMetricName(metrics, "event-purgatory-time-ms-p99"),
             kafkaMetricName(metrics, "event-purgatory-time-ms-p999"),
+            kafkaMetricName(metrics, "batch-linger-time-ms-max"),
+            kafkaMetricName(metrics, "batch-linger-time-ms-p50"),
+            kafkaMetricName(metrics, "batch-linger-time-ms-p95"),
+            kafkaMetricName(metrics, "batch-linger-time-ms-p99"),
+            kafkaMetricName(metrics, "batch-linger-time-ms-p999"),
             kafkaMetricName(metrics, "batch-flush-time-ms-max"),
             kafkaMetricName(metrics, "batch-flush-time-ms-p50"),
             kafkaMetricName(metrics, "batch-flush-time-ms-p95"),
@@ -236,6 +242,7 @@ public class CoordinatorRuntimeMetricsImplTest {
         EVENT_QUEUE_TIME_METRIC_NAME,
         EVENT_PROCESSING_TIME_METRIC_NAME,
         EVENT_PURGATORY_TIME_METRIC_NAME,
+        BATCH_LINGER_TIME_METRIC_NAME,
         BATCH_FLUSH_TIME_METRIC_NAME
     })
     public void testHistogramMetrics(String metricNamePrefix) {
@@ -254,6 +261,9 @@ public class CoordinatorRuntimeMetricsImplTest {
                     break;
                 case EVENT_PURGATORY_TIME_METRIC_NAME:
                     runtimeMetrics.recordEventPurgatoryTime(i);
+                    break;
+                case BATCH_LINGER_TIME_METRIC_NAME:
+                    runtimeMetrics.recordLingerTime(i);
                     break;
                 case BATCH_FLUSH_TIME_METRIC_NAME:
                     runtimeMetrics.recordFlushTime(i);

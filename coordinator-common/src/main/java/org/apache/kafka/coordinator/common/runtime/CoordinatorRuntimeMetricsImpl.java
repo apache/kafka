@@ -59,6 +59,11 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     public static final String EVENT_PURGATORY_TIME_METRIC_NAME = "event-purgatory-time-ms";
 
     /**
+     * The effective batch linger time metric name.
+     */
+    public static final String BATCH_LINGER_TIME_METRIC_NAME = "batch-linger-time-ms";
+
+    /**
      * The flush time metric name.
      */
     public static final String BATCH_FLUSH_TIME_METRIC_NAME = "batch-flush-time-ms";
@@ -115,6 +120,11 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
      * Sensor to measure the time an event stays in the purgatory.
      */
     private final Sensor eventPurgatoryTimeSensor;
+
+    /**
+     * Sensor to measure the effective batch linger time.
+     */
+    private final Sensor lingerTimeSensor;
 
     /**
      * Sensor to measure the flush time.
@@ -199,6 +209,15 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
         this.eventPurgatoryTimeSensor = metrics.sensor(this.metricsGroup + "-EventPurgatoryTime");
         this.eventPurgatoryTimeSensor.add(eventPurgatoryTimeHistogram);
 
+        KafkaMetricHistogram lingerTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
+            suffix -> kafkaMetricName(
+                BATCH_LINGER_TIME_METRIC_NAME + "-" + suffix,
+                "The " + suffix + " effective linger time in milliseconds"
+            )
+        );
+        this.lingerTimeSensor = metrics.sensor(this.metricsGroup + "-LingerTime");
+        this.lingerTimeSensor.add(lingerTimeHistogram);
+
         KafkaMetricHistogram flushTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
             suffix -> kafkaMetricName(
                 BATCH_FLUSH_TIME_METRIC_NAME + "-" + suffix,
@@ -234,6 +253,7 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
         metrics.removeSensor(eventQueueTimeSensor.name());
         metrics.removeSensor(eventProcessingTimeSensor.name());
         metrics.removeSensor(eventPurgatoryTimeSensor.name());
+        metrics.removeSensor(lingerTimeSensor.name());
         metrics.removeSensor(flushTimeSensor.name());
     }
 
@@ -292,6 +312,11 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     @Override
     public void recordEventPurgatoryTime(long purgatoryTimeMs) {
         eventPurgatoryTimeSensor.record(purgatoryTimeMs);
+    }
+
+    @Override
+    public void recordLingerTime(long durationMs) {
+        lingerTimeSensor.record(durationMs);
     }
 
     @Override

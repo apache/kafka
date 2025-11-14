@@ -173,9 +173,9 @@ public class QuorumControllerMetrics implements AutoCloseable {
         }));
     }
 
-    public void updateIdleTime(long idleDurationMs) {
+    public void updateIdleTime(long idleDurationMs, long currentTimeMs) {
         synchronized (avgIdleTimeRatio) {
-            avgIdleTimeRatio.record((double) idleDurationMs, time.milliseconds());
+            avgIdleTimeRatio.record((double) idleDurationMs, currentTimeMs);
         }
     }
 

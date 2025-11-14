@@ -125,14 +125,6 @@
       { "name": "Offset", "type": "int64", "versions": "0+",
         "about": "The offset." }
     ]},
-    { "name": "TopicPartitions", "versions": "0+", "fields": [
-      { "name": "TopicId", "type": "uuid", "versions": "0+",
-        "about": "The topic ID." },
-      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
-        "about": "The topic name." },
-      { "name": "Partitions", "type": "[]int32", "versions": "0+",
-        "about": "The partitions." }
-    ]},
     { "name": "Assignment", "versions": "0+", "fields": [
       { "name": "ActiveTasks", "type": "[]TaskIds", "versions": "0+",
         "about": "Active tasks for this client." },

@@ -38,13 +38,14 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
-import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeAsyncEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeSyncEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackRegistrationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
+import org.apache.kafka.clients.consumer.internals.events.SharePollEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareRenewAcknowledgementsCompleteEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
 import org.apache.kafka.clients.consumer.internals.events.StopFindCoordinatorOnCloseEvent;
@@ -146,6 +147,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     process((ShareAcknowledgementCommitCallbackEvent) event);
                     break;
 
+                case SHARE_RENEW_ACKNOWLEDGEMENTS_COMPLETE:
+                    process((ShareRenewAcknowledgementsCompleteEvent) event);
+                    break;
+
                 default:
                     throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
             }
@@ -159,6 +164,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             if (acknowledgementCommitCallbackHandler != null) {
                 completedAcknowledgements.add(event.acknowledgementsMap());
             }
+        }
+
+        private void process(final ShareRenewAcknowledgementsCompleteEvent event) {
+            currentFetch.renew(event.acknowledgementsMap());
         }
     }
 
@@ -203,6 +212,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     // and is used to prevent multithreaded access
     private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
     private final AtomicInteger refCount = new AtomicInteger(0);
+    private boolean shouldSendShareFetchEvent = false;
 
     ShareConsumerImpl(final ConsumerConfig config,
                       final Deserializer<K> keyDeserializer,
@@ -321,7 +331,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     logContext,
                     metadata,
                     subscriptions,
-                    new FetchConfig(config),
+                    new ShareFetchConfig(config),
                     deserializers);
 
             this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics);
@@ -373,7 +383,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 logContext,
                 metadata,
                 subscriptions,
-                new FetchConfig(config),
+                new ShareFetchConfig(config),
                 deserializers);
         this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics);
         this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP);
@@ -384,7 +394,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             backgroundEventQueue, time, asyncConsumerMetrics);
 
         final Supplier<NetworkClientDelegate> networkClientDelegateSupplier =
-                () -> new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, true, asyncConsumerMetrics);
+                NetworkClientDelegate.supplier(time, config, logContext, client, metadata, backgroundEventHandler, true, asyncConsumerMetrics);
 
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
                 config,
@@ -494,7 +504,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 final LogContext logContext,
                 final ShareConsumerMetadata metadata,
                 final SubscriptionState subscriptions,
-                final FetchConfig fetchConfig,
+                final ShareFetchConfig shareFetchConfig,
                 final Deserializers<K, V> deserializers
         );
     }
@@ -575,15 +585,20 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             // If using implicit acknowledgement, acknowledge the previously fetched records
             acknowledgeBatchIfImplicitAcknowledgement();
 
+            // If using explicit acknowledgement, make sure all in-flight records have been acknowledged
+            ensureInFlightAcknowledgedIfExplicitAcknowledgement();
+
             kafkaShareConsumerMetrics.recordPollStart(timer.currentTimeMs());
 
             if (subscriptions.hasNoSubscriptionOrUserAssignment()) {
                 throw new IllegalStateException("Consumer is not subscribed to any topics.");
             }
 
+            shouldSendShareFetchEvent = true;
+
             do {
                 // Make sure the network thread can tell the application is actively polling
-                applicationEventHandler.add(new PollEvent(timer.currentTimeMs()));
+                applicationEventHandler.add(new SharePollEvent(timer.currentTimeMs()));
 
                 processBackgroundEvents();
 
@@ -651,38 +666,63 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     }
 
     private ShareFetch<K, V> collect(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
-        if (currentFetch.isEmpty()) {
+        Map<TopicIdPartition, NodeAcknowledgements> acksToSend = acknowledgementsMap;
+
+        if (currentFetch.isEmpty() && !currentFetch.hasRenewals()) {
             final ShareFetch<K, V> fetch = fetchCollector.collect(fetchBuffer);
             if (fetch.isEmpty()) {
-                // Check for any acknowledgements which could have come from control records (GAP) and include them.
-                applicationEventHandler.add(new ShareFetchEvent(acknowledgementsMap, fetch.takeAcknowledgedRecords()));
+                // Check for any acknowledgements which could have come from control records (GAP) and send them.
+                Map<TopicIdPartition, NodeAcknowledgements> controlRecordAcknowledgements = fetch.takeAcknowledgedRecords();
+                if (!controlRecordAcknowledgements.isEmpty()) {
+                    // Asynchronously commit any waiting acknowledgements from control records.
+                    sendShareAcknowledgeAsyncEvent(controlRecordAcknowledgements);
+                }
 
-                // Notify the network thread to wake up and start the next round of fetching
-                applicationEventHandler.wakeupNetworkThread();
-            } else if (!acknowledgementsMap.isEmpty()) {
+                // We only send one ShareFetchEvent per poll call.
+                if (shouldSendShareFetchEvent) {
+                    applicationEventHandler.add(new ShareFetchEvent(acksToSend));
+                    shouldSendShareFetchEvent = false;
+                    // Notify the network thread to wake up and start the next round of fetching
+                    applicationEventHandler.wakeupNetworkThread();
+                    acksToSend = Map.of();
+                }
+            }
+
+            if (!acksToSend.isEmpty()) {
                 // Asynchronously commit any waiting acknowledgements
-                Timer timer = time.timer(defaultApiTimeoutMs);
-                applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap, calculateDeadlineMs(timer)));
-
-                // Notify the network thread to wake up and start the next round of fetching
-                applicationEventHandler.wakeupNetworkThread();
+                sendShareAcknowledgeAsyncEvent(acksToSend);
             }
             return fetch;
-        } else {
-            if (!acknowledgementsMap.isEmpty()) {
-                // Asynchronously commit any waiting acknowledgements
-                Timer timer = time.timer(defaultApiTimeoutMs);
-                applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap, calculateDeadlineMs(timer)));
+        } else if (currentFetch.hasRenewals()) {
+            // First, take any records which have been renewed and move them back into in-flight records.
+            currentFetch.takeRenewedRecords();
 
-                // Notify the network thread to wake up and start the next round of fetching
-                applicationEventHandler.wakeupNetworkThread();
+            // If some records are in renewing state...
+            if (currentFetch.hasRenewals()) {
+                // We only send one ShareFetchEvent per poll call.
+                if (shouldSendShareFetchEvent) {
+                    applicationEventHandler.add(new ShareFetchEvent(acksToSend));
+                    shouldSendShareFetchEvent = false;
+                    // Notify the network thread to wake up and start the next round of fetching
+                    applicationEventHandler.wakeupNetworkThread();
+                    acksToSend = Map.of();
+                }
             }
-            if (acknowledgementMode == ShareAcknowledgementMode.EXPLICIT) {
-                // We cannot leave unacknowledged records in EXPLICIT acknowledgement mode, so we throw an exception to the application.
-                throw new IllegalStateException("All records must be acknowledged in explicit acknowledgement mode.");
-            }
-            return currentFetch;
         }
+
+        if (!acksToSend.isEmpty()) {
+            // Asynchronously commit any waiting acknowledgements
+            sendShareAcknowledgeAsyncEvent(acksToSend);
+        }
+        return currentFetch;
+    }
+
+    private void sendShareAcknowledgeAsyncEvent(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
+        Timer timer = time.timer(defaultApiTimeoutMs);
+        applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap, calculateDeadlineMs(timer)));
+
+        // Notify the network thread to wake up and start the next round of fetching
+        applicationEventHandler.wakeupNetworkThread();
     }
 
     /**
@@ -835,6 +875,15 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         }
 
         return ClientTelemetryUtils.fetchClientInstanceId(clientTelemetryReporter.get(), timeout);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Optional<Integer> acquisitionLockTimeoutMs() {
+        // To be implemented
+        return Optional.empty();
     }
 
     /**
@@ -1083,6 +1132,18 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         // If IMPLICIT, acknowledge all records
         if (acknowledgementMode == ShareAcknowledgementMode.IMPLICIT) {
             currentFetch.acknowledgeAll(AcknowledgeType.ACCEPT);
+        }
+    }
+
+    /**
+     * If the acknowledgement mode is EXPLICIT, ensure that all in-flight records have been acknowledged.
+     */
+    private void ensureInFlightAcknowledgedIfExplicitAcknowledgement() {
+        if (acknowledgementMode == ShareAcknowledgementMode.EXPLICIT) {
+            if (!currentFetch.checkAllInFlightAreAcknowledged()) {
+                // We cannot leave unacknowledged records in EXPLICIT acknowledgement mode, so we throw an exception to the application.
+                throw new IllegalStateException("All records must be acknowledged in explicit acknowledgement mode.");
+            }
         }
     }
 
