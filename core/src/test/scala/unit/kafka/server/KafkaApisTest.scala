@@ -3418,6 +3418,103 @@ class KafkaApisTest extends Logging {
     assertEquals(normalize(expectedResponse), normalize(response.data))
   }
 
+  @ParameterizedTest(name = "testWriteTxnMarkersEpochValidationError with transactionVersion={0}")
+  @ValueSource(shorts = Array(1, 2))
+  def testWriteTxnMarkersEpochValidationError(transactionVersion: Short): Unit = {
+    // Test that epoch validation errors (InvalidProducerEpochException) are properly
+    // propagated through KafkaApis -> ReplicaManager -> Partition -> UnifiedLog
+    // and returned in WriteTxnMarkersResponse
+    val topicPartition = new TopicPartition("test-topic", 0)
+    val topicId = Uuid.randomUuid()
+    val producerId = 1L
+    val currentEpoch = 5.toShort
+    // For TV2, same epoch is ALSO invalid; for TV1, old epoch is invalid
+    val oldEpoch = if (transactionVersion >= 2) currentEpoch else (currentEpoch - 1).toShort
+    
+    val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
+      util.List.of(
+        new TxnMarkerEntry(
+          producerId,
+          oldEpoch,
+          0,
+          TransactionResult.COMMIT,
+          util.List.of(topicPartition),
+          transactionVersion
+        )
+      )
+    ).build()
+    
+    val requestChannelRequest = buildRequest(writeTxnMarkersRequest)
+    
+    // Set up partition and log
+    val partition = mock(classOf[Partition])
+    when(replicaManager.onlinePartition(topicPartition))
+      .thenReturn(Some(partition))
+    when(replicaManager.topicIdPartition(topicPartition))
+      .thenReturn(new TopicIdPartition(topicId, topicPartition))
+    
+    // Set up appendRecords to simulate epoch validation failure
+    val entriesPerPartition: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, MemoryRecords]])
+    val responseCallback: ArgumentCaptor[Map[TopicIdPartition, PartitionResponse] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, PartitionResponse] => Unit])
+    
+    when(replicaManager.appendRecords(
+      ArgumentMatchers.eq(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT.toLong),
+      ArgumentMatchers.eq(-1),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
+      entriesPerPartition.capture(),
+      responseCallback.capture(),
+      any(),
+      ArgumentMatchers.eq(RequestLocal.noCaching),
+      any(),
+      ArgumentMatchers.eq(transactionVersion)
+    )).thenAnswer { _ =>
+      // Simulate epoch validation failure by calling callback with INVALID_PRODUCER_EPOCH error
+      val topicIdPartition = new TopicIdPartition(topicId, topicPartition)
+      responseCallback.getValue.apply(
+        Map(topicIdPartition -> new PartitionResponse(Errors.INVALID_PRODUCER_EPOCH))
+      )
+    }
+    
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleWriteTxnMarkersRequest(requestChannelRequest, RequestLocal.noCaching)
+    
+    // Verify the response contains INVALID_PRODUCER_EPOCH error
+    val expectedResponse = new WriteTxnMarkersResponseData()
+      .setMarkers(util.List.of(
+        new WriteTxnMarkersResponseData.WritableTxnMarkerResult()
+          .setProducerId(producerId)
+          .setTopics(util.List.of(
+            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
+              .setName(topicPartition.topic())
+              .setPartitions(util.List.of(
+                new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
+                  .setPartitionIndex(topicPartition.partition())
+                  .setErrorCode(Errors.INVALID_PRODUCER_EPOCH.code)
+              ))
+          ))
+      ))
+    
+    val response = verifyNoThrottling[WriteTxnMarkersResponse](requestChannelRequest)
+    assertEquals(normalize(expectedResponse), normalize(response.data))
+    
+    // Verify appendRecords was called with the correct transactionVersion
+    verify(replicaManager).appendRecords(
+      anyLong,
+      anyShort,
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
+      any(),
+      any(),
+      any(),
+      ArgumentMatchers.eq(RequestLocal.noCaching),
+      any(),
+      ArgumentMatchers.eq(transactionVersion)
+    )
+  }
+
   private def normalize(
     response: WriteTxnMarkersResponseData
   ): WriteTxnMarkersResponseData = {

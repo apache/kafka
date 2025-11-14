@@ -44,7 +44,7 @@ import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, AsyncOffsetReader, Cleaner, EpochEntry, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogToClean, OffsetResultHolder, OffsetsOutOfOrderException, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.internals.utils.Throttler
 import org.apache.kafka.storage.log.metrics.{BrokerTopicMetrics, BrokerTopicStats}
-import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, _}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
@@ -3714,16 +3714,74 @@ class UnifiedLogTest {
       () => LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1, 1))
   }
 
-  @Test
-  def testEndTxnWithFencedProducerEpoch(): Unit = {
+  @ParameterizedTest(name = "testEndTxnWithFencedProducerEpoch with transactionVersion={0}")
+  @ValueSource(shorts = Array(1, 2))
+  def testEndTxnWithFencedProducerEpoch(transactionVersion: Short): Unit = {
     val producerId = 1L
     val epoch = 5.toShort
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, epoch, ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1)
-
+    
+    // First, write some transactional records to establish the current epoch
+    val records = MemoryRecords.withTransactionalRecords(
+      Compression.NONE, producerId, epoch, 0,
+      new SimpleRecord("key".getBytes, "value".getBytes)
+    )
+    log.appendAsLeader(records, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, transactionVersion)
+    
+    // Test 1: Old epoch (epoch - 1) should be rejected for both TV0/TV1 and TV2
+    // TV0/TV1: markerEpoch < currentEpoch is rejected
+    // TV2: markerEpoch <= currentEpoch is rejected (requires strict >)
     assertThrows(classOf[InvalidProducerEpochException],
-      () => LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, (epoch - 1).toShort, ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1))
+      () => LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, (epoch - 1).toShort, 
+        ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1, 
+        leaderEpoch = 0, transactionVersion = transactionVersion))
+    
+    // Test 2: Same epoch behavior differs between TV0/TV1 and TV2
+    // TV0/TV1: same epoch is allowed (markerEpoch >= currentEpoch)
+    // TV2: same epoch is rejected (requires strict >, markerEpoch > currentEpoch)
+    if (transactionVersion >= 2) {
+      // TV2: same epoch should be rejected
+      assertThrows(classOf[InvalidProducerEpochException],
+        () => LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, epoch, 
+          ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1, 
+          leaderEpoch = 0, transactionVersion = transactionVersion))
+    } else {
+      // TV0/TV1: same epoch should be allowed
+      assertDoesNotThrow(() => LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, epoch, 
+        ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1, 
+        leaderEpoch = 0, transactionVersion = transactionVersion))
+    }
+  }
+
+  @Test
+  def testTV2MarkerWithBumpedEpochSucceeds(): Unit = {
+    // Test that TV2 markers with bumped epochs (epoch + 1) are accepted (positive case)
+    // TV2 (KIP-890): Coordinator bumps epoch before writing marker, so markerEpoch = currentEpoch + 1
+    val transactionVersion: Short = 2
+    val producerId = 1L
+    val epoch = 5.toShort
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
+    val log = createLog(logDir, logConfig)
+    
+    // First, write some transactional records to establish the current epoch
+    val records = MemoryRecords.withTransactionalRecords(
+      Compression.NONE, producerId, epoch, 0,
+      new SimpleRecord("key".getBytes, "value".getBytes)
+    )
+    log.appendAsLeader(records, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, transactionVersion)
+    
+    // TV2: Verify that bumped epoch (epoch + 1) is accepted
+    val bumpedEpoch = (epoch + 1).toShort
+    assertDoesNotThrow(() => LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, bumpedEpoch, 
+      ControlRecordType.COMMIT, mockTime.milliseconds(), coordinatorEpoch = 1, 
+      leaderEpoch = 0, transactionVersion = transactionVersion))
+    
+    // Verify the marker was successfully appended by checking producer state
+    val producerState = log.producerStateManager.activeProducers.get(producerId)
+    assertNotNull(producerState)
+    // After a commit marker, the producer epoch should be updated to the bumped epoch for TV2
+    assertEquals(bumpedEpoch, producerState.producerEpoch)
   }
 
   @Test

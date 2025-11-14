@@ -218,16 +218,24 @@ object LogTestUtils {
     recoveredLog
   }
 
+  /**
+   * Append an end transaction marker (commit or abort) to the log as a leader.
+   * 
+   * @param transactionVersion the transaction version (0/1 = legacy, 2 = TV2). Defaults to 0 for legacy behavior.
+   *                          TV2 markers require strict epoch validation (markerEpoch > currentEpoch),
+   *                          while legacy markers use relaxed validation (markerEpoch >= currentEpoch).
+   */
   def appendEndTxnMarkerAsLeader(log: UnifiedLog,
                                  producerId: Long,
                                  producerEpoch: Short,
                                  controlType: ControlRecordType,
                                  timestamp: Long,
                                  coordinatorEpoch: Int = 0,
-                                 leaderEpoch: Int = 0): LogAppendInfo = {
+                                 leaderEpoch: Int = 0,
+                                 transactionVersion: Short = 0): LogAppendInfo = {
     val records = endTxnRecords(controlType, producerId, producerEpoch,
       coordinatorEpoch = coordinatorEpoch, timestamp = timestamp)
-    log.appendAsLeader(records, leaderEpoch, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, 0)
+    log.appendAsLeader(records, leaderEpoch, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, transactionVersion)
   }
 
   private def endTxnRecords(controlRecordType: ControlRecordType,
