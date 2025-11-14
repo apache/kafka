@@ -81,13 +81,13 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
         @Override
         public String toString() {
             return "TxnMarkerEntry{" +
-                "producerId=" + producerId +
-                ", producerEpoch=" + producerEpoch +
-                ", coordinatorEpoch=" + coordinatorEpoch +
-                ", result=" + result +
-                ", partitions=" + partitions +
-                ", transactionVersion=" + transactionVersion +
-                '}';
+                       "producerId=" + producerId +
+                       ", producerEpoch=" + producerEpoch +
+                       ", coordinatorEpoch=" + coordinatorEpoch +
+                       ", result=" + result +
+                       ", partitions=" + partitions +
+                       ", transactionVersion=" + transactionVersion +
+                       '}';
         }
 
         @Override
@@ -96,11 +96,11 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
             if (o == null || getClass() != o.getClass()) return false;
             final TxnMarkerEntry that = (TxnMarkerEntry) o;
             return producerId == that.producerId &&
-                producerEpoch == that.producerEpoch &&
-                coordinatorEpoch == that.coordinatorEpoch &&
-                result == that.result &&
-                transactionVersion == that.transactionVersion &&
-                Objects.equals(partitions, that.partitions);
+                       producerEpoch == that.producerEpoch &&
+                       coordinatorEpoch == that.coordinatorEpoch &&
+                       result == that.result &&
+                       transactionVersion == that.transactionVersion &&
+                       Objects.equals(partitions, that.partitions);
         }
 
         @Override
@@ -131,8 +131,8 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
                 final Map<String, WritableTxnMarkerTopic> topicMap = new HashMap<>();
                 for (TopicPartition topicPartition : marker.partitions) {
                     WritableTxnMarkerTopic topic = topicMap.getOrDefault(topicPartition.topic(),
-                        new WritableTxnMarkerTopic()
-                            .setName(topicPartition.topic()));
+                                                                         new WritableTxnMarkerTopic()
+                                                                             .setName(topicPartition.topic()));
                     topic.partitionIndexes().add(topicPartition.partition());
                     topicMap.put(topicPartition.topic(), topic);
                 }
@@ -198,11 +198,9 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
                     topicPartitions.add(new TopicPartition(topic.name(), partitionIdx));
                 }
             }
-            // Read transactionVersion from raw marker data (only available in version 2+)
-            short transactionVersion = 0;
-            if (version() >= 2) {
-                transactionVersion = markerEntry.transactionVersion();
-            }
+            // Read transactionVersion from raw marker data.
+            // For request version 1, this field is set to 0 during deserialization since it's ignorable.
+            short transactionVersion = markerEntry.transactionVersion();
 
             markers.add(new TxnMarkerEntry(
                 markerEntry.producerId(),

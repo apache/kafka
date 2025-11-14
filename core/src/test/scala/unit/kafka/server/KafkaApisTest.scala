@@ -3109,8 +3109,8 @@ class KafkaApisTest extends Logging {
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
     val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
       util.List.of(
-        new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, util.List.of(topicPartition), 0),
-        new TxnMarkerEntry(2, 1.toShort, 0, TransactionResult.COMMIT, util.List.of(topicPartition), 0),
+        new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, util.List.of(topicPartition), TransactionVersion.TV_2.featureLevel()),
+        new TxnMarkerEntry(2, 1.toShort, 0, TransactionResult.COMMIT, util.List.of(topicPartition), TransactionVersion.TV_2.featureLevel())
       )).build()
     val request = buildRequest(writeTxnMarkersRequest)
     val capturedResponse: ArgumentCaptor[WriteTxnMarkersResponse] = ArgumentCaptor.forClass(classOf[WriteTxnMarkersResponse])
@@ -3246,7 +3246,7 @@ class KafkaApisTest extends Logging {
           0,
           TransactionResult.COMMIT,
           util.List.of(offset0, foo0),
-          0
+          TransactionVersion.TV_2.featureLevel()
         ),
         new TxnMarkerEntry(
           2L,
@@ -3254,7 +3254,7 @@ class KafkaApisTest extends Logging {
           0,
           TransactionResult.ABORT,
           util.List.of(offset1, foo1),
-          0
+          TransactionVersion.TV_2.featureLevel()
         )
       )
     ).build()
@@ -3371,7 +3371,7 @@ class KafkaApisTest extends Logging {
           0,
           TransactionResult.COMMIT,
           util.List.of(offset0),
-          0
+          TransactionVersion.TV_2.featureLevel()
         )
       )
     ).build()
@@ -10097,7 +10097,7 @@ class KafkaApisTest extends Logging {
 
   private def createWriteTxnMarkersRequest(partitions: util.List[TopicPartition]) = {
     val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
-      util.List.of(new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, partitions, 0))).build()
+      util.List.of(new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, partitions, TransactionVersion.TV_2.featureLevel()))).build()
     (writeTxnMarkersRequest, buildRequest(writeTxnMarkersRequest))
   }
 
