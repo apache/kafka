@@ -358,7 +358,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         long currentTimeMs
     ) {
         final LogOffsetMetadata endOffsetMetadata = log.endOffset();
-
         if (state.updateLocalState(endOffsetMetadata, partitionState.lastVoterSet())) {
             onUpdateLeaderHighWatermark(state, currentTimeMs);
         }
@@ -1512,6 +1511,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             FetchRequest.replicaId(request),
             fetchPartition.replicaDirectoryId()
         );
+
         FetchResponseData response = tryCompleteFetchRequest(
             requestMetadata.listenerName(),
             requestMetadata.apiVersion(),
@@ -2933,7 +2933,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         return minBackoffMs;
     }
 
-    private long maybeSendRequest(
+    private long maybeSendRequests(
         long currentTimeMs,
         Set<ReplicaKey> remoteVoters,
         Function<Integer, Node> destinationSupplier,
@@ -3120,13 +3120,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                         )
                     );
 
-            timeUntilNextBeginQuorumSend = maybeSendRequest(
+            Set<ReplicaKey> needToSendBeginQuorumRequests = state.needToSendBeginQuorumRequests(currentTimeMs);
+            timeUntilNextBeginQuorumSend = maybeSendRequests(
                 currentTimeMs,
-                voters
-                    .voterKeys()
-                    .stream()
-                    .filter(key -> key.id() != quorum.localIdOrThrow())
-                    .collect(Collectors.toSet()),
+                needToSendBeginQuorumRequests,
                 nodeSupplier,
                 this::buildBeginQuorumEpochRequest
             );
@@ -3208,7 +3205,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (!state.epochElection().isVoteRejected()) {
             VoterSet voters = partitionState.lastVoterSet();
             boolean preVote = quorum.isProspective();
-            return maybeSendRequest(
+            return maybeSendRequests(
                 currentTimeMs,
                 state.epochElection().unrecordedVoters(),
                 voterId -> voters

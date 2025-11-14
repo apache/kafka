@@ -33,13 +33,14 @@ import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.KRaftVersion
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetSnapshot, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchPartitionStatus, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetSnapshot, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong}
 import org.mockito.Mockito.{mock, when}
 import org.mockito.{AdditionalMatchers, ArgumentMatchers}
 
+import java.util
 import scala.jdk.CollectionConverters._
 
 class ReplicaManagerQuotasTest {
@@ -171,7 +172,7 @@ class ReplicaManagerQuotasTest {
       when(partition.getReplica(1)).thenReturn(None)
 
       val tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("t1", 0))
-      val fetchPartitionStatus = FetchPartitionStatus(
+      val fetchPartitionStatus = new FetchPartitionStatus(
         new LogOffsetMetadata(50L, 0L, 250),
         new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
       val fetchParams = new FetchParams(
@@ -186,7 +187,7 @@ class ReplicaManagerQuotasTest {
 
       new DelayedFetch(
         params = fetchParams,
-        fetchPartitionStatus = Seq(tp -> fetchPartitionStatus),
+        fetchPartitionStatus = createFetchPartitionStatusMap(tp, fetchPartitionStatus),
         replicaManager = replicaManager,
         quota = null,
         responseCallback = null
@@ -222,7 +223,7 @@ class ReplicaManagerQuotasTest {
         .thenReturn(partition)
 
       val tidp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("t1", 0))
-      val fetchPartitionStatus = FetchPartitionStatus(
+      val fetchPartitionStatus = new FetchPartitionStatus(
         new LogOffsetMetadata(50L, 0L, 250),
         new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
       val fetchParams = new FetchParams(
@@ -237,7 +238,7 @@ class ReplicaManagerQuotasTest {
 
       new DelayedFetch(
         params = fetchParams,
-        fetchPartitionStatus = Seq(tidp -> fetchPartitionStatus),
+        fetchPartitionStatus = createFetchPartitionStatusMap(tidp, fetchPartitionStatus),
         replicaManager = replicaManager,
         quota = null,
         responseCallback = null
@@ -341,4 +342,9 @@ class ReplicaManagerQuotasTest {
     quota
   }
 
+  private def createFetchPartitionStatusMap(tpId: TopicIdPartition, status: FetchPartitionStatus): util.LinkedHashMap[TopicIdPartition, FetchPartitionStatus] = {
+    val statusMap = new util.LinkedHashMap[TopicIdPartition, FetchPartitionStatus]
+    statusMap.put(tpId, status)
+    statusMap
+  }
 }

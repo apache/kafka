@@ -18,7 +18,6 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -36,9 +35,9 @@ import java.util.stream.Collectors;
 @InterfaceStability.Evolving
 public class ListShareGroupOffsetsResult {
 
-    private final Map<String, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> futures;
+    private final Map<String, KafkaFuture<Map<TopicPartition, SharePartitionOffsetInfo>>> futures;
 
-    ListShareGroupOffsetsResult(final Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> futures) {
+    ListShareGroupOffsetsResult(final Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, SharePartitionOffsetInfo>>> futures) {
         this.futures = futures.entrySet().stream()
             .collect(Collectors.toMap(e -> e.getKey().idValue, Map.Entry::getValue));
     }
@@ -46,12 +45,12 @@ public class ListShareGroupOffsetsResult {
     /**
      * Return the future when the requests for all groups succeed.
      *
-     * @return Future which yields all {@code Map<String, Map<TopicPartition, OffsetAndMetadata>>} objects, if requests for all the groups succeed.
+     * @return Future which yields all {@code Map<String, Map<TopicPartition, SharePartitionOffsetInfo>>} objects, if requests for all the groups succeed.
      */
-    public KafkaFuture<Map<String, Map<TopicPartition, OffsetAndMetadata>>> all() {
+    public KafkaFuture<Map<String, Map<TopicPartition, SharePartitionOffsetInfo>>> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0])).thenApply(
             nil -> {
-                Map<String, Map<TopicPartition, OffsetAndMetadata>> offsets = new HashMap<>(futures.size());
+                Map<String, Map<TopicPartition, SharePartitionOffsetInfo>> offsets = new HashMap<>(futures.size());
                 futures.forEach((groupId, future) -> {
                     try {
                         offsets.put(groupId, future.get());
@@ -67,9 +66,9 @@ public class ListShareGroupOffsetsResult {
 
     /**
      * Return a future which yields a map of topic partitions to offsets for the specified group. If the group doesn't
-     * have a committed offset for a specific partition, the corresponding value in the returned map will be null.
+     * have offset information for a specific partition, the corresponding value in the returned map will be null.
      */
-    public KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> partitionsToOffsetAndMetadata(String groupId) {
+    public KafkaFuture<Map<TopicPartition, SharePartitionOffsetInfo>> partitionsToOffsetInfo(String groupId) {
         if (!futures.containsKey(groupId)) {
             throw new IllegalArgumentException("Group ID not found: " + groupId);
         }
