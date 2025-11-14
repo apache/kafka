@@ -3670,7 +3670,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldInitialiseNewStandbyTasks() {
+    public void shouldInitializeNewStandbyTasks() {
         final StandbyTask task01 = standbyTask(taskId01, taskId01ChangelogPartitions)
             .inState(State.CREATED)
             .withInputPartitions(taskId01Partitions)
@@ -4044,8 +4044,8 @@ public class TaskManagerTest {
         taskManager.maybePurgeCommittedRecords();
 
         // this call should be a no-op.
-        // this is verified, as there is no expectation on adminClient for this third call,
-        // so it would fail verification if we invoke the admin client again.
+        // because the previous deleteRecords request
+        // has not completed yet, so no new request is sent.
         taskManager.maybePurgeCommittedRecords();
     }
 
