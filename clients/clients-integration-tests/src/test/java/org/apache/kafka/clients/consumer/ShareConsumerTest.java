@@ -1634,7 +1634,7 @@ public class ShareConsumerTest {
             producer.flush();
 
             AtomicBoolean callbackCalled = new AtomicBoolean(false);
-            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallbackThrows<>(callbackCalled));
+            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallbackThrows(callbackCalled));
             shareConsumer.subscribe(Set.of(tp.topic()));
 
             TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
@@ -1647,12 +1647,12 @@ public class ShareConsumerTest {
                     throw new NoRetryException(e);
                 }
                 return callbackCalled.get();
-            }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to receive expected exception");
+            }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Received unexpected exception or callback not called");
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    private static class TestableAcknowledgementCommitCallbackThrows<K, V> implements AcknowledgementCommitCallback {
+    private static class TestableAcknowledgementCommitCallbackThrows implements AcknowledgementCommitCallback {
         private final AtomicBoolean callbackCalled;
 
         public TestableAcknowledgementCommitCallbackThrows(AtomicBoolean callbackCalled) {
