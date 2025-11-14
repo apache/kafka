@@ -490,6 +490,9 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         if (intervalMs < 1) {
             throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
         }
+        if (startTime.isBefore(Instant.EPOCH)) {
+            throw new IllegalArgumentException("The minimum supported start time is Instant.EPOCH.");
+        }
         final CapturedPunctuator capturedPunctuator = new CapturedPunctuator(startTime, intervalMs, type, callback);
         punctuators.add(capturedPunctuator);
         return capturedPunctuator::cancel;
