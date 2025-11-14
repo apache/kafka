@@ -3820,6 +3820,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             topicResponse.partitions.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(partitionIndex)
               .setStartOffset(-1)
+              .setLag(-1)
               .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
               .setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message))
           }

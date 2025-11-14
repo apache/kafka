@@ -118,7 +118,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private boolean commitNeeded = false;
     private boolean commitRequested = false;
     private boolean hasPendingTxCommit = false;
-    private Optional<Long> timeCurrentIdlingStarted;
+    private Optional<Long> timeCurrentIdlingStarted; // time since the task started idling, empty if not idling
+    private Optional<Long> lastNotReadyLogTime;   // last time logged about not being ready to process
+    private static final long NOT_READY_LOG_INTERVAL_MS = 120_000L; // log interval of not being ready (2 minutes)
 
     @SuppressWarnings({"rawtypes", "this-escape", "checkstyle:ParameterNumber"})
     public StreamTask(final TaskId id,
@@ -226,6 +228,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             highWatermark.put(topicPartition, -1L);
         }
         timeCurrentIdlingStarted = Optional.empty();
+        lastNotReadyLogTime = Optional.empty();
         processingExceptionHandler = config.processingExceptionHandler;
     }
 
@@ -237,6 +240,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             partitionQueues.put(partition, recordQueueCreator.createQueue(partition));
         }
         return partitionQueues;
+    }
+
+    // For testing only
+    void setLastNotReadyLogTime(final long lastNotReadyLogTime) {
+        this.lastNotReadyLogTime = Optional.of(lastNotReadyLogTime);
     }
 
     @Override
@@ -416,6 +424,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw new IllegalStateException("Unknown state " + state() + " while resuming active task " + id);
         }
         timeCurrentIdlingStarted = Optional.empty();
+        lastNotReadyLogTime = Optional.empty();
     }
 
     public void flush() {
@@ -445,7 +454,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     // TODO: this should be removed after we decouple caching with emitting
                     flush();
                     if (!clean) {
-                        log.debug("Skipped preparing {} task with id {} for commit since the task is getting closed dirty.", state(), id);
+                        log.debug("Skipped preparing {} task for commit since the task is getting closed dirty.", state());
                         return null;
                     }
                     hasPendingTxCommit = eosEnabled;
@@ -725,25 +734,49 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // a task is only closing / closed when 1) task manager is closing, 2) a rebalance is undergoing;
             // in either case we can just log it and move on without notifying the thread since the consumer
             // would soon be updated to not return any records for this task anymore.
-            log.info("Stream task {} is already in {} state, skip processing it.", id(), state());
+            log.info("Task is already in {} state, skip processing it.", state());
 
             return false;
         }
 
+        final boolean wasReady = lastNotReadyLogTime.isEmpty();
         if (hasPendingTxCommit) {
             // if the task has a pending TX commit, we should just retry the commit but not process any records
             // thus, the task is not processable, even if there is available data in the record queue
+            if (wasReady) {
+                // READY -> NOT_READY - start timer
+                lastNotReadyLogTime = Optional.of(wallClockTime);
+            } else {
+                maybeLogNotReady(wallClockTime, "Task is not ready to process: has pending transaction commit");
+            }
             return false;
         }
-        final boolean readyToProcess = partitionGroup.readyToProcess(wallClockTime);
-        if (!readyToProcess) {
-            if (timeCurrentIdlingStarted.isEmpty()) {
+
+        final AbstractPartitionGroup.ReadyToProcessResult readyToProcess = partitionGroup.readyToProcess(wallClockTime);
+        if (!readyToProcess.isReady()) {
+            if (wasReady) {
+                // READY -> NOT_READY - start the timer
+                lastNotReadyLogTime = Optional.of(wallClockTime);
                 timeCurrentIdlingStarted = Optional.of(wallClockTime);
+            } else {
+                maybeLogNotReady(wallClockTime, readyToProcess.getLogMessage().orElseThrow());
             }
         } else {
+            // Task is ready - clear the timer
+            lastNotReadyLogTime = Optional.empty();
             timeCurrentIdlingStarted = Optional.empty();
+            log.trace("Task is ready to process");
         }
-        return readyToProcess;
+        return readyToProcess.isReady();
+    }
+
+    private void maybeLogNotReady(final long wallClockTime, final String logMessage) {
+        // NOT_READY - check if it should log
+        final long timeSinceLastLog = lastNotReadyLogTime.map(aLong -> wallClockTime - aLong).orElse(-1L);
+        if (timeSinceLastLog >= NOT_READY_LOG_INTERVAL_MS) {
+            log.info(logMessage);
+            lastNotReadyLogTime = Optional.of(wallClockTime);
+        }
     }
 
     /**
@@ -764,7 +797,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             // if there is no record to process, return immediately
             if (record == null) {
+                log.trace("Task has no next record to process.");
                 return false;
+            } else {
+                log.trace("Task fetched one record {} to process.", record);
             }
         }
 
@@ -773,15 +809,22 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             if (!(record instanceof CorruptedRecord)) {
                 doProcess(wallClockTime);
+            } else {
+                log.trace("Task skips processing corrupted record {}", record);
             }
 
             // update the consumed offset map after processing is done
             consumedOffsets.put(partition, record.offset());
             commitNeeded = true;
 
+            log.trace("Task processed record: topic={}, partition={}, offset={}",
+                record.topic(), record.partition(), record.offset());
+
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
             if (recordInfo.queue().size() <= maxBufferedSize) {
+                log.trace("Resume consumption for partition {}: buffered size {} is under the threshold {}",
+                        partition, recordInfo.queue().size(), maxBufferedSize);
                 partitionsToResume.add(partition);
             }
 

@@ -2092,7 +2092,9 @@ public class GroupMetadataManager {
             response.setActiveTasks(createStreamsGroupHeartbeatResponseTaskIdsFromEpochs(updatedMember.assignedTasks().activeTasksWithEpochs()));
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().standbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().warmupTasks()));
-            if (memberEpoch != 0 || !updatedMember.assignedTasks().isEmpty()) {
+            if (updatedMember.userEndpoint().isPresent()) {
+                // If no user endpoint is defined, there is no change in the endpoint information.
+                // Otherwise, bump the endpoint information epoch
                 group.setEndpointInformationEpoch(group.endpointInformationEpoch() + 1);
             }
         }
@@ -2100,7 +2102,11 @@ public class GroupMetadataManager {
         if (group.endpointInformationEpoch() != memberEndpointEpoch) {
             response.setPartitionsByUserEndpoint(maybeBuildEndpointToPartitions(group, updatedMember));
         }
-        response.setEndpointInformationEpoch(group.endpointInformationEpoch());
+        if (groups.containsKey(group.groupId())) {
+            // If we just created the group, the endpoint information epoch will not be persisted, so return epoch 0.
+            // Otherwise, return the bumped epoch.
+            response.setEndpointInformationEpoch(group.endpointInformationEpoch());
+        }
 
         Map<String, CreatableTopic> internalTopicsToBeCreated = Collections.emptyMap();
         if (updatedConfiguredTopology.topicConfigurationException().isPresent()) {
@@ -2216,20 +2222,20 @@ public class GroupMetadataManager {
                                                                                                         StreamsGroupMember updatedMember) {
         List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList = new ArrayList<>();
         final Map<String, StreamsGroupMember> members = group.members();
+        // Build endpoint information for all members except the updated member
         for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
-            final String memberIdForAssignment = entry.getKey();
-            final Optional<StreamsGroupMemberMetadataValue.Endpoint> endpointOptional = members.get(memberIdForAssignment).userEndpoint();
-            StreamsGroupMember groupMember = updatedMember != null && memberIdForAssignment.equals(updatedMember.memberId()) ? updatedMember : members.get(memberIdForAssignment);
-            if (endpointOptional.isPresent()) {
-                final StreamsGroupMemberMetadataValue.Endpoint endpoint = endpointOptional.get();
-                final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
-                responseEndpoint.setHost(endpoint.host());
-                responseEndpoint.setPort(endpoint.port());
-                StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = EndpointToPartitionsManager.endpointToPartitions(groupMember, responseEndpoint, group, metadataImage);
-                endpointToPartitionsList.add(endpointToPartitions);
+            if (updatedMember != null && entry.getKey().equals(updatedMember.memberId())) {
+                continue;
             }
+            EndpointToPartitionsManager.maybeEndpointToPartitions(entry.getValue(), group, metadataImage)
+                .ifPresent(endpointToPartitionsList::add);
         }
-        return endpointToPartitionsList.isEmpty() ? null : endpointToPartitionsList;
+        // Always build endpoint information for the updated member (whether new or existing)
+        if (updatedMember != null) {
+            EndpointToPartitionsManager.maybeEndpointToPartitions(updatedMember, group, metadataImage)
+                .ifPresent(endpointToPartitionsList::add);
+        }
+        return endpointToPartitionsList;
     }
 
     /**
