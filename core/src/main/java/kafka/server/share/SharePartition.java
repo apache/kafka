@@ -2600,7 +2600,7 @@ public class SharePartition {
             case FENCED_LEADER_EPOCH, FENCED_STATE_EPOCH ->
                 new NotLeaderOrFollowerException(errorMessage);
             case SASL_AUTHENTICATION_FAILED, UNSUPPORTED_VERSION ->
-                new UnknownServerException("Unable to complete operation due to internal error.");
+                new UnknownServerException("Unable to complete operation due to server error.");
             default ->
                 new UnknownServerException(errorMessage);
         };
