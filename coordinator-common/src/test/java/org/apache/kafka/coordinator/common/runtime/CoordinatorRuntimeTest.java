@@ -4702,7 +4702,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(runtimeMetrics)
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
-                .withAppendLingerMs(10)
+                .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
