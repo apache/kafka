@@ -142,6 +142,10 @@ org.apache.kafka.tools.ConfigCommandTest:
 - testOptionEntityTypeNames
 - testParseConfigsToBeAddedForAddConfigFile
 org.apache.kafka.tools.ConnectPluginPathTest:
+- testListEmptyPluginPathArg
+- testListEmptyPluginPathElementArg
+- testListEmptyPluginPathElementInWorkerConfig
+- testListEmptyPluginPathInWorkerConfig
 - testListMultipleLocations
 - testListMultiplePluginPaths
 - testListMultipleWorkerConfigs
