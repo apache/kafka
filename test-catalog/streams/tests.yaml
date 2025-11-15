@@ -2323,6 +2323,7 @@ org.apache.kafka.streams.processor.internals.ProcessorTopologyTest:
 - testPrefixScanPersistentTimestampedStoreNoCachingNoLogging
 - testPrefixScanPersistentTimestampedStoreWithCachingNoLogging
 - testPrefixScanPersistentTimestampedStoreWithCachingWithLogging
+- testTopologyInitializationWithInitialKeyAndValue
 - testTopologyMetadata
 org.apache.kafka.streams.processor.internals.PunctuationQueueTest:
 - testPunctuationInterval

@@ -3,6 +3,8 @@ org.apache.kafka.coordinator.share.PersisterStateBatchCombinerTest:
 - testStateBatchCombineCornerCases
 - testStateBatchCombineDifferentStates
 - testStateBatchCombineSameState
+org.apache.kafka.coordinator.share.ShareCoordinatorConfigTest:
+- testAppendLingerMs
 org.apache.kafka.coordinator.share.ShareCoordinatorOffsetsManagerTest:
 - testUpdateStateAddsToInternalState
 - testUpdateStateComplexCases

@@ -282,7 +282,6 @@ org.apache.kafka.server.share.persister.PersisterStateManagerTest:
 - testInitializeStateRequestRetryWithNotCoordinatorSuccessfulOnRetry
 - testInitializeStateRequestWithCoordinatorNodeLookup
 - testInitializeStateRequestWithRetryAndCoordinatorNodeLookup
-- testNetworkErrorHandling
 - testPersisterStateManagerClose
 - testReadStateRequestCoordinatorFoundOnRetry
 - testReadStateRequestCoordinatorFoundSuccessfully
@@ -298,6 +297,7 @@ org.apache.kafka.server.share.persister.PersisterStateManagerTest:
 - testReadStateSummaryRequestRetryWithCoordinatorNodeLookup
 - testReadStateSummaryRequestRetryWithNotCoordinatorSuccessfulOnRetry
 - testReadStateSummaryRequestWithCoordinatorNodeLookup
+- testResponseErrorHandling
 - testWriteStateRequestBatchingWithCoordinatorNodeLookup
 - testWriteStateRequestCoordinatorFoundOnRetry
 - testWriteStateRequestCoordinatorFoundSuccessfully

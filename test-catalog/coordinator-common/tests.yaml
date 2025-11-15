@@ -43,6 +43,9 @@ org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImplTest:
 - testThreadIdleSensorMetricsGroupIsolation
 - testUpdateNumPartitionsMetrics
 org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeTest:
+- testAdaptiveAppendLingerTime
+- testAdaptiveAppendLingerWithMaxBatchSizeFlush
+- testAdaptiveAppendLingerWithTransactionalWrite
 - testAppendRecordBatchSize
 - testBufferShrinkWhenMaxMessageSizeReducedBelowInitialBufferSize
 - testCancelTimer

@@ -10,6 +10,7 @@ org.apache.kafka.coordinator.group.GroupConfigTest:
 - testValidShareAutoOffsetResetValues
 - testValidShareIsolationLevelValues
 org.apache.kafka.coordinator.group.GroupCoordinatorConfigTest:
+- testAppendLingerMs
 - testConfigs
 - testConsumerGroupAssignorFullClassNames
 - testConsumerGroupAssignors
