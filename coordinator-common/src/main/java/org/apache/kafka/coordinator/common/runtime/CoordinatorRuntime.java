@@ -790,10 +790,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
                     long flushStartMs = time.milliseconds();
                     // Write the records to the log and update the last written offset.
+                    // Regular coordinator records (not transaction markers) use transactionVersion = 0
                     long offset = partitionWriter.append(
                         tp,
                         currentBatch.verificationGuard,
-                        currentBatch.builder.build()
+                        currentBatch.builder.build(),
+                        (short) 0
                     );
                     runtimeMetrics.recordFlushTime(time.milliseconds() - flushStartMs);
                     coordinator.updateLastWrittenOffset(offset);
@@ -1090,6 +1092,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          * @param producerEpoch     The producer epoch.
          * @param coordinatorEpoch  The coordinator epoch of the transaction coordinator.
          * @param result            The transaction result.
+         * @param transactionVersion The transaction version (1 = TV1, 2 = TV2, etc.).
          * @param event             The event that must be completed when the
          *                          control record is written.
          */
@@ -1098,6 +1101,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             short producerEpoch,
             int coordinatorEpoch,
             TransactionResult result,
+            short transactionVersion,
             DeferredEvent event
         ) {
             if (state != CoordinatorState.ACTIVE) {
@@ -1128,7 +1132,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             result == TransactionResult.COMMIT ? ControlRecordType.COMMIT : ControlRecordType.ABORT,
                             coordinatorEpoch
                         )
-                    )
+                    ),
+                    transactionVersion
                 );
                 runtimeMetrics.recordFlushTime(time.milliseconds() - flushStartMs);
                 coordinator.updateLastWrittenOffset(offset);
@@ -1635,6 +1640,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         final TransactionResult result;
 
         /**
+         * The transaction version (1 = TV1, 2 = TV2 etc.).
+         */
+        final short transactionVersion;
+
+        /**
          * Timeout value for the write operation.
          */
         final Duration writeTimeout;
@@ -1667,6 +1677,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             short producerEpoch,
             int coordinatorEpoch,
             TransactionResult result,
+            short transactionVersion,
             Duration writeTimeout
         ) {
             this.name = name;
@@ -1675,6 +1686,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.producerEpoch = producerEpoch;
             this.coordinatorEpoch = coordinatorEpoch;
             this.result = result;
+            this.transactionVersion = transactionVersion;
             this.writeTimeout = writeTimeout;
             this.future = new CompletableFuture<>();
             this.createdTimeMs = time.milliseconds();
@@ -1702,6 +1714,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         producerEpoch,
                         coordinatorEpoch,
                         result,
+                        transactionVersion,
                         this
                     );
 
@@ -2270,6 +2283,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param producerEpoch     The producer epoch.
      * @param coordinatorEpoch  The epoch of the transaction coordinator.
      * @param result            The transaction result.
+     * @param transactionVersion The transaction version (1 = TV1, 2 = TV2, etc.).
      *
      * @return A future that will be completed with null when the operation is
      * completed or an exception if the operation failed.
@@ -2281,11 +2295,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         short producerEpoch,
         int coordinatorEpoch,
         TransactionResult result,
+        short transactionVersion,
         Duration timeout
     ) {
         throwIfNotRunning();
         log.debug("Scheduled execution of transaction completion for {} with producer id={}, producer epoch={}, " +
-            "coordinator epoch={} and transaction result={}.", tp, producerId, producerEpoch, coordinatorEpoch, result);
+            "coordinator epoch={}, transaction version={} and transaction result={}.", tp, producerId, producerEpoch, coordinatorEpoch, transactionVersion, result);
         CoordinatorCompleteTransactionEvent event = new CoordinatorCompleteTransactionEvent(
             name,
             tp,
@@ -2293,6 +2308,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             producerEpoch,
             coordinatorEpoch,
             result,
+            transactionVersion,
             timeout
         );
         enqueueLast(event);

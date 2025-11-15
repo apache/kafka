@@ -2227,7 +2227,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#completeTransaction(TopicPartition, long, short, int, TransactionResult, Duration)}.
+     * See {@link GroupCoordinator#completeTransaction(TopicPartition, long, short, int, TransactionResult, short, Duration)}.
      */
     @Override
     public CompletableFuture<Void> completeTransaction(
@@ -2236,6 +2236,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         short producerEpoch,
         int coordinatorEpoch,
         TransactionResult result,
+        short transactionVersion,
         Duration timeout
     ) {
         if (!isActive.get()) {
@@ -2255,6 +2256,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             producerEpoch,
             coordinatorEpoch,
             result,
+            transactionVersion,
             timeout
         );
     }
