@@ -322,6 +322,8 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testConsumerGroupRebalanceSensor
 - testConsumerGroupStates
 - testConsumerHeartbeatRegexValidation
+- testConsumerMemberWithRegexReplacedByClassicMemberWithChangedSubscription
+- testConsumerMemberWithRegexReplacedByClassicMemberWithSameSubscription
 - testDelayInitialRebalanceByGroupInitialRebalanceDelayOnEmptyGroup
 - testDelayRebalanceUptoRebalanceTimeout
 - testDescribeGroupRebalancing
