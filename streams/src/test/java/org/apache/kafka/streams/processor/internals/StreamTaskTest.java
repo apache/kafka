@@ -3486,7 +3486,7 @@ public class StreamTaskTest {
                 topology,
                 consumer,
                 new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
-                new StreamsMetricsImpl(metrics, "test", "processId", time),
+                new StreamsMetricsImpl(metrics, "test", "processId", "applicationId", time),
                 stateDirectory,
                 cache,
                 time,
