@@ -1909,6 +1909,7 @@ public class GroupMetadataManager {
             .maybeUpdateRebalanceTimeoutMs(ofSentinel(request.rebalanceTimeoutMs()))
             .maybeUpdateServerAssignorName(Optional.empty())
             .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscription.topics()))
+            .setSubscribedTopicRegex("") // Regex subscription is not supported for classic member.
             .setClientId(context.clientId())
             .setClientHost(context.clientAddress.toString())
             .setClassicMemberMetadata(
@@ -1923,6 +1924,18 @@ public class GroupMetadataManager {
             updatedMember,
             records
         );
+
+        bumpGroupEpoch |= maybeUpdateRegularExpressions(
+            context,
+            group,
+            member,
+            updatedMember,
+            records
+        );
+
+        // We bump the group epoch if the updated member replaces a static member
+        // with regex subscription to trigger a new assignment computation.
+        bumpGroupEpoch |= !member.subscribedTopicRegex().isEmpty();
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
