@@ -115,30 +115,21 @@ public class ProducerAppendInfo {
      */
     private void checkProducerEpoch(short producerEpoch, long offset, short transactionVersion) {
         short current = updatedEntry.producerEpoch();
+        boolean invalidEpoch = (transactionVersion >= 2) ? (producerEpoch <= current) : (producerEpoch < current);
 
-        if (transactionVersion >= 2) {
-            if (producerEpoch <= current) {
-                String message = "Reject late/dup TV2 marker: markerEpoch=" + producerEpoch + " <= currentEpoch=" + current +
-                        " for producer " + producerId + " at offset " + offset + " in " + topicPartition;
-                if (origin == AppendOrigin.REPLICATION) {
-                    log.warn(message);
-                } else {
-                    throw new InvalidProducerEpochException(message);
-                }
-            }
-        } else {
-            if (producerEpoch < current) {
-                String message = "Epoch of producer " + producerId + " at offset " + offset + " in " + topicPartition +
-                        " is " + producerEpoch + ", " + "which is smaller than the last seen epoch " + updatedEntry.producerEpoch();
+        if (invalidEpoch) {
+            String comparison = (transactionVersion >= 2) ? "<=" : "<";
+            String message = "Epoch of producer " + producerId + " at offset " + offset + " in " + topicPartition +
+                    " is " + producerEpoch + ", which is " + comparison + " the last seen epoch " + current +
+                    " (TV" + transactionVersion + ")";
 
-                if (origin == AppendOrigin.REPLICATION) {
-                    log.warn(message);
-                } else {
-                    // Starting from 2.7, we replaced ProducerFenced error with InvalidProducerEpoch in the
-                    // producer send response callback to differentiate from the former fatal exception,
-                    // letting client abort the ongoing transaction and retry.
-                    throw new InvalidProducerEpochException(message);
-                }
+            if (origin == AppendOrigin.REPLICATION) {
+                log.warn(message);
+            } else {
+                // Starting from 2.7, we replaced ProducerFenced error with InvalidProducerEpoch in the
+                // producer send response callback to differentiate from the former fatal exception,
+                // letting client abort the ongoing transaction and retry.
+                throw new InvalidProducerEpochException(message);
             }
         }
     }
