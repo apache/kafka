@@ -297,9 +297,9 @@ public class AbstractConfigTest {
 
         try {
             Map<String, String> props = new HashMap<>();
-            String threeConsumerInterceptors = CloseInterceptor.class.getName() + ", "
+            String twoConsumerInterceptors = CloseInterceptor.class.getName() + ", "
                     + MockConsumerInterceptor.class.getName();
-            props.put(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, threeConsumerInterceptors);
+            props.put(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, twoConsumerInterceptors);
             props.put("client.id", "test");
             TestConfig testConfig = new TestConfig(props);
 
