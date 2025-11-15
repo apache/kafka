@@ -987,6 +987,7 @@ org.apache.kafka.coordinator.group.modern.consumer.CurrentAssignmentBuilderTest:
 - testUnreleasedPartitionsToUnrevokedPartitions
 - testUnresolvedRegularExpression
 - testUnrevokedPartitionsToStable
+- testUnrevokedPartitionsToStableWithReturnedPartitionsPendingRevocation
 - testUnrevokedPartitionsToUnreleasedPartitions
 - testUnrevokedPartitionsToUnrevokedPartitions
 org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpressionTest:
