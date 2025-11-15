@@ -31,18 +31,16 @@ import org.junit.jupiter.api.Test;
 import org.mockito.MockedConstruction;
 
 import java.net.URI;
-
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mockConstruction;
-import static org.mockito.Mockito.spy;
-
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.spy;
 
 public class AbstractConnectCliTest {
 
@@ -174,4 +172,3 @@ public class AbstractConnectCliTest {
         }
     }
 }
-
