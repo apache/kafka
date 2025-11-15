@@ -80,7 +80,7 @@ public interface PartitionWriter {
      * @param verificationGuard The verification guard.
      * @param records           The MemoryRecords.
      * @param transactionVersion  The transaction version (0/1 = legacy, 2 = TV2).
-     *                            Use 0 for non-transaction writes (regular coordinator records).
+     *                            Use TV_UNKNOWN (-1) for non-transaction writes (regular coordinator records).
      * @return The log end offset right after the written records.
      */
     long append(

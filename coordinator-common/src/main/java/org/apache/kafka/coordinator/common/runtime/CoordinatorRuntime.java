@@ -39,6 +39,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.deferred.DeferredEvent;
 import org.apache.kafka.deferred.DeferredEventQueue;
+import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
 import org.apache.kafka.storage.internals.log.LogConfig;
@@ -790,12 +791,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
                     long flushStartMs = time.milliseconds();
                     // Write the records to the log and update the last written offset.
-                    // Regular coordinator records (not transaction markers) use transactionVersion = 0
+                    // Regular coordinator records use TV_UNKNOWN since they're not transaction markers.
                     long offset = partitionWriter.append(
                         tp,
                         currentBatch.verificationGuard,
                         currentBatch.builder.build(),
-                        (short) 0
+                        TransactionVersion.TV_UNKNOWN
                     );
                     runtimeMetrics.recordFlushTime(time.milliseconds() - flushStartMs);
                     coordinator.updateLastWrittenOffset(offset);

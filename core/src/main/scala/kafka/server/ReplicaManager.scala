@@ -50,7 +50,7 @@ import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.logger.StateChangeLogger
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.MetadataCache
-import org.apache.kafka.server.common.{DirectoryEventHandler, RequestLocal, StopPartition}
+import org.apache.kafka.server.common.{DirectoryEventHandler, RequestLocal, StopPartition, TransactionVersion}
 import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager
@@ -622,7 +622,8 @@ class ReplicaManager(val config: KafkaConfig,
    * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
    * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
    * @param transactionVersion            the transaction version for the records (1 for TV1, 2 for TV2, etc.).
-   *                                      Defaults to 0 (legacy behavior). Used for epoch validation of transaction markers (KIP-1228).
+   *                                      Defaults to TV_UNKNOWN (-1) to force explicit specification.
+   *                                      Used for epoch validation of transaction markers (KIP-1228).
    */
   def appendRecordsToLeader(
     requiredAcks: Short,
@@ -632,7 +633,7 @@ class ReplicaManager(val config: KafkaConfig,
     requestLocal: RequestLocal = RequestLocal.noCaching,
     actionQueue: ActionQueue = this.defaultActionQueue,
     verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
-    transactionVersion: Short = 0
+    transactionVersion: Short = TransactionVersion.TV_UNKNOWN
   ): Map[TopicIdPartition, LogAppendResult] = {
     val startTimeMs = time.milliseconds
     val localProduceResultsWithTopicId = appendToLocalLog(
@@ -672,7 +673,8 @@ class ReplicaManager(val config: KafkaConfig,
    * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
    *                                      thread calling this method
    * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
-   * @param transactionVersion            the transaction version for the records (1 for TV1, 2 for TV2, etc.).
+   * @param transactionVersion            the transaction version for the records (0/1 = legacy, 2 = TV2).
+   *                                      Defaults to TV_UNKNOWN (-1) to force explicit specification. Used for epoch validation of transaction markers (KIP-1228).
    */
   def appendRecords(timeout: Long,
                     requiredAcks: Short,
@@ -683,7 +685,7 @@ class ReplicaManager(val config: KafkaConfig,
                     recordValidationStatsCallback: Map[TopicIdPartition, RecordValidationStats] => Unit = _ => (),
                     requestLocal: RequestLocal = RequestLocal.noCaching,
                     verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
-                    transactionVersion: Short = 0): Unit = {
+                    transactionVersion: Short = TransactionVersion.TV_UNKNOWN): Unit = {
     if (!isValidRequiredAcks(requiredAcks)) {
       sendInvalidRequiredAcksResponse(entriesPerPartition, responseCallback)
       return

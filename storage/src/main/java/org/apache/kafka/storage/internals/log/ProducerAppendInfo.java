@@ -26,6 +26,7 @@ import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 
+import org.apache.kafka.server.common.TransactionVersion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -187,7 +188,7 @@ public class ProducerAppendInfo {
     }
 
     public Optional<CompletedTxn> append(RecordBatch batch, Optional<LogOffsetMetadata> firstOffsetMetadataOpt) {
-        return append(batch, firstOffsetMetadataOpt, (short) 0);
+        return append(batch, firstOffsetMetadataOpt, TransactionVersion.TV_UNKNOWN);
     }
 
     public Optional<CompletedTxn> append(RecordBatch batch, Optional<LogOffsetMetadata> firstOffsetMetadataOpt, short transactionVersion) {
@@ -250,6 +251,10 @@ public class ProducerAppendInfo {
                                                      long offset,
                                                      long timestamp,
                                                      short transactionVersion) {
+        if (transactionVersion == TransactionVersion.TV_UNKNOWN) {
+            throw new IllegalArgumentException("transactionVersion must be explicitly specified for transaction markers, " +
+                    "cannot use default value TV_UNKNOWN");
+        }
         checkProducerEpoch(producerEpoch, offset, transactionVersion);
         checkCoordinatorEpoch(endTxnMarker, offset);
 

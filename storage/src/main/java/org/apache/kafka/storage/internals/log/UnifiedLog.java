@@ -48,6 +48,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.RequestLocal;
+import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.record.BrokerCompressionType;
@@ -997,7 +998,7 @@ public class UnifiedLog implements AutoCloseable {
      * @param leaderEpoch the epoch of the replica appending
      */
     public LogAppendInfo appendAsLeader(MemoryRecords records, int leaderEpoch) throws IOException {
-        return appendAsLeader(records, leaderEpoch, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, (short) 0);
+        return appendAsLeader(records, leaderEpoch, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_UNKNOWN);
     }
 
     /**
@@ -1008,7 +1009,7 @@ public class UnifiedLog implements AutoCloseable {
      * @param origin Declares the origin of the append which affects required validations
      */
     public LogAppendInfo appendAsLeader(MemoryRecords records, int leaderEpoch, AppendOrigin origin) throws IOException {
-        return appendAsLeader(records, leaderEpoch, origin, RequestLocal.noCaching(), VerificationGuard.SENTINEL, (short) 0);
+        return appendAsLeader(records, leaderEpoch, origin, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_UNKNOWN);
     }
 
     /**
@@ -1020,7 +1021,8 @@ public class UnifiedLog implements AutoCloseable {
      * @param requestLocal request local instance
      * @param verificationGuard verification guard for transaction verification
      * @param transactionVersion the transaction version for the records (1 for TV1, 2 for TV2, etc.).
-     *                           Defaults to 0 (legacy behavior). Used for epoch validation of transaction markers (KIP-1228).
+     *                           Defaults to TV_UNKNOWN (-1) to force explicit specification.
+     *                           Used for epoch validation of transaction markers (KIP-1228).
      * @throws KafkaStorageException If the append fails due to an I/O error.
      * @return Information about the appended messages including the first and last offset.
      */
@@ -1047,7 +1049,7 @@ public class UnifiedLog implements AutoCloseable {
      */
     public LogAppendInfo appendAsLeaderWithRecordVersion(MemoryRecords records, int leaderEpoch, RecordVersion recordVersion) {
         return append(records, AppendOrigin.CLIENT, true, leaderEpoch, Optional.of(RequestLocal.noCaching()),
-                VerificationGuard.SENTINEL, false, recordVersion.value, (short) 0);
+                VerificationGuard.SENTINEL, false, recordVersion.value, TransactionVersion.TV_UNKNOWN);
     }
 
     /**
@@ -1067,7 +1069,7 @@ public class UnifiedLog implements AutoCloseable {
                       VerificationGuard.SENTINEL,
                       true,
                       RecordBatch.CURRENT_MAGIC_VALUE,
-                      (short) 0);
+                      TransactionVersion.TV_UNKNOWN);
     }
 
     /**
@@ -1085,6 +1087,7 @@ public class UnifiedLog implements AutoCloseable {
      * @param ignoreRecordSize true to skip validation of record size.
      * @param toMagic the record version magic value
      * @param transactionVersion the transaction version for the records (1 for TV1, 2 for TV2, etc.).
+     *                           Defaults to TV_UNKNOWN (-1) to force explicit specification.
      *                           Used for epoch validation of transaction markers (KIP-1228).
      *
      * @throws KafkaStorageException If the append fails due to an I/O error.
