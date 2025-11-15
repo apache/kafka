@@ -24,6 +24,7 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.server.common.TransactionVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 
 import java.nio.file.Files
@@ -221,7 +222,7 @@ object LogTestUtils {
   /**
    * Append an end transaction marker (commit or abort) to the log as a leader.
    * 
-   * @param transactionVersion the transaction version (0/1 = legacy, 2 = TV2). Defaults to 0 for legacy behavior.
+   * @param transactionVersion the transaction version (0/1 = legacy, 2 = TV2). Must be explicitly specified.
    *                          TV2 markers require strict epoch validation (markerEpoch > currentEpoch),
    *                          while legacy markers use relaxed validation (markerEpoch >= currentEpoch).
    */
@@ -232,7 +233,7 @@ object LogTestUtils {
                                  timestamp: Long,
                                  coordinatorEpoch: Int = 0,
                                  leaderEpoch: Int = 0,
-                                 transactionVersion: Short = 0): LogAppendInfo = {
+                                 transactionVersion: Short = TransactionVersion.TV_UNKNOWN): LogAppendInfo = {
     val records = endTxnRecords(controlType, producerId, producerEpoch,
       coordinatorEpoch = coordinatorEpoch, timestamp = timestamp)
     log.appendAsLeader(records, leaderEpoch, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, transactionVersion)

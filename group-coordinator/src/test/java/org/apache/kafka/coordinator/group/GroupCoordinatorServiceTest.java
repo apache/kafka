@@ -90,6 +90,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
+import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataDelta;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
@@ -3088,6 +3089,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq((short) 5),
             ArgumentMatchers.eq(10),
             ArgumentMatchers.eq(TransactionResult.COMMIT),
+            ArgumentMatchers.eq(TransactionVersion.TV_1.featureLevel()),
             ArgumentMatchers.eq(Duration.ofMillis(100))
         )).thenReturn(CompletableFuture.completedFuture(null));
 
@@ -3097,6 +3099,7 @@ public class GroupCoordinatorServiceTest {
             (short) 5,
             10,
             TransactionResult.COMMIT,
+            TransactionVersion.TV_1.featureLevel(),
             Duration.ofMillis(100)
         );
 
@@ -3117,6 +3120,7 @@ public class GroupCoordinatorServiceTest {
             (short) 5,
             10,
             TransactionResult.COMMIT,
+            TransactionVersion.TV_1.featureLevel(),
             Duration.ofMillis(100)
         );
 
@@ -3137,6 +3141,7 @@ public class GroupCoordinatorServiceTest {
             (short) 5,
             10,
             TransactionResult.COMMIT,
+            TransactionVersion.TV_1.featureLevel(),
             Duration.ofMillis(100)
         );
 

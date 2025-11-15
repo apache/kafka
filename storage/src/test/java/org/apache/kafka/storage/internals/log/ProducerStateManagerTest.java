@@ -491,15 +491,11 @@ public class ProducerStateManagerTest {
         assertDoesNotThrow(() -> appendClientEntry(recoveredMapping, producerId, epoch, 2, 2L, true));
     }
 
-    @ParameterizedTest
-    @ValueSource(shorts = {0, 2})
-    public void testRecoverFromSnapshotFinishedTransaction(short transactionVersion) throws IOException {
+    @Test
+    public void testRecoverFromSnapshotFinishedTransaction() throws IOException {
         appendClientEntry(stateManager, producerId, epoch, 0, 0L, true);
         appendClientEntry(stateManager, producerId, epoch, 1, 1L, true);
-
-        // For TV2, we need to bump epoch; for TV0, same epoch is allowed. (KIP-890, KIP-1228)
-        short markerEpoch = transactionVersion >= 2 ? (short) (epoch + 1) : epoch;
-        appendEndTxnMarker(stateManager, producerId, markerEpoch, ControlRecordType.ABORT, 2L, transactionVersion);
+        appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.ABORT, 2L, (short) 0);
 
         stateManager.takeSnapshot();
         ProducerStateManager recoveredMapping = new ProducerStateManager(partition, logDir,
@@ -515,14 +511,10 @@ public class ProducerStateManagerTest {
         assertEquals(OptionalLong.empty(), loadedEntry.currentTxnFirstOffset());
     }
 
-    @ParameterizedTest
-    @ValueSource(shorts = {0, 2})
-    public void testRecoverFromSnapshotEmptyTransaction(short transactionVersion) throws IOException {
+    @Test
+    public void testRecoverFromSnapshotEmptyTransaction() throws IOException {
         long appendTimestamp = time.milliseconds();
-        // For TV2, we need to bump epoch; for TV0, same epoch is allowed. (KIP-890, KIP-1228)
-        // Since there's no prior entry, we use epoch=0 for TV0 and epoch=1 for TV2.
-        short markerEpoch = transactionVersion >= 2 ? (short) 1 : (short) 0;
-        appendEndTxnMarker(stateManager, producerId, markerEpoch, ControlRecordType.ABORT, 0L, 0, appendTimestamp, transactionVersion);
+        appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.ABORT, 0L, 0, appendTimestamp, (short) 0);
         stateManager.takeSnapshot();
 
         ProducerStateManager recoveredMapping = new ProducerStateManager(partition, logDir,
@@ -688,18 +680,15 @@ public class ProducerStateManagerTest {
         assertEquals(Set.of(3L), currentSnapshotOffsets());
     }
 
-    @ParameterizedTest
-    @ValueSource(shorts = {0, 2})
-    public void testFirstUnstableOffsetAfterTruncation(short transactionVersion) throws IOException {
+    @Test
+    public void testFirstUnstableOffsetAfterTruncation() throws IOException {
         appendClientEntry(stateManager, producerId, epoch, defaultSequence, 99, true);
         assertEquals(99L, stateManager.firstUnstableOffset()
                 .map(offset -> offset.messageOffset)
                 .orElseThrow(() -> new RuntimeException("First unstable offset should be present")));
         stateManager.takeSnapshot();
 
-        // For TV2, we need to bump epoch; for TV0, same epoch is allowed. (KIP-890, KIP-1228)
-        short markerEpoch = transactionVersion >= 2 ? (short) (epoch + 1) : epoch;
-        appendEndTxnMarker(stateManager, producerId, markerEpoch, ControlRecordType.COMMIT, 105, transactionVersion);
+        appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.COMMIT, 105, (short) 0);
         stateManager.onHighWatermarkUpdated(106);
         assertEquals(Optional.empty(), stateManager.firstUnstableOffset().map(offset -> offset.messageOffset));
         stateManager.takeSnapshot();

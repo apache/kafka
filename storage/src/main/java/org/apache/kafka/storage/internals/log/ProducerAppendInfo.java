@@ -251,11 +251,21 @@ public class ProducerAppendInfo {
                                                      long offset,
                                                      long timestamp,
                                                      short transactionVersion) {
-        if (transactionVersion == TransactionVersion.TV_UNKNOWN) {
-            throw new IllegalArgumentException("transactionVersion must be explicitly specified for transaction markers, " +
-                    "cannot use default value TV_UNKNOWN");
+        // For replication (REPLICATION origin), TV_UNKNOWN is allowed because:
+        // 1. transactionVersion is not stored in MemoryRecords - it's only metadata in WriteTxnMarkersRequest
+        // 2. When records are replicated, followers only see MemoryRecords without transactionVersion
+        // 3. The leader already validated the marker with the correct transactionVersion (e.g., TV2 strict validation)
+        // 4. Using TV_0 validation (markerEpoch >= currentEpoch) is safe because it's more permissive than TV2
+        //    (markerEpoch > currentEpoch), so any marker that passed TV2 validation will pass TV_0 validation
+        // For all other origins (CLIENT, COORDINATOR), transactionVersion must be explicitly specified.
+        if (transactionVersion == TransactionVersion.TV_UNKNOWN && origin != AppendOrigin.REPLICATION) {
+            throw new IllegalArgumentException("transactionVersion must be explicitly specified (TV_0, TV_1, or TV_2), " +
+                    "cannot use default value TV_UNKNOWN for origin " + origin);
         }
-        checkProducerEpoch(producerEpoch, offset, transactionVersion);
+        // For replication with TV_UNKNOWN, use legacy validation (TV_0 behavior) since the leader already
+        // performed strict validation and the follower doesn't have access to the original transactionVersion
+        short effectiveTransactionVersion = (transactionVersion == TransactionVersion.TV_UNKNOWN) ? 0 : transactionVersion;
+        checkProducerEpoch(producerEpoch, offset, effectiveTransactionVersion);
         checkCoordinatorEpoch(endTxnMarker, offset);
 
         // Only emit the `CompletedTxn` for non-empty transactions. A transaction marker

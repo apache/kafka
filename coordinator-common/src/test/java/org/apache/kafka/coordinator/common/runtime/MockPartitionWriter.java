@@ -68,7 +68,8 @@ public class MockPartitionWriter extends InMemoryPartitionWriter {
     public long append(
         TopicPartition tp,
         VerificationGuard verificationGuard,
-        MemoryRecords batch
+        MemoryRecords batch,
+        short transactionVersion
     ) {
         if (batch.sizeInBytes() > config(tp).maxMessageSize())
             throw new RecordTooLargeException("Batch is larger than the max message size");
@@ -84,6 +85,6 @@ public class MockPartitionWriter extends InMemoryPartitionWriter {
             throw new KafkaException("Couldn't write end marker.");
 
         time.sleep(10);
-        return super.append(tp, verificationGuard, batch);
+        return super.append(tp, verificationGuard, batch, transactionVersion);
     }
 }
