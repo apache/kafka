@@ -751,6 +751,47 @@ class ConnectionQuotasTest {
       s"Number of connections on EXTERNAL listener:")
   }
 
+  @Test
+  def testMaxConnectionsPerIpOverrideAppliedToAllResolvedAddresses(): Unit = {
+
+    val overrideLimit = 5
+    val props = brokerPropsWithDefaultConnectionLimits
+    props.put(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG, 1)
+    props.put(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, s"localhost:$overrideLimit")
+    val config = KafkaConfig.fromProps(props)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
+
+    addListenersAndVerify(config, connectionQuotas)
+
+    val listener = listeners("EXTERNAL")
+    // resolve "localhost" to all its addresses (e.g. IPv4 and IPv6)
+    val resolvedAddrs = InetAddress.getAllByName("localhost").toSeq
+
+    // For each resolved address, ensure override applies independently
+    resolvedAddrs.foreach { addr =>
+      // start from a clean slate for this address
+      assertEquals(0, connectionQuotas.get(addr), s"Expected 0 connections for $addr before test")
+
+      // increment up to the override limit
+      for (_ <- 0 until overrideLimit) {
+        connectionQuotas.inc(listener.listenerName, addr, blockedPercentMeters("EXTERNAL"))
+      }
+      assertEquals(overrideLimit, connectionQuotas.get(addr), s"Expected $overrideLimit connections for $addr after increments")
+
+      // next increment should be rejected (but inc() still increments the counter)
+      assertThrows(classOf[TooManyConnectionsException], () =>
+        connectionQuotas.inc(listener.listenerName, addr, blockedPercentMeters("EXTERNAL"))
+      )
+
+      // remove the rejected connection increment before normal cleanup
+      connectionQuotas.dec(listener.listenerName, addr)
+
+      // cleanup: remove the added connections
+      for (_ <- 0 until overrideLimit) connectionQuotas.dec(listener.listenerName, addr)
+      assertEquals(0, connectionQuotas.get(addr), s"Expected 0 connections for $addr after cleanup")
+    }
+  }
+
   private def addListenersAndVerify(config: KafkaConfig, connectionQuotas: ConnectionQuotas) : Unit = {
     addListenersAndVerify(config, util.Map.of, connectionQuotas)
   }
