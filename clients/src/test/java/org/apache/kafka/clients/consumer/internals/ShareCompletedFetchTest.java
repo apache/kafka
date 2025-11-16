@@ -65,6 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ShareCompletedFetchTest {
     private static final String TOPIC_NAME = "test";
     private static final TopicIdPartition TIP = new TopicIdPartition(Uuid.randomUuid(), 0, TOPIC_NAME);
+    private static final Optional<Integer> DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS = Optional.of(30000);
     private static final long PRODUCER_ID = 1000L;
     private static final short PRODUCER_EPOCH = 0;
 
@@ -428,6 +429,7 @@ public class ShareCompletedFetchTest {
             0,
             TIP,
             partitionData,
+            DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS,
             shareFetchMetricsAggregator,
             ApiKeys.SHARE_FETCH.latestVersion());
     }

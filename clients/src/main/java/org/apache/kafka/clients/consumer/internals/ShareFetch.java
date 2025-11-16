@@ -30,6 +30,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * {@link ShareFetch} represents the records fetched from the broker to be returned to the consumer
@@ -41,13 +42,15 @@ import java.util.Objects;
  */
 public class ShareFetch<K, V> {
     private final Map<TopicIdPartition, ShareInFlightBatch<K, V>> batches;
+    private Optional<Integer> acquisitionLockTimeoutMs;
 
     public static <K, V> ShareFetch<K, V> empty() {
-        return new ShareFetch<>(new HashMap<>());
+        return new ShareFetch<>(new HashMap<>(), Optional.empty());
     }
 
-    private ShareFetch(Map<TopicIdPartition, ShareInFlightBatch<K, V>> batches) {
+    private ShareFetch(Map<TopicIdPartition, ShareInFlightBatch<K, V>> batches, Optional<Integer> acquisitionLockTimeoutMs) {
         this.batches = batches;
+        this.acquisitionLockTimeoutMs = acquisitionLockTimeoutMs;
     }
 
     /**
@@ -66,6 +69,9 @@ public class ShareFetch<K, V> {
             // This case shouldn't usually happen because we only send one fetch at a time per partition,
             // but it might conceivably happen in some rare cases (such as partition leader changes).
             currentBatch.merge(batch);
+        }
+        if (batch.getAcquisitionLockTimeoutMs().isPresent()) {
+            acquisitionLockTimeoutMs = batch.getAcquisitionLockTimeoutMs();
         }
     }
 
@@ -106,6 +112,13 @@ public class ShareFetch<K, V> {
      */
     public boolean isEmpty() {
         return numRecords() == 0;
+    }
+
+    /**
+     * @return The most up-to-date value of acquisition lock timeout, if available
+     */
+    public Optional<Integer> acquisitionLockTimeoutMs() {
+        return acquisitionLockTimeoutMs;
     }
 
     /**

@@ -821,6 +821,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         fetchTarget.id(),
                         tip,
                         partitionData,
+                        response.data().acquisitionLockTimeoutMs() > 0
+                            ? Optional.of(response.data().acquisitionLockTimeoutMs()) : Optional.empty(),
                         shareFetchMetricsAggregator,
                         requestVersion)
                 );
