@@ -1131,7 +1131,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         partition.partitionIndex()
                     );
                     var error = Errors.forCode(partition.errorCode());
-                    if (error != Errors.NONE) {
+                    if (error != Errors.NONE || topicName == null) {
                         log.debug("Failed to fetch offset for partition {}: {}", tp, error.message());
 
                         if (!failedRequestRegistered) {
@@ -1139,8 +1139,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                             failedRequestRegistered = true;
                         }
 
-                        if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION || error == Errors.UNKNOWN_TOPIC_ID) {
-                            future.completeExceptionally(new KafkaException("Topic or Partition " + tp + " does not exist"));
+                        if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION || error == Errors.UNKNOWN_TOPIC_ID || topicName == null) {
+                            future.completeExceptionally(new KafkaException("Topic does not exist"));
                             return;
                         } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                             unauthorizedTopics.add(tp.topic());
