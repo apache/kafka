@@ -60,7 +60,7 @@ ARG ducker_creator=default
 LABEL ducker.creator=$ducker_creator
 
 # Update Linux and install necessary utilities.
-RUN apt update && apt install -y sudo git netcat iptables rsync unzip wget curl jq coreutils openssh-server net-tools vim python3-pip python3-dev libffi-dev libssl-dev cmake pkg-config libfuse-dev iperf traceroute iproute2 iputils-ping && apt-get -y clean
+RUN apt update && apt install -y sudo git netcat iptables rsync unzip wget curl jq coreutils openssh-server net-tools vim python3-pip python3-dev libffi-dev libssl-dev cmake pkg-config libfuse-dev iperf traceroute iproute2 iputils-ping tini && apt-get -y clean
 RUN python3 -m pip install -U pip==21.1.1;
 # NOTE: ducktape 0.12.0 supports py 3.9, 3.10, 3.11 and 3.12
 COPY requirements.txt requirements.txt
@@ -120,8 +120,8 @@ RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.9.1-test.jar" -o /opt/kafka-3.9.1/lib
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.0.0-test.jar" -o /opt/kafka-4.0.0/libs/kafka-streams-4.0.0-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.1.0-test.jar" -o /opt/kafka-4.1.0/libs/kafka-streams-4.1.0-test.jar
 
-# To ensure the Kafka cluster starts successfully under JDK 17, we need to update the Zookeeper 
-# client from version 3.4.x to 3.5.7 in Kafka versions 2.1.1, 2.2.2, and 2.3.1, as the older Zookeeper 
+# To ensure the Kafka cluster starts successfully under JDK 17, we need to update the Zookeeper
+# client from version 3.4.x to 3.5.7 in Kafka versions 2.1.1, 2.2.2, and 2.3.1, as the older Zookeeper
 # client is incompatible with JDK 17. See KAFKA-17888 for more details.
 RUN curl -s "https://repo1.maven.org/maven2/org/apache/zookeeper/zookeeper/3.5.7/zookeeper-3.5.7.jar" -o /opt/zookeeper-3.5.7.jar
 RUN curl -s "https://repo1.maven.org/maven2/org/apache/zookeeper/zookeeper-jute/3.5.7/zookeeper-jute-3.5.7.jar" -o /opt/zookeeper-jute-3.5.7.jar
@@ -155,4 +155,6 @@ RUN useradd -u $UID -ms /bin/bash ducker \
 
 USER ducker
 
+# Use tini as PID 1 to properly reap zombie processes and forward signals
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["sudo", "service", "ssh", "start", "-D"]
