@@ -260,8 +260,10 @@ public class ShareConsumerTest {
             producer.send(record);
             producer.flush();
             shareConsumer.subscribe(Set.of(tp.topic()));
+            assertEquals(Optional.empty(), shareConsumer.acquisitionLockTimeoutMs());
             ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
+            assertEquals(Optional.of(15000), shareConsumer.acquisitionLockTimeoutMs());
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
@@ -276,8 +278,10 @@ public class ShareConsumerTest {
             producer.send(record);
             producer.flush();
             shareConsumer.subscribe(Set.of(tp.topic()));
+            assertEquals(Optional.empty(), shareConsumer.acquisitionLockTimeoutMs());
             ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
+            assertEquals(Optional.of(15000), shareConsumer.acquisitionLockTimeoutMs());
             producer.send(record);
             records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
@@ -323,11 +327,14 @@ public class ShareConsumerTest {
             shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, partitionExceptionMap));
 
             shareConsumer.subscribe(Set.of(tp.topic()));
+            assertEquals(Optional.empty(), shareConsumer.acquisitionLockTimeoutMs());
 
             TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
                 DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records for share consumer");
 
+            assertEquals(Optional.of(15000), shareConsumer.acquisitionLockTimeoutMs());
             shareConsumer.subscribe(Set.of(tp2.topic()));
+            assertEquals(Optional.of(15000), shareConsumer.acquisitionLockTimeoutMs());
 
             // Waiting for heartbeat to propagate the subscription change.
             TestUtils.waitForCondition(() -> {

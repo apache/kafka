@@ -156,6 +156,7 @@ public class ShareFetchCollectorTest {
         ShareFetch<String, String> fetch = fetchCollector.collect(fetchBuffer);
         assertFalse(fetch.isEmpty());
         assertEquals(recordCount, fetch.numRecords());
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, fetch.acquisitionLockTimeoutMs());
 
         // When we collected the data from the buffer, this will cause the completed fetch to get initialized.
         assertTrue(completedFetch.isInitialized());

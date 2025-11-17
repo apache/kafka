@@ -347,6 +347,8 @@ public class ShareConsumerImplTest {
         consumer.close();
         final IllegalStateException res = assertThrows(IllegalStateException.class, consumer::subscription);
         assertEquals("This consumer has already been closed.", res.getMessage());
+        final IllegalStateException res2 = assertThrows(IllegalStateException.class, consumer::acquisitionLockTimeoutMs);
+        assertEquals("This consumer has already been closed.", res2.getMessage());
     }
 
     @Test
@@ -427,10 +429,12 @@ public class ShareConsumerImplTest {
         List<String> topics = Collections.singletonList(topic);
         completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, topics);
         consumer.subscribe(topics);
+        assertEquals(Optional.empty(), consumer.acquisitionLockTimeoutMs());
 
         // First poll should succeed and return records
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
         assertEquals(2, records.count(), "Should have received 2 records");
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, consumer.acquisitionLockTimeoutMs());
 
         // Second poll should fail because records weren't acknowledged
         IllegalStateException exception = assertThrows(
@@ -441,6 +445,7 @@ public class ShareConsumerImplTest {
             exception.getMessage().contains("All records must be acknowledged in explicit acknowledgement mode."),
             "Unexpected error message: " + exception.getMessage()
         );
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, consumer.acquisitionLockTimeoutMs());
 
         // Verify that acknowledging one record but not all still throws exception
         Iterator<ConsumerRecord<String, String>> iterator = records.iterator();
@@ -508,6 +513,7 @@ public class ShareConsumerImplTest {
         // First poll should succeed and return records
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
         assertEquals(2, records.count(), "Should have received 2 records");
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, consumer.acquisitionLockTimeoutMs());
 
         // Renew the first record and accept the second
         Iterator<ConsumerRecord<String, String>> iterator = records.iterator();
@@ -518,6 +524,7 @@ public class ShareConsumerImplTest {
         records = consumer.poll(Duration.ofMillis(100));
         assertEquals(0, records.count(), "Should have received 1 record");
         assertTrue(firstFetch.hasRenewals());
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, consumer.acquisitionLockTimeoutMs());
 
         Acknowledgements acks = Acknowledgements.empty();
         acks.add(0, AcknowledgeType.RENEW);
@@ -532,6 +539,7 @@ public class ShareConsumerImplTest {
         ConsumerRecord<String, String> renewedRecord = iterator.next();
         assertEquals(0, renewedRecord.offset());
         consumer.acknowledge(renewedRecord);
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, consumer.acquisitionLockTimeoutMs());
 
         // Set up next fetch to return no records
         doReturn(ShareFetch.empty())
@@ -557,6 +565,7 @@ public class ShareConsumerImplTest {
         // Verify that poll succeeds and returns new records
         ConsumerRecords<String, String> newRecords = consumer.poll(Duration.ofMillis(100));
         assertEquals(2, newRecords.count(), "Should have received 2 new records");
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, consumer.acquisitionLockTimeoutMs());
     }
 
     @Test
