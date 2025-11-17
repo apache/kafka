@@ -25,8 +25,8 @@ import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
-
 import org.apache.kafka.server.common.TransactionVersion;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
