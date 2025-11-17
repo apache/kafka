@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
@@ -627,6 +628,430 @@ public class OptimizedUniformAssignmentBuilderTest {
             groupSpec,
             subscribedTopicMetadata
         );
+
+        assertAssignment(expectedAssignment, computedAssignment);
+        checkValidityAndBalance(members, computedAssignment);
+    }
+
+
+    @Test
+    public void testFirstAssignmentThreeMembersOneTopicWithRacks() {
+        CoordinatorMetadataImage coordinatorMetadataImage = new MetadataImageBuilder()
+            .addTopic(topic1Uuid, topic1Name, 6)
+            .addRacks()
+            .buildCoordinatorMetadataImage();
+
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
+            Optional.of("rack0"),
+            Optional.empty(),
+            Set.of(topic1Uuid),
+            Assignment.EMPTY
+        ));
+
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.of("rack1"),
+            Optional.empty(),
+            Set.of(topic1Uuid),
+            Assignment.EMPTY
+        ));
+
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.of("rack2"),
+            Optional.empty(),
+            Set.of(topic1Uuid),
+            Assignment.EMPTY
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HOMOGENEOUS,
+            Map.of()
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            coordinatorMetadataImage
+        );
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
+
+        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
+        expectedAssignment.put(memberA, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 3)
+        ));
+        expectedAssignment.put(memberB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 1, 4)
+        ));
+        expectedAssignment.put(memberC, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 2, 5)
+        ));
+
+        assertAssignment(expectedAssignment, computedAssignment);
+        checkValidityAndBalance(members, computedAssignment);
+    }
+
+    @Test
+    public void testFirstAssignmentThreeMembersOneTopicWithAllRacksMismatched() {
+        CoordinatorMetadataImage coordinatorMetadataImage = new MetadataImageBuilder()
+            .addTopic(topic1Uuid, topic1Name, 6)
+            .addRacks()
+            .buildCoordinatorMetadataImage();
+
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
+            Optional.of("rack5"),
+            Optional.empty(),
+            Set.of(topic1Uuid),
+            Assignment.EMPTY
+        ));
+
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.of("rack6"),
+            Optional.empty(),
+            Set.of(topic1Uuid),
+            Assignment.EMPTY
+        ));
+
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.of("rack7"),
+            Optional.empty(),
+            Set.of(topic1Uuid),
+            Assignment.EMPTY
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HOMOGENEOUS,
+            Map.of()
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            coordinatorMetadataImage
+        );
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
+
+        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
+        expectedAssignment.put(memberA, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 1)
+        ));
+        expectedAssignment.put(memberB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 2, 3)
+        ));
+        expectedAssignment.put(memberC, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 4, 5)
+        ));
+
+        assertAssignment(expectedAssignment, computedAssignment);
+        checkValidityAndBalance(members, computedAssignment);
+    }
+
+    @Test
+    public void testFirstAssignmentTwoMembersOneTopicWithMembersInSameRack() {
+        CoordinatorMetadataImage coordinatorMetadataImage = new MetadataImageBuilder()
+            .addTopic(topic1Uuid, topic1Name, 4)
+            .addRacks()
+            .buildCoordinatorMetadataImage();
+
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
+            Optional.of("rack0"),
+            Optional.empty(),
+            Set.of(topic1Uuid),
+            Assignment.EMPTY
+        ));
+
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.of("rack0"),
+            Optional.empty(),
+            Set.of(topic1Uuid),
+            Assignment.EMPTY
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HOMOGENEOUS,
+            Map.of()
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            coordinatorMetadataImage
+        );
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
+
+        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
+        expectedAssignment.put(memberA, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 3)
+        ));
+        expectedAssignment.put(memberB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 1, 2)
+        ));
+
+        assertAssignment(expectedAssignment, computedAssignment);
+        checkValidityAndBalance(members, computedAssignment);
+    }
+
+    @Test
+    public void testFirstAssignmentThreeMembersTwoTopicsWithOneMemberNoRack() {
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topic1Uuid, topic1Name, 6)
+            .addTopic(topic2Uuid, topic2Name, 3)
+            .addRacks()
+            .build();
+
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Optional.empty(),
+            Set.of(topic1Uuid, topic2Uuid),
+            Assignment.EMPTY
+        ));
+
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.of("rack1"),
+            Optional.empty(),
+            Set.of(topic1Uuid, topic2Uuid),
+            Assignment.EMPTY
+        ));
+
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.of("rack2"),
+            Optional.empty(),
+            Set.of(topic1Uuid, topic2Uuid),
+            Assignment.EMPTY
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HOMOGENEOUS,
+            Map.of()
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            new KRaftCoordinatorMetadataImage(metadataImage)
+        );
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
+        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
+        expectedAssignment.put(memberA, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 3, 4, 5)
+        ));
+        expectedAssignment.put(memberB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0),
+            mkTopicAssignment(topic2Uuid, 0, 1)
+        ));
+        expectedAssignment.put(memberC, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 1, 2),
+            mkTopicAssignment(topic2Uuid, 2)
+        ));
+
+        assertAssignment(expectedAssignment, computedAssignment);
+        checkValidityAndBalance(members, computedAssignment);
+    }
+
+    @Test
+    public void testReassignmentWhenRackMismatched() {
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topic1Uuid, topic1Name, 6)
+            .addRacks()
+            .build();
+
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
+            Optional.of("rack0"),
+            Optional.empty(),
+            Set.of(topic1Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 0, 1)
+            ))
+        ));
+
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.of("rack1"),
+            Optional.empty(),
+            Set.of(topic1Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 2, 4)
+            ))
+        ));
+
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.of("rack2"),
+            Optional.empty(),
+            Set.of(topic1Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 3, 5)
+            ))
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HOMOGENEOUS,
+            invertedTargetAssignment(members)
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            new KRaftCoordinatorMetadataImage(metadataImage)
+        );
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
+        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
+        expectedAssignment.put(memberA, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 3)
+        ));
+        expectedAssignment.put(memberB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 1, 4)
+        ));
+        expectedAssignment.put(memberC, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 2, 5)
+        ));
+
+        assertAssignment(expectedAssignment, computedAssignment);
+        checkValidityAndBalance(members, computedAssignment);
+    }
+
+    @Test
+    public void testReassignmentWhenAddingNewTopicWithRacks() {
+        // Add topic2 as new topic
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topic1Uuid, topic1Name, 6)
+            .addTopic(topic2Uuid, topic2Name, 2)
+            .addRacks()
+            .build();
+
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
+            Optional.of("rack0"),
+            Optional.empty(),
+            Set.of(topic1Uuid, topic2Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 0, 3)
+            ))
+        ));
+
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.of("rack1"),
+            Optional.empty(),
+            Set.of(topic1Uuid, topic2Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 1, 4)
+            ))
+        ));
+
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.of("rack2"),
+            Optional.empty(),
+            Set.of(topic1Uuid, topic2Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 2, 5)
+            ))
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HOMOGENEOUS,
+            invertedTargetAssignment(members)
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            new KRaftCoordinatorMetadataImage(metadataImage)
+        );
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
+        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
+        expectedAssignment.put(memberA, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 3),
+            mkTopicAssignment(topic2Uuid, 0)
+        ));
+        expectedAssignment.put(memberB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 1, 4),
+            mkTopicAssignment(topic2Uuid, 1)
+        ));
+        expectedAssignment.put(memberC, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 2, 5)
+        ));
+
+        assertAssignment(expectedAssignment, computedAssignment);
+        checkValidityAndBalance(members, computedAssignment);
+    }
+
+    @Test
+    public void testReassignmentWhenAddingNewMemberWithRacks() {
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topic1Uuid, topic1Name, 4)
+            .addRacks()
+            .build();
+
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
+            Optional.of("rack0"),
+            Optional.empty(),
+            Set.of(topic1Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 0, 3)
+            ))
+        ));
+
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.of("rack1"),
+            Optional.empty(),
+            Set.of(topic1Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 1, 2)
+            ))
+        ));
+
+        // Add new member C
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.of("rack2"),
+            Optional.empty(),
+            Set.of(topic1Uuid),
+            Assignment.EMPTY
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HOMOGENEOUS,
+            invertedTargetAssignment(members)
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            new KRaftCoordinatorMetadataImage(metadataImage)
+        );
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
+        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
+        expectedAssignment.put(memberA, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 3)
+        ));
+        expectedAssignment.put(memberB, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 1)
+        ));
+        expectedAssignment.put(memberC, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 2)
+        ));
 
         assertAssignment(expectedAssignment, computedAssignment);
         checkValidityAndBalance(members, computedAssignment);

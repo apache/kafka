@@ -26,10 +26,14 @@ import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.server.common.TopicIdPartition;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -41,11 +45,13 @@ import java.util.Set;
  * <li> Balance:          Ensure partitions are distributed equally among all members.
  *                        The difference in assignments sizes between any two members
  *                        should not exceed one partition. </li>
+ * <li> Rack Awareness:   When feasible, aim to assign partitions to members
+ *                        located on the same rack thus avoiding cross-zone traffic. </li>
  * <li> Stickiness:       Minimize partition movements among members by retaining
  *                        as much of the existing assignment as possible. </li>
  *
  * The assignment builder prioritizes the properties in the following order:
- *      Balance > Stickiness.
+ *      Balance > Rack Awareness > Stickiness.
  */
 public class UniformHomogeneousAssignmentBuilder {
     /**
@@ -66,7 +72,7 @@ public class UniformHomogeneousAssignmentBuilder {
     /**
      * The members that are below their quota.
      */
-    private final List<MemberWithRemainingQuota> unfilledMembers;
+    private final LinkedList<MemberWithRemainingQuota> unfilledMembers;
 
     /**
      * The partitions that still need to be assigned.
@@ -86,6 +92,11 @@ public class UniformHomogeneousAssignmentBuilder {
     private int minimumMemberQuota;
 
     /**
+     * Whether to use rack aware assignment strategy.
+     */
+    private final boolean useRackStrategy;
+
+    /**
      * The number of members to receive an extra partition beyond the minimum quota.
      * Example: If there are 11 partitions to be distributed among 3 members,
      *          each member gets 3 (11 / 3) [minQuota] partitions and 2 (11 % 3) members get an extra partition.
@@ -97,10 +108,34 @@ public class UniformHomogeneousAssignmentBuilder {
         this.subscribedTopicDescriber = subscribedTopicDescriber;
         this.subscribedTopicIds = new HashSet<>(groupSpec.memberSubscription(groupSpec.memberIds().iterator().next())
             .subscribedTopicIds());
-        this.unfilledMembers = new ArrayList<>();
-        this.unassignedPartitions = new ArrayList<>();
+        this.unfilledMembers = new LinkedList<>();
+        this.unassignedPartitions = new LinkedList<>();
 
         this.targetAssignment = new HashMap<>();
+
+        Set<String> allMemberRacks =  groupSpec.memberIds().stream()
+            .map(memberId -> groupSpec.memberSubscription(memberId).rackId())
+            .filter(Optional::isPresent)
+            .map(Optional::get)
+            .collect(java.util.stream.Collectors.toSet());
+        Map<TopicIdPartition, Set<String>> racksPerPartition = this.subscribedTopicIds.stream()
+            .flatMap(topicId -> {
+                int partitionCount = subscribedTopicDescriber.numPartitions(topicId);
+                List<TopicIdPartition> topicPartitions = new ArrayList<>();
+                for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
+                    topicPartitions.add(new TopicIdPartition(topicId, partitionId));
+                }
+                return topicPartitions.stream();
+            })
+            .collect(java.util.stream.Collectors.toMap(
+                tip -> tip,
+                tip -> subscribedTopicDescriber.racksForPartition(tip.topicId(), tip.partitionId())
+            ));
+        Set<String> allPartitionRacks = racksPerPartition.values().stream()
+            .flatMap(Collection::stream)
+            .collect(java.util.stream.Collectors.toSet());
+
+        this.useRackStrategy = Utils.useRackAwareAssignment(allMemberRacks, allPartitionRacks, racksPerPartition);
     }
 
     /**
@@ -139,6 +174,11 @@ public class UniformHomogeneousAssignmentBuilder {
         // exceed the maximum quota assigned to each member.
         maybeRevokePartitions();
 
+        // Assign the unassigned partitions to the members if rack matches.
+        if (useRackStrategy) {
+            assignRackAwarenessRemainingPartitions();
+        }
+
         // Assign the unassigned partitions to the members with space.
         assignRemainingPartitions();
 
@@ -154,11 +194,7 @@ public class UniformHomogeneousAssignmentBuilder {
      */
     @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity"})
     private void maybeRevokePartitions() {
-        int memberCount = groupSpec.memberIds().size();
-        int memberIndex = -1;
         for (String memberId : groupSpec.memberIds()) {
-            memberIndex++;
-
             Map<Uuid, Set<Integer>> oldAssignment = groupSpec.memberAssignment(memberId).partitions();
             Map<Uuid, Set<Integer>> newAssignment = null;
 
@@ -180,11 +216,17 @@ public class UniformHomogeneousAssignmentBuilder {
                 Set<Integer> partitions = topicPartitions.getValue();
 
                 if (subscribedTopicIds.contains(topicId)) {
-                    if (partitions.size() <= quota) {
+                    if (partitions.size() <= quota && !useRackStrategy) {
                         quota -= partitions.size();
                     } else {
                         for (Integer partition : partitions) {
-                            if (quota > 0) {
+                            // Keep the partition when:
+                            // 1. We still have quota left to keep it.
+                            // 2-1. Don't use rack strategy, so we can keep it.
+                            // 2-2. Use rack strategy and the member rack matches the partition racks.
+                            if (quota > 0 && (!useRackStrategy || Utils.isRackMatch(
+                                groupSpec.memberSubscription(memberId).rackId(),
+                                subscribedTopicDescriber.racksForPartition(topicId, partition)))) {
                                 quota--;
                             } else {
                                 if (newAssignment == null) {
@@ -215,21 +257,21 @@ public class UniformHomogeneousAssignmentBuilder {
             }
 
             if (quota > 0 &&
-                quotaHasExtraPartition &&
-                memberCount - memberIndex > remainingMembersToGetAnExtraPartition) {
-                // Give up the extra partition quota for another member to claim,
-                // unless this member is one of the last remainingMembersToGetAnExtraPartition
-                // members in the list and must take the extra partition.
+                quotaHasExtraPartition) {
+                // Give up the extra partition quota for another member to claim.
                 quota--;
                 quotaHasExtraPartition = false;
             }
 
-            if (quota > 0) {
-                unfilledMembers.add(new MemberWithRemainingQuota(memberId, quota));
+            if (quota == 0 && quotaHasExtraPartition) {
+                remainingMembersToGetAnExtraPartition--;
             }
 
-            if (quotaHasExtraPartition) {
-                remainingMembersToGetAnExtraPartition--;
+            // An unfilled member is a member that can still take more partitions.
+            // 1. It has quota left.
+            // 2. It doesn't have quota left, but there are remaining extra partition, and it hasn't claimed one yet.
+            if (quota > 0 || (remainingMembersToGetAnExtraPartition > 0 && !quotaHasExtraPartition)) {
+                unfilledMembers.add(new MemberWithRemainingQuota(memberId, quota));
             }
 
             if (newAssignment == null) {
@@ -241,10 +283,72 @@ public class UniformHomogeneousAssignmentBuilder {
     }
 
     /**
+     * Assign the unassigned partitions to the unfilled members if member and partition racks are matched.
+     */
+    private void assignRackAwarenessRemainingPartitions() {
+        for (var unassignedPartitionsIter = unassignedPartitions.iterator(); unassignedPartitionsIter.hasNext(); ) {
+            TopicIdPartition tip = unassignedPartitionsIter.next();
+            boolean isPartitionAssigned = false;
+
+            for (var unfilledMembersIter = unfilledMembers.iterator(); unfilledMembersIter.hasNext(); ) {
+                MemberWithRemainingQuota unfilledMember = unfilledMembersIter.next();
+                if (unfilledMember.remainingQuota() == 0 && remainingMembersToGetAnExtraPartition == 0) {
+                    unfilledMembersIter.remove();
+                    continue;
+                }
+
+                String memberId = unfilledMember.memberId;
+                if (!Utils.isRackMatch(groupSpec.memberSubscription(memberId).rackId(),
+                    subscribedTopicDescriber.racksForPartition(tip.topicId(), tip.partitionId()))) {
+                    continue;
+                }
+
+                Map<Uuid, Set<Integer>> newAssignment = targetAssignment.get(memberId).partitions();
+                if (AssignorHelpers.isImmutableMap(newAssignment)) {
+                    // If the new assignment is immutable, we must create a deep copy of it
+                    // before altering it.
+                    newAssignment = AssignorHelpers.deepCopyAssignment(newAssignment);
+                    targetAssignment.put(memberId, new MemberAssignmentImpl(newAssignment));
+                }
+                newAssignment
+                    .computeIfAbsent(tip.topicId(), __ -> new HashSet<>())
+                    .add(tip.partitionId());
+
+                if (unfilledMember.remainingQuota() > 0) {
+                    unfilledMember.decrementQuota();
+                } else {
+                    unfilledMembersIter.remove();
+                    remainingMembersToGetAnExtraPartition--;
+                }
+
+                isPartitionAssigned = true;
+                break;
+            }
+
+            if (isPartitionAssigned) {
+                unassignedPartitionsIter.remove();
+            }
+        }
+    }
+
+    /**
      * Assign the unassigned partitions to the unfilled members.
      */
     private void assignRemainingPartitions() {
         int unassignedPartitionIndex = 0;
+
+        // If member is one of the last remainingMembersToGetAnExtraPartition, it must take the extra partition.
+        for (Iterator<MemberWithRemainingQuota> it = unfilledMembers.descendingIterator(); it.hasNext(); ) {
+            MemberWithRemainingQuota unfilledMember = it.next();
+            if (remainingMembersToGetAnExtraPartition > 0) {
+                remainingMembersToGetAnExtraPartition--;
+                unfilledMember.incrementQuota();
+            }
+
+            if (unfilledMember.remainingQuota() == 0) {
+                it.remove();
+            }
+        }
 
         for (MemberWithRemainingQuota unfilledMember : unfilledMembers) {
             String memberId = unfilledMember.memberId;
@@ -272,6 +376,25 @@ public class UniformHomogeneousAssignmentBuilder {
         }
     }
 
-    private record MemberWithRemainingQuota(String memberId, int remainingQuota) {
+    private static class MemberWithRemainingQuota {
+        private final String memberId;
+        private int remainingQuota;
+
+        MemberWithRemainingQuota(String memberId, int remainingQuota) {
+            this.memberId = memberId;
+            this.remainingQuota = remainingQuota;
+        }
+
+        int remainingQuota() {
+            return remainingQuota;
+        }
+
+        void incrementQuota() {
+            remainingQuota++;
+        }
+
+        void decrementQuota() {
+            remainingQuota--;
+        }
     }
 }
