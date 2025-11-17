@@ -25,7 +25,6 @@ import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.server.common.TransactionVersion;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +35,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
+
+import static org.apache.kafka.server.common.TransactionVersion.TV_UNKNOWN;
 
 /**
  * This class is used to validate the records appended by a given producer before they are written to the log.
@@ -88,8 +89,8 @@ public class ProducerAppendInfo {
     }
 
     private void maybeValidateDataBatch(short producerEpoch, int firstSeq, long offset) {
-        // Default transaction version 0 is passed for data batches.
-        checkProducerEpoch(producerEpoch, offset, (short) 0);
+        // Default transaction version TV_UNKNOWN is passed for data batches.
+        checkProducerEpoch(producerEpoch, offset, TV_UNKNOWN);
         if (origin == AppendOrigin.CLIENT) {
             checkSequence(producerEpoch, firstSeq, offset);
         }
@@ -98,7 +99,7 @@ public class ProducerAppendInfo {
     /**
      * Validates the producer epoch for transaction markers based on the transaction version.
      * 
-     * <p>For Transaction Version 2 (TV2) and above (KIP-1228), the coordinator always increments
+     * <p>For Transaction Version 2 (TV2) and above, the coordinator always increments
      * the producer epoch by one before writing the final transaction marker. This establishes a
      * clear invariant: a valid TV2 marker must have an epoch strictly greater than the producer's
      * current epoch at the leader. Any marker with markerEpoch <= currentEpoch is a late or duplicate
@@ -179,7 +180,7 @@ public class ProducerAppendInfo {
     }
 
     public Optional<CompletedTxn> append(RecordBatch batch, Optional<LogOffsetMetadata> firstOffsetMetadataOpt) {
-        return append(batch, firstOffsetMetadataOpt, TransactionVersion.TV_UNKNOWN);
+        return append(batch, firstOffsetMetadataOpt, TV_UNKNOWN);
     }
 
     public Optional<CompletedTxn> append(RecordBatch batch, Optional<LogOffsetMetadata> firstOffsetMetadataOpt, short transactionVersion) {
@@ -249,13 +250,13 @@ public class ProducerAppendInfo {
         // 4. Using TV_0 validation (markerEpoch >= currentEpoch) is safe because it's more permissive than TV2
         //    (markerEpoch > currentEpoch), so any marker that passed TV2 validation will pass TV_0 validation
         // For all other origins (CLIENT, COORDINATOR), transactionVersion must be explicitly specified.
-        if (transactionVersion == TransactionVersion.TV_UNKNOWN && origin != AppendOrigin.REPLICATION) {
+        if (transactionVersion == TV_UNKNOWN && origin != AppendOrigin.REPLICATION) {
             throw new IllegalArgumentException("transactionVersion must be explicitly specified (TV_0, TV_1, or TV_2), " +
                     "cannot use default value TV_UNKNOWN for origin " + origin);
         }
         // For replication with TV_UNKNOWN, use legacy validation (TV_0 behavior) since the leader already
         // performed strict validation and the follower doesn't have access to the original transactionVersion
-        short effectiveTransactionVersion = (transactionVersion == TransactionVersion.TV_UNKNOWN) ? 0 : transactionVersion;
+        short effectiveTransactionVersion = (transactionVersion == TV_UNKNOWN) ? 0 : transactionVersion;
         checkProducerEpoch(producerEpoch, offset, effectiveTransactionVersion);
         checkCoordinatorEpoch(endTxnMarker, offset);
 

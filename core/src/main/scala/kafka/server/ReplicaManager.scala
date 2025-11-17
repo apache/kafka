@@ -673,8 +673,9 @@ class ReplicaManager(val config: KafkaConfig,
    * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
    *                                      thread calling this method
    * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
-   * @param transactionVersion            the transaction version for the records (0/1 = legacy, 2 = TV2).
-   *                                      Defaults to TV_UNKNOWN (-1) to force explicit specification. Used for epoch validation of transaction markers (KIP-1228).
+   * @param transactionVersion            the transaction version for the records (1 = TV1, 2 = TV2).
+   *                                      Defaults to TV_UNKNOWN (-1) to force explicit specification.
+   *                                      Used for epoch validation of transaction markers (KIP-1228).
    */
   def appendRecords(timeout: Long,
                     requiredAcks: Short,

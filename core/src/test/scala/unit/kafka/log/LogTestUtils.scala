@@ -222,7 +222,7 @@ object LogTestUtils {
   /**
    * Append an end transaction marker (commit or abort) to the log as a leader.
    * 
-   * @param transactionVersion the transaction version (0/1 = legacy, 2 = TV2). Must be explicitly specified.
+   * @param transactionVersion the transaction version (1 = TV1, 2 = TV2) etc. Must be explicitly specified.
    *                          TV2 markers require strict epoch validation (markerEpoch > currentEpoch),
    *                          while legacy markers use relaxed validation (markerEpoch >= currentEpoch).
    */

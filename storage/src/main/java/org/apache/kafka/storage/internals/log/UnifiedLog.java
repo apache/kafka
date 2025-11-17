@@ -1042,9 +1042,6 @@ public class UnifiedLog implements AutoCloseable {
      * been persisted to disk before that. In order to test such scenarios, we need the ability to append with older
      * record versions. This method exists for that purpose and hence it should only be used from test code.
      *
-     * @param records The records to append
-     * @param leaderEpoch the epoch of the replica appending
-     * @param recordVersion the record version to use
      * @see UnifiedLog#appendAsLeader
      */
     public LogAppendInfo appendAsLeaderWithRecordVersion(MemoryRecords records, int leaderEpoch, RecordVersion recordVersion) {
