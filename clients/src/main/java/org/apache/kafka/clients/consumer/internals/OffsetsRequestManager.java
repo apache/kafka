@@ -118,7 +118,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                                  final ApiVersions apiVersions,
                                  final NetworkClientDelegate networkClientDelegate,
                                  final CommitRequestManager commitRequestManager,
-                                 final ThreadSafeAsyncConsumerState threadSafeConsumerState,
+                                 final ValidatePositionsChecker validatePositionsChecker,
                                  final LogContext logContext) {
         requireNonNull(subscriptionState);
         requireNonNull(metadata);
@@ -139,7 +139,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.apiVersions = apiVersions;
         this.networkClientDelegate = networkClientDelegate;
-        this.offsetFetcherUtils = threadSafeConsumerState.offsetFetcherUtils();
+        this.offsetFetcherUtils = validatePositionsChecker.offsetFetcherUtils();
         // Register the cluster metadata update callback. Note this only relies on the
         // requestsToRetry initialized above, and won't be invoked until all managers are
         // initialized and the network thread started.

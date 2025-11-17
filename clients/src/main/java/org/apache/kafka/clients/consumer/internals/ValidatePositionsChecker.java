@@ -53,25 +53,17 @@ import static java.util.Objects.requireNonNull;
  * In general, callers from the application thread should not mutate any of the state contained within this class.
  * It should be considered as <em>read-only</em>, and only the background thread should mutate the state.
  */
-public class ThreadSafeAsyncConsumerState {
+public class ValidatePositionsChecker {
 
     private final SubscriptionState subscriptions;
     private final OffsetFetcherUtils offsetFetcherUtils;
 
-    public ThreadSafeAsyncConsumerState(LogContext logContext,
-                                        ConsumerMetadata metadata,
-                                        SubscriptionState subscriptions,
-                                        Time time,
-                                        long retryBackoffMs) {
-        this(logContext, metadata, subscriptions, time, retryBackoffMs, new ApiVersions());
-    }
-
-    public ThreadSafeAsyncConsumerState(LogContext logContext,
-                                        ConsumerMetadata metadata,
-                                        SubscriptionState subscriptions,
-                                        Time time,
-                                        long retryBackoffMs,
-                                        ApiVersions apiVersions) {
+    public ValidatePositionsChecker(LogContext logContext,
+                                    ConsumerMetadata metadata,
+                                    SubscriptionState subscriptions,
+                                    Time time,
+                                    long retryBackoffMs,
+                                    ApiVersions apiVersions) {
         requireNonNull(logContext);
         requireNonNull(metadata);
         requireNonNull(subscriptions);
@@ -94,21 +86,16 @@ public class ThreadSafeAsyncConsumerState {
     }
 
     /**
-     * This method is used by {@code AsyncKafkaConsumer#updateFetchPositions()} to determine if it can skip
-     * the step of sending (and waiting for) a {@link CheckAndUpdatePositionsEvent}. {@code updateFetchPositions()}
-     * is in the critical path for the {@link Consumer#poll(Duration)}, and if the application thread can determine
-     * that it doesn't need to perform the {@link OffsetsRequestManager#updateFetchPositions(long)} call (via the
-     * {@link CheckAndUpdatePositionsEvent}), that is a big performance savings.
+     * This method is used by {@code AsyncKafkaConsumer} to determine if it can skip the step of validating
+     * positions as this is in the critical path for the {@link Consumer#poll(Duration)}. If the application thread
+     * can safely and accurately determine that it doesn't need to perform the
+     * {@link OffsetsRequestManager#updateFetchPositions(long)} call, a big performance savings can be realized.
      *
      * <p/>
      *
      * This method performs similar checks to the start of {@link OffsetsRequestManager#updateFetchPositions(long)}:
      *
      * <ol>
-     *     <li>
-     *         Checks for previous exceptions during update positions
-     *         ({@code OffsetsRequestManager#cacheExceptionIfEventExpired()})
-     *     </li>
      *     <li>
      *         Checks that there are no positions in the {@link SubscriptionState.FetchStates#AWAIT_VALIDATION}
      *         state ({@link OffsetFetcherUtils#getPartitionsToValidate()})
@@ -119,18 +106,10 @@ public class ThreadSafeAsyncConsumerState {
      *     </li>
      * </ol>
      *
-     * If the first check fails, an exception will be thrown. If any of the second, third, or fourth checks fail, this
-     * method will return {@code false}. Otherwise, this method will return {@code true}, which signals to the
-     * application thread that the {@link CheckAndUpdatePositionsEvent} can be skipped.
+     * If any checks fail, this method will return {@code false}, otherwise, it will return {@code true}, which
+     * signals to the application thread that the position validation step can be skipped.
      *
-     * @return true if all checks pass, false if either of the latter two checks fail
-     *
-     * @exception InvalidTopicException         Thrown if one or more of the subscribed topics are invalid
-     * @exception NoOffsetForPartitionException Thrown if no offset could be found for one or more partitions and no
-     *                                          offset reset policy was configured
-     * @exception TopicAuthorizationException   Thrown if the user is not authorized to fetch from one or more of the
-     *                                          subscribed topics
-     * @exception KafkaException                Thrown on other unexpected errors
+     * @return true if all checks pass, false if any checks fail
      */
     public boolean canSkipUpdateFetchPositions() {
         // In cases of metadata updates, getPartitionsToValidate() will review the partitions and
