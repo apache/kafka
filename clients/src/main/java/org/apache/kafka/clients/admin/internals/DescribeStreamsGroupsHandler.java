@@ -92,7 +92,7 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
         StreamsGroupDescribeRequestData data = new StreamsGroupDescribeRequestData()
             .setGroupIds(groupIds)
             .setIncludeAuthorizedOperations(includeAuthorizedOperations);
-        return new StreamsGroupDescribeRequest.Builder(data, true);
+        return new StreamsGroupDescribeRequest.Builder(data);
     }
 
     @Override

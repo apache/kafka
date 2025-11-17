@@ -117,7 +117,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private CoordinatorMetrics coordinatorMetrics;
         private Serializer<U> serializer;
         private Compression compression;
-        private int appendLingerMs;
+        private OptionalInt appendLingerMs;
         private ExecutorService executorService;
 
         public Builder<S, U> withLogPrefix(String logPrefix) {
@@ -185,7 +185,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             return this;
         }
 
-        public Builder<S, U> withAppendLingerMs(int appendLingerMs) {
+        public Builder<S, U> withAppendLingerMs(OptionalInt appendLingerMs) {
             this.appendLingerMs = appendLingerMs;
             return this;
         }
@@ -195,6 +195,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             return this;
         }
 
+        @SuppressWarnings("checkstyle:CyclomaticComplexity")
         public CoordinatorRuntime<S, U> build() {
             if (logPrefix == null)
                 logPrefix = "";
@@ -220,8 +221,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 throw new IllegalArgumentException("Serializer must be set.");
             if (compression == null)
                 compression = Compression.NONE;
-            if (appendLingerMs < 0)
-                throw new IllegalArgumentException("AppendLinger must be >= 0");
+            if (appendLingerMs == null)
+                appendLingerMs = OptionalInt.empty();
+            if (appendLingerMs.isPresent() && appendLingerMs.getAsInt() < 0)
+                throw new IllegalArgumentException("AppendLinger must be empty or >= 0");
             if (executorService == null)
                 throw new IllegalArgumentException("ExecutorService must be set.");
 
@@ -441,6 +444,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             if (prevTask != null) prevTask.cancel();
         }
 
+        @Override
+        public boolean isScheduled(String key) {
+            return tasks.containsKey(key);
+        }
+
         public void cancelAll() {
             Iterator<Map.Entry<String, TimerTask>> iterator = tasks.entrySet().iterator();
             while (iterator.hasNext()) {
@@ -598,6 +606,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          * The current (or pending) batch.
          */
         CoordinatorBatch currentBatch;
+
+        /**
+         * The batch epoch. Incremented every time a new batch is started.
+         * Only valid for the lifetime of the CoordinatorContext. The first batch has an epoch of 1.
+         */
+        int batchEpoch;
 
         /**
          * Constructor.
@@ -770,6 +784,24 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         }
 
         /**
+         * Adds a flush event to the end of the event queue, after any existing writes in the queue.
+         *
+         * @param expectedBatchEpoch The epoch of the batch to flush.
+         */
+        private void enqueueAdaptiveFlush(int expectedBatchEpoch) {
+            enqueueLast(new CoordinatorInternalEvent("FlushBatch", tp, () -> {
+                withActiveContextOrThrow(tp, context -> {
+                    // The batch could have already been flushed because it reached the maximum
+                    // batch size or a transactional write came in. When this happens, we want
+                    // to avoid flushing the next batch early.
+                    if (context.currentBatch != null && context.batchEpoch == expectedBatchEpoch) {
+                        context.flushCurrentBatch();
+                    }
+                });
+            }));
+        }
+
+        /**
          * Flushes the current (or pending) batch to the log. When the batch is written
          * locally, a new snapshot is created in the snapshot registry and the events
          * associated with the batch are added to the deferred event queue.
@@ -789,6 +821,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     }
 
                     long flushStartMs = time.milliseconds();
+                    runtimeMetrics.recordLingerTime(flushStartMs - currentBatch.appendTimeMs);
                     // Write the records to the log and update the last written offset.
                     long offset = partitionWriter.append(
                         tp,
@@ -833,7 +866,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          */
         private void maybeFlushCurrentBatch(long currentTimeMs) {
             if (currentBatch != null) {
-                if (currentBatch.builder.isTransactional() || (currentTimeMs - currentBatch.appendTimeMs) >= appendLingerMs || !currentBatch.builder.hasRoomFor(0)) {
+                if (currentBatch.builder.isTransactional() ||
+                    // When adaptive linger time is enabled, we avoid flushing here.
+                    // Instead, we rely on the flush event enqueued at the back of the event queue.
+                    (appendLingerMs.isPresent() && (currentTimeMs - currentBatch.appendTimeMs) >= appendLingerMs.getAsInt()) ||
+                    !currentBatch.builder.hasRoomFor(0)) {
                     flushCurrentBatch();
                 }
             }
@@ -882,20 +919,31 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     maxBatchSize
                 );
 
+                batchEpoch++;
+
                 Optional<TimerTask> lingerTimeoutTask = Optional.empty();
-                if (appendLingerMs > 0) {
-                    lingerTimeoutTask = Optional.of(new TimerTask(appendLingerMs) {
-                        @Override
-                        public void run() {
-                            // An event to flush the batch is pushed to the front of the queue
-                            // to ensure that the linger time is respected.
-                            enqueueFirst(new CoordinatorInternalEvent("FlushBatch", tp, () -> {
-                                if (this.isCancelled()) return;
-                                withActiveContextOrThrow(tp, CoordinatorContext::flushCurrentBatch);
-                            }));
-                        }
-                    });
-                    CoordinatorRuntime.this.timer.add(lingerTimeoutTask.get());
+                if (appendLingerMs.isPresent()) {
+                    if (appendLingerMs.getAsInt() > 0) {
+                        lingerTimeoutTask = Optional.of(new TimerTask(appendLingerMs.getAsInt()) {
+                            @Override
+                            public void run() {
+                                // An event to flush the batch is pushed to the front of the queue
+                                // to ensure that the linger time is respected.
+                                enqueueFirst(new CoordinatorInternalEvent("FlushBatch", tp, () -> {
+                                    if (this.isCancelled()) return;
+                                    withActiveContextOrThrow(tp, CoordinatorContext::flushCurrentBatch);
+                                }));
+                            }
+                        });
+                        CoordinatorRuntime.this.timer.add(lingerTimeoutTask.get());
+                    }
+                } else {
+                    // Always queue a flush immediately at the end of the queue, unless the batch is
+                    // transactional. Transactional batches are flushed immediately at the end of
+                    // the write, so a flush event is never needed.
+                    if (!builder.isTransactional()) {
+                        enqueueAdaptiveFlush(batchEpoch);
+                    }
                 }
 
                 currentBatch = new CoordinatorBatch(
@@ -1991,9 +2039,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
     /**
      * The duration in milliseconds that the coordinator will wait for writes to
-     * accumulate before flushing them to disk.
+     * accumulate before flushing them to disk. {@code OptionalInt.empty()} indicates
+     * an adaptive linger time based on the workload.
      */
-    private final int appendLingerMs;
+    private final OptionalInt appendLingerMs;
 
     /**
      * The executor service used by the coordinator runtime to schedule
@@ -2045,7 +2094,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorMetrics coordinatorMetrics,
         Serializer<U> serializer,
         Compression compression,
-        int appendLingerMs,
+        OptionalInt appendLingerMs,
         ExecutorService executorService
     ) {
         this.logPrefix = logPrefix;

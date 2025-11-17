@@ -1921,9 +1921,19 @@ The following set of metrics are available for monitoring the group coordinator:
       <td>The time that an event waited in the purgatory before being completed</td>
     </tr>
     <tr>
+      <td>Batch Linger Time (Ms)</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=batch-linger-time-ms-[max|p50|p95|p99|p999]</td>
+      <td>The effective linger time of a batch before being flushed to the local partition</td>
+    </tr>
+    <tr>
       <td>Batch Flush Time (Ms)</td>
       <td>kafka.server:type=group-coordinator-metrics,name=batch-flush-time-ms-[max|p50|p95|p99|p999]</td>
       <td>The time that a batch took to be flushed to the local partition</td>
+    </tr>
+    <tr>
+      <td>Batch Flush Rate</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=batch-flush-rate</td>
+      <td>The number of batches flushed per second</td>
     </tr>
     <tr>
       <td>Group Count, per group type</td>

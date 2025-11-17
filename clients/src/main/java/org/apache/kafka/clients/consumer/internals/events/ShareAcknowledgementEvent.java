@@ -17,26 +17,31 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.Acknowledgements;
+import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.common.TopicIdPartition;
 
-import java.util.HashMap;
 import java.util.Map;
 
-public class ShareRenewAcknowledgementsCompleteEvent extends BackgroundEvent {
+/**
+ * This is the class of events created by the {@link ConsumerNetworkThread network thread} to indicate completion
+ * of acknowledgements.
+ */
+public class ShareAcknowledgementEvent {
 
     private final Map<TopicIdPartition, Acknowledgements> acknowledgementsMap;
+    private final boolean checkForRenewAcknowledgements;
 
-    public ShareRenewAcknowledgementsCompleteEvent(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
-        super(Type.SHARE_RENEW_ACKNOWLEDGEMENTS_COMPLETE);
-        this.acknowledgementsMap = new HashMap<>(acknowledgementsMap);
+    public ShareAcknowledgementEvent(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap,
+                                     boolean checkForRenewAcknowledgements) {
+        this.acknowledgementsMap = acknowledgementsMap;
+        this.checkForRenewAcknowledgements = checkForRenewAcknowledgements;
     }
 
     public Map<TopicIdPartition, Acknowledgements> acknowledgementsMap() {
         return acknowledgementsMap;
     }
 
-    @Override
-    public String toStringBase() {
-        return super.toStringBase() + ", acknowledgementsMap=" + acknowledgementsMap;
+    public boolean checkForRenewAcknowledgements() {
+        return checkForRenewAcknowledgements;
     }
 }
