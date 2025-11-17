@@ -153,7 +153,7 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
                 this.time
             );
             sendThread.start();
-            log.debug("NetworkPartitionMetadataClient sendThread initialized and started");
+            log.info("NetworkPartitionMetadataClient sendThread initialized and started");
         }
     }
 
