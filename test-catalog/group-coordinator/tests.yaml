@@ -124,7 +124,8 @@ org.apache.kafka.coordinator.group.GroupCoordinatorServiceTest:
 - testDescribeShareGroupOffsetsMetadataImageNull
 - testDescribeShareGroupOffsetsNonexistentTopicWithDefaultPersister
 - testDescribeShareGroupOffsetsWithDefaultPersister
-- testDescribeShareGroupOffsetsWithDefaultPersisterLatestOffsetError
+- testDescribeShareGroupOffsetsWithDefaultPersisterLatestOffsetReturnsError
+- testDescribeShareGroupOffsetsWithDefaultPersisterLatestOffsetThrowsError
 - testDescribeShareGroupOffsetsWithDefaultPersisterNullResult
 - testDescribeShareGroupOffsetsWithDefaultPersisterNullTopicData
 - testDescribeShareGroupOffsetsWithDefaultPersisterReadSummaryPartitionError
@@ -618,6 +619,29 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testUpdatingSubscriptionTriggersNewTargetAssignment
 - testValidHeartbeat
 - testValidLeaveGroup
+org.apache.kafka.coordinator.group.NetworkPartitionMetadataClientTest:
+- testClose
+- testCloseWithoutInitialization
+- testLazyInitialization
+- testLazyInitializationOnlyOnce
+- testLazyInitializationWithEmptyPartitions
+- testLazyInitializationWithNullPartitions
+- testListLatestOffsetsAuthenticationError
+- testListLatestOffsetsDisconnected
+- testListLatestOffsetsEmptyPartitionLeader
+- testListLatestOffsetsEmptyPartitions
+- testListLatestOffsetsMissingPartitionInResponse
+- testListLatestOffsetsMultiplePartitionsDifferentLeaders
+- testListLatestOffsetsMultiplePartitionsSameLeader
+- testListLatestOffsetsMultipleTopics
+- testListLatestOffsetsNoNodePartitionLeader
+- testListLatestOffsetsNullPartitions
+- testListLatestOffsetsNullResponse
+- testListLatestOffsetsNullResponseBody
+- testListLatestOffsetsServerError
+- testListLatestOffsetsSuccess
+- testListLatestOffsetsTimedOut
+- testListLatestOffsetsVersionMismatch
 org.apache.kafka.coordinator.group.OffsetAndMetadataTest:
 - testAttributes
 - testFromRecord
