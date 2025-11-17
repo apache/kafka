@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.server;
+package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -31,7 +31,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.PartitionMetadataClient;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.util.InterBrokerSendThread;
 import org.apache.kafka.server.util.RequestAndCompletionHandler;
@@ -62,12 +61,9 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
     private final AtomicBoolean initialized = new AtomicBoolean(false);
     private volatile SendThread sendThread;
 
-    public NetworkPartitionMetadataClient(
-        MetadataCache metadataCache,
-        Supplier<KafkaClient> networkClientSupplier,
-        Time time,
-        ListenerName listenerName
-    ) {
+    public NetworkPartitionMetadataClient(MetadataCache metadataCache,
+                                          Supplier<KafkaClient> networkClientSupplier,
+                                          Time time, ListenerName listenerName) {
         this.metadataCache = metadataCache;
         this.networkClientSupplier = networkClientSupplier;
         this.time = time;
@@ -75,9 +71,7 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
     }
 
     @Override
-    public Map<TopicPartition, CompletableFuture<OffsetResponse>> listLatestOffsets(
-        Set<TopicPartition> topicPartitions
-    ) {
+    public Map<TopicPartition, CompletableFuture<OffsetResponse>> listLatestOffsets(Set<TopicPartition> topicPartitions) {
         if (topicPartitions == null || topicPartitions.isEmpty()) {
             return Map.of();
         }
@@ -159,7 +153,7 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
                 this.time
             );
             sendThread.start();
-            log.info("NetworkPartitionMetadataClient sendThread initialized and started");
+            log.debug("NetworkPartitionMetadataClient sendThread initialized and started");
         }
     }
 
@@ -228,7 +222,7 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
     private boolean maybeHandleErrorResponse(Map<TopicPartition, CompletableFuture<OffsetResponse>> partitionFutures, ClientResponse clientResponse) {
         Errors error;
         if (clientResponse == null) {
-            log.debug("Response for ListOffsets for topicPartitions: {} is null", partitionFutures.keySet());
+            log.error("Response for ListOffsets for topicPartitions: {} is null", partitionFutures.keySet());
             error = Errors.UNKNOWN_SERVER_ERROR;
         } else if (clientResponse.authenticationException() != null) {
             log.error("Authentication exception", clientResponse.authenticationException());
@@ -257,11 +251,10 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
     /**
      * Tracks a pending ListOffsets request and its associated futures.
      */
-    private record PendingRequest(
-        Node node,
-        Map<TopicPartition, CompletableFuture<OffsetResponse>> futures,
-        ListOffsetsRequest.Builder requestBuilder
-    ) { }
+    private record PendingRequest(Node node,
+                                  Map<TopicPartition, CompletableFuture<OffsetResponse>> futures,
+                                  ListOffsetsRequest.Builder requestBuilder) {
+    }
 
     private class SendThread extends InterBrokerSendThread {
         private final ConcurrentLinkedQueue<PendingRequest> pendingRequests = new ConcurrentLinkedQueue<>();

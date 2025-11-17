@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.server;
+package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
@@ -31,7 +31,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.coordinator.group.PartitionMetadataClient;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.util.MockTime;
 
@@ -128,7 +127,7 @@ class NetworkPartitionMetadataClientTest {
             if (body instanceof ListOffsetsRequest request) {
                 ListOffsetsTopic requestTopic = request.data().topics().get(0);
                 return requestTopic.name().equals(TOPIC) &&
-                       requestTopic.partitions().get(0).partitionIndex() == PARTITION;
+                    requestTopic.partitions().get(0).partitionIndex() == PARTITION;
             }
             return false;
         }, new ListOffsetsResponse(
@@ -242,7 +241,7 @@ class NetworkPartitionMetadataClientTest {
                 ListOffsetsRequest request = (ListOffsetsRequest) body;
                 ListOffsetsTopic requestTopic = request.data().topics().get(0);
                 return requestTopic.name().equals(TOPIC) &&
-                       requestTopic.partitions().get(0).partitionIndex() == PARTITION;
+                    requestTopic.partitions().get(0).partitionIndex() == PARTITION;
             }
             return false;
         }, null, LEADER_NODE);
@@ -391,7 +390,7 @@ class NetworkPartitionMetadataClientTest {
                 ListOffsetsRequest request = (ListOffsetsRequest) body;
                 ListOffsetsTopic requestTopic = request.data().topics().get(0);
                 return requestTopic.name().equals(TOPIC) &&
-                       requestTopic.partitions().size() == 2;
+                    requestTopic.partitions().size() == 2;
             }
             return false;
         }, new ListOffsetsResponse(
@@ -468,8 +467,8 @@ class NetworkPartitionMetadataClientTest {
                 ListOffsetsRequest request = (ListOffsetsRequest) body;
                 ListOffsetsTopic requestTopic = request.data().topics().get(0);
                 return requestTopic.name().equals(TOPIC) &&
-                       requestTopic.partitions().size() == 1 &&
-                       requestTopic.partitions().get(0).partitionIndex() == 0;
+                    requestTopic.partitions().size() == 1 &&
+                    requestTopic.partitions().get(0).partitionIndex() == 0;
             }
             return false;
         }, new ListOffsetsResponse(
@@ -493,8 +492,8 @@ class NetworkPartitionMetadataClientTest {
                 ListOffsetsRequest request = (ListOffsetsRequest) body;
                 ListOffsetsTopic requestTopic = request.data().topics().get(0);
                 return requestTopic.name().equals(TOPIC) &&
-                       requestTopic.partitions().size() == 1 &&
-                       requestTopic.partitions().get(0).partitionIndex() == 1;
+                    requestTopic.partitions().size() == 1 &&
+                    requestTopic.partitions().get(0).partitionIndex() == 1;
             }
             return false;
         }, new ListOffsetsResponse(
@@ -661,7 +660,7 @@ class NetworkPartitionMetadataClientTest {
                 ListOffsetsRequest request = (ListOffsetsRequest) body;
                 ListOffsetsTopic requestTopic = request.data().topics().get(0);
                 return requestTopic.name().equals(TOPIC) &&
-                       requestTopic.partitions().get(0).partitionIndex() == PARTITION;
+                    requestTopic.partitions().get(0).partitionIndex() == PARTITION;
             }
             return false;
         }, new ListOffsetsResponse(
@@ -714,7 +713,7 @@ class NetworkPartitionMetadataClientTest {
                 ListOffsetsRequest request = (ListOffsetsRequest) body;
                 ListOffsetsTopic requestTopic = request.data().topics().get(0);
                 return requestTopic.name().equals(TOPIC) &&
-                       requestTopic.partitions().get(0).partitionIndex() == PARTITION;
+                    requestTopic.partitions().get(0).partitionIndex() == PARTITION;
             }
             return false;
         }, new ListOffsetsResponse(
@@ -788,7 +787,7 @@ class NetworkPartitionMetadataClientTest {
             if (body instanceof ListOffsetsRequest request) {
                 ListOffsetsTopic requestTopic = request.data().topics().get(0);
                 return requestTopic.name().equals(TOPIC) &&
-                       requestTopic.partitions().get(0).partitionIndex() == PARTITION;
+                    requestTopic.partitions().get(0).partitionIndex() == PARTITION;
             }
             return false;
         }, new ListOffsetsResponse(
@@ -910,7 +909,7 @@ class NetworkPartitionMetadataClientTest {
             if (body instanceof ListOffsetsRequest request) {
                 ListOffsetsTopic requestTopic = request.data().topics().get(0);
                 return requestTopic.name().equals(TOPIC) &&
-                       requestTopic.partitions().get(0).partitionIndex() == PARTITION;
+                    requestTopic.partitions().get(0).partitionIndex() == PARTITION;
             }
             return false;
         }, new ListOffsetsResponse(
@@ -932,7 +931,7 @@ class NetworkPartitionMetadataClientTest {
             if (body instanceof ListOffsetsRequest request) {
                 ListOffsetsTopic requestTopic = request.data().topics().get(0);
                 return requestTopic.name().equals(TOPIC) &&
-                       requestTopic.partitions().get(0).partitionIndex() == PARTITION;
+                    requestTopic.partitions().get(0).partitionIndex() == PARTITION;
             }
             return false;
         }, new ListOffsetsResponse(

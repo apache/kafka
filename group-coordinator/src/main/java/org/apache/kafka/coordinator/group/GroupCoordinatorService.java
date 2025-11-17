@@ -1897,14 +1897,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         CompletableFuture.allOf(partitionLatestOffsets.values().toArray(new CompletableFuture<?>[0]))
             .whenComplete((result, error) -> {
+                // The error variable will not be null when one or more of the partitionLatestOffsets futures get completed exceptionally.
+                // As per the handling of these futures in NetworkPartitionMetadataClient, this should not happen, as error cases are
+                // handled within the OffsetResponse object for each partition. This is just a safety check.
                 if (error != null) {
                     log.error("Failed to retrieve partition end offsets while calculating share partitions lag for share group - {}", groupId, error);
                     responseFuture.completeExceptionally(error);
                     return;
                 }
-                // The error variable will not be null when one or more of the partitionLatestOffsets futures get completed exceptionally.
-                // If that is the case, then the same exception would be caught in the try catch executed below when .join() is called.
-                // Thus, we do not need to check error != null here.
                 readSummaryResult.topicsData().forEach(topicData -> {
                     // Build response for each topic.
                     DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic topic =
