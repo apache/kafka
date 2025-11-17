@@ -2862,7 +2862,7 @@ public class ShareConsumeRequestManagerTest {
                                              Metadata metadata,
                                              BackgroundEventHandler backgroundEventHandler,
                                              boolean notifyMetadataErrorsViaErrorQueue) {
-            super(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, mock(AsyncConsumerMetrics.class), new ThreadSafeConsumerState());
+            super(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, mock(AsyncConsumerMetrics.class));
         }
 
         @Override

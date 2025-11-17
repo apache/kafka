@@ -54,6 +54,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -92,7 +93,12 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private final NetworkClientDelegate networkClientDelegate;
     private final CommitRequestManager commitRequestManager;
     private final long defaultApiTimeoutMs;
-    private final ThreadSafeExceptionReference positionsUpdateError;
+
+    /**
+     * Exception that occurred while updating positions after the triggering event had already
+     * expired. It will be propagated and cleared on the next call to update fetch positions.
+     */
+    private final AtomicReference<Throwable> cachedUpdatePositionsException = new AtomicReference<>();
 
     /**
      * This holds the last OffsetFetch request triggered to retrieve committed offsets to update
@@ -139,7 +145,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         // initialized and the network thread started.
         this.metadata.addClusterUpdateListener(this);
         this.commitRequestManager = commitRequestManager;
-        this.positionsUpdateError = threadSafeConsumerState.positionsUpdateError();
     }
 
     private static class PendingFetchCommittedRequest {
@@ -257,7 +262,12 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     }
 
     private boolean maybeCompleteWithPreviousException(CompletableFuture<Void> result) {
-        return positionsUpdateError.getClearAndRun(result::completeExceptionally);
+        Throwable cachedException = cachedUpdatePositionsException.getAndSet(null);
+        if (cachedException != null) {
+            result.completeExceptionally(cachedException);
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -307,7 +317,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         result.whenComplete((__, error) -> {
             boolean updatePositionsExpired = time.milliseconds() >= deadlineMs;
             if (error != null && updatePositionsExpired) {
-                positionsUpdateError.set(error);
+                cachedUpdatePositionsException.set(error);
             }
         });
     }

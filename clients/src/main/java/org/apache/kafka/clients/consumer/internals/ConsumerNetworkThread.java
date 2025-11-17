@@ -64,7 +64,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private final Supplier<NetworkClientDelegate> networkClientDelegateSupplier;
     private final Supplier<RequestManagers> requestManagersSupplier;
     private final AsyncConsumerMetrics asyncConsumerMetrics;
-    private final ThreadSafeExceptionReference metadataError;
     private ApplicationEventProcessor applicationEventProcessor;
     private NetworkClientDelegate networkClientDelegate;
     private RequestManagers requestManagers;
@@ -81,8 +80,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                                  Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                                  Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                  Supplier<RequestManagers> requestManagersSupplier,
-                                 AsyncConsumerMetrics asyncConsumerMetrics,
-                                 ThreadSafeConsumerState threadSafeConsumerState) {
+                                 AsyncConsumerMetrics asyncConsumerMetrics) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
         this.log = logContext.logger(getClass());
@@ -93,7 +91,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         this.requestManagersSupplier = requestManagersSupplier;
         this.running = true;
         this.asyncConsumerMetrics = asyncConsumerMetrics;
-        this.metadataError = threadSafeConsumerState.metadataError();
     }
 
     @Override
@@ -388,10 +385,10 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         if (filteredEvents.isEmpty())
             return false;
 
-        Optional<Throwable> me = metadataError.getAndClear();
+        Optional<Exception> metadataError = networkClientDelegate.getAndClearMetadataError();
 
-        if (me.isPresent()) {
-            filteredEvents.forEach(e -> e.onMetadataError(me.get()));
+        if (metadataError.isPresent()) {
+            filteredEvents.forEach(e -> e.onMetadataError(metadataError.get()));
             return true;
         } else {
             return false;

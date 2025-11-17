@@ -181,7 +181,7 @@ class OffsetFetcherUtils {
         return subscriptionState
                 .partitionsNeedingValidation(time.milliseconds())
                 .stream()
-                .filter(tp -> subscriptionState.position(tp) != null)
+                .filter(tp -> subscriptionState.positionOrNull(tp) != null)
                 .collect(Collectors.toMap(Function.identity(), subscriptionState::position));
     }
 

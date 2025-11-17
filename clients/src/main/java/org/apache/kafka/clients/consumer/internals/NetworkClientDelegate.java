@@ -70,7 +70,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final int requestTimeoutMs;
     private final Queue<UnsentRequest> unsentRequests;
     private final long retryBackoffMs;
-    private final ThreadSafeExceptionReference metadataError;
+    private Optional<Exception> metadataError;
     private final boolean notifyMetadataErrorsViaErrorQueue;
     private final AsyncConsumerMetrics asyncConsumerMetrics;
 
@@ -82,8 +82,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             final Metadata metadata,
             final BackgroundEventHandler backgroundEventHandler,
             final boolean notifyMetadataErrorsViaErrorQueue,
-            final AsyncConsumerMetrics asyncConsumerMetrics,
-            final ThreadSafeConsumerState threadSafeConsumerState) {
+            final AsyncConsumerMetrics asyncConsumerMetrics) {
         this.time = time;
         this.client = client;
         this.metadata = metadata;
@@ -92,7 +91,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.unsentRequests = new ArrayDeque<>();
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        this.metadataError = threadSafeConsumerState.metadataError();
+        this.metadataError = Optional.empty();
         this.notifyMetadataErrorsViaErrorQueue = notifyMetadataErrorsViaErrorQueue;
         this.asyncConsumerMetrics = asyncConsumerMetrics;
     }
@@ -164,7 +163,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             if (notifyMetadataErrorsViaErrorQueue) {
                 backgroundEventHandler.add(new ErrorEvent(e));
             } else {
-                metadataError.set(e);
+                metadataError = Optional.of(e);
             }
         }
     }
@@ -247,6 +246,11 @@ public class NetworkClientDelegate implements AutoCloseable {
             (int) unsent.timer.remainingMs(),
             unsent.handler
         );
+    }
+    public Optional<Exception> getAndClearMetadataError() {
+        Optional<Exception> metadataError = this.metadataError;
+        this.metadataError = Optional.empty();
+        return metadataError;
     }
 
     public Node leastLoadedNode() {
@@ -448,8 +452,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                                                            final ClientTelemetrySender clientTelemetrySender,
                                                            final BackgroundEventHandler backgroundEventHandler,
                                                            final boolean notifyMetadataErrorsViaErrorQueue,
-                                                           final AsyncConsumerMetrics asyncConsumerMetrics,
-                                                           final ThreadSafeConsumerState threadSafeConsumerState) {
+                                                           final AsyncConsumerMetrics asyncConsumerMetrics) {
         return new CachedSupplier<>() {
             @Override
             protected NetworkClientDelegate create() {
@@ -463,7 +466,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                         metadata,
                         throttleTimeSensor,
                         clientTelemetrySender);
-                return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, asyncConsumerMetrics, threadSafeConsumerState);
+                return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, asyncConsumerMetrics);
             }
         };
     }
@@ -479,8 +482,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                                                            final Metadata metadata,
                                                            final BackgroundEventHandler backgroundEventHandler,
                                                            final boolean notifyMetadataErrorsViaErrorQueue,
-                                                           final AsyncConsumerMetrics asyncConsumerMetrics,
-                                                           final ThreadSafeConsumerState threadSafeConsumerState) {
+                                                           final AsyncConsumerMetrics asyncConsumerMetrics) {
         return new CachedSupplier<>() {
             @Override
             protected NetworkClientDelegate create() {
@@ -492,8 +494,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                     metadata,
                     backgroundEventHandler,
                     notifyMetadataErrorsViaErrorQueue,
-                    asyncConsumerMetrics,
-                    threadSafeConsumerState
+                    asyncConsumerMetrics
                 );
             }
         };

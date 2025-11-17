@@ -74,18 +74,13 @@ public class NetworkClientDelegateTest {
     private MockClient client;
     private Metadata metadata;
     private BackgroundEventHandler backgroundEventHandler;
-    private ThreadSafeConsumerState threadSafeConsumerState;
 
     @BeforeEach
     public void setup() {
         this.time = new MockTime(0);
         this.metadata = mock(Metadata.class);
         this.backgroundEventHandler = mock(BackgroundEventHandler.class);
-        this.threadSafeConsumerState = mock(ThreadSafeConsumerState.class);
         this.client = new MockClient(time, Collections.singletonList(mockNode()));
-
-        ThreadSafeExceptionReference metadataError = new ThreadSafeExceptionReference();
-        when(this.threadSafeConsumerState.metadataError()).thenReturn(metadataError);
     }
 
     @Test
@@ -225,11 +220,10 @@ public class NetworkClientDelegateTest {
         doThrow(authException).when(metadata).maybeThrowAnyException();
 
         NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate(false);
-        ThreadSafeExceptionReference metadataErrorRef = threadSafeConsumerState.metadataError();
-        assertTrue(metadataErrorRef.getAndClear().isEmpty());
+        assertTrue(networkClientDelegate.getAndClearMetadataError().isEmpty());
         networkClientDelegate.poll(0, time.milliseconds());
 
-        Optional<Throwable> metadataError = metadataErrorRef.getAndClear();
+        Optional<Exception> metadataError = networkClientDelegate.getAndClearMetadataError();
         assertTrue(metadataError.isPresent());
         assertInstanceOf(AuthenticationException.class, metadataError.get());
         assertEquals(authException.getMessage(), metadataError.get().getMessage());
@@ -307,8 +301,7 @@ public class NetworkClientDelegateTest {
                 this.metadata,
                 this.backgroundEventHandler,
                 notifyMetadataErrorsViaErrorQueue,
-                asyncConsumerMetrics,
-                threadSafeConsumerState
+                asyncConsumerMetrics
         );
     }
 

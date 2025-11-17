@@ -44,7 +44,6 @@ import static java.util.Objects.requireNonNull;
  *     <li>{@link ApiVersions}</li>
  *     <li>{@link ConsumerMetadata}</li>
  *     <li>{@link OffsetFetcherUtils}</li>
- *     <li>{@link ThreadSafeExceptionReference}</li>
  *     <li>{@link SubscriptionState}</li>
  *     <li>{@link Time}</li>
  * </ul>
@@ -54,16 +53,10 @@ import static java.util.Objects.requireNonNull;
  * In general, callers from the application thread should not mutate any of the state contained within this class.
  * It should be considered as <em>read-only</em>, and only the background thread should mutate the state.
  */
-public class ThreadSafeAsyncConsumerState extends ThreadSafeConsumerState {
+public class ThreadSafeAsyncConsumerState {
 
     private final SubscriptionState subscriptions;
     private final OffsetFetcherUtils offsetFetcherUtils;
-
-    /**
-     * Exception that occurred while updating positions after the triggering event had already
-     * expired. It will be propagated and cleared on the next call to update fetch positions.
-     */
-    private final ThreadSafeExceptionReference positionsUpdateError;
 
     public ThreadSafeAsyncConsumerState(LogContext logContext,
                                         ConsumerMetadata metadata,
@@ -94,15 +87,10 @@ public class ThreadSafeAsyncConsumerState extends ThreadSafeConsumerState {
             retryBackoffMs,
             apiVersions
         );
-        this.positionsUpdateError = new ThreadSafeExceptionReference();
     }
 
     OffsetFetcherUtils offsetFetcherUtils() {
         return offsetFetcherUtils;
-    }
-
-    public ThreadSafeExceptionReference positionsUpdateError() {
-        return positionsUpdateError;
     }
 
     /**
@@ -145,9 +133,6 @@ public class ThreadSafeAsyncConsumerState extends ThreadSafeConsumerState {
      * @exception KafkaException                Thrown on other unexpected errors
      */
     public boolean canSkipUpdateFetchPositions() {
-        positionsUpdateError.maybeThrowException();
-        metadataError.maybeClearAndThrowException();
-
         // In cases of metadata updates, getPartitionsToValidate() will review the partitions and
         // determine which, if any, need to be validated. If any partitions require validation, the
         // update fetch positions step can't be skipped.

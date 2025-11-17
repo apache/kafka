@@ -282,7 +282,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new ShareFetchBuffer(logContext);
-            ThreadSafeConsumerState threadSafeConsumerState = new ThreadSafeConsumerState();
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(
                     time,
                     logContext,
@@ -294,8 +293,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
                     backgroundEventHandler,
                     true,
-                    asyncConsumerMetrics,
-                    threadSafeConsumerState
+                    asyncConsumerMetrics
             );
             this.completedAcknowledgements = new LinkedList<>();
 
@@ -328,8 +326,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
                     requestManagersSupplier,
-                    asyncConsumerMetrics,
-                    threadSafeConsumerState);
+                    asyncConsumerMetrics);
 
             this.acknowledgementEventProcessor = new ShareAcknowledgementEventProcessor();
             this.backgroundEventProcessor = new BackgroundEventProcessor();
@@ -403,9 +400,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.backgroundEventHandler = new BackgroundEventHandler(
             backgroundEventQueue, time, asyncConsumerMetrics);
 
-        ThreadSafeConsumerState threadSafeConsumerState = new ThreadSafeConsumerState();
         final Supplier<NetworkClientDelegate> networkClientDelegateSupplier =
-                NetworkClientDelegate.supplier(time, config, logContext, client, metadata, backgroundEventHandler, true, asyncConsumerMetrics, threadSafeConsumerState);
+                NetworkClientDelegate.supplier(time, config, logContext, client, metadata, backgroundEventHandler, true, asyncConsumerMetrics);
 
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
                 config,
@@ -440,8 +436,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier,
-                asyncConsumerMetrics,
-                threadSafeConsumerState);
+                asyncConsumerMetrics);
 
         this.acknowledgementEventProcessor = new ShareAcknowledgementEventProcessor();
         this.backgroundEventProcessor = new BackgroundEventProcessor();
@@ -511,8 +506,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                 final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                 final Supplier<RequestManagers> requestManagersSupplier,
-                final AsyncConsumerMetrics asyncConsumerMetrics,
-                final ThreadSafeConsumerState threadSafeConsumerState
+                final AsyncConsumerMetrics asyncConsumerMetrics
         );
     }
 

@@ -52,5 +52,5 @@ public interface MetadataErrorNotifiableEvent {
      *
      * @param metadataError Error that originally came from {@link Metadata#maybeThrowAnyException()}
      */
-    void onMetadataError(Throwable metadataError);
+    void onMetadataError(Exception metadataError);
 }

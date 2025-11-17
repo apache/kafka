@@ -448,8 +448,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
                     backgroundEventHandler,
                     false,
-                    asyncConsumerMetrics,
-                    threadSafeConsumerState
+                    asyncConsumerMetrics
             );
             this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
             this.groupMetadata.set(initializeGroupMetadata(config, groupRebalanceConfig));
@@ -484,8 +483,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
                     requestManagersSupplier,
-                    asyncConsumerMetrics,
-                    threadSafeConsumerState
+                    asyncConsumerMetrics
             );
             this.rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
                     logContext,
@@ -653,8 +651,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             metadata,
             backgroundEventHandler,
             false,
-            asyncConsumerMetrics,
-            threadSafeConsumerState
+            asyncConsumerMetrics
         );
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
         Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(
@@ -689,8 +686,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier,
-                asyncConsumerMetrics,
-                threadSafeConsumerState);
+                asyncConsumerMetrics);
         this.streamsRebalanceListenerInvoker = Optional.empty();
         this.backgroundEventProcessor = new BackgroundEventProcessor();
         this.backgroundEventReaper = new CompletableEventReaper(logContext);
@@ -707,8 +703,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
             final Supplier<RequestManagers> requestManagersSupplier,
-            final AsyncConsumerMetrics asyncConsumerMetrics,
-            final ThreadSafeConsumerState threadSafeConsumerState
+            final AsyncConsumerMetrics asyncConsumerMetrics
         );
 
     }
@@ -1953,6 +1948,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // thread has not completed that stage for the inflight event, don't attempt to collect data from the fetch
         // buffer. If the inflight event was nulled out by checkInflightPoll(), that implies that it is safe to
         // attempt to collect data from the fetch buffer.
+        if (threadSafeConsumerState.canSkipUpdateFetchPositions()) {
+            return fetchCollector.collectFetch(fetchBuffer);
+        }
+
         if (inflightPoll != null && !inflightPoll.isValidatePositionsComplete()) {
             return Fetch.empty();
         }

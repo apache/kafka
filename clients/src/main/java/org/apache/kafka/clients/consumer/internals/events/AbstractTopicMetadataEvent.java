@@ -28,7 +28,7 @@ public abstract class AbstractTopicMetadataEvent extends CompletableApplicationE
     }
 
     @Override
-    public void onMetadataError(Throwable metadataError) {
+    public void onMetadataError(Exception metadataError) {
         future().completeExceptionally(metadataError);
     }
 }

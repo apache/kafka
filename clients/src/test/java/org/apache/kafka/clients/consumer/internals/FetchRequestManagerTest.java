@@ -4215,7 +4215,7 @@ public class FetchRequestManagerTest {
                                              ConsumerMetadata metadata,
                                              BackgroundEventHandler backgroundEventHandler,
                                              boolean notifyMetadataErrorsViaErrorQueue) {
-            super(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, mock(AsyncConsumerMetrics.class), new ThreadSafeAsyncConsumerState(logContext, metadata, subscriptions, time, retryBackoffMs, apiVersions));
+            super(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, mock(AsyncConsumerMetrics.class));
         }
 
         @Override

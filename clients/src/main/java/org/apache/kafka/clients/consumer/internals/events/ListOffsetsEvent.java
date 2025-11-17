@@ -65,7 +65,7 @@ public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicParti
     }
 
     @Override
-    public void onMetadataError(Throwable metadataError) {
+    public void onMetadataError(Exception metadataError) {
         future().completeExceptionally(metadataError);
     }
 

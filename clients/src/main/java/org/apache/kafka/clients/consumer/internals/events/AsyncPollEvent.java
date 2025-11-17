@@ -99,7 +99,7 @@ public class AsyncPollEvent extends ApplicationEvent implements MetadataErrorNot
     }
 
     @Override
-    public void onMetadataError(Throwable metadataError) {
+    public void onMetadataError(Exception metadataError) {
         completeExceptionally(ConsumerUtils.maybeWrapAsKafkaException(metadataError));
     }
 
