@@ -529,7 +529,7 @@ public class ShareConsumerImplTest {
         Acknowledgements acks = Acknowledgements.empty();
         acks.add(0, AcknowledgeType.RENEW);
         acks.complete(null);
-        ShareAcknowledgementEvent e = new ShareAcknowledgementEvent(Map.of(tip, acks), true);
+        ShareAcknowledgementEvent e = new ShareAcknowledgementEvent(Map.of(tip, acks), true, Optional.empty());
         acknowledgementEventQueue.add(e);
 
         records = consumer.poll(Duration.ofMillis(100));

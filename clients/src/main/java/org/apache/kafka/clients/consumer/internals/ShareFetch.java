@@ -235,15 +235,19 @@ public class ShareFetch<K, V> {
      * Handles completed renew acknowledgements by returning successfully renewed records
      * to the set of in-flight records.
      *
-     * @param acknowledgementsMap Map from topic-partition to acknowledgements for
-     *                            completed renew acknowledgements
+     * @param acknowledgementsMap      Map from topic-partition to acknowledgements for
+     *                                 completed renew acknowledgements
+     * @param acquisitionLockTimeoutMs Optional updated acquisition lock timeout
      *
      * @return The number of records renewed
      */
-    public int renew(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
+    public int renew(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap, Optional<Integer> acquisitionLockTimeoutMs) {
         int recordsRenewed = 0;
         for (Map.Entry<TopicIdPartition, Acknowledgements> entry : acknowledgementsMap.entrySet()) {
             recordsRenewed += batches.get(entry.getKey()).renew(entry.getValue());
+        }
+        if (acquisitionLockTimeoutMs.isPresent()) {
+            this.acquisitionLockTimeoutMs = acquisitionLockTimeoutMs;
         }
         return recordsRenewed;
     }

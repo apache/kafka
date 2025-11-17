@@ -138,7 +138,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 completedAcknowledgements.add(event.acknowledgementsMap());
             }
             if (event.checkForRenewAcknowledgements()) {
-                currentFetch.renew(event.acknowledgementsMap());
+                currentFetch.renew(event.acknowledgementsMap(), event.acquisitionLockTimeoutMs());
             }
         }
     }

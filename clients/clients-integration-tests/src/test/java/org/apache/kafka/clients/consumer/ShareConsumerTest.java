@@ -2983,6 +2983,9 @@ public class ShareConsumerTest {
             shareConsumer.subscribe(List.of(tp.topic()));
             ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 10);
             assertEquals(10, records.count());
+            assertEquals(Optional.of(15000), shareConsumer.acquisitionLockTimeoutMs());
+
+            alterShareRecordLockDurationMs("group1", 25000);
 
             int count = 0;
             Map<TopicIdPartition, Optional<KafkaException>> result;
@@ -2994,6 +2997,7 @@ public class ShareConsumerTest {
                 }
                 result = shareConsumer.commitSync();
                 assertEquals(1, result.size());
+                assertEquals(Optional.of(25000), shareConsumer.acquisitionLockTimeoutMs());
                 assertEquals(Optional.empty(), result.get(new TopicIdPartition(tpId, tp.partition(), tp.topic())));
                 count++;
             }
@@ -3001,6 +3005,7 @@ public class ShareConsumerTest {
             // Get the rest of all 5 records.
             records = waitedPoll(shareConsumer, 2500L, 5);
             assertEquals(5, records.count());
+            assertEquals(Optional.of(25000), shareConsumer.acquisitionLockTimeoutMs());
             for (ConsumerRecord<byte[], byte[]> record : records) {
                 shareConsumer.acknowledge(record, AcknowledgeType.ACCEPT);
             }
@@ -3310,6 +3315,19 @@ public class ShareConsumerTest {
         Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
         alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
             GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, newValue), AlterConfigOp.OpType.SET)));
+        AlterConfigsOptions alterOptions = new AlterConfigsOptions();
+        try (Admin adminClient = createAdminClient()) {
+            assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
+                .all()
+                .get(60, TimeUnit.SECONDS), "Failed to alter configs");
+        }
+    }
+
+    private void alterShareRecordLockDurationMs(String groupId, int newValue) {
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
+        Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
+        alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
+            GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, Integer.toString(newValue)), AlterConfigOp.OpType.SET)));
         AlterConfigsOptions alterOptions = new AlterConfigsOptions();
         try (Admin adminClient = createAdminClient()) {
             assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
