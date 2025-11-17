@@ -68,8 +68,7 @@ public class ApplicationEventHandler implements Closeable {
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier,
-                asyncConsumerMetrics
-        );
+                asyncConsumerMetrics);
         this.networkThread.start();
     }
 

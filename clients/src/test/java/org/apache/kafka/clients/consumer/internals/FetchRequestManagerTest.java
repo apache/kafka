@@ -4212,7 +4212,7 @@ public class FetchRequestManagerTest {
                                              ConsumerConfig config,
                                              LogContext logContext,
                                              KafkaClient client,
-                                             ConsumerMetadata metadata,
+                                             Metadata metadata,
                                              BackgroundEventHandler backgroundEventHandler,
                                              boolean notifyMetadataErrorsViaErrorQueue) {
             super(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, mock(AsyncConsumerMetrics.class));

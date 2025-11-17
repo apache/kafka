@@ -253,9 +253,8 @@ public class AsyncKafkaConsumerTest {
         long retryBackoffMs = 100L;
         int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 1000;
-        LogContext logContext = new LogContext();
         return new AsyncKafkaConsumer<>(
-            logContext,
+            new LogContext(),
             "client-id",
             new Deserializers<>(new StringDeserializer(), new StringDeserializer(), metrics),
             fetchBuffer,
@@ -274,7 +273,7 @@ public class AsyncKafkaConsumerTest {
             defaultApiTimeoutMs,
             "group-id",
             false,
-            new ThreadSafeAsyncConsumerState(logContext, metadata, subscriptions, time, retryBackoffMs));
+            new ThreadSafeAsyncConsumerState(new LogContext(), metadata, subscriptions, time, retryBackoffMs));
     }
 
     @Test
@@ -1802,6 +1801,7 @@ public class AsyncKafkaConsumerTest {
         completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(Collections.singletonList("topic"));
         consumer.poll(Duration.ZERO);
+        completeAsyncPollEventSuccessfully();
         verify(backgroundEventReaper).reap(time.milliseconds());
     }
 

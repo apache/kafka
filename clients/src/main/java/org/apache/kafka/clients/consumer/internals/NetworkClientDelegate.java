@@ -247,6 +247,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             unsent.handler
         );
     }
+
     public Optional<Exception> getAndClearMetadataError() {
         Optional<Exception> metadataError = this.metadataError;
         this.metadataError = Optional.empty();
