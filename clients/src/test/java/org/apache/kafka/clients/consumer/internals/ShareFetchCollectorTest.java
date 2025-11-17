@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -49,6 +51,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -119,6 +122,71 @@ public class ShareFetchCollectorTest {
 
         // However, while the queue is "empty", the next-in-line fetch is actually still in the buffer.
         assertNotNull(fetchBuffer.nextInLineFetch());
+
+        // Now attempt to collect more records from the fetch buffer.
+        fetch = fetchCollector.collect(fetchBuffer);
+        assertEquals(0, fetch.numRecords());
+        assertTrue(fetch.isEmpty());
+
+        // However, once we read *past* the end of the records in the ShareCompletedFetch, then we will call
+        // drain on it, and it will be considered all consumed.
+        assertTrue(completedFetch.isConsumed());
+    }
+
+    @Test
+    public void testWithRenew() {
+        int recordCount = DEFAULT_MAX_POLL_RECORDS;
+        buildDependencies();
+        subscribeAndAssign(topicAPartition0);
+
+        ShareCompletedFetch completedFetch = completedFetchBuilder
+            .recordCount(recordCount)
+            .build();
+
+        // Validate that the buffer is empty until after we add the fetch data.
+        assertTrue(fetchBuffer.isEmpty());
+        fetchBuffer.add(List.of(completedFetch));
+        assertFalse(fetchBuffer.isEmpty());
+
+        // Validate that the completed fetch isn't initialized just because we add it to the buffer.
+        assertFalse(completedFetch.isInitialized());
+
+        // Fetch the data and validate that we get all the records we want back.
+        ShareFetch<String, String> fetch = fetchCollector.collect(fetchBuffer);
+        assertFalse(fetch.isEmpty());
+        assertEquals(recordCount, fetch.numRecords());
+
+        // When we collected the data from the buffer, this will cause the completed fetch to get initialized.
+        assertTrue(completedFetch.isInitialized());
+
+        // However, even though we've collected the data, it isn't (completely) consumed yet.
+        assertFalse(completedFetch.isConsumed());
+
+        // The buffer is now considered "empty" because our queue is empty.
+        assertTrue(fetchBuffer.isEmpty());
+        assertNull(fetchBuffer.peek());
+        assertNull(fetchBuffer.poll());
+
+        // However, while the queue is "empty", the next-in-line fetch is actually still in the buffer.
+        assertNotNull(fetchBuffer.nextInLineFetch());
+
+        assertEquals(500, fetch.numRecords());
+        ConsumerRecord<String, String> record = new ConsumerRecord<>(topicAPartition0.topic(), topicAPartition0.partition(), 0, "", "");
+        fetch.acknowledge(record, AcknowledgeType.RENEW);
+        assertEquals(DEFAULT_MAX_POLL_RECORDS, fetch.numRecords());
+        assertFalse(fetch.hasRenewals());
+
+        Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap = fetch.takeAcknowledgedRecords();
+        assertTrue(fetch.hasRenewals());
+        assertEquals(DEFAULT_MAX_POLL_RECORDS - 1, fetch.numRecords());
+
+        Acknowledgements acks = acknowledgementsMap.get(topicAPartition0).acknowledgements();
+        acks.complete(null);
+        fetch.renew(Map.of(topicAPartition0, acks));
+        assertTrue(fetch.hasRenewals());
+        fetch.takeRenewedRecords();
+        assertFalse(fetch.hasRenewals());
+        assertEquals(DEFAULT_MAX_POLL_RECORDS, fetch.numRecords());
 
         // Now attempt to collect more records from the fetch buffer.
         fetch = fetchCollector.collect(fetchBuffer);

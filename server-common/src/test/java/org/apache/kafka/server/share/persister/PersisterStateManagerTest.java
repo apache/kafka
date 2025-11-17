@@ -23,6 +23,8 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.message.InitializeShareGroupStateResponseData;
@@ -4502,35 +4504,68 @@ class PersisterStateManagerTest {
         boolean hasResponse;
         boolean wasDisconnected;
         boolean wasTimedOut;
+        boolean authException;
+        boolean versionMismatch;
         Optional<Errors> exp;
 
-        TestHolder(boolean hasResponse, boolean wasDisconnected, boolean wasTimedOut, Optional<Errors> exp) {
+        TestHolder(boolean hasResponse, boolean wasDisconnected, boolean wasTimedOut, boolean isAuthExp, boolean isVersionMismatch, Optional<Errors> exp) {
             this.hasResponse = hasResponse;
             this.wasDisconnected = wasDisconnected;
             this.wasTimedOut = wasTimedOut;
+            this.authException = isAuthExp;
+            this.versionMismatch = isVersionMismatch;
             this.exp = exp;
+        }
+
+        @Override
+        public String toString() {
+            return "(" +
+                "hasResponse:" + hasResponse + ", " +
+                "wasDisconnected:" + wasDisconnected + ", " +
+                "wasTimedOut:" + wasTimedOut + ", " +
+                "authException:" + authException + ", " +
+                "versionMismatch:" + versionMismatch + ", " +
+                "expErr:" + (exp.isPresent() ? exp.get() : "<empty>") +
+                ")";
         }
     }
 
     private static Stream<TestHolder> generatorDifferentStates() {
-        return Stream.of(
-            // Let the actual handler handle since response present.
-            new TestHolder(true, false, false, Optional.empty()),
-            new TestHolder(true, true, true, Optional.empty()),
-            new TestHolder(true, false, true, Optional.empty()),
-            new TestHolder(true, true, false, Optional.empty()),
+        int combs = 1 << 4; // 2^4 combinations
+        List<TestHolder> holders = new ArrayList<>();
 
-            // Handled by checkNetworkError.
-            new TestHolder(false, true, false, Optional.of(Errors.NETWORK_EXCEPTION)),
-            new TestHolder(false, false, true, Optional.of(Errors.REQUEST_TIMED_OUT)),
-            new TestHolder(false, true, true, Optional.of(Errors.NETWORK_EXCEPTION)),   // takes precedence
-            new TestHolder(false, false, false, Optional.of(Errors.UNKNOWN_SERVER_ERROR))
-        );
+        // Let the actual handler handle since response present.
+        for (int i = 1; i <= combs; i++) {
+            holders.add(new TestHolder(true, (i & 1) != 0, (i & 2) != 0, (i & 4) != 0, (i & 8) != 0, Optional.empty()));
+        }
+
+        // Handled by checkResponseError.
+        for (int i = 1; i <= combs; i++) {
+            boolean disconnect = (i & 1) != 0;
+            boolean timedOut = (i & 2) != 0;
+            boolean authException = (i & 4) != 0;
+            boolean versionMismatch = (i & 8) != 0;
+
+            Optional<Errors> err = Optional.of(Errors.UNKNOWN_SERVER_ERROR);
+            if (authException) {
+                err = Optional.of(Errors.SASL_AUTHENTICATION_FAILED);
+            } else if (versionMismatch) {
+                err = Optional.of(Errors.UNSUPPORTED_VERSION);
+            } else if (disconnect) {
+                err = Optional.of(Errors.NETWORK_EXCEPTION);
+            } else if (timedOut) {
+                err = Optional.of(Errors.REQUEST_TIMED_OUT);
+            }
+
+            holders.add(new TestHolder(false, disconnect, timedOut, authException, versionMismatch, err));
+        }
+
+        return holders.stream();
     }
 
     @ParameterizedTest
     @MethodSource("generatorDifferentStates")
-    public void testNetworkErrorHandling(TestHolder holder) {
+    public void testResponseErrorHandling(TestHolder holder) {
         KafkaClient client = mock(KafkaClient.class);
         Timer timer = mock(Timer.class);
         PersisterStateManager psm = PersisterStateManagerBuilder
@@ -4563,7 +4598,9 @@ class PersisterStateManagerTest {
         when(response.hasResponse()).thenReturn(holder.hasResponse);
         when(response.wasDisconnected()).thenReturn(holder.wasDisconnected);
         when(response.wasTimedOut()).thenReturn(holder.wasTimedOut);
-        assertEquals(holder.exp, handler.checkNetworkError(response, (err, exp) -> {
-        }));
+        when(response.authenticationException()).thenReturn(holder.authException ? new SaslAuthenticationException("bad stuff") : null);
+        when(response.versionMismatch()).thenReturn(holder.versionMismatch ? new UnsupportedVersionException("worse stuff") : null);
+        assertEquals(holder.exp, handler.checkResponseError(response, (err, exp) -> {
+        }), holder.toString());
     }
 }

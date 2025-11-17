@@ -23,7 +23,9 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
@@ -385,12 +387,12 @@ public class PersisterStateManager {
             }
 
             if (isFindCoordinatorResponse(response)) {
-                Optional<Errors> err = checkNetworkError(response, this::findCoordinatorErrorResponse);
+                Optional<Errors> err = checkResponseError(response, this::findCoordinatorErrorResponse);
                 if (err.isEmpty()) {
                     handleFindCoordinatorResponse(response);
                 }
             } else if (isResponseForRequest(response)) {
-                Optional<Errors> err = checkNetworkError(response, this::requestErrorResponse);
+                Optional<Errors> err = checkResponseError(response, this::requestErrorResponse);
                 if (err.isEmpty()) {
                     handleRequestResponse(response);
                 }
@@ -399,14 +401,24 @@ public class PersisterStateManager {
         }
 
         // Visibility for testing
-        Optional<Errors> checkNetworkError(ClientResponse response, BiConsumer<Errors, Exception> errorConsumer) {
+        Optional<Errors> checkResponseError(ClientResponse response, BiConsumer<Errors, Exception> errorConsumer) {
             if (response.hasResponse()) {
                 return Optional.empty();
             }
 
-            log.debug("Response for RPC {} with key {} is invalid - {}.", name(), this.partitionKey, response);
+            log.debug("Response for RPC {} with key {} is invalid - {}", name(), this.partitionKey, response);
 
-            if (response.wasDisconnected()) {
+            if (response.authenticationException() != null) {
+                log.error("Authentication exception", response.authenticationException());
+                Errors error = Errors.forException(response.authenticationException());
+                errorConsumer.accept(error, new AuthenticationException(String.format("Server response for %s indicates authentication exception.", this.partitionKey)));
+                return Optional.of(error);
+            } else if (response.versionMismatch() != null) {
+                log.error("Version mismatch exception", response.versionMismatch());
+                Errors error = Errors.forException(response.versionMismatch());
+                errorConsumer.accept(error, new UnsupportedVersionException(String.format("Server response for %s indicates version mismatch.", this.partitionKey)));
+                return Optional.of(error);
+            } else if (response.wasDisconnected()) {
                 errorConsumer.accept(Errors.NETWORK_EXCEPTION, new NetworkException(String.format("Server response for %s indicates disconnect.", this.partitionKey)));
                 return Optional.of(Errors.NETWORK_EXCEPTION);
             } else if (response.wasTimedOut()) {

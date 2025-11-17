@@ -41,6 +41,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -77,6 +78,8 @@ import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 
+import org.apache.logging.log4j.Level;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -121,10 +124,12 @@ import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
 import static org.apache.kafka.streams.processor.internals.Task.State.SUSPENDED;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.isA;
 import static org.hamcrest.Matchers.not;
@@ -1597,6 +1602,66 @@ public class StreamTaskTest {
         task.resume();
 
         assertThat("task is not idling", task.timeCurrentIdlingStarted().isEmpty());
+    }
+
+    @Test
+    public void shouldLogNotReadyWhenStaleAfterThreshold() throws Exception {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        
+        task = createStatelessTask(createConfig("100"));
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        task.addRecords(partition1, singleton(getConsumerRecordWithOffsetAsTimestamp(partition1, 0)));
+
+        try (final LogCaptureAppender streamTaskAppender = LogCaptureAppender.createAndRegister(StreamTask.class);
+             final LogCaptureAppender partitionGroupAppender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
+            
+            // Enable TRACE logging for PartitionGroup to capture the "ready for processing" message
+            partitionGroupAppender.setClassLogger(PartitionGroup.class, Level.TRACE);
+            
+            // Set lastNotReadyLogTime to 100 seconds ago
+            final long initialTime = time.milliseconds();
+            task.setLastNotReadyLogTime(initialTime - 100_000L);
+            
+            // Advance time by 19.999 seconds
+            long newTime = time.milliseconds() + 19_999L;
+            
+            // Should not trigger logging after being stale for 119 seconds
+            assertFalse(task.isProcessable(newTime));
+            List<String> messages = streamTaskAppender.getMessages();
+            assertEquals(0, messages.size(), "No log message should be logged before 120 seconds");
+
+            // Advance time by 20 seconds
+            newTime = time.milliseconds() + 20_000L;
+
+            // Should trigger logging after being stale for 120 seconds
+            assertFalse(task.isProcessable(newTime));
+            
+            // Validate INFO log from StreamTask about partition2 not being ready
+            messages = streamTaskAppender.getMessages();
+            final String expectedNotReadyMessage = "stream-thread [Test worker] task [0_0] Partition topic2-0 has fetched lag of -1\n\tWaiting to fetch data for topic2-0";
+            final String expectedReadyMessage = "Partition topic1-0 has buffered data, ready for processing";
+            assertThat("Should have logged not ready message", messages.size(), is(1));
+            assertThat(
+                streamTaskAppender.getEvents(),
+                hasItem(Matchers.allOf(
+                    Matchers.hasProperty("level", equalTo("INFO")),
+                    Matchers.hasProperty("message", equalTo(expectedNotReadyMessage))
+                ))
+            );
+            assertThat(messages.get(0), equalTo(expectedNotReadyMessage));
+            
+            // Validate TRACE log from PartitionGroup about partition1 being ready
+            assertThat(
+                partitionGroupAppender.getEvents(),
+                hasItem(Matchers.allOf(
+                    Matchers.hasProperty("level", equalTo("TRACE")),
+                    Matchers.hasProperty("message", containsString(expectedReadyMessage))
+                ))
+            );
+        }
     }
 
     @Test

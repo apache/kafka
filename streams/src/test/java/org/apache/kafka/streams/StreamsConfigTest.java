@@ -1688,20 +1688,6 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldLogWarningWhenStreamsProtocolIsUsed() {
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            appender.setClassLogger(StreamsConfig.class, Level.WARN);
-            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
-
-            new StreamsConfig(props);
-
-            assertTrue(appender.getMessages().stream()
-                .anyMatch(msg -> msg.contains("The streams rebalance protocol is still in development and should " +
-                    "not be used in production. Please set group.protocol=classic (default) in all production use cases.")));
-        }
-    }
-
-    @Test
     public void shouldLogWarningWhenWarmupReplicasSetWithStreamsProtocol() {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
             appender.setClassLogger(StreamsConfig.class, Level.WARN);
