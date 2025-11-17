@@ -505,7 +505,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         logger.info("Starting voters are {}", partitionState.lastVoterSet());
         if (nodeId.isPresent()) {
             // if starting voters contain node id, it can't join to the cluster
-            // because it already in.
+            // because it is already in.
             canAutoJoin = !partitionState.lastVoterSet().voterIds().contains(nodeId.getAsInt());
         }
 
@@ -3357,7 +3357,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private boolean maybeSendAutoJoinRequest(FollowerState state, long currentTimeMs) {
+    private boolean maybeAutoJoin(FollowerState state, long currentTimeMs) {
         /* When the cluster supports reconfiguration, only replicas that can become a voter
          * and are configured to auto join should attempt to automatically join the voter
          * set for the configured topic partition.
@@ -3367,7 +3367,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private boolean shouldSendAddVoterRequest(FollowerState state, long currentTimeMs) {
-        return canAutoJoin && maybeSendAutoJoinRequest(state, currentTimeMs);
+        return canAutoJoin && maybeAutoJoin(state, currentTimeMs);
     }
 
     private boolean shouldSendRemoveVoterRequest(FollowerState state, long currentTimeMs) {
@@ -3375,7 +3375,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         final var voters = partitionState.lastVoterSet();
 
         if (voters.voterIds().contains(localReplicaKey.id())) {
-            if (maybeSendAutoJoinRequest(state, currentTimeMs)) {
+            if (maybeAutoJoin(state, currentTimeMs)) {
                 // When the bootstrap controller needs to update directory id,
                 // it should be removed and then rejoining to cluster
                 // In such a case, we should set canAutoJoin to true, and it will
@@ -3397,7 +3397,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             // If we are an observer, then we can shutdown immediately. We want to
             // skip potentially sending any add or remove voter RPCs.
             return 0;
-        } else if (nodeId().isPresent() && shouldSendRemoveVoterRequest(state, currentTimeMs)) {
+        } else if (nodeId.isPresent() && shouldSendRemoveVoterRequest(state, currentTimeMs)) {
             final var localReplicaKey = quorum.localReplicaKeyOrThrow();
             final var voters = partitionState.lastVoterSet();
             /* The replica's id is in the voter set but the replica is not a voter because
@@ -3414,7 +3414,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 state.resetUpdateVoterSetPeriod(currentTimeMs);
             }
             return sendResult.timeToWaitMs();
-        } else if (nodeId().isPresent() && shouldSendAddVoterRequest(state, currentTimeMs)) {
+        } else if (nodeId.isPresent() && shouldSendAddVoterRequest(state, currentTimeMs)) {
             sendResult = maybeSendAddVoterRequest(state, currentTimeMs);
             if (sendResult.requestSent()) {
                 state.resetUpdateVoterSetPeriod(currentTimeMs);
