@@ -18,11 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
-import org.apache.kafka.clients.consumer.internals.events.CheckAndUpdatePositionsEvent;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.errors.InvalidTopicException;
-import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
