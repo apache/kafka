@@ -367,7 +367,7 @@ public class SharePartition {
         this.leaderEpoch = leaderEpoch;
         this.maxInFlightRecords = maxInFlightRecords;
         this.maxDeliveryCount = maxDeliveryCount;
-        this.badRecordDeliveryThreshold = (int) Math.ceil((double) maxDeliveryCount / 2);
+        this.badRecordDeliveryThreshold = Math.max(2, (int) Math.ceil((double) maxDeliveryCount / 2));
         this.cachedState = new ConcurrentSkipListMap<>();
         this.lock = new ReentrantReadWriteLock();
         this.findNextFetchOffset = false;
@@ -1911,7 +1911,7 @@ public class SharePartition {
                 int recordDeliveryCount = offsetState.getValue().deliveryCount();
                 // On last delivery attempt, submit acquired records,
                 // bad record will be delivered alone next time
-                if (recordDeliveryCount == maxDeliveryCount - 1 && acquiredCount > 0) {
+                if (maxDeliveryCount > 2 && recordDeliveryCount == maxDeliveryCount - 1 && acquiredCount > 0) {
                     hasBadRecord = true;
                     break;
                 }
@@ -1943,7 +1943,7 @@ public class SharePartition {
                 acquiredCount++;
 
                 // Delivered alone.
-                if (offsetState.getValue().deliveryCount() == maxDeliveryCount) {
+                if (offsetState.getValue().deliveryCount() == maxDeliveryCount && maxDeliveryCount > 2) {
                     hasBadRecord = true;
                     break;
                 }
@@ -3309,6 +3309,10 @@ public class SharePartition {
         int maxRecords
     ) { }
 
+    /**
+     * BadRecordMarkerAndAcquiredCount class is used to track whether a batch contains any bad records
+     * and the number of records that were successfully acquired from the current batch.
+     */
     private record BadRecordMarkerAndAcquiredCount(
         boolean badRecordMarker,
         int acquiredCount
