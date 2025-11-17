@@ -24,7 +24,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.time.Duration;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -107,7 +106,7 @@ public class CoordinatorExecutorImpl<S extends CoordinatorShard<U>, U> implement
                         "the coordinator is not active.", key, exception.getMessage());
                 } else {
                     log.error("The write event for the task {} failed due to {}. Ignoring it. ",
-                        key, exception.getMessage());
+                        key, exception.getMessage(), exception);
                 }
 
                 return null;
@@ -128,9 +127,6 @@ public class CoordinatorExecutorImpl<S extends CoordinatorShard<U>, U> implement
     }
 
     public void cancelAll() {
-        Iterator<String> iterator = tasks.keySet().iterator();
-        while (iterator.hasNext()) {
-            iterator.remove();
-        }
+        tasks.clear();
     }
 }

@@ -937,8 +937,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * once the record has been stored in the buffer of records waiting to be sent.
      * This allows sending many records in parallel without blocking to wait for the response after each one.
      * Can block for the following cases: 1) For the first record being sent to 
-     * the cluster by this client for the given topic. In this case it will block for up to {@code max.block.ms} milliseconds if 
-     * Kafka cluster is unreachable; 2) Allocating a buffer if buffer pool doesn't have any free buffers.
+     * the cluster by this client for the given topic. In this case it will block for up to {@code max.block.ms} milliseconds 
+     * while waiting for topic's metadata if Kafka cluster is unreachable; 2) Allocating a buffer if buffer pool doesn't
+     * have any free buffers.
+     * <p>
+     * <b>Reducing first-send latency:</b> You can reduce the latency of the first send by preloading the metadata
+     * with {@link #partitionsFor(String)}. However, be aware that metadata cache will be cleared to free up resources after
+     * {@code metadata.max.idle.ms} of inactivity, so subsequent sends after a long idle period will still
+     * experience delays.
      * <p>
      * The result of the send is a {@link RecordMetadata} specifying the partition the record was sent to, the offset
      * it was assigned and the timestamp of the record. If the producer is configured with acks = 0, the {@link RecordMetadata}
@@ -1036,6 +1042,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws InterruptException     If the thread is interrupted while blocked
      * @throws SerializationException If the key or value are not valid objects given the configured serializers
      * @throws KafkaException         If a Kafka related error occurs that does not belong to the public API exceptions.
+     * @see #partitionsFor(String)
      */
     @Override
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {

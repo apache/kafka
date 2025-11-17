@@ -14,26 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.storage.internals.log;
+package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.metadata.LeaderRecoveryState;
+import org.apache.kafka.common.TopicPartition;
 
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
-public record CommittedPartitionState(Set<Integer> isr, LeaderRecoveryState leaderRecoveryState) implements PartitionState {
-
-    public CommittedPartitionState {
-        isr = Set.copyOf(isr);
-    }
-
-    @Override
-    public Set<Integer> maximalIsr() {
-        return isr;
-    }
-
-    @Override
-    public boolean isInflight() {
-        return false;
-    }
-
+/**
+ * Client interface for retrieving latest offsets for topic partitions.
+ */
+public interface PartitionMetadataClient extends AutoCloseable {
+    /**
+     * Lists the latest offsets for the provided topic partitions.
+     *
+     * @param topicPartitions A set of topic partitions.
+     * @return A map of topic partitions to the completableFuture of their latest offsets
+     */
+    Map<TopicPartition, CompletableFuture<Long>> listLatestOffsets(
+        Set<TopicPartition> topicPartitions
+    );
 }
