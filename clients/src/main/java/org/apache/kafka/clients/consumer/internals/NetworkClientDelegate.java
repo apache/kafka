@@ -440,7 +440,7 @@ public class NetworkClientDelegate implements AutoCloseable {
      */
     public static Supplier<NetworkClientDelegate> supplier(final Time time,
                                                            final LogContext logContext,
-                                                           final ConsumerMetadata metadata,
+                                                           final Metadata metadata,
                                                            final ConsumerConfig config,
                                                            final ApiVersions apiVersions,
                                                            final Metrics metrics,
@@ -464,6 +464,37 @@ public class NetworkClientDelegate implements AutoCloseable {
                         throttleTimeSensor,
                         clientTelemetrySender);
                 return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, asyncConsumerMetrics, threadSafeConsumerState);
+            }
+        };
+    }
+
+    /**
+     * Creates a {@link Supplier} for deferred creation during invocation by
+     * {@link ConsumerNetworkThread}.
+     */
+    public static Supplier<NetworkClientDelegate> supplier(final Time time,
+                                                           final ConsumerConfig config,
+                                                           final LogContext logContext,
+                                                           final KafkaClient client,
+                                                           final Metadata metadata,
+                                                           final BackgroundEventHandler backgroundEventHandler,
+                                                           final boolean notifyMetadataErrorsViaErrorQueue,
+                                                           final AsyncConsumerMetrics asyncConsumerMetrics,
+                                                           final ThreadSafeConsumerState threadSafeConsumerState) {
+        return new CachedSupplier<>() {
+            @Override
+            protected NetworkClientDelegate create() {
+                return new NetworkClientDelegate(
+                    time,
+                    config,
+                    logContext,
+                    client,
+                    metadata,
+                    backgroundEventHandler,
+                    notifyMetadataErrorsViaErrorQueue,
+                    asyncConsumerMetrics,
+                    threadSafeConsumerState
+                );
             }
         };
     }

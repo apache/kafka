@@ -414,7 +414,7 @@ public class EmbeddedKafkaCluster {
     }
 
     public void waitForRemainingTopics(final long timeoutMs, final String... topics) throws InterruptedException {
-        TestUtils.waitForCondition(new TopicsRemainingCondition(topics), timeoutMs, "Topics are not expected after " + timeoutMs + " milli seconds.");
+        TestUtils.waitForCondition(new TopicsRemainingCondition(topics), timeoutMs, "Topics are not expected after " + timeoutMs + " milliseconds.");
     }
 
     public Set<String> getAllTopicsInCluster() {
@@ -473,6 +473,19 @@ public class EmbeddedKafkaCluster {
                 Map.of(
                     new ConfigResource(ConfigResource.Type.GROUP, groupId),
                     List.of(new AlterConfigOp(new ConfigEntry(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(numStandbyReplicas)), AlterConfigOp.OpType.SET))
+                )
+            ).all().get();
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void setGroupStreamsInitialRebalanceDelay(final String groupId, final int initialRebalanceDelayMs) {
+        try (final Admin adminClient = createAdminClient()) {
+            adminClient.incrementalAlterConfigs(
+                Map.of(
+                    new ConfigResource(ConfigResource.Type.GROUP, groupId),
+                    List.of(new AlterConfigOp(new ConfigEntry(GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, String.valueOf(initialRebalanceDelayMs)), AlterConfigOp.OpType.SET))
                 )
             ).all().get();
         } catch (final InterruptedException | ExecutionException e) {

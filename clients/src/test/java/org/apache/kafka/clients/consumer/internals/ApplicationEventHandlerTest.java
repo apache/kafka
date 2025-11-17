@@ -19,8 +19,8 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
+import org.apache.kafka.clients.consumer.internals.events.AsyncPollEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
-import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
@@ -63,7 +63,7 @@ public class ApplicationEventHandlerTest {
                      threadSafeConsumerState
              )) {
             // add event
-            applicationEventHandler.add(new PollEvent(time.milliseconds()));
+            applicationEventHandler.add(new AsyncPollEvent(time.milliseconds() + 10, time.milliseconds()));
             verify(asyncConsumerMetrics).recordApplicationEventQueueSize(1);
         }
     }

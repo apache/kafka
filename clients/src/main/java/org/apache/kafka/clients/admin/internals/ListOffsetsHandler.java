@@ -202,7 +202,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     public Map<TopicPartition, Throwable> handleUnsupportedVersionException(
         int brokerId, UnsupportedVersionException exception, Set<TopicPartition> keys
     ) {
-        log.warn("Broker " + brokerId + " does not support MAX_TIMESTAMP offset specs");
+        log.warn("Broker {} does not support MAX_TIMESTAMP offset specs", brokerId);
         Map<TopicPartition, Throwable> maxTimestampPartitions = new HashMap<>();
         for (TopicPartition topicPartition : keys) {
             Long offsetTimestamp = offsetTimestampsByPartition.get(topicPartition);

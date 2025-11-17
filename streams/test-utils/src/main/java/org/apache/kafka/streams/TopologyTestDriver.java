@@ -385,6 +385,7 @@ public class TopologyTestDriver implements Closeable {
                 metrics,
                 "test-client",
                 "processId",
+                "applicationId",
                 mockWallClockTime
         );
         TaskMetrics.droppedRecordsSensor(threadId, TASK_ID.toString(), streamsMetrics);
@@ -493,7 +494,6 @@ public class TopologyTestDriver implements Closeable {
                 streamsMetrics,
                 cache
             );
-            context.setRecordContext(new ProcessorRecordContext(0L, -1L, -1, null, new RecordHeaders()));
 
             task = new StreamTask(
                 TASK_ID,
@@ -605,6 +605,7 @@ public class TopologyTestDriver implements Closeable {
         }
     }
 
+    @SuppressWarnings("removal")
     private void commit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         if (processingMode == EXACTLY_ONCE_V2) {
             testDriverProducer.commitTransaction(offsets, new ConsumerGroupMetadata("dummy-app-id"));
@@ -918,6 +919,7 @@ public class TopologyTestDriver implements Closeable {
     private StateStore getStateStore(final String name,
                                      final boolean throwForBuiltInStores) {
         if (task != null) {
+            task.processorContext().setRecordContext(new ProcessorRecordContext(0L, -1L, -1, null, new RecordHeaders()));
             final StateStore stateStore = ((ProcessorContextImpl) task.processorContext()).stateManager().store(name);
             if (stateStore != null) {
                 if (throwForBuiltInStores) {

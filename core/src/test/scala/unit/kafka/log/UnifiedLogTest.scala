@@ -3188,6 +3188,60 @@ class UnifiedLogTest {
   }
 
   @Test
+  def shouldDeleteLocalLogSegmentsWhenPolicyIsEmptyWithSizeRetention(): Unit = {
+    def createRecords = TestUtils.singletonRecords("test".getBytes, key = "test".getBytes(), timestamp = 10L)
+    val recordSize = createRecords.sizeInBytes
+    val logConfig = LogTestUtils.createLogConfig(
+      segmentBytes = recordSize * 2,
+      localRetentionBytes = recordSize / 2,
+      cleanupPolicy = "",
+      remoteLogStorageEnable = true
+    )
+    val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
+
+    for (_ <- 0 until 10)
+      log.appendAsLeader(createRecords, 0)
+
+    val segmentsBefore = log.numberOfSegments
+    log.updateHighWatermark(log.logEndOffset)
+    log.updateHighestOffsetInRemoteStorage(log.logEndOffset - 1)
+    val deleteOldSegments = log.deleteOldSegments()
+
+    assertTrue(log.numberOfSegments < segmentsBefore, "Some segments should be deleted due to size retention")
+    assertTrue(deleteOldSegments > 0, "At least one segment should be deleted")
+  }
+
+  @Test
+  def shouldDeleteLocalLogSegmentsWhenPolicyIsEmptyWithMsRetention(): Unit = {
+    val oldTimestamp = mockTime.milliseconds - 20000
+    def oldRecords = TestUtils.singletonRecords("test".getBytes, key = "test".getBytes(), timestamp = oldTimestamp)
+    val recordSize = oldRecords.sizeInBytes
+    val logConfig = LogTestUtils.createLogConfig(
+      segmentBytes = recordSize * 2,
+      localRetentionMs = 5000,
+      cleanupPolicy = "",
+      remoteLogStorageEnable = true
+    )
+    val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
+
+    for (_ <- 0 until 10)
+      log.appendAsLeader(oldRecords, 0)
+
+    def newRecords = TestUtils.singletonRecords("test".getBytes, key = "test".getBytes(), timestamp = mockTime.milliseconds)
+    for (_ <- 0 until 5)
+      log.appendAsLeader(newRecords, 0)
+
+    val segmentsBefore = log.numberOfSegments
+
+    log.updateHighWatermark(log.logEndOffset)
+    log.updateHighestOffsetInRemoteStorage(log.logEndOffset - 1)
+    val deleteOldSegments = log.deleteOldSegments()
+
+    assertTrue(log.numberOfSegments < segmentsBefore, "Some segments should be deleted due to time retention")
+    assertTrue(deleteOldSegments > 0, "At least one segment should be deleted")
+  }
+
+  @Test
   def shouldDeleteSegmentsReadyToBeDeletedWhenCleanupPolicyIsCompactAndDelete(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes, key = "test".getBytes, timestamp = 10L)
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionMs = 10000, cleanupPolicy = "compact,delete")
@@ -5011,6 +5065,96 @@ class UnifiedLogTest {
   }
 
   case class TimestampAndEpoch(timestamp: Long, leaderEpoch: Int)
+
+  @Test
+  def testStaleProducerEpochReturnsRecoverableErrorForTV1Clients(): Unit = {
+    // Producer epoch gets incremented (coordinator fail over, completed transaction, etc.)
+    // and client has stale cached epoch. Fix prevents fatal InvalidTxnStateException.
+    
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
+    
+    val producerId = 123L
+    val oldEpoch = 5.toShort
+    val newEpoch = 6.toShort
+    
+    // Step 1: Simulate a scenario where producer epoch was incremented to fence the producer
+    val previousRecords = MemoryRecords.withTransactionalRecords(
+      Compression.NONE, producerId, newEpoch, 0,
+      new SimpleRecord("previous-key".getBytes, "previous-value".getBytes)
+    )
+    val previousGuard = log.maybeStartTransactionVerification(producerId, 0, newEpoch, false)  // TV1 = supportsEpochBump = false
+    log.appendAsLeader(previousRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, previousGuard)
+    
+    // Complete the transaction normally (commits do update producer state with current epoch)
+    val commitMarker = MemoryRecords.withEndTransactionMarker(
+      producerId, newEpoch, new EndTransactionMarker(ControlRecordType.COMMIT, 0)
+    )
+    log.appendAsLeader(commitMarker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching, VerificationGuard.SENTINEL)
+    
+    // Step 2: TV1 client tries to write with stale cached epoch (before learning about epoch increment)  
+    val staleEpochRecords = MemoryRecords.withTransactionalRecords(
+      Compression.NONE, producerId, oldEpoch, 0,
+      new SimpleRecord("stale-epoch-key".getBytes, "stale-epoch-value".getBytes)
+    )
+    
+    // Step 3: Verify our fix - should get InvalidProducerEpochException (recoverable), not InvalidTxnStateException (fatal)
+    val exception = assertThrows(classOf[InvalidProducerEpochException], () => {
+      val staleGuard = log.maybeStartTransactionVerification(producerId, 0, oldEpoch, false)  
+      log.appendAsLeader(staleEpochRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, staleGuard)
+     })
+     
+     // Verify the error message indicates epoch mismatch  
+     assertTrue(exception.getMessage.contains("smaller than the last seen epoch"))
+     assertTrue(exception.getMessage.contains(s"$oldEpoch"))
+     assertTrue(exception.getMessage.contains(s"$newEpoch"))
+  }
+
+  @Test
+  def testStaleProducerEpochReturnsRecoverableErrorForTV2Clients(): Unit = {
+    // Check producer epoch FIRST - if stale, return recoverable error before verification checks.
+    
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
+    
+    val producerId = 456L
+    val originalEpoch = 3.toShort
+    val bumpedEpoch = 4.toShort
+    
+    // Step 1: Start transaction with epoch 3 (before timeout)
+    val initialRecords = MemoryRecords.withTransactionalRecords(
+      Compression.NONE, producerId, originalEpoch, 0,
+      new SimpleRecord("ks-initial-key".getBytes, "ks-initial-value".getBytes)
+    )
+    val initialGuard = log.maybeStartTransactionVerification(producerId, 0, originalEpoch, true)  // TV2 = supportsEpochBump = true
+    log.appendAsLeader(initialRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, initialGuard)
+    
+    // Step 2: Coordinator times out and aborts transaction
+    // TV2 (KIP-890): Coordinator bumps epoch from 3 → 4 and sends abort marker with epoch 4
+    val abortMarker = MemoryRecords.withEndTransactionMarker(
+      producerId, bumpedEpoch, new EndTransactionMarker(ControlRecordType.ABORT, 0)
+    )
+    log.appendAsLeader(abortMarker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching, VerificationGuard.SENTINEL)
+    
+    // Step 3: TV2 transactional producer tries to append with stale epoch (timeout recovery scenario)
+    val staleEpochRecords = MemoryRecords.withTransactionalRecords(
+      Compression.NONE, producerId, originalEpoch, 0,
+      new SimpleRecord("ks-resume-key".getBytes, "ks-resume-value".getBytes)
+    )
+    
+    // Step 4: Verify our fix works for TV2 - should get InvalidProducerEpochException (recoverable), not InvalidTxnStateException (fatal)
+    val exception = assertThrows(classOf[InvalidProducerEpochException], () => {
+      val staleGuard = log.maybeStartTransactionVerification(producerId, 0, originalEpoch, true)  // TV2 = supportsEpochBump = true
+      log.appendAsLeader(staleEpochRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, staleGuard)
+     })
+     
+     // Verify the error message indicates epoch mismatch (3 < 4)
+     assertTrue(exception.getMessage.contains("smaller than the last seen epoch"))
+     assertTrue(exception.getMessage.contains(s"$originalEpoch"))
+     assertTrue(exception.getMessage.contains(s"$bumpedEpoch"))
+  }
 }
 
 object UnifiedLogTest {
