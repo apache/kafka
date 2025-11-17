@@ -2667,6 +2667,7 @@ org.apache.kafka.streams.processor.internals.StreamTaskTest:
 - shouldNotProcessRecordsAfterPrepareCommitWhenEosV2Enabled
 - shouldNotPunctuateSystemTimeWhenIntervalNotElapsed
 - shouldNotShareHeadersBetweenPunctuateIterations
+- shouldNotThrowExceptionOnAnchoredSchedule
 - shouldNotThrowExceptionOnScheduleIfCurrentNodeIsNotNull
 - shouldNotThrowFromStateManagerCloseInCloseDirty
 - shouldOnlyCheckpointStateWithBigAdvanceIfNotEnforced
@@ -2677,6 +2678,8 @@ org.apache.kafka.streams.processor.internals.StreamTaskTest:
 - shouldPunctuateOnceStreamTimeAfterGap
 - shouldPunctuateOnceSystemTimeAfterGap
 - shouldPunctuateSystemTimeWhenIntervalElapsed
+- shouldPunctuateUsingAnchoredStreamStartTime
+- shouldPunctuateUsingAnchoredSystemStartTimeWithStartTimeBeforeNow
 - shouldReInitializeTopologyWhenResuming
 - shouldReadCommittedOffsetAndRethrowTimeoutWhenCompleteRestoration
 - shouldReadCommittedStreamTimeAndMergeProcessorMetadataOnInitialize

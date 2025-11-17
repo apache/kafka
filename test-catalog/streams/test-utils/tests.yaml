@@ -11,6 +11,7 @@ org.apache.kafka.streams.KeyValueStoreFacadeTest:
 - shouldReturnName
 org.apache.kafka.streams.MockProcessorContextTest:
 - fullConstructorShouldSetAllExpectedAttributes
+- shouldCaptureAnchoredPunctuator
 - shouldCaptureApplicationAndRecordMetadata
 - shouldCaptureCommitsAndAllowReset
 - shouldCaptureOutputRecords
