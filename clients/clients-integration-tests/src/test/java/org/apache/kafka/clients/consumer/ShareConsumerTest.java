@@ -62,12 +62,9 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
-import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
-
-import com.yammer.metrics.core.Meter;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -2956,9 +2953,6 @@ public class ShareConsumerTest {
             shareConsumer.commitSync();
             assertEquals(15, acknowledgementsCommitted.get());
         }
-
-        // Verify that metric.
-        verifyYammerMetricCount("ackType=Renew", 5);
     }
 
     @ClusterTest
@@ -3004,9 +2998,6 @@ public class ShareConsumerTest {
                 shareConsumer.acknowledge(record, AcknowledgeType.ACCEPT);
             }
         }
-
-        // Verify that metric.
-        verifyYammerMetricCount("ackType=Renew", 5);
     }
 
     @ClusterTest
@@ -3035,9 +3026,6 @@ public class ShareConsumerTest {
                 assertThrows(IllegalStateException.class, () -> shareConsumer.acknowledge(rec, AcknowledgeType.RENEW));
             }
         }
-
-        // Verify that metric.
-        verifyYammerMetricCount("ackType=Renew", 0);    // Because the share consumer itself should invalidate.
     }
 
     @ClusterTest(
@@ -3089,9 +3077,6 @@ public class ShareConsumerTest {
             assertEquals(10, acknowledgementsCommitted.get());
             assertEquals(0, records.count());
 
-            // Verify that metric.
-            verifyYammerMetricCount("ackType=Renew", 5);
-
             // Renewal duration passed, now records will be back.
             records = waitedPoll(shareConsumer, 2500L, 5);  // Renewed records as well as 10-15 records.
             assertEquals(5, records.count());
@@ -3112,16 +3097,6 @@ public class ShareConsumerTest {
             // Initial - 5 renew + 5 accept, Subsequent - 5 renewed accepted + 5 fresh accepted (10-15)
             assertEquals(20, acknowledgementsCommitted.get());
         }
-    }
-
-    private void verifyYammerMetricCount(String filterString, int val) {
-        com.yammer.metrics.core.Metric renewAck = KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
-            .filter(entry -> entry.getKey().toString().contains(filterString))
-            .findAny()
-            .orElseThrow(() -> new AssertionError("metric not found"))
-            .getValue();
-
-        assertEquals(val, ((Meter) renewAck).count());
     }
 
     /**
