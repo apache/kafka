@@ -871,15 +871,16 @@ public class SharePartition {
                     // In record_limit mode, we need to ensure that we do not acquire more than
                     // maxRecordsToAcquire. Hence, pass the remaining number of records that can
                     // be acquired.
-                    int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, isRecordLimitMode, numRecordsRemaining, firstBatch.baseOffset(), lastOffsetToAcquire, inFlightBatch, result);
+                    BadRecordMarkerAndAcquiredCount badRecordMarkerAndAcquiredCount = acquireSubsetBatchRecords(memberId, isRecordLimitMode,
+                        numRecordsRemaining, firstBatch.baseOffset(), lastOffsetToAcquire, inFlightBatch, result);
+
+                    acquiredCount += badRecordMarkerAndAcquiredCount.acquiredCount();
                     // If a bad record is present, return immediately and set `maxRecordsToAcquire = -1`
                     // to prevent acquiring any new records afterwards.
-                    if (acquiredSubsetCount < 0) {
+                    if (badRecordMarkerAndAcquiredCount.badRecordMarker()) {
                         maxRecordsToAcquire = -1;
-                        acquiredCount += -1 * acquiredSubsetCount;
                         break;
                     }
-                    acquiredCount += acquiredSubsetCount;
                     continue;
                 }
 
@@ -1875,7 +1876,7 @@ public class SharePartition {
         return numRecordsInBatch > numRecordsRemaining;
     }
 
-    private int acquireSubsetBatchRecords(
+    private BadRecordMarkerAndAcquiredCount acquireSubsetBatchRecords(
         String memberId,
         boolean isRecordLimitMode,
         long maxFetchRecords,
@@ -1957,7 +1958,7 @@ public class SharePartition {
         } finally {
             lock.writeLock().unlock();
         }
-        return hasBadRecord ? -acquiredCount : acquiredCount;
+        return new BadRecordMarkerAndAcquiredCount(hasBadRecord, acquiredCount);
     }
 
     /**
@@ -3306,6 +3307,11 @@ public class SharePartition {
     private record LastOffsetAndMaxRecords(
         long lastOffset,
         int maxRecords
+    ) { }
+
+    private record BadRecordMarkerAndAcquiredCount(
+        boolean badRecordMarker,
+        int acquiredCount
     ) { }
 
     // Visibility for testing
