@@ -463,7 +463,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final String name = namedInternal.orElseGenerateWithPrefix(builder, TRANSFORMVALUES_NAME);
 
-        final KTableProcessorSupplier<K, V, K, VR> processorSupplier = new KTableTransformValues<>(
+        final KTableProcessorSupplier<K, V, K, VR> processorSupplier = new KTableProcessValues<>(
             this,
             transformerSupplier,
             queryableStoreName);
