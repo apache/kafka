@@ -819,6 +819,7 @@ org.apache.kafka.clients.consumer.KafkaConsumerTest:
 - testCommittedAuthenticationFailure
 - testCommittedThrowsTimeoutExceptionForNoResponse
 - testConstructorClose
+- testConstructorFailsOnNetworkClientConstructorFailure
 - testConstructorInvalidMetricReporters
 - testConsumerJmxPrefix
 - testCurrentLag
@@ -1113,6 +1114,9 @@ org.apache.kafka.clients.consumer.internals.AcknowledgementsTest:
 - testSingleStateSingleGap
 - testSingleStateSingleRecord
 org.apache.kafka.clients.consumer.internals.ApplicationEventHandlerTest:
+- testDelayInInitializeResources
+- testFailOnInitializeResources
+- testInterruptInInitializeResources
 - testRecordApplicationEventQueueSize
 org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumerTest:
 - testAssign
@@ -2220,6 +2224,7 @@ org.apache.kafka.clients.consumer.internals.ShareConsumerImplTest:
 - testCloseWithInvalidTopicException
 - testCloseWithTopicAuthorizationException
 - testCompleteQuietly
+- testConstructorFailsOnNetworkClientConstructorFailure
 - testControlRecordsOnEmptyFetch
 - testEnsurePollEventSentOnConsumerPoll
 - testExplicitModeRenewAndAcknowledgeOnPoll
