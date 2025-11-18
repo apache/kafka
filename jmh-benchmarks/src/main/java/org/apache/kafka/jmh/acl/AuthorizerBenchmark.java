@@ -23,6 +23,8 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.internals.PluginMetricsImpl;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -51,6 +53,7 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.profile.GCProfiler;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
@@ -76,7 +79,7 @@ import java.util.concurrent.TimeUnit;
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class AuthorizerBenchmark {
 
-    @Param({"10000"})
+    @Param({"10000", "50000"})
     private int resourceCount;
     //no. of. rules per resource
     @Param({"10", "50"})
@@ -202,6 +205,11 @@ public class AuthorizerBenchmark {
         return rand.nextDouble() * 100.0 - eps < denyPercentage;
     }
 
+    @Setup(Level.Iteration)
+    public void setupIteration() {
+        authorizer.withPluginMetrics(new PluginMetricsImpl(new Metrics(), new HashMap<>(1000000)));
+    }
+
     @TearDown(Level.Trial)
     public void tearDown() throws IOException {
         authorizer.close();
@@ -220,21 +228,5 @@ public class AuthorizerBenchmark {
     @Benchmark
     public AuthorizationResult testAuthorizeByResourceType() {
         return authorizer.authorizeByResourceType(authorizeByResourceTypeContext, op, resourceType);
-    }
-
-    public static void main(String[] args) {
-        Options opt = new OptionsBuilder()
-                .include(AuthorizerBenchmark.class.getSimpleName() + ".testAuthorizeByResourceType")
-                .warmupIterations(5)
-                .warmupTime(TimeValue.seconds(1))
-                .measurementIterations(15)
-                .measurementTime(TimeValue.seconds(1))
-                .forks(1)
-                .build();
-        try {
-            new Runner(opt).run();
-        } catch (RunnerException e) {
-            e.printStackTrace();
-        }
     }
 }

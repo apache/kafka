@@ -17,7 +17,6 @@
 
 package org.apache.kafka.server.authorizer;
 
-import org.apache.commons.collections4.Trie;
 import org.apache.commons.collections4.trie.PatriciaTrie;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.Endpoint;
@@ -34,11 +33,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.SecurityUtils;
 
 import java.io.Closeable;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -182,6 +177,117 @@ public interface Authorizer extends Configurable, Closeable {
      *                       to perform the given ACL operation on at least one resource of the
      *                       given type. Return {@link AuthorizationResult#DENIED} otherwise.
      */
+    default AuthorizationResult authorizeByResourceType1(AuthorizableRequestContext requestContext, AclOperation op, ResourceType resourceType) {
+        SecurityUtils.authorizeByResourceTypeCheckArgs(op, resourceType);
+
+        // Check a hard-coded name to ensure that super users are granted
+        // access regardless of DENY ACLs.
+        if (authorize(requestContext, Collections.singletonList(new Action(
+                op, new ResourcePattern(resourceType, "hardcode", PatternType.LITERAL),
+                0, true, false)))
+                .get(0) == AuthorizationResult.ALLOWED) {
+            return AuthorizationResult.ALLOWED;
+        }
+
+        // Filter out all the resource pattern corresponding to the RequestContext,
+        // AclOperation, and ResourceType
+        ResourcePatternFilter resourceTypeFilter = new ResourcePatternFilter(
+                resourceType, null, PatternType.ANY);
+        AclBindingFilter aclFilter = new AclBindingFilter(
+                resourceTypeFilter, AccessControlEntryFilter.ANY);
+
+        EnumMap<PatternType, Set<String>> denyPatterns =
+                new EnumMap<>(PatternType.class) {{
+                    put(PatternType.LITERAL, new HashSet<>());
+                    put(PatternType.PREFIXED, new HashSet<>());
+                }};
+        EnumMap<PatternType, Set<String>> allowPatterns =
+                new EnumMap<>(PatternType.class) {{
+                    put(PatternType.LITERAL, new HashSet<>());
+                    put(PatternType.PREFIXED, new HashSet<>());
+                }};
+
+        boolean hasWildCardAllow = false;
+
+        KafkaPrincipal principal = new KafkaPrincipal(
+                requestContext.principal().getPrincipalType(),
+                requestContext.principal().getName());
+        String hostAddr = requestContext.clientAddress().getHostAddress();
+
+        for (AclBinding binding : acls(aclFilter)) {
+            if (!binding.entry().host().equals(hostAddr) && !binding.entry().host().equals("*"))
+                continue;
+
+            if (!SecurityUtils.parseKafkaPrincipal(binding.entry().principal()).equals(principal)
+                    && !binding.entry().principal().equals("User:*"))
+                continue;
+
+            if (binding.entry().operation() != op
+                    && binding.entry().operation() != AclOperation.ALL)
+                continue;
+
+            if (binding.entry().permissionType() == AclPermissionType.DENY) {
+                switch (binding.pattern().patternType()) {
+                    case LITERAL:
+                        // If wildcard deny exists, return deny directly
+                        if (binding.pattern().name().equals(ResourcePattern.WILDCARD_RESOURCE))
+                            return AuthorizationResult.DENIED;
+                        denyPatterns.get(PatternType.LITERAL).add(binding.pattern().name());
+                        break;
+                    case PREFIXED:
+                        denyPatterns.get(PatternType.PREFIXED).add(binding.pattern().name());
+                        break;
+                    default:
+                }
+                continue;
+            }
+
+            if (binding.entry().permissionType() != AclPermissionType.ALLOW)
+                continue;
+
+            switch (binding.pattern().patternType()) {
+                case LITERAL:
+                    if (binding.pattern().name().equals(ResourcePattern.WILDCARD_RESOURCE)) {
+                        hasWildCardAllow = true;
+                        continue;
+                    }
+                    allowPatterns.get(PatternType.LITERAL).add(binding.pattern().name());
+                    break;
+                case PREFIXED:
+                    allowPatterns.get(PatternType.PREFIXED).add(binding.pattern().name());
+                    break;
+                default:
+            }
+        }
+
+        if (hasWildCardAllow) {
+            return AuthorizationResult.ALLOWED;
+        }
+
+        // For any literal allowed, if there's no dominant literal and prefix denied, return allow.
+        // For any prefix allowed, if there's no dominant prefix denied, return allow.
+        for (Map.Entry<PatternType, Set<String>> entry : allowPatterns.entrySet()) {
+            for (String allowStr : entry.getValue()) {
+                if (entry.getKey() == PatternType.LITERAL
+                        && denyPatterns.get(PatternType.LITERAL).contains(allowStr))
+                    continue;
+                StringBuilder sb = new StringBuilder();
+                boolean hasDominatedDeny = false;
+                for (char ch : allowStr.toCharArray()) {
+                    sb.append(ch);
+                    if (denyPatterns.get(PatternType.PREFIXED).contains(sb.toString())) {
+                        hasDominatedDeny = true;
+                        break;
+                    }
+                }
+                if (!hasDominatedDeny)
+                    return AuthorizationResult.ALLOWED;
+            }
+        }
+
+        return AuthorizationResult.DENIED;
+    }
+
     default AuthorizationResult authorizeByResourceType(AuthorizableRequestContext requestContext, AclOperation op, ResourceType resourceType) {
         SecurityUtils.authorizeByResourceTypeCheckArgs(op, resourceType);
 
@@ -201,14 +307,11 @@ public interface Authorizer extends Configurable, Closeable {
         AclBindingFilter aclFilter = new AclBindingFilter(
             resourceTypeFilter, AccessControlEntryFilter.ANY);
 
-        // stub for Patricia map
-        final Object val = new Object();
-
         Set<String> denyPatternsLiteral = new HashSet<>();
-        Trie<String, Object> denyPatternsPrefixed = new PatriciaTrie<>();
+        PatriciaTrie<Boolean> denyPatternsPrefixed = new PatriciaTrie<>();
 
         Set<String> allowPatternsLiteral = new HashSet<>();
-        Map<String, Object> allowPatternsPrefixed = new PatriciaTrie<>();
+        PatriciaTrie<Boolean> allowPatternsPrefixed = new PatriciaTrie<>();
 
         boolean hasWildCardAllow = false;
 
@@ -238,7 +341,7 @@ public interface Authorizer extends Configurable, Closeable {
                         denyPatternsLiteral.add(binding.pattern().name());
                         break;
                     case PREFIXED:
-                        denyPatternsPrefixed.put(binding.pattern().name(), val);
+                        denyPatternsPrefixed.put(binding.pattern().name(), Boolean.TRUE);
                         break;
                     default:
                 }
@@ -257,7 +360,7 @@ public interface Authorizer extends Configurable, Closeable {
                     allowPatternsLiteral.add(binding.pattern().name());
                     break;
                 case PREFIXED:
-                    allowPatternsPrefixed.put(binding.pattern().name(), val);
+                    allowPatternsPrefixed.put(binding.pattern().name(), Boolean.TRUE);
                     break;
                 default:
             }
@@ -273,7 +376,16 @@ public interface Authorizer extends Configurable, Closeable {
                 continue;
             }
 
-            boolean hasDominatedDeny = !denyPatternsPrefixed.prefixMap(allowStr).isEmpty();
+            boolean hasDominatedDeny = false;
+
+            if(!denyPatternsPrefixed.isEmpty()) {
+                hasDominatedDeny = !denyPatternsPrefixed.headMap(allowStr).isEmpty() || denyPatternsPrefixed.containsKey(allowStr);
+            }
+            
+         //   String denyPrefix = denyPatternsPrefixed.selectKey(allowStr);
+         //   boolean hasDominatedDeny = (denyPrefix != null);
+
+          //  boolean hasDominatedDeny = !denyPatternsPrefixed.prefixMap(allowStr).isEmpty();
 
             if (!hasDominatedDeny)
                 return AuthorizationResult.ALLOWED;
@@ -281,7 +393,11 @@ public interface Authorizer extends Configurable, Closeable {
 
         // For any prefix allowed, if there's no dominant prefix denied, return allow.
         for (String allowStr : allowPatternsPrefixed.keySet()) {
-            boolean hasDominatedDeny = !denyPatternsPrefixed.prefixMap(allowStr).isEmpty();
+            boolean hasDominatedDeny = false;
+
+            if(!denyPatternsPrefixed.isEmpty()) {
+                hasDominatedDeny = !denyPatternsPrefixed.headMap(allowStr).isEmpty() || denyPatternsPrefixed.containsKey(allowStr);
+            }
 
             if (!hasDominatedDeny)
                 return AuthorizationResult.ALLOWED;

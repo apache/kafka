@@ -142,6 +142,26 @@ trait BaseAuthorizerTest {
   }
 
   @Test
+  def testAuthorizeByResourceTypeLiteralResourceDenyDominate(): Unit = {
+    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
+    val host1 = InetAddress.getByName("192.168.1.1")
+    val abcd = new ResourcePattern(GROUP, "abcd", PREFIXED)
+    val abcde = new ResourcePattern(GROUP, "abcde", LITERAL)
+
+    val u1h1Context = newRequestContext(user1, host1)
+    val allowAce = new AccessControlEntry(user1.toString, host1.getHostAddress, READ, ALLOW)
+    val denyAce = new AccessControlEntry(user1.toString, host1.getHostAddress, READ, DENY)
+
+    addAcls(authorizer, Set(allowAce), abcde)
+    assertTrue(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP),
+      "User1 from host1 should have READ access to at least one group")
+
+    addAcls(authorizer, Set(denyAce), abcd)
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP),
+      "User1 from host1 now should not have READ access to any group")
+  }
+
+  @Test
   def testAuthorizeByResourceTypePrefixedResourceDenyDominate(): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val host1 = InetAddress.getByName("192.168.1.1")
