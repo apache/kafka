@@ -314,8 +314,8 @@ public class NetworkClientDelegateTest {
             Node node = mockNode();
             client.setUnreachable(node, REQUEST_TIMEOUT_MS);
 
-            // Poll with onClose=false
-            ncd.poll(0, time.milliseconds(), false);
+            // Poll with onClose=false (default)
+            ncd.poll(0, time.milliseconds());
             assertTrue(ncd.hasAnyPendingRequests());
 
             // Poll with onClose=true
