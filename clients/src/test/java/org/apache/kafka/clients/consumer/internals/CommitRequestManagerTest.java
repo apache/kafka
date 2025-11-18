@@ -778,7 +778,7 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testOffsetFetchRequestShouldFailedWithTopicIdWhenMetadataUnknownResponseTopicId() {
+    public void testOffsetFetchRequestShouldFailWithTopicIdWhenMetadataUnknownResponseTopicId() {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
         Uuid topicId = Uuid.randomUuid();
@@ -791,14 +791,11 @@ public class CommitRequestManagerTest {
         List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures = sendAndVerifyDuplicatedOffsetFetchRequests(
             commitRequestManager,
             partitions,
-            2,
-            Errors.NONE,
+            1,
+            Errors.UNKNOWN_TOPIC_OR_PARTITION,
             true,
             topicId);
-        futures.forEach(f -> {
-            assertTrue(f.isDone());
-            assertTrue(f.isCompletedExceptionally());
-        });
+        futures.forEach(f -> testRetriable(commitRequestManager, futures, Errors.UNKNOWN_TOPIC_OR_PARTITION));
         // expecting the buffers to be emptied after being completed successfully
         commitRequestManager.poll(0);
         assertEmptyPendingRequests(commitRequestManager);

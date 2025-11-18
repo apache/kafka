@@ -1132,7 +1132,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     );
                     var error = Errors.forCode(partition.errorCode());
                     if (error != Errors.NONE || topicName == null) {
-                        log.debug("Failed to fetch offset for partition {}: {}", tp, error.message());
+                        if (error != Errors.NONE) {
+                            log.debug("Failed to fetch offset for partition {}: {}", tp, error.message());
+                        } else { // unknown topic name
+                            log.debug("Failed to fetch offset, topic does not exist");
+                        }
 
                         if (!failedRequestRegistered) {
                             onFailedAttempt(currentTimeMs);
