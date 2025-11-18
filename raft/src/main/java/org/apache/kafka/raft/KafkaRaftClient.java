@@ -443,7 +443,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private Optional<SnapshotReader<T>> latestSnapshot() {
-        Optional<SnapshotReader<T>> snapshot = log.latestSnapshot().map(reader ->
+        return log.latestSnapshot().map(reader ->
             RecordsSnapshotReader.of(reader,
                 serde,
                 BufferSupplier.create(),
@@ -452,7 +452,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 logContext
             )
         );
-        return snapshot;
     }
 
     private void maybeFireHandleCommit(long baseOffset, int epoch, long appendTimestamp, int sizeInBytes, List<T> records) {

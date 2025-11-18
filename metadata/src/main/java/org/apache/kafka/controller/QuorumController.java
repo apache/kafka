@@ -384,6 +384,8 @@ public final class QuorumController implements Controller {
         public QuorumController build() throws Exception {
             if (raftClient == null) {
                 throw new IllegalStateException("You must set a raft client.");
+            } else if (bootstrapMetadata == null) {
+                throw new IllegalStateException("You must specify an initial metadata.version using the kafka-storage tool.");
             } else if (quorumFeatures == null) {
                 throw new IllegalStateException("You must specify the quorum features");
             } else if (nonFatalFaultHandler == null) {
@@ -1020,12 +1022,9 @@ public final class QuorumController implements Controller {
                         Batch<ApiMessageAndVersion> batch = reader.next();
                         long offset = batch.lastOffset();
                         List<ApiMessageAndVersion> messages = batch.records();
-                        if (reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID)) {
-                            // For bootstrap snapshots, extract feature levels from all data records
-                            if (!messages.isEmpty()) {
-                                bootstrapMetadata = BootstrapMetadata.fromRecords(messages, "bootstrap");
-                                return;
-                            }
+                        // KIP-1170: The 0-0.checkpoint can contain metadata records. If it does, they should be considered the bootstrap metadata for the cluster.
+                        if (reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID) && !messages.isEmpty()) {
+                            bootstrapMetadata = BootstrapMetadata.fromRecords(messages, "bootstrap");
                         }
                         log.debug("Replaying snapshot {} batch with last offset of {}",
                                 snapshotName, offset);

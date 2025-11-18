@@ -124,17 +124,6 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
                         messages.add(new ApiMessageAndVersion(message, (short) 0));
                         break;
                     }
-                    case KRAFT_VERSION: {
-                        KRaftVersionRecord message = new KRaftVersionRecord();
-                        message.read(new ByteBufferAccessor(record.value()), (short) 0);
-                        messages.add(new ApiMessageAndVersion(message, (short) 0));
-                        break;
-                    }
-                    case KRAFT_VOTERS:
-                        VotersRecord message =  new VotersRecord();
-                        message.read(new ByteBufferAccessor(record.value()), (short) 0);
-                        messages.add(new ApiMessageAndVersion(message, (short) 0));
-                        break;
                     default:
                         throw new RuntimeException("Unsupported control record type " + type + " at offset " +
                                 record.offset());

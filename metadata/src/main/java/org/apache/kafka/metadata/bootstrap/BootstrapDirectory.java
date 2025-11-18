@@ -58,7 +58,7 @@ public class BootstrapDirectory {
         this.directoryPath = Objects.requireNonNull(directoryPath);
     }
 
-    public BootstrapMetadata readBootstrapCheckpoint() throws Exception {
+    public BootstrapMetadata maybeReadLegacyBootstrapCheckpoint() throws Exception {
         Path path = Paths.get(directoryPath);
         if (!Files.isDirectory(path)) {
             if (Files.exists(path)) {

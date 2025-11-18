@@ -1593,7 +1593,6 @@ public class QuorumControllerTest {
             msg -> { },
             -1L,
             BootstrapMetadata.fromVersion(metadataVersion, "test"),
-            false,
             Optional.empty(),
             3);
         RecordTestUtils.replayAll(featureControlManager, result.records());
@@ -1629,7 +1628,6 @@ public class QuorumControllerTest {
             logMsg -> { },
             0L,
             BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
-            false,
             Optional.empty(),
             3);
         assertFalse(result.isAtomic());
@@ -1678,7 +1676,6 @@ public class QuorumControllerTest {
             logMsg -> { },
             offsetControlManager.transactionStartOffset(),
             BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
-            false,
             Optional.of(MetadataVersion.IBP_3_6_IV1),
             3);
 
@@ -1702,7 +1699,6 @@ public class QuorumControllerTest {
                 msg -> { },
                 offsetControlManager.transactionStartOffset(),
                 BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV0, "test"),
-                false,
                 Optional.of(MetadataVersion.IBP_3_6_IV0),
                 3));
     }

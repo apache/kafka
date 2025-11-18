@@ -482,14 +482,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 return;
             }
             formatter.setReleaseVersion(nodes.bootstrapMetadata().metadataVersion());
-            Feature.PRODUCTION_FEATURES.forEach(feature -> {
-                String featureName = feature.featureName();
-                if (!MetadataVersion.FEATURE_NAME.equals(featureName)
-                    && !KRaftVersion.FEATURE_NAME.equals(featureName)) {
-                    short level = nodes.bootstrapMetadata().featureLevel(featureName);
-                    formatter.setFeatureLevel(featureName, level);
-                }
-            });
             formatter.setUnstableFeatureVersionsEnabled(true);
             formatter.setIgnoreFormatted(false);
             formatter.setControllerListenerName(controllerListenerName);
