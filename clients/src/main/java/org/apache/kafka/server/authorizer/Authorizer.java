@@ -207,7 +207,7 @@ public interface Authorizer extends Configurable, Closeable {
                     put(PatternType.LITERAL, new HashSet<>());
                     put(PatternType.PREFIXED, new HashSet<>());
                 }};
-        EnumMap<PatternType, Set<String>> allowPatterns =
+        EnumMap<PatternType, TrieSet> allowPatterns =
             new EnumMap<>(PatternType.class) {{
                     put(PatternType.LITERAL, new TrieSet());
                     put(PatternType.PREFIXED, new TrieSet());
@@ -272,8 +272,8 @@ public interface Authorizer extends Configurable, Closeable {
 
         // For any literal allowed, if there's no dominant literal and prefix denied, return allow.
         // For any prefix allowed, if there's no dominant prefix denied, return allow.
-        for (Map.Entry<PatternType, Set<String>> entry : allowPatterns.entrySet()) {
-            TrieSet toAllow = (TrieSet) entry.getValue();
+        for (Map.Entry<PatternType, TrieSet> entry : allowPatterns.entrySet()) {
+            TrieSet toAllow = entry.getValue();
             if (entry.getKey() == PatternType.LITERAL)
                 toAllow.removeAll(denyPatterns.get(PatternType.LITERAL));
             for (final String d : denyPatterns.get(PatternType.PREFIXED)) {

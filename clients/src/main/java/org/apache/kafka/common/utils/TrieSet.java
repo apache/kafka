@@ -24,6 +24,15 @@ import java.util.Iterator;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * A set of strings backed by a PATRICIA trie.
+ * <p>
+ * A {@link org.apache.commons.collections4.trie.PatriciaTrie}
+ * (Practical Algorithm to Retrieve Information
+ * Coded in Alphanumeric) implements efficient worst-case O(K)-time operations, where K is the max key bit-length in the
+ * tree.
+ * </p>
+ */
 public class TrieSet implements Set<String> {
     private final PatriciaTrie<String> trie;
 
@@ -31,6 +40,14 @@ public class TrieSet implements Set<String> {
         trie = new PatriciaTrie<>();
     }
 
+    /**
+     * Get a set view of all strings with the same prefix.
+     * <p>
+     * The view is backed by the trie. If you want to modify the trie while iterating the view, create a copy first.
+     * </p>
+     * @param key the prefix to search for
+     * @return a set view of all strings with the given prefix
+     */
     public Set<String> prefixSet(String key) {
         return trie.prefixMap(key).keySet();
     }
@@ -62,6 +79,7 @@ public class TrieSet implements Set<String> {
 
     @Override
     public <T> T[] toArray(T[] a) {
+        Objects.requireNonNull(a);
         return trie.keySet().toArray(a);
     }
 
@@ -96,9 +114,13 @@ public class TrieSet implements Set<String> {
     @Override
     public boolean retainAll(Collection<?> c) {
         boolean mutated = false;
-        for (final Object k : c) {
-            if (!contains(k))
-                mutated |= remove(k);
+        Iterator<String> it = iterator();
+        while (it.hasNext()) {
+            String element = it.next();
+            if (!c.contains(element)) {
+                it.remove();
+                mutated = true;
+            }
         }
         return mutated;
     }
