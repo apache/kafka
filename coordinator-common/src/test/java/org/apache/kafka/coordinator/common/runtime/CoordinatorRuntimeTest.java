@@ -634,7 +634,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(metrics)
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
-                .withAppendLingerMs(10)
+                .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -2352,6 +2352,57 @@ public class CoordinatorRuntimeTest {
     }
 
     @Test
+    public void testTimerIsScheduled() throws InterruptedException {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .build();
+
+        runtime.scheduleLoadOperation(TP, 10);
+
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0, ctx.timer.size());
+
+        assertFalse(ctx.timer.isScheduled("timer-1"));
+
+        ctx.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, false,
+            () -> new CoordinatorResult<>(List.of("record1"), null));
+
+        assertTrue(ctx.timer.isScheduled("timer-1"));
+        assertFalse(ctx.timer.isScheduled("timer-2"));
+        assertEquals(1, ctx.timer.size());
+
+        ctx.timer.schedule("timer-2", 20, TimeUnit.MILLISECONDS, false,
+            () -> new CoordinatorResult<>(List.of("record2"), null));
+
+        assertTrue(ctx.timer.isScheduled("timer-1"));
+        assertTrue(ctx.timer.isScheduled("timer-2"));
+        assertEquals(2, ctx.timer.size());
+
+        ctx.timer.cancel("timer-1");
+
+        assertFalse(ctx.timer.isScheduled("timer-1"));
+        assertTrue(ctx.timer.isScheduled("timer-2"));
+        assertEquals(1, ctx.timer.size());
+
+        timer.advanceClock(21);
+
+        assertFalse(ctx.timer.isScheduled("timer-2"));
+        assertEquals(0, ctx.timer.size());
+    }
+
+    @Test
     public void testStateChanges() throws Exception {
         MockTimer timer = new MockTimer();
         MockPartitionWriter writer = mock(MockPartitionWriter.class);
@@ -2615,6 +2666,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withAppendLingerMs(OptionalInt.of(0))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -2689,7 +2741,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(metrics)
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
-                .withAppendLingerMs(10)
+                .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -2766,6 +2818,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withAppendLingerMs(OptionalInt.of(0))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -3163,7 +3216,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
-                .withAppendLingerMs(10)
+                .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -3298,7 +3351,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
-                .withAppendLingerMs(10)
+                .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -3350,7 +3403,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
-                .withAppendLingerMs(10)
+                .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -3436,7 +3489,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
-                .withAppendLingerMs(10)
+                .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -3534,7 +3587,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
-                .withAppendLingerMs(10)
+                .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -3650,6 +3703,453 @@ public class CoordinatorRuntimeTest {
     }
 
     @Test
+    public void testAdaptiveAppendLingerTime() {
+        MockTimer timer = new MockTimer();
+        ManualEventProcessor processor = new ManualEventProcessor();
+        MockPartitionWriter writer = new MockPartitionWriter();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(processor)
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withAppendLingerMs(OptionalInt.empty())
+                .withExecutorService(mock(ExecutorService.class))
+                .build();
+
+        // Loads the coordinator. Poll once to execute the load operation and once
+        // to complete the load.
+        runtime.scheduleLoadOperation(TP, 10);
+        processor.poll();
+        processor.poll();
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertNull(ctx.currentBatch);
+
+        // Write #1.
+        runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+            state -> new CoordinatorResult<>(List.of("record1", "record2"), "response1")
+        );
+
+        // Write #2.
+        runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+            state -> new CoordinatorResult<>(List.of("record3"), "response2")
+        );
+
+        // Execute write #1.
+        processor.poll();
+
+        // A batch has been created.
+        assertNotNull(ctx.currentBatch);
+
+        // A flush event is queued after write #2.
+        assertEquals(2, processor.size());
+
+        // Verify the state. Records are replayed but no batch written.
+        assertEquals(0L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, "record1"),
+            new MockCoordinatorShard.RecordAndMetadata(1, "record2")
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(), writer.entries(TP));
+
+        // Execute write #2.
+        processor.poll();
+        assertEquals(1, processor.size());
+
+        // The batch has not been flushed.
+        assertNotNull(ctx.currentBatch);
+
+        // Verify the state. Records are replayed but no batch written.
+        assertEquals(0L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, "record1"),
+            new MockCoordinatorShard.RecordAndMetadata(1, "record2"),
+            new MockCoordinatorShard.RecordAndMetadata(2, "record3")
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(), writer.entries(TP));
+
+        // Flush the batch.
+        processor.poll();
+
+        // The batch is flushed.
+        assertNull(ctx.currentBatch);
+
+        // Verify the state.
+        assertEquals(3L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(0L, 3L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, "record1"),
+            new MockCoordinatorShard.RecordAndMetadata(1, "record2"),
+            new MockCoordinatorShard.RecordAndMetadata(2, "record3")
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(
+            TestUtil.records(timer.time().milliseconds(), "record1", "record2", "record3")
+        ), writer.entries(TP));
+    }
+
+    /**
+     * Tests a flush triggered by the max batch size with an adaptive append linger time.
+     *
+     * The flush for the first batch must not flush the second batch.
+     */
+    @Test
+    @SuppressWarnings("checkstyle:MethodLength")
+    public void testAdaptiveAppendLingerWithMaxBatchSizeFlush() {
+        MockTimer timer = new MockTimer();
+        ManualEventProcessor processor = new ManualEventProcessor();
+        MockPartitionWriter writer = new MockPartitionWriter();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(processor)
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withAppendLingerMs(OptionalInt.empty())
+                .withExecutorService(mock(ExecutorService.class))
+                .build();
+
+        // Loads the coordinator. Poll once to execute the load operation and once
+        // to complete the load.
+        runtime.scheduleLoadOperation(TP, 10);
+        processor.poll();
+        processor.poll();
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertNull(ctx.currentBatch);
+
+        // Get the max batch size.
+        int maxBatchSize = writer.config(TP).maxMessageSize();
+
+        // Create records with a quarter of the max batch size each. Keep in mind that
+        // each batch has a header so it is not possible to have those four records
+        // in one single batch.
+        List<String> records = Stream.of('1', '2', '3', '4', '5').map(c -> {
+            char[] payload = new char[maxBatchSize / 4];
+            Arrays.fill(payload, c);
+            return new String(payload);
+        }).collect(Collectors.toList());
+
+        // Write #1.
+        runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+            state -> new CoordinatorResult<>(records.subList(0, 1), "response1")
+        );
+
+        // Write #2.
+        runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+            state -> new CoordinatorResult<>(records.subList(1, 2), "response2")
+        );
+
+        // Write #3.
+        runtime.scheduleWriteOperation("write#3", TP, Duration.ofMillis(20),
+            state -> new CoordinatorResult<>(records.subList(2, 3), "response3")
+        );
+
+        // Write #4.
+        runtime.scheduleWriteOperation("write#4", TP, Duration.ofMillis(20),
+            state -> new CoordinatorResult<>(records.subList(3, 4), "response4")
+        );
+
+        // Execute write #1, write #2 and write #3.
+        processor.poll();
+        processor.poll();
+        processor.poll();
+
+        // A batch has been created.
+        assertNotNull(ctx.currentBatch);
+
+        // A flush event is queued after write #4.
+        assertEquals(2, processor.size());
+
+        // Verify the state. Records are replayed but no batch written.
+        assertEquals(0L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, records.get(0)),
+            new MockCoordinatorShard.RecordAndMetadata(1, records.get(1)),
+            new MockCoordinatorShard.RecordAndMetadata(2, records.get(2))
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(), writer.entries(TP));
+
+        // Write #5.
+        runtime.scheduleWriteOperation("write#5", TP, Duration.ofMillis(20),
+            state -> new CoordinatorResult<>(records.subList(4, 5), "response5")
+        );
+
+        // Execute write #4. This one cannot go into the existing batch
+        // so the existing batch should be flushed and a new one should be created.
+        processor.poll();
+
+        // A batch has been created.
+        assertNotNull(ctx.currentBatch);
+
+        // Another flush event is queued after write #5.
+        assertEquals(3, processor.size());
+
+        // Verify the state.
+        assertEquals(3L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(0L, 3L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, records.get(0)),
+            new MockCoordinatorShard.RecordAndMetadata(1, records.get(1)),
+            new MockCoordinatorShard.RecordAndMetadata(2, records.get(2)),
+            new MockCoordinatorShard.RecordAndMetadata(3, records.get(3))
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(
+            TestUtil.records(timer.time().milliseconds(), records.subList(0, 3))
+        ), writer.entries(TP));
+
+        // Execute the first flush.
+        processor.poll();
+        assertEquals(2, processor.size());
+
+        // The flush does not belong to the current batch and is ignored.
+        assertNotNull(ctx.currentBatch);
+
+        // Verify the state.
+        assertEquals(3L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(0L, 3L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, records.get(0)),
+            new MockCoordinatorShard.RecordAndMetadata(1, records.get(1)),
+            new MockCoordinatorShard.RecordAndMetadata(2, records.get(2)),
+            new MockCoordinatorShard.RecordAndMetadata(3, records.get(3))
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(
+            TestUtil.records(timer.time().milliseconds(), records.subList(0, 3))
+        ), writer.entries(TP));
+
+        // Execute write #5.
+        processor.poll();
+        assertEquals(1, processor.size());
+
+        // Verify the state.
+        assertEquals(3L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(0L, 3L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, records.get(0)),
+            new MockCoordinatorShard.RecordAndMetadata(1, records.get(1)),
+            new MockCoordinatorShard.RecordAndMetadata(2, records.get(2)),
+            new MockCoordinatorShard.RecordAndMetadata(3, records.get(3)),
+            new MockCoordinatorShard.RecordAndMetadata(4, records.get(4))
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(
+            TestUtil.records(timer.time().milliseconds(), records.subList(0, 3))
+        ), writer.entries(TP));
+
+        // Execute the second flush.
+        processor.poll();
+        assertEquals(0, processor.size());
+
+        // The batch is flushed.
+        assertNull(ctx.currentBatch);
+
+        // Verify the state.
+        assertEquals(5L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(0L, 3L, 5L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, records.get(0)),
+            new MockCoordinatorShard.RecordAndMetadata(1, records.get(1)),
+            new MockCoordinatorShard.RecordAndMetadata(2, records.get(2)),
+            new MockCoordinatorShard.RecordAndMetadata(3, records.get(3)),
+            new MockCoordinatorShard.RecordAndMetadata(4, records.get(4))
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(
+            TestUtil.records(timer.time().milliseconds(), records.subList(0, 3)),
+            TestUtil.records(timer.time().milliseconds(), records.subList(3, 5))
+        ), writer.entries(TP));
+    }
+
+    /**
+     * Tests a transactional write with an adaptive append linger time.
+     *
+     * The transactional write must not enqueue a flush, since it flushes immediately.
+     * The flush for the batch before the transactional write must not flush the batch after the
+     * transactional write.
+     */
+    @Test
+    public void testAdaptiveAppendLingerWithTransactionalWrite() {
+        MockTimer timer = new MockTimer();
+        ManualEventProcessor processor = new ManualEventProcessor();
+        MockPartitionWriter writer = new MockPartitionWriter();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(processor)
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withAppendLingerMs(OptionalInt.empty())
+                .withExecutorService(mock(ExecutorService.class))
+                .build();
+
+        // Loads the coordinator. Poll once to execute the load operation and once
+        // to complete the load.
+        runtime.scheduleLoadOperation(TP, 10);
+        processor.poll();
+        processor.poll();
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertNull(ctx.currentBatch);
+
+        // Write #1.
+        runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+            state -> new CoordinatorResult<>(List.of("record1"), "response1")
+        );
+
+        // Transactional write #2. This will flush the batch.
+        runtime.scheduleTransactionalWriteOperation(
+            "txn-write#1",
+            TP,
+            "transactional-id",
+            100L,
+            (short) 50,
+            Duration.ofMillis(20),
+            state -> new CoordinatorResult<>(List.of("record2"), "response2"),
+            TXN_OFFSET_COMMIT_LATEST_VERSION
+        );
+
+        // Write #3.
+        runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+            state -> new CoordinatorResult<>(List.of("record3"), "response3")
+        );
+
+        assertEquals(3, processor.size());
+
+        // Execute write #1.
+        processor.poll();
+
+        // A batch has been created.
+        assertNotNull(ctx.currentBatch);
+
+        // A flush event is queued after write #3.
+        assertEquals(3, processor.size());
+
+        // Verify the state. Records are replayed but no batch written.
+        assertEquals(0L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, "record1")
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(), writer.entries(TP));
+
+        // Execute transactional write #2.
+        processor.poll();
+
+        // The batch is flushed.
+        assertNull(ctx.currentBatch);
+
+        // No flush event is queued.
+        assertEquals(2, processor.size());
+
+        // Verify the state. The current batch and the transactional records are
+        // written to the log.
+        assertEquals(2L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(0L, 1L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, "record1")
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(
+            TestUtil.records(timer.time().milliseconds(), "record1"),
+            TestUtil.transactionalRecords(100L, (short) 50, timer.time().milliseconds(), "record2")
+        ), writer.entries(TP));
+
+        // Execute write #3.
+        processor.poll();
+
+        // A batch has been created.
+        assertNotNull(ctx.currentBatch);
+
+        // A flush event is queued after the first flush.
+        assertEquals(2, processor.size());
+
+        // Verify the state. Records are replayed but no batch written.
+        assertEquals(2L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(0L, 1L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, "record1"),
+            new MockCoordinatorShard.RecordAndMetadata(2, "record3")
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(
+            TestUtil.records(timer.time().milliseconds(), "record1"),
+            TestUtil.transactionalRecords(100L, (short) 50, timer.time().milliseconds(), "record2")
+        ), writer.entries(TP));
+
+        // Execute the first flush.
+        processor.poll();
+        assertEquals(1, processor.size());
+
+        // The flush does not belong to the current batch and is ignored.
+        assertNotNull(ctx.currentBatch);
+
+        // Execute the second flush.
+        processor.poll();
+        assertEquals(0, processor.size());
+
+        // The batch is flushed.
+        assertNull(ctx.currentBatch);
+
+        // Verify the state.
+        assertEquals(3L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(0L, 1L, 2L, 3L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, "record1"),
+            new MockCoordinatorShard.RecordAndMetadata(2, "record3")
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(
+            TestUtil.records(timer.time().milliseconds(), "record1"),
+            TestUtil.transactionalRecords(100L, (short) 50, timer.time().milliseconds(), "record2"),
+            TestUtil.records(timer.time().milliseconds(), "record3")
+        ), writer.entries(TP));
+    }
+
+    @Test
     public void testStateMachineIsReloadedWhenOutOfSync() {
         MockTimer timer = new MockTimer();
         MockCoordinatorLoader loader = spy(new MockCoordinatorLoader());
@@ -3677,7 +4177,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
-                .withAppendLingerMs(10)
+                .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -3792,7 +4292,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
-                .withAppendLingerMs(10)
+                .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -3841,7 +4341,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
-                .withAppendLingerMs(10)
+                .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -3950,7 +4450,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
-                .withAppendLingerMs(10)
+                .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -4046,7 +4546,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
-                .withAppendLingerMs(10)
+                .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -4133,7 +4633,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(serializer)
-                .withAppendLingerMs(10)
+                .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -4183,6 +4683,119 @@ public class CoordinatorRuntimeTest {
     }
 
     @Test
+    public void testRecordAppendLingerTime() throws Exception {
+        MockTimer timer = new MockTimer();
+
+        // Writer sleeps for 10ms before appending records.
+        MockPartitionWriter writer = new MockPartitionWriter(timer.time(), Integer.MAX_VALUE, false);
+        CoordinatorRuntimeMetrics runtimeMetrics = mock(CoordinatorRuntimeMetrics.class);
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(runtimeMetrics)
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withAppendLingerMs(OptionalInt.of(10))
+                .withExecutorService(mock(ExecutorService.class))
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertNull(ctx.currentBatch);
+
+        // Get the max batch size.
+        int maxBatchSize = writer.config(TP).maxMessageSize();
+
+        // Create records with a quarter of the max batch size each. Keep in mind that
+        // each batch has a header so it is not possible to have those four records
+        // in one single batch.
+        List<String> records = Stream.of('1', '2', '3', '4').map(c -> {
+            char[] payload = new char[maxBatchSize / 4];
+            Arrays.fill(payload, c);
+            return new String(payload);
+        }).collect(Collectors.toList());
+
+        // Write #1 with two records.
+        long firstBatchTimestamp = timer.time().milliseconds();
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(50),
+            state -> new CoordinatorResult<>(records.subList(0, 2), "response1")
+        );
+
+        // A batch has been created.
+        assertNotNull(ctx.currentBatch);
+
+        // Write #2 with one record.
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(50),
+            state -> new CoordinatorResult<>(records.subList(2, 3), "response2")
+        );
+
+        // Verify the state. Records are replayed but no batch written.
+        assertEquals(List.of(), writer.entries(TP));
+        verify(runtimeMetrics, times(0)).recordFlushTime(10);
+
+        // Write #3 with one record. This one cannot go into the existing batch
+        // so the existing batch should be flushed and a new one should be created.
+        long secondBatchTimestamp = timer.time().milliseconds();
+        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP, Duration.ofMillis(50),
+            state -> new CoordinatorResult<>(records.subList(3, 4), "response3")
+        );
+
+        // Verify the state. Records are replayed. The previous batch
+        // got flushed with all the records but the new one from #3.
+        // The new batch's timestamp comes from before the flush.
+        assertEquals(3L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, records.get(0)),
+            new MockCoordinatorShard.RecordAndMetadata(1, records.get(1)),
+            new MockCoordinatorShard.RecordAndMetadata(2, records.get(2)),
+            new MockCoordinatorShard.RecordAndMetadata(3, records.get(3))
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(
+            records(firstBatchTimestamp, records.subList(0, 3))
+        ), writer.entries(TP));
+        verify(runtimeMetrics, times(1)).recordLingerTime(0);
+
+        // Advance past the linger time.
+        timer.advanceClock(11);
+
+        // Verify the state. The pending batch is flushed.
+        assertEquals(4L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(
+            new MockCoordinatorShard.RecordAndMetadata(0, records.get(0)),
+            new MockCoordinatorShard.RecordAndMetadata(1, records.get(1)),
+            new MockCoordinatorShard.RecordAndMetadata(2, records.get(2)),
+            new MockCoordinatorShard.RecordAndMetadata(3, records.get(3))
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(
+            records(secondBatchTimestamp, records.subList(0, 3)),
+            records(secondBatchTimestamp, records.subList(3, 4))
+        ), writer.entries(TP));
+        verify(runtimeMetrics, times(1)).recordLingerTime(21);
+
+        // Commit and verify that writes are completed.
+        writer.commit(TP);
+        assertTrue(write1.isDone());
+        assertTrue(write2.isDone());
+        assertTrue(write3.isDone());
+        assertEquals(4L, ctx.coordinator.lastCommittedOffset());
+        assertEquals("response1", write1.get(5, TimeUnit.SECONDS));
+        assertEquals("response2", write2.get(5, TimeUnit.SECONDS));
+        assertEquals("response3", write3.get(5, TimeUnit.SECONDS));
+    }
+
+    @Test
     public void testRecordFlushTime() throws Exception {
         MockTimer timer = new MockTimer();
 
@@ -4202,7 +4815,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(runtimeMetrics)
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
-                .withAppendLingerMs(10)
+                .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -4313,7 +4926,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withCompression(compression)
                 .withSerializer(new StringSerializer())
-                .withAppendLingerMs(10)
+                .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -4399,7 +5012,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withCompression(compression)
                 .withSerializer(new StringSerializer())
-                .withAppendLingerMs(10)
+                .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -4485,7 +5098,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withCompression(compression)
                 .withSerializer(new StringSerializer())
-                .withAppendLingerMs(10)
+                .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -4576,6 +5189,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(runtimeMetrics)
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withAppendLingerMs(OptionalInt.of(0))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -4662,6 +5276,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(runtimeMetrics)
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withAppendLingerMs(OptionalInt.of(0))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
@@ -4807,6 +5422,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(runtimeMetrics)
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withAppendLingerMs(OptionalInt.of(0))
                 .withExecutorService(executorService)
                 .build();
 
@@ -4888,7 +5504,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
-                .withAppendLingerMs(10)
+                .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
                 .build();
 
