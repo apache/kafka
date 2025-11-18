@@ -1263,6 +1263,8 @@ org.apache.kafka.clients.consumer.internals.CommitRequestManagerTest:
 - testOffsetFetchRequestEnsureDuplicatedRequestSucceed
 - testOffsetFetchRequestErroredRequests
 - testOffsetFetchRequestPartitionDataError
+- testOffsetFetchRequestShouldFailWithTopicIdWhenMetadataUnknownResponseTopicId
+- testOffsetFetchRequestShouldSucceedWithTopicId
 - testOffsetFetchRequestStateToStringBase
 - testOffsetFetchRequestTimeoutRequests
 - testPollEnsureAutocommitSent
