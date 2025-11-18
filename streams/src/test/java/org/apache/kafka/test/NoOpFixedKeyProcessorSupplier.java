@@ -16,29 +16,26 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 
-public class NoOpValueTransformerWithKeySupplier<K, V> implements ValueTransformerWithKeySupplier<K, V, V> {
-    public ProcessorContext context;
+public class NoOpFixedKeyProcessorSupplier<K, V> implements FixedKeyProcessorSupplier<K, V, V> {
+    public FixedKeyProcessorContext<K, V> context;
 
     @Override
-    public ValueTransformerWithKey<K, V, V> get() {
-        return new ValueTransformerWithKey<>() {
+    public FixedKeyProcessor<K, V, V> get() {
+        return new FixedKeyProcessor<>() {
 
             @Override
-            public void init(final ProcessorContext context1) {
-                NoOpValueTransformerWithKeySupplier.this.context = context1;
+            public void init(final FixedKeyProcessorContext<K, V> context) {
+                NoOpFixedKeyProcessorSupplier.this.context = context;
             }
 
             @Override
-            public V transform(final K readOnlyKey, final V value) {
-                return value;
-            }
-
-            @Override
-            public void close() {
+            public void process(final FixedKeyRecord<K, V> record) {
+                // no-op
             }
         };
     }

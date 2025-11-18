@@ -34,6 +34,10 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -45,7 +49,7 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
-import org.apache.kafka.test.NoOpValueTransformerWithKeySupplier;
+import org.apache.kafka.test.NoOpFixedKeyProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -69,7 +73,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.isA;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
@@ -101,9 +105,9 @@ public class KTableProcessValuesTest {
     @Mock
     private TimestampedKeyValueStore<String, String> stateStore;
     @Mock
-    private ValueTransformerWithKeySupplier<String, String, String> mockSupplier;
+    private FixedKeyProcessorSupplier<String, String, String> mockSupplier;
     @Mock
-    private ValueTransformerWithKey<String, String, String> transformer;
+    private FixedKeyProcessor<String, String, String> fixedKeyProcessor;
 
     @AfterEach
     public void cleanup() {
@@ -121,15 +125,10 @@ public class KTableProcessValuesTest {
 
     @Test
     public void shouldThrowOnGetIfSupplierReturnsNull() {
-        final KTableProcessValues<String, String, String> transformer =
+        final KTableProcessValues<String, String, String> fixedKeyProcessorSupplier =
             new KTableProcessValues<>(parent, new NullSupplier(), QUERYABLE_NAME);
 
-        try {
-            transformer.get();
-            fail("NPE expected");
-        } catch (final NullPointerException expected) {
-            // expected
-        }
+        assertThrows(NullPointerException.class, fixedKeyProcessorSupplier::get);
     }
 
     @Test
@@ -137,33 +136,28 @@ public class KTableProcessValuesTest {
         final KTableValueGetterSupplier<String, String> view =
             new KTableProcessValues<>(parent, new NullSupplier(), null).view();
 
-        try {
-            view.get();
-            fail("NPE expected");
-        } catch (final NullPointerException expected) {
-            // expected
-        }
+        assertThrows(NullPointerException.class, view::get);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
-    public void shouldInitializeTransformerWithForwardDisabledProcessorContext() {
-        final NoOpValueTransformerWithKeySupplier<String, String> transformer = new NoOpValueTransformerWithKeySupplier<>();
-        final KTableProcessValues<String, String, String> transformValues =
-            new KTableProcessValues<>(parent, transformer, null);
-        final Processor<String, Change<String>, String, Change<String>> processor = transformValues.get();
+    public void shouldInitializeTransformerWithForwardDisabledProcessorContext() { // TODO revisit and rename ?
+        final NoOpFixedKeyProcessorSupplier<String, String> fixedKeyProcessorSupplier = new NoOpFixedKeyProcessorSupplier<>();
+        final KTableProcessValues<String, String, String> processValues =
+            new KTableProcessValues<>(parent, fixedKeyProcessorSupplier, null);
+        final Processor<String, Change<String>, String, Change<String>> processor = processValues.get();
 
         processor.init(context);
 
-        //assertThat(transformer.context, isA((Class) ForwardingDisabledProcessorContext.class));
+        //assertThat(fixedKeyProcessorSupplier.context, isA((Class) ForwardingDisabledProcessorContext.class));
+        throw new RuntimeException();
     }
 
     @Test
     public void shouldNotSendOldValuesByDefault() {
-        final KTableProcessValues<String, String, String> transformValues =
-            new KTableProcessValues<>(parent, new ExclamationValueTransformerSupplier(), null);
+        final KTableProcessValues<String, String, String> processValues =
+            new KTableProcessValues<>(parent, new ExclamationFixedKeyProcessorSupplier(), null);
 
-        final Processor<String, Change<String>, String, Change<String>> processor = transformValues.get();
+        final Processor<String, Change<String>, String, Change<String>> processor = processValues.get();
         processor.init(context);
 
         doNothing().when(context).forward(new Record<>("Key", new Change<>("Key->newValue!", null), 0));
@@ -173,13 +167,13 @@ public class KTableProcessValuesTest {
 
     @Test
     public void shouldSendOldValuesIfConfigured() {
-        final KTableProcessValues<String, String, String> transformValues =
-            new KTableProcessValues<>(parent, new ExclamationValueTransformerSupplier(), null);
+        final KTableProcessValues<String, String, String> processValues =
+            new KTableProcessValues<>(parent, new ExclamationFixedKeyProcessorSupplier(), null);
 
         when(parent.enableSendingOldValues(true)).thenReturn(true);
 
-        transformValues.enableSendingOldValues(true);
-        final Processor<String, Change<String>, String, Change<String>> processor = transformValues.get();
+        processValues.enableSendingOldValues(true);
+        final Processor<String, Change<String>, String, Change<String>> processor = processValues.get();
         processor.init(context);
 
         doNothing().when(context).forward(new Record<>("Key", new Change<>("Key->newValue!", "Key->oldValue!"), 0));
@@ -189,7 +183,7 @@ public class KTableProcessValuesTest {
 
     @Test
     public void shouldNotSetSendOldValuesOnParentIfMaterialized() {
-        new KTableProcessValues<>(parent, new NoOpValueTransformerWithKeySupplier<>(), QUERYABLE_NAME).enableSendingOldValues(true);
+        new KTableProcessValues<>(parent, new NoOpFixedKeyProcessorSupplier<>(), QUERYABLE_NAME).enableSendingOldValues(true);
 
         verify(parent, never()).enableSendingOldValues(anyBoolean());
     }
@@ -198,13 +192,13 @@ public class KTableProcessValuesTest {
     public void shouldSetSendOldValuesOnParentIfNotMaterialized() {
         when(parent.enableSendingOldValues(true)).thenReturn(true);
 
-        new KTableProcessValues<>(parent, new NoOpValueTransformerWithKeySupplier<>(), null).enableSendingOldValues(true);
+        new KTableProcessValues<>(parent, new NoOpFixedKeyProcessorSupplier<>(), null).enableSendingOldValues(true);
     }
 
     @Test
-    public void shouldTransformOnGetIfNotMaterialized() {
-        final KTableProcessValues<String, String, String> transformValues =
-            new KTableProcessValues<>(parent, new ExclamationValueTransformerSupplier(), null);
+    public void shouldProcessOnGetIfNotMaterialized() {
+        final KTableProcessValues<String, String, String> processValues =
+            new KTableProcessValues<>(parent, new ExclamationFixedKeyProcessorSupplier(), null);
 
         when(parent.valueGetterSupplier()).thenReturn(parentGetterSupplier);
         when(parentGetterSupplier.get()).thenReturn(parentGetter);
@@ -226,7 +220,7 @@ public class KTableProcessValuesTest {
         ));
         doNothing().when(context).setRecordContext(recordContext);
 
-        final KTableValueGetter<String, String> getter = transformValues.view().get();
+        final KTableValueGetter<String, String> getter = processValues.view().get();
         getter.init(context);
 
         final String result = getter.get("Key").value();
@@ -236,13 +230,13 @@ public class KTableProcessValuesTest {
 
     @Test
     public void shouldGetFromStateStoreIfMaterialized() {
-        final KTableProcessValues<String, String, String> transformValues =
-            new KTableProcessValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
+        final KTableProcessValues<String, String, String> processValues =
+            new KTableProcessValues<>(parent, new ExclamationFixedKeyProcessorSupplier(), QUERYABLE_NAME);
 
         when(context.getStateStore(QUERYABLE_NAME)).thenReturn(stateStore);
         when(stateStore.get("Key")).thenReturn(ValueAndTimestamp.make("something", 0L));
 
-        final KTableValueGetter<String, String> getter = transformValues.view().get();
+        final KTableValueGetter<String, String> getter = processValues.view().get();
         getter.init(context);
 
         final String result = getter.get("Key").value();
@@ -252,65 +246,65 @@ public class KTableProcessValuesTest {
 
     @Test
     public void shouldGetStoreNamesFromParentIfNotMaterialized() {
-        final KTableProcessValues<String, String, String> transformValues =
-            new KTableProcessValues<>(parent, new ExclamationValueTransformerSupplier(), null);
+        final KTableProcessValues<String, String, String> processValues =
+            new KTableProcessValues<>(parent, new ExclamationFixedKeyProcessorSupplier(), null);
 
         when(parent.valueGetterSupplier()).thenReturn(parentGetterSupplier);
         when(parentGetterSupplier.storeNames()).thenReturn(new String[]{"store1", "store2"});
 
-        final String[] storeNames = transformValues.view().storeNames();
+        final String[] storeNames = processValues.view().storeNames();
 
         assertThat(storeNames, is(new String[]{"store1", "store2"}));
     }
 
     @Test
     public void shouldGetQueryableStoreNameIfMaterialized() {
-        final KTableProcessValues<String, String, String> transformValues =
-            new KTableProcessValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
+        final KTableProcessValues<String, String, String> processValues =
+            new KTableProcessValues<>(parent, new ExclamationFixedKeyProcessorSupplier(), QUERYABLE_NAME);
 
-        final String[] storeNames = transformValues.view().storeNames();
+        final String[] storeNames = processValues.view().storeNames();
 
         assertThat(storeNames, is(new String[]{QUERYABLE_NAME}));
     }
 
     @Test
-    public void shouldCloseTransformerOnProcessorClose() {
-        final KTableProcessValues<String, String, String> transformValues =
+    public void shouldCloseFixedKeyProcessorOnProcessorClose() {
+        final KTableProcessValues<String, String, String> processValues =
             new KTableProcessValues<>(parent, mockSupplier, null);
 
-        when(mockSupplier.get()).thenReturn(transformer);
-        doNothing().when(transformer).close();
+        when(mockSupplier.get()).thenReturn(fixedKeyProcessor);
+        doNothing().when(fixedKeyProcessor).close();
 
-        final Processor<String, Change<String>, String, Change<String>> processor = transformValues.get();
+        final Processor<String, Change<String>, String, Change<String>> processor = processValues.get();
         processor.close();
     }
 
     @Test
-    public void shouldCloseTransformerOnGetterClose() {
-        final KTableProcessValues<String, String, String> transformValues =
+    public void shouldCloseFixedKeyProcessorOnGetterClose() {
+        final KTableProcessValues<String, String, String> processValues =
             new KTableProcessValues<>(parent, mockSupplier, null);
 
-        when(mockSupplier.get()).thenReturn(transformer);
+        when(mockSupplier.get()).thenReturn(fixedKeyProcessor);
         when(parentGetterSupplier.get()).thenReturn(parentGetter);
         when(parent.valueGetterSupplier()).thenReturn(parentGetterSupplier);
 
-        doNothing().when(transformer).close();
+        doNothing().when(fixedKeyProcessor).close();
 
-        final KTableValueGetter<String, String> getter = transformValues.view().get();
+        final KTableValueGetter<String, String> getter = processValues.view().get();
         getter.close();
     }
 
     @Test
     public void shouldCloseParentGetterClose() {
-        final KTableProcessValues<String, String, String> transformValues =
+        final KTableProcessValues<String, String, String> processValues =
             new KTableProcessValues<>(parent, mockSupplier, null);
 
         when(parent.valueGetterSupplier()).thenReturn(parentGetterSupplier);
-        when(mockSupplier.get()).thenReturn(transformer);
+        when(mockSupplier.get()).thenReturn(fixedKeyProcessor);
         when(parentGetterSupplier.get()).thenReturn(parentGetter);
         doNothing().when(parentGetter).close();
 
-        final KTableValueGetter<String, String> getter = transformValues.view().get();
+        final KTableValueGetter<String, String> getter = processValues.view().get();
         getter.close();
     }
 
@@ -487,12 +481,27 @@ public class KTableProcessValuesTest {
     public static Properties props() {
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
-        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
+        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class.getName());
+        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class.getName());
         return props;
     }
 
     private static void throwIfStoresNotAvailable(final ProcessorContext context,
+                                                  final List<String> expectedStoredNames) {
+        final List<String> missing = new ArrayList<>();
+
+        for (final String storedName : expectedStoredNames) {
+            if (context.getStateStore(storedName) == null) {
+                missing.add(storedName);
+            }
+        }
+
+        if (!missing.isEmpty()) {
+            throw new AssertionError("State stores are not accessible: " + missing);
+        }
+    }
+
+    private static void throwIfStoresNotAvailable(final FixedKeyProcessorContext<?, ?> context,
                                                   final List<String> expectedStoredNames) {
         final List<String> missing = new ArrayList<>();
 
@@ -541,9 +550,42 @@ public class KTableProcessValuesTest {
         public void close() {}
     }
 
-    private static class NullSupplier implements ValueTransformerWithKeySupplier<String, String, String> {
+    public static class ExclamationFixedKeyProcessorSupplier implements FixedKeyProcessorSupplier<Object, String, String> {
+        private final List<String> expectedStoredNames;
+
+        ExclamationFixedKeyProcessorSupplier(final String... expectedStoreNames) {
+            this.expectedStoredNames = Arrays.asList(expectedStoreNames);
+        }
+
         @Override
-        public ValueTransformerWithKey<String, String, String> get() {
+        public ExclamationFixedKeyProcessor get() {
+            return new ExclamationFixedKeyProcessor(expectedStoredNames);
+        }
+    }
+
+    public static class ExclamationFixedKeyProcessor implements FixedKeyProcessor<Object, String, String> {
+        private final List<String> expectedStoredNames;
+        private FixedKeyProcessorContext<Object, String> context;
+
+        ExclamationFixedKeyProcessor(final List<String> expectedStoredNames) {
+            this.expectedStoredNames = expectedStoredNames;
+        }
+
+        @Override
+        public void init(final FixedKeyProcessorContext<Object, String> context) {
+            throwIfStoresNotAvailable(context, expectedStoredNames);
+            this.context = context;
+        }
+
+        @Override
+        public void process(final FixedKeyRecord<Object, String> record) {
+            context.forward(record.withValue(record.key().toString() + "->" + record.value() + "!"));
+        }
+    }
+
+    private static class NullSupplier implements FixedKeyProcessorSupplier<String, String, String> {
+        @Override
+        public FixedKeyProcessor<String, String, String> get() {
             return null;
         }
     }
