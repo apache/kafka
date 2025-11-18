@@ -131,7 +131,8 @@ versions += [
   zstd: "1.5.6-10",
   junitPlatform: "1.13.1",
   hdrHistogram: "2.2.2",
-  hash4j: "0.22.0"
+  hash4j: "0.22.0",
+  commonsCollections4: "4.4"
 ]
 
 libs += [
@@ -234,4 +235,5 @@ libs += [
   httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient",
   hdrHistogram: "org.hdrhistogram:HdrHistogram:$versions.hdrHistogram",
   hash4j: "com.dynatrace.hash4j:hash4j:$versions.hash4j",
+  commonsCollections4: "org.apache.commons:commons-collections4:$versions.commonsCollections4",
 ]
