@@ -16,9 +16,13 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -35,6 +39,7 @@ import org.apache.kafka.streams.kstream.TableJoined;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKey;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKeySchema;
@@ -64,8 +69,22 @@ import org.apache.kafka.streams.kstream.internals.suppress.FinalResultsSuppressi
 import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.suppress.NamedSuppressed;
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
+import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalResourcesNaming;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
@@ -81,13 +100,16 @@ import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChang
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -434,6 +456,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                                  final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal,
                                                  final NamedInternal namedInternal,
                                                  final String... stateStoreNames) {
+        Objects.requireNonNull(transformerSupplier, "transformerSupplier");
         Objects.requireNonNull(stateStoreNames, "stateStoreNames");
         final Serde<K> keySerde;
         final Serde<VR> valueSerde;
@@ -463,9 +486,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final String name = namedInternal.orElseGenerateWithPrefix(builder, TRANSFORMVALUES_NAME);
 
+        final FixedKeyProcessorSupplier<? super K, ? super V, ? extends VR> fixedKeyProcessorSupplier =
+            createValueTransformerWithKeySupplierToFixedProcessorSupplierAdaptor(transformerSupplier);
         final KTableProcessorSupplier<K, V, K, VR> processorSupplier = new KTableProcessValues<>(
             this,
-            transformerSupplier,
+            fixedKeyProcessorSupplier,
             queryableStoreName);
 
         final ProcessorParameters<K, VR, ?, ?> processorParameters =
@@ -495,6 +520,218 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             processorSupplier,
             tableNode,
             builder);
+    }
+
+    private <VR> FixedKeyProcessorSupplier<? super K, ? super V, ? extends VR> createValueTransformerWithKeySupplierToFixedProcessorSupplierAdaptor(
+        final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier
+    ) {
+        return new FixedKeyProcessorSupplier<>() {
+
+            @Override
+            public Set<StoreBuilder<?>> stores() {
+                return transformerSupplier.stores();
+            }
+
+            @Override
+            public FixedKeyProcessor<K, V, VR> get() {
+                final ValueTransformerWithKey<? super K, ? super V, ? extends VR> valueTransformerWithKey = transformerSupplier.get();
+
+                return new FixedKeyProcessor<>() {
+                    private final AtomicReference<Long> timestamp = new AtomicReference<>();
+                    private final AtomicReference<Headers> headers = new AtomicReference<>();
+
+                    private FixedKeyProcessorContext<K, VR> context;
+
+                    @Override
+                    public void init(final FixedKeyProcessorContext<K, VR> context) {
+                        this.context = context;
+
+                        timestamp.set(-1L);
+                        headers.set(new RecordHeaders());
+
+                        valueTransformerWithKey.init(new ProcessorContext() {
+                            @Override
+                            public String applicationId() {
+                                return context.applicationId();
+                            }
+
+                            @Override
+                            public TaskId taskId() {
+                                return context.taskId();
+                            }
+
+                            @Override
+                            public Serde<?> keySerde() {
+                                return context.keySerde();
+                            }
+
+                            @Override
+                            public Serde<?> valueSerde() {
+                                return context.valueSerde();
+                            }
+
+                            @Override
+                            public File stateDir() {
+                                return context.stateDir();
+                            }
+
+                            @Override
+                            public StreamsMetrics metrics() {
+                                return context.metrics();
+                            }
+
+                            @Override
+                            public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
+                                ((InternalProcessorContext<?, ?>) context).register(store, stateRestoreCallback);
+                            }
+
+                            @Override
+                            public <S extends StateStore> S getStateStore(final String name) {
+                                return context.getStateStore(name);
+                            }
+
+                            @Override
+                            public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
+                                return context.schedule(interval, type, callback);
+                            }
+
+                            @Override
+                            public Cancellable schedule(final Instant startTime, final Duration interval, final PunctuationType type, final Punctuator callback) {
+                                return context.schedule(startTime, interval, type, callback);
+                            }
+
+                            @Override
+                            public <K, V> void forward(final K key, final V value) {
+                                throw new StreamsException("Disabled");
+                            }
+
+                            @Override
+                            public <K, V> void forward(final K key, final V value, final To to) {
+                                throw new StreamsException("Disabled");
+
+                            }
+
+                            @Override
+                            public void commit() {
+                                context.commit();
+                            }
+
+                            @Override
+                            public String topic() {
+                                return context.recordMetadata().orElse(
+                                    new RecordMetadata() {
+                                        @Override
+                                        public String topic() {
+                                            return "";
+                                        }
+
+                                        @Override
+                                        public int partition() {
+                                            return 0;
+                                        }
+
+                                        @Override
+                                        public long offset() {
+                                            return 0;
+                                        }
+                                    }
+                                ).topic();
+                            }
+
+                            @Override
+                            public int partition() {
+                                return context.recordMetadata().orElse(
+                                    new RecordMetadata() {
+                                        @Override
+                                        public String topic() {
+                                            return "";
+                                        }
+
+                                        @Override
+                                        public int partition() {
+                                            return 0;
+                                        }
+
+                                        @Override
+                                        public long offset() {
+                                            return 0;
+                                        }
+                                    }
+                                ).partition();
+                            }
+
+                            @Override
+                            public long offset() {
+                                return context.recordMetadata().orElse(
+                                    new RecordMetadata() {
+                                        @Override
+                                        public String topic() {
+                                            return "";
+                                        }
+
+                                        @Override
+                                        public int partition() {
+                                            return 0;
+                                        }
+
+                                        @Override
+                                        public long offset() {
+                                            return 0;
+                                        }
+                                    }
+                                ).offset();
+                            }
+
+                            @Override
+                            public Headers headers() {
+                                return headers.get();
+                            }
+
+                            @Override
+                            public long timestamp() {
+                                return timestamp.get();
+                            }
+
+                            @Override
+                            public Map<String, Object> appConfigs() {
+                                return context.appConfigs();
+                            }
+
+                            @Override
+                            public Map<String, Object> appConfigsWithPrefix(final String prefix) {
+                                return context.appConfigsWithPrefix(prefix);
+                            }
+
+                            @Override
+                            public long currentSystemTimeMs() {
+                                return context.currentSystemTimeMs();
+                            }
+
+                            @Override
+                            public long currentStreamTimeMs() {
+                                return context.currentStreamTimeMs();
+                            }
+                        });
+                    }
+
+                    @Override
+                    public void process(final FixedKeyRecord<K, V> record) {
+                        timestamp.set(record.timestamp());
+                        headers.set(record.headers());
+
+                        context.forward(record.withValue(valueTransformerWithKey.transform(record.key(), record.value())));
+
+                        timestamp.set(-1L);
+                        headers.set(new RecordHeaders());
+                    }
+
+                    @Override
+                    public void close() {
+                        valueTransformerWithKey.close();
+                    }
+                };
+            }
+        };
     }
 
     @Override
