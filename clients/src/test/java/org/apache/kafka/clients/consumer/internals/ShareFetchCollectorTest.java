@@ -184,11 +184,12 @@ public class ShareFetchCollectorTest {
 
         Acknowledgements acks = acknowledgementsMap.get(topicAPartition0).acknowledgements();
         acks.complete(null);
-        fetch.renew(Map.of(topicAPartition0, acks));
+        fetch.renew(Map.of(topicAPartition0, acks), Optional.of(20000));
         assertTrue(fetch.hasRenewals());
         fetch.takeRenewedRecords();
         assertFalse(fetch.hasRenewals());
         assertEquals(DEFAULT_MAX_POLL_RECORDS, fetch.numRecords());
+        assertEquals(Optional.of(20000), fetch.acquisitionLockTimeoutMs());
 
         // Now attempt to collect more records from the fetch buffer.
         fetch = fetchCollector.collect(fetchBuffer);

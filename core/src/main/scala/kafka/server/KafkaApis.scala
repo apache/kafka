@@ -4014,6 +4014,9 @@ class KafkaApis(val requestChannel: RequestChannel,
   // the callback for processing a share acknowledge response, invoked before throttling
   def processShareAcknowledgeResponse(responseAcknowledgeData: Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData],
                                       request: RequestChannel.Request): ShareAcknowledgeResponse = {
+    val shareAcknowledgeRequest = request.body[ShareAcknowledgeRequest]
+    val groupId = shareAcknowledgeRequest.data.groupId
+
     val partitions = new util.LinkedHashMap[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]
     val nodeEndpoints = new mutable.HashMap[Int, Node]
     responseAcknowledgeData.foreach{ case(tp, partitionData) =>
@@ -4036,7 +4039,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       0,
       partitions,
       nodeEndpoints.values.toList.asJava,
-      config.shareGroupConfig.shareGroupRecordLockDurationMs
+      ShareFetchUtils.recordLockDurationMsOrDefault(groupConfigManager, groupId, config.shareGroupConfig.shareGroupRecordLockDurationMs)
     )
   }
 
