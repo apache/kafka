@@ -14,30 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.storage.internals.log;
+package org.apache.kafka.server.partition;
 
 import java.util.List;
 
-public record OngoingReassignmentState(
-        List<Integer> addingReplicas,
-        List<Integer> removingReplicas,
-        List<Integer> replicas
-) implements AssignmentState {
-
-    public OngoingReassignmentState {
-        addingReplicas = List.copyOf(addingReplicas);
-        removingReplicas = List.copyOf(removingReplicas);
+public record SimpleAssignmentState(List<Integer> replicas) implements AssignmentState {
+    public SimpleAssignmentState {
         replicas = List.copyOf(replicas);
     }
 
     @Override
     public int replicationFactor() {
-        // Keep the size of the original replicas. Replicas may also include those currently being added.
-        return (int) replicas.stream().filter(r -> !addingReplicas.contains(r)).count();
+        return replicas().size();
     }
 
     @Override
     public boolean isAddingReplica(int brokerId) {
-        return addingReplicas.contains(brokerId);
+        return false;
     }
 }

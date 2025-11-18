@@ -14,22 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.storage.internals.log;
+package org.apache.kafka.clients.consumer.internals.events;
 
-import java.util.List;
+public class SharePollEvent extends ApplicationEvent {
 
-public record SimpleAssignmentState(List<Integer> replicas) implements AssignmentState {
-    public SimpleAssignmentState {
-        replicas = List.copyOf(replicas);
+    private final long pollTimeMs;
+
+    public SharePollEvent(final long pollTimeMs) {
+        super(Type.SHARE_POLL);
+        this.pollTimeMs = pollTimeMs;
+    }
+
+    public long pollTimeMs() {
+        return pollTimeMs;
     }
 
     @Override
-    public int replicationFactor() {
-        return replicas().size();
-    }
-
-    @Override
-    public boolean isAddingReplica(int brokerId) {
-        return false;
+    public String toStringBase() {
+        return super.toStringBase() + ", pollTimeMs=" + pollTimeMs;
     }
 }

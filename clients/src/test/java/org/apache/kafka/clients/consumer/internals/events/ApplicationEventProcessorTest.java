@@ -49,6 +49,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.verification.VerificationMode;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -65,6 +66,7 @@ import static org.apache.kafka.clients.consumer.internals.events.CompletableEven
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -88,6 +90,7 @@ public class ApplicationEventProcessorTest {
     private final ConsumerHeartbeatRequestManager heartbeatRequestManager = mock(ConsumerHeartbeatRequestManager.class);
     private final ConsumerMembershipManager membershipManager = mock(ConsumerMembershipManager.class);
     private final OffsetsRequestManager offsetsRequestManager = mock(OffsetsRequestManager.class);
+    private final FetchRequestManager fetchRequestManager = mock(FetchRequestManager.class);
     private SubscriptionState subscriptionState = mock(SubscriptionState.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private final StreamsGroupHeartbeatRequestManager streamsGroupHeartbeatRequestManager = mock(StreamsGroupHeartbeatRequestManager.class);
@@ -99,7 +102,7 @@ public class ApplicationEventProcessorTest {
                 new LogContext(),
                 offsetsRequestManager,
                 mock(TopicMetadataRequestManager.class),
-                mock(FetchRequestManager.class),
+                fetchRequestManager,
                 withGroupId ? Optional.of(mock(CoordinatorRequestManager.class)) : Optional.empty(),
                 withGroupId ? Optional.of(commitRequestManager) : Optional.empty(),
                 withGroupId ? Optional.of(heartbeatRequestManager) : Optional.empty(),
@@ -171,7 +174,7 @@ public class ApplicationEventProcessorTest {
 
     private static Stream<Arguments> applicationEvents() {
         return Stream.of(
-                Arguments.of(new PollEvent(100)),
+                Arguments.of(new AsyncPollEvent(calculateDeadlineMs(12345, 100), 100)),
                 Arguments.of(new CreateFetchRequestsEvent(calculateDeadlineMs(12345, 100))),
                 Arguments.of(new CheckAndUpdatePositionsEvent(500)),
                 Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)),
@@ -264,16 +267,20 @@ public class ApplicationEventProcessorTest {
     }
 
     @Test
-    public void testPollEvent() {
-        PollEvent event = new PollEvent(12345);
+    public void testAsyncPollEvent() {
+        AsyncPollEvent event = new AsyncPollEvent(12346, 12345);
 
         setupProcessor(true);
         when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+        when(offsetsRequestManager.updateFetchPositions(event.deadlineMs())).thenReturn(CompletableFuture.completedFuture(true));
+        when(fetchRequestManager.createFetchRequests()).thenReturn(CompletableFuture.completedFuture(null));
         processor.process(event);
-        assertTrue(event.reconcileAndAutoCommit().isDone());
-        verify(commitRequestManager).updateTimerAndMaybeCommit(12345);
+        assertTrue(event.isComplete());
+        verify(commitRequestManager).updateTimerAndMaybeCommit(event.pollTimeMs());
         verify(membershipManager).onConsumerPoll();
-        verify(heartbeatRequestManager).resetPollTimer(12345);
+        verify(heartbeatRequestManager).resetPollTimer(event.pollTimeMs());
+        verify(offsetsRequestManager).updateFetchPositions(event.deadlineMs());
+        verify(fetchRequestManager).createFetchRequests();
     }
 
     @Test
@@ -653,6 +660,72 @@ public class ApplicationEventProcessorTest {
                     "of the onAllTasksLost callback execution could not be sent")));
             verify(streamsMembershipManager, never()).onAllTasksLostCallbackCompleted(event);
         }
+    }
+
+    @Test
+    public void testUpdatePatternSubscriptionInvokedWhenMetadataUpdated() {
+        when(subscriptionState.hasPatternSubscription()).thenReturn(true);
+        when(subscriptionState.matchesSubscribedPattern(any(String.class))).thenReturn(true);
+        when(metadata.updateVersion()).thenReturn(1, 2);
+        testUpdatePatternSubscription(times(1));
+    }
+
+    @Test
+    public void testUpdatePatternSubscriptionNotInvokedWhenNotUsingPatternSubscription() {
+        when(subscriptionState.hasPatternSubscription()).thenReturn(false);
+        when(metadata.updateVersion()).thenReturn(1, 2);
+        testUpdatePatternSubscription(never());
+    }
+
+    @Test
+    public void testUpdatePatternSubscriptionNotInvokedWhenMetadataNotUpdated() {
+        when(subscriptionState.hasPatternSubscription()).thenReturn(true);
+        when(subscriptionState.matchesSubscribedPattern(any(String.class))).thenReturn(true);
+        when(metadata.updateVersion()).thenReturn(1, 1);
+        testUpdatePatternSubscription(never());
+    }
+
+    private void testUpdatePatternSubscription(VerificationMode verificationMode) {
+        String topic = "test-topic";
+        Cluster cluster = mock(Cluster.class);
+
+        when(metadata.fetch()).thenReturn(cluster);
+        when(cluster.topics()).thenReturn(Set.of(topic));
+
+        when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+        when(offsetsRequestManager.updateFetchPositions(anyLong())).thenReturn(CompletableFuture.completedFuture(true));
+
+        setupProcessor(true);
+        processor.process(new AsyncPollEvent(110, 100));
+        verify(subscriptionState, verificationMode).matchesSubscribedPattern(topic);
+        verify(membershipManager, verificationMode).onSubscriptionUpdated();
+    }
+
+    @Test
+    public void testRefreshCommittedOffsetsShouldNotResetIfFailedWithTimeout() {
+        setupProcessor(true);
+        testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout();
+    }
+
+    @Test
+    public void testRefreshCommittedOffsetsNotCalledIfNoGroupId() {
+        // Create consumer without group id so committed offsets are not used for updating positions
+        setupProcessor(false);
+        testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout();
+    }
+
+    private void testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout() {
+        when(offsetsRequestManager.updateFetchPositions(anyLong())).thenReturn(
+            CompletableFuture.failedFuture(new Throwable("Intentional failure"))
+        );
+        when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+
+        // Verify that the poll completes even when the update fetch positions throws an error.
+        AsyncPollEvent event = new AsyncPollEvent(110, 100);
+        processor.process(event);
+        verify(offsetsRequestManager).updateFetchPositions(anyLong());
+        assertTrue(event.isComplete());
+        assertFalse(event.error().isEmpty());
     }
 
     private List<NetworkClientDelegate.UnsentRequest> mockCommitResults() {

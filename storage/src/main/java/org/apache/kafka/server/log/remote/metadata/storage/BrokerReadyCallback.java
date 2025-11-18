@@ -14,34 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.storage.internals.log;
-
-import java.util.List;
+package org.apache.kafka.server.log.remote.metadata.storage;
 
 /**
- * Represents the current assignment of replicas for a partition. This can be a simple assignment
- * or an ongoing reassignment.
+ * Callback interface for broker ready notification.
  */
-public interface AssignmentState {
-
+public interface BrokerReadyCallback {
     /**
-     * An ordered sequence of all the broker ids that were assigned to this topic partition.
-     * @return the list of broker ids
+     * This method will be called during broker startup for the implementation,
+     * which needs delayed initialization until the broker can process requests.
      */
-    List<Integer> replicas();
+    void onBrokerReady();
 
-    /**
-     * The number of replicas in the assignment.
-     * @return the replication factor
-     */
-    int replicationFactor();
-
-    /**
-     * Check whether a replica is being added to the assignment.
-     * The simple assignment returns false permanently.
-     *
-     * @param brokerId the broker id to check
-     * @return true if the broker is being added
-     */
-    boolean isAddingReplica(int brokerId);
 }

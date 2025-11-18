@@ -50,8 +50,6 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
 
 /**
  * A client that consumes records from a Kafka cluster using a share group.
- * <p>
- *     <em>This is a preview feature introduced by KIP-932. It is not yet recommended for production use.</em>
  *
  * <h3>Cross-Version Compatibility</h3>
  * This client can communicate with brokers that are a version that supports share groups. You will receive an
@@ -557,7 +555,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * the acknowledgements to commit have been indicated using {@link #acknowledge(ConsumerRecord)} or
      * {@link #acknowledge(ConsumerRecord, AcknowledgeType)}. If the consumer is using implicit acknowledgement,
      * all the records returned by the latest call to {@link #poll(Duration)} are acknowledged.
-
+     *
      * <p>
      * This is a synchronous commit and will block until either the commit succeeds, an unrecoverable error is
      * encountered (in which case it is thrown to the caller), or the timeout expires.
@@ -630,6 +628,16 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     @Override
     public Uuid clientInstanceId(Duration timeout) {
         return delegate.clientInstanceId(timeout);
+    }
+
+    /**
+     * Returns the acquisition lock timeout for the last set of records fetched from the cluster.
+     *
+     * @return The acquisition lock timeout in milliseconds, or {@code Optional.empty()} if the timeout is not known.
+     */
+    @Override
+    public Optional<Integer> acquisitionLockTimeoutMs() {
+        return delegate.acquisitionLockTimeoutMs();
     }
 
     /**

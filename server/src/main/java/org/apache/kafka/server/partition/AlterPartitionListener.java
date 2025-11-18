@@ -14,26 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.storage.internals.log;
+package org.apache.kafka.server.partition;
 
-import org.apache.kafka.metadata.LeaderRecoveryState;
+/**
+ * A listener that is invoked when the ISR of a partition is altered. Implementations of this
+ * interface can be used to track metrics related to ISR changes.
+ */
+public interface AlterPartitionListener {
+    /**
+     * Callback invoked when the ISR is expanded.
+     */
+    void markIsrExpand();
 
-import java.util.Set;
+    /**
+     * Callback invoked when the ISR is shrunk.
+     */
+    void markIsrShrink();
 
-public record CommittedPartitionState(Set<Integer> isr, LeaderRecoveryState leaderRecoveryState) implements PartitionState {
-
-    public CommittedPartitionState {
-        isr = Set.copyOf(isr);
-    }
-
-    @Override
-    public Set<Integer> maximalIsr() {
-        return isr;
-    }
-
-    @Override
-    public boolean isInflight() {
-        return false;
-    }
-
+    /**
+     * Callback invoked when an AlterPartition request fails.
+     */
+    void markFailed();
 }

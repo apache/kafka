@@ -24,7 +24,6 @@
 
     <!-- These are tests, allow whatever -->
     <allow pkg="org.apache.kafka"/>
-    <allow pkg="org.junit"/>
     <allow pkg="kafka"/>
     <allow pkg="org.slf4j"/>
 
