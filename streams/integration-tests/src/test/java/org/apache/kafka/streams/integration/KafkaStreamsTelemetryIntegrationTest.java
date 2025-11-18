@@ -39,6 +39,7 @@ import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.telemetry.ClientTelemetry;
 import org.apache.kafka.server.telemetry.ClientTelemetryPayload;
 import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
+import org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.MetricsData;
 import org.apache.kafka.streams.ClientInstanceIds;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
@@ -86,8 +87,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
-
-import io.opentelemetry.proto.metrics.v1.MetricsData;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -679,7 +678,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
                         .stream()
                         .flatMap(rm -> rm.getScopeMetricsList().stream())
                         .flatMap(sm -> sm.getMetricsList().stream())
-                        .map(io.opentelemetry.proto.metrics.v1.Metric::getGauge)
+                        .map(org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.Metric::getGauge)
                         .flatMap(gauge -> gauge.getDataPointsList().stream())
                         .flatMap(numberDataPoint -> numberDataPoint.getAttributesList().stream())
                         .filter(keyValue -> keyValue.getKey().equals("process_id"))
@@ -693,7 +692,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
                         .stream()
                         .flatMap(rm -> rm.getScopeMetricsList().stream())
                         .flatMap(sm -> sm.getMetricsList().stream())
-                        .map(io.opentelemetry.proto.metrics.v1.Metric::getName)
+                        .map(org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.Metric::getName)
                         .sorted()
                         .toList();
                 LOG.info("Found metrics {} for clientId={}", metricNames, clientId);
