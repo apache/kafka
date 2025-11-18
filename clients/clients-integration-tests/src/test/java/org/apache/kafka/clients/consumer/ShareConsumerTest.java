@@ -2146,11 +2146,7 @@ public class ShareConsumerTest {
                     int shareGroupStateTp = Utils.abs(key.asCoordinatorKey().hashCode()) % 3;
                     List<Integer> curShareCoordNodeId = null;
                     try {
-                        curShareCoordNodeId = admin.describeTopics(List.of(Topic.SHARE_GROUP_STATE_TOPIC_NAME)).allTopicNames().get().get(Topic.SHARE_GROUP_STATE_TOPIC_NAME)
-                            .partitions().stream()
-                            .filter(info -> info.partition() == shareGroupStateTp)
-                            .map(info -> info.leader().id())
-                            .toList();
+                        curShareCoordNodeId = topicPartitionLeader(admin, Topic.SHARE_GROUP_STATE_TOPIC_NAME, shareGroupStateTp);
                     } catch (Exception e) {
                         fail(e);
                     }
@@ -2165,11 +2161,7 @@ public class ShareConsumerTest {
 
                     List<Integer> newShareCoordNodeId = null;
                     try {
-                        newShareCoordNodeId = admin.describeTopics(List.of(Topic.SHARE_GROUP_STATE_TOPIC_NAME)).allTopicNames().get().get(Topic.SHARE_GROUP_STATE_TOPIC_NAME)
-                            .partitions().stream()
-                            .filter(info -> info.partition() == shareGroupStateTp)
-                            .map(info -> info.leader().id())
-                            .toList();
+                        newShareCoordNodeId = topicPartitionLeader(admin, Topic.SHARE_GROUP_STATE_TOPIC_NAME, shareGroupStateTp);
                     } catch (Exception e) {
                         fail(e);
                     }
@@ -3145,14 +3137,17 @@ public class ShareConsumerTest {
     @ClusterTest
     public void testDescribeShareGroupOffsetsForEmptySharePartition() {
         String groupId = "group1";
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId)) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId);
+             Admin adminClient = createAdminClient()) {
             shareConsumer.subscribe(List.of(tp.topic()));
             // Polling share consumer to make sure the share partition in created.
             shareConsumer.poll(Duration.ofMillis(2000));
-            SharePartitionOffsetInfo sharePartitionDescription = sharePartitionDescription(groupId, tp);
+            SharePartitionOffsetInfo sharePartitionDescription = sharePartitionDescription(adminClient, groupId, tp);
             // Since the partition is empty, and no records have been consumed, the share partition startOffset will be
             // -1. Thus, there will be no description for the share partition.
             assertNull(sharePartitionDescription);
+        } catch (ExecutionException | InterruptedException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -3161,7 +3156,8 @@ public class ShareConsumerTest {
         String groupId = "group1";
         alterShareAutoOffsetReset(groupId, "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
-            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId)) {
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId);
+            Admin adminClient = createAdminClient()) {
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "Message".getBytes());
             producer.send(record);
             producer.flush();
@@ -3171,12 +3167,12 @@ public class ShareConsumerTest {
             // Acknowledge and commit the consumed record to update the share partition state.
             shareConsumer.commitSync();
             // After the acknowledgement is successful, the share partition lag should be 0 because the only produced record has been consumed.
-            verifySharePartitionLag(groupId, tp, 0L);
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
             // Producing another record to the share partition.
             producer.send(record);
             producer.flush();
             // Since the new record has not been consumed yet, the share partition lag should be 1.
-            verifySharePartitionLag(groupId, tp, 1L);
+            verifySharePartitionLag(adminClient, groupId, tp, 1L);
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
@@ -3188,7 +3184,8 @@ public class ShareConsumerTest {
         alterShareAutoOffsetReset(groupId, "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(groupId);
-             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer(groupId)) {
+             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer(groupId);
+             Admin adminClient = createAdminClient()) {
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "Message".getBytes());
             producer.send(record);
             producer.flush();
@@ -3200,22 +3197,22 @@ public class ShareConsumerTest {
             // Acknowledge and commit the consumed records to update the share partition state.
             shareConsumer1.commitSync();
             // After the acknowledgement is successful, the share partition lag should be 0 because the all produced records have been consumed.
-            verifySharePartitionLag(groupId, tp, 0L);
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
             // Producing more records to the share partition.
             producer.send(record);
             // Polling share consumer 2 this time.
             waitedPoll(shareConsumer2, 2500L, 1);
             // Since the consumed record hasn't been acknowledged yet, the share partition lag should be 1.
-            verifySharePartitionLag(groupId, tp, 1L);
+            verifySharePartitionLag(adminClient, groupId, tp, 1L);
             // Acknowledge and commit the consumed records to update the share partition state.
             shareConsumer2.commitSync();
             // After the acknowledgement is successful, the share partition lag should be 0 because the all produced records have been consumed.
-            verifySharePartitionLag(groupId, tp, 0L);
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
             // Producing another record to the share partition.
             producer.send(record);
             producer.flush();
             // Since the new record has not been consumed yet, the share partition lag should be 1.
-            verifySharePartitionLag(groupId, tp, 1L);
+            verifySharePartitionLag(adminClient, groupId, tp, 1L);
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
@@ -3226,7 +3223,8 @@ public class ShareConsumerTest {
         String groupId = "group1";
         alterShareAutoOffsetReset(groupId, "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId, Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId, Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
+             Admin adminClient = createAdminClient()) {
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "Message".getBytes());
             producer.send(record);
             producer.flush();
@@ -3237,7 +3235,7 @@ public class ShareConsumerTest {
             records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.ACCEPT));
             shareConsumer.commitSync();
             // After accepting, the lag should be 0 because the record is consumed successfully.
-            verifySharePartitionLag(groupId, tp, 0L);
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
             // Producing another record to the share partition.
             producer.send(record);
             producer.flush();
@@ -3247,14 +3245,14 @@ public class ShareConsumerTest {
             records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.RELEASE));
             shareConsumer.commitSync();
             // After releasing the lag should be 1, because the record is released for redelivery.
-            verifySharePartitionLag(groupId, tp, 1L);
+            verifySharePartitionLag(adminClient, groupId, tp, 1L);
             // The record is now consumed again.
             records = waitedPoll(shareConsumer, 2500L, 1);
             // Accept the record to mark it as consumed.
             records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.ACCEPT));
             shareConsumer.commitSync();
             // After accepting the record, the lag should be 0 because all the produced records have been consumed.
-            verifySharePartitionLag(groupId, tp, 0L);
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
@@ -3265,7 +3263,8 @@ public class ShareConsumerTest {
         String groupId = "group1";
         alterShareAutoOffsetReset(groupId, "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId, Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId, Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
+             Admin adminClient = createAdminClient()) {
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "Message".getBytes());
             producer.send(record);
             producer.flush();
@@ -3276,7 +3275,7 @@ public class ShareConsumerTest {
             records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.ACCEPT));
             shareConsumer.commitSync();
             // After accepting, the lag should be 0 because the record is consumed successfully.
-            verifySharePartitionLag(groupId, tp, 0L);
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
             // Producing another record to the share partition.
             producer.send(record);
             producer.flush();
@@ -3286,7 +3285,7 @@ public class ShareConsumerTest {
             records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.REJECT));
             shareConsumer.commitSync();
             // After rejecting the lag should be 0, because the record is permanently rejected and offset moves forward.
-            verifySharePartitionLag(groupId, tp, 0L);
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
@@ -3305,7 +3304,12 @@ public class ShareConsumerTest {
         String groupId = "group1";
         alterShareAutoOffsetReset(groupId, "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId)) {
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId);
+             Admin adminClient = createAdminClient()) {
+            String topicName = "testTopicWithReplicas";
+            // Create a topic with replication factor 3
+            Uuid tpId = createTopic(topicName, 1, 3);
+            TopicPartition tp = new TopicPartition(topicName, 0);
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "Message".getBytes());
             // Produce first record and consume it
             producer.send(record);
@@ -3316,34 +3320,37 @@ public class ShareConsumerTest {
             // Acknowledge and commit the consumed record to update the share partition state.
             shareConsumer.commitSync();
             // After the acknowledgement is successful, the share partition lag should be 0 because the only produced record has been consumed.
-            verifySharePartitionLag(groupId, tp, 0L);
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
             // Producing another record to the share partition.
             producer.send(record);
             producer.flush();
             // Since the new record has not been consumed yet, the share partition lag should be 1.
-            verifySharePartitionLag(groupId, tp, 1L);
-            // Find the broker which is the group coordinator for the share group.
+            verifySharePartitionLag(adminClient, groupId, tp, 1L);
+            SharePartitionKey key = SharePartitionKey.getInstance(groupId, new TopicIdPartition(tpId, tp));
+            int shareGroupStateTp = Utils.abs(key.asCoordinatorKey().hashCode()) % 3;
             int consumerOffsetsTp = Utils.abs(groupId.hashCode()) % 3;
             List<Integer> curGroupCoordNodeId;
-            try (Admin admin = createAdminClient()) {
-                curGroupCoordNodeId = admin.describeTopics(List.of(Topic.GROUP_METADATA_TOPIC_NAME))
-                    .allTopicNames().get().get(Topic.GROUP_METADATA_TOPIC_NAME)
-                    .partitions().stream()
-                    .filter(info -> info.partition() == consumerOffsetsTp)
-                    .map(info -> info.leader().id())
-                    .toList();
-                assertEquals(1, curGroupCoordNodeId.size(), "Should have exactly one coordinator broker");
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
+            // Find the broker which is the group coordinator for the share group.
+            curGroupCoordNodeId = topicPartitionLeader(adminClient, Topic.GROUP_METADATA_TOPIC_NAME, consumerOffsetsTp);
+            assertEquals(1, curGroupCoordNodeId.size());
             // Shut down the coordinator broker
             KafkaBroker broker = cluster.brokers().get(curGroupCoordNodeId.get(0));
             cluster.shutdownBroker(curGroupCoordNodeId.get(0));
             // Wait for it to be completely shutdown
             broker.awaitShutdown();
+            // Wait for the leaders of share coordinator, group coordinator and topic partition to be elected, if needed, on a different broker.
+            TestUtils.waitForCondition(() -> {
+                List<Integer> newShareCoordNodeId = topicPartitionLeader(adminClient, Topic.SHARE_GROUP_STATE_TOPIC_NAME, shareGroupStateTp);
+                List<Integer> newGroupCoordNodeId = topicPartitionLeader(adminClient, Topic.GROUP_METADATA_TOPIC_NAME, consumerOffsetsTp);
+                List<Integer> newTopicPartitionLeader = topicPartitionLeader(adminClient, tp.topic(), tp.partition());
+
+                return newShareCoordNodeId.size() == 1 && !Objects.equals(newShareCoordNodeId.get(0), curGroupCoordNodeId.get(0)) &&
+                    newGroupCoordNodeId.size() == 1 && !Objects.equals(newGroupCoordNodeId.get(0), curGroupCoordNodeId.get(0)) &&
+                    newTopicPartitionLeader.size() == 1 && !Objects.equals(newTopicPartitionLeader.get(0), curGroupCoordNodeId.get(0));
+            }, DEFAULT_MAX_WAIT_MS, DEFAULT_POLL_INTERVAL_MS, () -> "Failed to elect new leaders after broker shutdown");
             // After group coordinator shutdown, check that lag is still 1
-            verifySharePartitionLag(groupId, tp, 1L);
-        } catch (InterruptedException e) {
+            verifySharePartitionLag(adminClient, groupId, tp, 1L);
+        } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
         }
     }
@@ -3361,7 +3368,12 @@ public class ShareConsumerTest {
         String groupId = "group1";
         alterShareAutoOffsetReset(groupId, "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId)) {
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId);
+             Admin adminClient = createAdminClient()) {
+            String topicName = "testTopicWithReplicas";
+            // Create a topic with replication factor 3
+            Uuid tpId = createTopic(topicName, 1, 3);
+            TopicPartition tp = new TopicPartition(topicName, 0);
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "Message".getBytes());
             // Produce first record and consume it
             producer.send(record);
@@ -3372,35 +3384,37 @@ public class ShareConsumerTest {
             // Acknowledge and commit the consumed record to update the share partition state.
             shareConsumer.commitSync();
             // After the acknowledgement is successful, the share partition lag should be 0 because the only produced record has been consumed.
-            verifySharePartitionLag(groupId, tp, 0L);
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
             // Producing another record to the share partition.
             producer.send(record);
             producer.flush();
             // Since the new record has not been consumed yet, the share partition lag should be 1.
-            verifySharePartitionLag(groupId, tp, 1L);
-            // Find the broker which is the share coordinator for the share group.
+            verifySharePartitionLag(adminClient, groupId, tp, 1L);
             SharePartitionKey key = SharePartitionKey.getInstance(groupId, new TopicIdPartition(tpId, tp));
             int shareGroupStateTp = Utils.abs(key.asCoordinatorKey().hashCode()) % 3;
+            int consumerOffsetsTp = Utils.abs(groupId.hashCode()) % 3;
             List<Integer> curShareCoordNodeId;
-            try (Admin admin = createAdminClient()) {
-                curShareCoordNodeId = admin.describeTopics(List.of(Topic.SHARE_GROUP_STATE_TOPIC_NAME))
-                    .allTopicNames().get().get(Topic.SHARE_GROUP_STATE_TOPIC_NAME)
-                    .partitions().stream()
-                    .filter(info -> info.partition() == shareGroupStateTp)
-                    .map(info -> info.leader().id())
-                    .toList();
-                assertEquals(1, curShareCoordNodeId.size(), "Should have exactly one coordinator broker");
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
+            // Find the broker which is the share coordinator for the share partition.
+            curShareCoordNodeId = topicPartitionLeader(adminClient, Topic.SHARE_GROUP_STATE_TOPIC_NAME, shareGroupStateTp);
+            assertEquals(1, curShareCoordNodeId.size());
             // Shut down the coordinator broker
             KafkaBroker broker = cluster.brokers().get(curShareCoordNodeId.get(0));
             cluster.shutdownBroker(curShareCoordNodeId.get(0));
             // Wait for it to be completely shutdown
             broker.awaitShutdown();
-            // After share coordinator shutdown, check that lag is still 1
-            verifySharePartitionLag(groupId, tp, 1L);
-        } catch (InterruptedException e) {
+            // Wait for the leaders of share coordinator, group coordinator and topic partition to be elected, if needed, on a different broker.
+            TestUtils.waitForCondition(() -> {
+                List<Integer> newShareCoordNodeId = topicPartitionLeader(adminClient, Topic.SHARE_GROUP_STATE_TOPIC_NAME, shareGroupStateTp);
+                List<Integer> newGroupCoordNodeId = topicPartitionLeader(adminClient, Topic.GROUP_METADATA_TOPIC_NAME, consumerOffsetsTp);
+                List<Integer> newTopicPartitionLeader = topicPartitionLeader(adminClient, tp.topic(), tp.partition());
+
+                return newShareCoordNodeId.size() == 1 && !Objects.equals(newShareCoordNodeId.get(0), curShareCoordNodeId.get(0)) &&
+                    newGroupCoordNodeId.size() == 1 && !Objects.equals(newGroupCoordNodeId.get(0), curShareCoordNodeId.get(0)) &&
+                    newTopicPartitionLeader.size() == 1 && !Objects.equals(newTopicPartitionLeader.get(0), curShareCoordNodeId.get(0));
+            }, DEFAULT_MAX_WAIT_MS, DEFAULT_POLL_INTERVAL_MS, () -> "Failed to elect new leaders after broker shutdown");
+            // After share coordinator shutdown and new leaderS election, check that lag is still 1
+            verifySharePartitionLag(adminClient, groupId, tp, 1L);
+        } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
         }
     }
@@ -3716,23 +3730,31 @@ public class ShareConsumerTest {
         }
     }
 
-    private SharePartitionOffsetInfo sharePartitionDescription(String groupId, TopicPartition tp) {
-        SharePartitionOffsetInfo partitionResult = null;
-        try (Admin adminClient = createAdminClient()) {
-            ListShareGroupOffsetsResult result = adminClient.listShareGroupOffsets(
-                Map.of(groupId, new ListShareGroupOffsetsSpec().topicPartitions(List.of(tp))),
-                new ListShareGroupOffsetsOptions().timeoutMs(30000)
-            );
-            partitionResult = result.partitionsToOffsetInfo(groupId).get().get(tp);
-        } catch (Exception e) {
-            fail("Could not fetch lag for group " + groupId + " and tp " + tp, e);
-        }
+    private List<Integer> topicPartitionLeader(Admin adminClient, String topicName, int partition)
+        throws InterruptedException, ExecutionException {
+        return adminClient.describeTopics(List.of(topicName)).allTopicNames().get().get(topicName)
+            .partitions().stream()
+            .filter(info -> info.partition() == partition)
+            .map(info -> info.leader().id())
+            .filter(info -> info != -1)
+            .toList();
+    }
+
+    private SharePartitionOffsetInfo sharePartitionDescription(Admin adminClient, String groupId, TopicPartition tp)
+        throws InterruptedException, ExecutionException {
+        SharePartitionOffsetInfo partitionResult;
+        ListShareGroupOffsetsResult result = adminClient.listShareGroupOffsets(
+            Map.of(groupId, new ListShareGroupOffsetsSpec().topicPartitions(List.of(tp))),
+            new ListShareGroupOffsetsOptions().timeoutMs(30000)
+        );
+        partitionResult = result.partitionsToOffsetInfo(groupId).get().get(tp);
         return partitionResult;
     }
 
-    private void verifySharePartitionLag(String groupId, TopicPartition tp, long expectedLag) throws InterruptedException {
+    private void verifySharePartitionLag(Admin adminClient, String groupId, TopicPartition tp, long expectedLag) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
-            SharePartitionOffsetInfo sharePartitionDescription = sharePartitionDescription(groupId, tp);
+            SharePartitionOffsetInfo sharePartitionDescription = sharePartitionDescription(adminClient, groupId, tp);
+            System.out.println("Current share partition description: " + sharePartitionDescription);
             return sharePartitionDescription != null &&
                 sharePartitionDescription.lag().isPresent() &&
                 sharePartitionDescription.lag().get() == expectedLag;
