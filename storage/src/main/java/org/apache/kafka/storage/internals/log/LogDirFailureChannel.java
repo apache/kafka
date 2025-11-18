@@ -69,7 +69,7 @@ public class LogDirFailureChannel {
      * The method will wait if necessary until a new offline log directory becomes available
      * 
      * @return The next offline log dir.
-     * @throws InterruptedException
+     * @throws InterruptedException if the current thread is interrupted while waiting
      */
     public String takeNextOfflineLogDir() throws InterruptedException {
         return offlineLogDirQueue.take();
