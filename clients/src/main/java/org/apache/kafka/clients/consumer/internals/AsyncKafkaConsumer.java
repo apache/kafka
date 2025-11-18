@@ -521,9 +521,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        String clientId,
                        Deserializers<K, V> deserializers,
                        FetchBuffer fetchBuffer,
+                       FetchCollector<K, V> fetchCollector,
                        FetchMetricsManager fetchMetricsManager,
                        RebalanceCallbackMetricsManager rebalanceCallbackMetricsManager,
-                       FetchCollector<K, V> fetchCollector,
                        ConsumerInterceptors<K, V> interceptors,
                        Time time,
                        ApplicationEventHandler applicationEventHandler,
@@ -542,9 +542,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.subscriptions = subscriptions;
         this.clientId = clientId;
         this.fetchBuffer = fetchBuffer;
+        this.fetchCollector = fetchCollector;
         this.fetchMetricsManager = fetchMetricsManager;
         this.rebalanceCallbackMetricsManager = rebalanceCallbackMetricsManager;
-        this.fetchCollector = fetchCollector;
         this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         this.interceptors = Objects.requireNonNull(interceptors);
         this.time = time;
