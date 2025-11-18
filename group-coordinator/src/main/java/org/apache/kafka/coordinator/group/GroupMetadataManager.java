@@ -2446,7 +2446,9 @@ public class GroupMetadataManager {
             records
         );
 
-        bumpGroupEpoch |= !member.subscribedTopicRegex().equals(updatedMember.subscribedTopicRegex());
+        // We bump the group epoch if the updated member replaces a static member
+        // with regex subscription to trigger a new assignment computation.
+        bumpGroupEpoch |= "".equals(member.subscribedTopicRegex());
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
