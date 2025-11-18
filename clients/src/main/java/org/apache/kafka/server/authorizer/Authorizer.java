@@ -157,6 +157,26 @@ public interface Authorizer extends Configurable, Closeable {
         return -1;
     }
 
+    /**
+     * Check if the caller is authorized to perform the given ACL operation on at least one
+     * resource of the given type.
+     *
+     * Custom authorizer implementations should consider overriding this default implementation because:
+     * 1. The default implementation iterates all AclBindings multiple times, without any caching
+     *    by principal, host, operation, permission types, and resource types. More efficient
+     *    implementations may be added in custom authorizers that directly access cached entries.
+     * 2. The default implementation cannot integrate with any audit logging included in the
+     *    authorizer implementation.
+     * 3. The default implementation does not support any custom authorizer configs or other access
+     *    rules apart from ACLs.
+     *
+     * @param requestContext Request context including request resourceType, security protocol and listener name
+     * @param op             The ACL operation to check
+     * @param resourceType   The resource type to check
+     * @return               Return {@link AuthorizationResult#ALLOWED} if the caller is authorized
+     *                       to perform the given ACL operation on at least one resource of the
+     *                       given type. Return {@link AuthorizationResult#DENIED} otherwise.
+     */
     default AuthorizationResult authorizeByResourceType(AuthorizableRequestContext requestContext, AclOperation op, ResourceType resourceType) {
         SecurityUtils.authorizeByResourceTypeCheckArgs(op, resourceType);
 
@@ -250,6 +270,11 @@ public interface Authorizer extends Configurable, Closeable {
             if(!denyPatternsPrefixed.isEmpty()) {
                 hasDominatedDeny = !denyPatternsPrefixed.headMap(allowStr).isEmpty() || denyPatternsPrefixed.containsKey(allowStr);
             }
+
+         //   String denyPrefix = denyPatternsPrefixed.selectKey(allowStr);
+         //   boolean hasDominatedDeny = (denyPrefix != null);
+
+          //  boolean hasDominatedDeny = !denyPatternsPrefixed.prefixMap(allowStr).isEmpty();
 
             if (!hasDominatedDeny)
                 return AuthorizationResult.ALLOWED;
