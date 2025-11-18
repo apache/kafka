@@ -2985,6 +2985,7 @@ public class ShareConsumerTest {
             assertEquals(10, records.count());
             assertEquals(Optional.of(15000), shareConsumer.acquisitionLockTimeoutMs());
 
+            // The updated acquisition lock timeout is only applied when the next poll is called.
             alterShareRecordLockDurationMs("group1", 25000);
 
             int count = 0;
@@ -2997,7 +2998,7 @@ public class ShareConsumerTest {
                 }
                 result = shareConsumer.commitSync();
                 assertEquals(1, result.size());
-                assertEquals(Optional.of(25000), shareConsumer.acquisitionLockTimeoutMs());
+                assertEquals(Optional.of(15000), shareConsumer.acquisitionLockTimeoutMs());
                 assertEquals(Optional.empty(), result.get(new TopicIdPartition(tpId, tp.partition(), tp.topic())));
                 count++;
             }

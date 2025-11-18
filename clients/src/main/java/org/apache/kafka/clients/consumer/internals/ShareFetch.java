@@ -43,6 +43,7 @@ import java.util.Optional;
 public class ShareFetch<K, V> {
     private final Map<TopicIdPartition, ShareInFlightBatch<K, V>> batches;
     private Optional<Integer> acquisitionLockTimeoutMs;
+    private Optional<Integer> acquisitionLockTimeoutMsRenewed;
 
     public static <K, V> ShareFetch<K, V> empty() {
         return new ShareFetch<>(new HashMap<>(), Optional.empty());
@@ -51,6 +52,7 @@ public class ShareFetch<K, V> {
     private ShareFetch(Map<TopicIdPartition, ShareInFlightBatch<K, V>> batches, Optional<Integer> acquisitionLockTimeoutMs) {
         this.batches = batches;
         this.acquisitionLockTimeoutMs = acquisitionLockTimeoutMs;
+        this.acquisitionLockTimeoutMsRenewed = Optional.empty();
     }
 
     /**
@@ -141,6 +143,10 @@ public class ShareFetch<K, V> {
     public void takeRenewedRecords() {
         for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> entry : batches.entrySet()) {
             entry.getValue().takeRenewals();
+        }
+        // Any acquisition lock timeout updated by renewal is applied as the renewed records are move back to in-flight
+        if (acquisitionLockTimeoutMsRenewed.isPresent()) {
+            acquisitionLockTimeoutMs = acquisitionLockTimeoutMsRenewed;
         }
     }
 
@@ -246,9 +252,7 @@ public class ShareFetch<K, V> {
         for (Map.Entry<TopicIdPartition, Acknowledgements> entry : acknowledgementsMap.entrySet()) {
             recordsRenewed += batches.get(entry.getKey()).renew(entry.getValue());
         }
-        if (acquisitionLockTimeoutMs.isPresent()) {
-            this.acquisitionLockTimeoutMs = acquisitionLockTimeoutMs;
-        }
+        acquisitionLockTimeoutMsRenewed = acquisitionLockTimeoutMs;
         return recordsRenewed;
     }
 }
