@@ -43,6 +43,7 @@ import java.util.Optional;
 public class ShareFetch<K, V> {
     private final Map<TopicIdPartition, ShareInFlightBatch<K, V>> batches;
     private Optional<Integer> acquisitionLockTimeoutMs;
+    private Optional<Integer> acquisitionLockTimeoutMsRenewed;
 
     public static <K, V> ShareFetch<K, V> empty() {
         return new ShareFetch<>(new HashMap<>(), Optional.empty());
@@ -51,6 +52,7 @@ public class ShareFetch<K, V> {
     private ShareFetch(Map<TopicIdPartition, ShareInFlightBatch<K, V>> batches, Optional<Integer> acquisitionLockTimeoutMs) {
         this.batches = batches;
         this.acquisitionLockTimeoutMs = acquisitionLockTimeoutMs;
+        this.acquisitionLockTimeoutMsRenewed = Optional.empty();
     }
 
     /**
@@ -141,6 +143,10 @@ public class ShareFetch<K, V> {
     public void takeRenewedRecords() {
         for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> entry : batches.entrySet()) {
             entry.getValue().takeRenewals();
+        }
+        // Any acquisition lock timeout updated by renewal is applied as the renewed records are move back to in-flight
+        if (acquisitionLockTimeoutMsRenewed.isPresent()) {
+            acquisitionLockTimeoutMs = acquisitionLockTimeoutMsRenewed;
         }
     }
 
@@ -235,16 +241,18 @@ public class ShareFetch<K, V> {
      * Handles completed renew acknowledgements by returning successfully renewed records
      * to the set of in-flight records.
      *
-     * @param acknowledgementsMap Map from topic-partition to acknowledgements for
-     *                            completed renew acknowledgements
+     * @param acknowledgementsMap      Map from topic-partition to acknowledgements for
+     *                                 completed renew acknowledgements
+     * @param acquisitionLockTimeoutMs Optional updated acquisition lock timeout
      *
      * @return The number of records renewed
      */
-    public int renew(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
+    public int renew(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap, Optional<Integer> acquisitionLockTimeoutMs) {
         int recordsRenewed = 0;
         for (Map.Entry<TopicIdPartition, Acknowledgements> entry : acknowledgementsMap.entrySet()) {
             recordsRenewed += batches.get(entry.getKey()).renew(entry.getValue());
         }
+        acquisitionLockTimeoutMsRenewed = acquisitionLockTimeoutMs;
         return recordsRenewed;
     }
 }
