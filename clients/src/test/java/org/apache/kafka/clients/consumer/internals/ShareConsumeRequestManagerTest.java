@@ -25,10 +25,9 @@ import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ShareAcquireMode;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackEvent;
-import org.apache.kafka.clients.consumer.internals.events.ShareRenewAcknowledgementsCompleteEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementEventHandler;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
@@ -2627,25 +2626,25 @@ public class ShareConsumeRequestManagerTest {
 
     private ShareAcknowledgeResponse emptyAcknowledgeResponse() {
         Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> partitions = Collections.emptyMap();
-        return ShareAcknowledgeResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), Collections.emptyList());
+        return ShareAcknowledgeResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), Collections.emptyList(), 0);
     }
 
     private ShareAcknowledgeResponse acknowledgeResponseWithTopLevelError(TopicIdPartition tp, Errors error) {
         Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> partitions = Map.of(tp,
                 partitionDataForAcknowledge(tp, Errors.NONE));
-        return ShareAcknowledgeResponse.of(error, 0, new LinkedHashMap<>(partitions), Collections.emptyList());
+        return ShareAcknowledgeResponse.of(error, 0, new LinkedHashMap<>(partitions), Collections.emptyList(), 0);
     }
 
     private ShareAcknowledgeResponse fullAcknowledgeResponse(TopicIdPartition tp, Errors error) {
         Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> partitions = Map.of(tp,
                 partitionDataForAcknowledge(tp, error));
-        return ShareAcknowledgeResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), Collections.emptyList());
+        return ShareAcknowledgeResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), Collections.emptyList(), 0);
     }
 
     private ShareAcknowledgeResponse fullAcknowledgeResponse(Map<TopicIdPartition, Errors> partitionErrorsMap) {
         Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> partitions = new HashMap<>();
         partitionErrorsMap.forEach((tip, error) -> partitions.put(tip, partitionDataForAcknowledge(tip, error)));
-        return ShareAcknowledgeResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), Collections.emptyList());
+        return ShareAcknowledgeResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), Collections.emptyList(), 0);
     }
 
     private ShareAcknowledgeResponse fullAcknowledgeResponse(TopicIdPartition tp,
@@ -2654,7 +2653,7 @@ public class ShareConsumeRequestManagerTest {
                                                              List<Node> nodeEndpoints) {
         Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> partitions = Map.of(tp,
             partitionDataForAcknowledge(tp, error, currentLeader));
-        return ShareAcknowledgeResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), nodeEndpoints);
+        return ShareAcknowledgeResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), nodeEndpoints, 0);
     }
 
     private ShareFetchResponseData.PartitionData partitionDataForFetch(TopicIdPartition tp,
@@ -2763,7 +2762,7 @@ public class ShareConsumeRequestManagerTest {
                 subscriptions,
                 shareFetchConfig,
                 deserializers);
-        BackgroundEventHandler backgroundEventHandler = new TestableBackgroundEventHandler(time, completedAcknowledgements, renewedRecords);
+        ShareAcknowledgementEventHandler acknowledgementEventHandler = new TestableShareAcknowledgementEventHandler(completedAcknowledgements, renewedRecords);
         shareConsumeRequestManager = spy(new TestableShareConsumeRequestManager<>(
                 logContext,
                 groupId,
@@ -2771,7 +2770,7 @@ public class ShareConsumeRequestManagerTest {
                 subscriptionState,
                 shareFetchConfig,
                 new ShareFetchBuffer(logContext),
-                backgroundEventHandler,
+                acknowledgementEventHandler,
                 metricsManager,
                 shareFetchCollector));
     }
@@ -2810,11 +2809,11 @@ public class ShareConsumeRequestManagerTest {
                                                   SubscriptionState subscriptions,
                                                   ShareFetchConfig shareFetchConfig,
                                                   ShareFetchBuffer shareFetchBuffer,
-                                                  BackgroundEventHandler backgroundEventHandler,
+                                                  ShareAcknowledgementEventHandler acknowledgementEventHandler,
                                                   ShareFetchMetricsManager metricsManager,
                                                   ShareFetchCollector<K, V> fetchCollector) {
             super(time, logContext, groupId, metadata, subscriptions, shareFetchConfig, shareFetchBuffer,
-                    backgroundEventHandler, metricsManager, retryBackoffMs, 1000);
+                acknowledgementEventHandler, metricsManager, retryBackoffMs, 1000);
             this.shareFetchCollector = fetchCollector;
             onMemberEpochUpdated(Optional.empty(), Uuid.randomUuid().toString());
         }
@@ -2955,23 +2954,20 @@ public class ShareConsumeRequestManagerTest {
         }
     }
 
-    private static class TestableBackgroundEventHandler extends BackgroundEventHandler {
+    private static class TestableShareAcknowledgementEventHandler extends ShareAcknowledgementEventHandler {
         List<Map<TopicIdPartition, Acknowledgements>> completedAcknowledgements;
         Set<Long> renewedRecords;
 
-        public TestableBackgroundEventHandler(Time time, List<Map<TopicIdPartition, Acknowledgements>> completedAcknowledgements, Set<Long> renewedRecords) {
-            super(new LinkedBlockingQueue<>(), time, mock(AsyncConsumerMetrics.class));
+        public TestableShareAcknowledgementEventHandler(List<Map<TopicIdPartition, Acknowledgements>> completedAcknowledgements, Set<Long> renewedRecords) {
+            super(new LinkedBlockingQueue<>());
             this.completedAcknowledgements = completedAcknowledgements;
             this.renewedRecords = renewedRecords;
         }
 
-        public void add(BackgroundEvent event) {
-            if (event.type() == BackgroundEvent.Type.SHARE_ACKNOWLEDGEMENT_COMMIT_CALLBACK) {
-                ShareAcknowledgementCommitCallbackEvent shareAcknowledgementCommitCallbackEvent = (ShareAcknowledgementCommitCallbackEvent) event;
-                completedAcknowledgements.add(shareAcknowledgementCommitCallbackEvent.acknowledgementsMap());
-            } else if (event.type() == BackgroundEvent.Type.SHARE_RENEW_ACKNOWLEDGEMENTS_COMPLETE) {
-                ShareRenewAcknowledgementsCompleteEvent shareRenewAcknowledgementsCompleteEvent = (ShareRenewAcknowledgementsCompleteEvent) event;
-                shareRenewAcknowledgementsCompleteEvent.acknowledgementsMap().values().forEach(acks ->
+        public void add(ShareAcknowledgementEvent event) {
+            completedAcknowledgements.add(event.acknowledgementsMap());
+            if (event.checkForRenewAcknowledgements()) {
+                event.acknowledgementsMap().values().forEach(acks ->
                     acks.getAcknowledgementsTypeMap().forEach((offset, ackType) -> renewedRecords.add(offset)));
             }
         }

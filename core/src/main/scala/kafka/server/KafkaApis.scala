@@ -4035,7 +4035,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       Errors.NONE,
       0,
       partitions,
-      nodeEndpoints.values.toList.asJava
+      nodeEndpoints.values.toList.asJava,
+      config.shareGroupConfig.shareGroupRecordLockDurationMs
     )
   }
 

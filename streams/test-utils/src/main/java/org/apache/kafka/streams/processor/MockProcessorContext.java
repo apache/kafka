@@ -34,6 +34,7 @@ import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 
 import java.io.File;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -80,15 +81,29 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * {@link CapturedPunctuator} holds captured punctuators, along with their scheduling information.
      */
     public static class CapturedPunctuator {
+        private final Instant startTime;
         private final long intervalMs;
         private final PunctuationType type;
         private final Punctuator punctuator;
         private boolean cancelled = false;
 
         private CapturedPunctuator(final long intervalMs, final PunctuationType type, final Punctuator punctuator) {
+            this.startTime = null;  // unanchored punctuator so start time is undefined
             this.intervalMs = intervalMs;
             this.type = type;
             this.punctuator = punctuator;
+        }
+
+        private CapturedPunctuator(final Instant startTime, final long intervalMs, final PunctuationType type, final Punctuator punctuator) {
+            this.startTime = startTime;
+            this.intervalMs = intervalMs;
+            this.type = type;
+            this.punctuator = punctuator;
+        }
+
+        @SuppressWarnings({"WeakerAccess", "unused"})
+        public Instant getStartTime() {
+            return startTime;
         }
 
         @SuppressWarnings({"WeakerAccess", "unused"})
@@ -463,9 +478,23 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
             throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
         }
         final CapturedPunctuator capturedPunctuator = new CapturedPunctuator(intervalMs, type, callback);
-
         punctuators.add(capturedPunctuator);
+        return capturedPunctuator::cancel;    }
 
+    @Override
+    public Cancellable schedule(final Instant startTime,
+                                final Duration interval,
+                                final PunctuationType type,
+                                final Punctuator callback) throws IllegalArgumentException {
+        final long intervalMs = ApiUtils.validateMillisecondDuration(interval, "interval");
+        if (intervalMs < 1) {
+            throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
+        }
+        if (startTime.isBefore(Instant.EPOCH)) {
+            throw new IllegalArgumentException("The minimum supported start time is Instant.EPOCH.");
+        }
+        final CapturedPunctuator capturedPunctuator = new CapturedPunctuator(startTime, intervalMs, type, callback);
+        punctuators.add(capturedPunctuator);
         return capturedPunctuator::cancel;
     }
 

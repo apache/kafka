@@ -87,6 +87,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val shareAcknowledgeResponse = IntegrationTestUtils.sendAndReceive[ShareAcknowledgeResponse](shareAcknowledgeRequest, socket)
 
     assertEquals(Errors.UNSUPPORTED_VERSION.code, shareAcknowledgeResponse.data.errorCode)
+    assertEquals(0, shareAcknowledgeResponse.data.acquisitionLockTimeoutMs)
   }
 
   @ClusterTests(
@@ -505,6 +506,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setErrorCode(Errors.NONE.code())
 
     val acknowledgePartitionData = shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().get(0)
+    assertEquals(30000, shareAcknowledgeResponseData.acquisitionLockTimeoutMs())
     compareAcknowledgeResponsePartitions(expectedAcknowledgePartitionData, acknowledgePartitionData)
 
     // Producing 10 more records to the topic
@@ -730,6 +732,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(1, shareAcknowledgeResponseData.responses().size())
     assertEquals(topicId, shareAcknowledgeResponseData.responses().stream().findFirst().get().topicId())
     assertEquals(1, shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().size())
+    assertEquals(30000, shareAcknowledgeResponseData.acquisitionLockTimeoutMs())
 
     val expectedAcknowledgePartitionData = new ShareAcknowledgeResponseData.PartitionData()
       .setPartitionIndex(PARTITION)
@@ -952,6 +955,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(1, shareAcknowledgeResponseData.responses().size())
     assertEquals(topicId, shareAcknowledgeResponseData.responses().stream().findFirst().get().topicId())
     assertEquals(1, shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().size())
+    assertEquals(30000, shareAcknowledgeResponseData.acquisitionLockTimeoutMs())
 
     val expectedAcknowledgePartitionData = new ShareAcknowledgeResponseData.PartitionData()
       .setPartitionIndex(PARTITION)
@@ -1183,6 +1187,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(1, shareAcknowledgeResponseData.responses().size())
     assertEquals(topicId, shareAcknowledgeResponseData.responses().stream().findFirst().get().topicId())
     assertEquals(1, shareAcknowledgeResponseData.responses().stream().findFirst().get().partitions().size())
+    assertEquals(30000, shareAcknowledgeResponseData.acquisitionLockTimeoutMs())
 
     var expectedAcknowledgePartitionData = new ShareAcknowledgeResponseData.PartitionData()
       .setPartitionIndex(PARTITION)
@@ -1766,6 +1771,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val shareAcknowledgeResponseData = shareAcknowledgeResponse.data()
     assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH.code, shareAcknowledgeResponseData.errorCode)
+    assertEquals(0, shareAcknowledgeResponseData.acquisitionLockTimeoutMs())
   }
 
   @ClusterTests(
@@ -1913,6 +1919,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val shareAcknowledgeResponseData = shareAcknowledgeResponse.data()
     assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH.code, shareAcknowledgeResponseData.errorCode)
+    assertEquals(0, shareAcknowledgeResponseData.acquisitionLockTimeoutMs())
   }
 
   @ClusterTests(

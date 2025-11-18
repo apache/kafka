@@ -41,6 +41,7 @@ import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 
 import java.io.File;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -114,15 +115,28 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
      * {@link CapturedPunctuator} holds captured punctuators, along with their scheduling information.
      */
     public static final class CapturedPunctuator {
+        private final Instant startTime;
         private final Duration interval;
         private final PunctuationType type;
         private final Punctuator punctuator;
         private boolean cancelled = false;
 
         private CapturedPunctuator(final Duration interval, final PunctuationType type, final Punctuator punctuator) {
+            this.startTime = null;  // unanchored punctuator so start time is undefined
             this.interval = interval;
             this.type = type;
             this.punctuator = punctuator;
+        }
+
+        private CapturedPunctuator(final Instant startTime, final Duration interval, final PunctuationType type, final Punctuator punctuator) {
+            this.startTime = startTime;
+            this.interval = interval;
+            this.type = type;
+            this.punctuator = punctuator;
+        }
+
+        public Instant getStartTime() {
+            return startTime;
         }
 
         public Duration getInterval() {
@@ -373,9 +387,16 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
                                 final PunctuationType type,
                                 final Punctuator callback) {
         final CapturedPunctuator capturedPunctuator = new CapturedPunctuator(interval, type, callback);
-
         punctuators.add(capturedPunctuator);
+        return capturedPunctuator::cancel;    }
 
+    @Override
+    public Cancellable schedule(final Instant startTime,
+                                final Duration interval,
+                                final PunctuationType type,
+                                final Punctuator callback) {
+        final CapturedPunctuator capturedPunctuator = new CapturedPunctuator(startTime, interval, type, callback);
+        punctuators.add(capturedPunctuator);
         return capturedPunctuator::cancel;
     }
 

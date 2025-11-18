@@ -27,11 +27,10 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeAsyncEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeOnCloseEvent;
-import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackRegistrationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.SharePollEvent;
-import org.apache.kafka.clients.consumer.internals.events.ShareRenewAcknowledgementsCompleteEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
 import org.apache.kafka.clients.consumer.internals.events.StopFindCoordinatorOnCloseEvent;
@@ -41,6 +40,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -69,6 +69,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -101,12 +102,14 @@ import static org.mockito.Mockito.verify;
 @SuppressWarnings("unchecked")
 public class ShareConsumerImplTest {
 
+    private static final Optional<Integer> DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS = Optional.of(30000);
     private ShareConsumerImpl<String, String> consumer = null;
 
     private final Time time = new MockTime(1);
     private final ShareFetchCollector<String, String> fetchCollector = mock(ShareFetchCollector.class);
     private final ShareConsumerMetadata metadata = mock(ShareConsumerMetadata.class);
     private final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
+    private final LinkedBlockingQueue<ShareAcknowledgementEvent> acknowledgementEventQueue = new LinkedBlockingQueue<>();
     private final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
     private final CompletableEventReaper backgroundEventReaper = mock(CompletableEventReaper.class);
 
@@ -147,6 +150,7 @@ public class ShareConsumerImplTest {
                 (a, b, c, d, e, f, g, h) -> applicationEventHandler,
                 a -> backgroundEventReaper,
                 (a, b, c, d, e) -> fetchCollector,
+                acknowledgementEventQueue,
                 backgroundEventQueue
         );
     }
@@ -181,6 +185,7 @@ public class ShareConsumerImplTest {
                 fetchCollector,
                 time,
                 applicationEventHandler,
+                acknowledgementEventQueue,
                 backgroundEventQueue,
                 backgroundEventReaper,
                 new Metrics(),
@@ -254,7 +259,7 @@ public class ShareConsumerImplTest {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(subscriptions);
 
-        // Setup subscription
+        // Set up subscription
         final String topicName = "foo";
         final List<String> subscriptionTopic = Collections.singletonList(topicName);
         completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, subscriptionTopic);
@@ -262,7 +267,7 @@ public class ShareConsumerImplTest {
 
         // Create a fetch with only GAP (no records)
         final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), 0, topicName);
-        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip);
+        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip, DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS);
         // Add GAP without adding any records
         batch.addGap(1);
         
@@ -272,7 +277,7 @@ public class ShareConsumerImplTest {
 
         consumer.poll(Duration.ZERO);
 
-        // Verify that a ShareAcknowledeAsyncEvent was sent with the acknowledgement GAP for offset 1
+        // Verify that a ShareAcknowledgeAsyncEvent was sent with the acknowledgement GAP for offset 1
         verify(applicationEventHandler).add(argThat(event -> {
             if (!(event instanceof ShareAcknowledgeAsyncEvent)) {
                 return false;
@@ -313,7 +318,7 @@ public class ShareConsumerImplTest {
         final String topicName = "foo";
         final int partition = 3;
         final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), partition, topicName);
-        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip);
+        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip, DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS);
         batch.addRecord(new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"));
         doAnswer(invocation -> {
             consumer.wakeup();
@@ -342,6 +347,8 @@ public class ShareConsumerImplTest {
         consumer.close();
         final IllegalStateException res = assertThrows(IllegalStateException.class, consumer::subscription);
         assertEquals("This consumer has already been closed.", res.getMessage());
+        final IllegalStateException res2 = assertThrows(IllegalStateException.class, consumer::acquisitionLockTimeoutMs);
+        assertEquals("This consumer has already been closed.", res2.getMessage());
     }
 
     @Test
@@ -349,9 +356,9 @@ public class ShareConsumerImplTest {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(subscriptions);
 
-        // Setup test data
+        // Set up test data
         String topic = "test-topic";
-        // Setup an empty fetch.
+        // Set up an empty fetch.
         ShareFetch<String, String> firstFetch = ShareFetch.empty();
 
         doReturn(firstFetch)
@@ -359,7 +366,7 @@ public class ShareConsumerImplTest {
                 .when(fetchCollector)
                 .collect(any(ShareFetchBuffer.class));
 
-        // Setup subscription
+        // Set up subscription
         List<String> topics = Collections.singletonList(topic);
         completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, topics);
         consumer.subscribe(topics);
@@ -393,7 +400,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testExplicitModeUnacknowledgedRecords() {
-        // Setup consumer with explicit acknowledgement mode
+        // Set up consumer with explicit acknowledgement mode
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(
                 mock(ShareFetchBuffer.class),
@@ -402,15 +409,15 @@ public class ShareConsumerImplTest {
                 "client-id",
                 "explicit");
 
-        // Setup test data
+        // Set up test data
         String topic = "test-topic";
         int partition = 0;
         TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), partition, topic);
-        ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip);
+        ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip, DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS);
         batch.addRecord(new ConsumerRecord<>(topic, partition, 0, "key1", "value1"));
         batch.addRecord(new ConsumerRecord<>(topic, partition, 1, "key2", "value2"));
 
-        // Setup first fetch to return records
+        // Set up first fetch to return records
         ShareFetch<String, String> firstFetch = ShareFetch.empty();
         firstFetch.add(tip, batch);
         doReturn(firstFetch)
@@ -418,14 +425,16 @@ public class ShareConsumerImplTest {
             .when(fetchCollector)
             .collect(any(ShareFetchBuffer.class));
 
-        // Setup subscription
+        // Set up subscription
         List<String> topics = Collections.singletonList(topic);
         completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, topics);
         consumer.subscribe(topics);
+        assertEquals(Optional.empty(), consumer.acquisitionLockTimeoutMs());
 
         // First poll should succeed and return records
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
         assertEquals(2, records.count(), "Should have received 2 records");
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, consumer.acquisitionLockTimeoutMs());
 
         // Second poll should fail because records weren't acknowledged
         IllegalStateException exception = assertThrows(
@@ -436,6 +445,7 @@ public class ShareConsumerImplTest {
             exception.getMessage().contains("All records must be acknowledged in explicit acknowledgement mode."),
             "Unexpected error message: " + exception.getMessage()
         );
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, consumer.acquisitionLockTimeoutMs());
 
         // Verify that acknowledging one record but not all still throws exception
         Iterator<ConsumerRecord<String, String>> iterator = records.iterator();
@@ -452,9 +462,9 @@ public class ShareConsumerImplTest {
         // Verify that after acknowledging all records, poll succeeds
         consumer.acknowledge(iterator.next());
         
-        // Setup second fetch to return new records
+        // Set up second fetch to return new records
         ShareFetch<String, String> secondFetch = ShareFetch.empty();
-        ShareInFlightBatch<String, String> newBatch = new ShareInFlightBatch<>(2, tip);
+        ShareInFlightBatch<String, String> newBatch = new ShareInFlightBatch<>(2, tip, DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS);
         newBatch.addRecord(new ConsumerRecord<>(topic, partition, 2, "key3", "value3"));
         newBatch.addRecord(new ConsumerRecord<>(topic, partition, 3, "key4", "value4"));
         secondFetch.add(tip, newBatch);
@@ -471,7 +481,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testExplicitModeRenewAndAcknowledgeOnPoll() {
-        // Setup consumer with explicit acknowledgement mode
+        // Set up consumer with explicit acknowledgement mode
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(
             mock(ShareFetchBuffer.class),
@@ -480,22 +490,22 @@ public class ShareConsumerImplTest {
             "client-id",
             "explicit");
 
-        // Setup test data
+        // Set up test data
         String topic = "test-topic";
         int partition = 0;
         TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), partition, topic);
-        ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip);
+        ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip, DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS);
         batch.addRecord(new ConsumerRecord<>(topic, partition, 0, "key1", "value1"));
         batch.addRecord(new ConsumerRecord<>(topic, partition, 1, "key2", "value2"));
 
-        // Setup first fetch to return records
+        // Set up first fetch to return records
         ShareFetch<String, String> firstFetch = ShareFetch.empty();
         firstFetch.add(tip, batch);
         doReturn(firstFetch)
             .when(fetchCollector)
             .collect(any(ShareFetchBuffer.class));
 
-        // Setup subscription
+        // Set up subscription
         List<String> topics = Collections.singletonList(topic);
         completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, topics);
         consumer.subscribe(topics);
@@ -503,6 +513,7 @@ public class ShareConsumerImplTest {
         // First poll should succeed and return records
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
         assertEquals(2, records.count(), "Should have received 2 records");
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, consumer.acquisitionLockTimeoutMs());
 
         // Renew the first record and accept the second
         Iterator<ConsumerRecord<String, String>> iterator = records.iterator();
@@ -513,12 +524,13 @@ public class ShareConsumerImplTest {
         records = consumer.poll(Duration.ofMillis(100));
         assertEquals(0, records.count(), "Should have received 1 record");
         assertTrue(firstFetch.hasRenewals());
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, consumer.acquisitionLockTimeoutMs());
 
         Acknowledgements acks = Acknowledgements.empty();
         acks.add(0, AcknowledgeType.RENEW);
         acks.complete(null);
-        ShareRenewAcknowledgementsCompleteEvent e = new ShareRenewAcknowledgementsCompleteEvent(Map.of(tip, acks));
-        backgroundEventQueue.add(e);
+        ShareAcknowledgementEvent e = new ShareAcknowledgementEvent(Map.of(tip, acks), true);
+        acknowledgementEventQueue.add(e);
 
         records = consumer.poll(Duration.ofMillis(100));
         assertEquals(1, records.count(), "Should have received 1 record");
@@ -527,8 +539,9 @@ public class ShareConsumerImplTest {
         ConsumerRecord<String, String> renewedRecord = iterator.next();
         assertEquals(0, renewedRecord.offset());
         consumer.acknowledge(renewedRecord);
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, consumer.acquisitionLockTimeoutMs());
 
-        // Setup next fetch to return no records
+        // Set up next fetch to return no records
         doReturn(ShareFetch.empty())
             .when(fetchCollector)
             .collect(any(ShareFetchBuffer.class));
@@ -537,9 +550,9 @@ public class ShareConsumerImplTest {
         records = consumer.poll(Duration.ofMillis(100));
         assertTrue(records.isEmpty());
 
-        // Setup next fetch to return new records
+        // Set up next fetch to return new records
         ShareFetch<String, String> thirdFetch = ShareFetch.empty();
-        ShareInFlightBatch<String, String> newBatch = new ShareInFlightBatch<>(2, tip);
+        ShareInFlightBatch<String, String> newBatch = new ShareInFlightBatch<>(2, tip, DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS);
         newBatch.addRecord(new ConsumerRecord<>(topic, partition, 2, "key3", "value3"));
         newBatch.addRecord(new ConsumerRecord<>(topic, partition, 3, "key4", "value4"));
         thirdFetch.add(tip, newBatch);
@@ -552,6 +565,7 @@ public class ShareConsumerImplTest {
         // Verify that poll succeeds and returns new records
         ConsumerRecords<String, String> newRecords = consumer.poll(Duration.ofMillis(100));
         assertEquals(2, newRecords.count(), "Should have received 2 new records");
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, consumer.acquisitionLockTimeoutMs());
     }
 
     @Test
@@ -568,7 +582,7 @@ public class ShareConsumerImplTest {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(subscriptions);
 
-        // Setup the expected successful completion of close events
+        // Set up the expected successful completion of close events
         completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
 
@@ -776,7 +790,7 @@ public class ShareConsumerImplTest {
 
         final TopicPartition tp = new TopicPartition("topic", 0);
         final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), tp);
-        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip);
+        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip, DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS);
         batch.addRecord(new ConsumerRecord<>("topic", 0, 2, "key1", "value1"));
         final ShareFetch<String, String> fetch = ShareFetch.empty();
         fetch.add(tip, batch);
@@ -898,13 +912,13 @@ public class ShareConsumerImplTest {
         Metrics metrics = consumer.metricsRegistry();
         AsyncConsumerMetrics asyncConsumerMetrics = consumer.asyncConsumerMetrics();
 
-        ShareAcknowledgementCommitCallbackEvent event = new ShareAcknowledgementCommitCallbackEvent(Map.of());
+        ErrorEvent event = new ErrorEvent(new InvalidRecordStateException("The record is in the wrong state"));
         backgroundEventQueue.add(event);
         asyncConsumerMetrics.recordBackgroundEventQueueSize(1);
 
         assertEquals(1, (double) metrics.metric(metrics.metricName("background-event-queue-size", CONSUMER_SHARE_METRIC_GROUP)).metricValue());
 
-        consumer.processBackgroundEvents();
+        assertThrows(InvalidRecordStateException.class, () -> consumer.processBackgroundEvents());
         assertEquals(0, (double) metrics.metric(metrics.metricName("background-event-queue-size", CONSUMER_SHARE_METRIC_GROUP)).metricValue());
     }
 

@@ -74,6 +74,7 @@ public class ShareFetchCollectorTest {
 
     private static final int DEFAULT_RECORD_COUNT = 10;
     private static final int DEFAULT_MAX_POLL_RECORDS = ConsumerConfig.DEFAULT_MAX_POLL_RECORDS;
+    private static final Optional<Integer> DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS = Optional.of(30000);
     private final TopicIdPartition topicAPartition0 = new TopicIdPartition(Uuid.randomUuid(), 0, "topic-a");
     private LogContext logContext;
 
@@ -155,6 +156,7 @@ public class ShareFetchCollectorTest {
         ShareFetch<String, String> fetch = fetchCollector.collect(fetchBuffer);
         assertFalse(fetch.isEmpty());
         assertEquals(recordCount, fetch.numRecords());
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, fetch.acquisitionLockTimeoutMs());
 
         // When we collected the data from the buffer, this will cause the completed fetch to get initialized.
         assertTrue(completedFetch.isInitialized());
@@ -417,6 +419,7 @@ public class ShareFetchCollectorTest {
                     0,
                     topicAPartition0,
                     partitionData,
+                    DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS,
                     shareFetchMetricsAggregator,
                     ApiKeys.SHARE_FETCH.latestVersion());
         }

@@ -480,6 +480,19 @@ public class EmbeddedKafkaCluster {
         }
     }
 
+    public void setGroupStreamsInitialRebalanceDelay(final String groupId, final int initialRebalanceDelayMs) {
+        try (final Admin adminClient = createAdminClient()) {
+            adminClient.incrementalAlterConfigs(
+                Map.of(
+                    new ConfigResource(ConfigResource.Type.GROUP, groupId),
+                    List.of(new AlterConfigOp(new ConfigEntry(GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, String.valueOf(initialRebalanceDelayMs)), AlterConfigOp.OpType.SET))
+                )
+            ).all().get();
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private final class TopicsRemainingCondition implements TestCondition {
         final Set<String> remainingTopics = new HashSet<>();
 
