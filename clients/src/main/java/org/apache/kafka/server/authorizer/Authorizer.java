@@ -30,8 +30,10 @@ import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.SecurityUtils;
+import org.apache.kafka.common.utils.TrieSet;
 
 import java.io.Closeable;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashSet;
@@ -207,8 +209,8 @@ public interface Authorizer extends Configurable, Closeable {
                 }};
         EnumMap<PatternType, Set<String>> allowPatterns =
             new EnumMap<>(PatternType.class) {{
-                    put(PatternType.LITERAL, new HashSet<>());
-                    put(PatternType.PREFIXED, new HashSet<>());
+                    put(PatternType.LITERAL, new TrieSet());
+                    put(PatternType.PREFIXED, new TrieSet());
                 }};
 
         boolean hasWildCardAllow = false;
@@ -271,22 +273,15 @@ public interface Authorizer extends Configurable, Closeable {
         // For any literal allowed, if there's no dominant literal and prefix denied, return allow.
         // For any prefix allowed, if there's no dominant prefix denied, return allow.
         for (Map.Entry<PatternType, Set<String>> entry : allowPatterns.entrySet()) {
-            for (String allowStr : entry.getValue()) {
-                if (entry.getKey() == PatternType.LITERAL
-                        && denyPatterns.get(PatternType.LITERAL).contains(allowStr))
-                    continue;
-                StringBuilder sb = new StringBuilder();
-                boolean hasDominatedDeny = false;
-                for (char ch : allowStr.toCharArray()) {
-                    sb.append(ch);
-                    if (denyPatterns.get(PatternType.PREFIXED).contains(sb.toString())) {
-                        hasDominatedDeny = true;
-                        break;
-                    }
-                }
-                if (!hasDominatedDeny)
-                    return AuthorizationResult.ALLOWED;
+            TrieSet toAllow = (TrieSet) entry.getValue();
+            if (entry.getKey() == PatternType.LITERAL)
+                toAllow.removeAll(denyPatterns.get(PatternType.LITERAL));
+            for (final String d : denyPatterns.get(PatternType.PREFIXED)) {
+                List<String> toDeny = new ArrayList<>(toAllow.prefixSet(d));
+                toAllow.removeAll(toDeny);
             }
+            if (!toAllow.isEmpty())
+                return AuthorizationResult.ALLOWED;
         }
 
         return AuthorizationResult.DENIED;
