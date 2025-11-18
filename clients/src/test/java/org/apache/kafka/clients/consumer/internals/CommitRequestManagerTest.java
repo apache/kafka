@@ -88,6 +88,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -792,10 +793,15 @@ public class CommitRequestManagerTest {
             commitRequestManager,
             partitions,
             1,
-            Errors.UNKNOWN_TOPIC_OR_PARTITION,
+            Errors.NONE,
             true,
             topicId);
-        futures.forEach(f -> testRetriable(commitRequestManager, futures, Errors.UNKNOWN_TOPIC_OR_PARTITION));
+        futures.forEach(f -> {
+            assertTrue(f.isDone());
+            assertTrue(f.isCompletedExceptionally());
+            ExecutionException exception = assertThrows(ExecutionException.class, f::get);
+            assertInstanceOf(KafkaException.class, exception.getCause());
+        });
         // expecting the buffers to be emptied after being completed successfully
         commitRequestManager.poll(0);
         assertEmptyPendingRequests(commitRequestManager);
