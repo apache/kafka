@@ -2178,6 +2178,7 @@ org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManagerTest:
 - testFetchDisconnected
 - testFetchError
 - testFetchNormal
+- testFetchOneNodeAtATimeForRecordLimitMode
 - testFetchWithAcquiredRecords
 - testFetchWithLastRecordMissingFromBatch
 - testHandleFetchResponseError
