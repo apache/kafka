@@ -139,8 +139,9 @@ public class KTableProcessValuesTest {
         assertThrows(NullPointerException.class, view::get);
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
-    public void shouldInitializeTransformerWithForwardDisabledProcessorContext() { // TODO revisit and rename ?
+    public void shouldInitializeTransformerWithForwardCaptureProcessorContext() {
         final NoOpFixedKeyProcessorSupplier<String, String> fixedKeyProcessorSupplier = new NoOpFixedKeyProcessorSupplier<>();
         final KTableProcessValues<String, String, String> processValues =
             new KTableProcessValues<>(parent, fixedKeyProcessorSupplier, null);
@@ -148,8 +149,7 @@ public class KTableProcessValuesTest {
 
         processor.init(context);
 
-        //assertThat(fixedKeyProcessorSupplier.context, isA((Class) ForwardingDisabledProcessorContext.class));
-        throw new RuntimeException();
+        assertThat(fixedKeyProcessorSupplier.context, isA((Class) ForwardCaptureProcessorContext.class));
     }
 
     @Test
@@ -160,7 +160,7 @@ public class KTableProcessValuesTest {
         final Processor<String, Change<String>, String, Change<String>> processor = processValues.get();
         processor.init(context);
 
-        doNothing().when(context).forward(new Record<>("Key", new Change<>("Key->newValue!", null), 0));
+        doNothing().when(context).forward(new Record<>("Key", new Change<>("Key->newValue!", null), 0), null);
 
         processor.process(new Record<>("Key", new Change<>("newValue", "oldValue"), 0));
     }
@@ -176,7 +176,7 @@ public class KTableProcessValuesTest {
         final Processor<String, Change<String>, String, Change<String>> processor = processValues.get();
         processor.init(context);
 
-        doNothing().when(context).forward(new Record<>("Key", new Change<>("Key->newValue!", "Key->oldValue!"), 0));
+        doNothing().when(context).forward(new Record<>("Key", new Change<>("Key->newValue!", "Key->oldValue!"), 0), null);
 
         processor.process(new Record<>("Key", new Change<>("newValue", "oldValue"), 0));
     }
