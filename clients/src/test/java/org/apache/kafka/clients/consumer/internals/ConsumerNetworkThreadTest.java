@@ -18,8 +18,8 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
+import org.apache.kafka.clients.consumer.internals.events.AsyncPollEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
-import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.metrics.Metrics;
@@ -258,7 +258,7 @@ public class ConsumerNetworkThreadTest {
              )) {
             consumerNetworkThread.initializeResources();
 
-            PollEvent event = new PollEvent(0);
+            AsyncPollEvent event = new AsyncPollEvent(10, 0);
             event.setEnqueuedMs(time.milliseconds());
             applicationEventQueue.add(event);
             asyncConsumerMetrics.recordApplicationEventQueueSize(1);

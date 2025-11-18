@@ -79,7 +79,7 @@ The following example declares -PmaxTestRetries=1 and -PmaxTestRetryFailures=3 t
 
     ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=3
 
-See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for and [build.yml](.github/workflows/build.yml) more details.
+See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) and [build.yml](.github/workflows/build.yml) for more details.
 
 ### Generating test coverage reports ###
 Generate coverage reports for the whole project:
