@@ -236,7 +236,7 @@ public class PlaintextConsumerTest {
 
             // Close should not hang waiting for retries when broker is already down
             assertTimeoutPreemptively(Duration.ofSeconds(5), () -> consumer.close(),
-            "Consumer close should not wait for full timeout when broker is already shutdown");
+                    "Consumer close should not wait for full timeout when broker is already shutdown");
         }
     }
 
