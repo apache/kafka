@@ -1202,14 +1202,16 @@ public class SubscriptionState {
         }
 
         /**
-         * True if the partition is in {@link FetchStates#INITIALIZING} state. While in this
-         * state, a position for the partition can be retrieved (based on committed offsets or
+         * Check if we need to retrieve a fetch position for the given partition.
+         * True if the partition state is {@link FetchStates#INITIALIZING}, and the partition is not being revoked.
+         * <p/>
+         * While in this state, a position for the partition will be retrieved (based on committed offsets or
          * partitions offsets).
          * Note that retrieving a position does not mean that we can start fetching from the
          * partition (see {@link #isFetchable()})
          */
         private boolean shouldInitialize() {
-            return fetchState.equals(FetchStates.INITIALIZING);
+            return fetchState.equals(FetchStates.INITIALIZING) && !pendingRevocation;
         }
 
         private boolean isFetchable() {
