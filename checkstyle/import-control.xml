@@ -201,6 +201,7 @@
     <subpackage name="utils">
       <allow pkg="org.apache.kafka.common" />
       <allow pkg="org.apache.logging.log4j" />
+      <allow pkg="org.apache.commons.collections4.trie" />
     </subpackage>
 
     <subpackage name="quotas">
@@ -252,6 +253,10 @@
 
     <!-- This is required to make AlterConfigPolicyTest work. -->
     <allow pkg="org.apache.kafka.server.policy" />
+
+    <subpackage name="authorizer">
+      <allow pkg="org.apache.commons.collections4.trie" />
+    </subpackage>
 
     <subpackage name="telemetry">
       <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
