@@ -442,7 +442,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         while (reader.hasNext()) {
             Batch<ApiMessageAndVersion> batch = reader.next();
             loadControlRecords(batch);
-            if (reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID) && !batch.records().isEmpty()) {
+            if (!reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID)) {
                 for (ApiMessageAndVersion record : batch.records()) {
                     try {
                         delta.replay(record.message());

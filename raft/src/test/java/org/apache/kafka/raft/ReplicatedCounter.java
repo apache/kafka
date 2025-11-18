@@ -22,7 +22,7 @@ import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
-
+import org.apache.kafka.snapshot.Snapshots;
 import org.slf4j.Logger;
 
 import java.util.List;
@@ -144,33 +144,35 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
             // Since the state machine is only one value, expect only one data record
             boolean foundDataRecord = false;
             while (reader.hasNext()) {
-                Batch<Integer> batch = reader.next();
-                if (!batch.records().isEmpty()) {
-                    if (foundDataRecord) {
-                        throw new AssertionError(
-                            String.format(
-                                "Expected the snapshot at %s to only one data batch %s",
-                                reader.snapshotId(),
-                                batch
-                            )
-                        );
-                    } else if (batch.records().size() != 1) {
-                        throw new AssertionError(
-                            String.format(
-                                "Expected the snapshot at %s to only contain one record %s",
-                                reader.snapshotId(),
-                                batch.records()
-                            )
-                        );
+                if (!reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID)) {
+                    Batch<Integer> batch = reader.next();
+                    if (!batch.records().isEmpty()) {
+                        if (foundDataRecord) {
+                            throw new AssertionError(
+                                String.format(
+                                    "Expected the snapshot at %s to only one data batch %s",
+                                    reader.snapshotId(),
+                                    batch
+                                )
+                            );
+                        } else if (batch.records().size() != 1) {
+                            throw new AssertionError(
+                                String.format(
+                                    "Expected the snapshot at %s to only contain one record %s",
+                                    reader.snapshotId(),
+                                    batch.records()
+                                )
+                            );
+                        }
+
+                        foundDataRecord = true;
                     }
 
-                    foundDataRecord = true;
-                }
-
-                for (Integer value : batch) {
-                    log.debug("Setting value: {}", value);
-                    committed = value;
-                    uncommitted = value;
+                    for (Integer value : batch) {
+                        log.debug("Setting value: {}", value);
+                        committed = value;
+                        uncommitted = value;
+                    }
                 }
             }
             lastOffsetSnapshotted = reader.lastContainedLogOffset();

@@ -182,7 +182,7 @@ object KafkaRaftServer {
 
     // Load the BootstrapMetadata.
     val bootstrapDirectory = new BootstrapDirectory(config.metadataLogDir)
-    val bootstrapMetadata = bootstrapDirectory.readBootstrapCheckpoint()
+    val bootstrapMetadata = bootstrapDirectory.maybeReadLegacyBootstrapCheckpoint()
     (metaPropsEnsemble, bootstrapMetadata)
   }
 

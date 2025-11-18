@@ -1025,24 +1025,25 @@ public final class QuorumController implements Controller {
                         // KIP-1170: The 0-0.checkpoint can contain metadata records. If it does, they should be considered the bootstrap metadata for the cluster.
                         if (reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID) && !messages.isEmpty()) {
                             bootstrapMetadata = BootstrapMetadata.fromRecords(messages, "bootstrap");
-                        }
-                        log.debug("Replaying snapshot {} batch with last offset of {}",
-                                snapshotName, offset);
+                        } else {
+                            log.debug("Replaying snapshot {} batch with last offset of {}",
+                                    snapshotName, offset);
 
-                        int i = 1;
-                        for (ApiMessageAndVersion message : messages) {
-                            try {
-                                replay(message.message(), Optional.of(reader.snapshotId()),
-                                        reader.lastContainedLogOffset());
-                            } catch (Throwable e) {
-                                String failureMessage = String.format("Unable to apply %s record " +
-                                    "from snapshot %s on standby controller, which was %d of " +
-                                    "%d record(s) in the batch with baseOffset %d.",
-                                    message.message().getClass().getSimpleName(), reader.snapshotId(),
-                                    i, messages.size(), batch.baseOffset());
-                                throw fatalFaultHandler.handleFault(failureMessage, e);
+                            int i = 1;
+                            for (ApiMessageAndVersion message : messages) {
+                                try {
+                                    replay(message.message(), Optional.of(reader.snapshotId()),
+                                            reader.lastContainedLogOffset());
+                                } catch (Throwable e) {
+                                    String failureMessage = String.format("Unable to apply %s record " +
+                                        "from snapshot %s on standby controller, which was %d of " +
+                                        "%d record(s) in the batch with baseOffset %d.",
+                                        message.message().getClass().getSimpleName(), reader.snapshotId(),
+                                        i, messages.size(), batch.baseOffset());
+                                    throw fatalFaultHandler.handleFault(failureMessage, e);
+                                }
+                                i++;
                             }
-                            i++;
                         }
                     }
                     offsetControl.endLoadSnapshot(reader.lastContainedLogTimestamp());
