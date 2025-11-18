@@ -3815,7 +3815,7 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
      */
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class)
-    public void testConstructorFailOnNetworkClientConstructorFailure(GroupProtocol groupProtocol) {
+    public void testConstructorFailsOnNetworkClientConstructorFailure(GroupProtocol groupProtocol) {
         Map<String, Object> configs = Map.of(
             ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
             ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
