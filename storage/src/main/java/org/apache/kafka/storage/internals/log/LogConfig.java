@@ -67,12 +67,14 @@ public class LogConfig extends AbstractConfig {
         private final boolean remoteStorageEnable;
         private final boolean remoteLogDeleteOnDisable;
         private final boolean remoteLogCopyDisable;
+        private final boolean remoteLogKeepLatest;
         private final long localRetentionMs;
         private final long localRetentionBytes;
 
         private RemoteLogConfig(LogConfig config) {
             this.remoteStorageEnable = config.getBoolean(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
             this.remoteLogCopyDisable = config.getBoolean(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG);
+            this.remoteLogKeepLatest = config.getBoolean(TopicConfig.REMOTE_LOG_KEEP_LATEST_CONFIG);
             this.remoteLogDeleteOnDisable = config.getBoolean(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG);
             this.localRetentionMs = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
             this.localRetentionBytes = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
@@ -83,6 +85,7 @@ public class LogConfig extends AbstractConfig {
             return "RemoteLogConfig{" +
                     "remoteStorageEnable=" + remoteStorageEnable +
                     ", remoteLogCopyDisable=" + remoteLogCopyDisable +
+                    ", remoteLogKeepLatest=" + remoteLogKeepLatest +
                     ", remoteLogDeleteOnDisable=" + remoteLogDeleteOnDisable +
                     ", localRetentionMs=" + localRetentionMs +
                     ", localRetentionBytes=" + localRetentionBytes +
@@ -135,6 +138,7 @@ public class LogConfig extends AbstractConfig {
 
     public static final boolean DEFAULT_REMOTE_STORAGE_ENABLE = false;
     public static final boolean DEFAULT_REMOTE_LOG_COPY_DISABLE_CONFIG = false;
+    public static final boolean DEFAULT_REMOTE_LOG_KEEP_LATEST_CONFIG = true;
     public static final boolean DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = false;
     public static final long DEFAULT_LOCAL_RETENTION_BYTES = -2; // It indicates the value to be derived from RetentionBytes
     public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
@@ -246,6 +250,7 @@ public class LogConfig extends AbstractConfig {
                 .define(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
                         TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_COPY_DISABLE_DOC)
+                .define(TopicConfig.REMOTE_LOG_KEEP_LATEST_CONFIG, BOOLEAN, DEFAULT_REMOTE_LOG_KEEP_LATEST_CONFIG, MEDIUM, TopicConfig.REMOTE_LOG_KEEP_LATEST_DOC)
                 .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC)
                 .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, MEDIUM, INTERNAL_SEGMENT_BYTES_DOC);
     }
@@ -396,6 +401,10 @@ public class LogConfig extends AbstractConfig {
 
     public Boolean remoteLogCopyDisable() {
         return remoteLogConfig.remoteLogCopyDisable;
+    }
+
+    public Boolean remoteLogKeepLatest() {
+        return remoteLogConfig.remoteLogKeepLatest;
     }
 
     public long localRetentionMs() {
