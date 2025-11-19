@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * iterating over the records in the batch.
  */
 public abstract class BufferSupplier implements AutoCloseable {
-    protected AtomicLong cachedSize = new AtomicLong();
+    protected final AtomicLong cachedSize = new AtomicLong();
 
     public static final BufferSupplier NO_CACHING = new BufferSupplier() {
         @Override
@@ -41,11 +41,6 @@ public abstract class BufferSupplier implements AutoCloseable {
 
         @Override
         public void release(ByteBuffer buffer) {}
-
-        @Override
-        public long size() {
-            return 0;
-        }
 
         @Override
         public void close() {}
@@ -68,7 +63,9 @@ public abstract class BufferSupplier implements AutoCloseable {
     /**
      * Return total size in bytes of cached buffers.
      */
-    public abstract long size();
+    public long size() {
+        return cachedSize.get();
+    }
 
     /**
      * Release all resources associated with this supplier.
@@ -95,11 +92,6 @@ public abstract class BufferSupplier implements AutoCloseable {
             Deque<ByteBuffer> bufferQueue = bufferMap.computeIfAbsent(buffer.capacity(), k -> new ArrayDeque<>(1));
             bufferQueue.addLast(buffer);
             cachedSize.addAndGet(buffer.capacity());
-        }
-
-        @Override
-        public long size() {
-            return cachedSize.get();
         }
 
         @Override
@@ -133,11 +125,6 @@ public abstract class BufferSupplier implements AutoCloseable {
             buffer.clear();
             cachedBuffer = buffer;
             cachedSize.set(buffer.capacity());
-        }
-
-        @Override
-        public long size() {
-            return cachedSize.get();
         }
 
         @Override

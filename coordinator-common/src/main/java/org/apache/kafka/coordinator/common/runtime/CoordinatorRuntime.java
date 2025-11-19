@@ -2113,7 +2113,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         Serializer<U> serializer,
         Compression compression,
         OptionalInt appendLingerMs,
-        ExecutorService executorService
+        ExecutorService executorService,
         Supplier<Integer> appendMaxBufferSizeSupplier
     ) {
         this.logPrefix = logPrefix;
