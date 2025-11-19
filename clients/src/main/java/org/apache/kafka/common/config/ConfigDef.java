@@ -543,7 +543,7 @@ public class ConfigDef {
             List<?> originalListValue = (List<?>) parsedValue;
             parsedValue = originalListValue.stream().distinct().collect(Collectors.toList());
             if (originalListValue.size() != ((List<?>) parsedValue).size()) {
-                LOGGER.warn("Duplicate configuration \"{}\" values are found. Duplicates will be removed. The original value " +
+                LOGGER.warn("Configuration key \"{}\" contains duplicate values. Duplicates will be removed. The original value " +
                         "is: {}, the updated value is: {}", key.name, originalListValue, parsedValue);
             }
         }
@@ -1081,10 +1081,7 @@ public class ConfigDef {
         }
 
         public String toString() {
-            String base = validString.validStrings.isEmpty() ? "any non-duplicate values" : validString.toString();
-            String emptyList = isEmptyAllowed ? ", empty list" : "";
-            String nullValue = isNullAllowed ? ", null" : "";
-            return base + emptyList + nullValue;
+            return !validString.validStrings.isEmpty() ? validString.toString() : "";
         }
     }
 

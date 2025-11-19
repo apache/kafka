@@ -834,4 +834,24 @@ public class ConfigDefTest {
         ConfigException exception7 = assertThrows(ConfigException.class, () -> notAllowEmptyValidator.ensureValid("test.config", List.of("a", "a")));
         assertEquals("Configuration 'test.config' values must not be duplicated.", exception7.getMessage());
     }
+
+    @Test
+    public void testParseValueWillRemoveDuplicatesInValidList() {
+        ConfigDef def = new ConfigDef()
+            .define(
+                "list",
+                Type.LIST,
+                List.of(),
+                ConfigDef.ValidList.anyNonDuplicateValues(true, true),
+                Importance.HIGH,
+                "list doc"
+            );
+
+        Map<String, String> props = new HashMap<>();
+        props.put("list", "a,b,c,a,b");
+
+        Map<String, Object> parsed = def.parse(props);
+        List<String> expectedList = List.of("a", "b", "c");
+        assertEquals(expectedList, parsed.get("list"));
+    }
 }

@@ -45,7 +45,8 @@ public class AllowlistConnectorClientConfigOverridePolicy extends AbstractConnec
                 ConfigDef.Type.LIST,
                 ALLOWLIST_CONFIG_DEFAULT,
                 ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                ConfigDef.Importance.MEDIUM, ALLOWLIST_CONFIG_DOC
+                ConfigDef.Importance.MEDIUM,
+                ALLOWLIST_CONFIG_DOC
             );
 
     private List<String> allowlist = ALLOWLIST_CONFIG_DEFAULT;
