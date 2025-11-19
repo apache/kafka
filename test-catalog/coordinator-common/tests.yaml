@@ -86,6 +86,7 @@ org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeTest:
 - testScheduleReadOpWhenPartitionInactive
 - testScheduleTimer
 - testScheduleTransactionCompletion
+- testScheduleTransactionCompletionWhenEpochValidationFails
 - testScheduleTransactionCompletionWhenReplayFails
 - testScheduleTransactionCompletionWhenWriteFails
 - testScheduleTransactionCompletionWhenWriteTimesOut

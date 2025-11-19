@@ -710,6 +710,8 @@ kafka.coordinator.group.CoordinatorPartitionWriterTest:
 - testRegisterDeregisterListener
 - testWriteRecords
 - testWriteRecordsWithFailure
+- testWriteTransactionMarker
+- testWriteTransactionMarkerWithTVUnknownThrowsException
 kafka.coordinator.transaction.ProducerIntegrationTest:
 - testTransactionWithAndWithoutSend
 - testTransactionWithInvalidSendAndEndTxnRequestSent
@@ -1214,6 +1216,7 @@ kafka.log.UnifiedLogTest:
 - testLastStableOffsetWithMixedProducerData
 - testLeaderEpochCacheClearedAfterDowngradeInAppendedMessages
 - testLeaderEpochCacheCreatedAfterMessageFormatUpgrade
+- testLeaderRejectsTVUnknownForTransactionMarker
 - testLoadEmptyLog
 - testLoadPartitionDirWithNoSegmentsShouldNotThrow
 - testLoadingLogDeletesProducerStateSnapshotsPastLogEndOffset
@@ -1261,6 +1264,7 @@ kafka.log.UnifiedLogTest:
 - testRecoveryPointNotIncrementedOnProducerStateSnapshotFlushFailure
 - testRemoteLogStorageIsDisabledOnInternalAndRemoteLogMetadataTopic
 - testRenamingDirWithoutReinitialization
+- testReplicationWithTVUnknownAllowed
 - testRetentionDeletesProducerStateSnapshots
 - testRetentionIdempotency
 - testRetentionOnLocalLogDeletionWhenRemoteLogCopyDisabled
@@ -1274,6 +1278,7 @@ kafka.log.UnifiedLogTest:
 - testStaleProducerEpochReturnsRecoverableErrorForTV1Clients
 - testStaleProducerEpochReturnsRecoverableErrorForTV2Clients
 - testStartOffsetsRemoteLogStorageIsEnabled
+- testTV2MarkerWithBumpedEpochSucceeds
 - testTakeSnapshotOnRollAndDeleteSnapshotOnRecoveryPointCheckpoint
 - testThatGarbageCollectingSegmentsDoesntChangeOffset
 - testTimeBasedLogRollDuringAppend
@@ -2327,6 +2332,7 @@ kafka.server.KafkaApisTest:
 - testValidateAcknowledgementBatchesForRenew
 - testWriteShareGroupStateAuthorizationFailed
 - testWriteShareGroupStateSuccess
+- testWriteTxnMarkersEpochValidationError
 - testWriteTxnMarkersShouldAllBeIncludedInTheResponse
 kafka.server.KafkaConfigTest:
 - testAcceptsLargeId
