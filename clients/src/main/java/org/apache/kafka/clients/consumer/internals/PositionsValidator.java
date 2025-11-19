@@ -18,6 +18,8 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.internals.events.AsyncPollEvent;
+import org.apache.kafka.clients.consumer.internals.events.CheckAndUpdatePositionsEvent;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -67,6 +69,10 @@ public class PositionsValidator {
         this.subscriptions = requireNonNull(subscriptions);
     }
 
+    /**
+     * This method is called by the background thread in response to {@link AsyncPollEvent} and
+     * {@link CheckAndUpdatePositionsEvent}.
+     */
     Map<TopicPartition, SubscriptionState.FetchPosition> getPartitionsToValidate(ApiVersions apiVersions) {
         maybeThrowError();
 

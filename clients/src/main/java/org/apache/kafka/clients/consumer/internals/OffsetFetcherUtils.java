@@ -75,6 +75,17 @@ class OffsetFetcherUtils {
                        SubscriptionState subscriptionState,
                        Time time,
                        long retryBackoffMs,
+                       ApiVersions apiVersions) {
+        this(logContext, metadata, subscriptionState,
+            time, retryBackoffMs, apiVersions,
+            new PositionsValidator(logContext, time, metadata, subscriptionState));
+    }
+
+    OffsetFetcherUtils(LogContext logContext,
+                       ConsumerMetadata metadata,
+                       SubscriptionState subscriptionState,
+                       Time time,
+                       long retryBackoffMs,
                        ApiVersions apiVersions,
                        PositionsValidator positionsValidator) {
         this.log = logContext.logger(getClass());

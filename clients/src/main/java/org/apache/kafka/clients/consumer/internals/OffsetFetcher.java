@@ -91,8 +91,7 @@ public class OffsetFetcher {
         this.apiVersions = apiVersions;
         this.offsetsForLeaderEpochClient = new OffsetsForLeaderEpochClient(client, logContext);
         this.offsetFetcherUtils = new OffsetFetcherUtils(logContext, metadata, subscriptions,
-                time, retryBackoffMs, apiVersions,
-                new PositionsValidator(logContext, time, metadata, subscriptions));
+                time, retryBackoffMs, apiVersions);
     }
 
     /**
