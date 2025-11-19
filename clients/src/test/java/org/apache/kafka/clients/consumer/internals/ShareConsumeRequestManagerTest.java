@@ -424,7 +424,7 @@ public class ShareConsumeRequestManagerTest {
 
     @Test
     public void testCloseFutureCompletedWhenMemberIdIsNull() {
-        buildRequestManager(new MetricConfig(), new ByteArrayDeserializer(), new ByteArrayDeserializer(), null);
+        buildRequestManager(new MetricConfig(), new ByteArrayDeserializer(), new ByteArrayDeserializer(), null, ShareAcquireMode.BATCH_OPTIMIZED);
         assignFromSubscribed(Collections.singleton(tp0));
 
         CompletableFuture<Void> closeFuture = shareConsumeRequestManager.acknowledgeOnClose(Map.of(),
@@ -2748,14 +2748,9 @@ public class ShareConsumeRequestManagerTest {
     }
 
     private <K, V> void buildRequestManager(Deserializer<K> keyDeserializer,
-                                            Deserializer<V> valueDeserializer) {
-        buildRequestManager(new MetricConfig(), keyDeserializer, valueDeserializer, Uuid.randomUuid().toString());
-    }
-
-    private <K, V> void buildRequestManager(Deserializer<K> keyDeserializer,
                                             Deserializer<V> valueDeserializer,
                                             ShareAcquireMode shareAcquireMode) {
-        buildRequestManager(new MetricConfig(), keyDeserializer, valueDeserializer, shareAcquireMode);
+        buildRequestManager(new MetricConfig(), keyDeserializer, valueDeserializer, Uuid.randomUuid().toString(), shareAcquireMode);
     }
 
     private <K, V> void buildRequestManager(MetricConfig metricConfig,
@@ -2775,7 +2770,7 @@ public class ShareConsumeRequestManagerTest {
                                             SubscriptionState subscriptionState,
                                             LogContext logContext,
                                             String memberId,
-                                            ShareAcquireMode shareAcquireMode) {
+                                                                                   ShareAcquireMode shareAcquireMode) {
         buildDependencies(metricConfig, subscriptionState, logContext);
         Deserializers<K, V> deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);
         int maxWaitMs = 0;
