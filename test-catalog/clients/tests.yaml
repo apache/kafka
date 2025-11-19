@@ -2556,7 +2556,8 @@ org.apache.kafka.clients.consumer.internals.SubscriptionStateTest:
 - testIsFetchableConsidersExplicitTopicSubscription
 - testIsFetchableOnAutoAssignment
 - testIsFetchableOnManualAssignment
-- testMarkingPartitionPending
+- testMarkingPendingRevocation
+- testMarkingPendingRevocationPreventsInitializingPosition
 - testMaybeCompleteValidation
 - testMaybeCompleteValidationAfterOffsetReset
 - testMaybeCompleteValidationAfterPositionChange
