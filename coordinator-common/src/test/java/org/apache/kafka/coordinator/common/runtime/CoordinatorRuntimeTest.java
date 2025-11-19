@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -1619,6 +1620,98 @@ public class CoordinatorRuntimeTest {
         assertEquals(List.of(
             transactionalRecords(100L, (short) 5, timer.time().milliseconds(), "record1", "record2")
         ), writer.entries(TP));
+    }
+
+    @ParameterizedTest
+    @MethodSource("epochValidationFailureTestParameters")
+    public void testScheduleTransactionCompletionWhenEpochValidationFails(
+        short transactionVersion,
+        short transactionalEpoch,
+        short markerEpoch
+    ) {
+        // Test that InvalidProducerEpochException is thrown when epoch validation fails during transaction completion.
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter.EpochValidatingPartitionWriter writer = new MockPartitionWriter.EpochValidatingPartitionWriter();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .build();
+
+        // Loads the coordinator.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
+
+        // Write transactional records with the given epoch.
+        runtime.scheduleTransactionalWriteOperation(
+            "write#1",
+            TP,
+            "transactional-id",
+            100L,
+            transactionalEpoch,
+            DEFAULT_WRITE_TIMEOUT,
+            state -> new CoordinatorResult<>(List.of("record1", "record2"), "response1"),
+            TXN_OFFSET_COMMIT_LATEST_VERSION
+        );
+
+        // Verify that the state has been updated.
+        assertEquals(2L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertEquals(Set.of("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
+        assertEquals(Set.of(), ctx.coordinator.coordinator().records());
+
+        // Complete transaction with an invalid marker epoch.
+        // This will trigger epoch validation in the partition writer, which should fail.
+        CompletableFuture<Void> complete1 = runtime.scheduleTransactionCompletion(
+            "complete#1",
+            TP,
+            100L,
+            markerEpoch,
+            10,
+            TransactionResult.COMMIT,
+            transactionVersion,
+            DEFAULT_WRITE_TIMEOUT
+        );
+
+        // Verify that InvalidProducerEpochException is thrown.
+        assertFutureThrows(InvalidProducerEpochException.class, complete1);
+
+        // Verify that the state has been reverted (no marker written).
+        assertEquals(2L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(List.of(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertEquals(Set.of("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
+        assertEquals(Set.of(), ctx.coordinator.coordinator().records());
+        // Only transactional records should be in the log, no marker.
+        assertEquals(1, writer.entries(TP).size());
+    }
+
+    private static Stream<Arguments> epochValidationFailureTestParameters() {
+        // Test cases: (transactionVersion, transactionalEpoch, markerEpoch)
+        return Stream.of(
+            // TV1: markerEpoch < currentEpoch should fail
+            Arguments.of((short) 1, (short) 5, (short) 4),
+            // TV2: markerEpoch < currentEpoch should fail
+            Arguments.of((short) 2, (short) 5, (short) 4),
+            // TV2: markerEpoch == currentEpoch should fail (strict validation)
+            Arguments.of((short) 2, (short) 5, (short) 5)
+        );
     }
 
     @Test

@@ -3428,9 +3428,9 @@ class KafkaApisTest extends Logging {
   @ParameterizedTest(name = "testWriteTxnMarkersEpochValidationError with transactionVersion={0}")
   @ValueSource(shorts = Array(1, 2))
   def testWriteTxnMarkersEpochValidationError(transactionVersion: Short): Unit = {
-    // Test that epoch validation errors (InvalidProducerEpochException) are properly
-    // propagated through KafkaApis -> ReplicaManager -> Partition -> UnifiedLog
-    // and returned in WriteTxnMarkersResponse
+    // Test that epoch validation errors (INVALID_PRODUCER_EPOCH) are properly
+    // propagated from ReplicaManager (mocked) through KafkaApis and returned
+    // in WriteTxnMarkersResponse.
     val topicPartition = new TopicPartition("test-topic", 0)
     val topicId = Uuid.randomUuid()
     val producerId = 1L

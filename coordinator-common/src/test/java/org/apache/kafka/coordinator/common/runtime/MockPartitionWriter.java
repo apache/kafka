@@ -18,12 +18,15 @@ package org.apache.kafka.coordinator.common.runtime;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -86,5 +89,59 @@ public class MockPartitionWriter extends InMemoryPartitionWriter {
 
         time.sleep(10);
         return super.append(tp, verificationGuard, batch, transactionVersion);
+    }
+
+    /**
+     * A partition writer that validates producer epochs for transaction markers.
+     * This simulates the epoch validation that happens in ProducerAppendInfo.checkProducerEpoch().
+     */
+    public static class EpochValidatingPartitionWriter extends InMemoryPartitionWriter {
+        // Maps producerId -> current epoch
+        private final Map<Long, Short> producerEpochs = new ConcurrentHashMap<>();
+
+        public EpochValidatingPartitionWriter() {
+            super(false);
+        }
+
+        @Override
+        public long append(
+            TopicPartition tp,
+            VerificationGuard verificationGuard,
+            MemoryRecords batch,
+            short transactionVersion
+        ) {
+            // Track epochs for transactional data batches
+            if (batch.firstBatch().isTransactional() && !batch.firstBatch().isControlBatch()) {
+                long producerId = batch.firstBatch().producerId();
+                short producerEpoch = batch.firstBatch().producerEpoch();
+                producerEpochs.put(producerId, producerEpoch);
+            }
+
+            // Validate epoch for transaction markers (control batches)
+            if (batch.firstBatch().isControlBatch()) {
+                long producerId = batch.firstBatch().producerId();
+                short markerEpoch = batch.firstBatch().producerEpoch();
+                Short currentEpoch = producerEpochs.get(producerId);
+
+                if (currentEpoch != null) {
+                    // TV2: markerEpoch must be > currentEpoch (strict validation)
+                    // TV1/TV0: markerEpoch must be >= currentEpoch
+                    boolean invalidEpoch = (transactionVersion >= 2) 
+                        ? (markerEpoch <= currentEpoch) 
+                        : (markerEpoch < currentEpoch);
+
+                    if (invalidEpoch) {
+                        String comparison = (transactionVersion >= 2) ? "<=" : "<";
+                        String message = String.format(
+                            "Epoch of producer %d at offset %d in %s is %d, which is %s the last seen epoch %d (TV%d)",
+                            producerId, 0L, tp, markerEpoch, comparison, currentEpoch, transactionVersion
+                        );
+                        throw new InvalidProducerEpochException(message);
+                    }
+                }
+            }
+
+            return super.append(tp, verificationGuard, batch, transactionVersion);
+        }
     }
 }

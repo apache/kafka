@@ -3880,6 +3880,41 @@ class UnifiedLogTest {
   }
 
   @Test
+  def testLeaderRejectsTVUnknownForTransactionMarker(): Unit = {
+    // Test that TV_UNKNOWN is rejected for COORDINATOR origin (leader writing transaction markers)
+    // TV_UNKNOWN is only allowed for REPLICATION origin (followers)
+    val producerId = 1L
+    val epoch = 5.toShort
+    val coordinatorEpoch = 1
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
+    val log = createLog(logDir, logConfig)
+    
+    // Write transactional records as leader to establish current epoch
+    val transactionalRecords = MemoryRecords.withTransactionalRecords(
+      Compression.NONE, producerId, epoch, 0,
+      new SimpleRecord("key".getBytes, "value".getBytes)
+    )
+    log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_2.featureLevel())
+    
+    // Attempt to write a transaction marker with TV_UNKNOWN as COORDINATOR (leader)
+    // This should throw IllegalArgumentException because TV_UNKNOWN is not allowed for COORDINATOR origin
+    val marker = MemoryRecords.withEndTransactionMarker(
+      mockTime.milliseconds(),
+      producerId,
+      (epoch + 1).toShort, // bumped epoch for TV2
+      new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
+    )
+    
+    val exception = assertThrows(classOf[IllegalArgumentException], () => {
+      log.appendAsLeader(marker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_UNKNOWN)
+    })
+    
+    assertTrue(exception.getMessage.contains("transactionVersion must be explicitly specified"))
+    assertTrue(exception.getMessage.contains("TV_UNKNOWN"))
+    assertTrue(exception.getMessage.contains("COORDINATOR"))
+  }
+
+  @Test
   def testLastStableOffsetDoesNotExceedLogStartOffsetMidSegment(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)

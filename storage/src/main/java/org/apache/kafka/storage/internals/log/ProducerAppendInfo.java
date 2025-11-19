@@ -251,7 +251,7 @@ public class ProducerAppendInfo {
         //    (markerEpoch > currentEpoch), so any marker that passed TV2 validation will pass TV_0 validation
         // For all other origins (CLIENT, COORDINATOR), transactionVersion must be explicitly specified.
         if (transactionVersion == TV_UNKNOWN && origin != AppendOrigin.REPLICATION) {
-            throw new IllegalArgumentException("transactionVersion must be explicitly specified (TV_0, TV_1, or TV_2), " +
+            throw new IllegalArgumentException("transactionVersion must be explicitly specified, " +
                     "cannot use default value TV_UNKNOWN for origin " + origin);
         }
         // For replication with TV_UNKNOWN, use legacy validation (TV_0 behavior) since the leader already
