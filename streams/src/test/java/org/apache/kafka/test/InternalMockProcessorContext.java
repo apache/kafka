@@ -58,6 +58,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListe
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -319,6 +320,14 @@ public class InternalMockProcessorContext<KOut, VOut>
 
     @Override
     public Cancellable schedule(final Duration interval,
+                                final PunctuationType type,
+                                final Punctuator callback) throws IllegalArgumentException {
+        throw new UnsupportedOperationException("schedule() not supported.");
+    }
+
+    @Override
+    public Cancellable schedule(final Instant startTime,
+                                final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
         throw new UnsupportedOperationException("schedule() not supported.");
