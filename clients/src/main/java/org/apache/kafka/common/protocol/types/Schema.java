@@ -179,6 +179,20 @@ public class Schema extends DocumentedType {
         return this.fields;
     }
 
+    public boolean tolerateMissingFieldsWithDefaults() {
+        return this.tolerateMissingFieldsWithDefaults;
+    }
+
+    @Override
+    public String leftBracket() {
+        return "{";
+    }
+
+    @Override
+    public String rightBracket() {
+        return "}";
+    }
+
     /**
      * Display a string representation of the schema
      */

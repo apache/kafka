@@ -101,12 +101,12 @@ public class ArrayOf extends DocumentedType {
 
     @Override
     public String leftBracket() {
-        return "[";
+        return nullable ? "?[" : "[";
     }
 
     @Override
     public String rightBracket() {
-        return nullable ? "]?" : "]";
+        return "]";
     }
 
     @Override

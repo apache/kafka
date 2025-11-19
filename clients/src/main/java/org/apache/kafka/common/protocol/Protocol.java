@@ -40,6 +40,8 @@ public class Protocol {
         final String indentStr = indentString(indentSize);
         final Map<String, Type> subTypes = new LinkedHashMap<>();
 
+        b.append(schema.leftBracket());
+        b.append(" ");
         // Top level fields
         for (BoundField field: schema.fields()) {
             Type type = field.def.type;
@@ -76,6 +78,7 @@ public class Protocol {
                     subTypes.put(field.def.name, type);
             }
         }
+        b.append(schema.rightBracket());
         b.append("\n");
 
         // Sub Types/Schemas
@@ -85,8 +88,6 @@ public class Protocol {
                 b.append(indentStr);
                 b.append(entry.getKey());
                 b.append(" => ");
-                b.append(((Schema) entry.getValue()).typeName());
-                b.append(" ");
                 schemaToBnfHtml((Schema) entry.getValue(), b, indentSize + 2);
             } else {
                 // Standard Field Type
@@ -199,7 +200,7 @@ public class Protocol {
                 b.append(key.name);
                 b.append(" Request (Version: ");
                 b.append(version);
-                b.append(") =>  STRUCT ");
+                b.append(") => ");
                 schemaToBnfHtml(schema, b, 2);
                 b.append("</pre>");
 
@@ -229,7 +230,7 @@ public class Protocol {
                 b.append(key.name);
                 b.append(" Response (Version: ");
                 b.append(version);
-                b.append(") => STRUCT ");
+                b.append(") => ");
                 schemaToBnfHtml(schema, b, 2);
                 b.append("</pre>");
 

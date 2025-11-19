@@ -17,6 +17,7 @@
 package org.apache.kafka.common.protocol.types;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 /**
  * The nullable schema for a compound record definition
@@ -31,6 +32,10 @@ public final class NullableSchema extends Schema {
 
     public NullableSchema(boolean tolerateMissingFieldsWithDefaults, Field... fs) {
         super(tolerateMissingFieldsWithDefaults, fs);
+    }
+
+    public NullableSchema(Schema schema) {
+        this(schema.tolerateMissingFieldsWithDefaults(), Arrays.stream(schema.fields()).map(BoundField::def).toArray(Field[]::new));
     }
 
     @Override
@@ -75,6 +80,16 @@ public final class NullableSchema extends Schema {
         return NULLABLE_STRUCT_TYPE_NAME;
     }
 
+    @Override
+    public String leftBracket() {
+        return "?{";
+    }
+
+    @Override
+    public String rightBracket() {
+        return "}";
+    }
+    
     @Override
     public String documentation() {
         return "A struct is named by a string with a capitalized first letter and consists of one or more fields. " +
