@@ -602,7 +602,7 @@ public class OffsetsRequestManagerTest {
                 Optional.of(5));
         SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(5L,
                 Optional.of(10), leaderAndEpoch);
-        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
+        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Map.of(TEST_PARTITION_1, position));
         when(subscriptionState.position(any())).thenReturn(position, position);
         NodeApiVersions nodeApiVersions = NodeApiVersions.create();
         when(apiVersions.get(LEADER_1.idString())).thenReturn(nodeApiVersions);
@@ -645,7 +645,7 @@ public class OffsetsRequestManagerTest {
         SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(currentOffset,
                 Optional.of(10), leaderAndEpoch);
 
-        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
+        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Map.of(TEST_PARTITION_1, position));
         when(subscriptionState.position(any())).thenReturn(position, position);
 
         // No api version info initially available
@@ -657,7 +657,7 @@ public class OffsetsRequestManagerTest {
 
         // Api version updated, next validate positions should successfully build the request
         when(apiVersions.get(LEADER_1.idString())).thenReturn(NodeApiVersions.create());
-        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
+        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Map.of(TEST_PARTITION_1, position));
         when(subscriptionState.position(any())).thenReturn(position, position);
         requestManager.validatePositionsIfNeeded();
         assertEquals(1, requestManager.requestsToSend(), "Invalid request count");
@@ -826,7 +826,7 @@ public class OffsetsRequestManagerTest {
     private void mockAssignedPartitionsMissingPositions(Set<TopicPartition> assignedPartitions,
                                                         Set<TopicPartition> initializingPartitions,
                                                         Metadata.LeaderAndEpoch leaderAndEpoch) {
-        when(subscriptionState.partitionsNeedingValidation(anyLong())).thenReturn(Collections.emptySet());
+        when(subscriptionState.partitionsNeedingValidation(anyLong())).thenReturn(Map.of());
         assignedPartitions.forEach(tp -> {
             when(subscriptionState.isAssigned(tp)).thenReturn(true);
             when(metadata.currentLeader(tp)).thenReturn(leaderAndEpoch);
@@ -837,8 +837,8 @@ public class OffsetsRequestManagerTest {
     }
 
     private void mockSuccessfulBuildRequestForValidatingPositions(SubscriptionState.FetchPosition position, Node leader) {
-        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
-        when(subscriptionState.position(any())).thenReturn(position, position);
+        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Map.of(TEST_PARTITION_1, position));
+        when(subscriptionState.positionOrNull(any())).thenReturn(position, position);
         NodeApiVersions nodeApiVersions = NodeApiVersions.create();
         when(apiVersions.get(leader.idString())).thenReturn(nodeApiVersions);
     }

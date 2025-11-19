@@ -50,7 +50,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -178,11 +177,7 @@ class OffsetFetcherUtils {
         validatePositionsOnMetadataChange();
 
         // Collect positions needing validation, with backoff
-        return subscriptionState
-                .partitionsNeedingValidation(time.milliseconds())
-                .stream()
-                .filter(tp -> subscriptionState.positionOrNull(tp) != null)
-                .collect(Collectors.toMap(Function.identity(), subscriptionState::position));
+        return subscriptionState.partitionsNeedingValidation(time.milliseconds());
     }
 
     void maybeSetValidatePositionsException(RuntimeException e) {

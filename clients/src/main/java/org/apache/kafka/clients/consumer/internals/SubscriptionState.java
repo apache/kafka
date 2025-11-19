@@ -879,8 +879,19 @@ public class SubscriptionState {
         return collectPartitions(state -> state.awaitingReset() && !state.awaitingRetryBackoff(nowMs));
     }
 
-    public synchronized Set<TopicPartition> partitionsNeedingValidation(long nowMs) {
-        return collectPartitions(state -> state.awaitingValidation() && !state.awaitingRetryBackoff(nowMs));
+    public synchronized Map<TopicPartition, FetchPosition> partitionsNeedingValidation(long nowMs) {
+        Map<TopicPartition, FetchPosition> result = new HashMap<>();
+
+        assignment.forEach((topicPartition, topicPartitionState) -> {
+            if (topicPartitionState.awaitingValidation() &&
+                !topicPartitionState.awaitingRetryBackoff(nowMs) &&
+                topicPartitionState.position != null) {
+                    result.put(topicPartition, topicPartitionState.position);
+                }
+            }
+        );
+
+        return result;
     }
 
     public synchronized boolean isAssigned(TopicPartition tp) {
