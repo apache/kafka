@@ -135,7 +135,7 @@ public class UniformHomogeneousAssignmentBuilder {
             .flatMap(Collection::stream)
             .collect(java.util.stream.Collectors.toSet());
 
-        this.useRackStrategy = Utils.useRackAwareAssignment(allMemberRacks, allPartitionRacks, racksPerPartition);
+        this.useRackStrategy = AssignorHelpers.useRackAwareAssignment(allMemberRacks, allPartitionRacks, racksPerPartition);
     }
 
     /**
@@ -224,7 +224,7 @@ public class UniformHomogeneousAssignmentBuilder {
                             // 1. We still have quota left to keep it.
                             // 2-1. Don't use rack strategy, so we can keep it.
                             // 2-2. Use rack strategy and the member rack matches the partition racks.
-                            if (quota > 0 && (!useRackStrategy || Utils.isRackMatch(
+                            if (quota > 0 && (!useRackStrategy || AssignorHelpers.isRackMatch(
                                 groupSpec.memberSubscription(memberId).rackId(),
                                 subscribedTopicDescriber.racksForPartition(topicId, partition)))) {
                                 quota--;
@@ -298,7 +298,7 @@ public class UniformHomogeneousAssignmentBuilder {
                 }
 
                 String memberId = unfilledMember.memberId;
-                if (!Utils.isRackMatch(groupSpec.memberSubscription(memberId).rackId(),
+                if (!AssignorHelpers.isRackMatch(groupSpec.memberSubscription(memberId).rackId(),
                     subscribedTopicDescriber.racksForPartition(tip.topicId(), tip.partitionId()))) {
                     continue;
                 }

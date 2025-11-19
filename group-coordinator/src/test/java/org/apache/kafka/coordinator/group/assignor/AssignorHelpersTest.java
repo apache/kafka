@@ -28,27 +28,27 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class UtilsTest {
+public class AssignorHelpersTest {
     private static final Uuid TOPIC_ID = Uuid.randomUuid();
 
     @Test
     void testIsRackMatchWithEmptyMemberRackId() {
-        assertFalse(Utils.isRackMatch(Optional.empty(), Set.of("rack1", "rack2")));
+        assertFalse(AssignorHelpers.isRackMatch(Optional.empty(), Set.of("rack1", "rack2")));
     }
 
     @Test
     void testIsRackMatchWithMatchingRack() {
-        assertTrue(Utils.isRackMatch(Optional.of("rack1"), Set.of("rack1", "rack2")));
+        assertTrue(AssignorHelpers.isRackMatch(Optional.of("rack1"), Set.of("rack1", "rack2")));
     }
 
     @Test
     void testIsRackMatchWithNonMatchingRack() {
-        assertFalse(Utils.isRackMatch(Optional.of("rack3"), Set.of("rack1", "rack2")));
+        assertFalse(AssignorHelpers.isRackMatch(Optional.of("rack3"), Set.of("rack1", "rack2")));
     }
 
     @Test
     void testIsRackMatchWithEmptyPartitionRacks() {
-        assertFalse(Utils.isRackMatch(Optional.of("rack1"), Set.of()));
+        assertFalse(AssignorHelpers.isRackMatch(Optional.of("rack1"), Set.of()));
     }
 
     @Test
@@ -60,7 +60,7 @@ public class UtilsTest {
             new TopicIdPartition(TOPIC_ID, 1), Set.of("rack2")
         );
 
-        assertFalse(Utils.useRackAwareAssignment(allMemberRacks, allPartitionRacks, racksPerPartition));
+        assertFalse(AssignorHelpers.useRackAwareAssignment(allMemberRacks, allPartitionRacks, racksPerPartition));
     }
 
     @Test
@@ -72,7 +72,7 @@ public class UtilsTest {
             new TopicIdPartition(TOPIC_ID, 1), Set.of("rack4")
         );
 
-        assertFalse(Utils.useRackAwareAssignment(allMemberRacks, allPartitionRacks, racksPerPartition));
+        assertFalse(AssignorHelpers.useRackAwareAssignment(allMemberRacks, allPartitionRacks, racksPerPartition));
     }
 
     @Test
@@ -84,7 +84,7 @@ public class UtilsTest {
             new TopicIdPartition(TOPIC_ID, 1), Set.of("rack1", "rack2")
         );
 
-        assertFalse(Utils.useRackAwareAssignment(allMemberRacks, allPartitionRacks, racksPerPartition));
+        assertFalse(AssignorHelpers.useRackAwareAssignment(allMemberRacks, allPartitionRacks, racksPerPartition));
     }
 
     @Test
@@ -96,6 +96,6 @@ public class UtilsTest {
             new TopicIdPartition(TOPIC_ID, 1), Set.of("rack2")
         );
 
-        assertTrue(Utils.useRackAwareAssignment(allMemberRacks, allPartitionRacks, racksPerPartition));
+        assertTrue(AssignorHelpers.useRackAwareAssignment(allMemberRacks, allPartitionRacks, racksPerPartition));
     }
 }
