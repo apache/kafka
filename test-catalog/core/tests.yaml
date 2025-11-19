@@ -472,6 +472,20 @@ kafka.api.SaslOAuthBearerSslEndToEndAuthorizationTest:
 - testProduceConsumeWithPrefixedAcls
 - testProduceConsumeWithWildcardAcls
 - testTwoConsumersWithDifferentSaslCredentials
+kafka.api.SaslPlainSslEndToEndAuthorizationTest:
+- testNoConsumeWithDescribeAclViaAssign
+- testNoConsumeWithDescribeAclViaSubscribe
+- testNoConsumeWithoutDescribeAclViaAssign
+- testNoConsumeWithoutDescribeAclViaSubscribe
+- testNoDescribeProduceOrConsumeWithoutTopicDescribeAcl
+- testNoGroupAcl
+- testNoProduceWithDescribeAcl
+- testProduceConsumeTopicAutoCreateTopicCreateAcl
+- testProduceConsumeViaAssign
+- testProduceConsumeViaSubscribe
+- testProduceConsumeWithPrefixedAcls
+- testProduceConsumeWithWildcardAcls
+- testTwoConsumersWithDifferentSaslCredentials
 kafka.api.SaslPlaintextConsumerTest:
 - testClusterResourceListener
 - testCoordinatorFailover
