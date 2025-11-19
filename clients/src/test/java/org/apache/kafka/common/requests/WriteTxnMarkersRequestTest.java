@@ -120,7 +120,7 @@ public class WriteTxnMarkersRequestTest {
                 RESULT, Collections.singletonList(TOPIC_PARTITION), (short) 2)
         );
         WriteTxnMarkersRequest.Builder builder = new WriteTxnMarkersRequest.Builder(markersWithVersion);
-        
+
         // Test request version 2 - TransactionVersion should be included.
         WriteTxnMarkersRequest requestV2 = builder.build((short) 2);
         assertNotNull(requestV2);
@@ -182,7 +182,7 @@ public class WriteTxnMarkersRequestTest {
         TopicPartition topicPartition2 = new TopicPartition("topic2", 1);
         long producerId1 = 100L;
         long producerId2 = 200L;
-        
+
         List<WriteTxnMarkersRequest.TxnMarkerEntry> markersWithDifferentVersions = List.of(
             new WriteTxnMarkersRequest.TxnMarkerEntry(
                 producerId1, PRODUCER_EPOCH, COORDINATOR_EPOCH,
@@ -191,23 +191,23 @@ public class WriteTxnMarkersRequestTest {
                 producerId2, PRODUCER_EPOCH, COORDINATOR_EPOCH,
                 RESULT, Collections.singletonList(topicPartition2), (short) 2)  // tv2
         );
-        
+
         WriteTxnMarkersRequest.Builder builder = new WriteTxnMarkersRequest.Builder(markersWithDifferentVersions);
         WriteTxnMarkersRequest request = builder.build((short) 2);
-        
+
         assertNotNull(request);
         assertEquals(2, request.data().markers().size());
-        
+
         // Verify first marker has tv1 (transactionVersion = 1) in the request data
         WriteTxnMarkersRequestData.WritableTxnMarker dataMarker1 = request.data().markers().get(0);
         assertEquals(producerId1, dataMarker1.producerId());
         assertEquals((byte) 1, dataMarker1.transactionVersion());
-        
+
         // Verify second marker has tv2 (transactionVersion = 2) in the request data
         WriteTxnMarkersRequestData.WritableTxnMarker dataMarker2 = request.data().markers().get(1);
         assertEquals(producerId2, dataMarker2.producerId());
         assertEquals((byte) 2, dataMarker2.transactionVersion());
-        
+
         // Verify markers() method also returns correct transaction versions
         List<WriteTxnMarkersRequest.TxnMarkerEntry> markers = request.markers();
         assertEquals(2, markers.size());

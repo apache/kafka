@@ -456,8 +456,8 @@ class PartitionLockTest extends Logging {
     LogOffsetsListener.NO_OP_OFFSETS_LISTENER) {
 
     override def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, origin: AppendOrigin,
-                                requestLocal: RequestLocal, verificationGuard: VerificationGuard): LogAppendInfo = {
-      val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, requestLocal, verificationGuard)
+                                requestLocal: RequestLocal, verificationGuard: VerificationGuard, transactionVersion: Short): LogAppendInfo = {
+      val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, requestLocal, verificationGuard, transactionVersion)
       appendSemaphore.acquire()
       appendInfo
     }
