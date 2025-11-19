@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.common.TopicIdPartition;
 
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * This is the class of events created by the {@link ConsumerNetworkThread network thread} to indicate completion
@@ -30,11 +31,14 @@ public class ShareAcknowledgementEvent {
 
     private final Map<TopicIdPartition, Acknowledgements> acknowledgementsMap;
     private final boolean checkForRenewAcknowledgements;
+    private final Optional<Integer> acquisitionLockTimeoutMs;
 
     public ShareAcknowledgementEvent(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap,
-                                     boolean checkForRenewAcknowledgements) {
+                                     boolean checkForRenewAcknowledgements,
+                                     Optional<Integer> acquisitionLockTimeoutMs) {
         this.acknowledgementsMap = acknowledgementsMap;
         this.checkForRenewAcknowledgements = checkForRenewAcknowledgements;
+        this.acquisitionLockTimeoutMs = acquisitionLockTimeoutMs;
     }
 
     public Map<TopicIdPartition, Acknowledgements> acknowledgementsMap() {
@@ -43,5 +47,9 @@ public class ShareAcknowledgementEvent {
 
     public boolean checkForRenewAcknowledgements() {
         return checkForRenewAcknowledgements;
+    }
+
+    public Optional<Integer> acquisitionLockTimeoutMs() {
+        return acquisitionLockTimeoutMs;
     }
 }

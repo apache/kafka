@@ -65,6 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ShareCompletedFetchTest {
     private static final String TOPIC_NAME = "test";
     private static final TopicIdPartition TIP = new TopicIdPartition(Uuid.randomUuid(), 0, TOPIC_NAME);
+    private static final Optional<Integer> DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS = Optional.of(30000);
     private static final long PRODUCER_ID = 1000L;
     private static final short PRODUCER_EPOCH = 0;
 
@@ -89,6 +90,7 @@ public class ShareCompletedFetchTest {
         assertEquals(Optional.of((short) 1), record.deliveryCount());
         Acknowledgements acknowledgements = batch.getAcknowledgements();
         assertEquals(0, acknowledgements.size());
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
 
         batch = completedFetch.fetchRecords(deserializers, 10, true);
         records = batch.getInFlightRecords();
@@ -98,12 +100,14 @@ public class ShareCompletedFetchTest {
         assertEquals(Optional.of((short) 1), record.deliveryCount());
         acknowledgements = batch.getAcknowledgements();
         assertEquals(0, acknowledgements.size());
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
 
         batch = completedFetch.fetchRecords(deserializers, 10, true);
         records = batch.getInFlightRecords();
         assertEquals(0, records.size());
         acknowledgements = batch.getAcknowledgements();
         assertEquals(0, acknowledgements.size());
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
     }
 
     @Test
@@ -126,12 +130,14 @@ public class ShareCompletedFetchTest {
         assertEquals(Optional.of((short) 1), record.deliveryCount());
         Acknowledgements acknowledgements = batch.getAcknowledgements();
         assertEquals(0, acknowledgements.size());
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
 
         batch = completedFetch.fetchRecords(deserializers, 10, true);
         records = batch.getInFlightRecords();
         assertEquals(0, records.size());
         acknowledgements = batch.getAcknowledgements();
         assertEquals(0, acknowledgements.size());
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
     }
 
     @Test
@@ -154,12 +160,14 @@ public class ShareCompletedFetchTest {
         assertEquals(Optional.of((short) 1), record.deliveryCount());
         Acknowledgements acknowledgements = batch.getAcknowledgements();
         assertEquals(0, acknowledgements.size());
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
 
         batch = completedFetch.fetchRecords(deserializers, 10, true);
         records = batch.getInFlightRecords();
         assertEquals(0, records.size());
         acknowledgements = batch.getAcknowledgements();
         assertEquals(0, acknowledgements.size());
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
     }
 
     @Test
@@ -177,6 +185,7 @@ public class ShareCompletedFetchTest {
             assertEquals(10, records.size());
             Acknowledgements acknowledgements = batch.getAcknowledgements();
             assertEquals(0, acknowledgements.size());
+            assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
         }
     }
 
@@ -195,6 +204,7 @@ public class ShareCompletedFetchTest {
             assertEquals(0, records.size());
             Acknowledgements acknowledgements = batch.getAcknowledgements();
             assertEquals(0, acknowledgements.size());
+            assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
         }
     }
 
@@ -210,6 +220,7 @@ public class ShareCompletedFetchTest {
             assertEquals(0, records.size());
             Acknowledgements acknowledgements = batch.getAcknowledgements();
             assertEquals(0, acknowledgements.size());
+            assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
         }
     }
 
@@ -263,6 +274,7 @@ public class ShareCompletedFetchTest {
                 acknowledgements = batch.getAcknowledgements();
                 assertEquals(1, acknowledgements.size());
                 assertEquals(AcknowledgeType.RELEASE, acknowledgements.get(1L));
+                assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
 
                 // Record 2 then results in an empty batch, because record 1 has now been skipped
                 batch = completedFetch.fetchRecords(deserializers, 10, false);
@@ -280,6 +292,7 @@ public class ShareCompletedFetchTest {
                 acknowledgements = batch.getAcknowledgements();
                 assertEquals(1, acknowledgements.size());
                 assertEquals(AcknowledgeType.RELEASE, acknowledgements.get(2L));
+                assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
 
                 // Record 3 is returned in the next batch, because record 2 has now been skipped
                 batch = completedFetch.fetchRecords(deserializers, 10, false);
@@ -289,6 +302,7 @@ public class ShareCompletedFetchTest {
                 assertEquals(3L, fetchedRecords.get(0).offset());
                 acknowledgements = batch.getAcknowledgements();
                 assertEquals(0, acknowledgements.size());
+                assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
             }
         }
     }
@@ -428,6 +442,7 @@ public class ShareCompletedFetchTest {
             0,
             TIP,
             partitionData,
+            DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS,
             shareFetchMetricsAggregator,
             ApiKeys.SHARE_FETCH.latestVersion());
     }
