@@ -773,7 +773,7 @@ public class TaskManager {
                                                          final CompletableFuture<StateUpdater.RemovedTaskResult> future) {
         final StateUpdater.RemovedTaskResult removedTaskResult;
         try {
-            removedTaskResult = future.get(1, TimeUnit.MINUTES);
+            removedTaskResult = future.get(5, TimeUnit.MINUTES);
             if (removedTaskResult == null) {
                 throw new IllegalStateException("Task " + taskId + " was not found in the state updater. "
                     + BUG_ERROR_MESSAGE);
