@@ -147,7 +147,7 @@ RUN useradd -u $UID -ms /bin/bash ducker \
   && mkdir -p /home/ducker/ \
   && rsync -aiq /root/.ssh/ /home/ducker/.ssh \
   && chown -R ducker /home/ducker/ /mnt/ /var/log/ \
-  && echo "PATH=$(runuser -l ducker -c 'echo $PATH'):$JAVA_HOME/bin" >> /etc/environment \
+  && echo "PATH=$(runuser -l ducker -c 'echo $PATH'):$JAVA_HOME/bin" >> /home/ducker/.ssh/environment \
   && echo 'PATH=$PATH:'"$JAVA_HOME/bin" >> /home/ducker/.profile \
   && echo 'ducker ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
 
