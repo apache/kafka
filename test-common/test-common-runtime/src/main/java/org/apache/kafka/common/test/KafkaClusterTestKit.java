@@ -525,7 +525,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
                 formatter.setHasDynamicQuorum(true);
             }
-        formatter.setWriteBootstrapSnapshot(false);
+            formatter.setWriteBootstrapSnapshot(false);
             formatter.run();
         } catch (Exception e) {
             throw new RuntimeException("Failed to format node " + ensemble.nodeId(), e);
