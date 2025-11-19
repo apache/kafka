@@ -208,7 +208,7 @@ public class StreamsGroup implements Group {
      * The current epoch for endpoint information, this is used to determine when to send
      * updated endpoint information to members of the group.
      */
-    private int endpointInformationEpoch = -1;
+    private int endpointInformationEpoch = 0;
 
     /**
      * The last used assignment configurations for this streams group.

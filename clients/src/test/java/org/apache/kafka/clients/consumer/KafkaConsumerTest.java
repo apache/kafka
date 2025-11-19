@@ -39,6 +39,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -93,6 +94,7 @@ import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.SyncGroupResponse;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -131,6 +133,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -152,6 +155,7 @@ import java.util.stream.Stream;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
+import javax.security.auth.login.LoginException;
 
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer.DEFAULT_REASON;
@@ -3794,6 +3798,58 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         } finally {
             MockConsumerInterceptor.resetCounters();
         }
+    }
+
+    /**
+     * This test ensures that both {@link Consumer} implementations fail on creation when the underlying
+     * {@link NetworkClient} fails creation.
+     *
+     * The logic to check for this case is admittedly a bit awkward because the constructor can fail for all
+     * manner of reasons. So a failure case is created by specifying an invalid
+     * {@link javax.security.auth.spi.LoginModule} class name, which in turn causes the {@link NetworkClient}
+     * to fail.
+     *
+     * This test was created to validate the change for KAFKA-19394 for the {@link AsyncKafkaConsumer}. The fix
+     * should handle the case where failure during initialization of resources (in this test, the underlying
+     * {@link NetworkClient}) will not cause the creation of the {@link AsyncKafkaConsumer} to hang.
+     */
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class)
+    public void testConstructorFailsOnNetworkClientConstructorFailure(GroupProtocol groupProtocol) {
+        Map<String, Object> configs = Map.of(
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999",
+            CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name,
+            SaslConfigs.SASL_MECHANISM, "PLAIN",
+            SaslConfigs.SASL_JAAS_CONFIG, "org.example.InvalidLoginModule required ;",
+            ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT)
+        );
+
+        KafkaException e = assertThrows(KafkaException.class, () -> {
+            try (KafkaConsumer<String, String> ignored = new KafkaConsumer<>(configs)) {
+                fail("Should not be able to create the consumer");
+            }
+        });
+
+        assertEquals("Failed to construct kafka consumer", e.getMessage());
+
+        // The root cause is multiple exceptions deep. This code is more concise and should hopefully be trivial
+        // to update should the underlying implementation change.
+        Throwable cause = e.getCause();
+        assertNotNull(cause);
+        assertInstanceOf(KafkaException.class, cause);
+        assertEquals("Failed to create new NetworkClient", cause.getMessage());
+
+        cause = cause.getCause();
+        assertNotNull(cause);
+        assertInstanceOf(KafkaException.class, cause);
+        assertEquals(LoginException.class.getName() + ": No LoginModule found for org.example.InvalidLoginModule", cause.getMessage());
+
+        cause = cause.getCause();
+        assertNotNull(cause);
+        assertInstanceOf(LoginException.class, cause);
+        assertEquals("No LoginModule found for org.example.InvalidLoginModule", cause.getMessage());
     }
 
     private MetricName expectedMetricName(String clientId, String config, Class<?> clazz) {
