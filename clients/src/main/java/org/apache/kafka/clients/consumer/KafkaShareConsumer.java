@@ -264,10 +264,12 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * <h3><a name="renewal">Extending Processing Times using Renewal Acknowledgement</a></h3>
  * For situations in which the processing time is longer than the acquisition lock duration, the application
  * can use <em>renewal acknowledgement</em>. This allows the application to renew its acquisition lock continuously
- * while the processing of a record is in progress. It must continue to call {@link #poll(Duration)} regularly
- * and must call {@link #acknowledge(ConsumerRecord, AcknowledgeType)} specifying {@link AcknowledgeType#RENEW} on
- * each iteration of its poll loop. When a record is renewed successfully, it is returned again from the
- * {@link #poll(Duration)} call.
+ * while the processing of a record is in progress. The application must be using explicit acknowledgement.
+ * <p>
+ * It must call {@link #poll(Duration)} regularly and also call {@link #acknowledge(ConsumerRecord, AcknowledgeType)}
+ * specifying {@link AcknowledgeType#RENEW} on each iteration of its poll loop. When a record is renewed successfully,
+ * it is returned again by the {@link #poll(Duration)} call. An acknowledgement commit callback can be used to
+ * observe the completion of the acknowledgements.
  *
  * <p>This example illustrates how an application could use renewal acknowledgement.
  *
@@ -298,7 +300,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *     while (true) {
  *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(1000));
  *
- *         // Find the acquisition lock timeout and prepare to wait half that time before renewing again
+ *         // Get the acquisition lock timeout and prepare to wait half that time before renewing again
  *         int timeToWaitMs = consumer.acquisitionLockTimeoutMs().getOrElse(10000) / 2;
  *
  *         for (ConsumerRecord&lt;String, String&gt; record : records) {
@@ -306,7 +308,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *                 // Start the processing on another thread
  *             }
  *
- *             // Wait for the processing to complete for timeToWaitMs
+ *             // Wait for the processing to complete for up to timeToWaitMs milliseconds
  *
  *             if (processingCompletedSuccessfully) {
  *                 consumer.acknowledge(record, AcknowledgeType.ACCEPT);
@@ -324,7 +326,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * Note that using renewal acknowledgements is intended only for situations where the processing times of the records
  * exceeds the acquisition lock duration. Consumers which use renewal acknowledgements can impact the delivery
  * progress of the share group. If the leadership of the partition for a record being delivered changes or the
- * application's connection breaks, the current delivery attempt will end.
+ * application's connection to the leader broker is disconnected, the current delivery attempt ends.
 
  * <h3><a name="multithreaded">Multithreaded Processing</a></h3>
  * The consumer is NOT thread-safe. It is the responsibility of the user to ensure that multithreaded access
