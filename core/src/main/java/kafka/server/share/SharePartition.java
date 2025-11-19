@@ -202,10 +202,10 @@ public class SharePartition {
     private final int maxDeliveryCount;
 
     /**
-     * Records whose delivery count exceeds this are deemed abnormal,
-     * and the batching of these records should be reduced.
+     * Records whose delivery count exceeds this are deemed abnormal and the batching of these records
+     * should be reduced. The limit is set to half of maxDeliveryCount rounded up, with a minimum of 2.
      */
-    private final int badRecordDeliveryThreshold;
+    private final int throttleRecordsDeliveryLimit;
     /**
      * The group config manager is used to retrieve the values for dynamic group configurations
      */
@@ -367,7 +367,7 @@ public class SharePartition {
         this.leaderEpoch = leaderEpoch;
         this.maxInFlightRecords = maxInFlightRecords;
         this.maxDeliveryCount = maxDeliveryCount;
-        this.badRecordDeliveryThreshold = Math.max(2, (int) Math.ceil((double) maxDeliveryCount / 2));
+        this.throttleRecordsDeliveryLimit = Math.max(2, (int) Math.ceil((double) maxDeliveryCount / 2));
         this.cachedState = new ConcurrentSkipListMap<>();
         this.lock = new ReentrantReadWriteLock();
         this.findNextFetchOffset = false;
@@ -840,14 +840,15 @@ public class SharePartition {
                 boolean fullMatch = checkForFullMatch(inFlightBatch, firstBatch.baseOffset(), lastOffsetToAcquire);
                 int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
                 boolean recordLimitSubsetMatch = isRecordLimitMode && checkForRecordLimitSubsetMatch(inFlightBatch, maxRecordsToAcquire, acquiredCount);
-                boolean deliveryCountExceed = checkForBadRecordsDeliveryCount(inFlightBatch);
+                boolean throttleRecordsDelivery = shouldThrottleRecordsDelivery(inFlightBatch);
                 // Stop acquiring more records if bad record found after acquiring some data to
                 // prevent affecting already acquired records
-                if (deliveryCountExceed && acquiredCount > 0) {
-                    maxRecordsToAcquire = -1;
+                if (throttleRecordsDelivery && acquiredCount > 0) {
+                    // Set the max records to acquire as 0 to prevent further acquisition of records.
+                    maxRecordsToAcquire = 0;
                     break;
                 }
-                if (!fullMatch || inFlightBatch.offsetState() != null || recordLimitSubsetMatch || deliveryCountExceed) {
+                if (!fullMatch || inFlightBatch.offsetState() != null || recordLimitSubsetMatch || throttleRecordsDelivery) {
                     log.trace("Subset or offset tracked batch record found for share partition,"
                             + " batch: {} request offsets - first: {}, last: {} for the share"
                             + " partition: {}-{}", inFlightBatch, firstBatch.baseOffset(),
@@ -878,7 +879,7 @@ public class SharePartition {
                     // If a bad record is present, return immediately and set `maxRecordsToAcquire = -1`
                     // to prevent acquiring any new records afterwards.
                     if (badRecordMarkerAndAcquiredCount.badRecordMarker()) {
-                        maxRecordsToAcquire = -1;
+                        maxRecordsToAcquire = 0;
                         break;
                     }
                     continue;
@@ -1916,9 +1917,15 @@ public class SharePartition {
                     break;
                 }
 
-                // On repeated delivery failures (>= badRecordDeliveryThreshold), progressively reduce batch size to isolate bad record
-                if (recordDeliveryCount >= badRecordDeliveryThreshold && maxFetchRecordsWhileBadRecord < 0) {
-                    maxFetchRecordsWhileBadRecord = Math.max(1, (long) inFlightBatch.offsetState().size() >> (recordDeliveryCount - badRecordDeliveryThreshold + 1));
+                // When record delivery count reach the throttle threshold, progressively reduce batch size to isolate bad records.
+                // The `maxFetchRecordsWhileBadRecord` is halved with each additional delivery attempt beyond the throttle limit.
+                // Example:
+                //   - maxDeliveryCount = 6, throttleRecordsDeliveryLimit = 3, batch size = 500
+                //   - deliveryCount = 3: maxFetchRecords = 500 >> (3 - 3 + 1) = 250
+                //   - deliveryCount = 4: maxFetchRecords = 500 >> (4 - 3 + 1) = 125
+                // The `maxFetchRecordsWhileBadRecord` is calculated based on the first acquirable bad record in the batch.
+                if (recordDeliveryCount >= throttleRecordsDeliveryLimit && maxFetchRecordsWhileBadRecord < 0) {
+                    maxFetchRecordsWhileBadRecord = Math.max(1, (long) inFlightBatch.offsetState().size() >> (recordDeliveryCount - throttleRecordsDeliveryLimit + 1));
                     hasBadRecord = true;
                 }
 
@@ -1994,11 +2001,11 @@ public class SharePartition {
      * @param inFlightBatch The in-flight batch to check for bad records.
      * @return True if the batch contains bad records (delivery count >= threshold), false otherwise.
      */
-    private boolean checkForBadRecordsDeliveryCount(InFlightBatch inFlightBatch) {
+    private boolean shouldThrottleRecordsDelivery(InFlightBatch inFlightBatch) {
         if (inFlightBatch.offsetState() == null) {
-            return inFlightBatch.batchDeliveryCount() >= badRecordDeliveryThreshold;
+            return inFlightBatch.batchDeliveryCount() >= throttleRecordsDeliveryLimit;
         }
-        return inFlightBatch.offsetState().values().stream().mapToInt(InFlightState::deliveryCount).max().orElse(0) >= badRecordDeliveryThreshold;
+        return inFlightBatch.offsetState().values().stream().mapToInt(InFlightState::deliveryCount).max().orElse(0) >= throttleRecordsDeliveryLimit;
     }
 
     // Visibility for test
