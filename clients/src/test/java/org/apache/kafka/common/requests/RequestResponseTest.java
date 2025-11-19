@@ -2424,8 +2424,7 @@ public class RequestResponseTest {
                                 .setPartitionIndexes(List.of(1))
                         ))
                 )),
-            false,
-            true
+            false
         ).build(version);
     }
 
@@ -2471,8 +2470,7 @@ public class RequestResponseTest {
                         .setGroupId("group5")
                         .setTopics(null)
                 )),
-            false,
-            true
+            false
         ).build(version);
     }
 
@@ -2487,8 +2485,7 @@ public class RequestResponseTest {
                         .setMemberEpoch(version >= 9 ? 10 : -1)
                         .setTopics(null)
                 )),
-            false,
-            true
+            false
         ).build(version);
     }
 
