@@ -91,7 +91,7 @@ public class BootstrapDirectoryTest {
             BootstrapMetadata metadata = BootstrapMetadata.fromRecords(SAMPLE_RECORDS1,
                     "the binary bootstrap metadata file: " + testDirectory.binaryBootstrapPath());
             directory.writeBinaryFile(metadata);
-            assertEquals(metadata, directory.read());
+            assertEquals(metadata, directory.maybeReadLegacyBootstrapCheckpoint());
         }
     }
 }
