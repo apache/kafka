@@ -31,6 +31,7 @@ import org.apache.kafka.streams.processor.To;
 
 import java.io.File;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 
@@ -94,6 +95,14 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
         return delegate.schedule(interval, type, callback);
+    }
+
+    @Override
+    public Cancellable schedule(final Instant startTime,
+                                final Duration interval,
+                                final PunctuationType type,
+                                final Punctuator callback) {
+        return delegate.schedule(startTime, interval, type, callback);
     }
 
     @Override

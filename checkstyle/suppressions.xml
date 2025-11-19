@@ -340,6 +340,8 @@
               files="(GroupMetadataManager|GroupMetadataManagerTest).java"/>
 
     <!-- coordinator-common -->
+    <suppress checks="JavaNCSS"
+              files="CoordinatorRuntimeTest.java"/>
     <suppress checks="NPathComplexity"
               files="CoordinatorRuntime.java"/>
 

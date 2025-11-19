@@ -1884,8 +1884,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         });
 
         // Fetch latest offsets for all partitions that need lag computation.
-        Map<TopicPartition, CompletableFuture<Long>> partitionLatestOffsets = partitionsToComputeLag.isEmpty() ? Map.of() :
-                partitionMetadataClient.listLatestOffsets(partitionsToComputeLag);
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> partitionLatestOffsets =
+            partitionsToComputeLag.isEmpty() ? Map.of() : partitionMetadataClient.listLatestOffsets(partitionsToComputeLag);
 
         // Final response object to be built. It will include lag information computed from partitionMetadataClient.
         DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup responseGroup =
@@ -1898,8 +1898,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
         CompletableFuture.allOf(partitionLatestOffsets.values().toArray(new CompletableFuture<?>[0]))
             .whenComplete((result, error) -> {
                 // The error variable will not be null when one or more of the partitionLatestOffsets futures get completed exceptionally.
-                // If that is the case, then the same exception would be caught in the try catch executed below when .join() is called.
-                // Thus, we do not need to check error != null here.
+                // As per the handling of these futures in NetworkPartitionMetadataClient, this should not happen, as error cases are
+                // handled within the OffsetResponse object for each partition. This is just a safety check.
+                if (error != null) {
+                    log.error("Failed to retrieve partition end offsets while calculating share partitions lag for share group - {}", groupId, error);
+                    responseFuture.completeExceptionally(error);
+                    return;
+                }
                 readSummaryResult.topicsData().forEach(topicData -> {
                     // Build response for each topic.
                     DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic topic =
@@ -1924,26 +1929,27 @@ public class GroupCoordinatorService implements GroupCoordinator {
                                 .setLeaderEpoch(partitionData.errorCode() == Errors.NONE.code() ? partitionData.leaderEpoch() : PartitionFactory.DEFAULT_LEADER_EPOCH)
                                 .setLag(PartitionFactory.UNINITIALIZED_LAG));
                         } else {
-                            try {
-                                // This code is reached when allOf above is complete, which happens when all the
-                                // individual futures are complete. Thus, the call to join() here is safe.
-                                long partitionLatestOffset = partitionLatestOffsets.get(tp).join();
+                            // This code is reached when allOf above is complete, which happens when all the
+                            // individual futures are complete. Thus, the call to join() here is safe.
+                            PartitionMetadataClient.OffsetResponse offsetResponse = partitionLatestOffsets.get(tp).join();
+                            if (offsetResponse.error().code() != Errors.NONE.code()) {
+                                // If there was an error during fetching latest offset for a partition, return the error in the response for that partition.
+                                log.error("Partition end offset fetch failed for topicPartition {}", tp);
+                                partitionResponses.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
+                                    .setPartitionIndex(partitionData.partition())
+                                    .setErrorCode(offsetResponse.error().code())
+                                    .setErrorMessage(offsetResponse.error().message()));
+                            } else {
                                 // Compute lag as (partition end offset - startOffset - deliveryCompleteCount).
                                 // Note, partition end offset, which is retrieved from partitionMetadataClient, is the offset of
                                 // the next message to be produced, not the last message offset. Thus, the formula for lag computation
                                 // does not need a +1 adjustment.
-                                long lag = partitionLatestOffset - partitionData.startOffset() - partitionData.deliveryCompleteCount();
+                                long lag = offsetResponse.offset() - partitionData.startOffset() - partitionData.deliveryCompleteCount();
                                 partitionResponses.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
                                     .setPartitionIndex(partitionData.partition())
                                     .setStartOffset(partitionData.startOffset())
                                     .setLeaderEpoch(partitionData.leaderEpoch())
                                     .setLag(lag));
-                            } catch (CompletionException e) {
-                                // If fetching latest offset for a partition failed, return the error in the response for that partition.
-                                partitionResponses.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
-                                    .setPartitionIndex(partitionData.partition())
-                                    .setErrorCode(Errors.forException(e.getCause()).code())
-                                    .setErrorMessage(e.getCause().getMessage()));
                             }
                         }
                     });

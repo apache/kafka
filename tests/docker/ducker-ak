@@ -44,10 +44,9 @@ docker_run_memory_limit="2000m"
 # The default number of cluster nodes to bring up if a number is not specified.
 default_num_nodes=14
 
-# The default OpenJDK base image.
-# The base image of openjdk:17 is typically oraclelinux:8-slim, which doesn't include apt-get. 
-# Therefore, use openjdk:17-bullseye instead.
-default_jdk="openjdk:17-bullseye"
+# The default JDK base image with apt-get support.
+# The openjdk image has been officially deprecated. For more imformation, see: https://hub.docker.com/_/openjdk
+default_jdk="sapmachine:17-jdk-ubuntu-jammy"
 
 # The default ducker-ak image name.
 default_image_name="ducker-ak"
