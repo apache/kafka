@@ -59,7 +59,7 @@ public class TrieSet implements Set<String> {
 
     @Override
     public boolean isEmpty() {
-        return trie.isEmpty();
+        return size() == 0;
     }
 
     @Override
