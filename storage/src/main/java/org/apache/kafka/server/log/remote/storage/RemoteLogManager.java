@@ -973,13 +973,14 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 long localLogSize = log.size();
                 long accumulatedUploadedSize = 0;
                 long currentTimeMs = time.milliseconds();
-                boolean remoteLogLatestEnable = log.config().remoteLogLatestEnable();
+                // Use default value true (original behavior) if config is null
+                boolean remoteLogLatestEnable = log.config() != null ? log.config().remoteLogLatestEnable() : true;
 
                 for (int idx = 1; idx < segments.size(); idx++) {
                     LogSegment previousSeg = segments.get(idx - 1);
                     LogSegment currentSeg = segments.get(idx);
                     if (currentSeg.baseOffset() <= lastStableOffset) {
-                        if (!remoteLogLatestEnable) {
+                        if (!remoteLogLatestEnable && log.config() != null) {
                             // Check time-based retention
                             long localRetentionMs = log.config().localRetentionMs();
                             if (isWithinLocalRetentionTime(previousSeg, localRetentionMs, currentTimeMs)) {
