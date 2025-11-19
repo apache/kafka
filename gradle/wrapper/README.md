@@ -12,7 +12,7 @@ When upgrading the Gradle version used by the Kafka project, update the followin
    ```
 
 2. **Update wrapper JAR checksum** in `wrapper.gradle`:
-   - Find the Wrapper JAR Checksum at https://gradle.org/release-checksums/
+   - Find the ***Wrapper JAR Checksum*** at https://gradle.org/release-checksums/
    - Update the `wrapperChecksum` variable:
    ```groovy
    task bootstrapWrapper() {
@@ -29,7 +29,7 @@ When upgrading the Gradle version used by the Kafka project, update the followin
 
 
 3. **Regenerate the `gradle/wrapper/gradle-wrapper.properties` and the wrapper script**:
-   - Find the SHA256 checksum for the binary distribution at https://gradle.org/release-checksums/
+   - Find the ***Binary-only (-bin) ZIP Checksum*** for the binary distribution at https://gradle.org/release-checksums/
 
       ```shell
       ./gradlew wrapper --gradle-version <gradle-version> \
