@@ -169,7 +169,7 @@ public class RequestManagers implements Closeable {
                                                      final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
                                                      final MemberStateListener applicationThreadMemberStateListener,
                                                      final Optional<StreamsRebalanceData> streamsRebalanceData,
-                                                     final ValidatePositionsChecker validatePositionsChecker
+                                                     final PositionsValidator positionsValidator
     ) {
         return new CachedSupplier<>() {
             @Override
@@ -288,12 +288,13 @@ public class RequestManagers implements Closeable {
                     metadata,
                     fetchConfig.isolationLevel,
                     time,
+                    retryBackoffMs,
                     requestTimeoutMs,
                     defaultApiTimeoutMs,
                     apiVersions,
                     networkClientDelegate,
                     commitRequestManager,
-                    validatePositionsChecker,
+                    positionsValidator,
                     logContext);
 
                 return new RequestManagers(

@@ -112,12 +112,13 @@ public class OffsetsRequestManagerTest {
                 metadata,
                 DEFAULT_ISOLATION_LEVEL,
                 time,
+                RETRY_BACKOFF_MS,
                 REQUEST_TIMEOUT_MS,
                 DEFAULT_API_TIMEOUT_MS,
                 apiVersions,
                 mock(NetworkClientDelegate.class),
                 commitRequestManager,
-                new ValidatePositionsChecker(logContext, metadata, subscriptionState, time, RETRY_BACKOFF_MS, apiVersions),
+                new PositionsValidator(logContext, time, metadata, subscriptionState),
                 logContext
         );
     }
@@ -801,12 +802,13 @@ public class OffsetsRequestManagerTest {
                 metadata,
                 DEFAULT_ISOLATION_LEVEL,
                 time,
+                RETRY_BACKOFF_MS,
                 requestTimeoutMs,
                 defaultApiTimeoutMs,
                 apiVersions,
                 mock(NetworkClientDelegate.class),
                 commitRequestManager,
-                new ValidatePositionsChecker(new LogContext(), metadata, subscriptionState, time, RETRY_BACKOFF_MS, apiVersions),
+                new PositionsValidator(new LogContext(), time, metadata, subscriptionState),
                 new LogContext()
         );
 

@@ -882,16 +882,23 @@ public class SubscriptionState {
     public synchronized Map<TopicPartition, FetchPosition> partitionsNeedingValidation(long nowMs) {
         Map<TopicPartition, FetchPosition> result = new HashMap<>();
 
-        assignment.forEach((topicPartition, topicPartitionState) -> {
-            if (topicPartitionState.awaitingValidation() &&
-                !topicPartitionState.awaitingRetryBackoff(nowMs) &&
-                topicPartitionState.position != null) {
-                    result.put(topicPartition, topicPartitionState.position);
-                }
+        assignment.forEach((tp, tps) -> {
+            if (tps.awaitingValidation() && !tps.awaitingRetryBackoff(nowMs) && tps.position != null) {
+                result.put(tp, tps.position);
             }
-        );
+        });
 
         return result;
+    }
+
+    public synchronized boolean hasPartitionsNeedingValidation(long nowMs) {
+        for (TopicPartitionState tps  : assignment.partitionStateValues()) {
+            if (tps.awaitingValidation() && !tps.awaitingRetryBackoff(nowMs) && tps.position != null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public synchronized boolean isAssigned(TopicPartition tp) {

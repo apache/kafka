@@ -325,7 +325,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Init value is needed to avoid NPE in case of exception raised in the constructor
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
 
-    private final ValidatePositionsChecker validatePositionsChecker;
+    private final PositionsValidator positionsValidator;
     private AsyncPollEvent inflightPoll;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
@@ -430,14 +430,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new FetchBuffer(logContext);
-            this.validatePositionsChecker = new ValidatePositionsChecker(
-                logContext,
-                metadata,
-                subscriptions,
-                time,
-                retryBackoffMs,
-                apiVersions
-            );
+            this.positionsValidator = new PositionsValidator(logContext, time, metadata, subscriptions);
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(time,
                     logContext,
                     metadata,
@@ -468,7 +461,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     offsetCommitCallbackInvoker,
                     memberStateListener,
                     streamsRebalanceData,
-                validatePositionsChecker
+                positionsValidator
             );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
@@ -544,7 +537,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        int defaultApiTimeoutMs,
                        String groupId,
                        boolean autoCommitEnabled,
-                       ValidatePositionsChecker validatePositionsChecker) {
+                       PositionsValidator positionsValidator) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = clientId;
@@ -576,7 +569,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             time,
             asyncConsumerMetrics
         );
-        this.validatePositionsChecker = validatePositionsChecker;
+        this.positionsValidator = positionsValidator;
     }
 
     AsyncKafkaConsumer(LogContext logContext,
@@ -636,14 +629,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             new RebalanceCallbackMetricsManager(metrics)
         );
         ApiVersions apiVersions = new ApiVersions();
-        this.validatePositionsChecker = new ValidatePositionsChecker(
-            logContext,
-            metadata,
-            subscriptions,
-            time,
-            retryBackoffMs,
-            apiVersions
-        );
+        this.positionsValidator = new PositionsValidator(logContext, time, metadata, subscriptions);
         Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(
             time,
             config,
@@ -672,7 +658,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             offsetCommitCallbackInvoker,
             memberStateListener,
             Optional.empty(),
-            validatePositionsChecker
+            positionsValidator
         );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
@@ -1951,7 +1937,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // thread has not completed that stage for the inflight event, don't attempt to collect data from the fetch
         // buffer. If the inflight event was nulled out by checkInflightPoll(), that implies that it is safe to
         // attempt to collect data from the fetch buffer.
-        if (validatePositionsChecker.canSkipUpdateFetchPositions()) {
+        if (positionsValidator.canSkipUpdateFetchPositions()) {
             return fetchCollector.collectFetch(fetchBuffer);
         }
 

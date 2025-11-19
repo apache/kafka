@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.Metadata.LeaderAndEpoch;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -274,7 +273,7 @@ public class AsyncKafkaConsumerTest {
             defaultApiTimeoutMs,
             "group-id",
             false,
-            new ValidatePositionsChecker(new LogContext(), metadata, subscriptions, time, retryBackoffMs, new ApiVersions()));
+            new PositionsValidator(new LogContext(), time, metadata, subscriptions));
     }
 
     @Test
