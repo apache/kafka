@@ -265,6 +265,8 @@ public class ReplicationControlManagerTest {
             this.offsetControlManager = new OffsetControlManager.Builder().
                 setSnapshotRegistry(snapshotRegistry).
                 build();
+            AivenTopicPolicy aivenTopicPolicy = new AivenTopicPolicy();
+            aivenTopicPolicy.configure(staticConfig);
             this.replicationControl = new ReplicationControlManager.Builder().
                 setSnapshotRegistry(snapshotRegistry).
                 setLogContext(logContext).
@@ -273,6 +275,7 @@ public class ReplicationControlManagerTest {
                 setClusterControl(clusterControl).
                 setCreateTopicPolicy(createTopicPolicy).
                 setFeatureControl(featureControl).
+                setAivenTopicPolicy(aivenTopicPolicy).
                 build();
             clusterControl.activate();
         }
@@ -630,7 +633,8 @@ public class ReplicationControlManagerTest {
 
     @Test
     public void testCreateTopics() {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+                .build();
         ReplicationControlManager replicationControl = ctx.replicationControl;
         CreateTopicsRequestData request = new CreateTopicsRequestData();
         request.topics().add(new CreatableTopic().setName("foo").
@@ -3459,5 +3463,437 @@ public class ReplicationControlManagerTest {
         int partitionEpoch = ctx.replicationControl.getPartition(fooId, 0).partitionEpoch;
         ctx.replay(List.of(new ApiMessageAndVersion(new ClearElrRecord(), CLEAR_ELR_RECORD.highestSupportedVersion())));
         assertEquals(partitionEpoch, ctx.replicationControl.getPartition(fooId, 0).partitionEpoch);
+    }
+
+    @Test
+    void testAivenTopicPolicyCreateTopicMaxUserTopics() {
+        String excludedTopic1 = "__consumer_offsets";
+        String excludedTopic2 = "__transaction_state";
+        String topic1 = "topic1";
+        String topic2 = "topic2";
+
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+            .setStaticConfig("aiven.topic.policy.max.user.topics", 1)
+            .setStaticConfig("aiven.topic.policy.excluded.topics", String.format("%s,%s", excludedTopic1, excludedTopic2))
+            .build();
+        ctx.registerBrokers(0);
+        ctx.unfenceBrokers(0);
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+
+        // Suppose we have an excluded topic first, it should not affect user topic creation checks.
+        CreateTopicsRequestData request1 = new CreateTopicsRequestData();
+        request1.topics().add(new CreatableTopic().setName(excludedTopic1).
+            setNumPartitions(1).setReplicationFactor((short) 1));
+        ControllerResult<CreateTopicsResponseData> result1 =
+            replicationControl.createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request1, Set.of(excludedTopic1));
+        CreatableTopicResult topicResult = result1.response().topics().find(excludedTopic1);
+        assertEquals(NONE.code(), topicResult.errorCode());
+        ctx.replay(result1.records());
+
+        // Allow the first user topic to be created.
+        CreateTopicsRequestData request2 = new CreateTopicsRequestData();
+        request2.topics().add(new CreatableTopic().setName(topic1).
+            setNumPartitions(1).setReplicationFactor((short) 1));
+        ControllerResult<CreateTopicsResponseData> result2 =
+            replicationControl.createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request2, Set.of(topic1));
+        topicResult = result2.response().topics().find(topic1);
+        assertEquals(NONE.code(), topicResult.errorCode());
+        ctx.replay(result2.records());
+
+        // Don't allow the second user topic to be created.
+        CreateTopicsRequestData request3 = new CreateTopicsRequestData();
+        request3.topics().add(new CreatableTopic().setName(topic2).
+            setNumPartitions(1).setReplicationFactor((short) 1));
+        ControllerResult<CreateTopicsResponseData> result3 =
+            replicationControl.createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request3, Set.of(topic2));
+        topicResult = result3.response().topics().find(topic2);
+        assertEquals(POLICY_VIOLATION.code(), topicResult.errorCode());
+        assertEquals("Topic limit exceeded: maximum 1 user topics allowed", topicResult.errorMessage());
+        ctx.replay(result3.records());
+
+        // Still allow creating more excluded topics.
+        CreateTopicsRequestData request4 = new CreateTopicsRequestData();
+        request4.topics().add(new CreatableTopic().setName(excludedTopic2).
+            setNumPartitions(1).setReplicationFactor((short) 1));
+        ControllerResult<CreateTopicsResponseData> result4 =
+            replicationControl.createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request4, Set.of(excludedTopic2));
+        topicResult = result4.response().topics().find(excludedTopic2);
+        assertEquals(NONE.code(), topicResult.errorCode());
+        ctx.replay(result4.records());
+    }
+
+    @Test
+    void testAivenTopicPolicyCreateTopicMaxUserTopicsNotConfigured() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ctx.registerBrokers(0);
+        ctx.unfenceBrokers(0);
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+
+        for (int i = 0; i < 10; i++) {
+            String topic = String.format("topic-%d", i);
+            CreateTopicsRequestData request = new CreateTopicsRequestData();
+            request.topics().add(new CreatableTopic().setName(topic).
+                    setNumPartitions(1).setReplicationFactor((short) 1));
+            ControllerResult<CreateTopicsResponseData> result2 =
+                    replicationControl.createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request, Set.of(topic));
+            CreatableTopicResult topicResult = result2.response().topics().find(topic);
+            assertEquals(NONE.code(), topicResult.errorCode());
+            ctx.replay(result2.records());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void testAivenTopicPolicyCreateTopicMaxUserPartitions(boolean autoAssignment) {
+        String excludedTopic1 = "__consumer_offsets";
+        String excludedTopic2 = "__transaction_state";
+        String topic1 = "topic1";
+        String topic2 = "topic2";
+
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+                .setStaticConfig("aiven.topic.policy.max.user.partitions", 1)
+                .setStaticConfig("aiven.topic.policy.excluded.topics", String.format("%s,%s", excludedTopic1, excludedTopic2))
+                .build();
+        ctx.registerBrokers(0);
+        ctx.unfenceBrokers(0);
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+
+        // Suppose we have an excluded topic first, it should not affect user topic creation checks.
+        CreateTopicsRequestData request1 = new CreateTopicsRequestData();
+        if (autoAssignment) {
+            request1.topics().add(new CreatableTopic().setName(excludedTopic1).
+                setNumPartitions(2).setReplicationFactor((short) 1));
+        } else {
+            CreateTopicsRequestData.CreatableReplicaAssignmentCollection assignments =
+                new CreateTopicsRequestData.CreatableReplicaAssignmentCollection();
+            assignments.add(new CreatableReplicaAssignment().setPartitionIndex(0).setBrokerIds(List.of(0)));
+            assignments.add(new CreatableReplicaAssignment().setPartitionIndex(1).setBrokerIds(List.of(0)));
+            request1.topics().add(new CreatableTopic().setName(excludedTopic1).
+                setNumPartitions(-1).setReplicationFactor((short) -1).
+                setAssignments(assignments));
+        }
+        ControllerResult<CreateTopicsResponseData> result1 =
+            replicationControl.createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request1, Set.of(excludedTopic1));
+        CreatableTopicResult topicResult = result1.response().topics().find(excludedTopic1);
+        assertEquals(NONE.code(), topicResult.errorCode());
+        ctx.replay(result1.records());
+
+        // Don't allow the first user topic to be created with too many partitions.
+        CreateTopicsRequestData request2 = new CreateTopicsRequestData();
+        if (autoAssignment) {
+            request2.topics().add(new CreatableTopic().setName(topic1).
+                    setNumPartitions(2).setReplicationFactor((short) 1));
+        } else {
+            CreateTopicsRequestData.CreatableReplicaAssignmentCollection assignments =
+                new CreateTopicsRequestData.CreatableReplicaAssignmentCollection();
+            assignments.add(new CreatableReplicaAssignment().setPartitionIndex(0).setBrokerIds(List.of(0)));
+            assignments.add(new CreatableReplicaAssignment().setPartitionIndex(1).setBrokerIds(List.of(0)));
+            request2.topics().add(new CreatableTopic().setName(topic1).
+                setNumPartitions(-1).setReplicationFactor((short) -1).
+                setAssignments(assignments));
+        }
+        ControllerResult<CreateTopicsResponseData> result2 =
+            replicationControl.createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request2, Set.of(topic1));
+        topicResult = result2.response().topics().find(topic1);
+        assertEquals(POLICY_VIOLATION.code(), topicResult.errorCode());
+        assertEquals("Partition limit exceeded: maximum 1 user partitions allowed", topicResult.errorMessage());
+        ctx.replay(result2.records());
+
+        // Allow the first user topic to be created with fewer partitions.
+        CreateTopicsRequestData request3 = new CreateTopicsRequestData();
+        if (autoAssignment) {
+            request3.topics().add(new CreatableTopic().setName(topic1).
+                setNumPartitions(1).setReplicationFactor((short) 1));
+        } else {
+            CreateTopicsRequestData.CreatableReplicaAssignmentCollection assignments =
+                new CreateTopicsRequestData.CreatableReplicaAssignmentCollection();
+            assignments.add(new CreatableReplicaAssignment().setPartitionIndex(0).setBrokerIds(List.of(0)));
+            request3.topics().add(new CreatableTopic().setName(topic1).
+                setNumPartitions(-1).setReplicationFactor((short) -1).
+                setAssignments(assignments));
+        }
+        ControllerResult<CreateTopicsResponseData> result3 =
+                replicationControl.createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request3, Set.of(topic1));
+        topicResult = result3.response().topics().find(topic1);
+        assertEquals(NONE.code(), topicResult.errorCode());
+        ctx.replay(result3.records());
+
+        // Don't allow the second user topic to be created.
+        CreateTopicsRequestData request4 = new CreateTopicsRequestData();
+        if (autoAssignment) {
+            request4.topics().add(new CreatableTopic().setName(topic2).
+                setNumPartitions(1).setReplicationFactor((short) 1));
+        } else {
+            CreateTopicsRequestData.CreatableReplicaAssignmentCollection assignments =
+                new CreateTopicsRequestData.CreatableReplicaAssignmentCollection();
+            assignments.add(new CreatableReplicaAssignment().setPartitionIndex(0).setBrokerIds(List.of(0)));
+            request4.topics().add(new CreatableTopic().setName(topic2).
+                setNumPartitions(-1).setReplicationFactor((short) -1).
+                setAssignments(assignments));
+        }
+        ControllerResult<CreateTopicsResponseData> result4 =
+                replicationControl.createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request4, Set.of(topic2));
+        topicResult = result4.response().topics().find(topic2);
+        assertEquals(POLICY_VIOLATION.code(), topicResult.errorCode());
+        assertEquals("Partition limit exceeded: maximum 1 user partitions allowed", topicResult.errorMessage());
+        ctx.replay(result4.records());
+
+        // Still allow creating more excluded topics.
+        CreateTopicsRequestData request5 = new CreateTopicsRequestData();
+        if (autoAssignment) {
+            request5.topics().add(new CreatableTopic().setName(excludedTopic2).
+                setNumPartitions(1).setReplicationFactor((short) 1));
+        } else {
+            CreateTopicsRequestData.CreatableReplicaAssignmentCollection assignments =
+                new CreateTopicsRequestData.CreatableReplicaAssignmentCollection();
+            assignments.add(new CreatableReplicaAssignment().setPartitionIndex(0).setBrokerIds(List.of(0)));
+            request5.topics().add(new CreatableTopic().setName(excludedTopic2).
+                setNumPartitions(-1).setReplicationFactor((short) -1).
+                setAssignments(assignments));
+        }
+        ControllerResult<CreateTopicsResponseData> result5 =
+                replicationControl.createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request5, Set.of(excludedTopic2));
+        topicResult = result5.response().topics().find(excludedTopic2);
+        assertEquals(NONE.code(), topicResult.errorCode());
+        ctx.replay(result5.records());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void testAivenTopicPolicyCreateTopicMaxPartitionsPerUserTopic(boolean autoAssignment) {
+        String excludedTopic1 = "__consumer_offsets";
+        String topic1 = "topic1";
+
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+            .setStaticConfig("aiven.topic.policy.max.partitions.per.user.topic", 1)
+            .setStaticConfig("aiven.topic.policy.excluded.topics", excludedTopic1)
+            .build();
+        ctx.registerBrokers(0);
+        ctx.unfenceBrokers(0);
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+
+        // Don't allow the user topic to be created with too many partitions.
+        CreateTopicsRequestData request1 = new CreateTopicsRequestData();
+        if (autoAssignment) {
+            request1.topics().add(new CreatableTopic().setName(topic1).
+                setNumPartitions(2).setReplicationFactor((short) 1));
+        } else {
+            CreateTopicsRequestData.CreatableReplicaAssignmentCollection assignments =
+                new CreateTopicsRequestData.CreatableReplicaAssignmentCollection();
+            assignments.add(new CreatableReplicaAssignment().setPartitionIndex(0).setBrokerIds(List.of(0)));
+            assignments.add(new CreatableReplicaAssignment().setPartitionIndex(1).setBrokerIds(List.of(0)));
+            request1.topics().add(new CreatableTopic().setName(topic1).
+                setNumPartitions(-1).setReplicationFactor((short) -1).
+                setAssignments(assignments));
+        }
+        ControllerResult<CreateTopicsResponseData> result1 =
+            replicationControl.createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request1, Set.of(topic1));
+        CreatableTopicResult topicResult = result1.response().topics().find(topic1);
+        assertEquals(POLICY_VIOLATION.code(), topicResult.errorCode());
+        assertEquals("Partition limit exceeded: maximum 1 partitions per user topic allowed", topicResult.errorMessage());
+        ctx.replay(result1.records());
+
+        // Allow the user topic to be created with fewer partitions.
+        CreateTopicsRequestData request2 = new CreateTopicsRequestData();
+        if (autoAssignment) {
+            request2.topics().add(new CreatableTopic().setName(topic1).
+                setNumPartitions(1).setReplicationFactor((short) 1));
+        } else {
+            CreateTopicsRequestData.CreatableReplicaAssignmentCollection assignments =
+                new CreateTopicsRequestData.CreatableReplicaAssignmentCollection();
+            assignments.add(new CreatableReplicaAssignment().setPartitionIndex(0).setBrokerIds(List.of(0)));
+            request2.topics().add(new CreatableTopic().setName(topic1).
+                setNumPartitions(-1).setReplicationFactor((short) -1).
+                setAssignments(assignments));
+        }
+        ControllerResult<CreateTopicsResponseData> result2 =
+            replicationControl.createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request2, Set.of(topic1));
+        topicResult = result2.response().topics().find(topic1);
+        assertEquals(NONE.code(), topicResult.errorCode());
+        ctx.replay(result2.records());
+
+        // Excluded topic are exempt from this check.
+        CreateTopicsRequestData request3 = new CreateTopicsRequestData();
+        if (autoAssignment) {
+            request3.topics().add(new CreatableTopic().setName(excludedTopic1).
+                setNumPartitions(2).setReplicationFactor((short) 1));
+        } else {
+            CreateTopicsRequestData.CreatableReplicaAssignmentCollection assignments =
+                new CreateTopicsRequestData.CreatableReplicaAssignmentCollection();
+            assignments.add(new CreatableReplicaAssignment().setPartitionIndex(0).setBrokerIds(List.of(0)));
+            assignments.add(new CreatableReplicaAssignment().setPartitionIndex(1).setBrokerIds(List.of(0)));
+            request3.topics().add(new CreatableTopic().setName(excludedTopic1).
+                setNumPartitions(-1).setReplicationFactor((short) -1).
+                setAssignments(assignments));
+        }
+        ControllerResult<CreateTopicsResponseData> result3 =
+            replicationControl.createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request3, Set.of(excludedTopic1));
+        topicResult = result3.response().topics().find(excludedTopic1);
+        assertEquals(NONE.code(), topicResult.errorCode());
+        ctx.replay(result3.records());
+    }
+
+    @Test
+    void testAivenTopicPolicyCreateTopicWhenPartitionLimitsNotConfigured() {
+        String topic = "topic1";
+
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ctx.registerBrokers(0);
+        ctx.unfenceBrokers(0);
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+
+        CreateTopicsRequestData request = new CreateTopicsRequestData();
+        request.topics().add(new CreatableTopic().setName(topic).
+                setNumPartitions(100).setReplicationFactor((short) 1));
+        ControllerResult<CreateTopicsResponseData> result =
+                replicationControl.createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request, Set.of(topic));
+        CreatableTopicResult topicResult = result.response().topics().find(topic);
+        assertEquals(NONE.code(), topicResult.errorCode());
+    }
+
+    @Test
+    void testAivenTopicPolicyCreatePartitionMaxUserPartitions() {
+        String excludedTopic1 = "__consumer_offsets";
+        String topic1 = "topic1";
+
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+            .setStaticConfig("aiven.topic.policy.max.user.partitions", 2)
+            .setStaticConfig("aiven.topic.policy.excluded.topics", excludedTopic1)
+            .build();
+        ctx.registerBrokers(0);
+        ctx.unfenceBrokers(0);
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+
+        // Suppose we have an excluded topic first, it should not affect user topic creation checks.
+        CreateTopicsRequestData request1 = new CreateTopicsRequestData();
+        request1.topics().add(new CreatableTopic().setName(excludedTopic1).
+            setNumPartitions(2).setReplicationFactor((short) 1));
+        ControllerResult<CreateTopicsResponseData> result1 =
+            replicationControl.createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request1, Set.of(excludedTopic1));
+        CreatableTopicResult topicResult = result1.response().topics().find(excludedTopic1);
+        assertEquals(NONE.code(), topicResult.errorCode());
+        ctx.replay(result1.records());
+
+        // Allow creating the first topic with one partition.
+        CreateTopicsRequestData request2 = new CreateTopicsRequestData();
+        request2.topics().add(new CreatableTopic().setName(topic1).
+            setNumPartitions(1).setReplicationFactor((short) 1));
+        ControllerResult<CreateTopicsResponseData> result2 =
+            replicationControl.createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request2, Set.of(topic1));
+        topicResult = result2.response().topics().find(topic1);
+        assertEquals(NONE.code(), topicResult.errorCode());
+        ctx.replay(result2.records());
+
+        // Allow to repartition the topic to two partitions.
+        CreatePartitionsTopic request3 = new CreatePartitionsTopic().setName(topic1).setCount(2).
+            setAssignments(List.of(new CreatePartitionsAssignment().setBrokerIds(List.of(0))));
+        ControllerResult<List<CreatePartitionsTopicResult>> result3 =
+            replicationControl.createPartitions(anonymousContextFor(ApiKeys.CREATE_PARTITIONS), List.of(request3));
+        CreatePartitionsTopicResult createPartitionsTopicResult = result3.response().get(0);
+        assertEquals(NONE.code(), createPartitionsTopicResult.errorCode());
+        ctx.replay(result3.records());
+
+        // Don't allow to repartition the topic to three partitions.
+        CreatePartitionsTopic request4 = new CreatePartitionsTopic().setName(topic1).setCount(3).
+            setAssignments(List.of(new CreatePartitionsAssignment().setBrokerIds(List.of(0))));
+        ControllerResult<List<CreatePartitionsTopicResult>> result4 =
+            replicationControl.createPartitions(anonymousContextFor(ApiKeys.CREATE_PARTITIONS), List.of(request4));
+        createPartitionsTopicResult = result4.response().get(0);
+        assertEquals(POLICY_VIOLATION.code(), createPartitionsTopicResult.errorCode());
+        assertEquals("Partition limit exceeded: maximum 2 user partitions allowed", createPartitionsTopicResult.errorMessage());
+        ctx.replay(result4.records());
+
+        // Allow to repartition the excluded topic to three partitions.
+        CreatePartitionsTopic request5 = new CreatePartitionsTopic().setName(excludedTopic1).setCount(3).
+            setAssignments(List.of(new CreatePartitionsAssignment().setBrokerIds(List.of(0))));
+        ControllerResult<List<CreatePartitionsTopicResult>> result5 =
+            replicationControl.createPartitions(anonymousContextFor(ApiKeys.CREATE_PARTITIONS), List.of(request5));
+        createPartitionsTopicResult = result5.response().get(0);
+        assertEquals(NONE.code(), createPartitionsTopicResult.errorCode());
+        ctx.replay(result5.records());
+    }
+
+    @Test
+    void testAivenTopicPolicyCreatePartitionsMaxPartitionsPerUserTopic() {
+        String excludedTopic1 = "__consumer_offsets";
+        String topic1 = "topic1";
+
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+            .setStaticConfig("aiven.topic.policy.max.partitions.per.user.topic", 1)
+            .setStaticConfig("aiven.topic.policy.excluded.topics", excludedTopic1)
+            .build();
+        ctx.registerBrokers(0);
+        ctx.unfenceBrokers(0);
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+
+        // Allow the user topic to be created with one partition.
+        CreateTopicsRequestData request1 = new CreateTopicsRequestData();
+        request1.topics().add(new CreatableTopic().setName(topic1).
+            setNumPartitions(1).setReplicationFactor((short) 1));
+        ControllerResult<CreateTopicsResponseData> result1 =
+            replicationControl.createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request1, Set.of(topic1));
+        CreatableTopicResult topicResult = result1.response().topics().find(topic1);
+        assertEquals(NONE.code(), topicResult.errorCode());
+        ctx.replay(result1.records());
+
+        // Don't allow to repartition the user topic to two partitions.
+        CreatePartitionsTopic request2 = new CreatePartitionsTopic().setName(topic1).setCount(2).
+            setAssignments(List.of(new CreatePartitionsAssignment().setBrokerIds(List.of(0))));
+        ControllerResult<List<CreatePartitionsTopicResult>> result2 =
+            replicationControl.createPartitions(anonymousContextFor(ApiKeys.CREATE_PARTITIONS), List.of(request2));
+        CreatePartitionsTopicResult createPartitionsTopicResult = result2.response().get(0);
+        assertEquals(POLICY_VIOLATION.code(), createPartitionsTopicResult.errorCode());
+        assertEquals("Partition limit exceeded: maximum 1 partitions per user topic allowed", createPartitionsTopicResult.errorMessage());
+        ctx.replay(result2.records());
+
+        // Excluded topic are exempt from this check.
+        CreateTopicsRequestData request3 = new CreateTopicsRequestData();
+        request3.topics().add(new CreatableTopic().setName(excludedTopic1).
+            setNumPartitions(1).setReplicationFactor((short) 1));
+        ControllerResult<CreateTopicsResponseData> result3 =
+            replicationControl.createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request3, Set.of(excludedTopic1));
+        topicResult = result3.response().topics().find(excludedTopic1);
+        assertEquals(NONE.code(), topicResult.errorCode());
+        ctx.replay(result3.records());
+
+        CreatePartitionsTopic request4 = new CreatePartitionsTopic().setName(excludedTopic1).setCount(2).
+            setAssignments(List.of(new CreatePartitionsAssignment().setBrokerIds(List.of(0))));
+        ControllerResult<List<CreatePartitionsTopicResult>> result4 =
+            replicationControl.createPartitions(anonymousContextFor(ApiKeys.CREATE_PARTITIONS), List.of(request4));
+        createPartitionsTopicResult = result4.response().get(0);
+        assertEquals(NONE.code(), createPartitionsTopicResult.errorCode());
+        ctx.replay(result4.records());
+    }
+
+    @Test
+    void testAivenTopicPolicyCreatePartitionsWhenPartitionLimitsNotConfigured() {
+        String topic = "topic1";
+
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ctx.registerBrokers(0);
+        ctx.unfenceBrokers(0);
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+
+        // First just create the topic.
+        CreateTopicsRequestData request1 = new CreateTopicsRequestData();
+        request1.topics().add(new CreatableTopic().setName(topic).
+            setNumPartitions(1).setReplicationFactor((short) 1));
+        ControllerResult<CreateTopicsResponseData> result1 =
+            replicationControl.createTopics(anonymousContextFor(ApiKeys.CREATE_TOPICS), request1, Set.of(topic));
+        CreatableTopicResult topicResult = result1.response().topics().find(topic);
+        assertEquals(NONE.code(), topicResult.errorCode());
+        ctx.replay(result1.records());
+
+        // Allow to repartition to any number of partitions.
+        ArrayList<CreatePartitionsAssignment> assignments = new ArrayList<>();
+        for (int i = 0; i < 99; i++) {
+            assignments.add(new CreatePartitionsAssignment().setBrokerIds(List.of(0)));
+        }
+        CreatePartitionsTopic request2 = new CreatePartitionsTopic().setName(topic).setCount(100).setAssignments(assignments);
+        ControllerResult<List<CreatePartitionsTopicResult>> result2 =
+            replicationControl.createPartitions(anonymousContextFor(ApiKeys.CREATE_PARTITIONS), List.of(request2));
+        CreatePartitionsTopicResult createPartitionsTopicResult = result2.response().get(0);
+        assertEquals(NONE.code(), createPartitionsTopicResult.errorCode());
+        ctx.replay(result2.records());
     }
 }

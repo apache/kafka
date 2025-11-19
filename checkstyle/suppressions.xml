@@ -370,4 +370,8 @@
 
      <!-- Add the new suppression rule for JaasTestUtils.java -->
     <suppress checks="ImportControl" files="(JaasTestUtils).java" />
+
+    <suppress checks="Header" files="(AivenTopicPolicy|AivenTopicPolicyConfig).java" />
+    <suppress checks="JavaNCSS"
+              files="ReplicationControlManagerTest.java"/>
 </suppressions>
