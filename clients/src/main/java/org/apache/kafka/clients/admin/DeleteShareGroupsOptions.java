@@ -19,7 +19,7 @@ package org.apache.kafka.clients.admin;
 import java.util.Collection;
 
 /**
- * Options for the {@link Admin#deleteShareGroups(Collection, DeleteShareGroupsOptions)} call.
+ * Options for {@link Admin#deleteShareGroups(Collection, DeleteShareGroupsOptions)}.
  */
 public class DeleteShareGroupsOptions extends AbstractOptions<DeleteShareGroupsOptions> {
 }

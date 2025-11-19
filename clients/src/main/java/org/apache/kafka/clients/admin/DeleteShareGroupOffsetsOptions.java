@@ -14,13 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.admin;
 
 import java.util.Set;
 
 /**
- * Options for the {@link Admin#deleteShareGroupOffsets(String, Set, DeleteShareGroupOffsetsOptions)} call.
+ * Options for {@link Admin#deleteShareGroupOffsets(String, Set, DeleteShareGroupOffsetsOptions)}.
  */
 public class DeleteShareGroupOffsetsOptions extends AbstractOptions<DeleteShareGroupOffsetsOptions> {
 }

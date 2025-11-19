@@ -19,7 +19,7 @@ package org.apache.kafka.clients.admin;
 import java.util.Map;
 
 /**
- * Options for the {@link Admin#alterShareGroupOffsets(String, Map, AlterShareGroupOffsetsOptions)} call.
+ * Options for {@link Admin#alterShareGroupOffsets(String, Map, AlterShareGroupOffsetsOptions)}.
  */
 public class AlterShareGroupOffsetsOptions extends AbstractOptions<AlterShareGroupOffsetsOptions> {
 }
