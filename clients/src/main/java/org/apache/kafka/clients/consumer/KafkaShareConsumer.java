@@ -95,7 +95,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * <h3>Record Delivery and Acknowledgement</h3>
  * When a consumer in a share-group fetches records using {@link #poll(Duration)}, it receives available records from any
  * of the topic-partitions that match its subscriptions. Records are acquired for delivery to this consumer with a
- * time-limited acquisition lock. While a record is acquired, it is not available for another consumer. By default,
+ * time-limited <i>acquisition lock</i>. While a record is acquired, it is not available for another consumer. By default,
  * the lock duration is 30 seconds, but it can also be controlled using the group {@code group.share.record.lock.duration.ms}
  * configuration property. The idea is that the lock is automatically released once the lock duration has elapsed, and
  * then the record is available to be given to another consumer. The consumer which holds the lock can deal with it in
@@ -148,18 +148,18 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * one error code per partition.
  *
  * <h3>Share Acquire Mode and Batching</h3>
- * The consumer is optimized to deliver records to the consuming application in batches which align with the data
+ * The share consumer is optimized to deliver records to the consuming application in batches which align with the data
  * when it was written to the topics, and it may also pre-fetch records in readiness for the application.
  * If the application needs precise control over the number of records fetched or the processing time is significant,
  * the application is able to limit the number of records fetched.
  * <p>
  * The application chooses between the two modes using the consumer {@code share.acquire.mode} configuration property.
  * <ul>
- *     <li>If the application sets the property to {@code "batch_optimized"} or does not set it at all, the consumer fetches
- *     records based on batch boundaries which may mean that the number of records returned may exceed the
- *     {@code max.poll.records} configuration property. The consumer may also prefetch records and buffer them
+ *     <li>If the application sets the property to {@code "batch_optimized"} or does not set it at all, the share
+ *     consumer fetches records based on batch boundaries which may mean that the number of records returned may exceed
+ *     the {@code max.poll.records} configuration property. The share consumer may also prefetch records and buffer them
  *     temporarily awaiting the application's next call to {@link #poll(Duration)}.</li>
- *     <li>If the application sets the property to {@code "record_limit"}, the consumer fetches no more than
+ *     <li>If the application sets the property to {@code "record_limit"}, the share consumer fetches no more than
  *     {@code max.poll.records} records at a time and does not prefetch. This is slower but gives the application
  *     tighter control on how many records are fetched and when the acquisition locks begin.</li>
  * </ul>
@@ -322,9 +322,9 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * </pre>
  * <p>
  * Note that using renewal acknowledgements is intended only for situations where the processing times of the records
- * exceeds the acquisition lock duration. Consumers which use renewal acknowledgements can impact the progress of
- * the other members of the share group. If the leadership of the partition containing a record changes or the
- * application's connection breaks, the record's delivery attempt will end.
+ * exceeds the acquisition lock duration. Consumers which use renewal acknowledgements can impact the delivery
+ * progress of the share group. If the leadership of the partition for a record being delivered changes or the
+ * application's connection breaks, the current delivery attempt will end.
 
  * <h3><a name="multithreaded">Multithreaded Processing</a></h3>
  * The consumer is NOT thread-safe. It is the responsibility of the user to ensure that multithreaded access
