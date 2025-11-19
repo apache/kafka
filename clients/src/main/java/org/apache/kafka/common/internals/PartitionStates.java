@@ -98,10 +98,6 @@ public class PartitionStates<S> {
         map.forEach(biConsumer);
     }
 
-    public Set<Map.Entry<TopicPartition, S>> entrySet() {
-        return map.entrySet();
-    }
-
     public Map<TopicPartition, S> partitionStateMap() {
         return Collections.unmodifiableMap(map);
     }
