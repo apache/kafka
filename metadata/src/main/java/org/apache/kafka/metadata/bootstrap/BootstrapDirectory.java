@@ -121,13 +121,7 @@ public class BootstrapDirectory {
         if (!Files.isDirectory(Paths.get(directoryPath))) {
             throw new RuntimeException("No such directory as " + directoryPath);
         }
-        Path topicDirectory = Paths.get(directoryPath, String.format("%s-%d",
-            CLUSTER_METADATA_TOPIC_PARTITION.topic(),
-            CLUSTER_METADATA_TOPIC_PARTITION.partition()));
-        Files.createDirectories(topicDirectory);
-
-        Path finalPath = topicDirectory.resolve(BINARY_BOOTSTRAP_CHECKPOINT_FILENAME);
-        Path tempPath = topicDirectory.resolve(BINARY_BOOTSTRAP_CHECKPOINT_FILENAME + ".tmp");
+        Path tempPath = Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME + ".tmp");
         Files.deleteIfExists(tempPath);
         try {
             try (BatchFileWriter writer = BatchFileWriter.open(tempPath)) {
@@ -138,7 +132,7 @@ public class BootstrapDirectory {
 
             Files.move(
                 tempPath,
-                finalPath,
+                Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME),
                 ATOMIC_MOVE, REPLACE_EXISTING
             );
         } finally {
