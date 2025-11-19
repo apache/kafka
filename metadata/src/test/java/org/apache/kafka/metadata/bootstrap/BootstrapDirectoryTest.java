@@ -56,7 +56,10 @@ public class BootstrapDirectoryTest {
         }
 
         synchronized String binaryBootstrapPath() {
-            return new File(directory, BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME).getAbsolutePath();
+            File topicDirectory = new File(directory, String.format("%s-%d",
+                org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION.topic(),
+                org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION.partition()));
+            return new File(topicDirectory, BootstrapDirectory.BINARY_BOOTSTRAP_CHECKPOINT_FILENAME).getAbsolutePath();
         }
 
         @Override
