@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.internals.Acknowledgements;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.common.TopicIdPartition;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -36,7 +37,7 @@ public class ShareAcknowledgementEvent {
     public ShareAcknowledgementEvent(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap,
                                      boolean checkForRenewAcknowledgements,
                                      Optional<Integer> acquisitionLockTimeoutMs) {
-        this.acknowledgementsMap = acknowledgementsMap;
+        this.acknowledgementsMap = new HashMap<>(acknowledgementsMap);
         this.checkForRenewAcknowledgements = checkForRenewAcknowledgements;
         this.acquisitionLockTimeoutMs = acquisitionLockTimeoutMs;
     }
