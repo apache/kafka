@@ -101,8 +101,8 @@ public class TopicConfig {
             "(i.e. local.retention.ms/bytes) becomes irrelevant, and all data expiration follows the topic-wide retention configuration" +
             "(i.e. retention.ms/bytes).";
 
-    public static final String REMOTE_LOG_KEEP_LATEST_CONFIG = "remote.log.keep.latest";
-    public static final String REMOTE_LOG_KEEP_LATEST_DOC = "Determines whether to upload all segments to remote storage including the latest ones within local retention. " +
+    public static final String REMOTE_LOG_LATEST_ENABLE_CONFIG = "remote.log.latest.enable";
+    public static final String REMOTE_LOG_LATEST_ENABLE_DOC = "Determines whether to upload all segments to remote storage including the latest ones within local retention. " +
             "When set to true (default), all committed segments will be uploaded without checking local retention constraints. " +
             "When set to false, only segments beyond local retention period will be uploaded to remote storage.";
 
