@@ -24,16 +24,12 @@ public enum StreamsVersion implements FeatureVersion {
     SV_0(0, MetadataVersion.MINIMUM_VERSION, Map.of()),
 
     // Version 1 enables "streams" groups (KIP-1071).
-    // Using metadata version IBP_4_2_IV1 disables it by default in AK 4.1 release, and enables it by default in AK 4.2 release.
-    //  - in AK 4.1, this can be enabled as "early access [unstable]"
-    //  - in AK 4.2, it is planned to go GA (cf `LATEST_PRODUCTION`)
     SV_1(1, MetadataVersion.IBP_4_2_IV1, Map.of());
 
     public static final String FEATURE_NAME = "streams.version";
 
-    // Mark "streams" group as unstable in AK 4.1 release
-    // Needs to be updated to SV_1 in AK 4.2, to mark as stable
-    public static final StreamsVersion LATEST_PRODUCTION = SV_0;
+    // Mark "streams" group as stable in production
+    public static final StreamsVersion LATEST_PRODUCTION = SV_1;
 
     private final short featureLevel;
     private final MetadataVersion bootstrapMetadataVersion;

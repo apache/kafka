@@ -45,7 +45,8 @@ public class ShareFetchRequest extends AbstractRequest {
 
         public static Builder forConsumer(String groupId, ShareRequestMetadata metadata,
                                           int maxWait, int minBytes, int maxBytes, int maxRecords,
-                                          int batchSize, byte shareAcquireMode, List<TopicIdPartition> send, List<TopicIdPartition> forget,
+                                          int batchSize, byte shareAcquireMode, boolean isRenewAck,
+                                          List<TopicIdPartition> send, List<TopicIdPartition> forget,
                                           Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementsMap) {
             ShareFetchRequestData data = new ShareFetchRequestData();
             data.setGroupId(groupId);
@@ -63,6 +64,7 @@ public class ShareFetchRequest extends AbstractRequest {
             data.setMaxRecords(maxRecords);
             data.setBatchSize(batchSize);
             data.setShareAcquireMode(shareAcquireMode);
+            data.setIsRenewAck(isRenewAck);
 
             // Build a map of topics to fetch keyed by topic ID, and within each a map of partitions keyed by index
             ShareFetchRequestData.FetchTopicCollection fetchTopics = new ShareFetchRequestData.FetchTopicCollection();
@@ -147,7 +149,7 @@ public class ShareFetchRequest extends AbstractRequest {
                 }
                 // The v1 only supports ShareAcquireMode.BATCH_OPTIMIZED.
                 if (data.shareAcquireMode() != ShareAcquireMode.BATCH_OPTIMIZED.id()) {
-                    throw new UnsupportedVersionException("The v1 ShareFetch does not support ShareAcquireMode.RECORD_LIMIT");
+                    throw new UnsupportedVersionException("The v1 ShareFetch only supports ShareAcquireMode.BATCH_OPTIMIZED");
                 }
             }
             return new ShareFetchRequest(data, version);
