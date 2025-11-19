@@ -365,7 +365,8 @@ public class DeleteTopicTest {
                     0,
                     AppendOrigin.CLIENT,
                     RequestLocal.noCaching(),
-                    VerificationGuard.SENTINEL
+                    VerificationGuard.SENTINEL,
+                    (short) 0
                 );
                 counter++;
                 result.add(new int[] {key, count});
