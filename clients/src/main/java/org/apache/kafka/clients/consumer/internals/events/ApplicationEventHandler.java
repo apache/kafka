@@ -51,7 +51,6 @@ public class ApplicationEventHandler implements Closeable {
 
     public ApplicationEventHandler(final LogContext logContext,
                                    final Time time,
-                                   final int initializationTimeoutMs,
                                    final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                    final CompletableEventReaper applicationEventReaper,
                                    final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
@@ -71,7 +70,7 @@ public class ApplicationEventHandler implements Closeable {
                 requestManagersSupplier,
                 asyncConsumerMetrics);
 
-        this.networkThread.start(initializationTimeoutMs);
+        this.networkThread.start();
     }
 
     /**

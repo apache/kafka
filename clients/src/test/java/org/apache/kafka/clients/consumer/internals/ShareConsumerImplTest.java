@@ -16,15 +16,11 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaShareConsumer;
-import org.apache.kafka.clients.consumer.ShareConsumer;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
@@ -43,7 +39,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidTopicException;
@@ -52,7 +47,6 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
@@ -86,8 +80,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 
-import javax.security.auth.login.LoginException;
-
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP;
@@ -95,11 +87,9 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doAnswer;
@@ -157,7 +147,7 @@ public class ShareConsumerImplTest {
                 new StringDeserializer(),
                 new StringDeserializer(),
                 time,
-                (a, b, c, d, e, f, g, h, i) -> applicationEventHandler,
+                (a, b, c, d, e, f, g, h) -> applicationEventHandler,
                 a -> backgroundEventReaper,
                 (a, b, c, d, e) -> fetchCollector,
                 acknowledgementEventQueue,
@@ -953,53 +943,6 @@ public class ShareConsumerImplTest {
 
         // Because we forced our mocked future to continuously time out, we should have no time remaining.
         assertEquals(0, timer.remainingMs());
-    }
-
-    /**
-     * This test ensures that the {@link ShareConsumer} implementation fails on creation when the underlying
-     * {@link NetworkClient} fails creation.
-     *
-     * The logic to check for this case is admittedly a bit awkward because the constructor can fail for all
-     * manner of reasons. So a failure case is created by specifying an invalid
-     * {@link javax.security.auth.spi.LoginModule} class name, which in turn causes the {@link NetworkClient}
-     * to fail.
-     */
-    @Test
-    public void testConstructorFailsOnNetworkClientConstructorFailure() {
-        Map<String, Object> configs = Map.of(
-            ConsumerConfig.GROUP_ID_CONFIG, "invalid-login-test-group",
-            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
-            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
-            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999",
-            CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name,
-            SaslConfigs.SASL_MECHANISM, "PLAIN",
-            SaslConfigs.SASL_JAAS_CONFIG, "org.example.InvalidLoginModule required ;"
-        );
-
-        KafkaException e = assertThrows(KafkaException.class, () -> {
-            try (ShareConsumer<String, String> ignored = new KafkaShareConsumer<>(configs)) {
-                fail("Should not be able to create the consumer");
-            }
-        });
-
-        assertEquals("Failed to construct Kafka share consumer", e.getMessage());
-
-        // The root cause is multiple exceptions deep. This code is more concise and should hopefully be trivial
-        // to update should the underlying implementation change.
-        Throwable cause = e.getCause();
-        assertNotNull(cause);
-        assertInstanceOf(KafkaException.class, cause);
-        assertEquals("Failed to create new NetworkClient", cause.getMessage());
-
-        cause = cause.getCause();
-        assertNotNull(cause);
-        assertInstanceOf(KafkaException.class, cause);
-        assertEquals(LoginException.class.getName() + ": No LoginModule found for org.example.InvalidLoginModule", cause.getMessage());
-
-        cause = cause.getCause();
-        assertNotNull(cause);
-        assertInstanceOf(LoginException.class, cause);
-        assertEquals("No LoginModule found for org.example.InvalidLoginModule", cause.getMessage());
     }
 
     private void completeShareSubscriptionChangeApplicationEventSuccessfully(SubscriptionState subscriptions, List<String> topics) {

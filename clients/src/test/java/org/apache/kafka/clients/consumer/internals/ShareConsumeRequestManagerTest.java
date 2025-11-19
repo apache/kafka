@@ -80,7 +80,6 @@ import org.apache.kafka.common.utils.Timer;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -2431,7 +2430,6 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(1, fetchedRecords.size());
     }
 
-    @Disabled
     @Test
     public void testFetchOneNodeAtATimeForRecordLimitMode() {
         // We will simulate two nodes, each with one partition. The first node will have more records
