@@ -1672,6 +1672,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .withExecutorService(mock(ExecutorService.class))
+                .withMaxBufferSizeSupplier(() -> MAX_BUFFER_SIZE)
                 .build();
 
         // Loads the coordinator.
@@ -2534,6 +2535,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .withExecutorService(mock(ExecutorService.class))
+                .withMaxBufferSizeSupplier(() -> MAX_BUFFER_SIZE)
                 .build();
 
         runtime.scheduleLoadOperation(TP, 10);
@@ -3878,6 +3880,7 @@ public class CoordinatorRuntimeTest {
                 .withSerializer(new StringSerializer())
                 .withAppendLingerMs(OptionalInt.empty())
                 .withExecutorService(mock(ExecutorService.class))
+                .withMaxBufferSizeSupplier(() -> MAX_BUFFER_SIZE)
                 .build();
 
         // Loads the coordinator. Poll once to execute the load operation and once
@@ -3986,6 +3989,7 @@ public class CoordinatorRuntimeTest {
                 .withSerializer(new StringSerializer())
                 .withAppendLingerMs(OptionalInt.empty())
                 .withExecutorService(mock(ExecutorService.class))
+                .withMaxBufferSizeSupplier(() -> MAX_BUFFER_SIZE)
                 .build();
 
         // Loads the coordinator. Poll once to execute the load operation and once
@@ -4175,6 +4179,7 @@ public class CoordinatorRuntimeTest {
                 .withSerializer(new StringSerializer())
                 .withAppendLingerMs(OptionalInt.empty())
                 .withExecutorService(mock(ExecutorService.class))
+                .withMaxBufferSizeSupplier(() -> MAX_BUFFER_SIZE)
                 .build();
 
         // Loads the coordinator. Poll once to execute the load operation and once
@@ -4869,6 +4874,7 @@ public class CoordinatorRuntimeTest {
                 .withSerializer(new StringSerializer())
                 .withAppendLingerMs(OptionalInt.of(10))
                 .withExecutorService(mock(ExecutorService.class))
+                .withMaxBufferSizeSupplier(() -> MAX_BUFFER_SIZE)
                 .build();
 
         // Schedule the loading.
