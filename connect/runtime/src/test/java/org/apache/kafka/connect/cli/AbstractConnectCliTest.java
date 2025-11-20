@@ -152,9 +152,8 @@ public class AbstractConnectCliTest {
 
         @Override
         protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-            // Block the restricted class and test plugin classes
-            if (name.equals(restrictedClassName)
-                || (name.startsWith("test.plugins") && name.contains("Sampling"))) {
+            // Block the restricted class to simulate it being only in plugin.path, not classpath.
+            if (name.equals(restrictedClassName)) {
                 throw new ClassNotFoundException("Class " + name + " not found (restricted for testing)");
             }
             // For other classes, delegate to system classloader
