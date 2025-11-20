@@ -60,7 +60,7 @@ versions += [
   commonsLang: "3.18.0",
   commonsValidator: "1.10.0",
   classgraph: "4.8.179",
-  gradle: "9.1.0",
+  gradle: "9.2.1",
   grgit: "5.3.3",
   httpclient: "4.5.14",
   jackson: "2.19.2",
