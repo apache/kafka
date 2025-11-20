@@ -113,7 +113,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-@SuppressWarnings("unchecked")
+@SuppressWarnings({"ClassFanOutComplexity", "unchecked"})
 public class ShareConsumerImplTest {
 
     private static final Optional<Integer> DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS = Optional.of(30000);
