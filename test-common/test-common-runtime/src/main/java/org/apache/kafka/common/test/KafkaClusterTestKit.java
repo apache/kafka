@@ -489,6 +489,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             StringBuilder dynamicVotersBuilder = new StringBuilder();
             String prefix = "";
+            boolean writeBootstrapSnapshot = false;
             if (standalone) {
                 if (nodeId == TestKitDefaults.BROKER_ID_OFFSET + TestKitDefaults.CONTROLLER_ID_OFFSET) {
                     final var controllerNode = nodes.controllerNodes().get(nodeId);
@@ -506,6 +507,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 // when the nodeId != TestKitDefaults.CONTROLLER_ID_OFFSET, the node is formatting with
                 // the --no-initial-controllers flag
                 formatter.setHasDynamicQuorum(true);
+                writeBootstrapSnapshot = true;
             } else if (initialVoterSet.isPresent()) {
                 for (final var controllerNode : initialVoterSet.get().entrySet()) {
                     final var voterId = controllerNode.getKey();
@@ -524,8 +526,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 }
                 formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
                 formatter.setHasDynamicQuorum(true);
+                writeBootstrapSnapshot = true;
             }
-            formatter.setWriteBootstrapSnapshot(false);
+            formatter.setWriteBootstrapSnapshot(writeBootstrapSnapshot);
             formatter.run();
         } catch (Exception e) {
             throw new RuntimeException("Failed to format node " + ensemble.nodeId(), e);
