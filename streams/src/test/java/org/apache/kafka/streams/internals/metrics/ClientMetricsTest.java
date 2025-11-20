@@ -37,6 +37,7 @@ import static org.mockito.Mockito.when;
 
 public class ClientMetricsTest {
     private static final String COMMIT_ID = "test-commit-ID";
+    private static final String PROCESS_ID = "test-process-id";
     private static final String VERSION = "test-version";
 
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
@@ -116,11 +117,15 @@ public class ClientMetricsTest {
         final String name = "client-state";
         final String description = "The state of the Kafka Streams client";
         final Gauge<Integer> stateProvider = (config, now) -> State.RUNNING.ordinal();
-        setUpAndVerifyMutableMetric(
-                name,
-                description,
-                stateProvider,
-                () -> ClientMetrics.addClientStateTelemetryMetric(streamsMetrics, stateProvider)
+
+        ClientMetrics.addClientStateTelemetryMetric(PROCESS_ID, streamsMetrics, stateProvider);
+
+        verify(streamsMetrics).addClientLevelMutableMetric(
+            eq(name),
+            eq(description),
+            eq(Collections.singletonMap("process-id", PROCESS_ID)),
+            eq(RecordingLevel.INFO),
+            eq(stateProvider)
         );
     }
 
@@ -129,11 +134,15 @@ public class ClientMetricsTest {
         final String name = "recording-level";
         final String description = "The metrics recording level of the Kafka Streams client";
         final int recordingLevel = 1;
-        setUpAndVerifyImmutableMetric(
-                name,
-                description,
-                recordingLevel,
-                () -> ClientMetrics.addClientRecordingLevelMetric(streamsMetrics, recordingLevel)
+
+        ClientMetrics.addClientRecordingLevelMetric(PROCESS_ID, streamsMetrics, recordingLevel);
+
+        verify(streamsMetrics).addClientLevelImmutableMetric(
+            eq(name),
+            eq(description),
+            eq(Collections.singletonMap("process-id", PROCESS_ID)),
+            eq(RecordingLevel.INFO),
+            eq(recordingLevel)
         );
     }
 

@@ -90,7 +90,7 @@ public class InternalMockProcessorContext<KOut, VOut>
         this(null,
             null,
             null,
-            new StreamsMetricsImpl(new Metrics(), "mock", "processId", new MockTime()),
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
             null,
@@ -107,7 +107,6 @@ public class InternalMockProcessorContext<KOut, VOut>
             new StreamsMetricsImpl(
                 new Metrics(),
                 "mock",
-                "processId",
                 new MockTime()
             ),
             config,
@@ -140,7 +139,6 @@ public class InternalMockProcessorContext<KOut, VOut>
             new StreamsMetricsImpl(
                 new Metrics(),
                 "mock",
-                "processId",
                 new MockTime()
             ),
             config,
@@ -158,7 +156,7 @@ public class InternalMockProcessorContext<KOut, VOut>
             stateDir,
             keySerde,
             valueSerde,
-            new StreamsMetricsImpl(new Metrics(), "mock", "processId", new MockTime()),
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
             config,
             null,
             null,
@@ -178,7 +176,7 @@ public class InternalMockProcessorContext<KOut, VOut>
             null,
             serdes.keySerde(),
             serdes.valueSerde(),
-            new StreamsMetricsImpl(metrics, "mock", "processId", new MockTime()),
+            new StreamsMetricsImpl(metrics, "mock", new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             null,
@@ -195,7 +193,7 @@ public class InternalMockProcessorContext<KOut, VOut>
             stateDir,
             keySerde,
             valueSerde,
-            new StreamsMetricsImpl(new Metrics(), "mock", "processId", new MockTime()),
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             cache,
