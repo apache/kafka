@@ -54,7 +54,7 @@ public class TimestampedSegmentTest {
     @BeforeEach
     public void setUp() {
         metricsRecorder.init(
-            new StreamsMetricsImpl(new Metrics(), "test-client", "processId", "applicationId", new MockTime()),
+            new StreamsMetricsImpl(new Metrics(), "test-client", new MockTime()),
             new TaskId(0, 0)
         );
     }

@@ -402,7 +402,7 @@ public class ShareConsumeRequestManagerTest {
         // Remaining acknowledgements sent with close().
         Acknowledgements acknowledgements2 = getAcknowledgements(2, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
-        shareConsumeRequestManager.acknowledgeOnClose(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements2)),
+        CompletableFuture<Void> closeFuture = shareConsumeRequestManager.acknowledgeOnClose(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements2)),
                 calculateDeadlineMs(time.timer(100)));
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
@@ -416,6 +416,25 @@ public class ShareConsumeRequestManagerTest {
         // Verifying that all 3 offsets were acknowledged as part of the final ShareAcknowledge on close.
         assertEquals(mergedAcks.getAcknowledgementsTypeMap(), completedAcknowledgements.get(0).get(tip0).getAcknowledgementsTypeMap());
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        // Polling once more to complete the closeFuture.
+        shareConsumeRequestManager.sendFetches();
+        assertTrue(closeFuture.isDone());
+    }
+
+    @Test
+    public void testCloseFutureCompletedWhenMemberIdIsNull() {
+        buildRequestManager(new MetricConfig(), new ByteArrayDeserializer(), new ByteArrayDeserializer(), null, ShareAcquireMode.BATCH_OPTIMIZED);
+        assignFromSubscribed(Collections.singleton(tp0));
+
+        CompletableFuture<Void> closeFuture = shareConsumeRequestManager.acknowledgeOnClose(Map.of(),
+                calculateDeadlineMs(time.timer(100)));
+
+        assertFalse(closeFuture.isDone());
+
+        // The subsequent poll should complete the closeFuture as the memberId is null.
+        shareConsumeRequestManager.sendFetches();
+        assertTrue(closeFuture.isDone());
     }
 
     @Test
@@ -2466,7 +2485,7 @@ public class ShareConsumeRequestManagerTest {
                 .setErrorCode(Errors.NONE.code()));
         client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, List.of(), 0), nodeId1);
         partitionData = buildPartitionDataMap(tip0, records, ShareCompletedFetchTest.acquiredRecords(1L, 1), Errors.NONE, Errors.NONE);
-        
+
         client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, List.of(), 0), nodeId0);
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
@@ -2731,17 +2750,18 @@ public class ShareConsumeRequestManagerTest {
     private <K, V> void buildRequestManager(Deserializer<K> keyDeserializer,
                                             Deserializer<V> valueDeserializer,
                                             ShareAcquireMode shareAcquireMode) {
-        buildRequestManager(new MetricConfig(), keyDeserializer, valueDeserializer, shareAcquireMode);
+        buildRequestManager(new MetricConfig(), keyDeserializer, valueDeserializer, Uuid.randomUuid().toString(), shareAcquireMode);
     }
 
     private <K, V> void buildRequestManager(MetricConfig metricConfig,
                                             Deserializer<K> keyDeserializer,
                                             Deserializer<V> valueDeserializer,
+                                            String memberId,
                                             ShareAcquireMode shareAcquireMode) {
         LogContext logContext = new LogContext();
         SubscriptionState subscriptionState = new SubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST);
         buildRequestManager(metricConfig, keyDeserializer, valueDeserializer,
-                subscriptionState, logContext, shareAcquireMode);
+                subscriptionState, logContext, memberId, shareAcquireMode);
     }
 
     private <K, V> void buildRequestManager(MetricConfig metricConfig,
@@ -2749,7 +2769,8 @@ public class ShareConsumeRequestManagerTest {
                                             Deserializer<V> valueDeserializer,
                                             SubscriptionState subscriptionState,
                                             LogContext logContext,
-                                            ShareAcquireMode shareAcquireMode) {
+                                            String memberId,
+                                                                                   ShareAcquireMode shareAcquireMode) {
         buildDependencies(metricConfig, subscriptionState, logContext);
         Deserializers<K, V> deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);
         int maxWaitMs = 0;
@@ -2781,7 +2802,8 @@ public class ShareConsumeRequestManagerTest {
                 new ShareFetchBuffer(logContext),
                 acknowledgementEventHandler,
                 metricsManager,
-                shareFetchCollector));
+                shareFetchCollector,
+                memberId));
     }
 
     private void buildDependencies(MetricConfig metricConfig,
@@ -2820,11 +2842,14 @@ public class ShareConsumeRequestManagerTest {
                                                   ShareFetchBuffer shareFetchBuffer,
                                                   ShareAcknowledgementEventHandler acknowledgementEventHandler,
                                                   ShareFetchMetricsManager metricsManager,
-                                                  ShareFetchCollector<K, V> fetchCollector) {
+                                                  ShareFetchCollector<K, V> fetchCollector,
+                                                  String memberId) {
             super(time, logContext, groupId, metadata, subscriptions, shareFetchConfig, shareFetchBuffer,
                 acknowledgementEventHandler, metricsManager, retryBackoffMs, 1000);
             this.shareFetchCollector = fetchCollector;
-            onMemberEpochUpdated(Optional.empty(), Uuid.randomUuid().toString());
+            if (memberId != null) {
+                onMemberEpochUpdated(Optional.empty(), memberId);
+            }
         }
 
         private ShareFetch<K, V> collectFetch() {
@@ -2914,7 +2939,7 @@ public class ShareConsumeRequestManagerTest {
         }
 
         @Override
-        protected void checkDisconnects(final long currentTimeMs) {
+        protected void checkDisconnects(final long currentTimeMs, boolean onClose) {
             // any disconnects affecting requests that have already been transmitted will be handled
             // by NetworkClient, so we just need to check whether connections for any of the unsent
             // requests have been disconnected; if they have, then we complete the corresponding future

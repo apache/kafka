@@ -113,6 +113,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -1250,6 +1251,28 @@ public class ShareConsumerTest {
             }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records for both consumers for the last batch");
             verifyShareGroupStateTopicRecordsProduced();
         }
+    }
+
+    @ClusterTest
+    public void testConsumerCloseOnBrokerShutdown() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1");
+        shareConsumer.subscribe(Set.of(tp.topic()));
+
+        // To ensure coordinator discovery is complete before shutting down the broker
+        shareConsumer.poll(Duration.ofMillis(100));
+
+        // Shutdown the broker.
+        assertEquals(1, cluster.brokers().size());
+        KafkaBroker broker = cluster.brokers().get(0);
+        cluster.shutdownBroker(0);
+
+        broker.awaitShutdown();
+
+        // Assert that close completes in less than 5 seconds, not the full 30-second timeout.
+        assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
+            shareConsumer.close();
+        }, "Consumer close should not wait for full timeout when broker is already shutdown");
     }
 
     @ClusterTest
