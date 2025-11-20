@@ -217,11 +217,15 @@
         policy. The <code>PrincipalConnectorClientConfigOverridePolicy</code> policy is now deprecated and will be removed in Kafka 5.0.0.
         For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/2IkvFg">KIP-1188</a>.
     </li>
+    <li>
+        It is now possible to specify the start time for a Kafka Streams punctuation, instead of relying on the non-deterministic time when you register it.
+        For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/9QqWF">KIP-1146</a>.
+    </li>
 </ul>
 
 <h4><a id="upgrade_4_1_0" href="#upgrade_4_1_0">Upgrading to 4.1.0</a></h4>
 
-<p><b>Note:</b> Kafka Streams 4.1.0 contains a critical memory leak bug (<a href="https://issues.apache.org/jira/browse/KAFKA-19748">KAFKA-19748</a>) that affects users of range scans and certain DSL operators (session windows, sliding windows, stream-stream joins, foreign-key joins). Users running Kafka Streams should consider upgrading directly to 4.1.1 when available.</p>
+<p><b>Note:</b> Kafka Streams 4.1.0 contains a critical memory leak bug (<a href="https://issues.apache.org/jira/browse/KAFKA-19748">KAFKA-19748</a>) that affects users of range scans and certain DSL operators (session windows, sliding windows, stream-stream joins, foreign-key joins). Users running Kafka Streams should consider upgrading directly to 4.1.1, which includes the fix for it.</p>
 
 <h5><a id="upgrade_4_1_0_from" href="#upgrade_4_1_0_from">Upgrading Servers to 4.1.0 from any version 3.3.x through 4.0.x</a></h5>
     <h5><a id="upgrade_410_notable" href="#upgrade_410_notable">Notable changes in 4.1.0</a></h5>

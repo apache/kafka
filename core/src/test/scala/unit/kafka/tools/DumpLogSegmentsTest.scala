@@ -45,13 +45,13 @@ import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, Tr
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.{MetadataLogConfig, VoterSetTest}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion, OffsetAndEpoch}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion, OffsetAndEpoch, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentMetadataUpdate, RemoteLogSegmentState, RemotePartitionDeleteMetadata, RemotePartitionDeleteState}
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.RecordsSnapshotWriter
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -154,7 +154,7 @@ class DumpLogSegmentsTest {
 
     log.appendAsLeader(MemoryRecords.withEndTransactionMarker(98323L, 99.toShort,
       new EndTransactionMarker(ControlRecordType.COMMIT, 100)
-    ), 7, AppendOrigin.COORDINATOR)
+    ), 7, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
 
     assertDumpLogRecordMetadata(log)
   }
@@ -530,7 +530,7 @@ class DumpLogSegmentsTest {
 
     log.appendAsLeader(MemoryRecords.withEndTransactionMarker(0L, 0.toShort,
       new EndTransactionMarker(ControlRecordType.COMMIT, 100)
-    ), 0, AppendOrigin.COORDINATOR)
+    ), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
 
     log.appendAsLeader(MemoryRecords.withLeaderChangeMessage(0L, 0L, 0, ByteBuffer.allocate(4),
       new LeaderChangeMessage()

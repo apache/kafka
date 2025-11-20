@@ -58,16 +58,19 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.share.SharePartitionKey;
+import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
 
+import com.yammer.metrics.core.Meter;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
 
@@ -161,6 +164,11 @@ public class ShareConsumerTest {
         } catch (Exception e) {
             fail(e);
         }
+    }
+
+    @AfterEach
+    public void tearDown() {
+        kafka.utils.TestUtils.clearYammerMetrics();
     }
 
     @ClusterTest
@@ -261,8 +269,10 @@ public class ShareConsumerTest {
             producer.send(record);
             producer.flush();
             shareConsumer.subscribe(Set.of(tp.topic()));
+            assertEquals(Optional.empty(), shareConsumer.acquisitionLockTimeoutMs());
             ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
+            assertEquals(Optional.of(15000), shareConsumer.acquisitionLockTimeoutMs());
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
@@ -277,8 +287,10 @@ public class ShareConsumerTest {
             producer.send(record);
             producer.flush();
             shareConsumer.subscribe(Set.of(tp.topic()));
+            assertEquals(Optional.empty(), shareConsumer.acquisitionLockTimeoutMs());
             ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
+            assertEquals(Optional.of(15000), shareConsumer.acquisitionLockTimeoutMs());
             producer.send(record);
             records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
@@ -324,11 +336,14 @@ public class ShareConsumerTest {
             shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, partitionExceptionMap));
 
             shareConsumer.subscribe(Set.of(tp.topic()));
+            assertEquals(Optional.empty(), shareConsumer.acquisitionLockTimeoutMs());
 
             TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
                 DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records for share consumer");
 
+            assertEquals(Optional.of(15000), shareConsumer.acquisitionLockTimeoutMs());
             shareConsumer.subscribe(Set.of(tp2.topic()));
+            assertEquals(Optional.of(15000), shareConsumer.acquisitionLockTimeoutMs());
 
             // Waiting for heartbeat to propagate the subscription change.
             TestUtils.waitForCondition(() -> {
@@ -1621,10 +1636,9 @@ public class ShareConsumerTest {
     }
 
     /**
-     * Test to verify that the acknowledgement commit callback can throw an exception, and it is propagated
+     * Test to verify that the acknowledgement commit callback can throw an exception, and it is not propagated
      * to the caller of poll().
      */
-    @Flaky("KAFKA-19840") // https://issues.apache.org/jira/browse/KAFKA-19840
     @ClusterTest
     public void testAcknowledgementCommitCallbackThrowsException() throws InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
@@ -1635,28 +1649,35 @@ public class ShareConsumerTest {
             producer.send(record);
             producer.flush();
 
-            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallbackThrows<>());
+            AtomicBoolean callbackCalled = new AtomicBoolean(false);
+            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallbackThrows(callbackCalled));
             shareConsumer.subscribe(Set.of(tp.topic()));
 
             TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
                 DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records for share consumer");
 
-            AtomicBoolean exceptionThrown = new AtomicBoolean(false);
             TestUtils.waitForCondition(() -> {
                 try {
                     shareConsumer.poll(Duration.ofMillis(500));
-                } catch (org.apache.kafka.common.errors.OutOfOrderSequenceException e) {
-                    exceptionThrown.set(true);
+                } catch (Exception e) {
+                    throw new NoRetryException(e);
                 }
-                return exceptionThrown.get();
-            }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to receive expected exception");
+                return callbackCalled.get();
+            }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Received unexpected exception or callback not called");
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    private static class TestableAcknowledgementCommitCallbackThrows<K, V> implements AcknowledgementCommitCallback {
+    private static class TestableAcknowledgementCommitCallbackThrows implements AcknowledgementCommitCallback {
+        private final AtomicBoolean callbackCalled;
+
+        public TestableAcknowledgementCommitCallbackThrows(AtomicBoolean callbackCalled) {
+            this.callbackCalled = callbackCalled;
+        }
+
         @Override
         public void onComplete(Map<TopicIdPartition, Set<Long>> offsetsMap, Exception exception) {
+            callbackCalled.set(true);
             throw new org.apache.kafka.common.errors.OutOfOrderSequenceException("Exception thrown in TestableAcknowledgementCommitCallbackThrows.onComplete");
         }
     }
@@ -2339,7 +2360,6 @@ public class ShareConsumerTest {
         verifyShareGroupStateTopicRecordsProduced();
     }
 
-    @Disabled("KAFKA-19840") // https://issues.apache.org/jira/browse/KAFKA-19840
     @ClusterTest(
         brokers = 1,
         serverProperties = {
@@ -2949,6 +2969,7 @@ public class ShareConsumerTest {
             shareConsumer.commitSync();
             assertEquals(15, acknowledgementsCommitted.get());
         }
+        verifyYammerMetricCount("ackType=Renew", 5);
     }
 
     @ClusterTest
@@ -2972,6 +2993,10 @@ public class ShareConsumerTest {
             shareConsumer.subscribe(List.of(tp.topic()));
             ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 10);
             assertEquals(10, records.count());
+            assertEquals(Optional.of(15000), shareConsumer.acquisitionLockTimeoutMs());
+
+            // The updated acquisition lock timeout is only applied when the next poll is called.
+            alterShareRecordLockDurationMs("group1", 25000);
 
             int count = 0;
             Map<TopicIdPartition, Optional<KafkaException>> result;
@@ -2983,6 +3008,7 @@ public class ShareConsumerTest {
                 }
                 result = shareConsumer.commitSync();
                 assertEquals(1, result.size());
+                assertEquals(Optional.of(15000), shareConsumer.acquisitionLockTimeoutMs());
                 assertEquals(Optional.empty(), result.get(new TopicIdPartition(tpId, tp.partition(), tp.topic())));
                 count++;
             }
@@ -2990,10 +3016,124 @@ public class ShareConsumerTest {
             // Get the rest of all 5 records.
             records = waitedPoll(shareConsumer, 2500L, 5);
             assertEquals(5, records.count());
+            assertEquals(Optional.of(25000), shareConsumer.acquisitionLockTimeoutMs());
             for (ConsumerRecord<byte[], byte[]> record : records) {
                 shareConsumer.acknowledge(record, AcknowledgeType.ACCEPT);
             }
         }
+        verifyYammerMetricCount("ackType=Renew", 5);
+    }
+
+    @ClusterTest
+    public void testRenewAcknowledgementInvalidStateRecord() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                 "group1",
+                 Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))
+        ) {
+            AtomicInteger acknowledgementsCommitted = new AtomicInteger(0);
+            shareConsumer.setAcknowledgementCommitCallback((offsetsByTopicPartition, exception) ->
+                offsetsByTopicPartition.forEach((tip, offsets) -> acknowledgementsCommitted.addAndGet(offsets.size())));
+
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "Message ".getBytes());
+            producer.send(record);
+            producer.flush();
+
+            shareConsumer.subscribe(List.of(tp.topic()));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+            assertEquals(1, records.count());
+
+            for (ConsumerRecord<byte[], byte[]> rec : records) {
+                shareConsumer.acknowledge(rec, AcknowledgeType.REJECT);
+                shareConsumer.commitSync();
+                assertThrows(IllegalStateException.class, () -> shareConsumer.acknowledge(rec, AcknowledgeType.RENEW));
+            }
+        }
+        verifyYammerMetricCount("ackType=Renew", 0);
+    }
+
+    @ClusterTest(
+        brokers = 1,
+        serverProperties = {
+            @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "12000"),
+            @ClusterConfigProperty(key = "group.share.min.record.lock.duration.ms", value = "12000"),
+        }
+    )
+    public void testRenewAcknowledgementNoResultInPoll() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                 "group1",
+                 Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))
+        ) {
+            AtomicInteger acknowledgementsCommitted = new AtomicInteger(0);
+            shareConsumer.setAcknowledgementCommitCallback((offsetsByTopicPartition, exception) ->
+                offsetsByTopicPartition.forEach((tip, offsets) -> acknowledgementsCommitted.addAndGet(offsets.size())));
+
+            for (int i = 0; i < 10; i++) {
+                ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), ("Message " + i).getBytes());
+                producer.send(record);
+            }
+            producer.flush();
+
+            shareConsumer.subscribe(List.of(tp.topic()));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 10);
+            assertEquals(10, records.count());
+
+            int count = 0;
+            for (ConsumerRecord<byte[], byte[]> record : records) {
+                if (count % 2 == 0) {
+                    shareConsumer.acknowledge(record, AcknowledgeType.ACCEPT);
+                } else {
+                    shareConsumer.acknowledge(record, AcknowledgeType.RENEW);
+                }
+                count++;
+            }
+
+            // 5 more records (total 15 produced).
+            for (int i = 10; i < 15; i++) {
+                ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), ("Message " + i).getBytes());
+                producer.send(record);
+            }
+
+            // Get the rest of all 5 records.
+            records = waitedPoll(shareConsumer, 11500L, 0);  // This will send the acks but not return next 5 records (10-15)
+            assertEquals(10, acknowledgementsCommitted.get());
+            assertEquals(0, records.count());
+            verifyYammerMetricCount("ackType=Renew", 5);
+
+            // Renewal duration passed, now records will be back.
+            records = waitedPoll(shareConsumer, 2500L, 5);  // Renewed records as well as 10-15 records.
+            assertEquals(5, records.count());
+            for (ConsumerRecord<byte[], byte[]> record : records) {
+                shareConsumer.acknowledge(record, AcknowledgeType.ACCEPT);
+            }
+
+            shareConsumer.commitSync();
+
+            records = waitedPoll(shareConsumer, 2500L, 5);  // 10-15 records.
+            assertEquals(5, records.count());
+            for (ConsumerRecord<byte[], byte[]> record : records) {
+                shareConsumer.acknowledge(record, AcknowledgeType.ACCEPT);
+            }
+
+            shareConsumer.commitSync();
+
+            // Initial - 5 renew + 5 accept, Subsequent - 5 renewed accepted + 5 fresh accepted (10-15)
+            assertEquals(20, acknowledgementsCommitted.get());
+        }
+        verifyYammerMetricCount("ackType=Renew", 5);
+    }
+
+    private void verifyYammerMetricCount(String filterString, int count) {
+        com.yammer.metrics.core.Metric renewAck = KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
+            .filter(entry -> entry.getKey().toString().contains(filterString))
+            .findAny()
+            .orElseThrow(() -> new AssertionError("metric not found"))
+            .getValue();
+
+        assertEquals(count, ((Meter) renewAck).count());
     }
 
     /**
@@ -3299,6 +3439,19 @@ public class ShareConsumerTest {
         Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
         alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
             GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, newValue), AlterConfigOp.OpType.SET)));
+        AlterConfigsOptions alterOptions = new AlterConfigsOptions();
+        try (Admin adminClient = createAdminClient()) {
+            assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
+                .all()
+                .get(60, TimeUnit.SECONDS), "Failed to alter configs");
+        }
+    }
+
+    private void alterShareRecordLockDurationMs(String groupId, int newValue) {
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
+        Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
+        alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
+            GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, Integer.toString(newValue)), AlterConfigOp.OpType.SET)));
         AlterConfigsOptions alterOptions = new AlterConfigsOptions();
         try (Admin adminClient = createAdminClient()) {
             assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)

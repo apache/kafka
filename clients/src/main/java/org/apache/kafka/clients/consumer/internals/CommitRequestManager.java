@@ -1004,38 +1004,37 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         public NetworkClientDelegate.UnsentRequest toUnsentRequest() {
-            List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = requestedPartitions.stream()
-                .collect(Collectors.groupingBy(TopicPartition::topic))
-                .entrySet()
-                .stream()
-                .map(entry -> new OffsetFetchRequestData.OffsetFetchRequestTopics()
+            Map<String, Uuid> topicIds = metadata.topicIds();
+            boolean canUseTopicIds = true;
+            List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = new ArrayList<>();
+            Map<String, List<TopicPartition>> tps = requestedPartitions.stream().collect(Collectors.groupingBy(TopicPartition::topic));
+            for (Map.Entry<String, List<TopicPartition>> entry : tps.entrySet()) {
+                String topic = entry.getKey();
+                Uuid topicId = topicIds.getOrDefault(topic, Uuid.ZERO_UUID);
+                if (Uuid.ZERO_UUID.equals(topicId)) {
+                    canUseTopicIds = false;
+                }
+                topics.add(new OffsetFetchRequestData.OffsetFetchRequestTopics()
                     .setName(entry.getKey())
+                    .setTopicId(topicId)
                     .setPartitionIndexes(entry.getValue().stream()
                         .map(TopicPartition::partition)
-                        .collect(Collectors.toList())))
-                .collect(Collectors.toList());
+                        .collect(Collectors.toList())));
+            }
 
-            OffsetFetchRequest.Builder builder = memberInfo.memberEpoch
-                .map(epoch -> OffsetFetchRequest.Builder.forTopicNames(
-                    new OffsetFetchRequestData()
-                        .setRequireStable(true)
-                        .setGroups(List.of(
-                            new OffsetFetchRequestData.OffsetFetchRequestGroup()
-                                .setGroupId(groupId)
-                                .setMemberId(memberInfo.memberId)
-                                .setMemberEpoch(epoch)
-                                .setTopics(topics))),
-                            throwOnFetchStableOffsetUnsupported))
-                // Building request without passing member ID/epoch to leave the logic to choose
-                // default values when not present on the request builder.
-                .orElseGet(() -> OffsetFetchRequest.Builder.forTopicNames(
-                    new OffsetFetchRequestData()
-                        .setRequireStable(true)
-                        .setGroups(List.of(
-                            new OffsetFetchRequestData.OffsetFetchRequestGroup()
-                                .setGroupId(groupId)
-                                .setTopics(topics))),
-                    throwOnFetchStableOffsetUnsupported));
+            OffsetFetchRequestData.OffsetFetchRequestGroup groupData = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId(groupId)
+                .setTopics(topics);
+            if (memberInfo.memberEpoch.isPresent()) {
+                groupData = groupData.setMemberId(memberInfo.memberId)
+                    .setMemberEpoch(memberInfo.memberEpoch.get());
+            }
+            OffsetFetchRequestData data = new OffsetFetchRequestData()
+                .setRequireStable(true)
+                .setGroups(List.of(groupData));
+            OffsetFetchRequest.Builder builder = canUseTopicIds
+                ? OffsetFetchRequest.Builder.forTopicIdsOrNames(data, throwOnFetchStableOffsetUnsupported, true)
+                : OffsetFetchRequest.Builder.forTopicNames(data, throwOnFetchStableOffsetUnsupported);
             return buildRequestWithResponseHandling(builder);
         }
 
@@ -1124,22 +1123,28 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             var failedRequestRegistered = false;
 
             for (var topic : response.topics()) {
+                // If the topic id is used, the topic name is empty in the response.
+                String topicName = topic.name().isEmpty() ? metadata.topicNames().get(topic.topicId()) : topic.name();
                 for (var partition : topic.partitions()) {
                     var tp = new TopicPartition(
-                        topic.name(),
+                        topicName,
                         partition.partitionIndex()
                     );
                     var error = Errors.forCode(partition.errorCode());
-                    if (error != Errors.NONE) {
-                        log.debug("Failed to fetch offset for partition {}: {}", tp, error.message());
+                    if (error != Errors.NONE || topicName == null) {
+                        if (error != Errors.NONE) {
+                            log.debug("Failed to fetch offset for partition {}: {}", tp, error.message());
+                        } else { // unknown topic name
+                            log.debug("Failed to fetch offset, topic does not exist");
+                        }
 
                         if (!failedRequestRegistered) {
                             onFailedAttempt(currentTimeMs);
                             failedRequestRegistered = true;
                         }
 
-                        if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-                            future.completeExceptionally(new KafkaException("Topic or Partition " + tp + " does not exist"));
+                        if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION || error == Errors.UNKNOWN_TOPIC_ID || topicName == null) {
+                            future.completeExceptionally(new KafkaException("Topic does not exist"));
                             return;
                         } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                             unauthorizedTopics.add(tp.topic());
