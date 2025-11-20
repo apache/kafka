@@ -841,8 +841,8 @@ public class SharePartition {
                 int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
                 boolean recordLimitSubsetMatch = isRecordLimitMode && checkForRecordLimitSubsetMatch(inFlightBatch, maxRecordsToAcquire, acquiredCount);
                 boolean throttleRecordsDelivery = shouldThrottleRecordsDelivery(inFlightBatch);
-                // Stop acquiring more records if bad record found after acquiring some data to
-                // prevent affecting already acquired records
+                // Stop acquiring more records if records delivery has to be throttled. The throttling prevents
+                // complete batch to be archived in case of a single record being corrupt.
                 if (throttleRecordsDelivery && acquiredCount > 0) {
                     // Set the max records to acquire as 0 to prevent further acquisition of records.
                     maxRecordsToAcquire = 0;
@@ -876,7 +876,7 @@ public class SharePartition {
                         numRecordsRemaining, firstBatch.baseOffset(), lastOffsetToAcquire, inFlightBatch, result);
 
                     acquiredCount += badRecordMarkerAndAcquiredCount.acquiredCount();
-                    // If a bad record is present, return immediately and set `maxRecordsToAcquire = -1`
+                    // If a bad record is present, return immediately and set `maxRecordsToAcquire = 0`
                     // to prevent acquiring any new records afterwards.
                     if (badRecordMarkerAndAcquiredCount.badRecordMarker()) {
                         maxRecordsToAcquire = 0;
