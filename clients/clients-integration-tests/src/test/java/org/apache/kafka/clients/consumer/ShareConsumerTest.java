@@ -3163,7 +3163,7 @@ public class ShareConsumerTest {
         try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId);
              Admin adminClient = createAdminClient()) {
             shareConsumer.subscribe(List.of(tp.topic()));
-            // Polling share consumer to make sure the share partition in created.
+            // Polling share consumer to make sure the share partition is created.
             shareConsumer.poll(Duration.ofMillis(2000));
             SharePartitionOffsetInfo sharePartitionOffsetInfo = sharePartitionOffsetInfo(adminClient, groupId, tp);
             // Since the partition is empty, and no records have been consumed, the share partition startOffset will be
@@ -3185,7 +3185,7 @@ public class ShareConsumerTest {
             producer.send(record);
             producer.flush();
             shareConsumer.subscribe(List.of(tp.topic()));
-            // Polling share consumer to make sure the share partition in created and teh record is consumed.
+            // Polling share consumer to make sure the share partition is created and the record is consumed.
             waitedPoll(shareConsumer, 2500L, 1);
             // Acknowledge and commit the consumed record to update the share partition state.
             shareConsumer.commitSync();
@@ -3212,10 +3212,9 @@ public class ShareConsumerTest {
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "Message".getBytes());
             producer.send(record);
             producer.flush();
-            producer.flush();
             shareConsumer1.subscribe(List.of(tp.topic()));
             shareConsumer2.subscribe(List.of(tp.topic()));
-            // Polling share consumer 1 to make sure the share partition in created and the records are consumed.
+            // Polling share consumer 1 to make sure the share partition is created and the records are consumed.
             waitedPoll(shareConsumer1, 2500L, 1);
             // Acknowledge and commit the consumed records to update the share partition state.
             shareConsumer1.commitSync();
@@ -3769,7 +3768,6 @@ public class ShareConsumerTest {
     private void verifySharePartitionLag(Admin adminClient, String groupId, TopicPartition tp, long expectedLag) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
             SharePartitionOffsetInfo sharePartitionOffsetInfo = sharePartitionOffsetInfo(adminClient, groupId, tp);
-            System.out.println("Current share partition description: " + sharePartitionOffsetInfo);
             return sharePartitionOffsetInfo != null &&
                 sharePartitionOffsetInfo.lag().isPresent() &&
                 sharePartitionOffsetInfo.lag().get() == expectedLag;
