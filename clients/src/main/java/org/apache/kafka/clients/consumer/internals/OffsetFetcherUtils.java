@@ -172,8 +172,8 @@ class OffsetFetcherUtils {
                         Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
     }
 
-    Map<TopicPartition, SubscriptionState.FetchPosition> getPartitionsToValidate() {
-        return positionsValidator.getPartitionsToValidate(apiVersions);
+    Map<TopicPartition, SubscriptionState.FetchPosition> refreshAndGetPartitionsToValidate() {
+        return positionsValidator.refreshAndGetPartitionsToValidate(apiVersions);
     }
 
     /**

@@ -74,7 +74,7 @@ public class PositionsValidator {
      * This method is called by the background thread in response to {@link AsyncPollEvent} and
      * {@link CheckAndUpdatePositionsEvent}.
      */
-    Map<TopicPartition, SubscriptionState.FetchPosition> getPartitionsToValidate(ApiVersions apiVersions) {
+    Map<TopicPartition, SubscriptionState.FetchPosition> refreshAndGetPartitionsToValidate(ApiVersions apiVersions) {
         maybeThrowError();
 
         // Validate each partition against the current leader and epoch
@@ -124,7 +124,7 @@ public class PositionsValidator {
      * <ol>
      *     <li>
      *         Checks that there are no positions in the {@link SubscriptionState.FetchStates#AWAIT_VALIDATION}
-     *         state ({@link OffsetFetcherUtils#getPartitionsToValidate()})
+     *         state ({@link OffsetFetcherUtils#refreshAndGetPartitionsToValidate()})
      *     </li>
      *     <li>
      *         Checks that all positions are in the {@link SubscriptionState.FetchStates#FETCHING} state
