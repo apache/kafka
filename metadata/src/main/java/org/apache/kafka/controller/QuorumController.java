@@ -479,10 +479,13 @@ public final class QuorumController implements Controller {
                         throw new InvalidRequestException("Invalid broker name " +
                             configResource.name());
                     }
-                    if (!(clusterControl.brokerRegistrations().containsKey(nodeId) ||
-                            featureControl.isControllerId(nodeId))) {
-                        throw new BrokerIdNotRegisteredException("No node with id " +
-                            nodeId + " found.");
+                    log.info("brokerRegistrations: {}", clusterControl.brokerRegistrations());
+                    log.info("controllerRegistrations: {}", clusterControl.controllerRegistrations());
+                    boolean isRegisteredBroker = clusterControl.brokerRegistrations().containsKey(nodeId);
+                    boolean isControllerInStaticQuorum = featureControl.isControllerId(nodeId);
+                    boolean isRegisteredController = clusterControl.controllerRegistrations().containsKey(nodeId);
+                    if (!(isRegisteredBroker || isControllerInStaticQuorum || isRegisteredController)) {
+                        throw new BrokerIdNotRegisteredException("No node with id " + nodeId + " found.");
                     }
                     break;
                 case TOPIC:
