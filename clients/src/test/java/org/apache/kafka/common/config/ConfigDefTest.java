@@ -836,7 +836,7 @@ public class ConfigDefTest {
     }
 
     @Test
-    public void testParseValueWillRemoveDuplicatesInValidList() {
+    public void testParsedValueWillRemoveDuplicatesInValidList() {
         ConfigDef def = new ConfigDef()
             .define(
                 "list",
