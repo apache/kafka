@@ -331,6 +331,7 @@ org.apache.kafka.clients.consumer.ShareConsumerTest:
 - testControlRecordsSkipped
 - testDeliveryCountDifferentBehaviorWhenClosingSessionWithExplicitAcknowledgement
 - testDeliveryCountNotIncreaseAfterSessionClose
+- testDescribeShareGroupOffsetsForEmptySharePartition
 - testExplicitAcknowledgeCommitSuccess
 - testExplicitAcknowledgeOffsetThrowsNotException
 - testExplicitAcknowledgeOffsetThrowsParametersError
@@ -378,6 +379,12 @@ org.apache.kafka.clients.consumer.ShareConsumerTest:
 - testShareConsumerAfterCoordinatorMovement
 - testShareGroupMaxSizeConfigExceeded
 - testShareGroupShareSessionCacheIsFull
+- testSharePartitionLagForMultipleShareConsumers
+- testSharePartitionLagForSingleShareConsumer
+- testSharePartitionLagOnGroupCoordinatorMovement
+- testSharePartitionLagOnShareCoordinatorMovement
+- testSharePartitionLagWithRejectAcknowledgement
+- testSharePartitionLagWithReleaseAcknowledgement
 - testSubscribeAndPollNoRecords
 - testSubscribeOnInvalidTopicThrowsInvalidTopicException
 - testSubscribePollSubscribe
