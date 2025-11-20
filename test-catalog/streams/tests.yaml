@@ -3057,8 +3057,7 @@ org.apache.kafka.streams.processor.internals.TaskManagerTest:
 - shouldComputeOffsetSumForRunningStatefulTaskAndRestoringTask
 - shouldComputeOffsetSumForStandbyTask
 - shouldComputeOffsetSumForUnassignedTaskWeCanLock
-- shouldComputeOffsetSumFromCheckpointFileForClosedTask
-- shouldComputeOffsetSumFromCheckpointFileForUninitializedTask
+- shouldComputeOffsetSumFromCheckpointFileForCreatedAndClosedTasks
 - shouldConvertActiveTaskToStandbyTask
 - shouldConvertStandbyTaskToActiveTask
 - shouldCreateActiveTaskDuringAssignment
