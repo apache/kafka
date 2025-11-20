@@ -54,10 +54,10 @@ public class TypeTest {
         MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
             new SimpleRecord("foo".getBytes()),
             new SimpleRecord("bar".getBytes()));
-        ByteBuffer buffer = ByteBuffer.allocate(Type.NULLABLE_RECORDS.sizeOf(records));
-        Type.NULLABLE_RECORDS.write(buffer, records);
+        ByteBuffer buffer = ByteBuffer.allocate(Type.RECORDS.sizeOf(records));
+        Type.RECORDS.write(buffer, records);
         buffer.flip();
-        assertEquals(records, Type.NULLABLE_RECORDS.read(buffer));
+        assertEquals(records, Type.RECORDS.read(buffer));
     }
 
     @Test
@@ -85,10 +85,10 @@ public class TypeTest {
         MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
             new SimpleRecord("foo".getBytes()),
             new SimpleRecord("bar".getBytes()));
-        ByteBuffer buffer = ByteBuffer.allocate(Type.COMPACT_NULLABLE_RECORDS.sizeOf(records));
-        Type.COMPACT_NULLABLE_RECORDS.write(buffer, records);
+        ByteBuffer buffer = ByteBuffer.allocate(Type.COMPACT_RECORDS.sizeOf(records));
+        Type.COMPACT_RECORDS.write(buffer, records);
         buffer.flip();
-        assertEquals(records, Type.COMPACT_NULLABLE_RECORDS.read(buffer));
+        assertEquals(records, Type.COMPACT_RECORDS.read(buffer));
     }
 
 }
