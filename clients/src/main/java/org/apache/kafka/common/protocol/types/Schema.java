@@ -27,7 +27,6 @@ import java.util.Objects;
  * The schema for a compound record definition
  */
 public class Schema extends DocumentedType {
-
     private static final String STRUCT_TYPE_NAME = "STRUCT";
 
     private static final Object[] NO_VALUES = new Object[0];
@@ -179,7 +178,7 @@ public class Schema extends DocumentedType {
         return this.fields;
     }
 
-    public boolean tolerateMissingFieldsWithDefaults() {
+    protected boolean tolerateMissingFieldsWithDefaults() {
         return this.tolerateMissingFieldsWithDefaults;
     }
 

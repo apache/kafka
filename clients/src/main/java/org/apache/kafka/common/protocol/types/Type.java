@@ -79,10 +79,16 @@ public abstract class Type {
         return arrayElementType().isPresent();
     }
 
+    /**
+     * Start flag for special data structure
+     */
     public String leftBracket() {
         return "";
     }
 
+    /**
+     * End flag for special data structure
+     */
     public String rightBracket() {
         return "";
     }
@@ -1217,7 +1223,7 @@ public abstract class Type {
             BYTES, COMPACT_BYTES, NULLABLE_BYTES, COMPACT_NULLABLE_BYTES,
             RECORDS, COMPACT_RECORDS, NULLABLE_RECORDS, COMPACT_NULLABLE_RECORDS,
             new ArrayOf(STRING), new CompactArrayOf(COMPACT_STRING), ArrayOf.nullable(STRING), CompactArrayOf.nullable(STRING),
-            new Schema(), new NullableSchema()};
+            new Schema(), new NullableSchema(new Schema())};
 
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");

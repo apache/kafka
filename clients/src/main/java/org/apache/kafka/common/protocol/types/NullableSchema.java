@@ -26,16 +26,8 @@ public final class NullableSchema extends Schema {
 
     private static final String NULLABLE_STRUCT_TYPE_NAME = "NULLABLE_STRUCT";
 
-    public NullableSchema(Field... fs) {
-        this(false, fs);
-    }
-
-    public NullableSchema(boolean tolerateMissingFieldsWithDefaults, Field... fs) {
-        super(tolerateMissingFieldsWithDefaults, fs);
-    }
-
     public NullableSchema(Schema schema) {
-        this(schema.tolerateMissingFieldsWithDefaults(), Arrays.stream(schema.fields()).map(BoundField::def).toArray(Field[]::new));
+        super(schema.tolerateMissingFieldsWithDefaults(), Arrays.stream(schema.fields()).map(field -> field.def).toArray(Field[]::new));
     }
 
     @Override

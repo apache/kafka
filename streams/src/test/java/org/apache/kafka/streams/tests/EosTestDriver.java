@@ -246,7 +246,7 @@ public class EosTestDriver extends SmokeTestUtil {
         }
 
         // do not modify: required test output
-        System.out.println("ALL-NULLABLE_RECORDS-DELIVERED");
+        System.out.println("ALL-RECORDS-DELIVERED");
         System.out.flush();
     }
 
