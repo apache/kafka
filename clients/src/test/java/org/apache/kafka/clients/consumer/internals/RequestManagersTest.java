@@ -55,7 +55,6 @@ public class RequestManagersTest {
         ConsumerMetadata metadata = mock(ConsumerMetadata.class);
         SubscriptionState subscriptions = mock(SubscriptionState.class);
         ApiVersions apiVersions = mock(ApiVersions.class);
-        long retryBackoffMs = 1000L;
         final RequestManagers requestManagers = RequestManagers.supplier(
             time,
             logContext,
@@ -102,7 +101,6 @@ public class RequestManagersTest {
         ConsumerMetadata metadata = mock(ConsumerMetadata.class);
         SubscriptionState subscriptions = mock(SubscriptionState.class);
         ApiVersions apiVersions = mock(ApiVersions.class);
-        long retryBackoffMs = 1000L;
         final RequestManagers requestManagers = RequestManagers.supplier(
             time,
             logContext,
