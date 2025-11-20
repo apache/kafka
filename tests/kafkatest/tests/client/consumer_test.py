@@ -306,7 +306,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         producer = self.setup_producer(self.TOPIC)
 
         producer.start()
-        self.await_produced_messages(producer)
+        self.await_produced_messages(producer, timeout_sec=120)
 
         consumer = self.setup_consumer(self.TOPIC, static_membership=True, group_protocol=group_protocol)
 
@@ -333,6 +333,16 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 # Consumer protocol: Existing members should remain active and new conflicting ones should not be able to join.
                 self.await_consumed_messages(consumer)
                 assert num_rebalances == consumer.num_rebalances(), "Static consumers attempt to join with instance id in use should not cause a rebalance"
+
+                self.logger.debug("Members status - Joined [%d/%d]: %s, Not joined: %s",
+                                  len(consumer.joined_nodes()),
+                                  len(consumer.nodes),
+                                  " ".join(str(node.account) for node in consumer.joined_nodes()),
+                                  " ".join(set(str(node.account) for node in consumer.nodes) - set(consumer.joined_nodes())))
+
+                if len(consumer.joined_nodes()) != len(consumer.nodes):
+                    self.logger.debug("All members not in group %s. Describe output is %s", self.group_id, " ".join(self.kafka.describe_consumer_group_members(self.group_id)))
+
                 assert len(consumer.joined_nodes()) == len(consumer.nodes)
                 assert len(conflict_consumer.joined_nodes()) == 0
 
@@ -346,11 +356,20 @@ class OffsetValidationTest(VerifiableConsumerTest):
                            timeout_sec=60,
                            err_msg="Timed out waiting for the consumer to shutdown")
                 # Wait until the group becomes empty to ensure the instance ID is released.
-                # We use the 50-second timeout because the consumer session timeout is 45 seconds.
+                self.logger.debug("Stopped consumers waiting for group %s to be removed from the group", self.group_id)
+
+                if len(consumer.joined_nodes()) != 0:
+                    self.logger.debug("Not all stopped consumers removed %s. Describe output is %s", self.group_id, " ".join(self.kafka.describe_consumer_group_members(self.group_id)))
+
+                # We use the 60-second timeout because the consumer session timeout is 45 seconds adding some time for latency.
                 wait_until(lambda: self.group_id in self.kafka.list_consumer_groups(state="empty"),
-                           timeout_sec=50,
+                           timeout_sec=60,
                            err_msg="Timed out waiting for the consumers to be removed from the group.")
                 conflict_consumer.start()
+
+                if len(consumer.joined_nodes()) != num_conflict_consumers:
+                    self.logger.debug("All conflict members not in group %s. Describe output is %s", self.group_id, " ".join(self.kafka.describe_consumer_group_members(self.group_id)))
+
                 self.await_members(conflict_consumer, num_conflict_consumers)
 
             
