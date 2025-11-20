@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentMatchers;
 
 import java.time.Duration;
 import java.util.LinkedList;
@@ -203,7 +204,7 @@ public class ConsumerNetworkThreadTest {
     public void testSendUnsentRequests() {
         when(networkClientDelegate.hasAnyPendingRequests()).thenReturn(true).thenReturn(true).thenReturn(false);
         consumerNetworkThread.cleanup();
-        verify(networkClientDelegate, times(2)).poll(anyLong(), anyLong());
+        verify(networkClientDelegate, times(2)).poll(anyLong(), anyLong(), ArgumentMatchers.booleanThat(onClose -> onClose));
     }
 
     @ParameterizedTest

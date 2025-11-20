@@ -39,7 +39,7 @@
     In fact disks are both much slower and much faster than people expect depending on how they are used; and a properly designed disk structure can often be as fast as the network.
     <p>
     The key fact about disk performance is that the throughput of hard drives has been diverging from the latency of a disk seek for the last decade. As a result the performance of linear writes on a <a href="https://en.wikipedia.org/wiki/Non-RAID_drive_architectures">JBOD</a>
-    configuration with six 7200rpm SATA RAID-5 array is about 600MB/sec but the performance of random writes is only about 100k/sec&mdash;a difference of over 6000X. These linear reads and writes are the most
+    configuration with six 7200rpm SATA RAID-5 array is about 600MB/sec but the performance of random writes is only about 100kB/sec&mdash;a difference of over 6000X. These linear reads and writes are the most
     predictable of all usage patterns, and are heavily optimized by the operating system. A modern operating system provides read-ahead and write-behind techniques that prefetch data in large block multiples and
     group smaller logical writes into large physical writes. A further discussion of this issue can be found in this <a href="https://queue.acm.org/detail.cfm?id=1563874">ACM Queue article</a>; they actually find that
     <a href="https://deliveryimages.acm.org/10.1145/1570000/1563874/jacobs3.jpg">sequential disk access can in some cases be faster than random memory access!</a>
@@ -88,7 +88,7 @@
     message published is read by at least one consumer (often many), hence we strive to make consumption as cheap as possible.
     <p>
     We have also found, from experience building and running a number of similar systems, that efficiency is a key to effective multi-tenant operations. If the downstream infrastructure service can easily become a
-    bottleneck due to a small bump in usage by the application, such small changes will often create problems. By being very fast we help ensure that the application will tip-over under load before the infrastructure.
+    bottleneck due to a small bump in usage by the application, such small changes will often create problems. By being very fast we help ensure that the application will tip over under load before the infrastructure.
     This is particularly important when trying to run a centralized service that supports dozens or hundreds of applications on a centralized cluster as changes in usage patterns are a near-daily occurrence.
     <p>
     We discussed disk efficiency in the previous section. Once poor disk access patterns have been eliminated, there are two common causes of inefficiency in this type of system: too many small I/O operations, and
@@ -106,7 +106,7 @@
     producer, the broker, and the consumer (so data chunks can be transferred without modification between them).
     <p>
     The message log maintained by the broker is itself just a directory of files, each populated by a sequence of message sets that have been written to disk in the same format used by the producer and consumer.
-    Maintaining this common format allows optimization of the most important operation: network transfer of persistent log chunks. Modern unix operating systems offer a highly optimized code path for transferring data
+    Maintaining this common format allows optimization of the most important operation: network transfer of persistent log chunks. Modern Unix operating systems offer a highly optimized code path for transferring data
     out of pagecache to a socket; in Linux this is done with the <a href="https://man7.org/linux/man-pages/man2/sendfile.2.html">sendfile system call</a>.
     <p>
     To understand the impact of sendfile, it is important to understand the common data path for transfer of data from file to socket:
@@ -137,8 +137,8 @@
     the same type (e.g. field names in JSON or user agents in web logs or common string values). Efficient compression requires compressing multiple messages together rather than compressing each message individually.
     <p>
     Kafka supports this with an efficient batching format. A batch of messages can be grouped together, compressed, and sent to the server in this form. The broker decompresses the batch in order to validate it. For
-    example, it validates that the number of records in the batch is same as what batch header states. This batch of messages is then written to disk in compressed form. The batch will remain compressed in the log and it will also be transmitted to the 
-    consumer in compressed form. The consumer decompresses any compressed data that it receives.
+    example, it validates that the number of records in the batch is same as what batch header states. This batch of messages is then written to disk in compressed form. The batch will remain compressed in the log and
+    it will also be transmitted to the consumer in compressed form. The consumer decompresses any compressed data that it receives.
     <p>
     Kafka supports GZIP, Snappy, LZ4 and ZStandard compression protocols. More details on compression can be found <a href="https://cwiki.apache.org/confluence/x/S5qoAQ">here</a>.
 
@@ -157,11 +157,10 @@
     <h4 class="anchor-heading"><a id="design_asyncsend" class="anchor-link"></a><a href="#design_asyncsend">Asynchronous send</a></h4>
     <p>
     Batching is one of the big drivers of efficiency, and to enable batching the Kafka producer will attempt to accumulate data in memory and to send out larger batches in a single request. The batching can be configured
-    to accumulate no more than a fixed number of messages and to wait no longer than some fixed latency bound (say 64k or 10 ms). This allows the accumulation of more bytes to send, and few larger I/O operations on the
+    to accumulate no more than a fixed number of messages and to wait no longer than some fixed latency bound (say 64kB or 10 ms). This allows the accumulation of more bytes to send, and few larger I/O operations on the
     servers. This buffering is configurable and gives a mechanism to trade off a small amount of additional latency for better throughput.
     <p>
-    Details on <a href="#producerconfigs">configuration</a> and the <a href="#producerapi">api</a> for the producer can be found
-    elsewhere in the documentation.
+    Details on <a href="#producerconfigs">configuration</a> and the <a href="#producerapi">api</a> for the producer can be found elsewhere in the documentation.
 
     <h3 class="anchor-heading"><a id="theconsumer" class="anchor-link"></a><a href="#theconsumer">4.5 The Consumer</a></h3>
 
@@ -356,36 +355,41 @@
     group will rebalance and fetch the last committed offset, which has the effect of rewinding back to the state before the transaction aborted. Alternatively, a more sophisticated application (such as the
     transactional message copier) can choose not to use <code>KafkaConsumer.committed</code> to retrieve the committed offset from Kafka, and then <code>KafkaConsumer.seek</code> to rewind the current position.
 
-    <h3 class="anchor-heading"><a id="sharegroups" class="anchor-link"></a><a href="#sharegroups">4.8 Share groups</a></h3>
+    <h3 class="anchor-heading"><a id="theshareconsumer" class="anchor-link"></a><a href="#theshareconsumer">4.8 The Share Consumer</a></h3>
     <p>
-    Share groups are a new type of group, existing alongside traditional consumer groups. Share groups enable Kafka consumers to cooperatively consume and process records from topics.
-    They offer an alternative to traditional consumer groups, particularly when applications require finer-grained sharing of partitions and records.
+    Most consumption of data from Kafka is performed by consumers in consumer groups. The way that consumer groups assign partitions to members of the group gives a powerful combination of ordering
+    and scalability. However, some traditional messaging workloads are not a good fit for consumer groups.
+    <p>
+    Share groups are another type of group, existing alongside traditional consumer groups. They offer an alternative to consumer groups, particularly when applications require finer-grained sharing of partitions and records.
+    Share groups enable consumers to cooperatively consume and process records from topics. The consumers in a share group are called share consumers, and they use a familiar but different programming interface.
     <p>
     The fundamental differences between a share group and a consumer group are:
     <ul>
-        <li>The consumers within a share group cooperatively consume records, and partitions may be assigned to multiple consumers.</li>
+        <li>The consumers in a share group cooperatively consume records, and partitions may be assigned to multiple consumers.</li>
         <li>The number of consumers in a share group can exceed the number of partitions in a topic.</li>
         <li>Records are acknowledged individually, though the system is optimized for batch processing to improve efficiency.</li>
         <li>Delivery attempts to consumers in a share group are counted, which enables automated handling of unprocessable records.</li>
     </ul>
     <p>
-    All consumers in the same share group subscribed to the same topic will cooperatively consume the records of that topic. If a topic is accessed by consumers in multiple share groups, each share group
+    All share consumers in the same share group subscribed to the same topic will cooperatively consume the records of that topic. If a topic is accessed by consumers in multiple share groups, each share group
     consumes from that topic independently of the others.
     <p>
-    Each consumer can dynamically set its list of subscribed topics. In practice, all consumers within a share group typically subscribe to the same topic or topics.
+    Each share consumer can dynamically set its list of subscribed topics. In practice, all consumers in a share group typically subscribe to the same topic or topics.
     <p>
-    When a consumer in a share-group fetches records, it receives available records from any of the topic-partitions matching its subscriptions. Records are acquired for delivery to this consumer with a time-limited
-    acquisition lock. While a record is acquired, it is unavailable to other consumers.
-    <p>By default, the lock duration is 30 seconds, but you can control it using the group configuration parameter <code>share.record.lock.duration.ms</code>. The lock is released automatically once its
-    duration elapses, making the record available to another consumer. A consumer holding the lock can handle the record in the following ways:
+    When a share consumer fetches records, it receives available records from any of the topic-partitions matching its subscriptions. Records are acquired for delivery to this share consumer with a time-limited
+    acquisition lock. While a record is acquired, it is unavailable to other consumers in the same share group for the duration of the lock.
+    <p>
+    By default, the lock duration is 30 seconds, but you can control it using the group configuration parameter <code>share.record.lock.duration.ms</code>. The lock is released automatically once its
+    duration elapses, making the record available to another delivery attempt. A share consumer holding the lock can handle the record in the following ways:
     <ul>
         <li>Acknowledge successful processing of the record.</li>
         <li>Release the record, making it available for another delivery attempt.</li>
         <li>Reject the record, indicating it's unprocessable and preventing further delivery attempts for that record.</li>
-        <li>Do nothing, in which case the lock is automatically released when its duration expires.</li>
+        <li>Renew the record, extending the delivery attempt because the record is still being processed.</li>
+        <li>Do nothing, in which case the lock is automatically released when its duration elapses.</li>
     </ul>
     <p>
-    The Kafka cluster limits the number of records acquired for consumers for each topic-partition within a share group. Once this limit is reached, fetching operations will temporarily yield no further records
+    The Kafka cluster limits the number of records for each topic-partition acquired by share consumers in each share group. Once this limit is reached, fetching operations will temporarily yield no further records
     until the number of acquired records decreases (as locks naturally time out). This limit is controlled by the broker configuration property <code>group.share.partition.max.record.locks</code>. By limiting
     the duration of the acquisition lock and automatically releasing the locks, the broker ensures delivery progresses even in the presence of consumer failures.
 
@@ -624,7 +628,7 @@
     Log compaction guarantees the following:
     <ol>
     <li>Any consumer that stays caught-up to within the head of the log will see every message that is written; these messages will have sequential offsets. The topic's <code>min.compaction.lag.ms</code> can be used to
-    guarantee the minimum length of time must pass after a message is written before it could be compacted. I.e. it provides a lower bound on how long each message will remain in the (uncompacted) head.
+    guarantee the minimum length of time must pass after a message is written before it could be compacted, that is, it provides a lower bound on how long each message will remain in the (uncompacted) head.
     The topic's <code>max.compaction.lag.ms</code> can be used to guarantee the maximum delay between the time a message is written and the time the message becomes eligible for compaction.
     <li>Ordering of messages is always maintained.  Compaction will never re-order messages, just remove some.
     <li>The offset for a message never changes.  It is the permanent identifier for a position in the log.
@@ -640,9 +644,9 @@
     <li>It chooses the log that has the highest ratio of log head to log tail
     <li>It creates a succinct summary of the last offset for each key in the head of the log
     <li>It recopies the log from beginning to end removing keys which have a later occurrence in the log. New, clean segments are swapped into the log immediately so the additional disk space required is just one
-    additional log segment (not a fully copy of the log).
+    additional log segment (not a full copy of the log).
     <li>The summary of the log head is essentially just a space-compact hash table. It uses exactly 24 bytes per entry. As a result with 8GB of cleaner buffer one cleaner iteration can clean around 366GB of log head
-    (assuming 1k messages).
+    (assuming 1kB messages).
     </ol>
     <p>
     <h4 class="anchor-heading"><a id="design_compactionconfig" class="anchor-link"></a><a href="#design_compactionconfig">Configuring The Log Cleaner</a></h4>
