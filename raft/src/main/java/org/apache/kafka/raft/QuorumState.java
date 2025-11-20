@@ -27,8 +27,6 @@ import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import org.slf4j.Logger;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -736,12 +734,7 @@ public class QuorumState {
 
     private void memoryTransitionTo(EpochState newState) {
         if (state != null) {
-            try {
-                state.close();
-            } catch (IOException e) {
-                throw new UncheckedIOException(
-                    "Failed to transition from " + state.name() + " to " + newState.name(), e);
-            }
+            state.close();
         }
 
         EpochState from = state;

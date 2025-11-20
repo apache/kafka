@@ -25,14 +25,29 @@
 
 <h5><a id="upgrade_420_notable" href="#upgrade_420_notable">Notable changes in 4.2.0</a></h5>
 <ul>
-    <li>The <code>org.apache.kafka.disallowed.login.modules</code> config was deprecated. Please use the <code>org.apache.kafka.allowed.login.modules</code>
+    <li>
+        Queues for Kafka (<a href="https://cwiki.apache.org/confluence/x/4hA0Dw">KIP-932</a>) is production-ready in Apache Kafka 4.2. This feature introduces a new kind of group called
+        share groups, as an alternative to consumer groups. Consumers in a share group cooperatively consume records from topics, without assigning each partition to just one consumer.
+        Share groups also introduce per-record acknowledgement and counting of delivery attempts. Use share groups in cases where records are processed one at a time, rather than as part
+        of an ordered stream.
+    </li>
+    <li>
+        The <code>org.apache.kafka.common.header.internals.RecordHeader</code> class has been updated to be read thread-safe. See <a href="https://cwiki.apache.org/confluence/x/nYmhFg">KIP-1205</a> for details.
+        In other words, each individual <code>Header</code> object within a <code>ConsumerRecord</code>'s <code>headers</code> can now be safely read from multiple threads concurrently.
+    </li>
+    <li>
+        The <code>org.apache.kafka.disallowed.login.modules</code> config was deprecated. Please use the <code>org.apache.kafka.allowed.login.modules</code>
         instead.
     </li>
     <li>
         The <code>remote.log.manager.thread.pool.size</code> config was deprecated. Please use the <code>remote.log.manager.follower.thread.pool.size</code> instead.
     </li>
-    <li>The <code>KafkaPrincipalBuilder</code> now extends <code>KafkaPrincipalSerde</code>. Force developer to implement <code>KafkaPrincipalSerde</code> interface for custom <code>KafkaPrincipalBuilder</code>.
+    <li>
+        The <code>KafkaPrincipalBuilder</code> now extends <code>KafkaPrincipalSerde</code>. Force developer to implement <code>KafkaPrincipalSerde</code> interface for custom <code>KafkaPrincipalBuilder</code>.
         For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/1gq9F">KIP-1157</a>.
+    </li>
+    <li>The behavior of <code>org.apache.kafka.streams.KafkaStreams#removeStreamThread</code> has been changed. The consumer has no longer remove once <code>removeStreamThread</code> finished.
+        Instead, consumer would be kicked off from the group after <code>org.apache.kafka.streams.processor.internals.StreamThread</code> completes its <code>run</code> function.
     </li>
     <li>
         The support for MX4J library, enabled through <code>kafka_mx4jenable</code> system property, was deprecated and will be removed in Kafka 5.0.
@@ -40,9 +55,177 @@
     <li>
         The <code>PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG</code> in <code>ProducerConfig</code> was deprecated and will be removed in Kafka 5.0. Please use the <code>PARTITIONER_ADAPTIVE_PARTITIONING_ENABLE_CONFIG</code> instead.
     </li>
+    <li>
+        The <code>ConsumerPerformance</code> command line tool has a new <code>--include</code> option that is an alternative to the <code>--topic</code> option.
+        This new option allows to pass a regular expression specifying a list of topics to include for consumption, which is useful to test consumer performance across multiple topics or dynamically matching topic sets.
+    </li>
+    <li>
+        The consistency of argument names for the command-line tools has been improved (<a href="https://cwiki.apache.org/confluence/x/DguWF">KIP-1147</a>).
+        The deprecated options will be removed in Kafka 5.0.
+        <ul>
+            <li>
+                In <code>kafka-producer-perf-test.sh</code>, <code>--bootstrap-server</code> and <code>--reporting-interval</code> option are added.
+            </li>
+            <li>
+                In <code>kafka-console-consumer.sh</code> and <code>kafka-console-share-consumer.sh</code>, the option <code>--property</code>
+                which is used to specify the properties for the formatter is deprecated in favor of <code>--formatter-property</code>.
+            </li>
+            <li>
+                In <code>kafka-console-producer.sh</code>, the option <code>--property</code> which is used to specify properties
+                in the form key=value to the message reader is deprecated in favor of <code>--reader-property</code>.
+            </li>
+            <li>
+                In <code>kafka-consumer-perf-test.sh</code> and <code>kafka-share-consumer-perf-test.sh</code>, the option <code>--messages</code>
+                is deprecated in favor of <code>--num-records</code> to bring all performance testing tools in line.
+            </li>
+            <li>
+                The option <code>--command-property</code> is used for all command-line tools which accept configuration properties directly on
+                the command line. The tools affected are:
+                <ul>
+                    <li>
+                        <code>kafka-console-consumer.sh</code>, <code>kafka-console-producer.sh</code> and
+                        <code>kafka-console-share-consumer.sh</code> (<code>--consumer-property</code> and <code>--producer-property</code> are
+                        deprecated in favor of <code>--command-property</code>)
+                    </li>
+                    <li>
+                        <code>kafka-producer-perf-test.sh</code> (<code>--producer-props</code> is deprecated in favor of <code>--command-property</code>)
+                    </li>
+                    <li>
+                        <code>kafka-consumer-perf-test.sh</code> and <code>kafka-share-consumer-perf-test.sh</code> gain the
+                        <code>--command-property</code> option to bring all performance testing tools in line
+                    </li>
+                </ul>
+            </li>
+            <li>
+                The option <code>--command-config</code> is used for all command-line tools which accept a file of configuration properties.
+                The tools affected are:
+                <ul>
+                    <li>
+                        <code>kafka-cluster.sh</code> (<code>--config</code> is deprecated in favor of <code>--command-config</code>)
+                    </li>
+                    <li>
+                        <code>kafka-console-consumer.sh</code>, <code>kafka-console-producer.sh</code> and
+                        <code>kafka-console-share-consumer.sh</code> (<code>--consumer.config</code> and <code>--producer.config</code> are
+                        deprecated in favor of <code>--command-config</code>)
+                    </li>
+                    <li>
+                        <code>kafka-consumer-perf-test.sh</code>, <code>kafka-producer-perf-test.sh</code> and
+                        <code>kafka-share-consumer-perf-test.sh</code> (<code>--consumer.config</code> and
+                        <code>--producer.config</code> are deprecated in favor of <code>--command-config</code>)
+                    </li>
+                    <li>
+                        <code>kafka-verifiable-consumer.sh</code> and <code>kafka-verifiable-producer.sh</code>
+                        (<code>--consumer.config</code> and <code>--producer.config</code> are deprecated in favor of <code>--command-config</code>)
+                    </li>
+                    <li>
+                        <code>kafka-leader-election.sh</code> (<code>--admin.config</code> is deprecated in favor of <code>--command-config</code>)
+                    </li>
+                    <li>
+                        <code>kafka-streams-application-reset.sh</code> (<code>--config-file</code> is deprecated in favor of <code>--command-config</code>)
+                    </li>
+                </ul>
+            </li>
+        </ul>
+    </li>
+    <li>
+        The <code>num.replica.fetchers</code> config has a new lower bound of 1.
+    </li>
+    <li>
+        Improvements have been made to the validation rules and default values of LIST-type configurations
+        (<a href="https://cwiki.apache.org/confluence/x/HArXF">KIP-1161</a>).
+        <ul>
+            <li>
+                LIST-type configurations now enforce stricter validation:
+                <ul>
+                    <li>Null values are no longer accepted for most LIST-type configurations, except those that explicitly
+                        allow a null default value or where a null value has a well-defined semantic meaning.</li>
+                    <li>Duplicate entries within the same list are no longer permitted.</li>
+                    <li>Empty lists are no longer allowed, except in configurations where an empty list has a well-defined
+                        semantic meaning.</li>
+                </ul>
+            </li>
+            <li>
+                Several configurations have been reclassified from STRING-type to LIST-type to better reflect their
+                intended use as comma-separated values.
+            </li>
+            <li>
+                Default values for certain configurations have been adjusted to ensure better consistency with related
+                settings.
+            </li>
+            <li>
+                <code>cleanup.policy</code> now supports empty values, which means infinite retention.
+                This is equivalent to setting <code>retention.ms=-1</code> and <code>retention.bytes=-1</code>
+                <br>
+                If <code>cleanup.policy</code> is empty and <code>remote.storage.enable</code> is set to true, the
+                local log segments will be cleaned based on the values of <code>log.local.retention.bytes</code> and
+                <code>log.local.retention.ms</code>.
+                <br>
+                If <code>cleanup.policy</code> is empty and <code>remote.storage.enable</code> is set to false,
+                local log segments will not be deleted automatically. However, records can still be deleted
+                explicitly through <code>deleteRecords</code> API calls, which will advance the log start offset
+                and remove the corresponding log segments.
+            </li>
+        </ul>
+    </li>
+    <li>
+        The <code>controller.quorum.auto.join.enable</code> has been added to <code>QuorumConfig</code>, enabling KRaft controllers to automatically join the cluster's voter set,
+        and defaults to false.
+        For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/nyH1D">KIP-853</a>.
+    </li>
+    <li>
+        The AppInfo metrics will deprecate the following metric names, which will be removed in Kafka 5.0:
+        <ul>
+            <li><code>[name=start-time-ms, group=app-info, description=Metric indicating start-time-ms, tags={}]</code></li>
+            <li><code>[name=commit-id, group=app-info, description=Metric indicating commit-id, tags={}]</code></li>
+            <li><code>[name=version, group=app-info, description=Metric indicating version, tags={}]</code></li>
+        </ul>
+        In addition, the <code>client-id</code> will be added to the tags of these metrics. The new metric names will be:
+        <ul>
+            <li><code>[name=start-time-ms, group=app-info, description=Metric indicating start-time-ms, tags={client-id=...}]</code></li>
+            <li><code>[name=commit-id, group=app-info, description=Metric indicating commit-id, tags={client-id=...}]</code></li>
+            <li><code>[name=version, group=app-info, description=Metric indicating version, tags={client-id=...}]</code></li>
+        </ul>
+        For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/3gn0Ew">KIP-1120</a>.
+    </li>
+    <li>
+        The metrics <code>org.apache.kafka.server:type=AssignmentsManager.QueuedReplicaToDirAssignments</code>,
+        <code>org.apache.kafka.storage.internals.log:type=RemoteStorageThreadPool.RemoteLogReaderTaskQueueSize</code>, and
+        <code>org.apache.kafka.storage.internals.log:type=RemoteStorageThreadPool.RemoteLogReaderAvgIdlePercent</code>
+        have been deprecated and will be removed in Kafka 5.0.
+
+        As replacements, the following metrics have been introduced, which report the same information:
+        <code>kafka.server:type=AssignmentsManager.QueuedReplicaToDirAssignments</code>,
+        <code>kafka.log.remote:type=RemoteStorageThreadPool.RemoteLogReaderTaskQueueSize</code>, and
+        <code>kafka.log.remote:type=RemoteStorageThreadPool.RemoteLogReaderAvgIdlePercent</code>.
+        For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/6oqMEw">KIP-1100</a>.
+    </li>
+    <li>
+        A new metric <code>AvgIdleRatio</code> has been added to the <code>ControllerEventManager</code> and <code>MetadataLoader</code> groups. These metrics measure the average idle ratio of their respective event queue threads,
+        providing visibility into how much time each component spends waiting for events versus processing them. The metric value ranges from 0.0 (always busy) to 1.0 (always idle).
+    </li>
+    <li>
+        Deprecated <code>org.apache.kafka.streams.KafkaStreams$CloseOptions</code> and its related methods, such as
+        <code>KafkaStreams#close(org.apache.kafka.streams.KafkaStreams$CloseOptions)</code>.
+        As a replacement, please use <code>org.apache.kafka.streams.CloseOptions</code> and
+        <code>KafkaStreams#close(org.apache.kafka.streams.CloseOptions)</code>.
+        For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/QAq9F">KIP-1153</a>.
+    </li>
+    <li>
+        A new implementation of <code>ConnectorClientConfigOverridePolicy</code>, <code>AllowlistConnectorClientConfigOverridePolicy</code>,
+        has been added. This enables specifying the configurations that connectors can override via <code>connector.client.config.override.allowlist</code>.
+        From Kafka 5.0.0, this will be the default <a href="documentation/#connectconfigs_connector.client.config.override.policy">connector.client.config.override.policy</a>
+        policy. The <code>PrincipalConnectorClientConfigOverridePolicy</code> policy is now deprecated and will be removed in Kafka 5.0.0.
+        For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/2IkvFg">KIP-1188</a>.
+    </li>
+    <li>
+        It is now possible to specify the start time for a Kafka Streams punctuation, instead of relying on the non-deterministic time when you register it.
+        For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/9QqWF">KIP-1146</a>.
+    </li>
 </ul>
 
 <h4><a id="upgrade_4_1_0" href="#upgrade_4_1_0">Upgrading to 4.1.0</a></h4>
+
+<p><b>Note:</b> Kafka Streams 4.1.0 contains a critical memory leak bug (<a href="https://issues.apache.org/jira/browse/KAFKA-19748">KAFKA-19748</a>) that affects users of range scans and certain DSL operators (session windows, sliding windows, stream-stream joins, foreign-key joins). Users running Kafka Streams should consider upgrading directly to 4.1.1, which includes the fix for it.</p>
 
 <h5><a id="upgrade_4_1_0_from" href="#upgrade_4_1_0_from">Upgrading Servers to 4.1.0 from any version 3.3.x through 4.0.x</a></h5>
     <h5><a id="upgrade_410_notable" href="#upgrade_410_notable">Notable changes in 4.1.0</a></h5>
@@ -152,6 +335,11 @@
         <li>
             The filename for rotated <code>state-change.log</code> files has been updated from <code>stage-change.log.[date]</code> to <code>state-change.log.[date]</code> in the log4j2.yaml configuration file.
             See <a href="https://issues.apache.org/jira/browse/KAFKA-19576">KAFKA-19576</a> for details.
+        </li>
+        <li>
+            Kafka Streams include a critical fix to upgrade from <code>KStreams#transformValues()</code> (remove with 4.0.0 release)
+            to <code>KStreams#processValues()</code>.
+            For more details, see the <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#transformers-removal-and-migration-to-processors">migration guide</a>.
         </li>
     </ul>
     <h5><a id="upgrade_servers_400_notable" href="#upgrade_servers_400_notable">Notable changes in 4.0.0</a></h5>
@@ -311,12 +499,12 @@
                         <li>The <code>--whitelist</code> option was removed from the <code>kafka-console-consumer</code> command line tool.
                             Please use <code>--include</code> instead.
                         </li>
-                        <li>Redirections from the old tools packages have been removed: 
-                            <code>kafka.admin.FeatureCommand</code>, 
-                            <code>kafka.tools.ClusterTool</code>, 
+                        <li>Redirections from the old tools packages have been removed:
+                            <code>kafka.admin.FeatureCommand</code>,
+                            <code>kafka.tools.ClusterTool</code>,
                             <code>kafka.tools.EndToEndLatency</code>,
-                            <code>kafka.tools.StateChangeLogMerger</code>, 
-                            <code>kafka.tools.StreamsResetter</code>, 
+                            <code>kafka.tools.StateChangeLogMerger</code>,
+                            <code>kafka.tools.StreamsResetter</code>,
                             <code>kafka.tools.JmxTool</code>.
                         </li>
                         <li>The <code>--authorizer</code>, <code>--authorizer-properties</code>, and <code>--zk-tls-config-file</code> options were removed from the <code>kafka-acls</code> command line tool.
@@ -380,7 +568,7 @@
                         </li>
                         <li>The deprecated <code>sendOffsetsToTransaction(Map&lt;TopicPartition, OffsetAndMetadata&gt;, String)</code> method has been removed from the Producer API.
                         </li>
-                        <li>The default <code>linger.ms</code> changed from 0 to 5 in Apache Kafka 4.0 as the efficiency gains from larger batches typically result in 
+                        <li>The default <code>linger.ms</code> changed from 0 to 5 in Apache Kafka 4.0 as the efficiency gains from larger batches typically result in
                             similar or lower producer latency despite the increased linger.
                         </li>
                     </ul>
@@ -436,10 +624,15 @@
 			    See <a href="https://issues.apache.org/jira/browse/KAFKA-17531">KAFKA-17531</a> for details.
                         </li>
                         <li>
-			    The most important changes are highlighted in the <a href="/{{version}}/documentation/streams/upgrade-guide.html#streams_api_changes_400">Kafka Streams upgrade guide</a>.
+                            The most important changes are highlighted in the <a href="/{{version}}/documentation/streams/upgrade-guide.html#streams_api_changes_400">Kafka Streams upgrade guide</a>.
                         </li>
                         <li>
-			    For a full list of changes, see <a href="https://issues.apache.org/jira/browse/KAFKA-12822">KAFKA-12822</a>.
+                            For a full list of changes, see <a href="https://issues.apache.org/jira/browse/KAFKA-12822">KAFKA-12822</a>.
+                        </li>
+                        <li>
+                            If you are using <code>KStream#transformValues()</code> which was removed with Apache Kafka 4.0.0 release,
+                            and you need to rewrite your program to use <code>KStreams#processValues()</code> instead,
+                            pay close attention to the <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#transformers-removal-and-migration-to-processors">migration guide</a>.
                         </li>
                     </ul>
                 </li>

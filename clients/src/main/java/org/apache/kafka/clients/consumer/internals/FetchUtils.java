@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.common.TopicPartition;
 
 /**
@@ -44,7 +45,7 @@ public class FetchUtils {
      * @param subscriptions {@link SubscriptionState} to clear any internal read replica node
      * @param topicPartition {@link TopicPartition} for which this state change is related
      */
-    static void requestMetadataUpdate(final ConsumerMetadata metadata,
+    static void requestMetadataUpdate(final Metadata metadata,
                                       final SubscriptionState subscriptions,
                                       final TopicPartition topicPartition) {
         metadata.requestUpdate(false);

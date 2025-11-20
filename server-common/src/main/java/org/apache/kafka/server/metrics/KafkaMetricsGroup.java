@@ -35,10 +35,6 @@ public class KafkaMetricsGroup {
     private final String pkg;
     private final String simpleName;
 
-    public KafkaMetricsGroup(Class<?> klass) {
-        this(klass.getPackage() == null ? "" : klass.getPackage().getName(), klass.getSimpleName().replaceAll("\\$$", ""));
-    }
-
     /**
      * This constructor allows caller to build metrics name with custom package and class name. This is useful to keep metrics
      * compatibility in migrating scala code, since the difference of either package or class name will impact the mbean name and

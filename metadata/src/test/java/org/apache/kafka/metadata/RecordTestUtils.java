@@ -106,22 +106,7 @@ public class RecordTestUtils {
         }
     }
 
-    public static class ImageDeltaPair<I, D> {
-        private final Supplier<I> imageSupplier;
-        private final Function<I, D> deltaCreator;
-
-        public ImageDeltaPair(Supplier<I> imageSupplier, Function<I, D> deltaCreator) {
-            this.imageSupplier = imageSupplier;
-            this.deltaCreator = deltaCreator;
-        }
-
-        public Supplier<I> imageSupplier() {
-            return imageSupplier;
-        }
-
-        public Function<I, D> deltaCreator() {
-            return deltaCreator;
-        }
+    public record ImageDeltaPair<I, D>(Supplier<I> imageSupplier, Function<I, D> deltaCreator) {
     }
 
     public static class TestThroughAllIntermediateImagesLeadingToFinalImageHelper<D, I> {

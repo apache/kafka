@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -82,7 +82,7 @@ public abstract class AbstractConnectCli<H extends Herder, T extends WorkerConfi
      *  Validate {@link #args}, process worker properties from the first CLI argument, and start {@link Connect}
      */
     public void run() {
-        if (args.length < 1 || Arrays.asList(args).contains("--help")) {
+        if (args.length < 1 || List.of(args).contains("--help")) {
             log.info("Usage: {}", usage());
             Exit.exit(1);
         }
@@ -90,7 +90,7 @@ public abstract class AbstractConnectCli<H extends Herder, T extends WorkerConfi
         try {
             String workerPropsFile = args[0];
             Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
-                    Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.emptyMap();
+                    Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Map.of();
             String[] extraArgs = Arrays.copyOfRange(args, 1, args.length);
             Connect<H> connect = startConnect(workerProps);
             processExtraArgs(connect, extraArgs);
@@ -114,14 +114,15 @@ public abstract class AbstractConnectCli<H extends Herder, T extends WorkerConfi
         log.info("Kafka Connect worker initializing ...");
         long initStart = time.hiResClockMs();
 
+        T config = createConfig(workerProps);
+        log.debug("Kafka cluster ID: {}", config.kafkaClusterId());
+
         WorkerInfo initInfo = new WorkerInfo();
         initInfo.logAll();
 
         log.info("Scanning for plugin classes. This might take a moment ...");
         Plugins plugins = new Plugins(workerProps);
         plugins.compareAndSwapWithDelegatingLoader();
-        T config = createConfig(workerProps);
-        log.debug("Kafka cluster ID: {}", config.kafkaClusterId());
 
         RestClient restClient = new RestClient(config);
 

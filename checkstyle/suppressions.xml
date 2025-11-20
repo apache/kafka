@@ -88,7 +88,7 @@
               files="ClientUtils.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(KafkaConsumer|ConsumerCoordinator|AbstractFetch|KafkaProducer|AbstractRequest|AbstractResponse|TransactionManager|Admin|KafkaAdminClient|MockAdminClient|KafkaNetworkChannelTest).java"/>
+              files="(KafkaConsumer|ConsumerCoordinator|AbstractFetch|KafkaProducer|AbstractRequest|AbstractResponse|TransactionManager|Admin|KafkaAdminClient|MockAdminClient|KafkaNetworkChannelTest|ClientTelemetryReporterTest).java"/>
     <suppress checks="ClassDataAbstractionCoupling"
               files="(Errors|SaslAuthenticatorTest|AgentTest|CoordinatorTest|NetworkClientTest).java"/>
 
@@ -175,7 +175,7 @@
     <suppress checks="ClassFanOutComplexity"
               files="(WorkerSink|WorkerSource|ErrorHandling)Task(|WithTopicCreation|Mockito)Test.java"/>
     <suppress checks="ClassFanOutComplexity"
-              files="DistributedHerderTest.java"/>
+              files="(AbstractHerderTest|DistributedHerderTest).java"/>
 
     <suppress checks="MethodLength"
               files="(RequestResponse|WorkerSinkTask|WorkerSinkTaskMockito)Test.java"/>
@@ -340,6 +340,8 @@
               files="(GroupMetadataManager|GroupMetadataManagerTest).java"/>
 
     <!-- coordinator-common -->
+    <suppress checks="JavaNCSS"
+              files="CoordinatorRuntimeTest.java"/>
     <suppress checks="NPathComplexity"
               files="CoordinatorRuntime.java"/>
 

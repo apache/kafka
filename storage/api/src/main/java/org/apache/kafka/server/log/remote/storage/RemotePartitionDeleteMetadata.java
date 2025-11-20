@@ -34,7 +34,7 @@ public class RemotePartitionDeleteMetadata extends RemoteLogMetadata {
      *
      * @param topicIdPartition topic partition for which this event is meant for.
      * @param state            State of the remote topic partition.
-     * @param eventTimestampMs Epoch time in milli seconds at which this event is occurred.
+     * @param eventTimestampMs Epoch time in milliseconds at which this event is occurred.
      * @param brokerId         Id of the broker in which this event is raised.
      */
     public RemotePartitionDeleteMetadata(TopicIdPartition topicIdPartition,

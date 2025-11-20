@@ -709,6 +709,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   private def shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
     new ShareGroupHeartbeatRequestData()
       .setGroupId(shareGroup)
+      .setMemberId(Uuid.randomUuid().toString)
       .setMemberEpoch(0)
       .setSubscribedTopicNames(List(topic).asJava)).build(ApiKeys.SHARE_GROUP_HEARTBEAT.latestVersion)
 
@@ -724,7 +725,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     val send: Seq[TopicIdPartition] = Seq(
       new TopicIdPartition(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID), new TopicPartition(topic, part)))
     val ackMap = new util.HashMap[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]]
-    requests.ShareFetchRequest.Builder.forConsumer(shareGroup, metadata, 100, 0, Int.MaxValue, 500, 500,
+    requests.ShareFetchRequest.Builder.forConsumer(shareGroup, metadata, 100, 0, Int.MaxValue, 500, 500, ShareAcquireMode.BATCH_OPTIMIZED.id(), false,
       send.asJava, Seq.empty.asJava, ackMap).build()
   }
 
@@ -1356,7 +1357,8 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     sendRecords(producer, 1, tp)
     removeAllClientAcls()
 
-    val consumer = createConsumer()
+    // Remove the group.id configuration since this self-assigning partitions.
+    val consumer = createConsumer(configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG)) 
     consumer.assign(java.util.List.of(tp))
     assertThrows(classOf[TopicAuthorizationException], () => consumeRecords(consumer))
   }
@@ -3912,14 +3914,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     consumer.subscribe(
       if (topicAsSourceTopic || topicAsRepartitionSourceTopic) util.Set.of(sourceTopic, topic) else util.Set.of(sourceTopic),
       new StreamsRebalanceListener {
-        override def onTasksRevoked(tasks: util.Set[StreamsRebalanceData.TaskId]): Optional[Exception] =
-          Optional.empty()
-
-        override def onTasksAssigned(assignment: StreamsRebalanceData.Assignment): Optional[Exception] =
-          Optional.empty()
-
-        override def onAllTasksLost(): Optional[Exception] =
-          Optional.empty()
+        override def onTasksRevoked(tasks: util.Set[StreamsRebalanceData.TaskId]): Unit = ()
+        override def onTasksAssigned(assignment: StreamsRebalanceData.Assignment): Unit = ()
+        override def onAllTasksLost(): Unit = ()
       }
     )
     consumer.poll(Duration.ofMillis(500L))

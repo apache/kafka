@@ -566,10 +566,11 @@ public class ReassignPartitionsCommand {
         List<String> topicsToReassign = t0.getValue();
 
         Map<TopicPartition, List<Integer>> currentAssignments = getReplicaAssignmentForTopics(adminClient, topicsToReassign);
+        Map<TopicPartitionReplica, String> currentReplicaLogDirs = getReplicaToLogDir(adminClient, currentAssignments);
         List<UsableBroker> usableBrokers = getBrokerMetadata(adminClient, brokersToReassign, enableRackAwareness);
         Map<TopicPartition, List<Integer>> proposedAssignments = calculateAssignment(currentAssignments, usableBrokers);
         System.out.printf("Current partition replica assignment%n%s%n%n",
-            formatAsReassignmentJson(currentAssignments, Map.of()));
+            formatAsReassignmentJson(currentAssignments, currentReplicaLogDirs));
         System.out.printf("Proposed partition reassignment configuration%n%s%n",
             formatAsReassignmentJson(proposedAssignments, Map.of()));
         return Map.entry(proposedAssignments, currentAssignments);
@@ -775,7 +776,7 @@ public class ReassignPartitionsCommand {
 
         verifyBrokerIds(adminClient, brokers);
         Map<TopicPartition, List<Integer>> currentParts = getReplicaAssignmentForPartitions(adminClient, proposedParts.keySet());
-        System.out.println(currentPartitionReplicaAssignmentToString(proposedParts, currentParts));
+        System.out.println(currentPartitionReplicaAssignmentToString(adminClient, proposedParts, currentParts));
 
         if (interBrokerThrottle >= 0 || logDirThrottle >= 0) {
             System.out.println(YOU_MUST_RUN_VERIFY_PERIODICALLY_MESSAGE);
@@ -916,20 +917,23 @@ public class ReassignPartitionsCommand {
     /**
      * Return the string which we want to print to describe the current partition assignment.
      *
+     * @param adminClient                 The admin client object to use.
      * @param proposedParts               The proposed partition assignment.
      * @param currentParts                The current partition assignment.
      *
      * @return                            The string to print.  We will only print information about
      *                                    partitions that appear in the proposed partition assignment.
      */
-    static String currentPartitionReplicaAssignmentToString(Map<TopicPartition, List<Integer>> proposedParts,
-                                                            Map<TopicPartition, List<Integer>> currentParts) throws JsonProcessingException {
+    static String currentPartitionReplicaAssignmentToString(Admin adminClient,
+                                                            Map<TopicPartition, List<Integer>> proposedParts,
+                                                            Map<TopicPartition, List<Integer>> currentParts) throws JsonProcessingException, ExecutionException, InterruptedException {
         Map<TopicPartition, List<Integer>> partitionsToBeReassigned = currentParts.entrySet().stream()
             .filter(e -> proposedParts.containsKey(e.getKey()))
             .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+        Map<TopicPartitionReplica, String> currentReplicaLogDirs = getReplicaToLogDir(adminClient, partitionsToBeReassigned);
 
         return String.format("Current partition replica assignment%n%n%s%n%nSave this to use as the %s",
-            formatAsReassignmentJson(partitionsToBeReassigned, Map.of()),
+            formatAsReassignmentJson(partitionsToBeReassigned, currentReplicaLogDirs),
             "--reassignment-json-file option during rollback");
     }
 
@@ -1513,5 +1517,27 @@ public class ReassignPartitionsCommand {
             }
         }
         return results;
+    }
+
+    static Map<TopicPartitionReplica, String> getReplicaToLogDir(
+        Admin adminClient,
+        Map<TopicPartition, List<Integer>> topicPartitionToReplicas
+    ) throws InterruptedException, ExecutionException {
+        var replicaLogDirs = topicPartitionToReplicas
+                .entrySet()
+                .stream()
+                .flatMap(entry -> entry.getValue()
+                    .stream()
+                    .map(id -> new TopicPartitionReplica(entry.getKey().topic(), entry.getKey().partition(), id)))
+                .collect(Collectors.toUnmodifiableSet());
+
+        return adminClient.describeReplicaLogDirs(replicaLogDirs).all().get()
+                .entrySet()
+                .stream()
+                .filter(entry -> entry.getValue().getCurrentReplicaLogDir() != null)
+                .collect(Collectors.toMap(
+                    Entry::getKey,
+                    entry -> entry.getValue().getCurrentReplicaLogDir()
+                ));
     }
 }
