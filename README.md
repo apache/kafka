@@ -271,6 +271,10 @@ only safe if the Scala library version is the same at compile time and runtime. 
 may depend on the kafka jar for integration tests where they may include a scala library with a different version), we don't enable it by
 default. See https://www.lightbend.com/blog/scala-inliner-optimizer for more details.
 
+### Upgrading Gradle version ###
+
+See [gradle/wrapper/README.md](gradle/wrapper/README.md) for instructions on upgrading the Gradle version.
+
 ### Running system tests ###
 
 See [tests/README.md](tests/README.md).

@@ -137,7 +137,8 @@ class CoordinatorPartitionWriter(
   override def append(
     tp: TopicPartition,
     verificationGuard: VerificationGuard,
-    records: MemoryRecords
+    records: MemoryRecords,
+    transactionVersion: Short
   ): Long = {
     // We write synchronously to the leader replica without waiting on replication.
     val topicIdPartition: TopicIdPartition = replicaManager.topicIdPartition(tp)
@@ -150,7 +151,8 @@ class CoordinatorPartitionWriter(
       verificationGuards = Map(tp -> verificationGuard),
       // We can directly complete the purgatories here because we don't hold
       // any conflicting locks.
-      actionQueue = directActionQueue
+      actionQueue = directActionQueue,
+      transactionVersion = transactionVersion
     )
 
     val partitionResult = appendResults.getOrElse(topicIdPartition,
