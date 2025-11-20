@@ -504,7 +504,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         partitionState.updateState();
         logger.info("Starting voters are {}", partitionState.lastVoterSet());
         if (nodeId.isPresent()) {
-            // if starting voters contain node id, it can't join to the cluster
+            // if the starting voters contain the node id of this node, it can't auto join to the cluster
             // because it is already in.
             canAutoJoin = !partitionState.lastVoterSet().voterIds().contains(nodeId.getAsInt());
         }
@@ -3357,7 +3357,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private boolean maybeAutoJoin(FollowerState state, long currentTimeMs) {
+    private boolean shouldAutoJoin(FollowerState state, long currentTimeMs) {
         /* When the cluster supports reconfiguration, only replicas that can become a voter
          * and are configured to auto join should attempt to automatically join the voter
          * set for the configured topic partition.
@@ -3367,7 +3367,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private boolean shouldSendAddVoterRequest(FollowerState state, long currentTimeMs) {
-        return canAutoJoin && maybeAutoJoin(state, currentTimeMs);
+        return canAutoJoin && shouldAutoJoin(state, currentTimeMs);
     }
 
     private boolean shouldSendRemoveVoterRequest(FollowerState state, long currentTimeMs) {
@@ -3375,7 +3375,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         final var voters = partitionState.lastVoterSet();
 
         if (voters.voterIds().contains(localReplicaKey.id())) {
-            if (maybeAutoJoin(state, currentTimeMs)) {
+            if (shouldAutoJoin(state, currentTimeMs)) {
                 // When the bootstrap controller needs to update directory id,
                 // it should be removed and then rejoining to cluster
                 // In such a case, we should set canAutoJoin to true, and it will
