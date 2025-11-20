@@ -138,7 +138,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 completedAcknowledgements.add(event.acknowledgementsMap());
             }
             if (event.checkForRenewAcknowledgements()) {
-                currentFetch.renew(event.acknowledgementsMap());
+                currentFetch.renew(event.acknowledgementsMap(), event.acquisitionLockTimeoutMs());
             }
         }
     }
@@ -321,6 +321,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             this.applicationEventHandler = applicationEventHandlerFactory.build(
                     logContext,
                     time,
+                    config.getInt(CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG),
                     applicationEventQueue,
                     new CompletableEventReaper(logContext),
                     applicationEventProcessorSupplier,
@@ -431,6 +432,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.applicationEventHandler = new ApplicationEventHandler(
                 logContext,
                 time,
+                config.getInt(CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG),
                 applicationEventQueue,
                 new CompletableEventReaper(logContext),
                 applicationEventProcessorSupplier,
@@ -501,6 +503,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         ApplicationEventHandler build(
                 final LogContext logContext,
                 final Time time,
+                final int initializationTimeoutMs,
                 final BlockingQueue<ApplicationEvent> applicationEventQueue,
                 final CompletableEventReaper applicationEventReaper,
                 final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
@@ -892,8 +895,12 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      */
     @Override
     public Optional<Integer> acquisitionLockTimeoutMs() {
-        // To be implemented
-        return Optional.empty();
+        acquireAndEnsureOpen();
+        try {
+            return currentFetch.acquisitionLockTimeoutMs();
+        } finally {
+            release();
+        }
     }
 
     /**

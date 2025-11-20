@@ -35,7 +35,7 @@ public class VersionConditionalTest {
         for (String line : lines) {
             expectedStringBuilder.append(String.format(line));
         }
-        assertEquals(stringWriter.toString(), expectedStringBuilder.toString());
+        assertEquals(expectedStringBuilder.toString(), stringWriter.toString());
     }
 
     @Test

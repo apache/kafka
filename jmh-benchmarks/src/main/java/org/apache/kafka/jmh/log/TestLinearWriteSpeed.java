@@ -60,6 +60,8 @@ import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 
+import static org.apache.kafka.server.common.TransactionVersion.TV_UNKNOWN;
+
 public class TestLinearWriteSpeed {
 
     public static void main(String[] args) throws Exception {
@@ -269,7 +271,8 @@ public class TestLinearWriteSpeed {
                 0,
                 AppendOrigin.CLIENT,
                 RequestLocal.noCaching(),
-                VerificationGuard.SENTINEL
+                VerificationGuard.SENTINEL,
+                TV_UNKNOWN
             );
             return messages.sizeInBytes();
         }
