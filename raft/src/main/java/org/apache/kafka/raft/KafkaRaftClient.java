@@ -222,8 +222,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private volatile RemoveVoterHandler removeVoterHandler;
     private volatile UpdateVoterHandler updateVoterHandler;
 
-    private volatile boolean canAutoJoin = true;
-
     /**
      * Create a new instance.
      *
@@ -503,11 +501,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         logger.info("Reading KRaft snapshot and log as part of the initialization");
         partitionState.updateState();
         logger.info("Starting voters are {}", partitionState.lastVoterSet());
-        if (nodeId.isPresent()) {
-            // if starting voters contain node id, it can't join to the cluster
-            // because it is already in.
-            canAutoJoin = !partitionState.lastVoterSet().voterIds().contains(nodeId.getAsInt());
-        }
 
         if (requestManager == null) {
             if (voterAddresses.isEmpty()) {
@@ -2342,11 +2335,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         /* These error codes indicate the replica was successfully added or the leader is unable to
          * process the request. In either case, reset the update voter set timer to back off.
          */
-        if (error == Errors.NONE) {
-            quorum.followerStateOrThrow().resetUpdateVoterSetPeriod(currentTimeMs);
-            canAutoJoin = false;
-            return true;
-        } else if (error == Errors.DUPLICATE_VOTER || error == Errors.REQUEST_TIMED_OUT) {
+        if (error == Errors.NONE || error == Errors.REQUEST_TIMED_OUT ||
+            error == Errors.DUPLICATE_VOTER) {
             quorum.followerStateOrThrow().resetUpdateVoterSetPeriod(currentTimeMs);
             return true;
         } else {
@@ -3357,7 +3347,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private boolean maybeAutoJoin(FollowerState state, long currentTimeMs) {
+    private boolean shouldSendAddOrRemoveVoterRequest(FollowerState state, long currentTimeMs) {
         /* When the cluster supports reconfiguration, only replicas that can become a voter
          * and are configured to auto join should attempt to automatically join the voter
          * set for the configured topic partition.
@@ -3366,56 +3356,30 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             quorumConfig.autoJoin() && state.hasUpdateVoterSetPeriodExpired(currentTimeMs);
     }
 
-    private boolean shouldSendAddVoterRequest(FollowerState state, long currentTimeMs) {
-        return canAutoJoin && maybeAutoJoin(state, currentTimeMs);
-    }
-
-    private boolean shouldSendRemoveVoterRequest(FollowerState state, long currentTimeMs) {
-        final var localReplicaKey = quorum.localReplicaKeyOrThrow();
-        final var voters = partitionState.lastVoterSet();
-
-        if (voters.voterIds().contains(localReplicaKey.id())) {
-            if (maybeAutoJoin(state, currentTimeMs)) {
-                // When the bootstrap controller needs to update directory id,
-                // it should be removed and then rejoining to cluster
-                // In such a case, we should set canAutoJoin to true, and it will
-                // be removed from the cluster, update directory id and rejoin
-                // to the cluster.
-                canAutoJoin = true;
-                return true;
-            }
-        }
-        return false;
-    }
-
-
     private long pollFollowerAsObserver(FollowerState state, long currentTimeMs) {
         GracefulShutdown shutdown = this.shutdown.get();
-        final RequestSendResult sendResult;
-
         if (shutdown != null) {
             // If we are an observer, then we can shutdown immediately. We want to
             // skip potentially sending any add or remove voter RPCs.
             return 0;
-        } else if (nodeId.isPresent() && shouldSendRemoveVoterRequest(state, currentTimeMs)) {
+        } else if (shouldSendAddOrRemoveVoterRequest(state, currentTimeMs)) {
             final var localReplicaKey = quorum.localReplicaKeyOrThrow();
             final var voters = partitionState.lastVoterSet();
-            /* The replica's id is in the voter set but the replica is not a voter because
-             * the directory id of the voter set entry is different. Remove the old voter.
-             * Local replica is not in the voter set because the replica is an observer.
-             */
-            final var oldVoter = voters.voterKeys()
+            final RequestSendResult sendResult;
+            if (voters.voterIds().contains(localReplicaKey.id())) {
+                /* The replica's id is in the voter set but the replica is not a voter because
+                 * the directory id of the voter set entry is different. Remove the old voter.
+                 * Local replica is not in the voter set because the replica is an observer.
+                 */
+                final var oldVoter = voters.voterKeys()
                     .stream()
                     .filter(replicaKey -> replicaKey.id() == localReplicaKey.id())
                     .findFirst()
                     .get();
-            sendResult = maybeSendRemoveVoterRequest(state, oldVoter, currentTimeMs);
-            if (sendResult.requestSent()) {
-                state.resetUpdateVoterSetPeriod(currentTimeMs);
+                sendResult = maybeSendRemoveVoterRequest(state, oldVoter, currentTimeMs);
+            } else {
+                sendResult = maybeSendAddVoterRequest(state, currentTimeMs);
             }
-            return sendResult.timeToWaitMs();
-        } else if (nodeId.isPresent() && shouldSendAddVoterRequest(state, currentTimeMs)) {
-            sendResult = maybeSendAddVoterRequest(state, currentTimeMs);
             if (sendResult.requestSent()) {
                 state.resetUpdateVoterSetPeriod(currentTimeMs);
             }
