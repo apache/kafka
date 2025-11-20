@@ -4266,7 +4266,7 @@ public class FetchRequestManagerTest {
         }
 
         @Override
-        protected void checkDisconnects(final long currentTimeMs) {
+        protected void checkDisconnects(final long currentTimeMs, boolean onClose) {
             // any disconnects affecting requests that have already been transmitted will be handled
             // by NetworkClient, so we just need to check whether connections for any of the unsent
             // requests have been disconnected; if they have, then we complete the corresponding future

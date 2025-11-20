@@ -133,11 +133,12 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
                             if (partitionResponse.errorCode() == Errors.NONE.code()) {
                                 final long startOffset = partitionResponse.startOffset();
                                 final Optional<Integer> leaderEpoch = partitionResponse.leaderEpoch() < 0 ? Optional.empty() : Optional.of(partitionResponse.leaderEpoch());
+                                final Optional<Long> lag = partitionResponse.lag() < 0 ? Optional.empty() : Optional.of(partitionResponse.lag());
                                 // Negative offset indicates there is no start offset for this partition
                                 if (partitionResponse.startOffset() < 0) {
                                     groupOffsetsListing.put(tp, null);
                                 } else {
-                                    groupOffsetsListing.put(tp, new SharePartitionOffsetInfo(startOffset, leaderEpoch, Optional.empty()));
+                                    groupOffsetsListing.put(tp, new SharePartitionOffsetInfo(startOffset, leaderEpoch, lag));
                                 }
                             } else {
                                 log.warn("Skipping return offset for {} due to error {}: {}.", tp, partitionResponse.errorCode(), partitionResponse.errorMessage());
