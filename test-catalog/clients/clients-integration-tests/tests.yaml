@@ -229,6 +229,7 @@ org.apache.kafka.clients.consumer.PlaintextConsumerTest:
 - testAsyncConsumeCoordinatorFailover
 - testAsyncConsumerAutoOffsetReset
 - testAsyncConsumerCloseLeavesGroupOnInterrupt
+- testAsyncConsumerCloseOnBrokerShutdown
 - testAsyncConsumerClusterResourceListener
 - testAsyncConsumerConsumeMessagesWithCreateTime
 - testAsyncConsumerConsumeMessagesWithLogAppendTime
@@ -264,6 +265,7 @@ org.apache.kafka.clients.consumer.PlaintextConsumerTest:
 - testAsyncConsumerStaticConsumerDetectsNewPartitionCreatedAfterRestart
 - testClassicConsumerAutoOffsetReset
 - testClassicConsumerCloseLeavesGroupOnInterrupt
+- testClassicConsumerCloseOnBrokerShutdown
 - testClassicConsumerClusterResourceListener
 - testClassicConsumerConsumeMessagesWithCreateTime
 - testClassicConsumerConsumeMessagesWithLogAppendTime
@@ -325,6 +327,7 @@ org.apache.kafka.clients.consumer.ShareConsumerTest:
 - testConfiguredExplicitAcknowledgeCommitSuccess
 - testConfiguredImplicitAcknowledgeExplicitAcknowledgeFails
 - testConsumerCloseInGroupSequential
+- testConsumerCloseOnBrokerShutdown
 - testControlRecordsSkipped
 - testDeliveryCountDifferentBehaviorWhenClosingSessionWithExplicitAcknowledgement
 - testDeliveryCountNotIncreaseAfterSessionClose

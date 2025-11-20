@@ -161,7 +161,7 @@ org.apache.kafka.clients.admin.ConfigTest:
 - testEquals
 - testHashCodeAndEqualsWithNull
 org.apache.kafka.clients.admin.ConsumerGroupDescriptionTest:
-- testState
+- testGroupState
 org.apache.kafka.clients.admin.ConsumerGroupListingTest:
 - testState
 org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResultTest:
@@ -461,6 +461,7 @@ org.apache.kafka.clients.admin.KafkaAdminClientTest:
 org.apache.kafka.clients.admin.ListConsumerGroupsOptionsTest:
 - testState
 org.apache.kafka.clients.admin.ListGroupsOptionsTest:
+- testConsumerGroupStates
 - testForConsumerGroups
 - testForShareGroups
 - testForStreamsGroups
@@ -2016,11 +2017,13 @@ org.apache.kafka.clients.consumer.internals.KafkaConsumerMetricsTest:
 - shouldRecordCommittedTime
 - shouldRemoveMetricsOnClose
 org.apache.kafka.clients.consumer.internals.NetworkClientDelegateTest:
+- testCheckDisconnectsWithOnClose
 - testEnsureCorrectCompletionTimeOnComplete
 - testEnsureCorrectCompletionTimeOnFailure
 - testEnsureTimerSetOnAdd
 - testHasAnyPendingRequests
 - testPollResultTimer
+- testPollWithOnClose
 - testPropagateMetadataError
 - testPropagateMetadataErrorWithErrorEvent
 - testRecordUnsentRequestsQueueTime
@@ -2168,6 +2171,7 @@ org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManagerTest:
 - testAcknowledgementCommitCallbackMultiplePartitionCommitAsync
 - testBatchingAcknowledgeRequestStates
 - testCallbackHandlerConfig
+- testCloseFutureCompletedWhenMemberIdIsNull
 - testCloseInternalClosesShareFetchMetricsManager
 - testCloseShouldBeIdempotent
 - testCloseWithSubscriptionChange
