@@ -157,8 +157,6 @@ import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
-import org.apache.kafka.common.message.GetReplicaLogInfoRequestData;
-import org.apache.kafka.common.message.GetReplicaLogInfoResponseData;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
@@ -299,6 +297,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.protocol.ApiKeys.API_VERSIONS;
+import static org.apache.kafka.common.protocol.ApiKeys.CREATE_DELEGATION_TOKEN;
 import static org.apache.kafka.common.protocol.ApiKeys.CREATE_PARTITIONS;
 import static org.apache.kafka.common.protocol.ApiKeys.CREATE_TOPICS;
 import static org.apache.kafka.common.protocol.ApiKeys.DELETE_ACLS;
@@ -1077,7 +1076,6 @@ public class RequestResponseTest {
             case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsRequest(version);
             case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsRequest(version);
             case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsRequest(version);
-            case GET_REPLICA_LOG_INFO: return createGetReplicaLogInfoRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1173,23 +1171,8 @@ public class RequestResponseTest {
             case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsResponse();
             case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsResponse();
             case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsResponse();
-            case GET_REPLICA_LOG_INFO: return createGetReplicaLogInfoResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
-    }
-
-    private GetReplicaLogInfoRequest createGetReplicaLogInfoRequest(short version) {
-        GetReplicaLogInfoRequestData data = new GetReplicaLogInfoRequestData()
-                .setTopicPartitions(singletonList(new GetReplicaLogInfoRequestData.TopicPartitions()
-                .setPartitions(singletonList(0))));
-        return new GetReplicaLogInfoRequest.Builder(data).build(version);
-    }
-
-    private GetReplicaLogInfoResponse createGetReplicaLogInfoResponse() {
-        GetReplicaLogInfoResponseData data = new GetReplicaLogInfoResponseData();
-        data.setBrokerEpoch(0);
-        data.setTopicPartitionLogInfoList(singletonList(new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()));
-        return new GetReplicaLogInfoResponse(data);
     }
 
     private ConsumerGroupDescribeRequest createConsumerGroupDescribeRequest(short version) {
@@ -2843,7 +2826,7 @@ public class RequestResponseTest {
 
     private WriteTxnMarkersRequest createWriteTxnMarkersRequest(short version) {
         List<TopicPartition> partitions = singletonList(new TopicPartition("topic", 73));
-        WriteTxnMarkersRequest.TxnMarkerEntry txnMarkerEntry = new WriteTxnMarkersRequest.TxnMarkerEntry(21L, (short) 42, 73, TransactionResult.ABORT, partitions);
+        WriteTxnMarkersRequest.TxnMarkerEntry txnMarkerEntry = new WriteTxnMarkersRequest.TxnMarkerEntry(21L, (short) 42, 73, TransactionResult.ABORT, partitions, (short) 0);
         return new WriteTxnMarkersRequest.Builder(singletonList(txnMarkerEntry)).build(version);
     }
 
@@ -3091,7 +3074,7 @@ public class RequestResponseTest {
     }
 
     private AlterConfigsRequest createAlterConfigsRequest(short version) {
-        Map<ConfigResource, AlterConfigsRequest.Config> configs = new HashMap<>();
+        Map<ConfigResource, AlterConfigsRequest.Config> configs = new LinkedHashMap<>();
         List<AlterConfigsRequest.ConfigEntry> configEntries = asList(
                 new AlterConfigsRequest.ConfigEntry("config_name", "config_value"),
                 new AlterConfigsRequest.ConfigEntry("another_name", "another value")
@@ -3099,7 +3082,19 @@ public class RequestResponseTest {
         configs.put(new ConfigResource(ConfigResource.Type.BROKER, "0"), new AlterConfigsRequest.Config(configEntries));
         configs.put(new ConfigResource(ConfigResource.Type.TOPIC, "topic"),
                 new AlterConfigsRequest.Config(emptyList()));
-        return new AlterConfigsRequest.Builder(configs, false).build(version);
+        AlterConfigsRequest alterConfigsRequest = new AlterConfigsRequest.Builder(configs, false).build(version);
+        assertEquals(
+                "AlterConfigsRequestData(resources=[" +
+                        "AlterConfigsResource(resourceType=" + ConfigResource.Type.BROKER.id() + ", " +
+                        "resourceName='0', " +
+                        "configs=[AlterableConfig(name='config_name', value='REDACTED'), " +
+                        "AlterableConfig(name='another_name', value='REDACTED')]), " +
+                        "AlterConfigsResource(resourceType=" + ConfigResource.Type.TOPIC.id() + ", " +
+                        "resourceName='topic', configs=[])], " +
+                        "validateOnly=false)",
+                alterConfigsRequest.toString()
+        );
+        return alterConfigsRequest;
     }
 
     private AlterConfigsResponse createAlterConfigsResponse() {
@@ -3202,7 +3197,12 @@ public class RequestResponseTest {
                 .setMaxTimestampMs(System.currentTimeMillis())
                 .setTokenId("token1")
                 .setHmac("test".getBytes());
-        return new CreateDelegationTokenResponse(data);
+        var response = new CreateDelegationTokenResponse(data);
+
+        String responseStr = response.toString();
+        assertTrue(responseStr.contains("tokenId='REDACTED'"));
+        assertTrue(responseStr.contains("hmac=[]"));
+        return response;
     }
 
     private RenewDelegationTokenRequest createRenewTokenRequest(short version) {
@@ -3258,7 +3258,14 @@ public class RequestResponseTest {
         tokenList.add(new DelegationToken(tokenInfo1, "test".getBytes()));
         tokenList.add(new DelegationToken(tokenInfo2, "test".getBytes()));
 
-        return new DescribeDelegationTokenResponse(version, 20, Errors.NONE, tokenList);
+        var response = new DescribeDelegationTokenResponse(version, 20, Errors.NONE, tokenList);
+
+        String responseStr = response.toString();
+        String[] parts = responseStr.split(",");
+        // The 2 token info should both be redacted
+        assertEquals(2, Arrays.stream(parts).filter(s -> s.trim().contains("tokenId='REDACTED'")).count());
+        assertEquals(2, Arrays.stream(parts).filter(s -> s.trim().contains("hmac=[]")).count());
+        return response;
     }
 
     private ElectLeadersRequest createElectLeadersRequestNullPartitions() {
@@ -3730,6 +3737,7 @@ public class RequestResponseTest {
                     .setPartition(0)
                     .setStateEpoch(0)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(0)
                     .setStateBatches(singletonList(new WriteShareGroupStateRequestData.StateBatch()
                         .setFirstOffset(0)
                         .setLastOffset(0)
@@ -3833,6 +3841,7 @@ public class RequestResponseTest {
                     .setPartitionIndex(0)
                     .setErrorCode(Errors.NONE.code())
                     .setStartOffset(0)
+                    .setLag(0)
                     .setLeaderEpoch(0)))))));
         return new DescribeShareGroupOffsetsResponse(data);
     }
@@ -3976,6 +3985,28 @@ public class RequestResponseTest {
         String msg = assertThrows(RuntimeException.class, () -> AbstractRequest.
                 parseRequest(SASL_AUTHENTICATE, SASL_AUTHENTICATE.latestVersion(), accessor)).getMessage();
         assertEquals("Error reading byte array of 32767 byte(s): only 3 byte(s) available", msg);
+    }
+
+    @Test
+    public void testSaslAuthenticateRequestResponseToStringMasksSensitiveData() {
+        byte[] sensitiveAuthBytes = "sensitive-auth-token-123".getBytes(StandardCharsets.UTF_8);
+        SaslAuthenticateRequestData requestData = new SaslAuthenticateRequestData().setAuthBytes(sensitiveAuthBytes);
+        SaslAuthenticateRequest request = new SaslAuthenticateRequest(requestData, (short) 2);
+
+        String requestString = request.toString();
+
+        // Verify that the authBytes field is present but empty in the output
+        assertTrue(requestString.contains("authBytes=[]"),
+                "authBytes field should be empty in toString() output");
+
+        SaslAuthenticateResponseData responseData = new SaslAuthenticateResponseData().setAuthBytes(sensitiveAuthBytes);
+        SaslAuthenticateResponse response = new SaslAuthenticateResponse(responseData);
+
+        String responseString = response.toString();
+
+        // Verify that the authBytes field is present but empty in the output
+        assertTrue(responseString.contains("authBytes=[]"),
+                "authBytes field should be empty in toString() output");
     }
 
     @Test

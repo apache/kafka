@@ -65,11 +65,13 @@ public class DefaultGroupFilter implements GroupFilter {
             .define(GROUPS_INCLUDE_CONFIG,
                     Type.LIST,
                     GROUPS_INCLUDE_DEFAULT,
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                     Importance.HIGH,
                     GROUPS_INCLUDE_DOC)
             .define(GROUPS_EXCLUDE_CONFIG,
                     Type.LIST,
                     GROUPS_EXCLUDE_DEFAULT,
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                     Importance.HIGH,
                     GROUPS_EXCLUDE_DOC);
 

@@ -35,10 +35,8 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
-import org.apache.kafka.server.telemetry.ClientTelemetry;
-import org.apache.kafka.server.telemetry.ClientTelemetryPayload;
-import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
+import org.apache.kafka.server.telemetry.ClientTelemetryExporter;
+import org.apache.kafka.server.telemetry.ClientTelemetryExporterProvider;
 import org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.MetricsData;
 import org.apache.kafka.streams.ClientInstanceIds;
 import org.apache.kafka.streams.KafkaClientSupplier;
@@ -65,6 +63,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -133,7 +132,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @BeforeAll
     public static void startCluster() throws IOException {
         final Properties properties = new Properties();
-        properties.put("metric.reporters", TelemetryPlugin.class.getName());
+        properties.put("metric.reporters", TelemetryPluginWithExporter.class.getName());
         cluster = new EmbeddedKafkaCluster(NUM_BROKERS, properties);
         cluster.start();
     }
@@ -174,7 +173,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @ParameterizedTest
     @MethodSource("recordingLevelParameters")
     public void shouldPushGlobalThreadMetricsToBroker(final String recordingLevel, final String groupProtocol) throws Exception {
-        streamsApplicationProperties = props(true, groupProtocol);
+        streamsApplicationProperties = props(groupProtocol);
         streamsApplicationProperties.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel);
         final Topology topology = simpleTopology(true);
         subscribeForStreamsMetrics();
@@ -191,7 +190,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
             assertNotNull(globalStoreConsumerInstanceId);
             LOG.info("Global consumer instance id {}", globalStoreConsumerInstanceId);
             TestUtils.waitForCondition(
-                    () -> !TelemetryPlugin.SUBSCRIBED_METRICS.getOrDefault(globalStoreConsumerInstanceId, Collections.emptyList()).isEmpty(),
+                    () -> !TelemetryPluginWithExporter.SUBSCRIBED_METRICS.getOrDefault(globalStoreConsumerInstanceId, Collections.emptyList()).isEmpty(),
                     30_000,
                     "Never received subscribed metrics"
             );
@@ -204,7 +203,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
                                 return "org.apache.kafka." + group + "." + name;
                             }).filter(name -> !name.equals("org.apache.kafka.stream.thread.state"))// telemetry reporter filters out string metrics
                     .sorted().toList();
-            final List<String> actualGlobalMetrics = new ArrayList<>(TelemetryPlugin.SUBSCRIBED_METRICS.get(globalStoreConsumerInstanceId));
+            final List<String> actualGlobalMetrics = new ArrayList<>(TelemetryPluginWithExporter.SUBSCRIBED_METRICS.get(globalStoreConsumerInstanceId));
             assertEquals(expectedGlobalMetrics, actualGlobalMetrics);
         }
     }
@@ -213,7 +212,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @MethodSource("recordingLevelParameters")
     public void shouldPushMetricsToBroker(final String recordingLevel, final String groupProtocol) throws Exception {
         // End-to-end test validating metrics pushed to broker
-        streamsApplicationProperties  = props(true, groupProtocol);
+        streamsApplicationProperties  = props(groupProtocol);
         streamsApplicationProperties.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel);
         final Topology topology = simpleTopology(false);
         subscribeForStreamsMetrics();
@@ -221,7 +220,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
             final ClientInstanceIds clientInstanceIds = streams.clientInstanceIds(Duration.ofSeconds(60));
             final Uuid adminInstanceId = clientInstanceIds.adminInstanceId();
-            
+
             final Uuid mainConsumerInstanceId = clientInstanceIds.consumerInstanceIds().entrySet().stream()
                     .filter(entry -> !entry.getKey().endsWith("-restore-consumer")
                             && !entry.getKey().endsWith("GlobalStreamThread-global-consumer"))
@@ -237,7 +236,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
                     .findFirst().orElseThrow();
 
             TestUtils.waitForCondition(
-                () -> !TelemetryPlugin.SUBSCRIBED_METRICS.getOrDefault(mainConsumerInstanceId, Collections.emptyList()).isEmpty(),
+                () -> !TelemetryPluginWithExporter.SUBSCRIBED_METRICS.getOrDefault(mainConsumerInstanceId, Collections.emptyList()).isEmpty(),
                 30_000,
                 "Never received subscribed metrics"
             );
@@ -248,36 +247,36 @@ public class KafkaStreamsTelemetryIntegrationTest {
                         return "org.apache.kafka." + group + "." + name;
                     }).filter(name -> !name.equals("org.apache.kafka.stream.thread.state"))// telemetry reporter filters out string metrics
                     .sorted().toList();
-            final List<String> actualMetrics = new ArrayList<>(TelemetryPlugin.SUBSCRIBED_METRICS.get(mainConsumerInstanceId));
+            final List<String> actualMetrics = new ArrayList<>(TelemetryPluginWithExporter.SUBSCRIBED_METRICS.get(mainConsumerInstanceId));
             assertEquals(expectedMetrics, actualMetrics);
 
             TestUtils.waitForCondition(
-                () -> !TelemetryPlugin.SUBSCRIBED_METRICS.getOrDefault(adminInstanceId, Collections.emptyList()).isEmpty(),
+                () -> !TelemetryPluginWithExporter.SUBSCRIBED_METRICS.getOrDefault(adminInstanceId, Collections.emptyList()).isEmpty(),
                 30_000,
                 "Never received subscribed metrics"
             );
-            final List<String> actualInstanceMetrics = TelemetryPlugin.SUBSCRIBED_METRICS.get(adminInstanceId);
+            final List<String> actualInstanceMetrics = TelemetryPluginWithExporter.SUBSCRIBED_METRICS.get(adminInstanceId);
             final List<String> expectedInstanceMetrics = Arrays.asList(
                 "org.apache.kafka.stream.alive.stream.threads",
                 "org.apache.kafka.stream.client.state",
                 "org.apache.kafka.stream.failed.stream.threads",
                 "org.apache.kafka.stream.recording.level");
-            
+
             assertEquals(expectedInstanceMetrics, actualInstanceMetrics);
 
-            TestUtils.waitForCondition(() -> TelemetryPlugin.processId != null,
+            TestUtils.waitForCondition(() -> TelemetryPluginWithExporter.processId != null,
                     30_000,
                     "Never received the process id");
 
-            assertEquals(expectedProcessId, TelemetryPlugin.processId);
+            assertEquals(expectedProcessId, TelemetryPluginWithExporter.processId);
         }
     }
 
     @ParameterizedTest
-    @MethodSource("singleAndMultiTaskParameters")
-    public void shouldPassMetrics(final String topologyType, final boolean stateUpdaterEnabled, final String groupProtocol) throws Exception {
+    @MethodSource("topologyComplexityAndRebalanceProtocol")
+    public void shouldPassMetrics(final String topologyType, final String groupProtocol) throws Exception {
         // Streams metrics should get passed to Admin and Consumer
-        streamsApplicationProperties = props(stateUpdaterEnabled, groupProtocol);
+        streamsApplicationProperties = props(groupProtocol);
         final Topology topology = topologyType.equals("simple") ? simpleTopology(false) : complexTopology();
 
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
@@ -303,16 +302,15 @@ public class KafkaStreamsTelemetryIntegrationTest {
         }
     }
 
-    @ParameterizedTest
-    @MethodSource("multiTaskParameters")
-    public void shouldPassCorrectMetricsDynamicInstances(final boolean stateUpdaterEnabled, final String groupProtocol) throws Exception {
+    @Test
+    public void shouldPassCorrectMetricsDynamicInstances() throws Exception {
         // Correct streams metrics should get passed with dynamic membership
-        streamsApplicationProperties = props(stateUpdaterEnabled, groupProtocol);
+        streamsApplicationProperties = props("classic");
         streamsApplicationProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1");
         streamsApplicationProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1");
 
 
-        streamsSecondApplicationProperties = props(stateUpdaterEnabled, groupProtocol);
+        streamsSecondApplicationProperties = props("classic");
         streamsSecondApplicationProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2");
         streamsSecondApplicationProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2");
 
@@ -359,7 +357,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
                         .filter(metricName -> metricName.tags().containsKey("task-id")).toList();
                 final List<MetricName> streamsOneStateMetrics = streamsOne.metrics().values().stream().map(Metric::metricName)
                         .filter(metricName -> metricName.group().equals("stream-state-metrics")).toList();
-                
+
                 final List<MetricName> consumerOnePassedTaskMetrics = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CLIENT)
                         .passedMetrics().stream().map(KafkaMetric::metricName).filter(metricName -> metricName.tags().containsKey("task-id")).toList();
                 final List<MetricName> consumerOnePassedStateMetrics = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CLIENT)
@@ -369,7 +367,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
                         .filter(metricName -> metricName.tags().containsKey("task-id")).toList();
                 final List<MetricName> streamsTwoStateMetrics = streamsTwo.metrics().values().stream().map(Metric::metricName)
                         .filter(metricName -> metricName.group().equals("stream-state-metrics")).toList();
-                
+
                 final List<MetricName> consumerTwoPassedTaskMetrics = INTERCEPTING_CONSUMERS.get(SECOND_INSTANCE_CLIENT)
                         .passedMetrics().stream().map(KafkaMetric::metricName).filter(metricName -> metricName.tags().containsKey("task-id")).toList();
                 final List<MetricName> consumerTwoPassedStateMetrics = INTERCEPTING_CONSUMERS.get(SECOND_INSTANCE_CLIENT)
@@ -407,7 +405,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @ValueSource(strings = {"classic", "streams"})
     public void passedMetricsShouldNotLeakIntoClientMetrics(final String groupProtocol) throws Exception {
         // Streams metrics should not be visible in client metrics
-        streamsApplicationProperties = props(true, groupProtocol);
+        streamsApplicationProperties = props(groupProtocol);
         final Topology topology =  complexTopology();
 
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
@@ -444,27 +442,16 @@ public class KafkaStreamsTelemetryIntegrationTest {
                 .toList();
     }
 
-    private static Stream<Arguments> singleAndMultiTaskParameters() {
+    private static Stream<Arguments> topologyComplexityAndRebalanceProtocol() {
         return Stream.of(
-            Arguments.of("simple", true, "classic"),
-            Arguments.of("simple", false, "classic"),
-            Arguments.of("complex", true, "classic"),
-            Arguments.of("complex", false, "classic"),
-            Arguments.of("simple", true, "streams"),
-            Arguments.of("simple", false, "streams")
+            Arguments.of("simple", "classic"),
+            Arguments.of("complex", "classic"),
+            Arguments.of("simple", "streams")
         );
     }
 
-    private static Stream<Arguments> multiTaskParameters() {
-        return Stream.of(
-            Arguments.of(true, "classic"),
-            Arguments.of(false, "classic")
-        );
-    }
-
-    private Properties props(final boolean stateUpdaterEnabled, final String groupProtocol) {
+    private Properties props(final String groupProtocol) {
         return props(mkObjectProperties(mkMap(
-            mkEntry(StreamsConfig.InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled),
             mkEntry(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
         )));
     }
@@ -646,11 +633,12 @@ public class KafkaStreamsTelemetryIntegrationTest {
         }
     }
 
-    public static class TelemetryPlugin implements ClientTelemetry, MetricsReporter, ClientTelemetryReceiver {
+    public static class TelemetryPluginWithExporter implements ClientTelemetryExporterProvider, MetricsReporter {
 
         public static final Map<Uuid, List<String>> SUBSCRIBED_METRICS = new ConcurrentHashMap<>();
         public static String processId;
-        public TelemetryPlugin() {
+
+        public TelemetryPluginWithExporter() {
         }
 
         @Override
@@ -667,50 +655,45 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
         @Override
         public void close() {
-
         }
 
         @Override
         public void configure(final Map<String, ?> configs) {
-
         }
 
         @Override
-        public ClientTelemetryReceiver clientReceiver() {
-            return this;
-        }
+        public ClientTelemetryExporter clientTelemetryExporter() {
+            return (context, payload) -> {
+                try {
+                    final MetricsData data = MetricsData.parseFrom(payload.data());
 
-        @Override
-        public void exportMetrics(final AuthorizableRequestContext context, final ClientTelemetryPayload payload) {
-            try {
-                final MetricsData data = MetricsData.parseFrom(payload.data());
-                
-                final Optional<String> processIdOption = data.getResourceMetricsList()
-                        .stream()
-                        .flatMap(rm -> rm.getScopeMetricsList().stream())
-                        .flatMap(sm -> sm.getMetricsList().stream())
-                        .map(org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.Metric::getGauge)
-                        .flatMap(gauge -> gauge.getDataPointsList().stream())
-                        .flatMap(numberDataPoint -> numberDataPoint.getAttributesList().stream())
-                        .filter(keyValue -> keyValue.getKey().equals("process_id"))
-                        .map(keyValue -> keyValue.getValue().getStringValue())
-                        .findFirst();
+                    final Optional<String> processIdOption = data.getResourceMetricsList()
+                            .stream()
+                            .flatMap(rm -> rm.getScopeMetricsList().stream())
+                            .flatMap(sm -> sm.getMetricsList().stream())
+                            .map(org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.Metric::getGauge)
+                            .flatMap(gauge -> gauge.getDataPointsList().stream())
+                            .flatMap(numberDataPoint -> numberDataPoint.getAttributesList().stream())
+                            .filter(keyValue -> keyValue.getKey().equals("process_id"))
+                            .map(keyValue -> keyValue.getValue().getStringValue())
+                            .findFirst();
 
-                processIdOption.ifPresent(pid -> processId = pid);
+                    processIdOption.ifPresent(pid -> processId = pid);
 
-                final Uuid clientId = payload.clientInstanceId();
-                final List<String> metricNames = data.getResourceMetricsList()
-                        .stream()
-                        .flatMap(rm -> rm.getScopeMetricsList().stream())
-                        .flatMap(sm -> sm.getMetricsList().stream())
-                        .map(org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.Metric::getName)
-                        .sorted()
-                        .toList();
-                LOG.info("Found metrics {} for clientId={}", metricNames, clientId);
-                SUBSCRIBED_METRICS.put(clientId, metricNames);
-            } catch (final Exception e) {
-                e.printStackTrace(System.err);
-            }
+                    final Uuid clientId = payload.clientInstanceId();
+                    final List<String> metricNames = data.getResourceMetricsList()
+                            .stream()
+                            .flatMap(rm -> rm.getScopeMetricsList().stream())
+                            .flatMap(sm -> sm.getMetricsList().stream())
+                            .map(org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.Metric::getName)
+                            .sorted()
+                            .toList();
+                    LOG.info("Found metrics {} for clientId={} with pushIntervalMs={}", metricNames, clientId, context.pushIntervalMs());
+                    SUBSCRIBED_METRICS.put(clientId, metricNames);
+                } catch (final Exception e) {
+                    e.printStackTrace(System.err);
+                }
+            };
         }
     }
 }

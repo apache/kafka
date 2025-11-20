@@ -119,7 +119,7 @@ public class ProducerStateManagerTest {
     public void testAppendTxnMarkerWithNoProducerState() {
         short producerEpoch = 2;
 
-        appendEndTxnMarker(stateManager, producerId, producerEpoch, ControlRecordType.COMMIT, 27L);
+        appendEndTxnMarker(stateManager, producerId, producerEpoch, ControlRecordType.COMMIT, 27L, (short) 0);
         ProducerStateEntry firstEntry = getLastEntryOrElseThrownByProducerId(stateManager, producerId);
 
         assertEquals(producerEpoch, firstEntry.producerEpoch());
@@ -214,7 +214,9 @@ public class ProducerStateManagerTest {
         appendClientEntry(stateManager, producerId, epoch, defaultSequence, 0L, false);
 
         short bumpedProducerEpoch = 1;
-        appendEndTxnMarker(stateManager, producerId, bumpedProducerEpoch, ControlRecordType.ABORT, 1L);
+        // This test verifies state management after an epoch bump, not epoch validation.
+        // Since we use a bumped epoch (1 > 0), it's valid for both TV0 and TV2, so behavior is identical.
+        appendEndTxnMarker(stateManager, producerId, bumpedProducerEpoch, ControlRecordType.ABORT, 1L, (short) 0);
 
         ProducerStateEntry lastEntry = getLastEntryOrElseThrownByProducerId(stateManager, producerId);
 
@@ -243,8 +245,9 @@ public class ProducerStateManagerTest {
         assertEquals(Optional.of(firstOffsetMetadata), stateManager.firstUnstableOffset());
     }
 
-    @Test
-    public void testHasLateTransaction() {
+    @ParameterizedTest
+    @ValueSource(shorts = {0, 2})
+    public void testHasLateTransaction(short transactionVersion) {
         long producerId1 = 39L;
         short epoch1 = 2;
         long producerId2 = 57L;
@@ -267,11 +270,14 @@ public class ProducerStateManagerTest {
         assertTrue(stateManager.hasLateTransaction(time.milliseconds()));
 
         // Finish the first transaction
-        appendEndTxnMarker(stateManager, producerId1, epoch1, ControlRecordType.COMMIT, 200);
+        // For TV2, we need to bump epoch; for TV0, same epoch is allowed. (KIP-890, KIP-1228)
+        short markerEpoch1 = markerEpochForTransactionVersion(epoch1, transactionVersion);
+        appendEndTxnMarker(stateManager, producerId1, markerEpoch1, ControlRecordType.COMMIT, 200, transactionVersion);
         assertTrue(stateManager.hasLateTransaction(time.milliseconds()));
 
         // Now finish the second transaction
-        appendEndTxnMarker(stateManager, producerId2, epoch2, ControlRecordType.COMMIT, 250);
+        short markerEpoch2 = markerEpochForTransactionVersion(epoch2, transactionVersion);
+        appendEndTxnMarker(stateManager, producerId2, markerEpoch2, ControlRecordType.COMMIT, 250, transactionVersion);
         assertFalse(stateManager.hasLateTransaction(time.milliseconds()));
     }
 
@@ -379,7 +385,7 @@ public class ProducerStateManagerTest {
                 16L, 30L, OptionalLong.of(16), appendInfo);
 
         EndTransactionMarker endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch);
-        CompletedTxn completedTxn = appendInfo.appendEndTxnMarker(endTxnMarker, epoch, 40L, time.milliseconds())
+        CompletedTxn completedTxn = appendInfo.appendEndTxnMarker(endTxnMarker, epoch, 40L, time.milliseconds(), (short) 0)
                 .orElseThrow(() -> new RuntimeException("The transaction should be completed"));
 
         assertEquals(producerId, completedTxn.producerId());
@@ -401,7 +407,7 @@ public class ProducerStateManagerTest {
         appendClientEntry(stateManager, producerId, epoch, 1, 1L, true);
 
         short bumpedEpoch = 1;
-        appendEndTxnMarker(stateManager, producerId, bumpedEpoch, ControlRecordType.ABORT, 1L);
+        appendEndTxnMarker(stateManager, producerId, bumpedEpoch, ControlRecordType.ABORT, 1L, (short) 0);
 
         // next append is invalid since we expect the sequence to be reset
         assertThrows(OutOfOrderSequenceException.class,
@@ -489,7 +495,7 @@ public class ProducerStateManagerTest {
     public void testRecoverFromSnapshotFinishedTransaction() throws IOException {
         appendClientEntry(stateManager, producerId, epoch, 0, 0L, true);
         appendClientEntry(stateManager, producerId, epoch, 1, 1L, true);
-        appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.ABORT, 2L);
+        appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.ABORT, 2L, (short) 0);
 
         stateManager.takeSnapshot();
         ProducerStateManager recoveredMapping = new ProducerStateManager(partition, logDir,
@@ -508,7 +514,7 @@ public class ProducerStateManagerTest {
     @Test
     public void testRecoverFromSnapshotEmptyTransaction() throws IOException {
         long appendTimestamp = time.milliseconds();
-        appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.ABORT, 0L, 0, appendTimestamp);
+        appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.ABORT, 0L, 0, appendTimestamp, (short) 0);
         stateManager.takeSnapshot();
 
         ProducerStateManager recoveredMapping = new ProducerStateManager(partition, logDir,
@@ -523,7 +529,10 @@ public class ProducerStateManagerTest {
     @Test
     public void testProducerStateAfterFencingAbortMarker() {
         appendClientEntry(stateManager, producerId, epoch, defaultSequence, 0L, true);
-        appendEndTxnMarker(stateManager, producerId, (short) (epoch + 1), ControlRecordType.ABORT, 1L);
+        // This test verifies producer state after fencing, not epoch validation.
+
+        short bumpedEpoch = (short) (epoch + 1);
+        appendEndTxnMarker(stateManager, producerId, bumpedEpoch, ControlRecordType.ABORT, 1L, (short) 0);
 
         ProducerStateEntry lastEntry = getLastEntryOrElseThrownByProducerId(stateManager, producerId);
         assertEquals(OptionalLong.empty(), lastEntry.currentTxnFirstOffset());
@@ -679,7 +688,7 @@ public class ProducerStateManagerTest {
                 .orElseThrow(() -> new RuntimeException("First unstable offset should be present")));
         stateManager.takeSnapshot();
 
-        appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.COMMIT, 105);
+        appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.COMMIT, 105, (short) 0);
         stateManager.onHighWatermarkUpdated(106);
         assertEquals(Optional.empty(), stateManager.firstUnstableOffset().map(offset -> offset.messageOffset));
         stateManager.takeSnapshot();
@@ -742,8 +751,9 @@ public class ProducerStateManagerTest {
         assertEquals(3L, stateManager.mapEndOffset());
     }
 
-    @Test
-    public void testFirstUnstableOffset() {
+    @ParameterizedTest
+    @ValueSource(shorts = {0, 2})
+    public void testFirstUnstableOffset(short transactionVersion) {
         short epoch = 5;
 
         assertEquals(OptionalLong.empty(), stateManager.firstUndecidedOffset());
@@ -757,7 +767,9 @@ public class ProducerStateManagerTest {
         assertEquals(OptionalLong.of(99L), stateManager.firstUndecidedOffset());
         assertEquals(Optional.of(99L), stateManager.firstUnstableOffset().map(x -> x.messageOffset));
 
-        appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.COMMIT, 109);
+        // For TV2, we need to bump epoch; for TV0, same epoch is allowed. (KIP-890, KIP-1228)
+        short markerEpoch1 = markerEpochForTransactionVersion(epoch, transactionVersion);
+        appendEndTxnMarker(stateManager, producerId, markerEpoch1, ControlRecordType.COMMIT, 109, transactionVersion);
         assertEquals(OptionalLong.of(105L), stateManager.firstUndecidedOffset());
         assertEquals(Optional.of(99L), stateManager.firstUnstableOffset().map(x -> x.messageOffset));
 
@@ -767,7 +779,8 @@ public class ProducerStateManagerTest {
         stateManager.onHighWatermarkUpdated(110L);
         assertEquals(Optional.of(105L), stateManager.firstUnstableOffset().map(x -> x.messageOffset));
 
-        appendEndTxnMarker(stateManager, anotherPid, epoch, ControlRecordType.ABORT, 112);
+        short markerEpoch2 = markerEpochForTransactionVersion(epoch, transactionVersion);
+        appendEndTxnMarker(stateManager, anotherPid, markerEpoch2, ControlRecordType.ABORT, 112, transactionVersion);
         assertFalse(stateManager.firstUndecidedOffset().isPresent());
         assertEquals(Optional.of(105L), stateManager.firstUnstableOffset().map(x -> x.messageOffset));
 
@@ -804,53 +817,82 @@ public class ProducerStateManagerTest {
                 time.milliseconds(), AppendOrigin.COORDINATOR, true);
     }
 
-    @Test
-    public void testOldEpochForControlRecord() {
+    @ParameterizedTest
+    @ValueSource(shorts = {0, 2})
+    public void testOldEpochForControlRecord(short transactionVersion) {
         short epoch = 5;
 
         assertFalse(stateManager.firstUndecidedOffset().isPresent());
 
         appendClientEntry(stateManager, producerId, epoch, defaultSequence, 99, true);
+        // For both TV0 and TV2, old epoch should be rejected
+        // TV0: markerEpoch < currentEpoch is rejected
+        // TV2: markerEpoch <= currentEpoch is rejected (requires strict >)
         assertThrows(InvalidProducerEpochException.class,
                 () -> appendEndTxnMarker(stateManager, producerId, (short) 3,
-                        ControlRecordType.COMMIT, 100));
+                        ControlRecordType.COMMIT, 100, transactionVersion));
+        
+        // For TV2, same epoch should also be rejected (requires strict >)
+        if (transactionVersion >= 2) {
+            assertThrows(InvalidProducerEpochException.class,
+                    () -> appendEndTxnMarker(stateManager, producerId, epoch,
+                            ControlRecordType.COMMIT, 100, transactionVersion));
+        } else {
+            // For TV0, same epoch is allowed
+            assertDoesNotThrow(() -> appendEndTxnMarker(stateManager, producerId, epoch,
+                    ControlRecordType.COMMIT, 100, transactionVersion));
+        }
     }
 
-    @Test
-    public void testCoordinatorFencing() {
+    @ParameterizedTest
+    @ValueSource(shorts = {0, 2})
+    public void testCoordinatorFencing(short transactionVersion) {
         short epoch = 5;
 
         appendClientEntry(stateManager, producerId, epoch, defaultSequence, 99, true);
-        appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.COMMIT, 100, 1, time.milliseconds());
+        // For TV2, we need to bump producer epoch; for TV0, same epoch is allowed. (KIP-890, KIP-1228)
+        // Note: This test also verifies coordinator epoch fencing, but producer epoch validation happens first.
+        short markerEpoch = markerEpochForTransactionVersion(epoch, transactionVersion);
+        appendEndTxnMarker(stateManager, producerId, markerEpoch, ControlRecordType.COMMIT, 100, 1, time.milliseconds(), transactionVersion);
 
         ProducerStateEntry lastEntry = getLastEntryOrElseThrownByProducerId(stateManager, producerId);
         assertEquals(1, lastEntry.coordinatorEpoch());
 
-        // writing with the current epoch is allowed
-        appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.COMMIT, 101, 1, time.milliseconds());
+        // writing with the current coordinator epoch is allowed
+        // For TV2, producer epoch must continue to be bumped; for TV0, same epoch is allowed.
+        short markerEpoch2 = markerEpochForTransactionVersion(markerEpoch, transactionVersion);
+        appendEndTxnMarker(stateManager, producerId, markerEpoch2, ControlRecordType.COMMIT, 101, 1, time.milliseconds(), transactionVersion);
 
-        // bumping the epoch is allowed
-        appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.COMMIT, 102, 2, time.milliseconds());
+        // bumping the coordinator epoch is allowed
+        short markerEpoch3 = markerEpochForTransactionVersion(markerEpoch2, transactionVersion);
+        appendEndTxnMarker(stateManager, producerId, markerEpoch3, ControlRecordType.COMMIT, 102, 2, time.milliseconds(), transactionVersion);
 
-        // old epochs are not allowed
+        // old coordinator epochs are not allowed
+        short markerEpoch4 = markerEpochForTransactionVersion(markerEpoch3, transactionVersion);
         assertThrows(TransactionCoordinatorFencedException.class,
-                () -> appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.COMMIT,
-                        103, 1, time.milliseconds()));
+                () -> appendEndTxnMarker(stateManager, producerId, markerEpoch4, ControlRecordType.COMMIT,
+                        103, 1, time.milliseconds(), transactionVersion));
     }
 
-    @Test
-    public void testCoordinatorFencedAfterReload() throws IOException {
+    @ParameterizedTest
+    @ValueSource(shorts = {0, 2})
+    public void testCoordinatorFencedAfterReload(short transactionVersion) throws IOException {
         appendClientEntry(stateManager, producerId, epoch, defaultSequence, 99, true);
-        appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.COMMIT, 100, 1, time.milliseconds());
+        // For TV2, we need to bump producer epoch; for TV0, same epoch is allowed. (KIP-890, KIP-1228)
+        // Note: This test also verifies coordinator fencing after reload, but producer epoch validation happens first.
+        short markerEpoch = markerEpochForTransactionVersion(epoch, transactionVersion);
+        appendEndTxnMarker(stateManager, producerId, markerEpoch, ControlRecordType.COMMIT, 100, 1, time.milliseconds(), transactionVersion);
         stateManager.takeSnapshot();
 
         ProducerStateManager recoveredMapping = new ProducerStateManager(partition, logDir,
                 maxTransactionTimeoutMs, producerStateManagerConfig, time);
         recoveredMapping.truncateAndReload(0L, 2L, 70000);
 
-        // append from old coordinator should be rejected
+        // append from old coordinator should be rejected (coordinator epoch check)
+        // For TV2, producer epoch must continue to be bumped; for TV0, same epoch is allowed.
+        short markerEpoch2 = markerEpochForTransactionVersion(markerEpoch, transactionVersion);
         assertThrows(TransactionCoordinatorFencedException.class, () -> appendEndTxnMarker(stateManager, producerId,
-                epoch, ControlRecordType.COMMIT, 100));
+                markerEpoch2, ControlRecordType.COMMIT, 100, transactionVersion));
     }
 
     @Test
@@ -1321,27 +1363,48 @@ public class ProducerStateManagerTest {
         appendReplicationEntry(stateManager, producerEpoch, seq, offset, time.milliseconds());
     }
 
+    /**
+     * Main implementation that appends an end transaction marker.
+     */
     private void appendEndTxnMarker(ProducerStateManager stateManager,
                                     long producerId,
                                     short producerEpoch,
                                     ControlRecordType controlType,
                                     long offset,
                                     int coordinatorEpoch,
-                                    long timestamp) {
+                                    long timestamp,
+                                    short transactionVersion) {
         ProducerAppendInfo producerAppendInfo = stateManager.prepareUpdate(producerId, AppendOrigin.COORDINATOR);
         EndTransactionMarker endTxnMarker = new EndTransactionMarker(controlType, coordinatorEpoch);
-        Optional<CompletedTxn> completedTxn = producerAppendInfo.appendEndTxnMarker(endTxnMarker, producerEpoch, offset, timestamp);
+        Optional<CompletedTxn> completedTxn = producerAppendInfo.appendEndTxnMarker(endTxnMarker, producerEpoch, offset, timestamp, transactionVersion);
         stateManager.update(producerAppendInfo);
         completedTxn.ifPresent(stateManager::completeTxn);
         stateManager.updateMapEndOffset(offset + 1);
     }
 
+    /**
+     * Convenience overload with transactionVersion, using default coordinatorEpoch=0 and current timestamp.
+     */
     private void appendEndTxnMarker(ProducerStateManager stateManager,
                                     long producerId,
                                     short producerEpoch,
                                     ControlRecordType controlType,
-                                    long offset) {
-        appendEndTxnMarker(stateManager, producerId, producerEpoch, controlType, offset, 0, time.milliseconds());
+                                    long offset,
+                                    short transactionVersion) {
+        appendEndTxnMarker(stateManager, producerId, producerEpoch, controlType, offset, 0, time.milliseconds(), transactionVersion);
+    }
+
+    /**
+     * Calculates the marker epoch for a transaction marker based on the transaction version.
+     * For TV2 and above, the coordinator bumps the epoch (markerEpoch = currentEpoch + 1).
+     * For TV0/TV1, the marker uses the same epoch as transactional records (markerEpoch = currentEpoch).
+     * 
+     * @param currentEpoch          the current producer epoch
+     * @param transactionVersion    the transaction version (1 = TV1, 2 = TV2, etc.)
+     * @return the marker epoch to use
+     */
+    private static short markerEpochForTransactionVersion(short currentEpoch, short transactionVersion) {
+        return transactionVersion >= 2 ? (short) (currentEpoch + 1) : currentEpoch;
     }
 
     private ProducerStateEntry getLastEntryOrElseThrownByProducerId(ProducerStateManager stateManger, long producerId) {
@@ -1450,7 +1513,7 @@ public class ProducerStateManagerTest {
 
     private Optional<CompletedTxn> appendEndTransaction(ControlRecordType recordType, long offset, ProducerAppendInfo appendInfo) {
         return appendInfo.appendEndTxnMarker(new EndTransactionMarker(recordType, 27),
-                epoch, offset, time.milliseconds());
+                epoch, offset, time.milliseconds(), (short) 0);
     }
 
     private void appendData(long startOffset, long endOffset, ProducerAppendInfo appendInfo, AtomicInteger seq) {

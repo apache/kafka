@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Timeout;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
@@ -56,5 +57,23 @@ public class MetadataVersionChangeTest {
         assertEquals("org.apache.kafka.image.MetadataVersionChangeException: The metadata.version " +
             "is changing from " + MetadataVersion.latestProduction() + " to " + MetadataVersion.MINIMUM_VERSION,
                 new MetadataVersionChangeException(CHANGE_LATEST_TO_MINIMUM).toString());
+    }
+
+    @Test
+    public void testConstructorThrowsExceptionWhenOldVersionIsNull() {
+        assertThrows(NullPointerException.class, () -> 
+            new MetadataVersionChange(null, MetadataVersion.MINIMUM_VERSION));
+    }
+
+    @Test
+    public void testConstructorThrowsExceptionWhenNewVersionIsNull() {
+        assertThrows(NullPointerException.class, () -> 
+            new MetadataVersionChange(MetadataVersion.MINIMUM_VERSION, null));
+    }
+
+    @Test
+    public void testConstructorThrowsExceptionWhenBothVersionsAreNull() {
+        assertThrows(NullPointerException.class, () -> 
+            new MetadataVersionChange(null, null));
     }
 }

@@ -155,12 +155,14 @@ public class AdminClientConfig extends AbstractConfig {
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
-                                        "",
+                                        List.of(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.HIGH,
                                         BOOTSTRAP_SERVERS_DOC).
                                  define(BOOTSTRAP_CONTROLLERS_CONFIG,
                                          Type.LIST,
-                                         "",
+                                         List.of(),
+                                         ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                          Importance.HIGH,
                                          BOOTSTRAP_CONTROLLERS_DOC)
                                 .define(CLIENT_ID_CONFIG, Type.STRING, "", Importance.MEDIUM, CLIENT_ID_DOC)
@@ -239,6 +241,7 @@ public class AdminClientConfig extends AbstractConfig {
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
                                         JmxReporter.class.getName(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.LOW,
                                         METRIC_REPORTER_CLASSES_DOC)
                                 .define(METRICS_RECORDING_LEVEL_CONFIG,
@@ -284,7 +287,8 @@ public class AdminClientConfig extends AbstractConfig {
                                         METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
                                 .define(CONFIG_PROVIDERS_CONFIG, 
                                         ConfigDef.Type.LIST,
-                                        List.of(), 
+                                        List.of(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         ConfigDef.Importance.LOW, 
                                         CONFIG_PROVIDERS_DOC);
     }

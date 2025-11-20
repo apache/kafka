@@ -381,6 +381,7 @@ public class RemoteLogManagerTest {
         assertFalse(remoteStorageManagerConfig.containsKey("remote.storage.manager.y"));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void testRemoteLogMetadataManagerWithEndpointConfig() {
         ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
@@ -391,6 +392,7 @@ public class RemoteLogManagerTest {
         assertEquals(brokerId, capture.getValue().get(ServerConfigs.BROKER_ID_CONFIG));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void testRemoteLogMetadataManagerWithEndpointConfigOverridden() throws IOException {
         Properties props = new Properties();
@@ -430,6 +432,7 @@ public class RemoteLogManagerTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void testConfigure() {
         ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
@@ -1769,9 +1772,9 @@ public class RemoteLogManagerTest {
     void testIdempotentClose() throws IOException {
         remoteLogManager.close();
         remoteLogManager.close();
-        InOrder inorder = inOrder(remoteStorageManager, remoteLogMetadataManager);
-        inorder.verify(remoteStorageManager, times(1)).close();
+        InOrder inorder = inOrder(remoteLogMetadataManager, remoteStorageManager);
         inorder.verify(remoteLogMetadataManager, times(1)).close();
+        inorder.verify(remoteStorageManager, times(1)).close();
     }
 
     @Test
@@ -2071,6 +2074,7 @@ public class RemoteLogManagerTest {
         assertEquals(expected, actual);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testRemoteSizeData() {
         Supplier<RemoteLogManager.RetentionSizeData>[] invalidRetentionSizeData =
@@ -2087,6 +2091,7 @@ public class RemoteLogManagerTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testRemoteSizeTime() {
         Supplier<RemoteLogManager.RetentionTimeData>[] invalidRetentionTimeData =
@@ -3394,7 +3399,6 @@ public class RemoteLogManagerTest {
         assertEquals(expectedEpoch + " " + expectedStartOffset, bufferedReader.readLine());
     }
 
-
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testCopyQuota(boolean quotaExceeded) throws Exception {
@@ -3417,7 +3421,7 @@ public class RemoteLogManagerTest {
             assertEquals(-1L, capture.getValue());
         } else {
             // Verify the copy operation completes within the timeout, since it does not need to wait for quota availability
-            assertTimeoutPreemptively(Duration.ofMillis(100), () -> task.copyLogSegmentsToRemote(mockLog));
+            assertTimeoutPreemptively(Duration.ofMillis(1000), () -> task.copyLogSegmentsToRemote(mockLog));
 
             // Verify quota check was performed
             verify(rlmCopyQuotaManager, times(1)).getThrottleTimeMs();

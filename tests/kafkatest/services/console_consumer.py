@@ -88,7 +88,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             jaas_override_variables     A dict of variables to be used in the jaas.conf template file
             kafka_opts_override         Override parameters of the KAFKA_OPTS environment variable
             client_prop_file_override   Override client.properties file used by the consumer
-            consumer_properties         A dict of values to pass in as --consumer-property key=value
+            consumer_properties         A dict of values to pass in as --command-property key=value. For versions older than KAFKA_4_2_0, these will be passed as --consumer-property key=value
         """
         JmxMixin.__init__(self, num_nodes=num_nodes, jmx_object_names=jmx_object_names, jmx_attributes=(jmx_attributes or []),
                           root=ConsoleConsumer.PERSISTENT_ROOT)
@@ -163,8 +163,11 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
               "export KAFKA_LOG4J_OPTS=\"%(log4j_param)s%(log4j_config)s\"; " \
               "export KAFKA_OPTS=%(kafka_opts)s; " \
               "%(console_consumer)s " \
-              "--topic %(topic)s " \
-              "--consumer.config %(config_file)s " % args
+              "--topic %(topic)s " % args
+
+        version = get_version(node)
+        command_config_arg = "--command-config" if version.supports_command_config() else "--consumer.config"
+        cmd += "%s %s" % (command_config_arg, args['config_file'])
         cmd += " --bootstrap-server %(broker_list)s" % args
         cmd += " --isolation-level %s" % self.isolation_level
 
@@ -176,14 +179,15 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             # This will be added in the properties file instead
             cmd += " --timeout-ms %s" % self.consumer_timeout_ms
 
+        formatter_property_arg = "--formatter-property" if version.supports_formatter_property() else "--property"
         if self.print_timestamp:
-            cmd += " --property print.timestamp=true"
+            cmd += " %s print.timestamp=true" % formatter_property_arg
 
         if self.print_key:
-            cmd += " --property print.key=true"
+            cmd += " %s print.key=true" % formatter_property_arg
 
         if self.print_partition:
-            cmd += " --property print.partition=true"
+            cmd += " %s print.partition=true" % formatter_property_arg
 
         # LoggingMessageFormatter was introduced after 0.9
         if node.version > LATEST_3_7:
@@ -194,9 +198,10 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         if self.enable_systest_events:
             cmd += " --enable-systest-events"
 
+        command_property_arg = "--command-property" if version.supports_command_property() else "--consumer-property"
         if self.consumer_properties is not None:
             for k, v in self.consumer_properties.items():
-                cmd += " --consumer-property %s=%s" % (k, v)
+                cmd += " %s %s=%s" % (command_property_arg, k, v)
 
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s &" % args
         return cmd

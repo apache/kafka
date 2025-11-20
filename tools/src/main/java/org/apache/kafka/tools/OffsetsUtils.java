@@ -460,7 +460,7 @@ public class OffsetsUtils {
         Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
 
         try {
-            return adminClient.describeTopics(topics).allTopicNames().get().entrySet()
+            return adminClient.describeTopics(topics, withTimeoutMs(new DescribeTopicsOptions())).allTopicNames().get().entrySet()
                 .stream()
                 .flatMap(entry -> entry.getValue().partitions().stream()
                     .filter(partitionInfo -> partitionInfo.leader() == null)
@@ -476,7 +476,7 @@ public class OffsetsUtils {
         // collect all topics
         Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
         try {
-            List<TopicPartition> existPartitions = adminClient.describeTopics(topics).allTopicNames().get().entrySet()
+            List<TopicPartition> existPartitions = adminClient.describeTopics(topics, withTimeoutMs(new DescribeTopicsOptions())).allTopicNames().get().entrySet()
                 .stream()
                 .flatMap(entry -> entry.getValue().partitions().stream()
                     .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
@@ -500,16 +500,7 @@ public class OffsetsUtils {
 
     public interface LogOffsetResult { }
 
-    public static class LogOffset implements LogOffsetResult {
-        final long value;
-
-        public LogOffset(long value) {
-            this.value = value;
-        }
-
-        public long value() {
-            return value;
-        }
+    public record LogOffset(long value) implements LogOffsetResult {
     }
 
     public static class Unknown implements LogOffsetResult { }
