@@ -272,14 +272,14 @@ public class ResetStreamsGroupOffsetTest {
         resetForNextTest(appId, 10L, topic1);
 
         // reset both partitions of topic1 and topic2:1 to specific offset
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--dry-run", "--group", appId,
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId,
             "--input-topic", topic1,  "--input-topic", topic2 + ":1", "--to-offset", "5"};
         final Map<TopicPartition, Long> expectedOffsets = Map.of(
             new TopicPartition(topic1, 0), 5L,
             new TopicPartition(topic1, 1), 5L,
             new TopicPartition(topic2, 1), 5L);
 
-        resetOffsetsAndAssert(args, appId, List.of(topic1, topic2), expectedOffsets,
+        resetOffsetsAndAssert(addTo(args, "--dry-run"), appId, List.of(topic1, topic2), expectedOffsets,
             Map.of(
                 new TopicPartition(topic1, 0), 10L,
                 new TopicPartition(topic1, 1), 10L,
@@ -307,7 +307,7 @@ public class ResetStreamsGroupOffsetTest {
         resetForNextTest(appId, 10L, topic1, topic2);
 
         // export to file
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--all-input-topics", "--to-offset", "5", "--export"};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--dry-run", "--group", appId, "--all-input-topics", "--to-offset", "5", "--export"};
         file = TestUtils.tempFile("reset-all", ".csv");
         exp = Map.of(new TopicPartition(topic1, 0), 5L,
             new TopicPartition(topic1, 1), 5L,
@@ -319,7 +319,7 @@ public class ResetStreamsGroupOffsetTest {
 
             assertEquals(exp, toOffsetMap(exportedOffsets.get(appId)));
         }
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId, "--input-topic", topic1, "--from-file", file.getCanonicalPath()};
+        args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--dry-run", "--group", appId, "--input-topic", topic1, "--from-file", file.getCanonicalPath()};
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args)) {
             Map<String, Map<TopicPartition, OffsetAndMetadata>> importedOffsets = service.resetOffsets();
 
