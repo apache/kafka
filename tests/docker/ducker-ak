@@ -45,7 +45,7 @@ docker_run_memory_limit="2000m"
 default_num_nodes=14
 
 # The default JDK base image with apt-get support.
-# The openjdk image has been officially deprecated. For more imformation, see: https://hub.docker.com/_/openjdk
+# The openjdk image has been officially deprecated. For more information, see: https://hub.docker.com/_/openjdk
 default_jdk="sapmachine:17-jdk-ubuntu-jammy"
 
 # The default ducker-ak image name.
@@ -95,18 +95,18 @@ up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
     the ducker container. Defaults to ${default_jdk}. Example: -j openjdk:17-bullseye
 
     If --ipv6 is specified, we will create a Docker network with IPv6 enabled.
-    
-    Note that port 5678 will be automatically exposed for ducker01 node and will be mapped to 5678 
+
+    Note that port 5678 will be automatically exposed for ducker01 node and will be mapped to 5678
     on your local machine to enable debugging in VS Code.
 
 test [-d|--debug] [test-name(s)] [-- [ducktape args]]
     Run a test or set of tests inside the currently active Ducker nodes.
     For example, to run the system test produce_bench_test, you would run:
         ./tests/docker/ducker-ak test ./tests/kafkatest/tests/core/produce_bench_test.py
-    
+
     If --debug is passed, the tests will wait for remote VS Code debugger to connect on port 5678:
         ./tests/docker/ducker-ak test --debug ./tests/kafkatest/tests/core/produce_bench_test.py
-    
+
     To pass arguments to underlying ducktape invocation, pass them after `--`, e.g.:
         ./tests/docker/ducker-ak test ./tests/kafkatest/tests/core/produce_bench_test.py -- --test-runner-timeout 1800000
 
@@ -337,7 +337,7 @@ docker_run() {
         # container to fix permission issues with mounted volumes
         podman_userns_option="--userns=keep-id"
     fi
-    must_do -v ${container_runtime} run --privileged \
+    must_do -v ${container_runtime} run --init --privileged \
         -d -t -h "${node}" --network ducknet "${expose_ports}" \
         --memory=${docker_run_memory_limit} ${memory_swappiness_option} ${podman_userns_option} \
         -v "${kafka_dir}:/opt/kafka-dev" --name "${node}" -- "${image_name}"
@@ -580,7 +580,7 @@ ducker_test() {
         esac
     done
     local ducktape_args=${*}
-    
+
     [[ ${#test_name_args} -lt 1 ]] && \
         die "ducker_test: you must supply at least one system test to run. Type --help for help."
     local test_names=""
@@ -594,7 +594,7 @@ ducker_test() {
             test_names="${test_names} ${test_name}"
         fi
     done
-    
+
     must_pushd "${kafka_dir}"
     ( (test -f ./gradlew || gradle) && ./gradlew systemTestLibs ) || die "ducker_test: Failed to build system test libraries, please check the error log."
     must_popd

@@ -401,6 +401,7 @@ public interface GroupCoordinator {
      * @param producerEpoch     The producer epoch.
      * @param coordinatorEpoch  The epoch of the transaction coordinator.
      * @param result            The transaction result.
+     * @param transactionVersion The transaction version (1 = TV1, 2 = TV2, etc.).
      * @param timeout           The operation timeout.
      *
      * @return A future yielding the result.
@@ -411,6 +412,7 @@ public interface GroupCoordinator {
         short producerEpoch,
         int coordinatorEpoch,
         TransactionResult result,
+        short transactionVersion,
         Duration timeout
     );
 
