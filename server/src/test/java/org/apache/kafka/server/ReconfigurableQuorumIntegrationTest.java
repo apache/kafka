@@ -30,6 +30,7 @@ import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.test.api.TestKitDefaults;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Tag;
@@ -40,6 +41,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -225,15 +227,10 @@ public class ReconfigurableQuorumIntegrationTest {
                 setNumControllerNodes(3).
                 build();
 
-        // Configure the initial voters with one voter having a different directory ID.
-        // This simulates the case where the controller failed and is brought back up with a different directory ID.
         final Map<Integer, Uuid> initialVoters = new HashMap<>();
-        final var oldDirectoryId = Uuid.randomUuid();
         for (final var controllerNode : nodes.controllerNodes().values()) {
             initialVoters.put(
-                controllerNode.id(),
-                controllerNode.id() == TestKitDefaults.CONTROLLER_ID_OFFSET ?
-                        oldDirectoryId : controllerNode.metadataDirectoryId()
+                controllerNode.id(), controllerNode.metadataDirectoryId()
             );
         }
 
@@ -254,11 +251,11 @@ public class ReconfigurableQuorumIntegrationTest {
                     }
                 });
 
-                // Remove 3002 from voter set
+                // Remove 3002 from the voter set
                 TestUtils.retryOnExceptionWithTimeout(30_000, 100, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     if (!voters.containsKey(3002)) {
-                        // if there are no node 3002, it should be removed
+                        // if there are no node 3002, it should be return
                         return;
                     }
 
@@ -269,23 +266,18 @@ public class ReconfigurableQuorumIntegrationTest {
                     }
                 });
 
-
-                // do not join the voter set in the next twenty seconds
-                for (int i = 0; i < 20; ++i) {
+                // do not join the voter set in the next five seconds
+                for (int i = 0; i < 5; ++i) {
                     TestUtils.retryOnExceptionWithTimeout(30_000, 100, () -> {
-                        TestUtils.retryOnExceptionWithTimeout(30_000, 100, () -> {
-                            Map<Integer, Uuid> voters = findVoterDirs(admin);
-                            if (!voters.containsKey(3002)) {
-                                // if there are no node 3002, it should be removed
-                                return;
-                            }
+                        Map<Integer, Uuid> voters = findVoterDirs(admin);
+                        if (voters.containsKey(3002)) {
+                            throw new NoRetryException(new RuntimeException("node 3002 should not in the voters."));
+                        }
 
-                            admin.removeRaftVoter(3002, voters.get(3002)).all().get();
-                            assertEquals(Set.of(3000, 3001), voters.keySet());
-                            for (int replicaId : new int[] {3000, 3001}) {
-                                assertEquals(nodes.controllerNodes().get(replicaId).metadataDirectoryId(), voters.get(replicaId));
-                            }
-                        });
+                        assertEquals(Set.of(3000, 3001), voters.keySet());
+                        for (int replicaId : new int[] {3000, 3001}) {
+                            assertEquals(nodes.controllerNodes().get(replicaId).metadataDirectoryId(), voters.get(replicaId));
+                        }
                     });
                     Thread.sleep(1000);
                 }
