@@ -85,7 +85,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
@@ -1999,9 +1998,9 @@ public class TaskManagerTest {
             .build();
 
         final TasksRegistry tasks = mock(TasksRegistry.class);
-        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
-
         when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, task)));
+
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
 
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
@@ -4172,9 +4171,6 @@ public class TaskManagerTest {
 
     @Test
     public void shouldNotFailOnTimeoutException() {
-        final AtomicReference<TimeoutException> timeoutException = new AtomicReference<>();
-        timeoutException.set(new TimeoutException("Skip me!"));
-
         final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId00Partitions)
@@ -4195,7 +4191,7 @@ public class TaskManagerTest {
             .thenReturn(false);
 
         when(task01.process(anyLong()))
-            .thenThrow(timeoutException.get())  // throws TimeoutException
+            .thenThrow(new TimeoutException("Skip me!"))  // throws TimeoutException
             .thenReturn(true)
             .thenReturn(true)
             .thenReturn(false);
@@ -4214,8 +4210,7 @@ public class TaskManagerTest {
         assertThat(taskManager.process(1, time), is(2));
         verify(task01).maybeInitTaskTimeoutOrThrow(anyLong(), any(TimeoutException.class));
 
-        //  retry without error - clear the timeout and update the mock
-        timeoutException.set(null);
+        //  retry without error
         assertThat(taskManager.process(1, time), is(3));
         verify(task01).clearTaskTimeout();
 
