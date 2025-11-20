@@ -30,7 +30,6 @@ import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.test.api.TestKitDefaults;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.KRaftVersion;
-import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Tag;
@@ -251,11 +250,13 @@ public class ReconfigurableQuorumIntegrationTest {
                     }
                 });
 
+                AtomicLong removedAtHighWatermark = new AtomicLong();
                 // Remove 3002 from the voter set
                 TestUtils.retryOnExceptionWithTimeout(30_000, 100, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     if (!voters.containsKey(3002)) {
                         // if there are no node 3002, it should be return
+                        removedAtHighWatermark.set(cluster.controllers().get(3002).raftManager().client().highWatermark().getAsLong());
                         return;
                     }
 
@@ -266,20 +267,16 @@ public class ReconfigurableQuorumIntegrationTest {
                     }
                 });
 
-                // do not join the voter set in the next five seconds
-                for (int i = 0; i < 5; ++i) {
-                    TestUtils.retryOnExceptionWithTimeout(30_000, 100, () -> {
-                        Map<Integer, Uuid> voters = findVoterDirs(admin);
-                        if (voters.containsKey(3002)) {
-                            throw new NoRetryException(new RuntimeException("node 3002 should not in the voters."));
-                        }
+                TestUtils.waitForCondition(() -> cluster.controllers().get(3002).raftManager().client().highWatermark().getAsLong()
+                                        > removedAtHighWatermark.get() + 10,
+                        30_000, 100, () -> "High watermark is not advanced in 30000ms"
+                );
 
-                        assertEquals(Set.of(3000, 3001), voters.keySet());
-                        for (int replicaId : new int[] {3000, 3001}) {
-                            assertEquals(nodes.controllerNodes().get(replicaId).metadataDirectoryId(), voters.get(replicaId));
-                        }
-                    });
-                    Thread.sleep(1000);
+                // 3002 does not join the voter set after high watermark advance
+                Map<Integer, Uuid> voters = findVoterDirs(admin);
+                assertEquals(Set.of(3000, 3001), voters.keySet());
+                for (int replicaId : new int[] {3000, 3001}) {
+                    assertEquals(nodes.controllerNodes().get(replicaId).metadataDirectoryId(), voters.get(replicaId));
                 }
             }
         }
