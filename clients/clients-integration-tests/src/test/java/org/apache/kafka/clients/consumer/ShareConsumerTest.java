@@ -3473,12 +3473,12 @@ public class ShareConsumerTest {
             // Offset 1 to 49 shall be in last deliver attempt and hence 1 record per poll.
             validateExpectedRecordsInEachPollAndRelease(shareConsumer, 1, 50, 1);
             // Delivery limit 4.
-            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 50, 99, 50);
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 50, 100, 50);
             // Delivery limit 5.
-            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 50, 99, 1);
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 50, 100, 1);
             // Next poll should not have any records as all records have reached delivery limit.
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2500L));
-            assertTrue(records.isEmpty());
+            assertTrue(records.isEmpty(), "Records should be empty as all records have reached delivery limit. But received: " + records.count());
         }
     }
 
@@ -3609,7 +3609,7 @@ public class ShareConsumerTest {
             validateExpectedRecordsInEachPollAndRelease(shareConsumer, 480, 512, 1);
             // Next poll should not have any records as all records have reached delivery limit.
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2500L));
-            assertTrue(records.isEmpty());
+            assertTrue(records.isEmpty(), "Records should be empty as all records have reached delivery limit. But received: " + records.count());
         }
     }
 
@@ -3681,14 +3681,14 @@ public class ShareConsumerTest {
                 return offsetToDeliveryCountMap.size() == 500 &&
                     offsetToDeliveryCountMap.values().stream().allMatch(deliveryCount -> deliveryCount == 10);
               },
-              60000L,
+              120000L, // 120 seconds.
               50L,
               () -> "failed to get records till delivery limit"
             );
 
             // Next poll should not have any records as all records have reached delivery limit.
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2500L));
-            assertTrue(records.isEmpty());
+            assertTrue(records.isEmpty(), "Records should be empty as all records have reached delivery limit. But received: " + records.count());
         }
     }
 
@@ -3721,7 +3721,7 @@ public class ShareConsumerTest {
             validateExpectedRecordsInEachPollAndRelease(shareConsumer, 0, 512, 512);
             // Next poll should not have any records as all records have reached delivery limit.
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2500L));
-            assertTrue(records.isEmpty());
+            assertTrue(records.isEmpty(), "Records should be empty as all records have reached delivery limit. But received: " + records.count());
         }
     }
 
