@@ -4513,7 +4513,7 @@ public class SharePartitionTest {
         assertNull(sharePartition.cachedState().get(0L).offsetState().get(8L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(0L).offsetState().get(9L).acquisitionLockTimeoutTask());
 
-        // Since only first 5 record from the batch are archived, the batch remains in the cachedState, but the
+        // Since only first 5 records from the batch are archived, the batch remains in the cachedState, but the
         // start offset is updated
         assertEquals(5, sharePartition.startOffset());
         assertEquals(0, sharePartition.deliveryCompleteCount());
