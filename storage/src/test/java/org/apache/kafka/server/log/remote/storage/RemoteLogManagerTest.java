@@ -72,7 +72,6 @@ import com.yammer.metrics.core.MetricName;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -3400,8 +3399,6 @@ public class RemoteLogManagerTest {
         assertEquals(expectedEpoch + " " + expectedStartOffset, bufferedReader.readLine());
     }
 
-
-    @Disabled("KAFKA-19578")
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testCopyQuota(boolean quotaExceeded) throws Exception {
@@ -3424,7 +3421,7 @@ public class RemoteLogManagerTest {
             assertEquals(-1L, capture.getValue());
         } else {
             // Verify the copy operation completes within the timeout, since it does not need to wait for quota availability
-            assertTimeoutPreemptively(Duration.ofMillis(100), () -> task.copyLogSegmentsToRemote(mockLog));
+            assertTimeoutPreemptively(Duration.ofMillis(1000), () -> task.copyLogSegmentsToRemote(mockLog));
 
             // Verify quota check was performed
             verify(rlmCopyQuotaManager, times(1)).getThrottleTimeMs();

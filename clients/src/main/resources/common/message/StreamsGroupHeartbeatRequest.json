@@ -20,10 +20,6 @@
   "name": "StreamsGroupHeartbeatRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
-  // The StreamsGroupHeartbeatRequest API is added as part of KIP-1071 and is still under
-  // development. Hence, the API is not exposed by default by brokers unless
-  // explicitly enabled.
-  "latestVersionUnstable": true,
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The group identifier." },

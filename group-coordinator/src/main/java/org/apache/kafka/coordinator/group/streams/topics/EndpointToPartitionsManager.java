@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.streams.topics;
 
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 
@@ -33,6 +34,33 @@ import java.util.Set;
 public class EndpointToPartitionsManager {
 
     private EndpointToPartitionsManager() {
+    }
+
+    /**
+     * Creates endpoint-to-partitions mapping for a member if the member has a user endpoint.
+     * Returns empty if the member has no user endpoint.
+     *
+     * @param streamsGroupMember The streams group member.
+     * @param streamsGroup       The streams group.
+     * @param metadataImage      The metadata image.
+     * @return An Optional containing the EndpointToPartitions if the member has an endpoint, empty otherwise.
+     */
+    public static Optional<StreamsGroupHeartbeatResponseData.EndpointToPartitions> maybeEndpointToPartitions(
+        final StreamsGroupMember streamsGroupMember,
+        final StreamsGroup streamsGroup,
+        final CoordinatorMetadataImage metadataImage
+    ) {
+        Optional<StreamsGroupMemberMetadataValue.Endpoint> endpointOptional = streamsGroupMember.userEndpoint();
+        if (endpointOptional.isEmpty()) {
+            return Optional.empty();
+        }
+
+        StreamsGroupMemberMetadataValue.Endpoint endpoint = endpointOptional.get();
+        StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
+        responseEndpoint.setHost(endpoint.host());
+        responseEndpoint.setPort(endpoint.port());
+
+        return Optional.of(endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup, metadataImage));
     }
 
     public static StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions(final StreamsGroupMember streamsGroupMember,

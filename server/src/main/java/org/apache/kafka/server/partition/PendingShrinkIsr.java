@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.storage.internals.log;
+package org.apache.kafka.server.partition;
 
 import org.apache.kafka.metadata.LeaderAndIsr;
 import org.apache.kafka.metadata.LeaderRecoveryState;

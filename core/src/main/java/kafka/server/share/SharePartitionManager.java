@@ -33,6 +33,7 @@ import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.server.common.ShareVersion;
+import org.apache.kafka.server.partition.PartitionListener;
 import org.apache.kafka.server.share.CachedSharePartition;
 import org.apache.kafka.server.share.ShareGroupListener;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -57,7 +58,6 @@ import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
-import org.apache.kafka.storage.internals.log.PartitionListener;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.slf4j.Logger;
@@ -623,8 +623,8 @@ public class SharePartitionManager implements AutoCloseable {
 
     // Visible for testing.
     void processShareFetch(ShareFetch shareFetch) {
-        if (shareFetch.topicIdPartitions().isEmpty()) {
-            // If there are no partitions to fetch then complete the future with an empty map.
+        if (shareFetch.topicIdPartitions().isEmpty() || shareFetch.maxFetchRecords() == 0 || shareFetch.fetchParams().maxBytes == 0) {
+            // If there are no partitions or no data requested to fetch then complete the future with an empty map.
             shareFetch.maybeComplete(Map.of());
             return;
         }
