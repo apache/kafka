@@ -4438,23 +4438,33 @@ public class TaskManagerTest {
 
     @Test
     public void shouldThrowRuntimeExceptionWhenEncounteredUnknownExceptionDuringTaskClose() {
-        final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false, stateManager) {
-            @Override
-            public void suspend() {
-                super.suspend();
-                throw new TaskMigratedException("t1 close exception", new RuntimeException());
-            }
-        };
+        final StandbyTask migratedTask01 = standbyTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId01Partitions)
+            .build();
+        final StandbyTask migratedTask02 = standbyTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId02Partitions)
+            .build();
 
-        final StateMachineTask migratedTask02 = new StateMachineTask(taskId02, taskId02Partitions, false, stateManager) {
-            @Override
-            public void suspend() {
-                super.suspend();
-                throw new IllegalStateException("t2 illegal state exception", new RuntimeException());
-            }
-        };
-        taskManager.addTask(migratedTask01);
-        taskManager.addTask(migratedTask02);
+        doThrow(new TaskMigratedException("t1 close exception", new RuntimeException()))
+            .when(migratedTask01).suspend();
+        doThrow(new IllegalStateException("t2 illegal state exception", new RuntimeException()))
+            .when(migratedTask02).suspend();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        when(stateUpdater.tasks()).thenReturn(Set.of(migratedTask01, migratedTask02));
+
+        // mock futures for removing tasks from StateUpdater
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future01 = new CompletableFuture<>();
+        when(stateUpdater.remove(taskId01)).thenReturn(future01);
+        future01.complete(new StateUpdater.RemovedTaskResult(migratedTask01));
+
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future02 = new CompletableFuture<>();
+        when(stateUpdater.remove(taskId02)).thenReturn(future02);
+        future02.complete(new StateUpdater.RemovedTaskResult(migratedTask02));
 
         final RuntimeException thrown = assertThrows(
             RuntimeException.class,
@@ -4464,27 +4474,42 @@ public class TaskManagerTest {
         assertThat(thrown.getMessage(), equalTo("Encounter unexpected fatal error for task 0_2"));
 
         assertThat(thrown.getCause().getMessage(), equalTo("t2 illegal state exception"));
+
+        verify(migratedTask01, times(2)).suspend();
+        verify(migratedTask02, times(2)).suspend();
+        verify(stateUpdater).remove(taskId01);
+        verify(stateUpdater).remove(taskId02);
     }
 
     @Test
     public void shouldThrowSameKafkaExceptionWhenEncounteredDuringTaskClose() {
-        final StateMachineTask migratedTask01 = new StateMachineTask(taskId01, taskId01Partitions, false, stateManager) {
-            @Override
-            public void suspend() {
-                super.suspend();
-                throw new TaskMigratedException("t1 close exception", new RuntimeException());
-            }
-        };
+        final StandbyTask migratedTask01 = standbyTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId01Partitions)
+            .build();
+        final StandbyTask migratedTask02 = standbyTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId02Partitions)
+            .build();
 
-        final StateMachineTask migratedTask02 = new StateMachineTask(taskId02, taskId02Partitions, false, stateManager) {
-            @Override
-            public void suspend() {
-                super.suspend();
-                throw new KafkaException("Kaboom for t2!", new RuntimeException());
-            }
-        };
-        taskManager.addTask(migratedTask01);
-        taskManager.addTask(migratedTask02);
+        doThrow(new TaskMigratedException("t1 close exception", new RuntimeException()))
+            .when(migratedTask01).suspend();
+        doThrow(new KafkaException("Kaboom for t2!", new RuntimeException()))
+            .when(migratedTask02).suspend();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        when(stateUpdater.tasks()).thenReturn(Set.of(migratedTask01, migratedTask02));
+
+        // mock futures for removing tasks from StateUpdater
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future01 = new CompletableFuture<>();
+        when(stateUpdater.remove(taskId01)).thenReturn(future01);
+        future01.complete(new StateUpdater.RemovedTaskResult(migratedTask01));
+
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future02 = new CompletableFuture<>();
+        when(stateUpdater.remove(taskId02)).thenReturn(future02);
+        future02.complete(new StateUpdater.RemovedTaskResult(migratedTask02));
 
         final StreamsException thrown = assertThrows(
             StreamsException.class,
@@ -4496,6 +4521,11 @@ public class TaskManagerTest {
 
         // Expecting the original Kafka exception wrapped in the StreamsException.
         assertThat(thrown.getCause().getMessage(), equalTo("Kaboom for t2!"));
+
+        verify(migratedTask01, times(2)).suspend();
+        verify(migratedTask02, times(2)).suspend();
+        verify(stateUpdater).remove(taskId01);
+        verify(stateUpdater).remove(taskId02);
     }
 
     @Test
@@ -4721,28 +4751,33 @@ public class TaskManagerTest {
 
     @Test
     public void shouldSuspendAllTasksButSkipCommitIfSuspendingFailsDuringRevocation() {
-        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
-            @Override
-            public void suspend() {
-                super.suspend();
-                throw new RuntimeException("KABOOM!");
-            }
-        };
-        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager);
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions)
+            .build();
+        final StreamTask task01 = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId01Partitions)
+            .build();
 
-        final Map<TaskId, Set<TopicPartition>> assignment = new HashMap<>(taskId00Assignment);
-        assignment.putAll(taskId01Assignment);
-        when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(asList(task00, task01));
+        doThrow(new RuntimeException("KABOOM!")).when(task00).suspend();
 
-        taskManager.handleAssignment(assignment, Collections.emptyMap());
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+
+        when(tasks.allTasks()).thenReturn(Set.of(task00, task01));
+
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
 
         final RuntimeException thrown = assertThrows(
             RuntimeException.class,
-            () -> taskManager.handleRevocation(asList(t1p0, t1p1)));
+            () -> taskManager.handleRevocation(union(HashSet::new, taskId00Partitions, taskId01Partitions)));
 
         assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
-        assertThat(task00.state(), is(Task.State.SUSPENDED));
-        assertThat(task01.state(), is(Task.State.SUSPENDED));
+
+        // verify both tasks had suspend called
+        verify(task00).suspend();
+        verify(task01).suspend();
+
         verifyNoInteractions(consumer);
     }
 
