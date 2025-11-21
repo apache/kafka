@@ -1930,7 +1930,14 @@ public class SharePartition {
                 //   - maxDeliveryCount = 6, throttleRecordsDeliveryLimit = 3, batch size = 500
                 //   - deliveryCount = 3: maxFetchRecords = 500 >> (3 - 3 + 1) = 250
                 //   - deliveryCount = 4: maxFetchRecords = 500 >> (4 - 3 + 1) = 125
-                // The `maxFetchRecordsWhileThrottledRecords` is calculated based on the first acquirable record that meets the throttling criteria in the batch.
+                // The `maxFetchRecordsWhileThrottledRecords` is calculated based on the first acquirable
+                // record that meets the throttling criteria in the batch. Generally, when complete
+                // batch is erroring out and increases delivery count then the front offset can have
+                // higher delivery count then the later offsets, for example for a batch of 500 records
+                // and delivery limit of 10 the division will happen as 250, 125, 62, 31, 1 which means
+                // offset 124 will be at higher delivery count than offset 125. The calculation below
+                // deliver 124 once alone and then proceed with 125 onwards. The code ensures that
+                // the records at higher delivery count are isolated first.
                 if (recordDeliveryCount >= throttleRecordsDeliveryLimit && maxFetchRecordsWhileThrottledRecords < 0) {
                     maxFetchRecordsWhileThrottledRecords = Math.max(1, (long) inFlightBatch.offsetState().size() >> (recordDeliveryCount - throttleRecordsDeliveryLimit + 1));
                     hasThrottledRecord = true;
@@ -2006,7 +2013,7 @@ public class SharePartition {
      *
      * @param inFlightBatch       The in-flight batch to check for throttling.
      * @param requestFirstOffset  The first offset to acquire.
-     * @param requestLastOffset   THe last offset to acquire.
+     * @param requestLastOffset   The last offset to acquire.
      * @return True if the batch should be throttled (delivery count >= threshold), false otherwise.
      */
     private boolean shouldThrottleRecordsDelivery(InFlightBatch inFlightBatch, long requestFirstOffset, long requestLastOffset) {
