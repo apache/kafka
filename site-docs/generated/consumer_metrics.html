@@ -1,0 +1,153 @@
+<table class="data-table">
+<tbody>
+<tr>
+<th>Metric/Attribute name</th>
+<th>Description</th>
+<th>Mbean name</th>
+</tr>
+<tr>
+<td>bytes-consumed-rate</td>
+<td>The average number of bytes consumed per second</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>bytes-consumed-total</td>
+<td>The total number of bytes consumed</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>fetch-latency-avg</td>
+<td>The average time taken for a fetch request.</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>fetch-latency-max</td>
+<td>The max time taken for any fetch request.</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>fetch-rate</td>
+<td>The number of fetch requests per second.</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>fetch-size-avg</td>
+<td>The average number of bytes fetched per request</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>fetch-size-max</td>
+<td>The maximum number of bytes fetched per request</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>fetch-throttle-time-avg</td>
+<td>The average throttle time in ms</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>fetch-throttle-time-max</td>
+<td>The maximum throttle time in ms</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>fetch-total</td>
+<td>The total number of fetch requests.</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>records-consumed-rate</td>
+<td>The average number of records consumed per second</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>records-consumed-total</td>
+<td>The total number of records consumed</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>records-lag-max</td>
+<td>The maximum lag in terms of number of records for any partition in this window. NOTE: This is based on current offset and not committed offset</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>records-lead-min</td>
+<td>The minimum lead in terms of number of records for any partition in this window</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>records-per-request-avg</td>
+<td>The average number of records in each request</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>bytes-consumed-rate</td>
+<td>The average number of bytes consumed per second for a topic. Note: For topic names with periods (.), an additional metric with underscores is emitted. However, the periods replaced metric is deprecated. Please use the metric with actual topic name instead.</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}",topic="{topic}"</td>
+</tr>
+<tr>
+<td>bytes-consumed-total</td>
+<td>The total number of bytes consumed for a topic. Note: For topic names with periods (.), an additional metric with underscores is emitted. However, the periods replaced metric is deprecated. Please use the metric with actual topic name instead.</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}",topic="{topic}"</td>
+</tr>
+<tr>
+<td>fetch-size-avg</td>
+<td>The average number of bytes fetched per request for a topic. Note: For topic names with periods (.), an additional metric with underscores is emitted. However, the periods replaced metric is deprecated. Please use the metric with actual topic name instead.</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}",topic="{topic}"</td>
+</tr>
+<tr>
+<td>fetch-size-max</td>
+<td>The maximum number of bytes fetched per request for a topic. Note: For topic names with periods (.), an additional metric with underscores is emitted. However, the periods replaced metric is deprecated. Please use the metric with actual topic name instead.</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}",topic="{topic}"</td>
+</tr>
+<tr>
+<td>records-consumed-rate</td>
+<td>The average number of records consumed per second for a topic. Note: For topic names with periods (.), an additional metric with underscores is emitted. However, the periods replaced metric is deprecated. Please use the metric with actual topic name instead.</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}",topic="{topic}"</td>
+</tr>
+<tr>
+<td>records-consumed-total</td>
+<td>The total number of records consumed for a topic. Note: For topic names with periods (.), an additional metric with underscores is emitted. However, the periods replaced metric is deprecated. Please use the metric with actual topic name instead.</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}",topic="{topic}"</td>
+</tr>
+<tr>
+<td>records-per-request-avg</td>
+<td>The average number of records in each request for a topic. Note: For topic names with periods (.), an additional metric with underscores is emitted. However, the periods replaced metric is deprecated. Please use the metric with actual topic name instead.</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id="{client-id}",topic="{topic}"</td>
+</tr>
+<tr>
+<td>preferred-read-replica</td>
+<td>The current read replica for the partition, or -1 if reading from leader. Note: For topic names with periods (.), an additional metric with underscores is emitted. However, the periods replaced metric is deprecated. Please use the metric with actual topic name instead.</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,partition="{partition}",topic="{topic}",client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>records-lag</td>
+<td>The latest lag of the partition. Note: For topic names with periods (.), an additional metric with underscores is emitted. However, the periods replaced metric is deprecated. Please use the metric with actual topic name instead.</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,partition="{partition}",topic="{topic}",client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>records-lag-avg</td>
+<td>The average lag of the partition. Note: For topic names with periods (.), an additional metric with underscores is emitted. However, the periods replaced metric is deprecated. Please use the metric with actual topic name instead.</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,partition="{partition}",topic="{topic}",client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>records-lag-max</td>
+<td>The max lag of the partition. Note: For topic names with periods (.), an additional metric with underscores is emitted. However, the periods replaced metric is deprecated. Please use the metric with actual topic name instead.</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,partition="{partition}",topic="{topic}",client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>records-lead</td>
+<td>The latest lead of the partition. Note: For topic names with periods (.), an additional metric with underscores is emitted. However, the periods replaced metric is deprecated. Please use the metric with actual topic name instead.</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,partition="{partition}",topic="{topic}",client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>records-lead-avg</td>
+<td>The average lead of the partition. Note: For topic names with periods (.), an additional metric with underscores is emitted. However, the periods replaced metric is deprecated. Please use the metric with actual topic name instead.</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,partition="{partition}",topic="{topic}",client-id="{client-id}"</td>
+</tr>
+<tr>
+<td>records-lead-min</td>
+<td>The min lead of the partition. Note: For topic names with periods (.), an additional metric with underscores is emitted. However, the periods replaced metric is deprecated. Please use the metric with actual topic name instead.</td>
+<td>kafka.consumer:type=consumer-fetch-manager-metrics,partition="{partition}",topic="{topic}",client-id="{client-id}"</td>
+</tr>
+</tbody></table>

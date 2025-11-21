@@ -1,0 +1,63 @@
+<ul class="config-list">
+<li>
+<h4><a id="remote.log.metadata.consume.wait.ms"></a><a id="remote_log_metadata_manager_remote.log.metadata.consume.wait.ms" href="#remote_log_metadata_manager_remote.log.metadata.consume.wait.ms">remote.log.metadata.consume.wait.ms</a></h4>
+<p>The amount of time in milliseconds to wait for the local consumer to receive the published event.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>120000 (2 minutes)</td></tr>
+<tr><th>Valid Values:</th><td>[0,...]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="remote.log.metadata.initialization.retry.interval.ms"></a><a id="remote_log_metadata_manager_remote.log.metadata.initialization.retry.interval.ms" href="#remote_log_metadata_manager_remote.log.metadata.initialization.retry.interval.ms">remote.log.metadata.initialization.retry.interval.ms</a></h4>
+<p>The retry interval in milliseconds for retrying RemoteLogMetadataManager resources initialization again.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>100</td></tr>
+<tr><th>Valid Values:</th><td>[0,...]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="remote.log.metadata.initialization.retry.max.timeout.ms"></a><a id="remote_log_metadata_manager_remote.log.metadata.initialization.retry.max.timeout.ms" href="#remote_log_metadata_manager_remote.log.metadata.initialization.retry.max.timeout.ms">remote.log.metadata.initialization.retry.max.timeout.ms</a></h4>
+<p>The maximum amount of time in milliseconds for retrying RemoteLogMetadataManager resources initialization. For TopicBasedRemoteLogMetadataManager's initialization, the timer starts after this local broker is ready to process requests (primarily for ensuring the local cluster is ready when metadata is stored locally as an internal topic). If initialization fails within this timeout, this broker process will terminate.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>120000 (2 minutes)</td></tr>
+<tr><th>Valid Values:</th><td>[0,...]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="remote.log.metadata.topic.num.partitions"></a><a id="remote_log_metadata_manager_remote.log.metadata.topic.num.partitions" href="#remote_log_metadata_manager_remote.log.metadata.topic.num.partitions">remote.log.metadata.topic.num.partitions</a></h4>
+<p>The number of partitions for remote log metadata topic.</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>50</td></tr>
+<tr><th>Valid Values:</th><td>[1,...]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="remote.log.metadata.topic.replication.factor"></a><a id="remote_log_metadata_manager_remote.log.metadata.topic.replication.factor" href="#remote_log_metadata_manager_remote.log.metadata.topic.replication.factor">remote.log.metadata.topic.replication.factor</a></h4>
+<p>Replication factor of remote log metadata topic.</p>
+<table><tbody>
+<tr><th>Type:</th><td>short</td></tr>
+<tr><th>Default:</th><td>3</td></tr>
+<tr><th>Valid Values:</th><td>[1,...]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="remote.log.metadata.topic.retention.ms"></a><a id="remote_log_metadata_manager_remote.log.metadata.topic.retention.ms" href="#remote_log_metadata_manager_remote.log.metadata.topic.retention.ms">remote.log.metadata.topic.retention.ms</a></h4>
+<p>Retention of remote log metadata topic in milliseconds. Default: -1, that means unlimited. Users can configure this value based on their use cases. To avoid any data loss, this value should be more than the maximum retention period of any topic enabled with tiered storage in the cluster.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>-1</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+</ul>
+

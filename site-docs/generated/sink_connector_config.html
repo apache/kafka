@@ -1,0 +1,243 @@
+<ul class="config-list">
+<li>
+<h4><a id="name"></a><a id="sinkconnectorconfigs_name" href="#sinkconnectorconfigs_name">name</a></h4>
+<p>Globally unique name to use for this connector.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td></td></tr>
+<tr><th>Valid Values:</th><td>non-empty string without ISO control characters</td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="connector.class"></a><a id="sinkconnectorconfigs_connector.class" href="#sinkconnectorconfigs_connector.class">connector.class</a></h4>
+<p>Name or alias of the class for this connector. Must be a subclass of org.apache.kafka.connect.connector.Connector. If the connector is org.apache.kafka.connect.file.FileStreamSinkConnector, you can either specify this full name,  or use "FileStreamSink" or "FileStreamSinkConnector" to make the configuration a bit shorter</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td></td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="connector.plugin.version"></a><a id="sinkconnectorconfigs_connector.plugin.version" href="#sinkconnectorconfigs_connector.plugin.version">connector.plugin.version</a></h4>
+<p>Version of the connector.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td>org.apache.kafka.connect.runtime.ConnectorConfig$PluginVersionValidator@46ee7fe8</td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="tasks.max"></a><a id="sinkconnectorconfigs_tasks.max" href="#sinkconnectorconfigs_tasks.max">tasks.max</a></h4>
+<p>Maximum number of tasks to use for this connector.</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>1</td></tr>
+<tr><th>Valid Values:</th><td>[1,...]</td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="topics"></a><a id="sinkconnectorconfigs_topics" href="#sinkconnectorconfigs_topics">topics</a></h4>
+<p>List of topics to consume, separated by commas</p>
+<table><tbody>
+<tr><th>Type:</th><td>list</td></tr>
+<tr><th>Default:</th><td>""</td></tr>
+<tr><th>Valid Values:</th><td>[] (empty config allowed) (null not allowed)</td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="topics.regex"></a><a id="sinkconnectorconfigs_topics.regex" href="#sinkconnectorconfigs_topics.regex">topics.regex</a></h4>
+<p>Regular expression giving topics to consume. Under the hood, the regex is compiled to a <code>java.util.regex.Pattern</code>. Only one of topics or topics.regex should be specified.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>""</td></tr>
+<tr><th>Valid Values:</th><td>valid regex</td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="tasks.max.enforce"></a><a id="sinkconnectorconfigs_tasks.max.enforce" href="#sinkconnectorconfigs_tasks.max.enforce">tasks.max.enforce</a></h4>
+<p>(Deprecated) Whether to enforce that the tasks.max property is respected by the connector. By default, connectors that generate too many tasks will fail, and existing sets of tasks that exceed the tasks.max property will also be failed. If this property is set to false, then connectors will be allowed to generate more than the maximum number of tasks, and existing sets of tasks that exceed the tasks.max property will be allowed to run. This property is deprecated and will be removed in an upcoming major release.</p>
+<table><tbody>
+<tr><th>Type:</th><td>boolean</td></tr>
+<tr><th>Default:</th><td>true</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="key.converter"></a><a id="sinkconnectorconfigs_key.converter" href="#sinkconnectorconfigs_key.converter">key.converter</a></h4>
+<p>Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka. This controls the format of the keys in messages written to or read from Kafka, and since this is independent of connectors it allows any connector to work with any serialization format. Examples of common formats include JSON and Avro.</p>
+<table><tbody>
+<tr><th>Type:</th><td>class</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td>A concrete subclass of org.apache.kafka.connect.storage.Converter, A class with a public, no-argument constructor</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="key.converter.plugin.version"></a><a id="sinkconnectorconfigs_key.converter.plugin.version" href="#sinkconnectorconfigs_key.converter.plugin.version">key.converter.plugin.version</a></h4>
+<p>Version of the key converter.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td>org.apache.kafka.connect.runtime.ConnectorConfig$PluginVersionValidator@3b95a09c</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="value.converter"></a><a id="sinkconnectorconfigs_value.converter" href="#sinkconnectorconfigs_value.converter">value.converter</a></h4>
+<p>Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka. This controls the format of the values in messages written to or read from Kafka, and since this is independent of connectors it allows any connector to work with any serialization format. Examples of common formats include JSON and Avro.</p>
+<table><tbody>
+<tr><th>Type:</th><td>class</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td>A concrete subclass of org.apache.kafka.connect.storage.Converter, A class with a public, no-argument constructor</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="value.converter.plugin.version"></a><a id="sinkconnectorconfigs_value.converter.plugin.version" href="#sinkconnectorconfigs_value.converter.plugin.version">value.converter.plugin.version</a></h4>
+<p>Version of the value converter.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td>org.apache.kafka.connect.runtime.ConnectorConfig$PluginVersionValidator@6ae40994</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="header.converter"></a><a id="sinkconnectorconfigs_header.converter" href="#sinkconnectorconfigs_header.converter">header.converter</a></h4>
+<p>HeaderConverter class used to convert between Kafka Connect format and the serialized form that is written to Kafka. This controls the format of the header values in messages written to or read from Kafka, and since this is independent of connectors it allows any connector to work with any serialization format. Examples of common formats include JSON and Avro. By default, the SimpleHeaderConverter is used to serialize header values to strings and deserialize them by inferring the schemas.</p>
+<table><tbody>
+<tr><th>Type:</th><td>class</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td>A concrete subclass of org.apache.kafka.connect.storage.HeaderConverter, A class with a public, no-argument constructor</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="header.converter.plugin.version"></a><a id="sinkconnectorconfigs_header.converter.plugin.version" href="#sinkconnectorconfigs_header.converter.plugin.version">header.converter.plugin.version</a></h4>
+<p>Version of the header converter.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td>org.apache.kafka.connect.runtime.ConnectorConfig$PluginVersionValidator@1a93a7ca</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="config.action.reload"></a><a id="sinkconnectorconfigs_config.action.reload" href="#sinkconnectorconfigs_config.action.reload">config.action.reload</a></h4>
+<p>The action that Connect should take on the connector when changes in external configuration providers result in a change in the connector's configuration properties. A value of 'none' indicates that Connect will do nothing. A value of 'restart' indicates that Connect should restart/reload the connector with the updated configuration properties.The restart may actually be scheduled in the future if the external configuration provider indicates that a configuration value will expire in the future.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>restart</td></tr>
+<tr><th>Valid Values:</th><td>[none, restart]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="transforms"></a><a id="sinkconnectorconfigs_transforms" href="#sinkconnectorconfigs_transforms">transforms</a></h4>
+<p>Aliases for the transformations to be applied to records.</p>
+<table><tbody>
+<tr><th>Type:</th><td>list</td></tr>
+<tr><th>Default:</th><td>""</td></tr>
+<tr><th>Valid Values:</th><td>non-null string, unique transformation aliases</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="predicates"></a><a id="sinkconnectorconfigs_predicates" href="#sinkconnectorconfigs_predicates">predicates</a></h4>
+<p>Aliases for the predicates used by transformations.</p>
+<table><tbody>
+<tr><th>Type:</th><td>list</td></tr>
+<tr><th>Default:</th><td>""</td></tr>
+<tr><th>Valid Values:</th><td>non-null string, unique predicate aliases</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="errors.retry.timeout"></a><a id="sinkconnectorconfigs_errors.retry.timeout" href="#sinkconnectorconfigs_errors.retry.timeout">errors.retry.timeout</a></h4>
+<p>The maximum duration in milliseconds that a failed operation will be reattempted. The default is 0, which means no retries will be attempted. Use -1 for infinite retries.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>0</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="errors.retry.delay.max.ms"></a><a id="sinkconnectorconfigs_errors.retry.delay.max.ms" href="#sinkconnectorconfigs_errors.retry.delay.max.ms">errors.retry.delay.max.ms</a></h4>
+<p>The maximum duration in milliseconds between consecutive retry attempts. Jitter will be added to the delay once this limit is reached to prevent thundering herd issues.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>60000 (1 minute)</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="errors.tolerance"></a><a id="sinkconnectorconfigs_errors.tolerance" href="#sinkconnectorconfigs_errors.tolerance">errors.tolerance</a></h4>
+<p>Behavior for tolerating errors during connector operation. 'none' is the default value and signals that any error will result in an immediate connector task failure; 'all' changes the behavior to skip over problematic records.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>none</td></tr>
+<tr><th>Valid Values:</th><td>[none, all]</td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="errors.log.enable"></a><a id="sinkconnectorconfigs_errors.log.enable" href="#sinkconnectorconfigs_errors.log.enable">errors.log.enable</a></h4>
+<p>If true, write each error and the details of the failed operation and problematic record to the Connect application log. This is 'false' by default, so that only errors that are not tolerated are reported.</p>
+<table><tbody>
+<tr><th>Type:</th><td>boolean</td></tr>
+<tr><th>Default:</th><td>false</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="errors.log.include.messages"></a><a id="sinkconnectorconfigs_errors.log.include.messages" href="#sinkconnectorconfigs_errors.log.include.messages">errors.log.include.messages</a></h4>
+<p>Whether to include in the log the Connect record that resulted in a failure. For sink records, the topic, partition, offset, and timestamp will be logged. For source records, the key and value (and their schemas), all headers, and the timestamp, Kafka topic, Kafka partition, source partition, and source offset will be logged. This is 'false' by default, which will prevent record keys, values, and headers from being written to log files.</p>
+<table><tbody>
+<tr><th>Type:</th><td>boolean</td></tr>
+<tr><th>Default:</th><td>false</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="errors.deadletterqueue.topic.name"></a><a id="sinkconnectorconfigs_errors.deadletterqueue.topic.name" href="#sinkconnectorconfigs_errors.deadletterqueue.topic.name">errors.deadletterqueue.topic.name</a></h4>
+<p>The name of the topic to be used as the dead letter queue (DLQ) for messages that result in an error when processed by this sink connector, or its transformations or converters. The topic name is blank by default, which means that no messages are to be recorded in the DLQ.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>""</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="errors.deadletterqueue.topic.replication.factor"></a><a id="sinkconnectorconfigs_errors.deadletterqueue.topic.replication.factor" href="#sinkconnectorconfigs_errors.deadletterqueue.topic.replication.factor">errors.deadletterqueue.topic.replication.factor</a></h4>
+<p>Replication factor used to create the dead letter queue topic when it doesn't already exist.</p>
+<table><tbody>
+<tr><th>Type:</th><td>short</td></tr>
+<tr><th>Default:</th><td>3</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="errors.deadletterqueue.context.headers.enable"></a><a id="sinkconnectorconfigs_errors.deadletterqueue.context.headers.enable" href="#sinkconnectorconfigs_errors.deadletterqueue.context.headers.enable">errors.deadletterqueue.context.headers.enable</a></h4>
+<p>If true, add headers containing error context to the messages written to the dead letter queue. To avoid clashing with headers from the original record, all error context header keys, all error context header keys will start with <code>__connect.errors.</code></p>
+<table><tbody>
+<tr><th>Type:</th><td>boolean</td></tr>
+<tr><th>Default:</th><td>false</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+</ul>
+

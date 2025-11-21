@@ -1,0 +1,1333 @@
+<ul class="config-list">
+<li>
+<h4><a id="bootstrap.servers"></a><a id="connectconfigs_bootstrap.servers" href="#connectconfigs_bootstrap.servers">bootstrap.servers</a></h4>
+<p>A list of host/port pairs used to establish the initial connection to the Kafka cluster. Clients use this list to bootstrap and discover the full set of Kafka brokers. While the order of servers in the list does not matter, we recommend including more than one server to ensure resilience if any servers are down. This list does not need to contain the entire set of brokers, as Kafka clients automatically manage and update connections to the cluster efficiently. This list must be in the form <code>host1:port1,host2:port2,...</code>.</p>
+<table><tbody>
+<tr><th>Type:</th><td>list</td></tr>
+<tr><th>Default:</th><td></td></tr>
+<tr><th>Valid Values:</th><td>[] (empty not allowed) (null not allowed)</td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="config.storage.topic"></a><a id="connectconfigs_config.storage.topic" href="#connectconfigs_config.storage.topic">config.storage.topic</a></h4>
+<p>The name of the Kafka topic where connector configurations are stored</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td></td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="group.id"></a><a id="connectconfigs_group.id" href="#connectconfigs_group.id">group.id</a></h4>
+<p>A unique string that identifies the Connect cluster group this worker belongs to.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td></td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="key.converter"></a><a id="connectconfigs_key.converter" href="#connectconfigs_key.converter">key.converter</a></h4>
+<p>Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka. This controls the format of the keys in messages written to or read from Kafka, and since this is independent of connectors it allows any connector to work with any serialization format. Examples of common formats include JSON and Avro.</p>
+<table><tbody>
+<tr><th>Type:</th><td>class</td></tr>
+<tr><th>Default:</th><td></td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="offset.storage.topic"></a><a id="connectconfigs_offset.storage.topic" href="#connectconfigs_offset.storage.topic">offset.storage.topic</a></h4>
+<p>The name of the Kafka topic where source connector offsets are stored</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td></td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="status.storage.topic"></a><a id="connectconfigs_status.storage.topic" href="#connectconfigs_status.storage.topic">status.storage.topic</a></h4>
+<p>The name of the Kafka topic where connector and task status are stored</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td></td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="value.converter"></a><a id="connectconfigs_value.converter" href="#connectconfigs_value.converter">value.converter</a></h4>
+<p>Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka. This controls the format of the values in messages written to or read from Kafka, and since this is independent of connectors it allows any connector to work with any serialization format. Examples of common formats include JSON and Avro.</p>
+<table><tbody>
+<tr><th>Type:</th><td>class</td></tr>
+<tr><th>Default:</th><td></td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="exactly.once.source.support"></a><a id="connectconfigs_exactly.once.source.support" href="#connectconfigs_exactly.once.source.support">exactly.once.source.support</a></h4>
+<p>Whether to enable exactly-once support for source connectors in the cluster by using transactions to write source records and their source offsets, and by proactively fencing out old task generations before bringing up new ones.<br>To enable exactly-once source support on a new cluster, set this property to 'enabled'. To enable support on an existing cluster, first set to 'preparing' on every worker in the cluster, then set to 'enabled'. A rolling upgrade may be used for both changes. For more information on this feature, see the <a href="https://kafka.apache.org/documentation.html#connect_exactlyoncesource">exactly-once source support documentation</a>.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>disabled</td></tr>
+<tr><th>Valid Values:</th><td>(case insensitive) [DISABLED, ENABLED, PREPARING]</td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="heartbeat.interval.ms"></a><a id="connectconfigs_heartbeat.interval.ms" href="#connectconfigs_heartbeat.interval.ms">heartbeat.interval.ms</a></h4>
+<p>The expected time between heartbeats to the group coordinator when using Kafka's group management facilities. Heartbeats are used to ensure that the worker's session stays active and to facilitate rebalancing when new members join or leave the group. The value must be set lower than <code>session.timeout.ms</code>, but typically should be set no higher than 1/3 of that value. It can be adjusted even lower to control the expected time for normal rebalances.</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>3000 (3 seconds)</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="rebalance.timeout.ms"></a><a id="connectconfigs_rebalance.timeout.ms" href="#connectconfigs_rebalance.timeout.ms">rebalance.timeout.ms</a></h4>
+<p>The maximum allowed time for each worker to join the group once a rebalance has begun. This is basically a limit on the amount of time needed for all tasks to flush any pending data and commit offsets. If the timeout is exceeded, then the worker will be removed from the group, which will cause offset commit failures.</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>60000 (1 minute)</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="session.timeout.ms"></a><a id="connectconfigs_session.timeout.ms" href="#connectconfigs_session.timeout.ms">session.timeout.ms</a></h4>
+<p>The timeout used to detect worker failures. The worker sends periodic heartbeats to indicate its liveness to the broker. If no heartbeats are received by the broker before the expiration of this session timeout, then the broker will remove the worker from the group and initiate a rebalance. Note that the value must be in the allowable range as configured in the broker configuration by <code>group.min.session.timeout.ms</code> and <code>group.max.session.timeout.ms</code>.</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>10000 (10 seconds)</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.key.password"></a><a id="connectconfigs_ssl.key.password" href="#connectconfigs_ssl.key.password">ssl.key.password</a></h4>
+<p>The password of the private key in the key store file or the PEM key specified in 'ssl.keystore.key'.</p>
+<table><tbody>
+<tr><th>Type:</th><td>password</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.keystore.certificate.chain"></a><a id="connectconfigs_ssl.keystore.certificate.chain" href="#connectconfigs_ssl.keystore.certificate.chain">ssl.keystore.certificate.chain</a></h4>
+<p>Certificate chain in the format specified by 'ssl.keystore.type'. Default SSL engine factory supports only PEM format with a list of X.509 certificates</p>
+<table><tbody>
+<tr><th>Type:</th><td>password</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.keystore.key"></a><a id="connectconfigs_ssl.keystore.key" href="#connectconfigs_ssl.keystore.key">ssl.keystore.key</a></h4>
+<p>Private key in the format specified by 'ssl.keystore.type'. Default SSL engine factory supports only PEM format with PKCS#8 keys. If the key is encrypted, key password must be specified using 'ssl.key.password'</p>
+<table><tbody>
+<tr><th>Type:</th><td>password</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.keystore.location"></a><a id="connectconfigs_ssl.keystore.location" href="#connectconfigs_ssl.keystore.location">ssl.keystore.location</a></h4>
+<p>The location of the key store file. This is optional for client and can be used for two-way authentication for client.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.keystore.password"></a><a id="connectconfigs_ssl.keystore.password" href="#connectconfigs_ssl.keystore.password">ssl.keystore.password</a></h4>
+<p>The store password for the key store file. This is optional for client and only needed if 'ssl.keystore.location' is configured. Key store password is not supported for PEM format.</p>
+<table><tbody>
+<tr><th>Type:</th><td>password</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.truststore.certificates"></a><a id="connectconfigs_ssl.truststore.certificates" href="#connectconfigs_ssl.truststore.certificates">ssl.truststore.certificates</a></h4>
+<p>Trusted certificates in the format specified by 'ssl.truststore.type'. Default SSL engine factory supports only PEM format with X.509 certificates.</p>
+<table><tbody>
+<tr><th>Type:</th><td>password</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.truststore.location"></a><a id="connectconfigs_ssl.truststore.location" href="#connectconfigs_ssl.truststore.location">ssl.truststore.location</a></h4>
+<p>The location of the trust store file.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.truststore.password"></a><a id="connectconfigs_ssl.truststore.password" href="#connectconfigs_ssl.truststore.password">ssl.truststore.password</a></h4>
+<p>The password for the trust store file. If a password is not set, trust store file configured will still be used, but integrity checking is disabled. Trust store password is not supported for PEM format.</p>
+<table><tbody>
+<tr><th>Type:</th><td>password</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>high</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="client.dns.lookup"></a><a id="connectconfigs_client.dns.lookup" href="#connectconfigs_client.dns.lookup">client.dns.lookup</a></h4>
+<p>Controls how the client uses DNS lookups. If set to <code>use_all_dns_ips</code>, connect to each returned IP address in sequence until a successful connection is established. After a disconnection, the next IP is used. Once all IPs have been used once, the client resolves the IP(s) from the hostname again (both the JVM and the OS cache DNS name lookups, however). If set to <code>resolve_canonical_bootstrap_servers_only</code>, resolve each bootstrap address into a list of canonical names. After the bootstrap phase, this behaves the same as <code>use_all_dns_ips</code>.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>use_all_dns_ips</td></tr>
+<tr><th>Valid Values:</th><td>[use_all_dns_ips, resolve_canonical_bootstrap_servers_only]</td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="connections.max.idle.ms"></a><a id="connectconfigs_connections.max.idle.ms" href="#connectconfigs_connections.max.idle.ms">connections.max.idle.ms</a></h4>
+<p>Close idle connections after the number of milliseconds specified by this config.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>540000 (9 minutes)</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="connector.client.config.override.policy"></a><a id="connectconfigs_connector.client.config.override.policy" href="#connectconfigs_connector.client.config.override.policy">connector.client.config.override.policy</a></h4>
+<p>Class name or alias of implementation of <code>ConnectorClientConfigOverridePolicy</code>. Defines what client configurations can be overridden by the connector. The default policy is <code>All</code>, meaning connector configurations can override all client properties. The other possible policies in the framework include <code>Allowlist</code> to specify allowed configurations via <code>connector.client.config.override.allowlist</code>, <code>None</code> to disallow connectors from overriding client properties, and <code>Principal</code> (now deprecated) to allow connectors to override only client principals.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>All</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="receive.buffer.bytes"></a><a id="connectconfigs_receive.buffer.bytes" href="#connectconfigs_receive.buffer.bytes">receive.buffer.bytes</a></h4>
+<p>The size of the TCP receive buffer (SO_RCVBUF) to use when reading data. If the value is -1, the OS default will be used.</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>32768 (32 kibibytes)</td></tr>
+<tr><th>Valid Values:</th><td>[-1,...]</td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="request.timeout.ms"></a><a id="connectconfigs_request.timeout.ms" href="#connectconfigs_request.timeout.ms">request.timeout.ms</a></h4>
+<p>The configuration controls the maximum amount of time the client will wait for the response of a request. If the response is not received before the timeout elapses the client will resend the request if necessary or fail the request if retries are exhausted.</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>40000 (40 seconds)</td></tr>
+<tr><th>Valid Values:</th><td>[0,...]</td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.client.callback.handler.class"></a><a id="connectconfigs_sasl.client.callback.handler.class" href="#connectconfigs_sasl.client.callback.handler.class">sasl.client.callback.handler.class</a></h4>
+<p>The fully qualified name of a SASL client callback handler class that implements the AuthenticateCallbackHandler interface.</p>
+<table><tbody>
+<tr><th>Type:</th><td>class</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.jaas.config"></a><a id="connectconfigs_sasl.jaas.config" href="#connectconfigs_sasl.jaas.config">sasl.jaas.config</a></h4>
+<p>JAAS login context parameters for SASL connections in the format used by JAAS configuration files. JAAS configuration file format is described <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/LoginConfigFile.html">here</a>. The format for the value is: <code>loginModuleClass controlFlag (optionName=optionValue)*;</code>. For brokers, the config must be prefixed with listener prefix and SASL mechanism name in lower-case. For example, listener.name.sasl_ssl.scram-sha-256.sasl.jaas.config=com.example.ScramLoginModule required;</p>
+<table><tbody>
+<tr><th>Type:</th><td>password</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.kerberos.service.name"></a><a id="connectconfigs_sasl.kerberos.service.name" href="#connectconfigs_sasl.kerberos.service.name">sasl.kerberos.service.name</a></h4>
+<p>The Kerberos principal name that Kafka runs as. This can be defined either in Kafka's JAAS config or in Kafka's config.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.login.callback.handler.class"></a><a id="connectconfigs_sasl.login.callback.handler.class" href="#connectconfigs_sasl.login.callback.handler.class">sasl.login.callback.handler.class</a></h4>
+<p>The fully qualified name of a SASL login callback handler class that implements the AuthenticateCallbackHandler interface. For brokers, login callback handler config must be prefixed with listener prefix and SASL mechanism name in lower-case. For example, listener.name.sasl_ssl.scram-sha-256.sasl.login.callback.handler.class=com.example.CustomScramLoginCallbackHandler</p>
+<table><tbody>
+<tr><th>Type:</th><td>class</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.login.class"></a><a id="connectconfigs_sasl.login.class" href="#connectconfigs_sasl.login.class">sasl.login.class</a></h4>
+<p>The fully qualified name of a class that implements the Login interface. For brokers, login config must be prefixed with listener prefix and SASL mechanism name in lower-case. For example, listener.name.sasl_ssl.scram-sha-256.sasl.login.class=com.example.CustomScramLogin</p>
+<table><tbody>
+<tr><th>Type:</th><td>class</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.mechanism"></a><a id="connectconfigs_sasl.mechanism" href="#connectconfigs_sasl.mechanism">sasl.mechanism</a></h4>
+<p>SASL mechanism used for client connections. This may be any mechanism for which a security provider is available. GSSAPI is the default mechanism.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>GSSAPI</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.assertion.algorithm"></a><a id="connectconfigs_sasl.oauthbearer.assertion.algorithm" href="#connectconfigs_sasl.oauthbearer.assertion.algorithm">sasl.oauthbearer.assertion.algorithm</a></h4>
+<p><p>The algorithm the Apache Kafka client should use to sign the assertion sent to the identity provider. It is also used as the value of the OAuth <code>alg</code> (Algorithm) header in the JWT assertion.</p><p><em>Note</em>: If a value for <code>sasl.oauthbearer.assertion.file</code> is provided, this configuration will be ignored.</p></p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>RS256</td></tr>
+<tr><th>Valid Values:</th><td>(case insensitive) [ES256, RS256]</td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.assertion.claim.aud"></a><a id="connectconfigs_sasl.oauthbearer.assertion.claim.aud" href="#connectconfigs_sasl.oauthbearer.assertion.claim.aud">sasl.oauthbearer.assertion.claim.aud</a></h4>
+<p><p>The JWT <code>aud</code> (Audience) claim which will be included in the  client JWT assertion created locally.</p><p><em>Note</em>: If a value for <code>sasl.oauthbearer.assertion.file</code> is provided, this configuration will be ignored.</p></p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.assertion.claim.iss"></a><a id="connectconfigs_sasl.oauthbearer.assertion.claim.iss" href="#connectconfigs_sasl.oauthbearer.assertion.claim.iss">sasl.oauthbearer.assertion.claim.iss</a></h4>
+<p><p>The value to be used as the <code>iss</code> (Issuer) claim which will be included in the client JWT assertion created locally.</p><p><em>Note</em>: If a value for <code>sasl.oauthbearer.assertion.file</code> is provided, this configuration will be ignored.</p></p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.assertion.claim.jti.include"></a><a id="connectconfigs_sasl.oauthbearer.assertion.claim.jti.include" href="#connectconfigs_sasl.oauthbearer.assertion.claim.jti.include">sasl.oauthbearer.assertion.claim.jti.include</a></h4>
+<p><p>Flag that determines if the JWT assertion should generate a unique ID for the JWT and include it in the <code>jti</code> (JWT ID) claim.</p><p><em>Note</em>: If a value for <code>sasl.oauthbearer.assertion.file</code> is provided, this configuration will be ignored.</p></p>
+<table><tbody>
+<tr><th>Type:</th><td>boolean</td></tr>
+<tr><th>Default:</th><td>false</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.assertion.claim.sub"></a><a id="connectconfigs_sasl.oauthbearer.assertion.claim.sub" href="#connectconfigs_sasl.oauthbearer.assertion.claim.sub">sasl.oauthbearer.assertion.claim.sub</a></h4>
+<p><p>The value to be used as the <code>sub</code> (Subject) claim which will be included in the client JWT assertion created locally.</p><p><em>Note</em>: If a value for <code>sasl.oauthbearer.assertion.file</code> is provided, this configuration will be ignored.</p></p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.assertion.file"></a><a id="connectconfigs_sasl.oauthbearer.assertion.file" href="#connectconfigs_sasl.oauthbearer.assertion.file">sasl.oauthbearer.assertion.file</a></h4>
+<p><p>File that contains a <em>pre-generated</em> JWT assertion.</p><p>The underlying implementation caches the file contents to avoid the performance hit of loading the file on each access. The caching mechanism will detect whenthe file changes to allow for the file to be reloaded on modifications. This allows for &quot;live&quot; assertion rotation without restarting the Kafka client.</p><p>The file contains the assertion in the serialized, three part JWT format:</p><ol><li>The <em>header</em> section is a base 64-encoded JWT header that contains values like <code>alg</code> (Algorithm), <code>typ</code> (Type, always the literal value <code>JWT</code>), etc.</li><li>The <em>payload</em> section includes the base 64-encoded set of JWT claims, such as <code>aud</code> (Audience), <code>iss</code> (Issuer), <code>sub</code> (Subject), etc.</li><li>The <em>signature</em> section is the concatenated <em>header</em> and <em>payload</em> sections that was signed using a private key</li></ol><p>See <a href="https://datatracker.ietf.org/doc/html/rfc7519">RFC 7519</a> and <a href="https://datatracker.ietf.org/doc/html/rfc7515">RFC 7515</a> for more details on the JWT and JWS formats.</p><p><em>Note</em>: If a value for <code>sasl.oauthbearer.assertion.file</code> is provided, all other <code>sasl.oauthbearer.assertion.</code>* configurations are ignored.</p></p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.assertion.private.key.file"></a><a id="connectconfigs_sasl.oauthbearer.assertion.private.key.file" href="#connectconfigs_sasl.oauthbearer.assertion.private.key.file">sasl.oauthbearer.assertion.private.key.file</a></h4>
+<p><p>File that contains a private key in the standard PEM format which is used to sign the JWT assertion sent to the identity provider.</p><p>The underlying implementation caches the file contents to avoid the performance hit of loading the file on each access. The caching mechanism will detect when the file changes to allow for the file to be reloaded on modifications. This allows for &quot;live&quot; private key rotation without restarting the Kafka client.</p><p><em>Note</em>: If a value for <code>sasl.oauthbearer.assertion.file</code> is provided, this configuration will be ignored.</p></p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.assertion.private.key.passphrase"></a><a id="connectconfigs_sasl.oauthbearer.assertion.private.key.passphrase" href="#connectconfigs_sasl.oauthbearer.assertion.private.key.passphrase">sasl.oauthbearer.assertion.private.key.passphrase</a></h4>
+<p><p>The optional passphrase to decrypt the private key file specified by <code>sasl.oauthbearer.assertion.private.key.file</code>.</p><p><em>Note</em>: If the file referred to by <code>sasl.oauthbearer.assertion.private.key.file</code> is modified on the file system at runtime and it was created with a <em>different</em> passphrase than it was previously, the client will not be able to access the private key file because the passphrase is now out of date. For that reason, when using private key passphrases, either use the same passphrase each time, or&mdash;for improved security&mdash;restart the Kafka client using the new passphrase configuration.</p><p><em>Note</em>: If a value for <code>sasl.oauthbearer.assertion.file</code> is provided, this configuration will be ignored.</p></p>
+<table><tbody>
+<tr><th>Type:</th><td>password</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.assertion.template.file"></a><a id="connectconfigs_sasl.oauthbearer.assertion.template.file" href="#connectconfigs_sasl.oauthbearer.assertion.template.file">sasl.oauthbearer.assertion.template.file</a></h4>
+<p><p>This optional configuration specifies the file containing the JWT headers and/or payload claims to be used when creating the JWT assertion.</p><p>Not all identity providers require the same set of claims; some may require a given claim while others may prohibit it. In order to provide the most flexibility, this configuration allows the user to provide the static header values and claims that are to be included in the JWT.</p><p><em>Note</em>: If a value for <code>sasl.oauthbearer.assertion.file</code> is provided, this configuration will be ignored.</p></p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.client.credentials.client.id"></a><a id="connectconfigs_sasl.oauthbearer.client.credentials.client.id" href="#connectconfigs_sasl.oauthbearer.client.credentials.client.id">sasl.oauthbearer.client.credentials.client.id</a></h4>
+<p><p>The ID (defined in/by the OAuth identity provider) to identify the client requesting the token.</p><p>The client ID was previously stored as part of the <code>sasl.jaas.config</code> configuration with the key <code>clientId</code>. For backward compatibility, the <code>clientId</code> JAAS option can still be used, but it is deprecated and will be removed in a future version.</p><p>Order of precedence:</p><ul><li><code>sasl.oauthbearer.client.credentials.client.id</code> from configuration</li><li><code>clientId</code> from JAAS</li></ul></p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.client.credentials.client.secret"></a><a id="connectconfigs_sasl.oauthbearer.client.credentials.client.secret" href="#connectconfigs_sasl.oauthbearer.client.credentials.client.secret">sasl.oauthbearer.client.credentials.client.secret</a></h4>
+<p><p>The secret (defined by either the user or preassigned, depending on the identity provider) of the client requesting the token.</p><p>The client secret was previously stored as part of the <code>sasl.jaas.config</code> configuration with the key <code>clientSecret</code>. For backward compatibility, the <code>clientSecret</code> JAAS option can still be used, but it is deprecated and will be removed in a future version.</p><p>Order of precedence:</p><ul><li><code>sasl.oauthbearer.client.credentials.client.secret</code> from configuration</li><li><code>clientSecret</code> from JAAS</li></ul></p>
+<table><tbody>
+<tr><th>Type:</th><td>password</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.jwks.endpoint.url"></a><a id="connectconfigs_sasl.oauthbearer.jwks.endpoint.url" href="#connectconfigs_sasl.oauthbearer.jwks.endpoint.url">sasl.oauthbearer.jwks.endpoint.url</a></h4>
+<p>The OAuth/OIDC provider URL from which the provider's <a href="https://datatracker.ietf.org/doc/html/rfc7517#section-5">JWKS (JSON Web Key Set)</a> can be retrieved. The URL can be HTTP(S)-based or file-based. If the URL is HTTP(S)-based, the JWKS data will be retrieved from the OAuth/OIDC provider via the configured URL on broker startup. All then-current keys will be cached on the broker for incoming requests. If an authentication request is received for a JWT that includes a "kid" header claim value that isn't yet in the cache, the JWKS endpoint will be queried again on demand. However, the broker polls the URL every sasl.oauthbearer.jwks.endpoint.refresh.ms milliseconds to refresh the cache with any forthcoming keys before any JWT requests that include them are received. If the URL is file-based, the broker will load the JWKS file from a configured location on startup. In the event that the JWT includes a "kid" header value that isn't in the JWKS file, the broker will reject the JWT and authentication will fail.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.jwt.retriever.class"></a><a id="connectconfigs_sasl.oauthbearer.jwt.retriever.class" href="#connectconfigs_sasl.oauthbearer.jwt.retriever.class">sasl.oauthbearer.jwt.retriever.class</a></h4>
+<p><p>The fully-qualified class name of a <code>JwtRetriever</code> implementation used to request tokens from the identity provider.</p><p>The default configuration value represents a class that maintains backward compatibility with previous versions of Apache Kafka. The default implementation uses the configuration to determine which concrete implementation to create.<p>Other implementations that are provided include:</p><ul><li><code>org.apache.kafka.common.security.oauthbearer.ClientCredentialsJwtRetriever</code></li><li><code>org.apache.kafka.common.security.oauthbearer.DefaultJwtRetriever</code></li><li><code>org.apache.kafka.common.security.oauthbearer.FileJwtRetriever</code></li><li><code>org.apache.kafka.common.security.oauthbearer.JwtBearerJwtRetriever</code></li></ul></p>
+<table><tbody>
+<tr><th>Type:</th><td>class</td></tr>
+<tr><th>Default:</th><td>org.apache.kafka.common.security.oauthbearer.DefaultJwtRetriever</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.jwt.validator.class"></a><a id="connectconfigs_sasl.oauthbearer.jwt.validator.class" href="#connectconfigs_sasl.oauthbearer.jwt.validator.class">sasl.oauthbearer.jwt.validator.class</a></h4>
+<p><p>The fully-qualified class name of a <code>JwtValidator</code> implementation used to validate the JWT from the identity provider.</p><p>The default validator (<code>org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator</code>) maintains backward compatibility with previous versions of Apache Kafka. The default validator uses configuration to determine which concrete implementation to create.<p>The built-in <code>JwtValidator</code> implementations are:</p><ul><li><code>org.apache.kafka.common.security.oauthbearer.BrokerJwtValidator</code></li><li><code>org.apache.kafka.common.security.oauthbearer.ClientJwtValidator</code></li><li><code>org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator</code></li></ul></p>
+<table><tbody>
+<tr><th>Type:</th><td>class</td></tr>
+<tr><th>Default:</th><td>org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.scope"></a><a id="connectconfigs_sasl.oauthbearer.scope" href="#connectconfigs_sasl.oauthbearer.scope">sasl.oauthbearer.scope</a></h4>
+<p><p>This is the level of access a client application is granted to a resource or API which is included in the token request. If provided, it should match one or more scopes configured in the identity provider.</p><p>The scope was previously stored as part of the <code>sasl.jaas.config</code> configuration with the key <code>scope</code>. For backward compatibility, the <code>scope</code> JAAS option can still be used, but it is deprecated and will be removed in a future version.</p><p>Order of precedence:</p><ul><li><code>sasl.oauthbearer.scope</code> from configuration</li><li><code>scope</code> from JAAS</li></ul></p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.token.endpoint.url"></a><a id="connectconfigs_sasl.oauthbearer.token.endpoint.url" href="#connectconfigs_sasl.oauthbearer.token.endpoint.url">sasl.oauthbearer.token.endpoint.url</a></h4>
+<p>The URL for the OAuth/OIDC identity provider. If the URL is HTTP(S)-based, it is the issuer's token endpoint URL to which requests will be made to login based on the configuration in <code>sasl.oauthbearer.jwt.retriever.class</code>. If the URL is file-based, it specifies a file containing an access token (in JWT serialized form) issued by the OAuth/OIDC identity provider to use for authorization.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="security.protocol"></a><a id="connectconfigs_security.protocol" href="#connectconfigs_security.protocol">security.protocol</a></h4>
+<p>Protocol used to communicate with brokers.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>PLAINTEXT</td></tr>
+<tr><th>Valid Values:</th><td>(case insensitive) [SASL_SSL, PLAINTEXT, SSL, SASL_PLAINTEXT]</td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="send.buffer.bytes"></a><a id="connectconfigs_send.buffer.bytes" href="#connectconfigs_send.buffer.bytes">send.buffer.bytes</a></h4>
+<p>The size of the TCP send buffer (SO_SNDBUF) to use when sending data. If the value is -1, the OS default will be used.</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>131072 (128 kibibytes)</td></tr>
+<tr><th>Valid Values:</th><td>[-1,...]</td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.enabled.protocols"></a><a id="connectconfigs_ssl.enabled.protocols" href="#connectconfigs_ssl.enabled.protocols">ssl.enabled.protocols</a></h4>
+<p>The list of protocols enabled for SSL connections. The default is 'TLSv1.2,TLSv1.3'. This means that clients and servers will prefer TLSv1.3 if both support it and fallback to TLSv1.2 otherwise (assuming both support at least TLSv1.2). This default should be fine for most use cases. If this configuration is set to an empty list, Kafka will use the protocols enabled by default in the underlying SSLEngine, which may include additional protocols depending on the JVM version. Also see the config documentation for <code>ssl.protocol</code> to understand how it can impact the TLS version negotiation behavior.</p>
+<table><tbody>
+<tr><th>Type:</th><td>list</td></tr>
+<tr><th>Default:</th><td>TLSv1.2,TLSv1.3</td></tr>
+<tr><th>Valid Values:</th><td>[] (empty config allowed) (null not allowed)</td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.keystore.type"></a><a id="connectconfigs_ssl.keystore.type" href="#connectconfigs_ssl.keystore.type">ssl.keystore.type</a></h4>
+<p>The file format of the key store file. This is optional for client. The values currently supported by the default <code>ssl.engine.factory.class</code> are [JKS, PKCS12, PEM].</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>JKS</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.protocol"></a><a id="connectconfigs_ssl.protocol" href="#connectconfigs_ssl.protocol">ssl.protocol</a></h4>
+<p>The SSL protocol used to generate the SSLContext. The default is 'TLSv1.3', which should be fine for most use cases. A typical alternative to the default is 'TLSv1.2'. Allowed values for this config are dependent on the JVM. Clients using the defaults for this config and 'ssl.enabled.protocols' will downgrade to 'TLSv1.2' if the server does not support 'TLSv1.3'. If this config is set to 'TLSv1.2', however, clients will not use 'TLSv1.3' even if it is one of the values in <code>ssl.enabled.protocols</code> and the server only supports 'TLSv1.3'.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>TLSv1.3</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.provider"></a><a id="connectconfigs_ssl.provider" href="#connectconfigs_ssl.provider">ssl.provider</a></h4>
+<p>The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.truststore.type"></a><a id="connectconfigs_ssl.truststore.type" href="#connectconfigs_ssl.truststore.type">ssl.truststore.type</a></h4>
+<p>The file format of the trust store file. The values currently supported by the default <code>ssl.engine.factory.class</code> are [JKS, PKCS12, PEM].</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>JKS</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="worker.sync.timeout.ms"></a><a id="connectconfigs_worker.sync.timeout.ms" href="#connectconfigs_worker.sync.timeout.ms">worker.sync.timeout.ms</a></h4>
+<p>When the worker is out of sync with other workers and needs to resynchronize configurations, wait up to this amount of time before giving up, leaving the group, and waiting a backoff period before rejoining.</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>3000 (3 seconds)</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="worker.unsync.backoff.ms"></a><a id="connectconfigs_worker.unsync.backoff.ms" href="#connectconfigs_worker.unsync.backoff.ms">worker.unsync.backoff.ms</a></h4>
+<p>When the worker is out of sync with other workers and  fails to catch up within the <code>worker.sync.timeout.ms</code>, leave the Connect cluster for this long before rejoining.</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>300000 (5 minutes)</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="access.control.allow.methods"></a><a id="connectconfigs_access.control.allow.methods" href="#connectconfigs_access.control.allow.methods">access.control.allow.methods</a></h4>
+<p>Sets the methods supported for cross origin requests by setting the Access-Control-Allow-Methods header. The default value of the Access-Control-Allow-Methods header allows cross origin requests for GET, POST and HEAD.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>""</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="access.control.allow.origin"></a><a id="connectconfigs_access.control.allow.origin" href="#connectconfigs_access.control.allow.origin">access.control.allow.origin</a></h4>
+<p>Value to set the Access-Control-Allow-Origin header to for REST API requests.To enable cross origin access, set this to the domain of the application that should be permitted to access the API, or '*' to allow access from any domain. The default value only allows access from the domain of the REST API.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>""</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="admin.listeners"></a><a id="connectconfigs_admin.listeners" href="#connectconfigs_admin.listeners">admin.listeners</a></h4>
+<p>List of comma-separated URIs the Admin REST API will listen on. The supported protocols are HTTP and HTTPS. An empty or blank string will disable this feature. The default behavior is to use the regular listener (specified by the 'listeners' property). A comma-separated list of valid URLs, e.g., http://localhost:8080,https://localhost:8443.</p>
+<table><tbody>
+<tr><th>Type:</th><td>list</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td>[] (empty config allowed) (null config allowed)</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="client.id"></a><a id="connectconfigs_client.id" href="#connectconfigs_client.id">client.id</a></h4>
+<p>An id string to pass to the server when making requests. The purpose of this is to be able to track the source of requests beyond just ip/port by allowing a logical application name to be included in server-side request logging.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>""</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="config.providers"></a><a id="connectconfigs_config.providers" href="#connectconfigs_config.providers">config.providers</a></h4>
+<p>Comma-separated alias names for classes implementing the <code>ConfigProvider</code> interface. This enables loading configuration data (such as passwords, API keys, and other credentials) from external sources. For example, see <a href="https://kafka.apache.org/documentation/#config_providers">Configuration Providers</a>.</p>
+<table><tbody>
+<tr><th>Type:</th><td>list</td></tr>
+<tr><th>Default:</th><td>""</td></tr>
+<tr><th>Valid Values:</th><td>[] (empty config allowed) (null not allowed)</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="config.storage.replication.factor"></a><a id="connectconfigs_config.storage.replication.factor" href="#connectconfigs_config.storage.replication.factor">config.storage.replication.factor</a></h4>
+<p>Replication factor used when creating the configuration storage topic</p>
+<table><tbody>
+<tr><th>Type:</th><td>short</td></tr>
+<tr><th>Default:</th><td>3</td></tr>
+<tr><th>Valid Values:</th><td>Positive number not larger than the number of brokers in the Kafka cluster, or -1 to use the broker's default</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="connect.protocol"></a><a id="connectconfigs_connect.protocol" href="#connectconfigs_connect.protocol">connect.protocol</a></h4>
+<p>Compatibility mode for Kafka Connect Protocol</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>sessioned</td></tr>
+<tr><th>Valid Values:</th><td>[eager, compatible, sessioned]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="header.converter"></a><a id="connectconfigs_header.converter" href="#connectconfigs_header.converter">header.converter</a></h4>
+<p>HeaderConverter class used to convert between Kafka Connect format and the serialized form that is written to Kafka. This controls the format of the header values in messages written to or read from Kafka, and since this is independent of connectors it allows any connector to work with any serialization format. Examples of common formats include JSON and Avro. By default, the SimpleHeaderConverter is used to serialize header values to strings and deserialize them by inferring the schemas.</p>
+<table><tbody>
+<tr><th>Type:</th><td>class</td></tr>
+<tr><th>Default:</th><td>org.apache.kafka.connect.storage.SimpleHeaderConverter</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="header.converter.plugin.version"></a><a id="connectconfigs_header.converter.plugin.version" href="#connectconfigs_header.converter.plugin.version">header.converter.plugin.version</a></h4>
+<p>Version of the header converter.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="inter.worker.key.generation.algorithm"></a><a id="connectconfigs_inter.worker.key.generation.algorithm" href="#connectconfigs_inter.worker.key.generation.algorithm">inter.worker.key.generation.algorithm</a></h4>
+<p>The algorithm to use for generating internal request keys. The algorithm 'HmacSHA256' will be used as a default on JVMs that support it; on other JVMs, no default is used and a value for this property must be manually specified in the worker config.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>HmacSHA256</td></tr>
+<tr><th>Valid Values:</th><td>Any KeyGenerator algorithm supported by the worker JVM</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="inter.worker.key.size"></a><a id="connectconfigs_inter.worker.key.size" href="#connectconfigs_inter.worker.key.size">inter.worker.key.size</a></h4>
+<p>The size of the key to use for signing internal requests, in bits. If null, the default key size for the key generation algorithm will be used.</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="inter.worker.key.ttl.ms"></a><a id="connectconfigs_inter.worker.key.ttl.ms" href="#connectconfigs_inter.worker.key.ttl.ms">inter.worker.key.ttl.ms</a></h4>
+<p>The TTL of generated session keys used for internal request validation (in milliseconds)</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>3600000 (1 hour)</td></tr>
+<tr><th>Valid Values:</th><td>[0,...,2147483647]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="inter.worker.signature.algorithm"></a><a id="connectconfigs_inter.worker.signature.algorithm" href="#connectconfigs_inter.worker.signature.algorithm">inter.worker.signature.algorithm</a></h4>
+<p>The algorithm used to sign internal requests. The algorithm 'HmacSHA256' will be used as a default on JVMs that support it; on other JVMs, no default is used and a value for this property must be manually specified in the worker config.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>HmacSHA256</td></tr>
+<tr><th>Valid Values:</th><td>Any MAC algorithm supported by the worker JVM</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="inter.worker.verification.algorithms"></a><a id="connectconfigs_inter.worker.verification.algorithms" href="#connectconfigs_inter.worker.verification.algorithms">inter.worker.verification.algorithms</a></h4>
+<p>A list of permitted algorithms for verifying internal requests, which must include the algorithm used for the <code>inter.worker.signature.algorithm</code> property. The algorithm(s) '[HmacSHA256]' will be used as a default on JVMs that provide them; on other JVMs, no default is used and a value for this property must be manually specified in the worker config.</p>
+<table><tbody>
+<tr><th>Type:</th><td>list</td></tr>
+<tr><th>Default:</th><td>HmacSHA256</td></tr>
+<tr><th>Valid Values:</th><td>A list of one or more MAC algorithms, each supported by the worker JVM</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="key.converter.plugin.version"></a><a id="connectconfigs_key.converter.plugin.version" href="#connectconfigs_key.converter.plugin.version">key.converter.plugin.version</a></h4>
+<p>Version of the key converter.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="listeners"></a><a id="connectconfigs_listeners" href="#connectconfigs_listeners">listeners</a></h4>
+<p>List of comma-separated URIs the REST API will listen on. The supported protocols are HTTP and HTTPS.<br> Specify hostname as 0.0.0.0 to bind to all interfaces.<br> Leave hostname empty to bind to default interface.<br> Examples of legal listener lists: HTTP://myhost:8083,HTTPS://myhost:8084</p>
+<table><tbody>
+<tr><th>Type:</th><td>list</td></tr>
+<tr><th>Default:</th><td>http://:8083</td></tr>
+<tr><th>Valid Values:</th><td>List of comma-separated URLs, ex: http://localhost:8080,https://localhost:8443.</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="metadata.max.age.ms"></a><a id="connectconfigs_metadata.max.age.ms" href="#connectconfigs_metadata.max.age.ms">metadata.max.age.ms</a></h4>
+<p>The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any partition leadership changes to proactively discover any new brokers or partitions.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>300000 (5 minutes)</td></tr>
+<tr><th>Valid Values:</th><td>[0,...]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="metadata.recovery.rebootstrap.trigger.ms"></a><a id="connectconfigs_metadata.recovery.rebootstrap.trigger.ms" href="#connectconfigs_metadata.recovery.rebootstrap.trigger.ms">metadata.recovery.rebootstrap.trigger.ms</a></h4>
+<p>If a client configured to rebootstrap using <code>metadata.recovery.strategy=rebootstrap</code> is unable to obtain metadata from any of the brokers in the last known metadata for this interval, client repeats the bootstrap process using <code>bootstrap.servers</code> configuration.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>300000 (5 minutes)</td></tr>
+<tr><th>Valid Values:</th><td>[0,...]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="metadata.recovery.strategy"></a><a id="connectconfigs_metadata.recovery.strategy" href="#connectconfigs_metadata.recovery.strategy">metadata.recovery.strategy</a></h4>
+<p>Controls how the client recovers when none of the brokers known to it is available. If set to <code>none</code>, the client fails. If set to <code>rebootstrap</code>, the client repeats the bootstrap process using <code>bootstrap.servers</code>. Rebootstrapping is useful when a client communicates with brokers so infrequently that the set of brokers may change entirely before the client refreshes metadata. Metadata recovery is triggered when all last-known brokers appear unavailable simultaneously. Brokers appear unavailable when disconnected and no current retry attempt is in-progress. Consider increasing <code>reconnect.backoff.ms</code> and <code>reconnect.backoff.max.ms</code> and decreasing <code>socket.connection.setup.timeout.ms</code> and <code>socket.connection.setup.timeout.max.ms</code> for the client. Rebootstrap is also triggered if connection cannot be established to any of the brokers for <code>metadata.recovery.rebootstrap.trigger.ms</code> milliseconds or if server requests rebootstrap.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>rebootstrap</td></tr>
+<tr><th>Valid Values:</th><td>(case insensitive) [REBOOTSTRAP, NONE]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="metric.reporters"></a><a id="connectconfigs_metric.reporters" href="#connectconfigs_metric.reporters">metric.reporters</a></h4>
+<p>A list of classes to use as metrics reporters. Implementing the <code>org.apache.kafka.common.metrics.MetricsReporter</code> interface allows plugging in classes that will be notified of new metric creation. When custom reporters are set and <code>org.apache.kafka.common.metrics.JmxReporter</code> is needed, it has to be explicitly added to the list.</p>
+<table><tbody>
+<tr><th>Type:</th><td>list</td></tr>
+<tr><th>Default:</th><td>org.apache.kafka.common.metrics.JmxReporter</td></tr>
+<tr><th>Valid Values:</th><td>[] (empty config allowed) (null not allowed)</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="metrics.num.samples"></a><a id="connectconfigs_metrics.num.samples" href="#connectconfigs_metrics.num.samples">metrics.num.samples</a></h4>
+<p>The number of samples maintained to compute metrics.</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>2</td></tr>
+<tr><th>Valid Values:</th><td>[1,...]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="metrics.recording.level"></a><a id="connectconfigs_metrics.recording.level" href="#connectconfigs_metrics.recording.level">metrics.recording.level</a></h4>
+<p>The highest recording level for metrics. It has three levels for recording metrics - info, debug, and trace.<br> <br>INFO level records only essential metrics necessary for monitoring system performance and health. It collects vital data without gathering too much detail, making it suitable for production environments where minimal overhead is desired.<br><br>DEBUG level records most metrics, providing more detailed information about the system's operation. It's useful for development and testing environments where you need deeper insights to debug and fine-tune the application.<br><br>TRACE level records all possible metrics, capturing every detail about the system's performance and operation. It's best for controlled environments where in-depth analysis is required, though it can introduce significant overhead.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>INFO</td></tr>
+<tr><th>Valid Values:</th><td>[INFO, DEBUG]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="metrics.sample.window.ms"></a><a id="connectconfigs_metrics.sample.window.ms" href="#connectconfigs_metrics.sample.window.ms">metrics.sample.window.ms</a></h4>
+<p>The window of time a metrics sample is computed over.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>30000 (30 seconds)</td></tr>
+<tr><th>Valid Values:</th><td>[0,...]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="offset.flush.interval.ms"></a><a id="connectconfigs_offset.flush.interval.ms" href="#connectconfigs_offset.flush.interval.ms">offset.flush.interval.ms</a></h4>
+<p>Interval at which to try committing offsets for tasks.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>60000 (1 minute)</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="offset.flush.timeout.ms"></a><a id="connectconfigs_offset.flush.timeout.ms" href="#connectconfigs_offset.flush.timeout.ms">offset.flush.timeout.ms</a></h4>
+<p>Maximum number of milliseconds to wait for records to flush and partition offset data to be committed to offset storage before cancelling the process and restoring the offset data to be committed in a future attempt. This property has no effect for source connectors running with exactly-once support.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>5000 (5 seconds)</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="offset.storage.partitions"></a><a id="connectconfigs_offset.storage.partitions" href="#connectconfigs_offset.storage.partitions">offset.storage.partitions</a></h4>
+<p>The number of partitions used when creating the offset storage topic</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>25</td></tr>
+<tr><th>Valid Values:</th><td>Positive number, or -1 to use the broker's default</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="offset.storage.replication.factor"></a><a id="connectconfigs_offset.storage.replication.factor" href="#connectconfigs_offset.storage.replication.factor">offset.storage.replication.factor</a></h4>
+<p>Replication factor used when creating the offset storage topic</p>
+<table><tbody>
+<tr><th>Type:</th><td>short</td></tr>
+<tr><th>Default:</th><td>3</td></tr>
+<tr><th>Valid Values:</th><td>Positive number not larger than the number of brokers in the Kafka cluster, or -1 to use the broker's default</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="plugin.discovery"></a><a id="connectconfigs_plugin.discovery" href="#connectconfigs_plugin.discovery">plugin.discovery</a></h4>
+<p>Method to use to discover plugins present in the classpath and plugin.path configuration. This can be one of multiple values with the following meanings:<br>* only_scan: Discover plugins only by reflection. Plugins which are not discoverable by ServiceLoader will not impact worker startup.<br>* hybrid_warn: Discover plugins reflectively and by ServiceLoader. Plugins which are not discoverable by ServiceLoader will print warnings during worker startup.<br>* hybrid_fail: Discover plugins reflectively and by ServiceLoader. Plugins which are not discoverable by ServiceLoader will cause worker startup to fail.<br>* service_load: Discover plugins only by ServiceLoader. Faster startup than other modes. Plugins which are not discoverable by ServiceLoader may not be usable.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>hybrid_warn</td></tr>
+<tr><th>Valid Values:</th><td>(case insensitive) [ONLY_SCAN, SERVICE_LOAD, HYBRID_WARN, HYBRID_FAIL]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="plugin.path"></a><a id="connectconfigs_plugin.path" href="#connectconfigs_plugin.path">plugin.path</a></h4>
+<p>List of paths separated by commas (,) that contain plugins (connectors, converters, transformations). The list should consist of top level directories that include any combination of: <br>a) directories immediately containing jars with plugins and their dependencies<br>b) uber-jars with plugins and their dependencies<br>c) directories immediately containing the package directory structure of classes of plugins and their dependencies<br>Note: symlinks will be followed to discover dependencies or plugins.<br>Examples: plugin.path=/usr/local/share/java,/usr/local/share/kafka/plugins,/opt/connectors<br>Do not use config provider variables in this property, since the raw path is used by the worker's scanner before config providers are initialized and used to replace variables.</p>
+<table><tbody>
+<tr><th>Type:</th><td>list</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td>[] (empty not allowed) (null config allowed)</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="reconnect.backoff.max.ms"></a><a id="connectconfigs_reconnect.backoff.max.ms" href="#connectconfigs_reconnect.backoff.max.ms">reconnect.backoff.max.ms</a></h4>
+<p>The maximum amount of time in milliseconds to wait when reconnecting to a broker that has repeatedly failed to connect. If provided, the backoff per host will increase exponentially for each consecutive connection failure, up to this maximum. After calculating the backoff increase, 20% random jitter is added to avoid connection storms.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>1000 (1 second)</td></tr>
+<tr><th>Valid Values:</th><td>[0,...]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="reconnect.backoff.ms"></a><a id="connectconfigs_reconnect.backoff.ms" href="#connectconfigs_reconnect.backoff.ms">reconnect.backoff.ms</a></h4>
+<p>The base amount of time to wait before attempting to reconnect to a given host. This avoids repeatedly connecting to a host in a tight loop. This backoff applies to all connection attempts by the client to a broker. This value is the initial backoff value and will increase exponentially for each consecutive connection failure, up to the <code>reconnect.backoff.max.ms</code> value.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>50</td></tr>
+<tr><th>Valid Values:</th><td>[0,...]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="response.http.headers.config"></a><a id="connectconfigs_response.http.headers.config" href="#connectconfigs_response.http.headers.config">response.http.headers.config</a></h4>
+<p>Rules for REST API HTTP response headers</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>""</td></tr>
+<tr><th>Valid Values:</th><td>Comma-separated header rules, where each header rule is of the form '[action] [header name]:[header value]' and optionally surrounded by double quotes if any part of a header rule contains a comma</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="rest.advertised.host.name"></a><a id="connectconfigs_rest.advertised.host.name" href="#connectconfigs_rest.advertised.host.name">rest.advertised.host.name</a></h4>
+<p>If this is set, this is the hostname that will be given out to other workers to connect to.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="rest.advertised.listener"></a><a id="connectconfigs_rest.advertised.listener" href="#connectconfigs_rest.advertised.listener">rest.advertised.listener</a></h4>
+<p>Sets the advertised listener (HTTP or HTTPS) which will be given to other workers to use.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="rest.advertised.port"></a><a id="connectconfigs_rest.advertised.port" href="#connectconfigs_rest.advertised.port">rest.advertised.port</a></h4>
+<p>If this is set, this is the port that will be given out to other workers to connect to.</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="rest.extension.classes"></a><a id="connectconfigs_rest.extension.classes" href="#connectconfigs_rest.extension.classes">rest.extension.classes</a></h4>
+<p>Comma-separated names of <code>ConnectRestExtension</code> classes, loaded and called in the order specified. Implementing the interface  <code>ConnectRestExtension</code> allows you to inject into Connect's REST API user defined resources like filters. Typically used to add custom capability like logging, security, etc. </p>
+<table><tbody>
+<tr><th>Type:</th><td>list</td></tr>
+<tr><th>Default:</th><td>""</td></tr>
+<tr><th>Valid Values:</th><td>[] (empty config allowed) (null not allowed)</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="retry.backoff.max.ms"></a><a id="connectconfigs_retry.backoff.max.ms" href="#connectconfigs_retry.backoff.max.ms">retry.backoff.max.ms</a></h4>
+<p>The maximum amount of time in milliseconds to wait when retrying a request to the broker that has repeatedly failed. If provided, the backoff per client will increase exponentially for each failed request, up to this maximum. To prevent all clients from being synchronized upon retry, a randomized jitter with a factor of 0.2 will be applied to the backoff, resulting in the backoff falling within a range between 20% below and 20% above the computed value. If <code>retry.backoff.ms</code> is set to be higher than <code>retry.backoff.max.ms</code>, then <code>retry.backoff.max.ms</code> will be used as a constant backoff from the beginning without any exponential increase</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>1000 (1 second)</td></tr>
+<tr><th>Valid Values:</th><td>[0,...]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="retry.backoff.ms"></a><a id="connectconfigs_retry.backoff.ms" href="#connectconfigs_retry.backoff.ms">retry.backoff.ms</a></h4>
+<p>The amount of time to wait before attempting to retry a failed request to a given topic partition. This avoids repeatedly sending requests in a tight loop under some failure scenarios. This value is the initial backoff value and will increase exponentially for each failed request, up to the <code>retry.backoff.max.ms</code> value.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>100</td></tr>
+<tr><th>Valid Values:</th><td>[0,...]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.kerberos.kinit.cmd"></a><a id="connectconfigs_sasl.kerberos.kinit.cmd" href="#connectconfigs_sasl.kerberos.kinit.cmd">sasl.kerberos.kinit.cmd</a></h4>
+<p>Kerberos kinit command path.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>/usr/bin/kinit</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.kerberos.min.time.before.relogin"></a><a id="connectconfigs_sasl.kerberos.min.time.before.relogin" href="#connectconfigs_sasl.kerberos.min.time.before.relogin">sasl.kerberos.min.time.before.relogin</a></h4>
+<p>Login thread sleep time between refresh attempts.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>60000</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.kerberos.ticket.renew.jitter"></a><a id="connectconfigs_sasl.kerberos.ticket.renew.jitter" href="#connectconfigs_sasl.kerberos.ticket.renew.jitter">sasl.kerberos.ticket.renew.jitter</a></h4>
+<p>Percentage of random jitter added to the renewal time.</p>
+<table><tbody>
+<tr><th>Type:</th><td>double</td></tr>
+<tr><th>Default:</th><td>0.05</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.kerberos.ticket.renew.window.factor"></a><a id="connectconfigs_sasl.kerberos.ticket.renew.window.factor" href="#connectconfigs_sasl.kerberos.ticket.renew.window.factor">sasl.kerberos.ticket.renew.window.factor</a></h4>
+<p>Login thread will sleep until the specified window factor of time from last refresh to ticket's expiry has been reached, at which time it will try to renew the ticket.</p>
+<table><tbody>
+<tr><th>Type:</th><td>double</td></tr>
+<tr><th>Default:</th><td>0.8</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.login.connect.timeout.ms"></a><a id="connectconfigs_sasl.login.connect.timeout.ms" href="#connectconfigs_sasl.login.connect.timeout.ms">sasl.login.connect.timeout.ms</a></h4>
+<p>The (optional) value in milliseconds for the external authentication provider connection timeout. Currently applies only to OAUTHBEARER.</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.login.read.timeout.ms"></a><a id="connectconfigs_sasl.login.read.timeout.ms" href="#connectconfigs_sasl.login.read.timeout.ms">sasl.login.read.timeout.ms</a></h4>
+<p>The (optional) value in milliseconds for the external authentication provider read timeout. Currently applies only to OAUTHBEARER.</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.login.refresh.buffer.seconds"></a><a id="connectconfigs_sasl.login.refresh.buffer.seconds" href="#connectconfigs_sasl.login.refresh.buffer.seconds">sasl.login.refresh.buffer.seconds</a></h4>
+<p>The amount of buffer time before credential expiration to maintain when refreshing a credential, in seconds. If a refresh would otherwise occur closer to expiration than the number of buffer seconds then the refresh will be moved up to maintain as much of the buffer time as possible. Legal values are between 0 and 3600 (1 hour); a default value of  300 (5 minutes) is used if no value is specified. This value and sasl.login.refresh.min.period.seconds are both ignored if their sum exceeds the remaining lifetime of a credential. Currently applies only to OAUTHBEARER.</p>
+<table><tbody>
+<tr><th>Type:</th><td>short</td></tr>
+<tr><th>Default:</th><td>300</td></tr>
+<tr><th>Valid Values:</th><td>[0,...,3600]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.login.refresh.min.period.seconds"></a><a id="connectconfigs_sasl.login.refresh.min.period.seconds" href="#connectconfigs_sasl.login.refresh.min.period.seconds">sasl.login.refresh.min.period.seconds</a></h4>
+<p>The desired minimum time for the login refresh thread to wait before refreshing a credential, in seconds. Legal values are between 0 and 900 (15 minutes); a default value of 60 (1 minute) is used if no value is specified.  This value and  sasl.login.refresh.buffer.seconds are both ignored if their sum exceeds the remaining lifetime of a credential. Currently applies only to OAUTHBEARER.</p>
+<table><tbody>
+<tr><th>Type:</th><td>short</td></tr>
+<tr><th>Default:</th><td>60</td></tr>
+<tr><th>Valid Values:</th><td>[0,...,900]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.login.refresh.window.factor"></a><a id="connectconfigs_sasl.login.refresh.window.factor" href="#connectconfigs_sasl.login.refresh.window.factor">sasl.login.refresh.window.factor</a></h4>
+<p>Login refresh thread will sleep until the specified window factor relative to the credential's lifetime has been reached, at which time it will try to refresh the credential. Legal values are between 0.5 (50%) and 1.0 (100%) inclusive; a default value of 0.8 (80%) is used if no value is specified. Currently applies only to OAUTHBEARER.</p>
+<table><tbody>
+<tr><th>Type:</th><td>double</td></tr>
+<tr><th>Default:</th><td>0.8</td></tr>
+<tr><th>Valid Values:</th><td>[0.5,...,1.0]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.login.refresh.window.jitter"></a><a id="connectconfigs_sasl.login.refresh.window.jitter" href="#connectconfigs_sasl.login.refresh.window.jitter">sasl.login.refresh.window.jitter</a></h4>
+<p>The maximum amount of random jitter relative to the credential's lifetime that is added to the login refresh thread's sleep time. Legal values are between 0 and 0.25 (25%) inclusive; a default value of 0.05 (5%) is used if no value is specified. Currently applies only to OAUTHBEARER.</p>
+<table><tbody>
+<tr><th>Type:</th><td>double</td></tr>
+<tr><th>Default:</th><td>0.05</td></tr>
+<tr><th>Valid Values:</th><td>[0.0,...,0.25]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.login.retry.backoff.max.ms"></a><a id="connectconfigs_sasl.login.retry.backoff.max.ms" href="#connectconfigs_sasl.login.retry.backoff.max.ms">sasl.login.retry.backoff.max.ms</a></h4>
+<p>The (optional) value in milliseconds for the maximum wait between login attempts to the external authentication provider. Login uses an exponential backoff algorithm with an initial wait based on the sasl.login.retry.backoff.ms setting and will double in wait length between attempts up to a maximum wait length specified by the sasl.login.retry.backoff.max.ms setting. Currently applies only to OAUTHBEARER.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>10000 (10 seconds)</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.login.retry.backoff.ms"></a><a id="connectconfigs_sasl.login.retry.backoff.ms" href="#connectconfigs_sasl.login.retry.backoff.ms">sasl.login.retry.backoff.ms</a></h4>
+<p>The (optional) value in milliseconds for the initial wait between login attempts to the external authentication provider. Login uses an exponential backoff algorithm with an initial wait based on the sasl.login.retry.backoff.ms setting and will double in wait length between attempts up to a maximum wait length specified by the sasl.login.retry.backoff.max.ms setting. Currently applies only to OAUTHBEARER.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>100</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.assertion.claim.exp.seconds"></a><a id="connectconfigs_sasl.oauthbearer.assertion.claim.exp.seconds" href="#connectconfigs_sasl.oauthbearer.assertion.claim.exp.seconds">sasl.oauthbearer.assertion.claim.exp.seconds</a></h4>
+<p><p>The number of seconds <em>in the future</em> for which the JWT is valid. The value is used to determine the JWT <code>exp</code> (Expiration) claim based on the current system time when the JWT is created.</p><p>The formula to generate the <code>exp</code> claim is very simple:</p><pre>Let:<br><br>  x = the current timestamp in seconds, on client<br>  y = the value of this configuration<br><br>Then:<br><br>  exp = x + y<br></pre><p><em>Note</em>: If a value for <code>sasl.oauthbearer.assertion.file</code> is provided, this configuration will be ignored.</p></p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>300</td></tr>
+<tr><th>Valid Values:</th><td>[0,...,86400]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.assertion.claim.nbf.seconds"></a><a id="connectconfigs_sasl.oauthbearer.assertion.claim.nbf.seconds" href="#connectconfigs_sasl.oauthbearer.assertion.claim.nbf.seconds">sasl.oauthbearer.assertion.claim.nbf.seconds</a></h4>
+<p><p>The number of seconds <em>in the past</em> from which the JWT is valid. The value is used to determine the JWT <code>nbf</code> (Not Before) claim based on the current system time when the JWT is created.</p><p>The formula to generate the <code>nbf</code> claim is very simple:</p><pre>Let:<br><br>  x = the current timestamp in seconds, on client<br>  y = the value of this configuration<br><br>Then:<br><br>  nbf = x - y<br></pre><p><em>Note</em>: If a value for <code>sasl.oauthbearer.assertion.file</code> is provided, this configuration will be ignored.</p></p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>60</td></tr>
+<tr><th>Valid Values:</th><td>[0,...,3600]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.clock.skew.seconds"></a><a id="connectconfigs_sasl.oauthbearer.clock.skew.seconds" href="#connectconfigs_sasl.oauthbearer.clock.skew.seconds">sasl.oauthbearer.clock.skew.seconds</a></h4>
+<p>The (optional) value in seconds to allow for differences between the time of the OAuth/OIDC identity provider and the broker.</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>30</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.expected.audience"></a><a id="connectconfigs_sasl.oauthbearer.expected.audience" href="#connectconfigs_sasl.oauthbearer.expected.audience">sasl.oauthbearer.expected.audience</a></h4>
+<p>The (optional) comma-delimited setting for the broker to use to verify that the JWT was issued for one of the expected audiences. The JWT will be inspected for the standard OAuth "aud" claim and if this value is set, the broker will match the value from JWT's "aud" claim  to see if there is an exact match. If there is no match, the broker will reject the JWT and authentication will fail.</p>
+<table><tbody>
+<tr><th>Type:</th><td>list</td></tr>
+<tr><th>Default:</th><td>""</td></tr>
+<tr><th>Valid Values:</th><td>[] (empty config allowed) (null not allowed)</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.expected.issuer"></a><a id="connectconfigs_sasl.oauthbearer.expected.issuer" href="#connectconfigs_sasl.oauthbearer.expected.issuer">sasl.oauthbearer.expected.issuer</a></h4>
+<p>The (optional) setting for the broker to use to verify that the JWT was created by the expected issuer. The JWT will be inspected for the standard OAuth "iss" claim and if this value is set, the broker will match it exactly against what is in the JWT's "iss" claim. If there is no match, the broker will reject the JWT and authentication will fail.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.header.urlencode"></a><a id="connectconfigs_sasl.oauthbearer.header.urlencode" href="#connectconfigs_sasl.oauthbearer.header.urlencode">sasl.oauthbearer.header.urlencode</a></h4>
+<p>The (optional) setting to enable the OAuth client to URL-encode the client_id and client_secret in the authorization header in accordance with RFC6749, see <a href="https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.1">here</a> for more details. The default value is set to 'false' for backward compatibility</p>
+<table><tbody>
+<tr><th>Type:</th><td>boolean</td></tr>
+<tr><th>Default:</th><td>false</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.jwks.endpoint.refresh.ms"></a><a id="connectconfigs_sasl.oauthbearer.jwks.endpoint.refresh.ms" href="#connectconfigs_sasl.oauthbearer.jwks.endpoint.refresh.ms">sasl.oauthbearer.jwks.endpoint.refresh.ms</a></h4>
+<p>The (optional) value in milliseconds for the broker to wait between refreshing its JWKS (JSON Web Key Set) cache that contains the keys to verify the signature of the JWT.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>3600000 (1 hour)</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.jwks.endpoint.retry.backoff.max.ms"></a><a id="connectconfigs_sasl.oauthbearer.jwks.endpoint.retry.backoff.max.ms" href="#connectconfigs_sasl.oauthbearer.jwks.endpoint.retry.backoff.max.ms">sasl.oauthbearer.jwks.endpoint.retry.backoff.max.ms</a></h4>
+<p>The (optional) value in milliseconds for the maximum wait between attempts to retrieve the JWKS (JSON Web Key Set) from the external authentication provider. JWKS retrieval uses an exponential backoff algorithm with an initial wait based on the sasl.oauthbearer.jwks.endpoint.retry.backoff.ms setting and will double in wait length between attempts up to a maximum wait length specified by the sasl.oauthbearer.jwks.endpoint.retry.backoff.max.ms setting.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>10000 (10 seconds)</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.jwks.endpoint.retry.backoff.ms"></a><a id="connectconfigs_sasl.oauthbearer.jwks.endpoint.retry.backoff.ms" href="#connectconfigs_sasl.oauthbearer.jwks.endpoint.retry.backoff.ms">sasl.oauthbearer.jwks.endpoint.retry.backoff.ms</a></h4>
+<p>The (optional) value in milliseconds for the initial wait between JWKS (JSON Web Key Set) retrieval attempts from the external authentication provider. JWKS retrieval uses an exponential backoff algorithm with an initial wait based on the sasl.oauthbearer.jwks.endpoint.retry.backoff.ms setting and will double in wait length between attempts up to a maximum wait length specified by the sasl.oauthbearer.jwks.endpoint.retry.backoff.max.ms setting.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>100</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.scope.claim.name"></a><a id="connectconfigs_sasl.oauthbearer.scope.claim.name" href="#connectconfigs_sasl.oauthbearer.scope.claim.name">sasl.oauthbearer.scope.claim.name</a></h4>
+<p>The OAuth claim for the scope is often named "scope", but this (optional) setting can provide a different name to use for the scope included in the JWT payload's claims if the OAuth/OIDC provider uses a different name for that claim.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>scope</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="sasl.oauthbearer.sub.claim.name"></a><a id="connectconfigs_sasl.oauthbearer.sub.claim.name" href="#connectconfigs_sasl.oauthbearer.sub.claim.name">sasl.oauthbearer.sub.claim.name</a></h4>
+<p>The OAuth claim for the subject is often named "sub", but this (optional) setting can provide a different name to use for the subject included in the JWT payload's claims if the OAuth/OIDC provider uses a different name for that claim.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>sub</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="scheduled.rebalance.max.delay.ms"></a><a id="connectconfigs_scheduled.rebalance.max.delay.ms" href="#connectconfigs_scheduled.rebalance.max.delay.ms">scheduled.rebalance.max.delay.ms</a></h4>
+<p>The maximum delay that is scheduled in order to wait for the return of one or more departed workers before rebalancing and reassigning their connectors and tasks to the group. During this period the connectors and tasks of the departed workers remain unassigned</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>300000 (5 minutes)</td></tr>
+<tr><th>Valid Values:</th><td>[0,...,2147483647]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="socket.connection.setup.timeout.max.ms"></a><a id="connectconfigs_socket.connection.setup.timeout.max.ms" href="#connectconfigs_socket.connection.setup.timeout.max.ms">socket.connection.setup.timeout.max.ms</a></h4>
+<p>The maximum amount of time the client will wait for the socket connection to be established. The connection setup timeout will increase exponentially for each consecutive connection failure up to this maximum. To avoid connection storms, a randomization factor of 0.2 will be applied to the timeout resulting in a random range between 20% below and 20% above the computed value.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>30000 (30 seconds)</td></tr>
+<tr><th>Valid Values:</th><td>[0,...]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="socket.connection.setup.timeout.ms"></a><a id="connectconfigs_socket.connection.setup.timeout.ms" href="#connectconfigs_socket.connection.setup.timeout.ms">socket.connection.setup.timeout.ms</a></h4>
+<p>The amount of time the client will wait for the socket connection to be established. If the connection is not built before the timeout elapses, clients will close the socket channel. This value is the initial backoff value and will increase exponentially for each consecutive connection failure, up to the <code>socket.connection.setup.timeout.max.ms</code> value.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>10000 (10 seconds)</td></tr>
+<tr><th>Valid Values:</th><td>[0,...]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.cipher.suites"></a><a id="connectconfigs_ssl.cipher.suites" href="#connectconfigs_ssl.cipher.suites">ssl.cipher.suites</a></h4>
+<p>A list of cipher suites. This is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol. By default all the available cipher suites are supported.</p>
+<table><tbody>
+<tr><th>Type:</th><td>list</td></tr>
+<tr><th>Default:</th><td>""</td></tr>
+<tr><th>Valid Values:</th><td>[] (empty config allowed) (null not allowed)</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.client.auth"></a><a id="connectconfigs_ssl.client.auth" href="#connectconfigs_ssl.client.auth">ssl.client.auth</a></h4>
+<p>Configures kafka broker to request client authentication. The following settings are common:  <ul> <li><code>ssl.client.auth=required</code> If set to required client authentication is required. <li><code>ssl.client.auth=requested</code> This means client authentication is optional. unlike required, if this option is set client can choose not to provide authentication information about itself <li><code>ssl.client.auth=none</code> This means client authentication is not needed.</ul></p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>none</td></tr>
+<tr><th>Valid Values:</th><td>[required, requested, none]</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.endpoint.identification.algorithm"></a><a id="connectconfigs_ssl.endpoint.identification.algorithm" href="#connectconfigs_ssl.endpoint.identification.algorithm">ssl.endpoint.identification.algorithm</a></h4>
+<p>The endpoint identification algorithm to validate server hostname using server certificate. </p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>https</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.engine.factory.class"></a><a id="connectconfigs_ssl.engine.factory.class" href="#connectconfigs_ssl.engine.factory.class">ssl.engine.factory.class</a></h4>
+<p>The class of type org.apache.kafka.common.security.auth.SslEngineFactory to provide SSLEngine objects. Default value is org.apache.kafka.common.security.ssl.DefaultSslEngineFactory. Alternatively, setting this to org.apache.kafka.common.security.ssl.CommonNameLoggingSslEngineFactory will log the common name of expired SSL certificates used by clients to authenticate at any of the brokers with log level INFO. Note that this will cause a tiny delay during establishment of new connections from mTLS clients to brokers due to the extra code for examining the certificate chain provided by the client. Note further that the implementation uses a custom truststore based on the standard Java truststore and thus might be considered a security risk due to not being as mature as the standard one.</p>
+<table><tbody>
+<tr><th>Type:</th><td>class</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.keymanager.algorithm"></a><a id="connectconfigs_ssl.keymanager.algorithm" href="#connectconfigs_ssl.keymanager.algorithm">ssl.keymanager.algorithm</a></h4>
+<p>The algorithm used by key manager factory for SSL connections. Default value is the key manager factory algorithm configured for the Java Virtual Machine.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>SunX509</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.secure.random.implementation"></a><a id="connectconfigs_ssl.secure.random.implementation" href="#connectconfigs_ssl.secure.random.implementation">ssl.secure.random.implementation</a></h4>
+<p>The SecureRandom PRNG implementation to use for SSL cryptography operations. </p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="ssl.trustmanager.algorithm"></a><a id="connectconfigs_ssl.trustmanager.algorithm" href="#connectconfigs_ssl.trustmanager.algorithm">ssl.trustmanager.algorithm</a></h4>
+<p>The algorithm used by trust manager factory for SSL connections. Default value is the trust manager factory algorithm configured for the Java Virtual Machine.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>PKIX</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="status.storage.partitions"></a><a id="connectconfigs_status.storage.partitions" href="#connectconfigs_status.storage.partitions">status.storage.partitions</a></h4>
+<p>The number of partitions used when creating the status storage topic</p>
+<table><tbody>
+<tr><th>Type:</th><td>int</td></tr>
+<tr><th>Default:</th><td>5</td></tr>
+<tr><th>Valid Values:</th><td>Positive number, or -1 to use the broker's default</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="status.storage.replication.factor"></a><a id="connectconfigs_status.storage.replication.factor" href="#connectconfigs_status.storage.replication.factor">status.storage.replication.factor</a></h4>
+<p>Replication factor used when creating the status storage topic</p>
+<table><tbody>
+<tr><th>Type:</th><td>short</td></tr>
+<tr><th>Default:</th><td>3</td></tr>
+<tr><th>Valid Values:</th><td>Positive number not larger than the number of brokers in the Kafka cluster, or -1 to use the broker's default</td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="task.shutdown.graceful.timeout.ms"></a><a id="connectconfigs_task.shutdown.graceful.timeout.ms" href="#connectconfigs_task.shutdown.graceful.timeout.ms">task.shutdown.graceful.timeout.ms</a></h4>
+<p>Amount of time to wait for tasks to shutdown gracefully. This is the total amount of time, not per task. All task have shutdown triggered, then they are waited on sequentially.</p>
+<table><tbody>
+<tr><th>Type:</th><td>long</td></tr>
+<tr><th>Default:</th><td>5000 (5 seconds)</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="topic.creation.enable"></a><a id="connectconfigs_topic.creation.enable" href="#connectconfigs_topic.creation.enable">topic.creation.enable</a></h4>
+<p>Whether to allow automatic creation of topics used by source connectors, when source connectors are configured with <code>topic.creation.</code> properties. Each task will use an admin client to create its topics and will not depend on the Kafka brokers to create topics automatically.</p>
+<table><tbody>
+<tr><th>Type:</th><td>boolean</td></tr>
+<tr><th>Default:</th><td>true</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="topic.tracking.allow.reset"></a><a id="connectconfigs_topic.tracking.allow.reset" href="#connectconfigs_topic.tracking.allow.reset">topic.tracking.allow.reset</a></h4>
+<p>If set to true, it allows user requests to reset the set of active topics per connector.</p>
+<table><tbody>
+<tr><th>Type:</th><td>boolean</td></tr>
+<tr><th>Default:</th><td>true</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="topic.tracking.enable"></a><a id="connectconfigs_topic.tracking.enable" href="#connectconfigs_topic.tracking.enable">topic.tracking.enable</a></h4>
+<p>Enable tracking the set of active topics per connector during runtime.</p>
+<table><tbody>
+<tr><th>Type:</th><td>boolean</td></tr>
+<tr><th>Default:</th><td>true</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+<li>
+<h4><a id="value.converter.plugin.version"></a><a id="connectconfigs_value.converter.plugin.version" href="#connectconfigs_value.converter.plugin.version">value.converter.plugin.version</a></h4>
+<p>Version of the value converter.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td>null</td></tr>
+<tr><th>Valid Values:</th><td></td></tr>
+<tr><th>Importance:</th><td>low</td></tr>
+</tbody></table>
+</li>
+</ul>
+

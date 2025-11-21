@@ -1,0 +1,45 @@
+<div id="org.apache.kafka.connect.transforms.predicates.HasHeaderKey">
+<h5><a href="#org.apache.kafka.connect.transforms.predicates.HasHeaderKey">org.apache.kafka.connect.transforms.predicates.HasHeaderKey</a></h5>
+A predicate which is true for records with at least one header with the configured name.
+<p/>
+<ul class="config-list">
+<li>
+<h6><a id="name"></a><a id="org.apache.kafka.connect.transforms.predicates.HasHeaderKey_name" href="#org.apache.kafka.connect.transforms.predicates.HasHeaderKey_name">name</a></h6>
+<p>The header name.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td></td></tr>
+<tr><th>Valid Values:</th><td>non-empty string</td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+</ul>
+
+</div>
+<div id="org.apache.kafka.connect.transforms.predicates.RecordIsTombstone">
+<h5><a href="#org.apache.kafka.connect.transforms.predicates.RecordIsTombstone">org.apache.kafka.connect.transforms.predicates.RecordIsTombstone</a></h5>
+A predicate which is true for records which are tombstones (i.e. have null value).
+<p/>
+<ul class="config-list">
+</ul>
+
+</div>
+<div id="org.apache.kafka.connect.transforms.predicates.TopicNameMatches">
+<h5><a href="#org.apache.kafka.connect.transforms.predicates.TopicNameMatches">org.apache.kafka.connect.transforms.predicates.TopicNameMatches</a></h5>
+A predicate which is true for records with a topic name that matches the configured regular expression.
+<p/>
+<ul class="config-list">
+<li>
+<h6><a id="pattern"></a><a id="org.apache.kafka.connect.transforms.predicates.TopicNameMatches_pattern" href="#org.apache.kafka.connect.transforms.predicates.TopicNameMatches_pattern">pattern</a></h6>
+<p>A Java regular expression for matching against the name of a record's topic.</p>
+<table><tbody>
+<tr><th>Type:</th><td>string</td></tr>
+<tr><th>Default:</th><td></td></tr>
+<tr><th>Valid Values:</th><td>non-empty string, valid regex</td></tr>
+<tr><th>Importance:</th><td>medium</td></tr>
+</tbody></table>
+</li>
+</ul>
+
+</div>
+
