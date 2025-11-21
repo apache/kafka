@@ -265,12 +265,13 @@ public class ReconfigurableQuorumIntegrationTest {
                     }
                 });
 
+                // We need to wait update timer to expire and then send AddVoter request automatically.
+                Thread.sleep(2000);
+
                 // Verify 3002 is already fetch and does not send add voter request
-                // we need to add magic number 10 because we need to wait add voter request
-                // get response, otherwise the test always pass.
                 long removedAtHighWatermark = cluster.controllers().get(3002).raftManager().client().highWatermark().getAsLong();
                 TestUtils.waitForCondition(() ->
-                        cluster.controllers().get(3002).raftManager().client().highWatermark().getAsLong() > removedAtHighWatermark + 10,
+                        cluster.controllers().get(3002).raftManager().client().highWatermark().getAsLong() > removedAtHighWatermark,
                     30_000, 100, () -> "High watermark is not advanced in 30000ms"
                 );
 
