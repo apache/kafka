@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -23,12 +24,15 @@ import org.apache.kafka.server.common.KRaftVersion;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.raft.KafkaRaftClientTest.replicaKey;
 import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_595_PROTOCOL;
 import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_853_PROTOCOL;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KafkaRaftClientAutoJoinTest {
     @Test
@@ -315,6 +319,131 @@ public class KafkaRaftClientAutoJoinTest {
         );
         // poll kraft to update the replica's voter set
         context.client.poll();
+    }
+
+    @Test
+    public void testBootstrapVoterSetDoesNotSendAddVoterAfterRemove() throws Exception {
+        // Test that a bootstrap voter node, after being removed by RemoveVoter RPC,
+        // will NOT automatically rejoin (canAutoJoin remains false)
+        final var leader = replicaKey(randomReplicaId(), true);
+        final var follower = replicaKey(leader.id() + 1, true);
+        final var thisVoter = replicaKey(follower.id() + 1, true);
+
+        final int epoch = 1;
+        final var context = new RaftClientTestContext.Builder(
+            thisVoter.id(),
+            thisVoter.directoryId().get())  // Same directory ID -> node is voter
+            .withRaftProtocol(KIP_853_PROTOCOL)
+            .withStartingVoters(
+                VoterSetTest.voterSet(Stream.of(leader, follower, thisVoter)), KRaftVersion.KRAFT_VERSION_1
+            )
+            .withElectedLeader(epoch, leader.id())
+            .withAutoJoin(true)
+            .withCanBecomeVoter(true)
+            .build();
+
+        // Node should be a follower (voter) initially
+        assertTrue(context.client.quorum().isFollower());
+
+        // Complete initial fetch
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
+
+        // Simulate this node being removed by RemoveVoter RPC (initiated by another node)
+        // Update voter set via fetch - this node is now removed from voter set
+        pollAndDeliverFetchToUpdateVoterSet(
+            context,
+            epoch,
+            VoterSetTest.voterSet(Stream.of(leader, follower))  // This node is no longer in voter set
+        );
+
+        // Node should now be an observer after being removed
+        assertTrue(context.client.quorum().isObserver());
+
+        // Advance time to expire update voter set timer
+        context.time.sleep(context.fetchTimeoutMs);
+
+        // Poll and verify that NO AddVoter request is sent
+        // With canAutoJoin=false (set during init because ID was in voter set),
+        // node should NOT automatically rejoin
+        context.time.sleep(1);
+        context.pollUntilRequest();
+
+        // Should not include AddVoter
+        assertEquals(0, context.channel.drainSentRequests(Optional.of(ApiKeys.ADD_RAFT_VOTER)).size());
+
+    }
+
+    @Test
+    public void testSuccessfulAddVoterSetsCanAutoJoinAgain() throws Exception {
+        // Test scenario:
+        // 1. Node initializes as observer
+        // 2. Node joins as follower via AddVoter
+        // 3. Node is removed via RemoveVoter and becomes observer again
+        // 4. Node should NOT send AddVoter request again
+        final var leader = replicaKey(randomReplicaId(), true);
+        final var follower = replicaKey(leader.id() + 1, true);
+        final var newVoter = replicaKey(follower.id() + 1, true);
+        final int epoch = 1;
+        final var context = new RaftClientTestContext.Builder(
+            newVoter.id(),
+            newVoter.directoryId().get())
+            .withRaftProtocol(KIP_853_PROTOCOL)
+            .withStartingVoters(
+                    VoterSetTest.voterSet(Stream.of(leader, follower)), KRaftVersion.KRAFT_VERSION_1
+            )
+            .withElectedLeader(epoch, leader.id())
+            .withAutoJoin(true)
+            .withCanBecomeVoter(true)
+            .build();
+
+        // 1. Node should be an observer initially
+        assertTrue(context.client.quorum().isObserver());
+
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
+
+        // 2. Send AddVoter request to join cluster
+        final var addVoterRequest = pollAndSendAddVoter(context, newVoter);
+
+        // Successfully add voter - this should set canAutoJoin to false
+        context.deliverResponse(
+            addVoterRequest.correlationId(),
+            addVoterRequest.destination(),
+            RaftUtil.addVoterResponse(Errors.NONE, Errors.NONE.message())
+        );
+
+        // Poll to process the response
+        context.client.poll();
+
+        // Update voter set via fetch - node is now a voter
+        pollAndDeliverFetchToUpdateVoterSet(
+            context,
+            epoch,
+            VoterSetTest.voterSet(Stream.of(leader, follower, newVoter))
+        );
+
+        // Node should now be a follower (voter)
+        assertTrue(context.client.quorum().isFollower());
+
+        // 3. Simulate this node being removed by RemoveVoter RPC
+        pollAndDeliverFetchToUpdateVoterSet(
+            context,
+            epoch,
+            VoterSetTest.voterSet(Stream.of(leader, follower))  // newVoter is removed
+        );
+
+        // Node should now be an observer after being removed
+        assertTrue(context.client.quorum().isObserver());
+
+        // Advance time to expire update voter set timer
+        context.time.sleep(context.fetchTimeoutMs);
+
+        // 4. Poll and verify that NO AddVoter request is sent
+        // Because canAutoJoin was set to false after successful AddVoter
+        context.time.sleep(1);
+        context.pollUntilRequest();
+
+        // Should not include AddVoter
+        assertEquals(0, context.channel.drainSentRequests(Optional.of(ApiKeys.ADD_RAFT_VOTER)).size());
     }
 
     private int randomReplicaId() {
