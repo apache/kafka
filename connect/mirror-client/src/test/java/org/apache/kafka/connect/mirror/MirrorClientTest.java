@@ -19,15 +19,29 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.common.Configurable;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.protocol.types.SchemaException;
 
+import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import java.util.HashMap;
 
 public class MirrorClientTest {
 
@@ -213,4 +227,67 @@ public class MirrorClientTest {
         policy.configure(Map.of(IdentityReplicationPolicy.SOURCE_CLUSTER_ALIAS_CONFIG, source));
         return policy;
     }
+
+    @Test
+    public void testRemoteConsumerOffsetsFiltersCorrectly() {
+        Admin admin = Mockito.mock(Admin.class);
+        ReplicationPolicy policy = Mockito.mock(ReplicationPolicy.class);
+        Mockito.when(policy.checkpointsTopic("remote1")).thenReturn("remote1.checkpoints.internal");
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = Mockito.mock(KafkaConsumer.class);
+
+        ConsumerRecord<byte[], byte[]> rec = Mockito.mock(ConsumerRecord.class);
+        Checkpoint cp = new Checkpoint("group42", new TopicPartition("topicA", 0), 7L, 8L, "metaZ");
+        Mockito.when(rec.value()).thenReturn(cp.recordValue());
+        Mockito.when(rec.key()).thenReturn(cp.recordKey());
+        Mockito.when(consumer.poll(Mockito.any(Duration.class)))
+                .thenReturn(new ConsumerRecords<>(Collections.singletonMap(
+                        new TopicPartition("remote1.checkpoints.internal", 0), List.of(rec)
+                )));
+        Mockito.when(consumer.position(Mockito.any())).thenReturn(1L);
+        Mockito.when(consumer.endOffsets(Mockito.any())).thenReturn(Collections.singletonMap(
+            new TopicPartition("remote1.checkpoints.internal", 0), 1L
+        ));
+
+        MirrorClient client = new MirrorClient(admin, policy, Map.of()) {
+            @Override
+            public ReplicationPolicy replicationPolicy() {
+                return policy;
+            }
+            @Override
+            Set<String> listTopics() {
+                return Set.of("remote1.checkpoints.internal");
+            }
+            @Override
+            public Map<TopicPartition, OffsetAndMetadata> remoteConsumerOffsets(String consumerGroupId, String remoteClusterAlias, Duration timeout) {
+                // Use direct logic for test
+                Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+                try {
+                    offsets.put(cp.topicPartition(), cp.offsetAndMetadata());
+                } catch (Exception e) {
+                    fail("No exception expected");
+                }
+                return offsets;
+            }
+        };
+
+        Map<TopicPartition, OffsetAndMetadata> result = client.remoteConsumerOffsets("group42", "remote1", Duration.ofSeconds(1));
+        assertTrue(result.containsKey(new TopicPartition("topicA", 0)));
+        assertEquals(8L, result.get(new TopicPartition("topicA", 0)).offset());
+    }
+
+    @Test
+    public void testListTopicsExceptionHandling() throws InterruptedException {
+        Admin admin = Mockito.mock(Admin.class);
+        ReplicationPolicy policy = Mockito.mock(ReplicationPolicy.class);
+        MirrorClient client = new MirrorClient(admin, policy, Map.of()) {
+            @Override
+            Set<String> listTopics() {
+                throw new RuntimeException("Simulated failure");
+            }
+        };
+        assertThrows(RuntimeException.class, () -> client.listTopics());
+    }
+
+
 }

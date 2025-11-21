@@ -3913,12 +3913,23 @@ project(':connect:mirror-client') {
     archivesName = "connect-mirror-client"
   }
 
+  apply plugin: "jacoco"
+
+  jacoco {
+    toolVersion = versions.jacoco
+  }
+
+
   dependencies {
     implementation project(':clients')
     implementation libs.slf4jApi
 
     testImplementation testLog4j2Libs
     testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+    testImplementation libs.mockitoJunitJupiter
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
+    testImplementation 'org.junit.jupiter:junit-jupiter-params:5.10.2'
     testImplementation project(':clients').sourceSets.test.output
 
     testRuntimeOnly runtimeTestLibs
