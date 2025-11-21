@@ -349,23 +349,26 @@ public class DefaultStateUpdater implements StateUpdater {
         // TODO: we can let the exception encode the actual corrupted changelog partitions and only
         //       mark those instead of marking all changelogs
         private void removeCheckpointForCorruptedTask(final Task task) {
-            task.markChangelogAsCorrupted(task.changelogPartitions());
+            try {
+                task.markChangelogAsCorrupted(task.changelogPartitions());
 
-            // we need to enforce a checkpoint that removes the corrupted partitions
-            measureCheckpointLatency(() -> task.maybeCheckpoint(true));
+                // we need to enforce a checkpoint that removes the corrupted partitions
+                measureCheckpointLatency(() -> task.maybeCheckpoint(true));
+            } catch (final StreamsException swallow) {
+                log.warn("Checkpoint failed for corrupted task {}", task.id(), swallow);
+            }
         }
 
         private void handleStreamsException(final StreamsException streamsException) {
             log.info("Encountered streams exception: ", streamsException);
             if (streamsException.taskId().isPresent()) {
-                handleStreamsExceptionWithTask(streamsException);
+                handleStreamsExceptionWithTask(streamsException, streamsException.taskId().get());
             } else {
                 handleStreamsExceptionWithoutTask(streamsException);
             }
         }
 
-        private void handleStreamsExceptionWithTask(final StreamsException streamsException) {
-            final TaskId failedTaskId = streamsException.taskId().get();
+        private void handleStreamsExceptionWithTask(final StreamsException streamsException, final TaskId failedTaskId) {
             if (updatingTasks.containsKey(failedTaskId)) {
                 addToExceptionsAndFailedTasksThenRemoveFromUpdatingTasks(
                     new ExceptionAndTask(streamsException, updatingTasks.get(failedTaskId))
@@ -518,7 +521,7 @@ public class DefaultStateUpdater implements StateUpdater {
                         + " own this task.", taskId);
                 }
             } catch (final StreamsException streamsException) {
-                handleStreamsException(streamsException);
+                handleStreamsExceptionWithTask(streamsException, taskId);
                 future.completeExceptionally(streamsException);
             } catch (final RuntimeException runtimeException) {
                 handleRuntimeException(runtimeException);
@@ -637,14 +640,19 @@ public class DefaultStateUpdater implements StateUpdater {
         private void pauseTask(final Task task) {
             final TaskId taskId = task.id();
             // do not need to unregister changelog partitions for paused tasks
-            measureCheckpointLatency(() -> task.maybeCheckpoint(true));
-            pausedTasks.put(taskId, task);
-            updatingTasks.remove(taskId);
-            if (task.isActive()) {
-                transitToUpdateStandbysIfOnlyStandbysLeft();
+            try {
+                measureCheckpointLatency(() -> task.maybeCheckpoint(true));
+                pausedTasks.put(taskId, task);
+                updatingTasks.remove(taskId);
+                if (task.isActive()) {
+                    transitToUpdateStandbysIfOnlyStandbysLeft();
+                }
+                log.info((task.isActive() ? "Active" : "Standby")
+                    + " task " + task.id() + " was paused from the updating tasks and added to the paused tasks.");
+
+            } catch (final StreamsException streamsException) {
+                handleStreamsExceptionWithTask(streamsException, taskId);
             }
-            log.info((task.isActive() ? "Active" : "Standby")
-                + " task " + task.id() + " was paused from the updating tasks and added to the paused tasks.");
         }
 
         private void resumeTask(final Task task) {
@@ -671,11 +679,15 @@ public class DefaultStateUpdater implements StateUpdater {
                                               final Set<TopicPartition> restoredChangelogs) {
             final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
             if (restoredChangelogs.containsAll(changelogPartitions)) {
-                measureCheckpointLatency(() -> task.maybeCheckpoint(true));
-                changelogReader.unregister(changelogPartitions);
-                addToRestoredTasks(task);
-                log.info("Stateful active task " + task.id() + " completed restoration");
-                transitToUpdateStandbysIfOnlyStandbysLeft();
+                try {
+                    measureCheckpointLatency(() -> task.maybeCheckpoint(true));
+                    changelogReader.unregister(changelogPartitions);
+                    addToRestoredTasks(task);
+                    log.info("Stateful active task " + task.id() + " completed restoration");
+                    transitToUpdateStandbysIfOnlyStandbysLeft();
+                } catch (final StreamsException streamsException) {
+                    handleStreamsExceptionWithTask(streamsException, task.id());
+                }
             }
         }
 
@@ -707,8 +719,12 @@ public class DefaultStateUpdater implements StateUpdater {
 
                 measureCheckpointLatency(() -> {
                     for (final Task task : updatingTasks.values()) {
-                        // do not enforce checkpointing during restoration if its position has not advanced much
-                        task.maybeCheckpoint(false);
+                        try {
+                            // do not enforce checkpointing during restoration if its position has not advanced much
+                            task.maybeCheckpoint(false);
+                        } catch (final StreamsException streamsException) {
+                            handleStreamsExceptionWithTask(streamsException, task.id());
+                        }
                     }
                 });
 
