@@ -78,7 +78,7 @@ class OffsetFetcherUtils {
                        ApiVersions apiVersions) {
         this(logContext, metadata, subscriptionState,
             time, retryBackoffMs, apiVersions,
-            new PositionsValidator(logContext, time, metadata, subscriptionState));
+            new PositionsValidator(logContext, time, subscriptionState, metadata));
     }
 
     OffsetFetcherUtils(LogContext logContext,

@@ -118,7 +118,7 @@ public class OffsetsRequestManagerTest {
                 apiVersions,
                 mock(NetworkClientDelegate.class),
                 commitRequestManager,
-                new PositionsValidator(logContext, time, metadata, subscriptionState),
+                new PositionsValidator(logContext, time, subscriptionState, metadata),
                 logContext
         );
     }
@@ -808,7 +808,7 @@ public class OffsetsRequestManagerTest {
                 apiVersions,
                 mock(NetworkClientDelegate.class),
                 commitRequestManager,
-                new PositionsValidator(new LogContext(), time, metadata, subscriptionState),
+                new PositionsValidator(new LogContext(), time, subscriptionState, metadata),
                 new LogContext()
         );
 

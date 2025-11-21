@@ -273,7 +273,7 @@ public class AsyncKafkaConsumerTest {
             defaultApiTimeoutMs,
             "group-id",
             false,
-            new PositionsValidator(new LogContext(), time, metadata, subscriptions));
+            new PositionsValidator(new LogContext(), time, subscriptions, metadata));
     }
 
     @Test

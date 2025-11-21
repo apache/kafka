@@ -62,8 +62,8 @@ public class PositionsValidator {
 
     public PositionsValidator(LogContext logContext,
                               Time time,
-                              ConsumerMetadata metadata,
-                              SubscriptionState subscriptions) {
+                              SubscriptionState subscriptions,
+                              ConsumerMetadata metadata) {
         this.log = requireNonNull(logContext).logger(getClass());
         this.time = requireNonNull(time);
         this.metadata = requireNonNull(metadata);
@@ -119,12 +119,13 @@ public class PositionsValidator {
      *
      * <p/>
      *
-     * This method performs similar checks to the start of {@link OffsetsRequestManager#updateFetchPositions(long)}:
-     *
      * <ol>
      *     <li>
-     *         Checks that there are no positions in the {@link SubscriptionState.FetchStates#AWAIT_VALIDATION}
-     *         state ({@link OffsetFetcherUtils#refreshAndGetPartitionsToValidate()})
+     *         Checks for previous errors from validation, and throws the error if present
+     *     </li>
+     *     <li>
+     *         Checks that the current {@link ConsumerMetadata#updateVersion()} matches its current cached
+     *         value to ensure that it is not stale
      *     </li>
      *     <li>
      *         Checks that all positions are in the {@link SubscriptionState.FetchStates#FETCHING} state
@@ -141,13 +142,6 @@ public class PositionsValidator {
         maybeThrowError();
 
         if (metadataUpdateVersion.get() != metadata.updateVersion()) {
-            return false;
-        }
-
-        // In cases of metadata updates, getPartitionsToValidate() will review the partitions and
-        // determine which, if any, need to be validated. If any partitions require validation, the
-        // update fetch positions step can't be skipped.
-        if (subscriptions.hasPartitionsNeedingValidation(time.milliseconds())) {
             return false;
         }
 
