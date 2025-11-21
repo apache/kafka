@@ -207,7 +207,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.INFO);
 
-        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+        rocksDBStore.preInit(context);
         rocksDBStore.init(context, rocksDBStore);
 
         verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
@@ -218,7 +218,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.DEBUG);
 
-        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+        rocksDBStore.preInit(context);
         rocksDBStore.init(context, rocksDBStore);
 
         verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), notNull());
@@ -230,7 +230,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         try {
             context = getProcessorContext(RecordingLevel.DEBUG);
 
-            rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+            rocksDBStore.preInit(context);
             rocksDBStore.init(context, rocksDBStore);
         } finally {
             rocksDBStore.close();
@@ -262,7 +262,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedStatistics.class);
 
-        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+        rocksDBStore.preInit(context);
         rocksDBStore.init(context, rocksDBStore);
 
         verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
@@ -274,7 +274,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedStatistics.class);
 
-        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+        rocksDBStore.preInit(context);
         final Statistics userStatistics = RocksDBConfigSetterWithUserProvidedStatistics.lastStatistics;
         final Statistics statisticsHandle = getStatistics(rocksDBStore);
         rocksDBStore.close();
@@ -291,7 +291,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.DEBUG);
 
-        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+        rocksDBStore.preInit(context);
         rocksDBStore.init(context, rocksDBStore);
 
         verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), eq(getStatistics(rocksDBStore)));
@@ -302,7 +302,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.DEBUG);
 
-        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+        rocksDBStore.preInit(context);
         final Statistics statisticsHandle = getStatistics(rocksDBStore);
         rocksDBStore.close();
 
@@ -331,7 +331,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             RecordingLevel.DEBUG,
             RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig.class
         );
-        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+        rocksDBStore.preInit(context);
         assertThrows(
             ProcessorStateException.class,
             () -> rocksDBStore.init(context, rocksDBStore),
@@ -362,7 +362,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             RocksDBConfigSetterWithUserProvidedNewPlainTableFormatConfig.class
         );
 
-        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
+        rocksDBStore.preInit(context);
         rocksDBStore.init(context, rocksDBStore);
 
         verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), isNull(), notNull());
@@ -417,7 +417,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         assertTrue(tmpDir.setReadOnly());
 
-        assertThrows(ProcessorStateException.class, () -> rocksDBStore.openDB(tmpContext.appConfigs(), tmpContext.stateDir()));
+        assertThrows(ProcessorStateException.class, () -> rocksDBStore.preInit(tmpContext));
     }
 
     @Test
