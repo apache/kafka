@@ -220,7 +220,7 @@ class NodeToControllerRequestThread(
   initialNetworkClient,
   Math.min(Int.MaxValue, Math.min(config.controllerSocketTimeoutMs, retryTimeoutMs)).toInt,
   time,
-  false
+  true
 ) with Logging {
 
   this.logIdent = logPrefix
