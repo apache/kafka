@@ -3340,7 +3340,7 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         verify(activeTaskCreator).close();
-        verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        verify(stateUpdater).shutdown(Duration.ofMinutes(1L));
     }
 
     @Test
@@ -3370,7 +3370,7 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         verify(activeTaskCreator).close();
-        verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        verify(stateUpdater).shutdown(Duration.ofMinutes(1L));
     }
 
     @SuppressWarnings("unchecked")
@@ -3536,7 +3536,7 @@ public class TaskManagerTest {
             .withInputPartitions(taskId00Partitions)
             .build();
 
-        when(stateUpdater.tasks()).thenReturn(Set.of(standbyTask00));
+        when(stateUpdater.tasks()).thenReturn(Set.of(standbyTask00)).thenReturn(Set.of());
         when(stateUpdater.standbyTasks()).thenReturn(Set.of(standbyTask00));
 
         final CompletableFuture<StateUpdater.RemovedTaskResult> futureForStandbyTask = new CompletableFuture<>();
@@ -3548,7 +3548,7 @@ public class TaskManagerTest {
 
         taskManager.shutdown(true);
 
-        verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        verify(stateUpdater).shutdown(Duration.ofMinutes(1L));
 
         verify(tasks).addTask(standbyTask00);
 
