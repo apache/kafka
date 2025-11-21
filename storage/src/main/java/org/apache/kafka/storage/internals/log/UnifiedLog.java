@@ -48,6 +48,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.RequestLocal;
+import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.record.BrokerCompressionType;
@@ -997,7 +998,7 @@ public class UnifiedLog implements AutoCloseable {
      * @param leaderEpoch the epoch of the replica appending
      */
     public LogAppendInfo appendAsLeader(MemoryRecords records, int leaderEpoch) throws IOException {
-        return appendAsLeader(records, leaderEpoch, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL);
+        return appendAsLeader(records, leaderEpoch, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_UNKNOWN);
     }
 
     /**
@@ -1008,7 +1009,7 @@ public class UnifiedLog implements AutoCloseable {
      * @param origin Declares the origin of the append which affects required validations
      */
     public LogAppendInfo appendAsLeader(MemoryRecords records, int leaderEpoch, AppendOrigin origin) throws IOException {
-        return appendAsLeader(records, leaderEpoch, origin, RequestLocal.noCaching(), VerificationGuard.SENTINEL);
+        return appendAsLeader(records, leaderEpoch, origin, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_UNKNOWN);
     }
 
     /**
@@ -1018,6 +1019,10 @@ public class UnifiedLog implements AutoCloseable {
      * @param leaderEpoch the epoch of the replica appending
      * @param origin Declares the origin of the append which affects required validations
      * @param requestLocal request local instance
+     * @param verificationGuard verification guard for transaction verification
+     * @param transactionVersion the transaction version for the records (1 for TV1, 2 for TV2, etc.).
+     *                           Defaults to TV_UNKNOWN (-1) to force explicit specification.
+     *                           Used for epoch validation of transaction markers (KIP-1228).
      * @throws KafkaStorageException If the append fails due to an I/O error.
      * @return Information about the appended messages including the first and last offset.
      */
@@ -1025,9 +1030,11 @@ public class UnifiedLog implements AutoCloseable {
                                         int leaderEpoch,
                                         AppendOrigin origin,
                                         RequestLocal requestLocal,
-                                        VerificationGuard verificationGuard) {
+                                        VerificationGuard verificationGuard,
+                                        short transactionVersion) {
         boolean validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER;
-        return append(records, origin, validateAndAssignOffsets, leaderEpoch, Optional.of(requestLocal), verificationGuard, false, RecordBatch.CURRENT_MAGIC_VALUE);
+        return append(records, origin, validateAndAssignOffsets, leaderEpoch, Optional.of(requestLocal),
+            verificationGuard, false, RecordBatch.CURRENT_MAGIC_VALUE, transactionVersion);
     }
 
     /**
@@ -1039,7 +1046,7 @@ public class UnifiedLog implements AutoCloseable {
      */
     public LogAppendInfo appendAsLeaderWithRecordVersion(MemoryRecords records, int leaderEpoch, RecordVersion recordVersion) {
         return append(records, AppendOrigin.CLIENT, true, leaderEpoch, Optional.of(RequestLocal.noCaching()),
-                VerificationGuard.SENTINEL, false, recordVersion.value);
+                VerificationGuard.SENTINEL, false, recordVersion.value, TransactionVersion.TV_UNKNOWN);
     }
 
     /**
@@ -1058,7 +1065,8 @@ public class UnifiedLog implements AutoCloseable {
                       Optional.empty(),
                       VerificationGuard.SENTINEL,
                       true,
-                      RecordBatch.CURRENT_MAGIC_VALUE);
+                      RecordBatch.CURRENT_MAGIC_VALUE,
+                      TransactionVersion.TV_UNKNOWN);
     }
 
     /**
@@ -1072,7 +1080,13 @@ public class UnifiedLog implements AutoCloseable {
      * @param validateAndAssignOffsets Should the log assign offsets to this message set or blindly apply what it is given
      * @param leaderEpoch The partition's leader epoch which will be applied to messages when offsets are assigned on the leader
      * @param requestLocal The request local instance if validateAndAssignOffsets is true
+     * @param verificationGuard verification guard for transaction verification
      * @param ignoreRecordSize true to skip validation of record size.
+     * @param toMagic the record version magic value
+     * @param transactionVersion the transaction version for the records (1 for TV1, 2 for TV2, etc.).
+     *                           Defaults to TV_UNKNOWN (-1) to force explicit specification.
+     *                           Used for epoch validation of transaction markers (KIP-1228).
+     *
      * @throws KafkaStorageException If the append fails due to an I/O error.
      * @throws OffsetsOutOfOrderException If out of order offsets found in 'records'
      * @throws UnexpectedAppendOffsetException If the first or last offset in append is less than next offset
@@ -1085,7 +1099,8 @@ public class UnifiedLog implements AutoCloseable {
                                  Optional<RequestLocal> requestLocal,
                                  VerificationGuard verificationGuard,
                                  boolean ignoreRecordSize,
-                                 byte toMagic) {
+                                 byte toMagic,
+                                 short transactionVersion) {
         // We want to ensure the partition metadata file is written to the log dir before any log data is written to disk.
         // This will ensure that any log data can be recovered with the correct topic ID in the case of failure.
         maybeFlushMetadataFile();
@@ -1206,7 +1221,8 @@ public class UnifiedLog implements AutoCloseable {
                             // now that we have valid records, offsets assigned, and timestamps updated, we need to
                             // validate the idempotent/transactional state of the producers and collect some metadata
                             AnalyzeAndValidateProducerStateResult result = analyzeAndValidateProducerState(
-                                    logOffsetMetadata, validRecords, origin, verificationGuard);
+                                logOffsetMetadata, validRecords, origin, verificationGuard, transactionVersion
+                            );
 
                             if (result.maybeDuplicate.isPresent()) {
                                 BatchMetadata duplicate = result.maybeDuplicate.get();
@@ -1352,7 +1368,8 @@ public class UnifiedLog implements AutoCloseable {
     private AnalyzeAndValidateProducerStateResult analyzeAndValidateProducerState(LogOffsetMetadata appendOffsetMetadata,
                                                                                   MemoryRecords records,
                                                                                   AppendOrigin origin,
-                                                                                  VerificationGuard requestVerificationGuard) {
+                                                                                  VerificationGuard requestVerificationGuard,
+                                                                                  short transactionVersion) {
         Map<Long, ProducerAppendInfo> updatedProducers = new HashMap<>();
         List<CompletedTxn> completedTxns = new ArrayList<>();
         int relativePositionInSegment = appendOffsetMetadata.relativePositionInSegment;
@@ -1409,7 +1426,13 @@ public class UnifiedLog implements AutoCloseable {
                     ? Optional.of(new LogOffsetMetadata(batch.baseOffset(), appendOffsetMetadata.segmentBaseOffset, relativePositionInSegment))
                     : Optional.empty();
 
-                Optional<CompletedTxn> maybeCompletedTxn = UnifiedLog.updateProducers(producerStateManager, batch, updatedProducers, firstOffsetMetadata, origin);
+                Optional<CompletedTxn> maybeCompletedTxn = UnifiedLog.updateProducers(
+                    producerStateManager,
+                    batch, updatedProducers,
+                    firstOffsetMetadata,
+                    origin,
+                    transactionVersion
+                );
                 maybeCompletedTxn.ifPresent(completedTxns::add);
             }
 
@@ -2602,7 +2625,8 @@ public class UnifiedLog implements AutoCloseable {
                         batch,
                         loadedProducers,
                         Optional.empty(),
-                        AppendOrigin.REPLICATION);
+                        AppendOrigin.REPLICATION,
+                        (short) 0);
                 maybeCompletedTxn.ifPresent(completedTxns::add);
             }
         });
@@ -2614,10 +2638,11 @@ public class UnifiedLog implements AutoCloseable {
                                                          RecordBatch batch,
                                                          Map<Long, ProducerAppendInfo> producers,
                                                          Optional<LogOffsetMetadata> firstOffsetMetadata,
-                                                         AppendOrigin origin) {
+                                                         AppendOrigin origin,
+                                                         short transactionVersion) {
         long producerId = batch.producerId();
         ProducerAppendInfo appendInfo = producers.computeIfAbsent(producerId, __ -> producerStateManager.prepareUpdate(producerId, origin));
-        Optional<CompletedTxn> completedTxn = appendInfo.append(batch, firstOffsetMetadata);
+        Optional<CompletedTxn> completedTxn = appendInfo.append(batch, firstOffsetMetadata, transactionVersion);
         // Whether we wrote a control marker or a data batch, we may be able to remove VerificationGuard since either the transaction is complete or we have a first offset.
         if (batch.isTransactional()) {
             VerificationStateEntry entry = producerStateManager.verificationStateEntry(producerId);

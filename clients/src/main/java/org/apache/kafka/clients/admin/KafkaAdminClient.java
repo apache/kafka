@@ -3580,6 +3580,7 @@ public class KafkaAdminClient extends AdminClient {
             .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
     }
 
+    @SuppressWarnings("removal")
     @Deprecated
     private static final class ListConsumerGroupsResults {
         private final List<Throwable> errors;

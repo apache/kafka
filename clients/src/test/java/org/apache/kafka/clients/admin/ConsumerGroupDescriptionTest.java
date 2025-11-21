@@ -16,25 +16,33 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.GroupState;
+import org.apache.kafka.common.GroupType;
 
 import org.junit.jupiter.api.Test;
+
+import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ConsumerGroupDescriptionTest {
     @Test
-    public void testState() {
-        for (ConsumerGroupState consumerGroupState : ConsumerGroupState.values()) {
+    public void testGroupState() {
+        for (GroupState groupState : GroupState.values()) {
             ConsumerGroupDescription description = new ConsumerGroupDescription(
                 "groupId",
                 false,
-                null,
+                Set.of(),
                 "assignor",
-                consumerGroupState,
-                null
+                GroupType.CONSUMER,
+                groupState,
+                null,
+                Set.of(),
+                Optional.empty(),
+                Optional.empty()
             );
-            assertEquals(consumerGroupState, description.state());
+            assertEquals(groupState, description.groupState());
         }
     }
 }
