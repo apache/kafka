@@ -68,7 +68,7 @@ import java.util.function.Supplier;
  * {@link #onPartitionLeadershipChanges(Set, Set)}. Each broker will have an instance of this class, and it subscribes
  * to metadata updates for the registered user topic partitions.
  */
-public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataManager {
+public class TopicBasedRemoteLogMetadataManager implements BrokerReadyCallback, RemoteLogMetadataManager {
     private static final Logger log = LoggerFactory.getLogger(TopicBasedRemoteLogMetadataManager.class);
     private final Time time = Time.SYSTEM;
 
@@ -290,12 +290,10 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         try {
             if (configured.compareAndSet(false, true)) {
                 TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(configs);
-                // Scheduling the initialization producer/consumer managers in a separate thread. Required resources may
-                // not yet be available now. This thread makes sure that it is retried at regular intervals until it is
-                // successful.
+                // Creates initialization thread for producer/consumer managers. It will be started when
+                // the broker is ready via onBrokerReady(). The thread retries until resources are available.
                 initializationThread = KafkaThread.nonDaemon(
                         "RLMMInitializationThread", () -> initializeResources(rlmmConfig));
-                initializationThread.start();
                 log.info("Successfully configured topic-based RLMM with config: {}", rlmmConfig);
             } else {
                 log.info("Skipping configure as it is already configured.");
@@ -374,6 +372,25 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                 Exit.exit(1);
             }
         }
+    }
+
+    /**
+     * Invoked when the broker is ready to handle requests. This triggers the initialization of
+     * resources including Kafka clients that operate on the remote log metadata topic.
+     * <p>
+     * The target cluster for the topic is determined by configuration and can be either:
+     * <ol>
+     *   <li>The local cluster (most common) - the initialization is deferred until the broker is ready
+     *       to handle requests. Early initialization would lead to connection failures.</li>
+     *   <li>A remote cluster - the delay is not necessary but causes no harm.</li>
+     * </ol>
+     * <p>
+     * By using the broker ready state as the initialization trigger, the implementation optimally handles
+     * the typical case while remaining correct for alternative configurations.
+     */
+    @Override
+    public void onBrokerReady() {
+        initializationThread.start();
     }
 
     boolean doesTopicExist(Admin admin, String topic) throws ExecutionException, InterruptedException {

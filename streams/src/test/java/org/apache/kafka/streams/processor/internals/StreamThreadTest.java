@@ -324,7 +324,6 @@ public class StreamThreadTest {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
             APPLICATION_ID,
-            PROCESS_ID.toString(),
             time
         );
 
@@ -384,7 +383,7 @@ public class StreamThreadTest {
 
         final StateListenerStub stateListener = new StateListenerStub();
         thread.setStateListener(stateListener);
-        assertEquals(thread.state(), StreamThread.State.CREATED);
+        assertEquals(StreamThread.State.CREATED, thread.state());
 
         final ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener();
 
@@ -396,7 +395,7 @@ public class StreamThreadTest {
         revokedPartitions = Collections.emptyList();
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
 
-        assertEquals(thread.state(), StreamThread.State.PARTITIONS_REVOKED);
+        assertEquals(StreamThread.State.PARTITIONS_REVOKED, thread.state());
 
         // assign single partition
         assignedPartitions = Collections.singletonList(t1p1);
@@ -406,7 +405,7 @@ public class StreamThreadTest {
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
         runOnce(processingThreadsEnabled);
-        assertEquals(thread.state(), StreamThread.State.RUNNING);
+        assertEquals(StreamThread.State.RUNNING, thread.state());
         assertEquals(4, stateListener.numChanges);
         assertEquals(StreamThread.State.PARTITIONS_ASSIGNED, stateListener.oldState);
 
@@ -435,7 +434,7 @@ public class StreamThreadTest {
             "Thread never shut down.");
 
         thread.shutdown(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
-        assertEquals(State.DEAD, thread.state());
+        assertEquals(StreamThread.State.DEAD, thread.state());
     }
 
     @ParameterizedTest
@@ -765,7 +764,6 @@ public class StreamThreadTest {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
             APPLICATION_ID,
-            PROCESS_ID.toString(),
             mockTime
         );
 
@@ -830,7 +828,6 @@ public class StreamThreadTest {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
             APPLICATION_ID,
-            PROCESS_ID.toString(),
             mockTime
         );
 
@@ -1196,7 +1193,7 @@ public class StreamThreadTest {
 
         final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime);
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         stateDirectory = new StateDirectory(config, mockTime, true, false);
@@ -1473,7 +1470,7 @@ public class StreamThreadTest {
         }
 
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime);
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
 
         final Properties props = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
         final StreamsConfig config = new StreamsConfig(props);
@@ -1944,7 +1941,6 @@ public class StreamThreadTest {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
             APPLICATION_ID,
-            PROCESS_ID.toString(),
             mockTime
         );
 
@@ -2705,7 +2701,7 @@ public class StreamThreadTest {
         when(taskManager.handleCorruption(corruptedTasks)).thenReturn(true);
 
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime);
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = new StreamThread(
@@ -2766,7 +2762,7 @@ public class StreamThreadTest {
         doThrow(new TimeoutException()).when(taskManager).handleCorruption(corruptedTasks);
 
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime);
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = new StreamThread(
@@ -2835,7 +2831,7 @@ public class StreamThreadTest {
         doNothing().when(taskManager).handleLostAll();
 
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime);
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = new StreamThread(
@@ -2901,7 +2897,7 @@ public class StreamThreadTest {
         doNothing().when(consumer).enforceRebalance("Active tasks corrupted");
 
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime);
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = new StreamThread(
@@ -2964,7 +2960,7 @@ public class StreamThreadTest {
         when(taskManager.handleCorruption(corruptedTasks)).thenReturn(false);
 
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime);
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = new StreamThread(
@@ -3199,7 +3195,7 @@ public class StreamThreadTest {
         final TaskManager taskManager = mock(TaskManager.class);
 
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime);
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = new StreamThread(
@@ -3258,7 +3254,7 @@ public class StreamThreadTest {
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         final TaskManager taskManager = mock(TaskManager.class);
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime);
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = new StreamThread(
@@ -3659,7 +3655,6 @@ public class StreamThreadTest {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
             APPLICATION_ID,
-            PROCESS_ID.toString(),
             mockTime
         );
 
@@ -3719,7 +3714,6 @@ public class StreamThreadTest {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
             APPLICATION_ID,
-            PROCESS_ID.toString(),
             mockTime
         );
 
@@ -3786,7 +3780,6 @@ public class StreamThreadTest {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
             APPLICATION_ID,
-            PROCESS_ID.toString(),
             mockTime
         );
 
@@ -3882,7 +3875,7 @@ public class StreamThreadTest {
             null,
             mock(TaskManager.class),
             null,
-            new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime),
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
             new TopologyMetadata(internalTopologyBuilder, config),
             PROCESS_ID,
             CLIENT_ID,
@@ -3942,7 +3935,7 @@ public class StreamThreadTest {
                 null,
                 mock(TaskManager.class),
                 null,
-                new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime),
+                new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
                 new TopologyMetadata(internalTopologyBuilder, config),
                 PROCESS_ID,
                 CLIENT_ID,
@@ -3966,11 +3959,13 @@ public class StreamThreadTest {
                         .setStatusDetail("Missing source topics")
         ));
 
+        streamsRebalanceData.setHeartbeatIntervalMs(5000);
+
         // First call should not throw exception (within timeout)
         thread.runOnceWithoutProcessingThreads();
 
         // Advance time beyond max.poll.interval.ms (default is 300000ms) to trigger timeout
-        mockTime.sleep(300001);
+        mockTime.sleep(10001);
 
         final MissingSourceTopicException exception = assertThrows(MissingSourceTopicException.class, () -> thread.runOnceWithoutProcessingThreads());
         assertTrue(exception.getMessage().contains("Missing source topics"));
@@ -4009,7 +4004,7 @@ public class StreamThreadTest {
                 null,
                 mock(TaskManager.class),
                 null,
-                new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime),
+                new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
                 new TopologyMetadata(internalTopologyBuilder, config),
                 PROCESS_ID,
                 CLIENT_ID,
@@ -4069,7 +4064,7 @@ public class StreamThreadTest {
             null,
             mock(TaskManager.class),
             null,
-            new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime),
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
             new TopologyMetadata(internalTopologyBuilder, config),
             PROCESS_ID,
             CLIENT_ID,
@@ -4129,7 +4124,7 @@ public class StreamThreadTest {
                 null,
                 mock(TaskManager.class),
                 null,
-                new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime),
+                new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
                 new TopologyMetadata(internalTopologyBuilder, config),
                 PROCESS_ID,
                 CLIENT_ID,
@@ -4153,11 +4148,13 @@ public class StreamThreadTest {
                         .setStatusDetail("Missing source topics")
         ));
 
+        streamsRebalanceData.setHeartbeatIntervalMs(5000);
+
         // First call should not throw exception (within timeout)
         thread.runOnceWithProcessingThreads();
 
-        // Advance time beyond max.poll.interval.ms (default is 300000ms) to trigger timeout
-        mockTime.sleep(300001);
+        // Advance time beyond 2 * heartbeatIntervalMs (default is 5000ms) to trigger timeout
+        mockTime.sleep(10001);
 
         final MissingSourceTopicException exception = assertThrows(MissingSourceTopicException.class, () -> thread.runOnceWithProcessingThreads());
         assertTrue(exception.getMessage().contains("Missing source topics"));
@@ -4196,7 +4193,7 @@ public class StreamThreadTest {
                 null,
                 mock(TaskManager.class),
                 null,
-                new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime),
+                new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
                 new TopologyMetadata(internalTopologyBuilder, config),
                 PROCESS_ID,
                 CLIENT_ID,
@@ -4221,11 +4218,13 @@ public class StreamThreadTest {
                         .setStatusDetail("Missing source topics")
         ));
 
+        streamsRebalanceData.setHeartbeatIntervalMs(5000);
+
         // First call should not throw exception (within timeout)
         thread.runOnceWithoutProcessingThreads();
 
         // Advance time but not beyond timeout
-        mockTime.sleep(150000); // Half of max.poll.interval.ms
+        mockTime.sleep(5000); // Half of max.poll.interval.ms
 
         // Should still not throw exception
         thread.runOnceWithoutProcessingThreads();
@@ -4243,13 +4242,13 @@ public class StreamThreadTest {
                         .setStatusDetail("Different missing topics")
         ));
 
-        // Advance time by 250 seconds to test if timer was reset
-        // Total time from beginning: 150000 + 250000 = 400000ms (400s)
-        // If timer was NOT reset: elapsed time = 400s > 300s → should throw
-        // If timer WAS reset: elapsed time = 250s < 300s → should NOT throw
-        mockTime.sleep(250000); // Advance by 250 seconds
+        // Advance time by 6 seconds to test if timer was reset
+        // Total time from beginning: 5000 + 6000 = 11000ms (11s)
+        // If timer was NOT reset: elapsed time = 11s > 10s → should throw
+        // If timer WAS reset: elapsed time = 6s < 10s → should NOT throw
+        mockTime.sleep(6000); // Advance by 6 seconds
 
-        // Should not throw because timer was reset - only 250s elapsed from reset point
+        // Should not throw because timer was reset - only 6s elapsed from reset point
         assertDoesNotThrow(() -> thread.runOnceWithoutProcessingThreads());
     }
 
@@ -4290,7 +4289,7 @@ public class StreamThreadTest {
             "",
             taskManager,
             null,
-            new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime),
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
             topologyMetadata,
             PROCESS_ID,
             "thread-id",
@@ -4342,7 +4341,7 @@ public class StreamThreadTest {
     private Collection<Task> createStandbyTask(final StreamsConfig config) {
         final LogContext logContext = new LogContext("test");
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime);
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
         final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator(
             new TopologyMetadata(internalTopologyBuilder, config),
             config,
@@ -4401,7 +4400,7 @@ public class StreamThreadTest {
                                            final StreamsConfig config,
                                            final TopologyMetadata topologyMetadata) {
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime);
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
 
         return new StreamThread(
             mockTime,

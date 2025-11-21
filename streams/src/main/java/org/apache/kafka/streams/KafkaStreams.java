@@ -469,11 +469,6 @@ public class KafkaStreams implements AutoCloseable {
                 }
                 processStreamThread(thread -> thread.setUncaughtExceptionHandler((t, e) -> { }
                 ));
-
-                if (globalStreamThread != null) {
-                    globalStreamThread.setUncaughtExceptionHandler((t, e) -> { }
-                    );
-                }
             } else {
                 throw new IllegalStateException("Can only set UncaughtExceptionHandler before calling start(). " +
                     "Current state is: " + state);
@@ -987,7 +982,6 @@ public class KafkaStreams implements AutoCloseable {
         streamsMetrics = new StreamsMetricsImpl(
             metrics,
             clientId,
-            processId.toString(),
             time
         );
 
@@ -996,8 +990,8 @@ public class KafkaStreams implements AutoCloseable {
         ClientMetrics.addApplicationIdMetric(streamsMetrics, applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG));
         ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, (metricsConfig, now) -> this.topologyMetadata.topologyDescriptionString());
         ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state.name());
-        ClientMetrics.addClientStateTelemetryMetric(streamsMetrics, (metricsConfig, now) -> state.ordinal());
-        ClientMetrics.addClientRecordingLevelMetric(streamsMetrics, calculateMetricsRecordingLevel());
+        ClientMetrics.addClientStateTelemetryMetric(processId.toString(), applicationId, streamsMetrics, (metricsConfig, now) -> state.ordinal());
+        ClientMetrics.addClientRecordingLevelMetric(processId.toString(), streamsMetrics, calculateMetricsRecordingLevel());
         threads = Collections.synchronizedList(new LinkedList<>());
         ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) -> numLiveStreamThreads());
 

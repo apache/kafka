@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.LogContext;
@@ -137,13 +138,25 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     /**
-     * Returns the responses of the sent requests. This method will try to send the unsent requests, poll for responses,
+     * This method will try to send the unsent requests, poll for responses,
      * and check the disconnected nodes.
      *
      * @param timeoutMs     timeout time
      * @param currentTimeMs current time
      */
     public void poll(final long timeoutMs, final long currentTimeMs) {
+        poll(timeoutMs, currentTimeMs, false);
+    }
+
+    /**
+     * This method will try to send the unsent requests, poll for responses,
+     * and check the disconnected nodes.
+     *
+     * @param timeoutMs     timeout time
+     * @param currentTimeMs current time
+     * @param onClose       True when the network thread is closing.
+     */
+    public void poll(final long timeoutMs, final long currentTimeMs, boolean onClose) {
         trySend(currentTimeMs);
 
         long pollTimeoutMs = timeoutMs;
@@ -152,7 +165,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         }
         this.client.poll(pollTimeoutMs, currentTimeMs);
         maybePropagateMetadataError();
-        checkDisconnects(currentTimeMs);
+        checkDisconnects(currentTimeMs, onClose);
         asyncConsumerMetrics.recordUnsentRequestsQueueSize(unsentRequests.size(), currentTimeMs);
     }
 
@@ -219,7 +232,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         return true;
     }
 
-    protected void checkDisconnects(final long currentTimeMs) {
+    protected void checkDisconnects(final long currentTimeMs, boolean onClose) {
         // Check the connection of the unsent request. Disconnect the disconnected node if it is unable to be connected.
         Iterator<UnsentRequest> iter = unsentRequests.iterator();
         while (iter.hasNext()) {
@@ -229,6 +242,11 @@ public class NetworkClientDelegate implements AutoCloseable {
                 asyncConsumerMetrics.recordUnsentRequestsQueueTime(time.milliseconds() - u.enqueueTimeMs());
                 AuthenticationException authenticationException = client.authenticationException(u.node.get());
                 u.handler.onFailure(currentTimeMs, authenticationException);
+            } else if (u.node.isEmpty() && onClose) {
+                log.debug("Removing unsent request {} because the client is closing", u);
+                iter.remove();
+                asyncConsumerMetrics.recordUnsentRequestsQueueTime(time.milliseconds() - u.enqueueTimeMs());
+                u.handler.onFailure(currentTimeMs, Errors.NETWORK_EXCEPTION.exception());
             }
         }
     }
@@ -445,7 +463,7 @@ public class NetworkClientDelegate implements AutoCloseable {
      */
     public static Supplier<NetworkClientDelegate> supplier(final Time time,
                                                            final LogContext logContext,
-                                                           final ConsumerMetadata metadata,
+                                                           final Metadata metadata,
                                                            final ConsumerConfig config,
                                                            final ApiVersions apiVersions,
                                                            final Metrics metrics,
@@ -468,6 +486,35 @@ public class NetworkClientDelegate implements AutoCloseable {
                         throttleTimeSensor,
                         clientTelemetrySender);
                 return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, asyncConsumerMetrics);
+            }
+        };
+    }
+
+    /**
+     * Creates a {@link Supplier} for deferred creation during invocation by
+     * {@link ConsumerNetworkThread}.
+     */
+    public static Supplier<NetworkClientDelegate> supplier(final Time time,
+                                                           final ConsumerConfig config,
+                                                           final LogContext logContext,
+                                                           final KafkaClient client,
+                                                           final Metadata metadata,
+                                                           final BackgroundEventHandler backgroundEventHandler,
+                                                           final boolean notifyMetadataErrorsViaErrorQueue,
+                                                           final AsyncConsumerMetrics asyncConsumerMetrics) {
+        return new CachedSupplier<>() {
+            @Override
+            protected NetworkClientDelegate create() {
+                return new NetworkClientDelegate(
+                    time,
+                    config,
+                    logContext,
+                    client,
+                    metadata,
+                    backgroundEventHandler,
+                    notifyMetadataErrorsViaErrorQueue,
+                    asyncConsumerMetrics
+                );
             }
         };
     }

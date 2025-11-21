@@ -78,7 +78,7 @@ public class DefaultApiVersionManager implements ApiVersionManager {
     public ApiVersionsResponse apiVersionResponse(int throttleTimeMs, boolean alterFeatureLevel0) {
         FinalizedFeatures finalizedFeatures = metadataCache.features();
         Optional<NodeApiVersions> controllerApiVersions = nodeApiVersionsSupplier.get();
-        boolean clientTelemetryEnabled = clientMetricsManager.map(ClientMetricsManager::isTelemetryReceiverConfigured).orElse(false);
+        boolean clientTelemetryEnabled = clientMetricsManager.map(ClientMetricsManager::isTelemetryExporterConfigured).orElse(false);
         ApiVersionsResponseData.ApiVersionCollection apiVersions = controllerApiVersions
                 .map(nodeApiVersions -> ApiVersionsResponse.controllerApiVersions(
                     nodeApiVersions,

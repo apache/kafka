@@ -100,9 +100,17 @@ public class StreamsCoordinatorRecordHelpers {
         String groupId,
         int newGroupEpoch,
         long metadataHash,
-        int validatedTopologyEpoch
+        int validatedTopologyEpoch,
+        Map<String, String> assignmentConfigs
     ) {
         Objects.requireNonNull(groupId, "groupId should not be null here");
+        Objects.requireNonNull(assignmentConfigs, "assignmentConfigs should not be null here");
+
+        List<StreamsGroupMetadataValue.LastAssignmentConfig> assignmentConfigList = assignmentConfigs.entrySet().stream()
+            .map(entry -> new StreamsGroupMetadataValue.LastAssignmentConfig()
+                .setKey(entry.getKey())
+                .setValue(entry.getValue()))
+            .toList();
 
         return CoordinatorRecord.record(
             new StreamsGroupMetadataKey()
@@ -111,7 +119,8 @@ public class StreamsCoordinatorRecordHelpers {
                 new StreamsGroupMetadataValue()
                     .setEpoch(newGroupEpoch)
                     .setMetadataHash(metadataHash)
-                    .setValidatedTopologyEpoch(validatedTopologyEpoch),
+                    .setValidatedTopologyEpoch(validatedTopologyEpoch)
+                    .setLastAssignmentConfigs(assignmentConfigList),
                 (short) 0
             )
         );
@@ -257,10 +266,10 @@ public class StreamsCoordinatorRecordHelpers {
                     .setMemberEpoch(member.memberEpoch())
                     .setPreviousMemberEpoch(member.previousMemberEpoch())
                     .setState(member.state().value())
-                    .setActiveTasks(toTaskIds(member.assignedTasks().activeTasks()))
+                    .setActiveTasks(toTaskIdsWithEpochs(member.assignedTasks().activeTasksWithEpochs()))
                     .setStandbyTasks(toTaskIds(member.assignedTasks().standbyTasks()))
                     .setWarmupTasks(toTaskIds(member.assignedTasks().warmupTasks()))
-                    .setActiveTasksPendingRevocation(toTaskIds(member.tasksPendingRevocation().activeTasks()))
+                    .setActiveTasksPendingRevocation(toTaskIdsWithEpochs(member.tasksPendingRevocation().activeTasksWithEpochs()))
                     .setStandbyTasksPendingRevocation(toTaskIds(member.tasksPendingRevocation().standbyTasks()))
                     .setWarmupTasksPendingRevocation(toTaskIds(member.tasksPendingRevocation().warmupTasks())),
                 (short) 0
@@ -298,6 +307,33 @@ public class StreamsCoordinatorRecordHelpers {
                 .setSubtopologyId(subtopologyId)
                 .setPartitions(partitions.stream().sorted().toList()))
         );
+        taskIds.sort(Comparator.comparing(StreamsGroupCurrentMemberAssignmentValue.TaskIds::subtopologyId));
+        return taskIds;
+    }
+
+    private static List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> toTaskIdsWithEpochs(
+        Map<String, Map<Integer, Integer>> tasksWithEpochs
+    ) {
+        List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> taskIds = new ArrayList<>(tasksWithEpochs.size());
+        tasksWithEpochs.forEach((subtopologyId, partitionEpochMap) -> {
+            // Sort by partition for consistent ordering
+            List<Map.Entry<Integer, Integer>> sortedEntries = partitionEpochMap.entrySet().stream()
+                .sorted(Comparator.comparingInt(Map.Entry::getKey))
+                .toList();
+            
+            List<Integer> partitions = new ArrayList<>(sortedEntries.size());
+            List<Integer> epochs = new ArrayList<>(sortedEntries.size());
+            
+            for (Map.Entry<Integer, Integer> entry : sortedEntries) {
+                partitions.add(entry.getKey());
+                epochs.add(entry.getValue());
+            }
+            
+            taskIds.add(new StreamsGroupCurrentMemberAssignmentValue.TaskIds()
+                .setSubtopologyId(subtopologyId)
+                .setPartitions(partitions)
+                .setAssignmentEpochs(epochs));
+        });
         taskIds.sort(Comparator.comparing(StreamsGroupCurrentMemberAssignmentValue.TaskIds::subtopologyId));
         return taskIds;
     }

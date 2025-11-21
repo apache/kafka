@@ -17,7 +17,6 @@
 
 package org.apache.kafka.jmh.partition;
 
-import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.Partition;
 import kafka.log.LogManager;
@@ -36,6 +35,7 @@ import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.metadata.MockConfigRepository;
 import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.server.partition.AlterPartitionListener;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;

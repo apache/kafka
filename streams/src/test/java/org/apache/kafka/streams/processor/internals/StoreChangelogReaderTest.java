@@ -1214,7 +1214,7 @@ public class StoreChangelogReaderTest {
         assertTrue(changelogReader.isEmpty());
         assertNull(changelogReader.changelogMetadata(tp1));
         assertNull(changelogReader.changelogMetadata(tp2));
-        assertEquals(changelogReader.state(), ACTIVE_RESTORING);
+        assertEquals(ACTIVE_RESTORING, changelogReader.state());
     }
 
     @Test

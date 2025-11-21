@@ -53,7 +53,6 @@
         <subpackage name="metadata">
             <allow pkg="com.fasterxml.jackson" />
             <allow pkg="org.apache.kafka.common.protocol" />
-            <allow pkg="org.apache.kafka.common.protocol.types" />
             <allow pkg="org.apache.kafka.common.message" />
             <allow pkg="org.apache.kafka.common.metadata" />
         </subpackage>
@@ -64,7 +63,6 @@
 
     <subpackage name="controller">
         <allow pkg="org.apache.kafka.clients" />
-        <allow pkg="org.apache.kafka.clients.admin" />
         <allow pkg="org.apache.kafka.common.acl" />
         <allow pkg="org.apache.kafka.common.annotation" />
         <allow pkg="org.apache.kafka.common.config" />
@@ -79,10 +77,7 @@
         <allow pkg="org.apache.kafka.common.resource" />
         <allow pkg="org.apache.kafka.controller" />
         <allow pkg="org.apache.kafka.image" />
-        <allow pkg="org.apache.kafka.image.writer" />
         <allow pkg="org.apache.kafka.metadata" />
-        <allow pkg="org.apache.kafka.metadata.authorizer" />
-        <allow pkg="org.apache.kafka.metadata.migration" />
         <allow pkg="org.apache.kafka.deferred" />
         <allow pkg="org.apache.kafka.queue" />
         <allow pkg="org.apache.kafka.raft" />
@@ -114,7 +109,6 @@
         <allow pkg="org.apache.kafka.common.requests" />
         <allow pkg="org.apache.kafka.common.resource" />
         <allow pkg="org.apache.kafka.image" />
-        <allow pkg="org.apache.kafka.image.writer" />
         <allow pkg="org.apache.kafka.metadata" />
         <allow pkg="org.apache.kafka.queue" />
         <allow pkg="org.apache.kafka.clients.admin" />
@@ -170,12 +164,7 @@
         <allow pkg="org.apache.kafka.server.util"/>
         <allow pkg="org.apache.kafka.test" />
         <subpackage name="authorizer">
-            <allow pkg="org.apache.kafka.common.acl" />
-            <allow pkg="org.apache.kafka.common.requests" />
-            <allow pkg="org.apache.kafka.common.resource" />
             <allow pkg="org.apache.kafka.controller" />
-            <allow pkg="org.apache.kafka.metadata" />
-            <allow pkg="org.apache.kafka.common.internals" />
             <allow pkg="org.apache.kafka.common.metrics" />
             <allow pkg="org.apache.kafka.common.metrics.internals" />
             <allow pkg="org.apache.kafka.common.metrics.stats" />
@@ -183,14 +172,7 @@
         <subpackage name="bootstrap">
             <allow pkg="org.apache.kafka.snapshot" />
         </subpackage>
-        <subpackage name="fault">
-            <allow pkg="org.apache.kafka.server.fault" />
-        </subpackage>
-        <subpackage name="migration">
-            <allow pkg="org.apache.kafka.controller" />
-        </subpackage>
         <subpackage name="storage">
-            <allow pkg="org.apache.kafka.common.internals" />
             <allow pkg="org.apache.kafka.snapshot" />
         </subpackage>
         <subpackage name="util">

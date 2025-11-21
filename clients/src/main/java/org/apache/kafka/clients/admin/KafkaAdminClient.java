@@ -3580,6 +3580,7 @@ public class KafkaAdminClient extends AdminClient {
             .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
     }
 
+    @SuppressWarnings("removal")
     @Deprecated
     private static final class ListConsumerGroupsResults {
         private final List<Throwable> errors;
@@ -3814,7 +3815,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public ListShareGroupOffsetsResult listShareGroupOffsets(final Map<String, ListShareGroupOffsetsSpec> groupSpecs,
                                                              final ListShareGroupOffsetsOptions options) {
-        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> future = ListShareGroupOffsetsHandler.newFuture(groupSpecs.keySet());
+        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, SharePartitionOffsetInfo>> future = ListShareGroupOffsetsHandler.newFuture(groupSpecs.keySet());
         ListShareGroupOffsetsHandler handler = new ListShareGroupOffsetsHandler(groupSpecs, logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new ListShareGroupOffsetsResult(future.all());
