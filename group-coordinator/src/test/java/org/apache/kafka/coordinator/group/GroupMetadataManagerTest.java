@@ -10460,7 +10460,7 @@ public class GroupMetadataManagerTest {
 
         List<CoordinatorRecord> expectedRecords = List.of(GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord("group-id"));
         List<CoordinatorRecord> records = new ArrayList<>();
-        context.groupMetadataManager.createGroupTombstoneRecords("group-id", records);
+        context.groupMetadataManager.createGroupTombstoneRecordsAndCancelTimers("group-id", records);
         assertEquals(expectedRecords, records);
     }
 
@@ -10498,7 +10498,7 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId)
         );
         List<CoordinatorRecord> records = new ArrayList<>();
-        context.groupMetadataManager.createGroupTombstoneRecords("group-id", records);
+        context.groupMetadataManager.createGroupTombstoneRecordsAndCancelTimers("group-id", records);
         assertEquals(expectedRecords, records);
     }
 
@@ -10540,7 +10540,7 @@ public class GroupMetadataManagerTest {
         assertTrue(context.timer.isScheduled(timerKey), "Timer should be scheduled after first member joins");
 
         List<CoordinatorRecord> records = new ArrayList<>();
-        context.groupMetadataManager.createGroupTombstoneRecords(groupId, records);
+        context.groupMetadataManager.createGroupTombstoneRecordsAndCancelTimers(groupId, records);
 
         assertFalse(context.timer.isScheduled(timerKey), "Timer should be cancelled after group deletion");
 
@@ -15952,7 +15952,7 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord(groupId)
         );
         List<CoordinatorRecord> records = new ArrayList<>();
-        context.groupMetadataManager.createGroupTombstoneRecords("share-group-id", records);
+        context.groupMetadataManager.createGroupTombstoneRecordsAndCancelTimers("share-group-id", records);
         assertEquals(expectedRecords, records);
     }
 
