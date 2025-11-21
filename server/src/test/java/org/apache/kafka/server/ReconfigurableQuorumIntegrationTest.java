@@ -251,6 +251,8 @@ public class ReconfigurableQuorumIntegrationTest {
 
 
                 // Remove 3002 from the voter set
+                Uuid dirId = cluster.nodes().controllerNodes().get(3002).metadataDirectoryId();
+                admin.removeRaftVoter(3002, dirId).all().get();
                 TestUtils.retryOnExceptionWithTimeout(30_000, 100, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     if (!voters.containsKey(3002)) {
@@ -258,7 +260,6 @@ public class ReconfigurableQuorumIntegrationTest {
                         return;
                     }
 
-                    admin.removeRaftVoter(3002, voters.get(3002)).all().get();
                     assertEquals(Set.of(3000, 3001), voters.keySet());
                     for (int replicaId : new int[] {3000, 3001}) {
                         assertEquals(nodes.controllerNodes().get(replicaId).metadataDirectoryId(), voters.get(replicaId));
