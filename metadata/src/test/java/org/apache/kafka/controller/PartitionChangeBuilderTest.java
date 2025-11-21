@@ -1211,8 +1211,7 @@ public class PartitionChangeBuilderTest {
                 metadataVersionForPartitionChangeRecordVersion(version), 3, true)
             .setElection(Election.PREFERRED)
             .setUseLastKnownLeaderInBalancedRecovery(true)
-            .setDefaultDirProvider(DEFAULT_DIR_PROVIDER)
-            ;
+            .setDefaultDirProvider(DEFAULT_DIR_PROVIDER);
 
         builder.setTargetIsr(List.of());
 
