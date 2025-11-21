@@ -40,7 +40,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -250,13 +249,12 @@ public class ReconfigurableQuorumIntegrationTest {
                     }
                 });
 
-                AtomicLong removedAtHighWatermark = new AtomicLong();
+
                 // Remove 3002 from the voter set
                 TestUtils.retryOnExceptionWithTimeout(30_000, 100, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     if (!voters.containsKey(3002)) {
                         // if there are no node 3002, it should be return
-                        removedAtHighWatermark.set(cluster.controllers().get(3002).raftManager().client().highWatermark().getAsLong());
                         return;
                     }
 
@@ -267,8 +265,10 @@ public class ReconfigurableQuorumIntegrationTest {
                     }
                 });
 
+                // Verify 3002 is already fetch and does not send add voter request
+                long removedAtHighWatermark = cluster.controllers().get(3002).raftManager().client().highWatermark().getAsLong();
                 TestUtils.waitForCondition(() -> cluster.controllers().get(3002).raftManager().client().highWatermark().getAsLong()
-                                        > removedAtHighWatermark.get() + 10,
+                                        > removedAtHighWatermark,
                         30_000, 100, () -> "High watermark is not advanced in 30000ms"
                 );
 
