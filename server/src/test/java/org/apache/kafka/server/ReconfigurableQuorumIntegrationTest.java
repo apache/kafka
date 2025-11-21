@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -249,27 +250,29 @@ public class ReconfigurableQuorumIntegrationTest {
                     }
                 });
 
+                // store the RaftEndpoint of the node 3002 so we cah re-add it to the cluster
+                // after it is removed
+                QuorumInfo quorumInfo = admin.describeMetadataQuorum().quorumInfo().get();
+                Set<RaftVoterEndpoint> removedVoterEndpoint = new HashSet<>(quorumInfo.nodes().get(3002).endpoints());
 
                 // Remove 3002 from the voter set
                 Uuid dirId = cluster.nodes().controllerNodes().get(3002).metadataDirectoryId();
                 admin.removeRaftVoter(3002, dirId).all().get();
                 TestUtils.retryOnExceptionWithTimeout(30_000, 100, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
-                    if (!voters.containsKey(3002)) {
-                        // if there are no node 3002, it should be return
-                        return;
-                    }
-
                     assertEquals(Set.of(3000, 3001), voters.keySet());
                     for (int replicaId : new int[] {3000, 3001}) {
                         assertEquals(nodes.controllerNodes().get(replicaId).metadataDirectoryId(), voters.get(replicaId));
                     }
                 });
 
-                // We need to wait update timer to expire and then send AddVoter request automatically.
-                Thread.sleep(2000);
+                // We need to wait for the update voter set timer expiring to allow the addVoter request to be sent.
+                long defaultUpdateVoterSetPeriodTimeout = 2000;
+                Thread.sleep(defaultUpdateVoterSetPeriodTimeout);
 
-                // Verify 3002 is already fetch and does not send add voter request
+                //  Because the auto join will happen before sending fetch request to the leader,
+                //  we verify the node id 3002 is already fetched from the active controller
+                //  by checking the high watermark. Then verifying the node 3002 does not exist in the voter set.
                 long removedAtHighWatermark = cluster.controllers().get(3002).raftManager().client().highWatermark().getAsLong();
                 TestUtils.waitForCondition(() ->
                         cluster.controllers().get(3002).raftManager().client().highWatermark().getAsLong() > removedAtHighWatermark,
@@ -282,6 +285,13 @@ public class ReconfigurableQuorumIntegrationTest {
                 for (int replicaId : new int[] {3000, 3001}) {
                     assertEquals(nodes.controllerNodes().get(replicaId).metadataDirectoryId(), voters.get(replicaId));
                 }
+
+                // We test 3002 can be added by AddVoter request from admin instead of auto-join
+                admin.addRaftVoter(3002, dirId, removedVoterEndpoint).all().get();
+                TestUtils.retryOnExceptionWithTimeout(30_000, 100, () -> {
+                    Map<Integer, Uuid> newVoters = findVoterDirs(admin);
+                    assertEquals(Set.of(3000, 3001, 3002), newVoters.keySet());
+                });
             }
         }
     }
