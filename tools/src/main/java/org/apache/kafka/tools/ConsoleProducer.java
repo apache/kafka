@@ -126,6 +126,7 @@ public class ConsoleProducer {
         private final OptionSpec<Long> metadataExpiryMsOpt;
         private final OptionSpec<Long> maxBlockMsOpt;
         private final OptionSpec<Long> maxMemoryBytesOpt;
+        @Deprecated(since = "4.2", forRemoval = true)
         private final OptionSpec<Integer> maxPartitionMemoryBytesOpt;
         private final OptionSpec<String> messageReaderOpt;
         private final OptionSpec<Integer> socketBufferSizeOpt;
@@ -156,8 +157,11 @@ public class ConsoleProducer {
                     .withOptionalArg()
                     .describedAs("compression-codec")
                     .ofType(String.class);
-            batchSizeOpt = parser.accepts("batch-size", "Number of messages to send in a single batch if they are not being sent synchronously. " +
-                            "please note that this option will be replaced if max-partition-memory-bytes is also set")
+            batchSizeOpt = parser.accepts("batch-size", "The buffer size in bytes allocated for a partition. " +
+                            "When records are received which are smaller than this size the producer " +
+                            "will attempt to optimistically group them together until this size is reached. " +
+                            "This is the option to control batch.size in producer configs. " +
+                            "Please note that this option will be replaced if max-partition-memory-bytes is also set.")
                     .withRequiredArg()
                     .describedAs("size")
                     .ofType(Integer.class)
@@ -212,9 +216,11 @@ public class ConsoleProducer {
                     .ofType(Long.class)
                     .defaultsTo(32 * 1024 * 1024L);
             maxPartitionMemoryBytesOpt = parser.accepts("max-partition-memory-bytes",
-                            "The buffer size allocated for a partition. When records are received which are smaller than this size the producer " +
+                            "(Deprecated) The buffer size in bytes allocated for a partition. " +
+                                    "When records are received which are smaller than this size the producer " +
                                     "will attempt to optimistically group them together until this size is reached. " +
-                                    "This is the option to control `batch.size` in producer configs.")
+                                    "This is the option to control batch.size in producer configs. " +
+                                    "This option will be removed in a future version. Use --batch-size instead.")
                     .withRequiredArg()
                     .describedAs("memory in bytes per partition")
                     .ofType(Integer.class)
@@ -333,6 +339,10 @@ public class ConsoleProducer {
             if (options.has(propertyOpt)) {
                 System.out.println("Warning: --property is deprecated and will be removed in a future version. Use --reader-property instead.");
                 readerPropertyOpt = propertyOpt;
+            }
+
+            if (options.has(maxPartitionMemoryBytesOpt)) {
+                System.out.println("Warning: --max-partition-memory-bytes is deprecated and will be removed in a future version. Use --batch-size instead.");
             }
 
             try {
