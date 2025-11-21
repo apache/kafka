@@ -147,9 +147,11 @@ RUN useradd -u $UID -ms /bin/bash ducker \
   && mkdir -p /home/ducker/ \
   && rsync -aiq /root/.ssh/ /home/ducker/.ssh \
   && chown -R ducker /home/ducker/ /mnt/ /var/log/ \
-  && echo "PATH=$(runuser -l ducker -c 'echo $PATH'):$JAVA_HOME/bin" >> /home/ducker/.ssh/environment \
-  && echo 'PATH=$PATH:'"$JAVA_HOME/bin" >> /home/ducker/.profile \
   && echo 'ducker ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+
+# Symlink all JDK binaries (java, jcmd, jps, etc.) to /usr/bin.
+# because some JDK Docker images set java tools via ENV in Dockerfiles, which are not visible to non-interactive shells.
+RUN cp -sn $JAVA_HOME/bin/* /usr/bin/
 
 USER ducker
 
