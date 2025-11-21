@@ -54,8 +54,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -902,6 +902,11 @@ public class StateDirectory implements AutoCloseable {
 
         @Override
         public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
+        public Cancellable schedule(final Instant startTime, final Duration interval, final PunctuationType type, final Punctuator callback) {
             throw new IllegalStateException("Should not be called");
         }
 

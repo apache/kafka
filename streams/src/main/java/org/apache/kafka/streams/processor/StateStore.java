@@ -71,7 +71,7 @@ public interface StateStore {
      */
     void init(final StateStoreContext stateStoreContext, final StateStore root);
 
-    default void preInit(final StateStoreContext stateStoreContext) {};
+    default void preInit(final StateStoreContext stateStoreContext) {}
 
     /**
      * Flush any cached data
