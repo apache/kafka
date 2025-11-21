@@ -133,7 +133,7 @@ public class Formatter {
      * The initial KIP-853 voters.
      */
     private Optional<DynamicVoters> initialControllers = Optional.empty();
-    private boolean noInitialControllersFlag = false;
+    private boolean hasDynamicQuorum = false;
 
     public Formatter setPrintStream(PrintStream printStream) {
         this.printStream = printStream;
@@ -210,8 +210,8 @@ public class Formatter {
         return this;
     }
 
-    public Formatter setNoInitialControllersFlag(boolean noInitialControllersFlag) {
-        this.noInitialControllersFlag = noInitialControllersFlag;
+    public Formatter setHasDynamicQuorum(boolean hasDynamicQuorum) {
+        this.hasDynamicQuorum = hasDynamicQuorum;
         return this;
     }
 
@@ -220,7 +220,7 @@ public class Formatter {
     }
 
     boolean hasDynamicQuorum() {
-        return initialControllers.isPresent() || noInitialControllersFlag;
+        return hasDynamicQuorum;
     }
 
     public BootstrapMetadata bootstrapMetadata() {
@@ -336,8 +336,8 @@ public class Formatter {
     /**
      * Calculate the effective feature level for kraft.version. In order to keep existing
      * command-line invocations of StorageTool working, we default this to 0 if no dynamic
-     * voter quorum arguments were provided. As a convenience, if dynamic voter quorum arguments
-     * were passed, we set the latest kraft.version. (Currently there is only 1 non-zero version).
+     * voter quorum arguments were provided. As a convenience, if the static voters config is
+     * empty, we set the latest kraft.version. (Currently there is only 1 non-zero version).
      *
      * @param configuredKRaftVersionLevel   The configured level for kraft.version
      * @return                              The effective feature level.
@@ -346,15 +346,21 @@ public class Formatter {
         if (configuredKRaftVersionLevel.isPresent()) {
             if (configuredKRaftVersionLevel.get() == 0) {
                 if (hasDynamicQuorum()) {
-                    throw new FormatterException("Cannot set kraft.version to " +
-                        configuredKRaftVersionLevel.get() + " if KIP-853 configuration is present. " +
-                            "Try removing the --feature flag for kraft.version.");
+                    throw new FormatterException(
+                        "Cannot set kraft.version to 0 if controller.quorum.voters is empty and one of the flags " +
+                        "--standalone, --initial-controllers, or --no-initial-controllers is used. For dynamic " +
+                        "controllers support, try removing the --feature flag for kraft.version."
+                    );
                 }
             } else {
                 if (!hasDynamicQuorum()) {
-                    throw new FormatterException("Cannot set kraft.version to " +
-                        configuredKRaftVersionLevel.get() + " unless KIP-853 configuration is present. " +
-                            "Try removing the --feature flag for kraft.version.");
+                    throw new FormatterException(
+                        "Cannot set kraft.version to " + configuredKRaftVersionLevel.get() +
+                        " unless controller.quorum.voters is empty and one of the flags --standalone, " +
+                        "--initial-controllers, or --no-initial-controllers is used. " +
+                        "For dynamic controllers support, try using one of --standalone, --initial-controllers, " +
+                        "or --no-initial-controllers and removing controller.quorum.voters."
+                    );
                 }
             }
             return configuredKRaftVersionLevel.get();

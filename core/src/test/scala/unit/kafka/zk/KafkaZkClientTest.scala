@@ -1443,6 +1443,21 @@ class KafkaZkClientTest extends QuorumTestHarness {
   }
 
   @Test
+  def testMigrationZnodeWithNullValue(): Unit = {
+    val (controllerEpoch, stat) = zkClient.getControllerEpoch.get
+    var migrationState = new ZkMigrationLeadershipState(3000, 42, 100, 42, Time.SYSTEM.milliseconds(), -1, controllerEpoch, stat.getVersion)
+    zkClient.retryRequestUntilConnected(CreateRequest(
+      MigrationZNode.path,
+      null,
+      zkClient.defaultAcls(MigrationZNode.path),
+      CreateMode.PERSISTENT))
+    
+    migrationState = zkClient.getOrCreateMigrationState(migrationState)
+
+    assertEquals(0, migrationState.migrationZkVersion())
+  }
+
+  @Test
   def testFailToUpdateMigrationZNode(): Unit = {
     val (controllerEpoch, stat) = zkClient.getControllerEpoch.get
     var migrationState = new ZkMigrationLeadershipState(3000, 42, 100, 42, Time.SYSTEM.milliseconds(), -1, controllerEpoch, stat.getVersion)

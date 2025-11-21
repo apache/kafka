@@ -128,21 +128,30 @@ object StorageTool extends Logging {
       featureNamesAndLevels(_).foreach {
         kv => formatter.setFeatureLevel(kv._1, kv._2)
       })
-    Option(namespace.getString("initial_controllers")).
+    val initialControllers = namespace.getString("initial_controllers")
+    val isStandalone = namespace.getBoolean("standalone")
+    val staticVotersEmpty = config.quorumVoters.isEmpty
+    formatter.setHasDynamicQuorum(staticVotersEmpty)
+    if (!staticVotersEmpty && (Option(initialControllers).isDefined || isStandalone)) {
+      throw new TerseFailure("You cannot specify " +
+        QuorumConfig.QUORUM_VOTERS_CONFIG + " and format the node " +
+        "with --initial-controllers or --standalone. " +
+        "If you want to use dynamic quorum, please remove " +
+        QuorumConfig.QUORUM_VOTERS_CONFIG + " and specify " +
+        QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG + " instead.")
+    }
+    Option(initialControllers).
       foreach(v => formatter.setInitialControllers(DynamicVoters.parse(v)))
-    if (namespace.getBoolean("standalone")) {
+    if (isStandalone) {
       formatter.setInitialControllers(createStandaloneDynamicVoters(config))
     }
-    if (namespace.getBoolean("no_initial_controllers")) {
-      formatter.setNoInitialControllersFlag(true)
-    } else {
-      if (config.processRoles.contains(ProcessRole.ControllerRole)) {
-        if (config.quorumVoters.isEmpty() && !formatter.initialVoters().isPresent()) {
+    if (!namespace.getBoolean("no_initial_controllers") &&
+      config.processRoles.contains(ProcessRole.ControllerRole) &&
+      staticVotersEmpty &&
+      !formatter.initialVoters().isPresent) {
           throw new TerseFailure("Because " + QuorumConfig.QUORUM_VOTERS_CONFIG +
             " is not set on this controller, you must specify one of the following: " +
             "--standalone, --initial-controllers, or --no-initial-controllers.");
-        }
-      }
     }
     Option(namespace.getList("add_scram")).
       foreach(scramArgs => formatter.setScramArguments(scramArgs.asInstanceOf[util.List[String]]))
@@ -206,18 +215,21 @@ object StorageTool extends Logging {
       action(append())
     val reconfigurableQuorumOptions = formatParser.addMutuallyExclusiveGroup()
     reconfigurableQuorumOptions.addArgument("--standalone", "-s")
-      .help("Used to initialize a controller as a single-node dynamic quorum.")
+      .help("Used to initialize a controller as a single-node dynamic quorum. When setting this flag, " +
+        "the controller.quorum.voters config must not be set, and controller.quorum.bootstrap.servers is set instead.")
       .action(storeTrue())
 
     reconfigurableQuorumOptions.addArgument("--no-initial-controllers", "-N")
-      .help("Used to initialize a server without a dynamic quorum topology.")
+      .help("Used to initialize a server without specifying a dynamic quorum. When setting this flag, " +
+        "the controller.quorum.voters config should not be set, and controller.quorum.bootstrap.servers is set instead.")
       .action(storeTrue())
 
     reconfigurableQuorumOptions.addArgument("--initial-controllers", "-I")
-      .help("Used to initialize a server with a specific dynamic quorum topology. The argument " +
+      .help("Used to initialize a server with the specified dynamic quorum. The argument " +
         "is a comma-separated list of id@hostname:port:directory. The same values must be used to " +
         "format all nodes. For example:\n0@example.com:8082:JEXY6aqzQY-32P5TStzaFg,1@example.com:8083:" +
-        "MvDxzVmcRsaTz33bUuRU6A,2@example.com:8084:07R5amHmR32VDA6jHkGbTA\n")
+        "MvDxzVmcRsaTz33bUuRU6A,2@example.com:8084:07R5amHmR32VDA6jHkGbTA\n. When setting this flag, " +
+        "the controller.quorum.voters config must not be set, and controller.quorum.bootstrap.servers is set instead.")
       .action(store())
     parser.parseArgs(args)
   }

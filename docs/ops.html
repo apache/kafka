@@ -1249,10 +1249,10 @@ queued.max.requests=[number of concurrent requests]</code></pre>
 
   <h3 class="anchor-heading"><a id="java" class="anchor-link"></a><a href="#java">6.6 Java Version</a></h3>
 
-  Java 8, Java 11, and Java 17 are supported.
+  Java 8, Java 11, Java 17, Java 21 and Java 23 are supported.
   <p>
   Note that Java 8 support project-wide has been deprecated since Apache Kafka 3.0 and Java 11 support for the broker and tools
-  has been deprecated since Apache Kafka 3.7. Both will be removed in Apache Kafka 4.0.
+  has been deprecated since Apache Kafka 3.7. Both have been removed in Apache Kafka 4.0.
   <p>
   Java 11 and later versions perform significantly better if TLS is enabled, so they are highly recommended (they also include a number of other
   performance improvements: G1GC, CRC32C, Compact Strings, Thread-Local Handshakes and more).
@@ -3843,42 +3843,26 @@ In the replica description 0@controller-0:1234:3Db5QLSqSZieL3rJBUUegA, 0 is the 
   If you are not sure whether you are using static or dynamic quorums, you can determine this by
   running something like the following:<p>
 
-<pre><code class="language-bash">
-  $ bin/kafka-features.sh --bootstrap-controller localhost:9093 describe
-</code></pre><p>
-
-  If the <code>kraft.version</code> field is level 0 or absent, you are using a static quorum. If
-  it is 1 or above, you are using a dynamic quorum. For example, here is an example of a static
-  quorum:<p/>
-<pre><code class="language-bash">
-Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 0 Epoch: 5
-Feature: metadata.version       SupportedMinVersion: 3.0-IV1    SupportedMaxVersion: 3.9-IV0 FinalizedVersionLevel: 3.9-IV0  Epoch: 5
-</code></pre><p/>
-
-  Here is another example of a static quorum:<p/>
-<pre><code class="language-bash">
-Feature: metadata.version       SupportedMinVersion: 3.0-IV1    SupportedMaxVersion: 3.8-IV0 FinalizedVersionLevel: 3.8-IV0  Epoch: 5
-</code></pre><p/>
-
-  Here is an example of a dynamic quorum:<p/>
-<pre><code class="language-bash">
-Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 1 Epoch: 5
-Feature: metadata.version       SupportedMinVersion: 3.0-IV1    SupportedMaxVersion: 3.9-IV0 FinalizedVersionLevel: 3.9-IV0  Epoch: 5
-</code></pre><p/>
-
-  The static versus dynamic nature of the quorum is determined at the time of formatting.
-  Specifically, the quorum will be formatted as dynamic if <code>controller.quorum.voters</code> is
-  <b>not</b> present, and if the software version is Apache Kafka 3.9 or newer. If you have
-  followed the instructions earlier in this document, you will get a dynamic quorum.<p>
-
-  If you would like the formatting process to fail if a dynamic quorum cannot be achieved, format your
-  controllers using the <code>--feature kraft.version=1</code>. (Note that you should not supply
-  this flag when formatting brokers -- only when formatting controllers.)<p>
-
-<pre><code class="language-bash">
-  $ bin/kafka-storage.sh format -t KAFKA_CLUSTER_ID --feature kraft.version=1 -c controller_static.properties
-  Cannot set kraft.version to 1 unless KIP-853 configuration is present. Try removing the --feature flag for kraft.version.
-</code></pre><p>
+  <pre><code class="language-bash">$ bin/kafka-features.sh --bootstrap-controller localhost:9093 describe</code></pre>
+  <p>
+    If the <code>kraft.version</code> field is level 0 or absent, you are using a static quorum. If
+    it is 1 or above, you are using a dynamic quorum. For example, here is an example of a static
+    quorum:<p>
+  <pre><code class="language-bash">Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 0 Epoch: 5
+Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 3.9-IV0 FinalizedVersionLevel: 3.9-IV0  Epoch: 5</code></pre>
+  <p>
+    Here is another example of a static quorum:<p>
+  <pre><code class="language-bash">Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 3.8-IV0 FinalizedVersionLevel: 3.8-IV0  Epoch: 5</code></pre>
+  <p>
+    Here is an example of a dynamic quorum:<p>
+  <pre><code class="language-bash">Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 1 Epoch: 5
+Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 3.9-IV0 FinalizedVersionLevel: 3.9-IV0  Epoch: 5</code></pre>
+  <p>
+    The static versus dynamic nature of the quorum is determined at the time of formatting.
+    Specifically, the quorum will be formatted as dynamic if <code>controller.quorum.voters</code> is
+    <b>not</b> present, and one of --standalone, --initial-controllers, or --no-initial-controllers is set.
+    If you have followed the instructions earlier in this document, you will get a dynamic quorum.
+  <p>
 
   Note: Currently it is <b>not</b> possible to convert clusters using a static controller quorum to
   use a dynamic controller quorum. This function will be supported in the future release.
@@ -4063,6 +4047,8 @@ inter.broker.listener.name=PLAINTEXT
 # Other configs ...</code></pre>
 
   <p>The new standalone controller in the example configuration above should be formatted using the <code>kafka-storage format --standalone</code>command.</p>
+
+  <p>Note: The migration can stall if the <a href="#zk_authz_migration">ZooKeeper Security Migration Tool</a> was previously executed (fixed from 3.9.2, see <a href="https://issues.apache.org/jira/browse/KAFKA-19480">KAFKA-19480</a> for more details). As a workaround, the malformed "/migration" node can be removed from ZooKeeper by running <code>delete /migration</code> with the <code>zookeeper-shell.sh</code> CLI tool.</p>
 
   <p><em>Note: The KRaft cluster <code>node.id</code> values must be different from any existing ZK broker <code>broker.id</code>.
   In KRaft-mode, the brokers and controllers share the same Node ID namespace.</em></p>
