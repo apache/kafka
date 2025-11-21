@@ -1200,7 +1200,7 @@ public class EosIntegrationTest {
                             sum += value;
                         }
                         state.put(key, sum);
-                        state.flush();
+                        state.commit(Map.of());
                     }
 
 

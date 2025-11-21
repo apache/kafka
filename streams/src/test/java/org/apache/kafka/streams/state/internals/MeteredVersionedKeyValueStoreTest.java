@@ -224,10 +224,10 @@ public class MeteredVersionedKeyValueStoreTest {
     }
 
     @Test
-    public void shouldDelegateAndRecordMetricsOnFlush() {
-        store.flush();
+    public void shouldDelegateAndRecordMetricsOnCommit() {
+        store.commit(Map.of());
 
-        verify(inner).flush();
+        verify(inner).commit(Map.of());
         assertThat((Double) getMetric("flush-rate").metricValue(), greaterThan(0.0));
     }
 

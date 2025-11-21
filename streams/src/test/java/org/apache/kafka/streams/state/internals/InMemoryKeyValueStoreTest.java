@@ -39,6 +39,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 
@@ -141,7 +142,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
             stringSerializer.serialize(null, "f")));
 
         byteStore.putAll(entries);
-        byteStore.flush();
+        byteStore.commit(Map.of());
 
         final List<String> valuesWithPrefix = new ArrayList<>();
         int numberOfKeysReturned = 0;
@@ -176,7 +177,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
             stringSerializer.serialize(null, "f")));
 
         byteStore.putAll(entries);
-        byteStore.flush();
+        byteStore.commit(Map.of());
 
         try (final KeyValueIterator<Bytes, byte[]> keysWithPrefixAsabcd = byteStore.prefixScan("abcd", stringSerializer)) {
             int numberOfKeysReturned = 0;
@@ -206,7 +207,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
             stringSerializer.serialize(null, "b")));
 
         byteStore.putAll(entries);
-        byteStore.flush();
+        byteStore.commit(Map.of());
 
         final List<String> valuesWithPrefix = new ArrayList<>();
         int numberOfKeysReturned = 0;
@@ -236,7 +237,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
             new Bytes(stringSerializer.serialize(null, "c")),
             stringSerializer.serialize(null, "e")));
         byteStore.putAll(entries);
-        byteStore.flush();
+        byteStore.commit(Map.of());
 
         int numberOfKeysReturned = 0;
 

@@ -103,7 +103,6 @@ public class ProcessorContextImplTest {
     private static final String REGISTERED_STORE_NAME = "registered-store";
     private static final TopicPartition CHANGELOG_PARTITION = new TopicPartition("store-changelog", 1);
 
-    private boolean flushExecuted = false;
     private boolean putExecuted = false;
     private boolean putWithTimestampExecuted;
     private boolean putIfAbsentExecuted = false;
@@ -300,7 +299,6 @@ public class ProcessorContextImplTest {
 
         final KeyValueStore<String, Long> keyValueStoreMock = mock(KeyValueStore.class);
         when(stateManager.store("LocalKeyValueStore")).thenAnswer(answer -> keyValueStoreMock(keyValueStoreMock));
-        mockStateStoreFlush(keyValueStoreMock);
         mockKeyValueStoreOperation(keyValueStoreMock);
 
         context = buildProcessorContextImpl(streamsConfig, stateManager);
@@ -314,7 +312,6 @@ public class ProcessorContextImplTest {
             verifyStoreCannotBeInitializedOrClosed(store);
 
             store.flush();
-            assertTrue(flushExecuted);
 
             store.put("1", 1L);
             assertTrue(putExecuted);
@@ -344,7 +341,6 @@ public class ProcessorContextImplTest {
         when(stateManager.store("LocalTimestampedKeyValueStore"))
             .thenAnswer(answer -> timestampedKeyValueStoreMock(timestampedKeyValueStoreMock));
         mockTimestampedKeyValueOperation(timestampedKeyValueStoreMock);
-        mockStateStoreFlush(timestampedKeyValueStoreMock);
 
         context = buildProcessorContextImpl(streamsConfig, stateManager);
 
@@ -357,7 +353,6 @@ public class ProcessorContextImplTest {
             verifyStoreCannotBeInitializedOrClosed(store);
 
             store.flush();
-            assertTrue(flushExecuted);
 
             store.put("1", ValueAndTimestamp.make(1L, 2L));
             assertTrue(putExecuted);
@@ -387,7 +382,6 @@ public class ProcessorContextImplTest {
 
         final WindowStore<String, Long> windowStore = mock(WindowStore.class);
         when(stateManager.store("LocalWindowStore")).thenAnswer(answer -> windowStoreMock(windowStore));
-        mockStateStoreFlush(windowStore);
 
         doAnswer(answer -> {
             putExecuted = true;
@@ -405,7 +399,6 @@ public class ProcessorContextImplTest {
             verifyStoreCannotBeInitializedOrClosed(store);
 
             store.flush();
-            assertTrue(flushExecuted);
 
             store.put("1", 1L, 1L);
             assertTrue(putExecuted);
@@ -427,7 +420,6 @@ public class ProcessorContextImplTest {
 
         final TimestampedWindowStore<String, Long> windowStore = mock(TimestampedWindowStore.class);
         when(stateManager.store("LocalTimestampedWindowStore")).thenAnswer(answer -> timestampedWindowStoreMock(windowStore));
-        mockStateStoreFlush(windowStore);
 
         doAnswer(answer -> {
             putExecuted = true;
@@ -448,7 +440,6 @@ public class ProcessorContextImplTest {
             verifyStoreCannotBeInitializedOrClosed(store);
 
             store.flush();
-            assertTrue(flushExecuted);
 
             store.put("1", ValueAndTimestamp.make(1L, 1L), 1L);
             assertTrue(putExecuted);
@@ -473,7 +464,6 @@ public class ProcessorContextImplTest {
 
         final SessionStore<String, Long> sessionStore = mock(SessionStore.class);
         when(stateManager.store("LocalSessionStore")).thenAnswer(answer -> sessionStoreMock(sessionStore));
-        mockStateStoreFlush(sessionStore);
 
         doAnswer(answer -> {
             putExecuted = true;
@@ -496,7 +486,6 @@ public class ProcessorContextImplTest {
             verifyStoreCannotBeInitializedOrClosed(store);
 
             store.flush();
-            assertTrue(flushExecuted);
 
             store.remove(null);
             assertTrue(removeExecuted);
@@ -905,13 +894,6 @@ public class ProcessorContextImplTest {
         when(stateStore.name()).thenReturn(STORE_NAME);
         when(stateStore.persistent()).thenReturn(true);
         when(stateStore.isOpen()).thenReturn(true);
-    }
-
-    private void mockStateStoreFlush(final StateStore stateStore) {
-        doAnswer(answer -> {
-            flushExecuted = true;
-            return null;
-        }).when(stateStore).flush();
     }
 
     @SuppressWarnings("rawtypes")
