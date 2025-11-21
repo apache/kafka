@@ -3409,6 +3409,7 @@ org.apache.kafka.common.config.ConfigDefTest:
 - testNullDefault
 - testNullDefaultWithValidator
 - testParseForValidate
+- testParsedValueWillRemoveDuplicatesInValidList
 - testParsingEmptyDefaultValueForStringFieldShouldSucceed
 - testSslPasswords
 - testThrowsExceptionWhenListSizeExceedsLimit
