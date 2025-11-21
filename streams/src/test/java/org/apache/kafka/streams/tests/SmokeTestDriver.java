@@ -375,97 +375,116 @@ public class SmokeTestDriver extends SmokeTestUtil {
         }
     }
 
-    public static VerificationResult verify(final String kafka,
-                                            final Map<String, Set<Integer>> inputs,
-                                            final int maxRecordsPerKey,
-                                            final boolean eosEnabled) {
-        final Properties props = new Properties();
-        props.put(ConsumerConfig.CLIENT_ID_CONFIG, "verifier");
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, NumberDeserializer.class);
-        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+    private static class PollResult {
+        final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events;
+        final int recordsProcessed;
+        final VerificationResult verificationResult;
 
-        // Verify all transactions are finished before proceeding with data verification
-        if (eosEnabled) {
-            final VerificationResult txnResult;
-            txnResult = verifyAllTransactionFinished(kafka);
-
-            if (!txnResult.passed()) {
-                System.err.println("Transaction verification failed: " + txnResult.result());
-                System.out.println("FAILED");
-                return txnResult;
-            }
+        PollResult(final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
+                   final int recordsProcessed,
+                   final VerificationResult verificationResult) {
+            this.events = events;
+            this.recordsProcessed = recordsProcessed;
+            this.verificationResult = verificationResult;
         }
+    }
+
+    private static VerificationResult preVerifyTransactions(final String kafka, final boolean eosEnabled) {
+        if (!eosEnabled) {
+            return null;
+        }
+
+        final VerificationResult txnResult = verifyAllTransactionFinished(kafka);
+        if (!txnResult.passed()) {
+            System.err.println("Transaction verification failed: " + txnResult.result());
+            System.out.println("FAILED");
+            return txnResult;
+        }
+        return null;
+    }
+
+    private static PollResult pollAndCollect(
+            final KafkaConsumer<String, Number> consumer,
+            final Map<String, Set<Integer>> inputs,
+            final int maxRecordsPerKey,
+            final boolean eosEnabled) {
         final int recordsGenerated = inputs.size() * maxRecordsPerKey;
         final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events = new HashMap<>();
         VerificationResult verificationResult = new VerificationResult(false, "no results yet");
         final long start = System.currentTimeMillis();
         int recordsProcessed = 0;
 
-        try (final KafkaConsumer<String, Number> consumer = new KafkaConsumer<>(props)) {
-            final List<TopicPartition> partitions = getAllPartitions(consumer, NUMERIC_VALUE_TOPICS);
-            consumer.assign(partitions);
-            consumer.seekToBeginning(partitions);
-            final Map<String, AtomicInteger> processed =
-                Stream.of(NUMERIC_VALUE_TOPICS)
-                      .collect(Collectors.toMap(t -> t, t -> new AtomicInteger(0)));
+        final List<TopicPartition> partitions = getAllPartitions(consumer, NUMERIC_VALUE_TOPICS);
+        consumer.assign(partitions);
+        consumer.seekToBeginning(partitions);
+        final Map<String, AtomicInteger> processed =
+            Stream.of(NUMERIC_VALUE_TOPICS)
+                  .collect(Collectors.toMap(t -> t, t -> new AtomicInteger(0)));
 
-            int retry = 0;
-            while (System.currentTimeMillis() - start < TimeUnit.MINUTES.toMillis(6)) {
-                final ConsumerRecords<String, Number> records = consumer.poll(Duration.ofSeconds(5));
-                if (records.isEmpty() && recordsProcessed >= recordsGenerated) {
-                    verificationResult = verifyAll(inputs, events, false, eosEnabled);
-                    if (verificationResult.passed()) {
-                        break;
-                    } else if (retry++ > MAX_RECORD_EMPTY_RETRIES) {
-                        System.out.println(Instant.now() + " Didn't get any more results, verification hasn't passed, and out of retries.");
-                        break;
-                    } else {
-                        System.out.println(Instant.now() + " Didn't get any more results, but verification hasn't passed (yet). Retrying..." + retry);
-                    }
+        int retry = 0;
+        while (System.currentTimeMillis() - start < TimeUnit.MINUTES.toMillis(6)) {
+            final ConsumerRecords<String, Number> records = consumer.poll(Duration.ofSeconds(5));
+            if (records.isEmpty() && recordsProcessed >= recordsGenerated) {
+                verificationResult = verifyAll(inputs, events, false, eosEnabled);
+                if (verificationResult.passed()) {
+                    break;
+                } else if (retry++ > MAX_RECORD_EMPTY_RETRIES) {
+                    System.out.println(Instant.now() + " Didn't get any more results, verification hasn't passed, and out of retries.");
+                    break;
                 } else {
-                    System.out.println(Instant.now() + " Get some more results from " + records.partitions() + ", resetting retry.");
+                    System.out.println(Instant.now() + " Didn't get any more results, but verification hasn't passed (yet). Retrying..." + retry);
+                }
+            } else {
+                System.out.println(Instant.now() + " Get some more results from " + records.partitions() + ", resetting retry.");
 
-                    retry = 0;
-                    for (final ConsumerRecord<String, Number> record : records) {
-                        final String key = record.key();
+                retry = 0;
+                for (final ConsumerRecord<String, Number> record : records) {
+                    final String key = record.key();
 
-                        final String topic = record.topic();
-                        processed.get(topic).incrementAndGet();
+                    final String topic = record.topic();
+                    processed.get(topic).incrementAndGet();
 
-                        if (topic.equals("echo")) {
-                            recordsProcessed++;
-                            if (recordsProcessed % 100 == 0) {
-                                System.out.println("Echo records processed = " + recordsProcessed);
-                            }
+                    if (topic.equals("echo")) {
+                        recordsProcessed++;
+                        if (recordsProcessed % 100 == 0) {
+                            System.out.println("Echo records processed = " + recordsProcessed);
                         }
-
-                        events.computeIfAbsent(topic, t -> new HashMap<>())
-                              .computeIfAbsent(key, k -> new LinkedList<>())
-                              .add(record);
                     }
 
-                    System.out.println(processed);
+                    events.computeIfAbsent(topic, t -> new HashMap<>())
+                          .computeIfAbsent(key, k -> new LinkedList<>())
+                          .add(record);
                 }
+
+                System.out.println(processed);
             }
         }
 
-        final long finished = System.currentTimeMillis() - start;
+        return new PollResult(events, recordsProcessed, verificationResult);
+    }
+
+    private static VerificationResult reportAndFinalize(
+            final Map<String, Set<Integer>> inputs,
+            final int maxRecordsPerKey,
+            final long startTime,
+            final boolean eosEnabled,
+            final PollResult pollResult) {
+        final int recordsGenerated = inputs.size() * maxRecordsPerKey;
+        final long finished = System.currentTimeMillis() - startTime;
         System.out.println("Verification time=" + finished);
         System.out.println("-------------------");
         System.out.println("Result Verification");
         System.out.println("-------------------");
         System.out.println("recordGenerated=" + recordsGenerated);
-        System.out.println("recordProcessed=" + recordsProcessed);
+        System.out.println("recordProcessed=" + pollResult.recordsProcessed);
 
-        if (recordsProcessed > recordsGenerated) {
+        if (pollResult.recordsProcessed > recordsGenerated) {
             System.out.println("PROCESSED-MORE-THAN-GENERATED");
-        } else if (recordsProcessed < recordsGenerated) {
+        } else if (pollResult.recordsProcessed < recordsGenerated) {
             System.out.println("PROCESSED-LESS-THAN-GENERATED");
         }
 
-        final Map<String, Set<Number>> received = parseRecordsForEchoTopic(events);
+        final Map<String, Set<Number>> received = parseRecordsForEchoTopic(pollResult.events);
 
         boolean success = inputs.equals(received);
 
@@ -479,9 +498,10 @@ public class SmokeTestDriver extends SmokeTestUtil {
             System.out.println("missedRecords=" + missedCount);
         }
 
+        VerificationResult verificationResult = pollResult.verificationResult;
         // give it one more try if it's not already passing.
         if (!verificationResult.passed()) {
-            verificationResult = verifyAll(inputs, events, true, eosEnabled);
+            verificationResult = verifyAll(inputs, pollResult.events, true, eosEnabled);
         }
         success &= verificationResult.passed();
 
@@ -489,6 +509,29 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
         System.out.println(success ? "SUCCESS" : "FAILURE");
         return verificationResult;
+    }
+
+    public static VerificationResult verify(final String kafka,
+                                            final Map<String, Set<Integer>> inputs,
+                                            final int maxRecordsPerKey,
+                                            final boolean eosEnabled) {
+        final VerificationResult txnResult = preVerifyTransactions(kafka, eosEnabled);
+        if (txnResult != null) {
+            return txnResult;
+        }
+
+        final Properties props = new Properties();
+        props.put(ConsumerConfig.CLIENT_ID_CONFIG, "verifier");
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, NumberDeserializer.class);
+        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+
+        final long start = System.currentTimeMillis();
+        try (final KafkaConsumer<String, Number> consumer = new KafkaConsumer<>(props)) {
+            final PollResult pollResult = pollAndCollect(consumer, inputs, maxRecordsPerKey, eosEnabled);
+            return reportAndFinalize(inputs, maxRecordsPerKey, start, eosEnabled, pollResult);
+        }
     }
 
     private static Map<String, Set<Number>> parseRecordsForEchoTopic(
