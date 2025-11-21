@@ -3071,6 +3071,7 @@ kafka.server.share.SharePartitionTest:
 - testAcquireMultipleRecords
 - testAcquireMultipleRecordsWithOverlapAndNewBatch
 - testAcquireMultipleRecordsWithOverlapAndNewBatchInRecordLimitMode
+- testAcquireRecordsHalvesBatchSizeOnEachFailureUntilSingleRecordOnLastAttempt
 - testAcquireReleasedRecord
 - testAcquireReleasedRecordMultipleBatches
 - testAcquireSameBatchAgain
@@ -3125,6 +3126,7 @@ kafka.server.share.SharePartitionTest:
 - testAcquisitionLockTimeoutMultipleRecordBatchInRecordLimitMode
 - testAcquisitionLockTimeoutWithConcurrentAcknowledgement
 - testAcquisitionLockTimeoutWithWriteStateRPCFailure
+- testAcquisitionNotThrottledIfHighDeliveryCountRecordNotAcquired
 - testCacheUpdateWhenBatchHasOngoingTransition
 - testCacheUpdateWhenOffsetStateHasOngoingTransition
 - testCanAcquireRecordsAfterAcceptAcknowledgement
@@ -3146,6 +3148,7 @@ kafka.server.share.SharePartitionTest:
 - testFetchAckTypeMapForBatch
 - testFetchLockReleasedByDifferentId
 - testFilterRecordBatchesFromAcquiredRecords
+- testLastAttemptRecordIsolationWithMixedDeliveryCount
 - testLsoMovementAheadOfEndOffset
 - testLsoMovementAheadOfEndOffsetPostAcknowledgement
 - testLsoMovementForArchivingAllAvailableBatches
@@ -3259,6 +3262,7 @@ kafka.server.share.SharePartitionTest:
 - testTerminalRecordsNotUpdatedWhenOffsetsBeforeStartOffsetAreExpiredAfterAcknowledgements
 - testTerminalRecordsUpdatedWhenAbortedTransactionBatchesAreArchived
 - testTerminalRecordsUpdatedWhenAbortedTransactionOffsetsAreArchived
+- testThrottleRecordsWhenPendingDeliveriesExist
 - testWriteShareGroupState
 - testWriteShareGroupStateFailure
 - testWriteShareGroupStateWithInvalidTopicsData
