@@ -380,7 +380,7 @@ public class ConsumerBounceTest {
         TestUtils.waitForCondition(() -> {
             FindCoordinatorResponse response = null;
             try {
-                response = IntegrationTestUtils.connectAndReceive(request, clusterInstance.boundPorts().get(0));
+                response = IntegrationTestUtils.connectAndReceive(request, clusterInstance.brokerBoundPorts().get(0));
             } catch (IOException e) {
                 return false;
             }
@@ -564,7 +564,7 @@ public class ConsumerBounceTest {
             assignments.clear();
             consumerPollers.forEach(poller -> assignments.add(poller.consumerAssignment()));
             return isPartitionAssignmentValid(assignments, subscriptions, expectedAssignments);
-        }, waitTimeMs, msg.orElse("Did not get valid assignment for partitions " + subscriptions + ". Instead got: " + assignments));
+        }, waitTimeMs, () -> msg.orElse("Did not get valid assignment for partitions " + subscriptions + ". Instead got: " + assignments));
     }
 
     // Overload for convenience (optional msg and expectedAssignments)
@@ -769,7 +769,7 @@ public class ConsumerBounceTest {
 
     private void receiveExactRecords(ConsumerAssignmentPoller consumer, int numRecords, long timeoutMs) throws InterruptedException {
         TestUtils.waitForCondition(() -> consumer.receivedMessages() == numRecords, timeoutMs,
-             String.format("Consumer did not receive expected %d. It received %d", numRecords, consumer.receivedMessages()));
+                () -> String.format("Consumer did not receive expected %d. It received %d", numRecords, consumer.receivedMessages()));
     }
 
     // A mock class to represent broker bouncing (simulate broker restart behavior)

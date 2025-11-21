@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.consumer.CloseOptions;
+import org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -45,6 +47,7 @@ import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaClientSupplier;
@@ -56,6 +59,7 @@ import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.ConsumerWrapper;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.internals.metrics.StreamsThreadMetricsDelegatingReporter;
@@ -87,12 +91,14 @@ import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.adminClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerClientId;
@@ -340,6 +346,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     private final ChangelogReader changelogReader;
     private final ConsumerRebalanceListener rebalanceListener;
+    private final Optional<DefaultStreamsRebalanceListener> defaultStreamsRebalanceListener;
     private final Consumer<byte[], byte[]> mainConsumer;
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final Admin adminClient;
@@ -361,7 +368,8 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
-    private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
+    private final AtomicReference<org.apache.kafka.streams.CloseOptions.GroupMembershipOperation> leaveGroupRequested =
+        new AtomicReference<>(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
     private final AtomicLong lastShutdownWarningTimestamp = new AtomicLong(0L);
     private final boolean eosEnabled;
     private final boolean stateUpdaterEnabled;
@@ -371,6 +379,8 @@ public class StreamThread extends Thread implements ProcessingThread {
     private volatile KafkaFutureImpl<Uuid> mainConsumerInstanceIdFuture = new KafkaFutureImpl<>();
     private volatile KafkaFutureImpl<Uuid> restoreConsumerInstanceIdFuture = new KafkaFutureImpl<>();
     private volatile KafkaFutureImpl<Uuid> producerInstanceIdFuture = new KafkaFutureImpl<>();
+
+    private Timer topicsReadyTimer;
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
@@ -835,6 +845,17 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.logPrefix = logContext.logPrefix();
         this.log = logContext.logger(StreamThread.class);
         this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, this.assignmentErrorCode);
+        this.defaultStreamsRebalanceListener = streamsRebalanceData.map(data ->
+            new DefaultStreamsRebalanceListener(
+                this.log,
+                time,
+                data,
+                this,
+                taskManager,
+                streamsMetrics,
+                getName()
+            )
+        );
         this.taskManager = taskManager;
         this.stateUpdater = stateUpdater;
         this.restoreConsumer = restoreConsumer;
@@ -890,7 +911,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             cleanRun = runLoop();
         } catch (final Throwable e) {
             failedStreamThreadSensor.record();
-            requestLeaveGroupDuringShutdown();
+            leaveGroupRequested.set(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
             streamsUncaughtExceptionHandler.accept(e, false);
             // Note: the above call currently rethrows the exception, so nothing below this line will be executed
         } finally {
@@ -1142,24 +1163,12 @@ public class StreamThread extends Thread implements ProcessingThread {
                 if (mainConsumer instanceof ConsumerWrapper) {
                     ((ConsumerWrapper) mainConsumer).subscribe(
                         topologyMetadata.allFullSourceTopicNames(),
-                        new DefaultStreamsRebalanceListener(
-                            log,
-                            time,
-                            streamsRebalanceData.get(),
-                            this,
-                            taskManager
-                        )
+                        defaultStreamsRebalanceListener.get()
                     );
                 } else {
                     ((AsyncKafkaConsumer<byte[], byte[]>) mainConsumer).subscribe(
                         topologyMetadata.allFullSourceTopicNames(),
-                        new DefaultStreamsRebalanceListener(
-                            log,
-                            time,
-                            streamsRebalanceData.get(),
-                            this,
-                            taskManager
-                        )
+                        defaultStreamsRebalanceListener.get()
                     );
                 }
             } else {
@@ -1528,6 +1537,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         try {
             records = mainConsumer.poll(pollTime);
         } catch (final InvalidOffsetException e) {
+            log.info("Found no valid offset for {} partitions, resetting.", e.partitions().size());
             resetOffsets(e.partitions(), e);
         }
 
@@ -1536,14 +1546,27 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     public void handleStreamsRebalanceData() {
         if (streamsRebalanceData.isPresent()) {
+            boolean hasMissingSourceTopics = false;
+            String missingTopicsDetail = null;
+
             for (final StreamsGroupHeartbeatResponseData.Status status : streamsRebalanceData.get().statuses()) {
                 if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code()) {
                     shutdownErrorHook.run();
                 } else if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_SOURCE_TOPICS.code()) {
-                    final String errorMsg = String.format("Missing source topics: %s", status.statusDetail());
+                    hasMissingSourceTopics = true;
+                    missingTopicsDetail = status.statusDetail();
+                } else if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.INCORRECTLY_PARTITIONED_TOPICS.code()) {
+                    final String errorMsg = status.statusDetail();
                     log.error(errorMsg);
-                    throw new MissingSourceTopicException(errorMsg);
+                    throw new TopologyException(errorMsg);
                 }
+            }
+
+            if (hasMissingSourceTopics) {
+                handleMissingSourceTopicsWithTimeout(missingTopicsDetail);
+            } else {
+                // Reset timeout tracking when no missing source topics are reported
+                topicsReadyTimer = null;
             }
 
             final Map<StreamsRebalanceData.HostInfo, StreamsRebalanceData.EndpointPartitions> partitionsByEndpoint =
@@ -1562,6 +1585,34 @@ public class StreamThread extends Thread implements ProcessingThread {
             );
         }
     }
+
+    private void handleMissingSourceTopicsWithTimeout(final String missingTopicsDetail) {
+        // Use 2 * heartbeatIntervalMs as the timeout ensures at least one heartbeat is sent before raising the exception
+        final int heartbeatIntervalMs = streamsRebalanceData.get().heartbeatIntervalMs();
+        final long timeoutMs = 2L * heartbeatIntervalMs;
+
+        // Start timeout tracking on first encounter with missing topics
+        if (topicsReadyTimer == null) {
+            topicsReadyTimer = time.timer(timeoutMs);
+            log.info("Missing source topics detected: {}. Will wait up to {}ms before failing.",
+                missingTopicsDetail, timeoutMs);
+        } else {
+            topicsReadyTimer.update();
+        }
+
+        if (topicsReadyTimer.isExpired()) {
+            final long elapsedTime = topicsReadyTimer.elapsedMs();
+            final String errorMsg = String.format("Missing source topics: %s. Timeout exceeded after %dms.",
+                missingTopicsDetail, elapsedTime);
+            log.error(errorMsg);
+
+            throw new MissingSourceTopicException(errorMsg);
+        } else {
+            log.debug("Missing source topics: {}. Elapsed time: {}ms, timeout in: {}ms",
+                missingTopicsDetail, topicsReadyTimer.elapsedMs(), topicsReadyTimer.remainingMs());
+        }
+    }
+
 
     static Map<TopicPartition, PartitionInfo> getTopicPartitionInfo(final Map<HostInfo, Set<TopicPartition>> partitionsByHost) {
         final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
@@ -1606,14 +1657,14 @@ public class StreamThread extends Thread implements ProcessingThread {
                         addToResetList(
                             partition,
                             seekToBeginning,
-                            "Setting topic '{}' to consume from earliest offset",
+                            "Setting topic '{}' to consume from 'earliest' offset",
                             loggedTopics
                         );
                     } else if (resetPolicy == AutoOffsetResetStrategy.LATEST) {
                         addToResetList(
                             partition,
                             seekToEnd,
-                            "Setting topic '{}' to consume from latest offset",
+                            "Setting topic '{}' to consume from 'latest' offset",
                             loggedTopics
                         );
                     } else if (resetPolicy.type() == AutoOffsetResetStrategy.StrategyType.BY_DURATION) {
@@ -1621,7 +1672,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                             partition,
                             seekByDuration,
                             resetPolicy.duration().get(),
-                            "Setting topic '{}' to consume from by_duration:{}",
+                            "Setting topic '{}' to consume from 'by_duration:{}'",
                             resetPolicy.duration().get().toString(),
                             loggedTopics
                         );
@@ -1737,12 +1788,12 @@ public class StreamThread extends Thread implements ProcessingThread {
     private void addToResetList(
         final TopicPartition partition,
         final Set<TopicPartition> partitions,
-        final String resetPolicy,
+        final String logMessage,
         final Set<String> loggedTopics
     ) {
         final String topic = partition.topic();
         if (loggedTopics.add(topic)) {
-            log.info("Setting topic '{}' to consume from {} offset", topic, resetPolicy);
+            log.info(logMessage, topic);
         }
         partitions.add(partition);
     }
@@ -1795,12 +1846,6 @@ public class StreamThread extends Thread implements ProcessingThread {
                     .collect(Collectors.toSet())
             );
 
-            if ((now - lastPurgeMs) > purgeTimeMs) {
-                // try to purge the committed records for repartition topics if possible
-                taskManager.maybePurgeCommittedRecords();
-                lastPurgeMs = now;
-            }
-
             if (committed == -1) {
                 log.debug("Unable to commit as we are in the middle of a rebalance, will try again when it completes.");
             } else {
@@ -1809,6 +1854,12 @@ public class StreamThread extends Thread implements ProcessingThread {
             }
         } else {
             committed = taskManager.maybeCommitActiveTasksPerUserRequested();
+        }
+
+        if ((now - lastPurgeMs) > purgeTimeMs) {
+            // try to purge the committed records for repartition topics if possible
+            taskManager.maybePurgeCommittedRecords();
+            lastPurgeMs = now;
         }
 
         return committed;
@@ -1832,10 +1883,13 @@ public class StreamThread extends Thread implements ProcessingThread {
      * <p>
      * Note that there is nothing to prevent this function from being called multiple times
      * (e.g., in testing), hence the state is set only the first time
+     *
+     * @param operation the group membership operation to apply on shutdown. Must be one of LEAVE_GROUP or REMAIN_IN_GROUP.
      */
-    public void shutdown() {
+    public void shutdown(final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
         log.info("Informed to shut down");
         final State oldState = setState(State.PENDING_SHUTDOWN);
+        leaveGroupRequested.set(operation);
         if (oldState == State.CREATED) {
             // The thread may not have been started. Take responsibility for shutting down
             completeShutdown(true);
@@ -1868,18 +1922,14 @@ public class StreamThread extends Thread implements ProcessingThread {
             log.error("Failed to close changelog reader due to the following error:", e);
         }
         try {
-            if (leaveGroupRequested.get()) {
-                mainConsumer.unsubscribe();
-            }
-        } catch (final Throwable e) {
-            log.error("Failed to unsubscribe due to the following error: ", e);
-        }
-        try {
-            mainConsumer.close();
+            final GroupMembershipOperation membershipOperation =
+                leaveGroupRequested.get() == org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP ? LEAVE_GROUP : REMAIN_IN_GROUP;
+            mainConsumer.close(CloseOptions.groupMembershipOperation(membershipOperation));
         } catch (final Throwable e) {
             log.error("Failed to close consumer due to the following error:", e);
         }
         try {
+            // restore consumer isn't part of a consumer group so we use REMAIN_IN_GROUP to skip any leaveGroup checks
             restoreConsumer.close();
         } catch (final Throwable e) {
             log.error("Failed to close restore consumer due to the following error:", e);
@@ -1995,10 +2045,6 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     public Optional<String> groupInstanceID() {
         return groupInstanceID;
-    }
-
-    public void requestLeaveGroupDuringShutdown() {
-        leaveGroupRequested.set(true);
     }
 
     public Map<MetricName, Metric> producerMetrics() {

@@ -19,7 +19,7 @@ package org.apache.kafka.tools.api;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.Map;
 
 public class RecordReaderTest {
 
@@ -27,7 +27,7 @@ public class RecordReaderTest {
     void testDefaultCloseAndConfigure() {
         RecordReader reader = inputStream -> null;
         // `configure` and `close` should have default empty body
-        Assertions.assertDoesNotThrow(() -> reader.configure(Collections.emptyMap()));
+        Assertions.assertDoesNotThrow(() -> reader.configure(Map.of()));
         Assertions.assertDoesNotThrow(reader::close);
     }
 }

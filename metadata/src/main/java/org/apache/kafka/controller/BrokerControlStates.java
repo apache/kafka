@@ -17,39 +17,5 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Objects;
-
-
-class BrokerControlStates {
-    private final BrokerControlState current;
-    private final BrokerControlState next;
-
-    BrokerControlStates(BrokerControlState current, BrokerControlState next) {
-        this.current = current;
-        this.next = next;
-    }
-
-    BrokerControlState current() {
-        return current;
-    }
-
-    BrokerControlState next() {
-        return next;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(current, next);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof BrokerControlStates other)) return false;
-        return other.current == current && other.next == next;
-    }
-
-    @Override
-    public String toString() {
-        return "BrokerControlStates(current=" + current + ", next=" + next + ")";
-    }
+record BrokerControlStates(BrokerControlState current, BrokerControlState next) {
 }

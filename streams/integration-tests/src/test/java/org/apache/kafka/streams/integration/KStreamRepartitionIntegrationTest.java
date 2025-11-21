@@ -28,6 +28,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -50,7 +51,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -59,6 +61,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -71,6 +74,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.KafkaStreams.State.ERROR;
 import static org.apache.kafka.streams.KafkaStreams.State.REBALANCING;
@@ -121,7 +125,7 @@ public class KStreamRepartitionIntegrationTest {
         CLUSTER.createTopic(outputTopic, 1, 1);
     }
 
-    private Properties createStreamsConfig(final String topologyOptimization) {
+    private Properties createStreamsConfig(final String topologyOptimization, final boolean useNewProtocol) {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -131,7 +135,21 @@ public class KStreamRepartitionIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, topologyOptimization);
+        
+        if (useNewProtocol) {
+            streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
+        }
+        
         return streamsConfiguration;
+    }
+
+    private static Stream<Arguments> protocolAndOptimizationParameters() {
+        return Stream.of(
+            Arguments.of(StreamsConfig.OPTIMIZE, false),          // OPTIMIZE with CLASSIC protocol
+            Arguments.of(StreamsConfig.OPTIMIZE, true),           // OPTIMIZE with STREAMS protocol
+            Arguments.of(StreamsConfig.NO_OPTIMIZATION, false),   // NO_OPTIMIZATION with CLASSIC protocol
+            Arguments.of(StreamsConfig.NO_OPTIMIZATION, true)     // NO_OPTIMIZATION with STREAMS protocol
+        );
     }
 
     @AfterEach
@@ -144,8 +162,8 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
-    public void shouldThrowAnExceptionWhenNumberOfPartitionsOfRepartitionOperationDoNotMatchSourceTopicWhenJoining(final String topologyOptimization) throws InterruptedException {
+    @MethodSource("protocolAndOptimizationParameters")
+    public void shouldThrowAnExceptionWhenNumberOfPartitionsOfRepartitionOperationDoNotMatchSourceTopicWhenJoining(final String topologyOptimization, final boolean useNewProtocol) throws InterruptedException {
         final int topicBNumberOfPartitions = 6;
         final String inputTopicRepartitionName = "join-repartition-test";
         final AtomicReference<Throwable> expectedThrowable = new AtomicReference<>();
@@ -167,10 +185,12 @@ public class KStreamRepartitionIntegrationTest {
                .join(topicBStream, (value1, value2) -> value2, JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofSeconds(10)))
                .to(outputTopic);
 
-        final Properties streamsConfiguration = createStreamsConfig(topologyOptimization);
+        final Properties streamsConfiguration = createStreamsConfig(topologyOptimization, useNewProtocol);
         try (final KafkaStreams ks = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration)) {
             ks.setUncaughtExceptionHandler(exception -> {
                 expectedThrowable.set(exception);
+                System.out.println(String.format("[%s Protocol] Exception caught: %s", 
+                    useNewProtocol ? "STREAMS" : "CLASSIC", exception.getMessage()));
                 return SHUTDOWN_CLIENT;
             });
             ks.start();
@@ -186,8 +206,8 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
-    public void shouldDeductNumberOfPartitionsFromRepartitionOperation(final String topologyOptimization) throws Exception {
+    @MethodSource("protocolAndOptimizationParameters")
+    public void shouldDeductNumberOfPartitionsFromRepartitionOperation(final String topologyOptimization, final boolean useNewProtocol) throws Exception {
         final String topicBMapperName = "topic-b-mapper";
         final int topicBNumberOfPartitions = 6;
         final String inputTopicRepartitionName = "join-repartition-test";
@@ -220,7 +240,7 @@ public class KStreamRepartitionIntegrationTest {
                .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
                .to(outputTopic);
 
-        final Properties streamsConfiguration = createStreamsConfig(topologyOptimization);
+        final Properties streamsConfiguration = createStreamsConfig(topologyOptimization, useNewProtocol);
         builder.build(streamsConfiguration);
 
         startStreams(builder, streamsConfiguration);
@@ -239,8 +259,8 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
-    public void shouldDoProperJoiningWhenNumberOfPartitionsAreValidWhenUsingRepartitionOperation(final String topologyOptimization) throws Exception {
+    @MethodSource("protocolAndOptimizationParameters")
+    public void shouldDoProperJoiningWhenNumberOfPartitionsAreValidWhenUsingRepartitionOperation(final String topologyOptimization, final boolean useNewProtocol) throws Exception {
         final String topicBRepartitionedName = "topic-b-scale-up";
         final String inputTopicRepartitionedName = "input-topic-scale-up";
 
@@ -278,7 +298,7 @@ public class KStreamRepartitionIntegrationTest {
                .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
                .to(outputTopic);
 
-        startStreams(builder, createStreamsConfig(topologyOptimization));
+        startStreams(builder, createStreamsConfig(topologyOptimization, useNewProtocol));
 
         assertEquals(4, getNumberOfPartitionsForTopic(toRepartitionTopicName(topicBRepartitionedName)));
         assertEquals(4, getNumberOfPartitionsForTopic(toRepartitionTopicName(inputTopicRepartitionedName)));
@@ -291,8 +311,8 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
-    public void shouldRepartitionToMultiplePartitions(final String topologyOptimization) throws Exception {
+    @MethodSource("protocolAndOptimizationParameters")
+    public void shouldRepartitionToMultiplePartitions(final String topologyOptimization, final boolean useNewProtocol) throws Exception {
         final String repartitionName = "broadcasting-partitioner-test";
         final long timestamp = System.currentTimeMillis();
         final AtomicInteger partitionerInvocation = new AtomicInteger(0);
@@ -334,7 +354,7 @@ public class KStreamRepartitionIntegrationTest {
             .repartition(repartitioned)
             .to(broadcastingOutputTopic);
 
-        startStreams(builder, createStreamsConfig(topologyOptimization));
+        startStreams(builder, createStreamsConfig(topologyOptimization, useNewProtocol));
 
         final String topic = toRepartitionTopicName(repartitionName);
 
@@ -360,8 +380,8 @@ public class KStreamRepartitionIntegrationTest {
 
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
-    public void shouldUseStreamPartitionerForRepartitionOperation(final String topologyOptimization) throws Exception {
+    @MethodSource("protocolAndOptimizationParameters")
+    public void shouldUseStreamPartitionerForRepartitionOperation(final String topologyOptimization, final boolean useNewProtocol) throws Exception {
         final int partition = 1;
         final String repartitionName = "partitioner-test";
         final long timestamp = System.currentTimeMillis();
@@ -387,7 +407,7 @@ public class KStreamRepartitionIntegrationTest {
                .repartition(repartitioned)
                .to(outputTopic);
 
-        startStreams(builder, createStreamsConfig(topologyOptimization));
+        startStreams(builder, createStreamsConfig(topologyOptimization, useNewProtocol));
 
         final String topic = toRepartitionTopicName(repartitionName);
 
@@ -402,8 +422,8 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
-    public void shouldPerformSelectKeyWithRepartitionOperation(final String topologyOptimization) throws Exception {
+    @MethodSource("protocolAndOptimizationParameters")
+    public void shouldPerformSelectKeyWithRepartitionOperation(final String topologyOptimization, final boolean useNewProtocol) throws Exception {
         final long timestamp = System.currentTimeMillis();
 
         sendEvents(
@@ -421,7 +441,7 @@ public class KStreamRepartitionIntegrationTest {
                .repartition()
                .to(outputTopic);
 
-        startStreams(builder, createStreamsConfig(topologyOptimization));
+        startStreams(builder, createStreamsConfig(topologyOptimization, useNewProtocol));
 
         validateReceivedMessages(
             new IntegerDeserializer(),
@@ -438,8 +458,8 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
-    public void shouldCreateRepartitionTopicIfKeyChangingOperationWasNotPerformed(final String topologyOptimization) throws Exception {
+    @MethodSource("protocolAndOptimizationParameters")
+    public void shouldCreateRepartitionTopicIfKeyChangingOperationWasNotPerformed(final String topologyOptimization, final boolean useNewProtocol) throws Exception {
         final String repartitionName = "dummy";
         final long timestamp = System.currentTimeMillis();
 
@@ -457,7 +477,7 @@ public class KStreamRepartitionIntegrationTest {
                .repartition(Repartitioned.as(repartitionName))
                .to(outputTopic);
 
-        startStreams(builder, createStreamsConfig(topologyOptimization));
+        startStreams(builder, createStreamsConfig(topologyOptimization, useNewProtocol));
 
         validateReceivedMessages(
             new IntegerDeserializer(),
@@ -475,8 +495,8 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
-    public void shouldPerformKeySelectOperationWhenRepartitionOperationIsUsedWithKeySelector(final String topologyOptimization) throws Exception {
+    @MethodSource("protocolAndOptimizationParameters")
+    public void shouldPerformKeySelectOperationWhenRepartitionOperationIsUsedWithKeySelector(final String topologyOptimization, final boolean useNewProtocol) throws Exception {
         final String repartitionedName = "new-key";
         final long timestamp = System.currentTimeMillis();
 
@@ -501,7 +521,7 @@ public class KStreamRepartitionIntegrationTest {
                .toStream()
                .to(outputTopic);
 
-        startStreams(builder, createStreamsConfig(topologyOptimization));
+        startStreams(builder, createStreamsConfig(topologyOptimization, useNewProtocol));
 
         validateReceivedMessages(
             new StringDeserializer(),
@@ -521,8 +541,8 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
-    public void shouldCreateRepartitionTopicWithSpecifiedNumberOfPartitions(final String topologyOptimization) throws Exception {
+    @MethodSource("protocolAndOptimizationParameters")
+    public void shouldCreateRepartitionTopicWithSpecifiedNumberOfPartitions(final String topologyOptimization, final boolean useNewProtocol) throws Exception {
         final String repartitionName = "new-partitions";
         final long timestamp = System.currentTimeMillis();
 
@@ -543,7 +563,7 @@ public class KStreamRepartitionIntegrationTest {
                .toStream()
                .to(outputTopic);
 
-        startStreams(builder, createStreamsConfig(topologyOptimization));
+        startStreams(builder, createStreamsConfig(topologyOptimization, useNewProtocol));
 
         validateReceivedMessages(
             new IntegerDeserializer(),
@@ -561,8 +581,8 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
-    public void shouldInheritRepartitionTopicPartitionNumberFromUpstreamTopicWhenNumberOfPartitionsIsNotSpecified(final String topologyOptimization) throws Exception {
+    @MethodSource("protocolAndOptimizationParameters")
+    public void shouldInheritRepartitionTopicPartitionNumberFromUpstreamTopicWhenNumberOfPartitionsIsNotSpecified(final String topologyOptimization, final boolean useNewProtocol) throws Exception {
         final String repartitionName = "new-topic";
         final long timestamp = System.currentTimeMillis();
 
@@ -583,7 +603,7 @@ public class KStreamRepartitionIntegrationTest {
                .toStream()
                .to(outputTopic);
 
-        startStreams(builder, createStreamsConfig(topologyOptimization));
+        startStreams(builder, createStreamsConfig(topologyOptimization, useNewProtocol));
 
         validateReceivedMessages(
             new IntegerDeserializer(),
@@ -601,8 +621,8 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
-    public void shouldCreateOnlyOneRepartitionTopicWhenRepartitionIsFollowedByGroupByKey(final String topologyOptimization) throws Exception {
+    @MethodSource("protocolAndOptimizationParameters")
+    public void shouldCreateOnlyOneRepartitionTopicWhenRepartitionIsFollowedByGroupByKey(final String topologyOptimization, final boolean useNewProtocol) throws Exception {
         final String repartitionName = "new-partitions";
         final long timestamp = System.currentTimeMillis();
 
@@ -629,7 +649,7 @@ public class KStreamRepartitionIntegrationTest {
                .toStream()
                .to(outputTopic);
 
-        startStreams(builder, createStreamsConfig(topologyOptimization));
+        startStreams(builder, createStreamsConfig(topologyOptimization, useNewProtocol));
 
         final String topology = builder.build().describe().toString();
 
@@ -647,8 +667,8 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
-    public void shouldGenerateRepartitionTopicWhenNameIsNotSpecified(final String topologyOptimization) throws Exception {
+    @MethodSource("protocolAndOptimizationParameters")
+    public void shouldGenerateRepartitionTopicWhenNameIsNotSpecified(final String topologyOptimization, final boolean useNewProtocol) throws Exception {
         final long timestamp = System.currentTimeMillis();
 
         sendEvents(
@@ -666,7 +686,7 @@ public class KStreamRepartitionIntegrationTest {
                .repartition(Repartitioned.with(Serdes.String(), Serdes.String()))
                .to(outputTopic);
 
-        startStreams(builder, createStreamsConfig(topologyOptimization));
+        startStreams(builder, createStreamsConfig(topologyOptimization, useNewProtocol));
 
         validateReceivedMessages(
             new StringDeserializer(),
@@ -683,8 +703,8 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
-    public void shouldGoThroughRebalancingCorrectly(final String topologyOptimization) throws Exception {
+    @MethodSource("protocolAndOptimizationParameters")
+    public void shouldGoThroughRebalancingCorrectly(final String topologyOptimization, final boolean useNewProtocol) throws Exception {
         final String repartitionName = "rebalancing-test";
         final long timestamp = System.currentTimeMillis();
 
@@ -711,7 +731,7 @@ public class KStreamRepartitionIntegrationTest {
                .toStream()
                .to(outputTopic);
 
-        final Properties streamsConfiguration = createStreamsConfig(topologyOptimization);
+        final Properties streamsConfiguration = createStreamsConfig(topologyOptimization, useNewProtocol);
         startStreams(builder, streamsConfiguration);
         final Properties streamsToCloseConfigs = new Properties();
         streamsToCloseConfigs.putAll(streamsConfiguration);

@@ -37,7 +37,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -63,9 +62,9 @@ public class ConsumerConfig extends AbstractConfig {
     // a list contains all the assignor names that only assign subscribed topics to consumer. Should be updated when new assignor added.
     // This is to help optimize ConsumerCoordinator#performAssignment method
     public static final List<String> ASSIGN_FROM_SUBSCRIBED_ASSIGNORS = List.of(
-            RANGE_ASSIGNOR_NAME, 
-            ROUNDROBIN_ASSIGNOR_NAME, 
-            STICKY_ASSIGNOR_NAME, 
+            RANGE_ASSIGNOR_NAME,
+            ROUNDROBIN_ASSIGNOR_NAME,
+            STICKY_ASSIGNOR_NAME,
             COOPERATIVE_STICKY_ASSIGNOR_NAME
     );
 
@@ -113,9 +112,8 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String GROUP_PROTOCOL_CONFIG = "group.protocol";
     public static final String DEFAULT_GROUP_PROTOCOL = GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT);
-    public static final String GROUP_PROTOCOL_DOC = "The group protocol consumer should use. We currently " +
-        "support \"classic\" or \"consumer\". If \"consumer\" is specified, then the consumer group protocol will be " +
-        "used. Otherwise, the classic group protocol will be used.";
+    public static final String GROUP_PROTOCOL_DOC = "The group protocol that the consumer uses. The " +
+        "supported values are <code>classic</code> or <code>consumer</code>. The default value is <code>classic</code>.";
 
     /**
     * <code>group.remote.assignor</code>
@@ -332,17 +330,6 @@ public class ConsumerConfig extends AbstractConfig {
     public static final boolean DEFAULT_EXCLUDE_INTERNAL_TOPICS = true;
 
     /**
-     * <code>internal.leave.group.on.close</code>
-     * Whether or not the consumer should leave the group on close. If set to <code>false</code> then a rebalance
-     * won't occur until <code>session.timeout.ms</code> expires.
-     *
-     * <p>
-     * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
-     *
-     */
-    static final String LEAVE_GROUP_ON_CLOSE_CONFIG = "internal.leave.group.on.close";
-
-    /**
      * <code>internal.throw.on.fetch.stable.offset.unsupported</code>
      * Whether or not the consumer should throw when the new stable offset feature is supported.
      * If set to <code>true</code> then the client shall crash upon hitting it.
@@ -392,6 +379,16 @@ public class ConsumerConfig extends AbstractConfig {
             " If set to <code>explicit</code>, the acknowledgement mode of the consumer is explicit and it must use" +
             " <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records.";
 
+    /**
+     * <code>share.acquire.mode</code>
+     */
+    public static final String SHARE_ACQUIRE_MODE_CONFIG = "share.acquire.mode";
+    private static final String SHARE_ACQUIRE_MODE_DOC = "Controls the acquire mode for a share consumer." +
+            " If set to <code>record_limit</code>, the number of records returned in each poll() will not exceed the value of <code>max.poll.records</code>." +
+            " If set to <code>batch_optimized</code>, the number of records returned in each poll() call may exceed <code>max.poll.records</code>" +
+            " to align with batch boundaries for optimization.";
+    public static final String DEFAULT_SHARE_ACQUIRE_MODE = ShareAcquireMode.BATCH_OPTIMIZED.name();
+
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
     /**
@@ -399,24 +396,26 @@ public class ConsumerConfig extends AbstractConfig {
      */
     private static final List<String> CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
             GROUP_REMOTE_ASSIGNOR_CONFIG,
-            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
+            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
+            SHARE_ACQUIRE_MODE_CONFIG
     );
 
     /**
      * A list of configuration keys not supported for CONSUMER protocol.
      */
     private static final List<String> CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
-            PARTITION_ASSIGNMENT_STRATEGY_CONFIG, 
-            HEARTBEAT_INTERVAL_MS_CONFIG, 
+            PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+            HEARTBEAT_INTERVAL_MS_CONFIG,
             SESSION_TIMEOUT_MS_CONFIG,
-            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
+            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
+            SHARE_ACQUIRE_MODE_CONFIG
     );
-    
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
-                                        Collections.emptyList(),
-                                        new ConfigDef.NonNullValidator(),
+                                        ConfigDef.NO_DEFAULT_VALUE,
+                                        ConfigDef.ValidList.anyNonDuplicateValues(false, false),
                                         Importance.HIGH,
                                         CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(CLIENT_DNS_LOOKUP_CONFIG,
@@ -446,7 +445,7 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                                         Type.LIST,
                                         List.of(RangeAssignor.class, CooperativeStickyAssignor.class),
-                                        new ConfigDef.NonNullValidator(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.MEDIUM,
                                         PARTITION_ASSIGNMENT_STRATEGY_DOC)
                                 .define(METADATA_MAX_AGE_CONFIG,
@@ -573,7 +572,7 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
                                         JmxReporter.class.getName(),
-                                        new ConfigDef.NonNullValidator(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.LOW,
                                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
                                 .define(KEY_DESERIALIZER_CLASS_CONFIG,
@@ -614,8 +613,8 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
                                 .define(INTERCEPTOR_CLASSES_CONFIG,
                                         Type.LIST,
-                                        Collections.emptyList(),
-                                        new ConfigDef.NonNullValidator(),
+                                        List.of(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.LOW,
                                         INTERCEPTOR_CLASSES_DOC)
                                 .define(MAX_POLL_RECORDS_CONFIG,
@@ -635,10 +634,6 @@ public class ConsumerConfig extends AbstractConfig {
                                         DEFAULT_EXCLUDE_INTERNAL_TOPICS,
                                         Importance.MEDIUM,
                                         EXCLUDE_INTERNAL_TOPICS_DOC)
-                                .defineInternal(LEAVE_GROUP_ON_CLOSE_CONFIG,
-                                        Type.BOOLEAN,
-                                        true,
-                                        Importance.LOW)
                                 .defineInternal(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED,
                                         Type.BOOLEAN,
                                         false,
@@ -699,9 +694,16 @@ public class ConsumerConfig extends AbstractConfig {
                                         new ShareAcknowledgementMode.Validator(),
                                         Importance.MEDIUM,
                                         ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_DOC)
+                                .define(ConsumerConfig.SHARE_ACQUIRE_MODE_CONFIG,
+                                        Type.STRING,
+                                        DEFAULT_SHARE_ACQUIRE_MODE,
+                                        new ShareAcquireMode.Validator(),
+                                        Importance.MEDIUM,
+                                        ConsumerConfig.SHARE_ACQUIRE_MODE_DOC)
                                 .define(CONFIG_PROVIDERS_CONFIG,
                                         ConfigDef.Type.LIST,
                                         List.of(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         ConfigDef.Importance.LOW,
                                         CONFIG_PROVIDERS_DOC);
     }

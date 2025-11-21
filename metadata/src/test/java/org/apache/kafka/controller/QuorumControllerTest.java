@@ -99,8 +99,6 @@ import org.apache.kafka.metadata.RecordTestUtils.ImageDeltaPair;
 import org.apache.kafka.metadata.RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.util.BatchFileWriter;
-import org.apache.kafka.metalog.LocalLogManager;
-import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
@@ -180,9 +178,9 @@ public class QuorumControllerTest {
     @Test
     public void testConfigurationOperations() throws Throwable {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).
                 build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 build()
         ) {
             controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
@@ -191,10 +189,10 @@ public class QuorumControllerTest {
                     Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.ELRV_1.featureLevel()))).
                 setBrokerId(0).
                 setLogDirs(List.of(Uuid.fromString("iiaQjkRPQcuMULNII0MUeA"))).
-                setClusterId(logEnv.clusterId())).get();
+                setClusterId(clientEnv.clusterId())).get();
             testConfigurationOperations(controlEnv.activeController());
 
-            testToImages(logEnv.allRecords());
+            testToImages(clientEnv.allRecords());
         }
     }
 
@@ -221,9 +219,9 @@ public class QuorumControllerTest {
     @Test
     public void testDelayedConfigurationOperations() throws Throwable {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).
                 build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 build()
         ) {
             controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
@@ -232,18 +230,18 @@ public class QuorumControllerTest {
                         Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.ELRV_1.featureLevel()))).
                     setBrokerId(0).
                     setLogDirs(List.of(Uuid.fromString("sTbzRAMnTpahIyIPNjiLhw"))).
-                    setClusterId(logEnv.clusterId())).get();
-            testDelayedConfigurationOperations(logEnv, controlEnv.activeController());
+                    setClusterId(clientEnv.clusterId())).get();
+            testDelayedConfigurationOperations(clientEnv, controlEnv.activeController());
 
-            testToImages(logEnv.allRecords());
+            testToImages(clientEnv.allRecords());
         }
     }
 
     private void testDelayedConfigurationOperations(
-        LocalLogManagerTestEnv logEnv,
+        MockRaftClientTestEnv clientEnv,
         QuorumController controller
     ) throws Throwable {
-        logEnv.logManagers().forEach(m -> m.setMaxReadOffset(1L));
+        clientEnv.raftClients().forEach(m -> m.setMaxReadOffset(1L));
         CompletableFuture<Map<ConfigResource, ApiError>> future1 =
             controller.incrementalAlterConfigs(ANONYMOUS_CONTEXT, Map.of(
                 BROKER0, Map.of("baz", entry(SET, "123"))), false);
@@ -252,7 +250,7 @@ public class QuorumControllerTest {
             new ResultOrError<>(Map.of())),
             controller.describeConfigs(ANONYMOUS_CONTEXT, Map.of(
                 BROKER0, List.of())).get());
-        logEnv.logManagers().forEach(m -> m.setMaxReadOffset(8L));
+        clientEnv.raftClients().forEach(m -> m.setMaxReadOffset(8L));
         assertEquals(Map.of(BROKER0, ApiError.NONE), future1.get());
     }
 
@@ -266,9 +264,9 @@ public class QuorumControllerTest {
         long sessionTimeoutMillis = 1000;
 
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).
                 build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
                 setBootstrapMetadata(SIMPLE_BOOTSTRAP).
                 build()
@@ -344,7 +342,7 @@ public class QuorumControllerTest {
             // Check that there are imbalaned partitions
             assertTrue(active.replicationControl().arePartitionLeadersImbalanced());
 
-            testToImages(logEnv.allRecords());
+            testToImages(clientEnv.allRecords());
         }
     }
 
@@ -352,9 +350,9 @@ public class QuorumControllerTest {
     public  void testElrEnabledByDefault() throws Throwable {
         long sessionTimeoutMillis = 500;
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).
                 build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
                 setBootstrapMetadata(BootstrapMetadata.fromRecords(
                     List.of(
@@ -384,9 +382,9 @@ public class QuorumControllerTest {
         long sessionTimeoutMillis = 500;
 
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).
                 build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
                 setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV1, "test-provided bootstrap ELR enabled")).
                 build()
@@ -521,9 +519,9 @@ public class QuorumControllerTest {
         long sessionTimeoutMillis = 500;
 
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).
                 build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv)
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv)
                 .setControllerBuilderInitializer(controllerBuilder ->
                     controllerBuilder.setFenceStaleBrokerIntervalNs(TimeUnit.SECONDS.toNanos(15)))
                 .setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis))
@@ -618,8 +616,8 @@ public class QuorumControllerTest {
         long sessionTimeoutMillis = 300;
 
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+                MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).build();
+                QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
                 setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV1, "test-provided bootstrap ELR enabled")).
                 build()
@@ -747,9 +745,9 @@ public class QuorumControllerTest {
         long leaderImbalanceCheckIntervalNs = 1_000_000_000;
 
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).
                 build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
                 setLeaderImbalanceCheckIntervalNs(OptionalLong.of(leaderImbalanceCheckIntervalNs)).
                 setBootstrapMetadata(SIMPLE_BOOTSTRAP).
@@ -873,7 +871,7 @@ public class QuorumControllerTest {
                 "Leaders were not balanced after unfencing all of the brokers"
             );
 
-            testToImages(logEnv.allRecords());
+            testToImages(clientEnv.allRecords());
         }
     }
 
@@ -886,9 +884,9 @@ public class QuorumControllerTest {
         long maxIdleIntervalNs = TimeUnit.MICROSECONDS.toNanos(100);
         long maxReplicationDelayMs = 1_000;
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(3).
                 build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 setControllerBuilderInitializer(controllerBuilder ->
                     controllerBuilder.setMaxIdleIntervalNs(OptionalLong.of(maxIdleIntervalNs))
                 ).
@@ -898,29 +896,29 @@ public class QuorumControllerTest {
             listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
             QuorumController active = controlEnv.activeController();
 
-            LocalLogManager localLogManager = logEnv
-                .logManagers()
+            MockRaftClient mockRaftClient = clientEnv
+                .raftClients()
                 .stream()
                 .filter(logManager -> logManager.nodeId().equals(OptionalInt.of(active.nodeId())))
                 .findAny()
                 .get();
             TestUtils.waitForCondition(
-                () -> localLogManager.highWatermark().isPresent(),
+                () -> mockRaftClient.highWatermark().isPresent(),
                 maxReplicationDelayMs,
                 "High watermark was not established"
             );
 
-            final long firstHighWatermark = localLogManager.highWatermark().getAsLong();
+            final long firstHighWatermark = mockRaftClient.highWatermark().getAsLong();
             TestUtils.waitForCondition(
-                () -> localLogManager.highWatermark().getAsLong() > firstHighWatermark,
+                () -> mockRaftClient.highWatermark().getAsLong() > firstHighWatermark,
                 maxReplicationDelayMs,
                 "Active controller didn't write NoOpRecord the first time"
             );
 
             // Do it again to make sure that we are not counting the leader change record
-            final long secondHighWatermark = localLogManager.highWatermark().getAsLong();
+            final long secondHighWatermark = mockRaftClient.highWatermark().getAsLong();
             TestUtils.waitForCondition(
-                () -> localLogManager.highWatermark().getAsLong() > secondHighWatermark,
+                () -> mockRaftClient.highWatermark().getAsLong() > secondHighWatermark,
                 maxReplicationDelayMs,
                 "Active controller didn't write NoOpRecord the second time"
             );
@@ -931,10 +929,10 @@ public class QuorumControllerTest {
     @CsvSource(value = {"0, 0", "0, 1", "1, 0", "1, 1"})
     public void testRegisterBrokerKRaftVersions(short finalizedKraftVersion, short brokerMaxSupportedKraftVersion) throws Throwable {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).
                 setLastKRaftVersion(KRaftVersion.fromFeatureLevel(finalizedKraftVersion)).
                 build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 setBootstrapMetadata(SIMPLE_BOOTSTRAP).
                 build()
         ) {
@@ -983,9 +981,9 @@ public class QuorumControllerTest {
     @Test
     public void testUnregisterBroker() throws Throwable {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).
                 build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 build()
         ) {
             ListenerCollection listeners = new ListenerCollection();
@@ -1041,7 +1039,7 @@ public class QuorumControllerTest {
                 });
             assertEquals(0, topicPartitionFuture.get().partitionId());
 
-            testToImages(logEnv.allRecords());
+            testToImages(clientEnv.allRecords());
         }
     }
 
@@ -1063,14 +1061,14 @@ public class QuorumControllerTest {
         Map<Integer, Long> brokerEpochs = new HashMap<>();
         Uuid fooId;
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(3).
                 build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 setBootstrapMetadata(SIMPLE_BOOTSTRAP).
                 build()
         ) {
             QuorumController active = controlEnv.activeController();
-            for (int i = 0; i < logEnv.logManagers().size(); i++) {
+            for (int i = 0; i < clientEnv.raftClients().size(); i++) {
                 active.registerController(ANONYMOUS_CONTEXT,
                     new ControllerRegistrationRequestData().
                         setControllerId(i).
@@ -1131,9 +1129,9 @@ public class QuorumControllerTest {
             active.allocateProducerIds(ANONYMOUS_CONTEXT,
                 new AllocateProducerIdsRequestData().setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0))).get();
             controlEnv.close();
-            assertEquals(generateTestRecords(fooId, brokerEpochs), logEnv.allRecords());
+            assertEquals(generateTestRecords(fooId, brokerEpochs), clientEnv.allRecords());
 
-            testToImages(logEnv.allRecords());
+            testToImages(clientEnv.allRecords());
         }
     }
 
@@ -1269,8 +1267,8 @@ public class QuorumControllerTest {
     @Test
     public void testTimeouts() throws Throwable {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+                MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).build();
+                QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 build()
         ) {
             QuorumController controller = controlEnv.activeController();
@@ -1315,7 +1313,7 @@ public class QuorumControllerTest {
             assertYieldsTimeout(alterReassignmentsFuture);
             assertYieldsTimeout(listReassignmentsFuture);
 
-            testToImages(logEnv.allRecords());
+            testToImages(clientEnv.allRecords());
         }
     }
 
@@ -1330,9 +1328,9 @@ public class QuorumControllerTest {
     @Test
     public void testEarlyControllerResults() throws Throwable {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).
                 build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 build()
         ) {
             QuorumController controller = controlEnv.activeController();
@@ -1362,16 +1360,16 @@ public class QuorumControllerTest {
             alterReassignmentsFuture.get();
             countDownLatch.countDown();
 
-            testToImages(logEnv.allRecords());
+            testToImages(clientEnv.allRecords());
         }
     }
 
     @Test
     public void testConfigResourceExistenceChecker() throws Throwable {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(3).
                 build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 build()
         ) {
             QuorumController active = controlEnv.activeController();
@@ -1402,16 +1400,16 @@ public class QuorumControllerTest {
             assertThrows(UnknownTopicOrPartitionException.class,
                 () -> checker.accept(new ConfigResource(TOPIC, "bar")));
 
-            testToImages(logEnv.allRecords());
+            testToImages(clientEnv.allRecords());
         }
     }
 
     @Test
     public void testFatalMetadataReplayErrorOnActive() throws Throwable {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(3).
                 build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 build()
         ) {
             QuorumController active = controlEnv.activeController();
@@ -1435,14 +1433,14 @@ public class QuorumControllerTest {
             new ApiMessageAndVersion(new PartitionRecord(), (short) 0))
         );
 
-        LocalLogManagerTestEnv.Builder logEnvBuilder = new LocalLogManagerTestEnv.Builder(3)
+        MockRaftClientTestEnv.Builder clientEnvBuilder = new MockRaftClientTestEnv.Builder(3)
             .setSnapshotReader(FileRawSnapshotReader.open(
                 invalidSnapshot.tempDir.toPath(),
                 new OffsetAndEpoch(0, 0)
             ));
 
-        try (LocalLogManagerTestEnv logEnv = logEnvBuilder.build()) {
-            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).build()) {
+        try (MockRaftClientTestEnv clientEnv = clientEnvBuilder.build()) {
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).build()) {
                 TestUtils.waitForCondition(() -> controlEnv.controllers().stream().allMatch(
                         controller -> controlEnv.fatalFaultHandler(controller.nodeId()).firstException() != null),
                         "At least one controller failed to detect the fatal fault"
@@ -1454,11 +1452,11 @@ public class QuorumControllerTest {
 
     @Test
     public void testFatalMetadataErrorDuringLogLoading() throws Exception {
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).build()) {
-            logEnv.appendInitialRecords(List.of(
+        try (MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(3).build()) {
+            clientEnv.appendInitialRecords(List.of(
                     new ApiMessageAndVersion(new PartitionRecord(), (short) 0)));
 
-            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).build()) {
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).build()) {
                 TestUtils.waitForCondition(() -> controlEnv.controllers().stream().allMatch(
                         controller -> controlEnv.fatalFaultHandler(controller.nodeId()).firstException() != null),
                         "At least one controller failed to detect the fatal fault"
@@ -1505,9 +1503,9 @@ public class QuorumControllerTest {
     @Test
     public void testInsertBootstrapRecordsToEmptyLog() throws Exception {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(3).
                 build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 setBootstrapMetadata(COMPLEX_BOOTSTRAP).
                 build()
         ) {
@@ -1538,7 +1536,7 @@ public class QuorumControllerTest {
                     Map.of("foo", "bar").equals(resultOrError.result());
             }, "Failed to see expected config change from bootstrap metadata");
 
-            testToImages(logEnv.allRecords());
+            testToImages(clientEnv.allRecords());
         }
     }
 

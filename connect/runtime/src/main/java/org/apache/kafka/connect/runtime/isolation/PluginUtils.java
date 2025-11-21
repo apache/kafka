@@ -34,9 +34,7 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -204,16 +202,13 @@ public class PluginUtils {
 
     public static Set<Path> pluginLocations(String pluginPath, boolean failFast) {
         if (pluginPath == null) {
-            return Collections.emptySet();
+            return Set.of();
         }
         String[] pluginPathElements = COMMA_WITH_WHITESPACE.split(pluginPath.trim(), -1);
         Set<Path> pluginLocations = new LinkedHashSet<>();
         for (String path : pluginPathElements) {
             try {
                 Path pluginPathElement = Paths.get(path).toAbsolutePath();
-                if (pluginPath.isEmpty()) {
-                    log.warn("Plugin path element is empty, evaluating to {}.", pluginPathElement);
-                }
                 if (!Files.exists(pluginPathElement)) {
                     throw new FileNotFoundException(pluginPathElement.toString());
                 }
@@ -266,7 +261,7 @@ public class PluginUtils {
         Set<Path> visited = new HashSet<>();
 
         if (isArchive(topPath)) {
-            return Collections.singletonList(topPath);
+            return List.of(topPath);
         }
 
         DirectoryStream<Path> topListing = Files.newDirectoryStream(
@@ -335,12 +330,12 @@ public class PluginUtils {
 
         if (containsClassFiles) {
             if (archives.isEmpty()) {
-                return Collections.singletonList(topPath);
+                return List.of(topPath);
             }
             log.warn("Plugin path contains both java archives and class files. Returning only the"
                     + " archives");
         }
-        return Arrays.asList(archives.toArray(new Path[0]));
+        return List.copyOf(archives);
     }
 
     public static Set<PluginSource> pluginSources(Set<Path> pluginLocations, ClassLoader classLoader, PluginClassLoaderFactory factory) {
@@ -475,7 +470,7 @@ public class PluginUtils {
             if (classLoader instanceof URLClassLoader) {
                 URL[] urls = ((URLClassLoader) classLoader).getURLs();
                 if (urls != null) {
-                    result.addAll(new HashSet<>(Arrays.asList(urls)));
+                    result.addAll(new HashSet<>(List.of(urls)));
                 }
             }
             classLoader = classLoader.getParent();

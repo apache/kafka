@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -28,22 +27,18 @@ public interface StreamsRebalanceListener {
      * Called when tasks are revoked from a stream thread.
      *
      * @param tasks The tasks to be revoked.
-     * @return The exception thrown during the callback, if any.
      */
-    Optional<Exception> onTasksRevoked(final Set<StreamsRebalanceData.TaskId> tasks);
+    void onTasksRevoked(final Set<StreamsRebalanceData.TaskId> tasks);
 
     /**
      * Called when tasks are assigned from a stream thread.
      *
      * @param assignment The tasks assigned.
-     * @return The exception thrown during the callback, if any.
      */
-    Optional<Exception> onTasksAssigned(final StreamsRebalanceData.Assignment assignment);
+    void onTasksAssigned(final StreamsRebalanceData.Assignment assignment);
 
     /**
-     * Called when a stream thread loses all assigned tasks.
-     *
-     * @return The exception thrown during the callback, if any.
+     * Called when a stream thread loses all assigned tasks
      */
-    Optional<Exception> onAllTasksLost();
+    void onAllTasksLost();
 }

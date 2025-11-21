@@ -24,7 +24,6 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -55,7 +54,7 @@ class ConsumerGroupCommandTestUtils {
                                             String topic,
                                             Supplier<KafkaConsumer<T, T>> consumerSupplier) {
         return buildConsumers(numberOfConsumers, syncCommit, consumerSupplier,
-                consumer -> consumer.subscribe(Collections.singleton(topic)));
+                consumer -> consumer.subscribe(Set.of(topic)));
     }
 
     static <T> AutoCloseable buildConsumers(

@@ -61,7 +61,7 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
      */
     private long lastCommittedOffset;
 
-    SnapshottableCoordinator(
+    public SnapshottableCoordinator(
         LogContext logContext,
         SnapshotRegistry snapshotRegistry,
         S coordinator,
