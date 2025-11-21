@@ -150,7 +150,8 @@ RUN useradd -u $UID -ms /bin/bash ducker \
   && echo 'ducker ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
 
 # Symlink all JDK binaries (java, jcmd, jps, etc.) to /usr/bin.
-# because some JDK Docker images set java tools via ENV in Dockerfiles, which are not visible to non-interactive shells.
+# We don't add PATH env to ~/.ssh/environment because on some Linux distributions,
+# PAM (Pluggable Authentication Modules) may re-read /etc/environment, overwriting PATH.
 RUN cp -sn $JAVA_HOME/bin/* /usr/bin/
 
 USER ducker
