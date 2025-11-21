@@ -109,14 +109,15 @@ public class PartitionChangeBuilder {
         int partitionId,
         IntPredicate isAcceptableLeader,
         MetadataVersion metadataVersion,
-        int minISR
+        int minISR,
+        boolean eligibleLeaderReplicasEnabled
     ) {
         this.partition = partition;
         this.topicId = topicId;
         this.partitionId = partitionId;
         this.isAcceptableLeader = isAcceptableLeader;
         this.metadataVersion = metadataVersion;
-        this.eligibleLeaderReplicasEnabled = false;
+        this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
         this.minISR = minISR;
 
         this.targetIsr = Replicas.toList(partition.isr);
@@ -173,11 +174,6 @@ public class PartitionChangeBuilder {
 
     public PartitionChangeBuilder setTargetLeaderRecoveryState(LeaderRecoveryState targetLeaderRecoveryState) {
         this.targetLeaderRecoveryState = targetLeaderRecoveryState;
-        return this;
-    }
-
-    public PartitionChangeBuilder setEligibleLeaderReplicasEnabled(boolean eligibleLeaderReplicasEnabled) {
-        this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
         return this;
     }
 

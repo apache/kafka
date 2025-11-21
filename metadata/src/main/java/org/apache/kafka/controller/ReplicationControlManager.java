@@ -1127,9 +1127,9 @@ public class ReplicationControlManager {
                     partitionId,
                     new LeaderAcceptor(clusterControl, partition),
                     featureControl.metadataVersionOrThrow(),
-                    getTopicEffectiveMinIsr(topic.name)
-                )
-                    .setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
+                    getTopicEffectiveMinIsr(topic.name),
+                    featureControl.isElrFeatureEnabled()
+                );
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
                 }
@@ -1588,10 +1588,10 @@ public class ReplicationControlManager {
             partitionId,
             new LeaderAcceptor(clusterControl, partition),
             featureControl.metadataVersionOrThrow(),
-            getTopicEffectiveMinIsr(topic)
+            getTopicEffectiveMinIsr(topic),
+            featureControl.isElrFeatureEnabled()
         )
             .setElection(election)
-            .setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled())
             .setDefaultDirProvider(clusterDescriber)
             .build();
         if (record.isEmpty()) {
@@ -1752,10 +1752,10 @@ public class ReplicationControlManager {
                 topicPartition.partitionId(),
                 new LeaderAcceptor(clusterControl, partition),
                 featureControl.metadataVersionOrThrow(),
-                getTopicEffectiveMinIsr(topic.name)
+                getTopicEffectiveMinIsr(topic.name),
+                featureControl.isElrFeatureEnabled()
             )
                 .setElection(PartitionChangeBuilder.Election.PREFERRED)
-                .setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled())
                 .setDefaultDirProvider(clusterDescriber)
                 .build().ifPresent(records::add);
         }
@@ -2022,9 +2022,9 @@ public class ReplicationControlManager {
                 topicIdPart.partitionId(),
                 new LeaderAcceptor(clusterControl, partition, isAcceptableLeader),
                 featureControl.metadataVersionOrThrow(),
-                getTopicEffectiveMinIsr(topic.name)
+                getTopicEffectiveMinIsr(topic.name),
+                featureControl.isElrFeatureEnabled()
             );
-            builder.setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
             }
@@ -2142,9 +2142,9 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersionOrThrow(),
-            getTopicEffectiveMinIsr(topicName)
+            getTopicEffectiveMinIsr(topicName),
+            featureControl.isElrFeatureEnabled()
         );
-        builder.setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
         }
@@ -2208,9 +2208,9 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersionOrThrow(),
-            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name)
+            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name),
+            featureControl.isElrFeatureEnabled()
         );
-        builder.setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
         if (!reassignment.replicas().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.replicas());
         }
@@ -2291,10 +2291,10 @@ public class ReplicationControlManager {
                                     partitionIndex,
                                     new LeaderAcceptor(clusterControl, partitionRegistration),
                                     featureControl.metadataVersionOrThrow(),
-                                    getTopicEffectiveMinIsr(topicName)
+                                    getTopicEffectiveMinIsr(topicName),
+                                    featureControl.isElrFeatureEnabled()
                             )
                                     .setDirectory(brokerId, dirId)
-                                    .setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled())
                                     .setDefaultDirProvider(clusterDescriber)
                                     .build();
                             partitionChangeRecord.ifPresent(records::add);
