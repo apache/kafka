@@ -447,7 +447,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   private def waitForNoLeaderAndIsrHasOldLeaderId(metadataCache: MetadataCache, leaderId: Int): Unit = {
     waitUntilTrue(() => metadataCache.getLeaderAndIsr(topic, partitionId).isPresent() &&
       metadataCache.getLeaderAndIsr(topic, partitionId).get.leader() == LeaderConstants.NO_LEADER &&
-      util.List.of(leaderId).equals(metadataCache.getLeaderAndIsr(topic, partitionId).get.isr()),
+      util.Set.of(leaderId).equals(metadataCache.getLeaderAndIsr(topic, partitionId).get.isr()),
       "Timed out waiting for broker metadata cache updates the info for topic partition:" + topicPartition)
   }
 }

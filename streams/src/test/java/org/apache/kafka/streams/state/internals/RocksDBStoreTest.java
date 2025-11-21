@@ -931,7 +931,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.DEBUG));
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-application", "processId", time);
+            new StreamsMetricsImpl(metrics, "test-application", time);
 
         context = mock(InternalMockProcessorContext.class);
         when(context.metrics()).thenReturn(streamsMetrics);
@@ -964,7 +964,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.INFO));
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-application", "processId", time);
+            new StreamsMetricsImpl(metrics, "test-application", time);
 
         context = mock(InternalMockProcessorContext.class);
         when(context.metrics()).thenReturn(streamsMetrics);
@@ -996,7 +996,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.INFO));
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-application", "processId", time);
+            new StreamsMetricsImpl(metrics, "test-application", time);
 
         final Properties props = StreamsTestUtils.getStreamsConfig();
         context = mock(InternalMockProcessorContext.class);

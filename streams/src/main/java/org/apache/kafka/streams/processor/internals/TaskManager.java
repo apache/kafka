@@ -1076,6 +1076,7 @@ public class TaskManager {
         try {
             if (canTryInitializeTask(task.id(), nowMs)) {
                 task.initializeIfNeeded();
+                task.clearTaskTimeout();
                 taskIdToBackoffRecord.remove(task.id());
                 stateUpdater.add(task);
             } else {
@@ -1089,6 +1090,14 @@ public class TaskManager {
                      lockException.getMessage());
             tasks.addPendingTasksToInit(Collections.singleton(task));
             updateOrCreateBackoffRecord(task.id(), nowMs);
+        } catch (final TimeoutException timeoutException) {
+            // A timeout can occur either during producer initialization OR while fetching committed offsets.
+            // Retry in the next iteration.
+            task.maybeInitTaskTimeoutOrThrow(nowMs, timeoutException);
+            tasks.addPendingTasksToInit(Collections.singleton(task));
+            updateOrCreateBackoffRecord(task.id(), nowMs);
+            log.info("Encountered timeout exception. Reattempting initialization in the next iteration. Error message was: {}",
+                     timeoutException.getMessage());
         }
     }
 

@@ -169,6 +169,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(0)
                     .setStateEpoch(0)
                     .setLeaderEpoch(leaderEpoch)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
@@ -208,6 +209,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(0)
                     .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setStateBatches(List.of(
                         new ShareSnapshotValue.StateBatch()
@@ -228,6 +231,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(1)
                     .setStateEpoch(1)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(13)
                     .setLeaderEpoch(leaderEpoch + 1)
                     .setStateBatches(List.of(
                         new ShareSnapshotValue.StateBatch()
@@ -263,6 +268,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
@@ -297,6 +303,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
@@ -336,6 +343,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
@@ -351,6 +359,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(21)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
@@ -411,6 +420,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(partition)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
@@ -445,6 +455,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(0)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
@@ -476,6 +487,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
@@ -506,6 +518,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(10)
                     .setStateEpoch(0)   // Lower state epoch in the second request.
                     .setLeaderEpoch(5)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
@@ -599,6 +612,7 @@ class ShareCoordinatorShardTest {
         assertEquals(ReadShareGroupStateSummaryResponse.toResponseData(
             TOPIC_ID,
             PARTITION,
+            0,
             0,
             0,
             0
@@ -753,6 +767,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(100)
+                    .setDeliveryCompleteCount(0)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(
@@ -800,6 +815,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(-1)
+                    .setDeliveryCompleteCount(10)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(
@@ -822,6 +838,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(110)    // 100 -> 110
+                    .setDeliveryCompleteCount(10)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(
@@ -839,6 +856,7 @@ class ShareCoordinatorShardTest {
         WriteShareGroupStateResponseData expectedDataFinal = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
         ShareGroupOffset offsetFinal = new ShareGroupOffset.Builder()
             .setStartOffset(110)
+            .setDeliveryCompleteCount(10)
             .setLeaderEpoch(0)
             .setStateEpoch(0)
             .setSnapshotEpoch(5)    // since subsequent share snapshot
@@ -899,6 +917,7 @@ class ShareCoordinatorShardTest {
         List<CoordinatorRecord> expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareUpdateRecord(
             GROUP_ID, TOPIC_ID, PARTITION, new ShareGroupOffset.Builder()
                 .setStartOffset(PartitionFactory.UNINITIALIZED_START_OFFSET)
+                .setDeliveryCompleteCount(PartitionFactory.UNINITIALIZED_DELIVERY_COMPLETE_COUNT)
                 .setLeaderEpoch(2)
                 .setStateBatches(List.of())
                 .setSnapshotEpoch(0)
@@ -1339,6 +1358,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(0)
                     .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setCreateTimestamp(timestamp)
                     .setWriteTimestamp(timestamp)
@@ -1361,6 +1382,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(0)
                     .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setCreateTimestamp(timestamp)
                     .setWriteTimestamp(timestamp)
@@ -1405,6 +1428,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(0)
                     .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setCreateTimestamp(timestamp)
                     .setWriteTimestamp(timestamp)
@@ -1436,6 +1461,8 @@ class ShareCoordinatorShardTest {
                     new ShareSnapshotValue()
                         .setSnapshotEpoch(1)
                         .setStateEpoch(0)
+                        .setStartOffset(0)
+                        .setDeliveryCompleteCount(11)
                         .setLeaderEpoch(leaderEpoch)
                         .setCreateTimestamp(timestamp)
                         .setWriteTimestamp(timestamp + sleep)
@@ -1463,6 +1490,8 @@ class ShareCoordinatorShardTest {
             new ApiMessageAndVersion(
                 new ShareUpdateValue()
                     .setSnapshotEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setStateBatches(List.of(
                         new ShareUpdateValue.StateBatch()
@@ -1502,6 +1531,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(0)
                     .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setCreateTimestamp(timestamp)
                     .setWriteTimestamp(timestamp)
@@ -1531,6 +1562,8 @@ class ShareCoordinatorShardTest {
                     new ShareSnapshotValue()
                         .setSnapshotEpoch(1)
                         .setStateEpoch(0)
+                        .setStartOffset(0)
+                        .setDeliveryCompleteCount(11)
                         .setLeaderEpoch(leaderEpoch)
                         .setCreateTimestamp(timestamp)
                         .setWriteTimestamp(timestamp + sleep)
@@ -1579,6 +1612,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(record1SnapshotEpoch)
                     .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setCreateTimestamp(timestamp)
                     .setWriteTimestamp(timestamp)
@@ -1603,6 +1638,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(0)
                     .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setCreateTimestamp(timestamp + delta)
                     .setWriteTimestamp(timestamp + delta)
@@ -1637,6 +1674,8 @@ class ShareCoordinatorShardTest {
                     new ShareSnapshotValue()
                         .setSnapshotEpoch(record1SnapshotEpoch + 1)
                         .setStateEpoch(0)
+                        .setStartOffset(0)
+                        .setDeliveryCompleteCount(11)
                         .setLeaderEpoch(leaderEpoch)
                         .setCreateTimestamp(timestamp)
                         .setWriteTimestamp(timestamp + sleep)
@@ -1693,6 +1732,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(record1SnapshotEpoch)
                     .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setCreateTimestamp(timestamp)
                     .setWriteTimestamp(timestamp)
@@ -1715,6 +1756,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(record1SnapshotEpoch)
                     .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setCreateTimestamp(timestamp)
                     .setWriteTimestamp(timestamp)
@@ -1758,7 +1801,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setStateEpoch(stateEpoch)
                     .setLeaderEpoch(-1)
-                    .setStartOffset(-1),
+                    .setStartOffset(-1)
+                    .setDeliveryCompleteCount(-1),
                 (short) 0
             )
         ));
