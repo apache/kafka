@@ -479,10 +479,7 @@ public final class QuorumController implements Controller {
                         throw new InvalidRequestException("Invalid broker name " +
                             configResource.name());
                     }
-                    boolean isRegisteredBroker = clusterControl.brokerRegistrations().containsKey(nodeId);
-                    boolean isControllerInStaticQuorum = featureControl.isControllerId(nodeId);
-                    boolean isRegisteredController = clusterControl.controllerRegistrations().containsKey(nodeId);
-                    if (!(isRegisteredBroker || isControllerInStaticQuorum || isRegisteredController)) {
+                    if (!isNodeIdRegistered(nodeId)) {
                         throw new BrokerIdNotRegisteredException("No node with id " + nodeId + " found.");
                     }
                     break;
@@ -495,6 +492,19 @@ public final class QuorumController implements Controller {
                 default:
                     break;
             }
+        }
+
+        /**
+         * Checks if a node id is registered as a broker, controller in static/dynamic quorum.
+         */
+        private boolean isNodeIdRegistered(int nodeId) {
+            if (clusterControl.brokerRegistrations().containsKey(nodeId)) {
+                return true;
+            }
+            if (featureControl.isControllerId(nodeId)) {
+                return true;
+            }
+            return clusterControl.controllerRegistrations().containsKey(nodeId);
         }
     }
 
