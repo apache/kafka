@@ -391,16 +391,15 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
     private static VerificationResult preVerifyTransactions(final String kafka, final boolean eosEnabled) {
         if (!eosEnabled) {
-            return null;
+            return new VerificationResult(true, "EOS is disabled; skipping transaction verification");
         }
 
         final VerificationResult txnResult = verifyAllTransactionFinished(kafka);
         if (!txnResult.passed()) {
             System.err.println("Transaction verification failed: " + txnResult.result());
             System.out.println("FAILED");
-            return txnResult;
         }
-        return null;
+        return txnResult;
     }
 
     private static PollResult pollAndCollect(
@@ -516,7 +515,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
                                             final int maxRecordsPerKey,
                                             final boolean eosEnabled) {
         final VerificationResult txnResult = preVerifyTransactions(kafka, eosEnabled);
-        if (txnResult != null) {
+        if (!txnResult.passed()) {
             return txnResult;
         }
 
