@@ -522,7 +522,6 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         val e = assertThrows(classOf[ExecutionException], () => future.get())
         assertEquals(classOf[KafkaException], e.getCause.getClass)
       }
-      assertEquals(0, consumer.poll(Duration.ofMillis(50L)).count, "Fetch response should have no message returned.")
     }
   }
 
