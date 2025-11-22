@@ -969,6 +969,7 @@ org.apache.kafka.tools.streams.ResetStreamsGroupOffsetTest:
 - testResetOffsetsWithDeleteAllInternalTopics
 - testResetOffsetsWithDeleteInternalTopicsOption
 - testResetOffsetsWithDeleteSpecifiedInternalTopics
+- testResetOffsetsWithoutDryRunOrExecuteOption
 - testResetOffsetsWithoutGroupOption
 - testResetWithUnrecognizedOption
 org.apache.kafka.tools.streams.StreamsGroupCommandTest:
