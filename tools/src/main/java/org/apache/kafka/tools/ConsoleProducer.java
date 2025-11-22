@@ -220,7 +220,7 @@ public class ConsoleProducer {
                                     "When records are received which are smaller than this size the producer " +
                                     "will attempt to optimistically group them together until this size is reached. " +
                                     "This is the option to control batch.size in producer configs. " +
-                                    "This option will be removed in a future version. Use --batch-size instead.")
+                                    "This option will be removed in Apache Kafka 5.0. Use --batch-size instead.")
                     .withRequiredArg()
                     .describedAs("memory in bytes per partition")
                     .ofType(Integer.class)
@@ -342,7 +342,7 @@ public class ConsoleProducer {
             }
 
             if (options.has(maxPartitionMemoryBytesOpt)) {
-                System.out.println("Warning: --max-partition-memory-bytes is deprecated and will be removed in a future version. Use --batch-size instead.");
+                System.out.println("Warning: --max-partition-memory-bytes is deprecated and will be removed in Apache Kafka 5.0. Use --batch-size instead.");
             }
 
             try {
@@ -408,7 +408,6 @@ public class ConsoleProducer {
             CommandLineUtils.maybeMergeOptions(props, RETRY_BACKOFF_MS_CONFIG, options, retryBackoffMsOpt);
             CommandLineUtils.maybeMergeOptions(props, SEND_BUFFER_CONFIG, options, socketBufferSizeOpt);
             CommandLineUtils.maybeMergeOptions(props, BUFFER_MEMORY_CONFIG, options, maxMemoryBytesOpt);
-            // We currently have 2 options to set the batch.size value. We'll deprecate/remove one of them in KIP-717.
             CommandLineUtils.maybeMergeOptions(props, BATCH_SIZE_CONFIG, options, batchSizeOpt);
             CommandLineUtils.maybeMergeOptions(props, BATCH_SIZE_CONFIG, options, maxPartitionMemoryBytesOpt);
             CommandLineUtils.maybeMergeOptions(props, METADATA_MAX_AGE_CONFIG, options, metadataExpiryMsOpt);
