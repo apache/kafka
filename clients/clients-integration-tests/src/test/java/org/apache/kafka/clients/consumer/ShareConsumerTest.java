@@ -3470,7 +3470,7 @@ public class ShareConsumerTest {
             }
 
             // Offset 0 has already reached the delivery limit hence shall be archived.
-            // Offset 1 to 49 shall be in last deliver attempt and hence 1 record per poll.
+            // Offset 1 to 49 shall be in last delivery attempt and hence 1 record per poll.
             validateExpectedRecordsInEachPollAndRelease(shareConsumer, 1, 50, 1);
             // Delivery limit 4.
             validateExpectedRecordsInEachPollAndRelease(shareConsumer, 50, 100, 50);
@@ -3680,10 +3680,10 @@ public class ShareConsumerTest {
                 }
                 return offsetToDeliveryCountMap.size() == 500 &&
                     offsetToDeliveryCountMap.values().stream().allMatch(deliveryCount -> deliveryCount == 10);
-              },
-              120000L, // 120 seconds.
-              50L,
-              () -> "failed to get records till delivery limit"
+                },
+                120000L, // 120 seconds.
+                50L,
+                () -> "failed to get records till delivery limit"
             );
 
             // Next poll should not have any records as all records have reached delivery limit.
