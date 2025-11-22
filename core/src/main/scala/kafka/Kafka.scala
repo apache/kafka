@@ -94,8 +94,12 @@ object Kafka extends Logging {
         }
       })
 
-      try server.startup()
-      catch {
+      val startupStartTimeMs = Time.SYSTEM.milliseconds()
+      try {
+        server.startup()
+        val startupDurationMs = Time.SYSTEM.milliseconds() - startupStartTimeMs
+        info(s"Kafka startup completed in ${startupDurationMs} ms")
+      } catch {
         case e: Throwable =>
           // KafkaBroker.startup() calls shutdown() in case of exceptions, so we invoke `exit` to set the status code
           fatal("Exiting Kafka due to fatal exception during startup.", e)
