@@ -814,21 +814,16 @@ public class Topology {
         final String processorName,
         final ProcessorSupplier<K, V, Void, Void> stateUpdateSupplier
     ) {
-        internalTopologyBuilder.addSource(
-            new AutoOffsetResetInternal(org.apache.kafka.streams.AutoOffsetReset.earliest()),
-            sourceName,
-            timestampExtractor,
-            keyDeserializer,
-            valueDeserializer,
-            topic
+        internalTopologyBuilder.addReadOnlyStateStore(
+                storeBuilder,
+                sourceName,
+                timestampExtractor,
+                keyDeserializer,
+                valueDeserializer,
+                topic,
+                processorName,
+                stateUpdateSupplier
         );
-        internalTopologyBuilder.addProcessor(processorName, stateUpdateSupplier, sourceName);
-        internalTopologyBuilder.addStateStore(storeBuilder, processorName);
-
-        // connect the source topic as (read-only) changelog topic for fault-tolerance
-        storeBuilder.withLoggingDisabled();
-        internalTopologyBuilder.connectSourceStoreAndTopic(storeBuilder.name(), topic);
-
         return this;
     }
 

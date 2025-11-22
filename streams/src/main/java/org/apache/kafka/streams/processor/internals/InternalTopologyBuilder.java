@@ -744,6 +744,64 @@ public class InternalTopologyBuilder {
         return changelogTopicToStore.get(topicName);
     }
 
+    public synchronized <K, V, S extends StateStore> void addReadOnlyStateStore(
+            final StoreBuilder<S> storeBuilder,
+            final String sourceName,
+            final TimestampExtractor timestampExtractor,
+            final Deserializer<K> keyDeserializer,
+            final Deserializer<V> valueDeserializer,
+            final String topic,
+            final String processorName,
+            final ProcessorSupplier<K, V, Void, Void> stateUpdateSupplier
+    ) {
+        addReadOnlyStateStore(
+                new AutoOffsetResetInternal(org.apache.kafka.streams.AutoOffsetReset.earliest()),
+                storeBuilder,
+                sourceName,
+                timestampExtractor,
+                keyDeserializer,
+                valueDeserializer,
+                topic,
+                processorName,
+                stateUpdateSupplier
+        );
+    }
+
+    // This method is used both by the Processor API and the DSL.
+    // - In the Processor API, stateUpdateSupplier has type ProcessorSupplier<K, V, Void, Void>
+    //   and only updates the state store.
+    // - In the DSL, KTableSource uses ProcessorSupplier<K, V, K, Change<V>> so that it can
+    //   both update the state store and forward a change stream downstream.
+    // For wiring the topology we only depend on the input key and value types,
+    // so the output key and value types are modelled as wildcards here.
+    public synchronized <K, V, S extends StateStore> void addReadOnlyStateStore(
+            final AutoOffsetResetInternal autoOffsetReset,
+            final StoreBuilder<S> storeBuilder,
+            final String sourceName,
+            final TimestampExtractor timestampExtractor,
+            final Deserializer<K> keyDeserializer,
+            final Deserializer<V> valueDeserializer,
+            final String topic,
+            final String processorName,
+            final ProcessorSupplier<K, V, ?, ?> stateUpdateSupplier
+    ) {
+        addSource(
+                autoOffsetReset,
+                sourceName,
+                timestampExtractor,
+                keyDeserializer,
+                valueDeserializer,
+                topic
+        );
+        addProcessor(processorName, stateUpdateSupplier, sourceName);
+        addStateStore(storeBuilder, processorName);
+
+        // connect the source topic as (read-only) changelog topic for fault-tolerance
+        storeBuilder.withLoggingDisabled();
+        connectSourceStoreAndTopic(storeBuilder.name(), topic);
+    }
+    
+    
     public void connectSourceStoreAndTopic(final String sourceStoreName,
                                            final String topic) {
         if (storeToChangelogTopic.containsKey(sourceStoreName)) {

@@ -21,9 +21,11 @@ import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.Set;
 
 /**
  * Used to represent either a KTable source or a GlobalKTable source. A boolean flag is used to indicate if this represents a GlobalKTable a {@link
@@ -96,27 +98,38 @@ public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
                 false
             );
         } else {
-            topologyBuilder.addSource(consumedInternal().offsetResetPolicy(),
-                                      sourceName,
-                                      consumedInternal().timestampExtractor(),
-                                      consumedInternal().keyDeserializer(),
-                                      consumedInternal().valueDeserializer(),
-                                      topicName);
-
-            processorParameters.addProcessorTo(topologyBuilder, sourceName);
-
-            // if the KTableSource should not be materialized, stores will be null or empty
             final KTableSource<K, V> tableSource = (KTableSource<K, V>) processorParameters.processorSupplier();
-            if (tableSource.stores() != null) {
-                if (shouldReuseSourceTopicForChangelog) {
-                    // TODO: rewrite this part to use Topology.addReadOnlyStateStore() instead
-                    // should allow to move off using `InternalTopologyBuilder` in favor of the public `Topology` API
-                    tableSource.stores().forEach(store -> {
-                        // connect the source topic as (read-only) changelog topic for fault-tolerance
-                        store.withLoggingDisabled();
-                        topologyBuilder.connectSourceStoreAndTopic(store.name(), topicName);
-                    });
-                }
+            if (tableSource.stores() != null && shouldReuseSourceTopicForChangelog) {
+                // The DSL topology uses a serial pipeline, 
+                // whereas the PAPI optimization assumes a parallel structure.
+                // We use a wildcard supplier to support the DSL's forwarding behavior.
+                final ProcessorSupplier<K, V, ?, ?> stateUpdater = 
+                        processorParameters.wrappedProcessSupplier(topologyBuilder);
+
+                // TableSourceNode is backed by KTableSource, which maintains a single state store. 
+                // Therefore, we are guaranteed to have exactly one store.
+                assert tableSource.stores().size() == 1;
+
+                topologyBuilder.addReadOnlyStateStore(
+                        consumedInternal().offsetResetPolicy(),
+                        tableSource.stores().iterator().next(),
+                        sourceName,
+                        consumedInternal().timestampExtractor(),
+                        consumedInternal().keyDeserializer(),
+                        consumedInternal().valueDeserializer(),
+                        topicName,
+                        processorParameters.processorName(),
+                        stateUpdater
+                );
+            } else {
+                topologyBuilder.addSource(consumedInternal().offsetResetPolicy(),
+                        sourceName,
+                        consumedInternal().timestampExtractor(),
+                        consumedInternal().keyDeserializer(),
+                        consumedInternal().valueDeserializer(),
+                        topicName);
+
+                processorParameters.addProcessorTo(topologyBuilder, sourceName);    
             }
         }
 

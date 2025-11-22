@@ -2439,6 +2439,64 @@ public class TopologyTest {
     }
 
     @Test
+    public void whenKTableSourceIsOptimizedThenTopologyShouldBeSerialPipeline() {
+        // Given
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table("input-topic")
+                .groupBy((key, value) -> null)
+                .count();
+        final Properties props = new Properties();
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        
+        // When
+        final Topology topology = builder.build(props);
+        
+        // Then
+        final String expectedTopologyDescription = "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
+                "      --> KTABLE-SOURCE-0000000002\n" +
+                "    Processor: KTABLE-SOURCE-0000000002 (stores: [input-topic-STATE-STORE-0000000000])\n" +
+                "      --> KTABLE-SELECT-0000000003\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: KTABLE-SELECT-0000000003 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000005\n" +
+                "      <-- KTABLE-SOURCE-0000000002\n" +
+                "    Sink: KSTREAM-SINK-0000000005 (topic: KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition)\n" +
+                "      <-- KTABLE-SELECT-0000000003\n" +
+                "\n" +
+                "  Sub-topology: 1\n" +
+                "    Source: KSTREAM-SOURCE-0000000006 (topics: [KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition])\n" +
+                "      --> KTABLE-AGGREGATE-0000000007\n" +
+                "    Processor: KTABLE-AGGREGATE-0000000007 (stores: [KTABLE-AGGREGATE-STATE-STORE-0000000004])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-SOURCE-0000000006\n\n";
+        assertEquals(
+                expectedTopologyDescription, 
+                topology.describe().toString()
+        );
+    }
+
+    @Test
+    public void whenKTableSourceIsOptimizedThenItsStateStoreShouldNotLog() {
+        // Given
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table("input-topic")
+                .groupBy((key, value) -> null)
+                .count();
+        final Properties props = new Properties();
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        
+        // When
+        final Topology topology = builder.build(props);
+
+        // Then
+        final StoreFactory stateStoreFactory = topology.internalTopologyBuilder.stateStores().get("input-topic-STATE-STORE-0000000000");
+        assertThat(stateStoreFactory.loggingEnabled(), equalTo(false));
+    }
+    
+
+    @Test
     public void shouldWrapProcessors() {
         final Map<Object, Object> props = dummyStreamsConfigMap();
         props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);

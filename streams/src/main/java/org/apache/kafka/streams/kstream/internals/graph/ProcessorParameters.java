@@ -58,6 +58,11 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
     public ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier() {
         return processorSupplier;
     }
+    
+    public ProcessorSupplier<KIn, VIn, KOut, VOut> wrappedProcessSupplier(final InternalTopologyBuilder topologyBuilder) {
+        ApiUtils.checkSupplier(processorSupplier);
+        return topologyBuilder.wrapProcessorSupplier(processorName, processorSupplier);
+    }
 
     public FixedKeyProcessorSupplier<KIn, VIn, VOut> fixedKeyProcessorSupplier() {
         return fixedKeyProcessorSupplier;
@@ -69,7 +74,7 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
 
             final ProcessorSupplier<KIn, VIn, KOut, VOut> wrapped =
                 topologyBuilder.wrapProcessorSupplier(processorName, processorSupplier);
-
+            
             topologyBuilder.addProcessor(processorName, wrapped, parentNodeNames);
             final Set<StoreBuilder<?>> stores = wrapped.stores();
             if (stores != null) {
