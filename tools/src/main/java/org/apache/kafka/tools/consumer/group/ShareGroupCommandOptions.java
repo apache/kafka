@@ -47,9 +47,10 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         "to specify the maximum amount of time in milliseconds to wait before the group stabilizes.";
     private static final String COMMAND_CONFIG_DOC = "Property file containing configs to be passed to Admin Client.";
     private static final String RESET_OFFSETS_DOC = "Reset offsets of share group. Supports one share group at the time, and instances must be inactive." + NL +
-        "Has 2 execution options: --dry-run (the default) to plan which offsets to reset, and --execute to reset the offsets. " + NL +
+        "Has 2 execution options: --dry-run to plan which offsets to reset, and --execute to reset the offsets. " + NL +
         "You must choose one of the following reset specifications: --to-datetime, --to-earliest, --to-latest." + NL +
-        "To define the scope use --all-topics or --topic.";
+        "To define the scope use --all-topics or --topic." + NL +
+        "Fails if neither '--dry-run' nor '–execute' is specified.";
     private static final String DRY_RUN_DOC = "Only show results without executing changes on share groups. Supported operations: reset-offsets.";
     private static final String EXECUTE_DOC = "Execute operation. Supported operations: reset-offsets.";
     private static final String RESET_TO_DATETIME_DOC = "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDThh:mm:ss.sss'";

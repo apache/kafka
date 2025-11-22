@@ -2543,6 +2543,7 @@ public class GroupMetadataManager {
             .maybeUpdateRebalanceTimeoutMs(ofSentinel(request.rebalanceTimeoutMs()))
             .maybeUpdateServerAssignorName(Optional.empty())
             .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscription.topics()))
+            .setSubscribedTopicRegex("") // Regex subscription is not supported for classic member.
             .setClientId(context.clientId())
             .setClientHost(context.clientAddress().toString())
             .setClassicMemberMetadata(
@@ -2551,12 +2552,24 @@ public class GroupMetadataManager {
                     .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(protocols)))
             .build();
 
-        boolean bumpGroupEpoch = hasMemberSubscriptionChanged(
+        boolean hasMemberSubscriptionChanged = hasMemberSubscriptionChanged(
             groupId,
             member,
             updatedMember,
             records
         );
+
+        // Maybe create tombstone for the regex if the joining member replaces a static member
+        // with regex subscription.
+        UpdateRegularExpressionsResult updateRegularExpressionsResult = maybeUpdateRegularExpressions(
+            context,
+            group,
+            member,
+            updatedMember,
+            records
+        );
+
+        boolean bumpGroupEpoch = hasMemberSubscriptionChanged || updateRegularExpressionsResult.regexUpdated();
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:

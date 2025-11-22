@@ -32,7 +32,7 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordValidat
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.metadata.MetadataCache
-import org.apache.kafka.server.common.RequestLocal
+import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedRemoteFetch, DelayedRemoteListOffsets, TopicPartitionOperationKey}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation
 import org.apache.kafka.server.util.timer.{MockTimer, Timer}
@@ -217,7 +217,8 @@ object AbstractCoordinatorConcurrencyTest {
                                responseCallback: Map[TopicIdPartition, PartitionResponse] => Unit,
                                processingStatsCallback: Map[TopicIdPartition, RecordValidationStats] => Unit = _ => (),
                                requestLocal: RequestLocal = RequestLocal.noCaching,
-                               verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
+                               verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
+                               transactionVersion: Short = TransactionVersion.TV_UNKNOWN): Unit = {
 
       if (entriesPerPartition.isEmpty)
         return

@@ -53,6 +53,7 @@ import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1185,13 +1186,25 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         switch (type) {
             case STREAM_TIME:
                 // align punctuation to 0L, punctuate as soon as we have data
-                return schedule(0L, interval, type, punctuator);
+                return schedule(0L, interval, type, punctuator, false);
             case WALL_CLOCK_TIME:
                 // align punctuation to now, punctuate after interval has elapsed
-                return schedule(time.milliseconds() + interval, interval, type, punctuator);
+                return schedule(time.milliseconds() + interval, interval, type, punctuator, false);
             default:
                 throw new IllegalArgumentException("Unrecognized PunctuationType: " + type);
         }
+    }
+
+    /**
+     * Schedules a punctuation for the processor
+     *
+     * @param startTime time of the first punctuation
+     * @param interval the interval in milliseconds
+     * @param type     the punctuation type
+     * @throws IllegalStateException if the current node is not null
+     */
+    public Cancellable schedule(final Instant startTime, final long interval, final PunctuationType type, final Punctuator punctuator) {
+        return schedule(startTime.toEpochMilli(), interval, type, punctuator, true);
     }
 
     /**
@@ -1202,12 +1215,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @param type      the punctuation type
      * @throws IllegalStateException if the current node is not null
      */
-    private Cancellable schedule(final long startTime, final long interval, final PunctuationType type, final Punctuator punctuator) {
+    private Cancellable schedule(final long startTime, final long interval, final PunctuationType type, final Punctuator punctuator, final boolean anchored) {
         if (processorContext.currentNode() == null) {
             throw new IllegalStateException(String.format("%sCurrent node is null", logPrefix));
         }
 
-        final PunctuationSchedule schedule = new PunctuationSchedule(processorContext.currentNode(), startTime, interval, punctuator);
+        final PunctuationSchedule schedule = getInitialSchedule(startTime, interval, type, punctuator, anchored);
 
         switch (type) {
             case STREAM_TIME:
@@ -1220,6 +1233,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             default:
                 throw new IllegalArgumentException("Unrecognized PunctuationType: " + type);
         }
+    }
+
+    // For anchored schedule, we want to have all punctuations only fire on times based on combinations of startTime and interval
+    // This method ensures that the first anchored punctuation is not fired prematurely due to startTime < now
+    private PunctuationSchedule getInitialSchedule(final long startTime, final long interval, final PunctuationType type, final Punctuator punctuator, final boolean anchored) {
+        final PunctuationSchedule originalSchedule = new PunctuationSchedule(processorContext.currentNode(), startTime, interval, punctuator);
+        final long now = (type == PunctuationType.WALL_CLOCK_TIME) ? time.milliseconds() : streamTime();
+
+        return (anchored && startTime < now) ? originalSchedule.next(now) : originalSchedule;
     }
 
     /**

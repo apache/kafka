@@ -65,6 +65,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -772,7 +773,7 @@ public class TaskManager {
                                                          final CompletableFuture<StateUpdater.RemovedTaskResult> future) {
         final StateUpdater.RemovedTaskResult removedTaskResult;
         try {
-            removedTaskResult = future.get();
+            removedTaskResult = future.get(5, TimeUnit.MINUTES);
             if (removedTaskResult == null) {
                 throw new IllegalStateException("Task " + taskId + " was not found in the state updater. "
                     + BUG_ERROR_MESSAGE);
@@ -787,6 +788,10 @@ public class TaskManager {
             Thread.currentThread().interrupt();
             log.error(INTERRUPTED_ERROR_MESSAGE, shouldNotHappen);
             throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, shouldNotHappen);
+        } catch (final java.util.concurrent.TimeoutException timeoutException) {
+            log.warn("The state updater wasn't able to remove task {} in time. The state updater thread may be dead. "
+                    + BUG_ERROR_MESSAGE, taskId, timeoutException);
+            return null;
         }
     }
 
@@ -1576,6 +1581,12 @@ public class TaskManager {
 
     private void shutdownStateUpdater() {
         if (stateUpdater != null) {
+            // If there are failed tasks handling them first
+            for (final StateUpdater.ExceptionAndTask exceptionAndTask : stateUpdater.drainExceptionsAndFailedTasks()) {
+                final Task failedTask = exceptionAndTask.task();
+                closeTaskDirty(failedTask, false);
+            }
+
             final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
             for (final Task task : stateUpdater.tasks()) {
                 final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
@@ -1584,7 +1595,8 @@ public class TaskManager {
             final Set<Task> tasksToCloseClean = new HashSet<>();
             final Set<Task> tasksToCloseDirty = new HashSet<>();
             addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
-            stateUpdater.shutdown(Duration.ofMillis(Long.MAX_VALUE));
+            // at this point we removed all tasks, so the shutdown should not take a lot of time
+            stateUpdater.shutdown(Duration.ofMinutes(1L));
 
             for (final Task task : tasksToCloseClean) {
                 tasks.addTask(task);
@@ -1592,16 +1604,22 @@ public class TaskManager {
             for (final Task task : tasksToCloseDirty) {
                 closeTaskDirty(task, false);
             }
+            // Handling all failures that occurred during the remove process
             for (final StateUpdater.ExceptionAndTask exceptionAndTask : stateUpdater.drainExceptionsAndFailedTasks()) {
                 final Task failedTask = exceptionAndTask.task();
                 closeTaskDirty(failedTask, false);
+            }
+
+            // If there is anything left unhandled due to timeouts, handling now
+            for (final Task task : stateUpdater.tasks()) {
+                closeTaskDirty(task, false);
             }
         }
     }
 
     private void shutdownSchedulingTaskManager() {
         if (schedulingTaskManager != null) {
-            schedulingTaskManager.shutdown(Duration.ofMillis(Long.MAX_VALUE));
+            schedulingTaskManager.shutdown(Duration.ofMinutes(5L));
         }
     }
 

@@ -60,6 +60,7 @@ public class ShareCompletedFetch {
     final int nodeId;
     final TopicIdPartition partition;
     final ShareFetchResponseData.PartitionData partitionData;
+    final Optional<Integer> acquisitionLockTimeoutMs;
     final short requestVersion;
 
     private final Logger log;
@@ -77,21 +78,23 @@ public class ShareCompletedFetch {
     private final List<OffsetAndDeliveryCount> acquiredRecordList;
     private ListIterator<OffsetAndDeliveryCount> acquiredRecordIterator;
     private OffsetAndDeliveryCount nextAcquired;
-    private final ShareFetchMetricsAggregator metricAggregator;
+    private final ShareFetchMetricsAggregator metricsAggregator;
 
     ShareCompletedFetch(final LogContext logContext,
                         final BufferSupplier decompressionBufferSupplier,
                         final int nodeId,
                         final TopicIdPartition partition,
                         final ShareFetchResponseData.PartitionData partitionData,
-                        final ShareFetchMetricsAggregator metricAggregator,
+                        final Optional<Integer> acquisitionLockTimeoutMs,
+                        final ShareFetchMetricsAggregator metricsAggregator,
                         final short requestVersion) {
         this.log = logContext.logger(org.apache.kafka.clients.consumer.internals.ShareCompletedFetch.class);
         this.decompressionBufferSupplier = decompressionBufferSupplier;
         this.nodeId = nodeId;
         this.partition = partition;
         this.partitionData = partitionData;
-        this.metricAggregator = metricAggregator;
+        this.acquisitionLockTimeoutMs = acquisitionLockTimeoutMs;
+        this.metricsAggregator = metricsAggregator;
         this.requestVersion = requestVersion;
         this.batches = ShareFetchResponse.recordsOrFail(partitionData).batches().iterator();
         this.acquiredRecordList = buildAcquiredRecordList(partitionData.acquiredRecords());
@@ -154,7 +157,7 @@ public class ShareCompletedFetch {
      * and number of records parsed. After all partitions have reported, we write the metric.
      */
     void recordAggregatedMetrics(int bytes, int records) {
-        metricAggregator.record(partition.topicPartition(), bytes, records);
+        metricsAggregator.record(partition.topicPartition(), bytes, records);
     }
 
     /**
@@ -173,7 +176,7 @@ public class ShareCompletedFetch {
                                                  final int maxRecords,
                                                  final boolean checkCrcs) {
         // Creating an empty ShareInFlightBatch
-        ShareInFlightBatch<K, V> inFlightBatch = new ShareInFlightBatch<>(nodeId, partition);
+        ShareInFlightBatch<K, V> inFlightBatch = new ShareInFlightBatch<>(nodeId, partition, acquisitionLockTimeoutMs);
 
         if (cachedBatchException != null) {
             // If the event that a CRC check fails, reject the entire record batch because it is corrupt.
@@ -318,13 +321,13 @@ public class ShareCompletedFetch {
         try {
             key = keyBytes == null ? null : deserializers.keyDeserializer().deserialize(partition.topic(), headers, keyBytes);
         } catch (RuntimeException e) {
-            log.error("Key Deserializers with error: {}", deserializers);
+            log.error("Key deserializers with error: {}", deserializers);
             throw newRecordDeserializationException(RecordDeserializationException.DeserializationExceptionOrigin.KEY, partition.topicPartition(), timestampType, record, e, headers);
         }
         try {
             value = valueBytes == null ? null : deserializers.valueDeserializer().deserialize(partition.topic(), headers, valueBytes);
         } catch (RuntimeException e) {
-            log.error("Value Deserializers with error: {}", deserializers);
+            log.error("Value deserializers with error: {}", deserializers);
             throw newRecordDeserializationException(RecordDeserializationException.DeserializationExceptionOrigin.VALUE, partition.topicPartition(), timestampType, record, e, headers);
         }
         return new ConsumerRecord<>(partition.topic(), partition.partition(), record.offset(),
