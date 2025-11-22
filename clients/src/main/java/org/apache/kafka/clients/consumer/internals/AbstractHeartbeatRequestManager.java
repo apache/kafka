@@ -26,6 +26,8 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -314,9 +316,11 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                     logger.debug("{} responded successfully: {}", heartbeatRequestName(), response);
                 else
                     logger.error("{} failed because of {}: {}", heartbeatRequestName(), error, response);
-            } else {
-                logger.error("{} failed because of unexpected exception.", heartbeatRequestName(), exception);
+            } else if (exception instanceof TimeoutException || exception instanceof DisconnectException){
+                logger.warn("{} heartbeat failed due to transient network issue: {}", heartbeatRequestName(), exception.getMessage());
             }
+            else
+                logger.error("{} heartbeat failed due to unexpected exception.", heartbeatRequestName(), exception);
         });
     }
 
