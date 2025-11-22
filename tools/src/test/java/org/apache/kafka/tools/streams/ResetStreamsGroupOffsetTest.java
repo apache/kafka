@@ -157,6 +157,23 @@ public class ResetStreamsGroupOffsetTest {
     }
 
     @Test
+    public void testResetOffsetsWithoutDryRunOrExecuteOption() {
+        final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--all-groups", "--all-input-topics", "--to-offset", "5"};
+        AtomicBoolean exited = new AtomicBoolean(false);
+        Exit.setExitProcedure(((statusCode, message) -> {
+            assertNotEquals(0, statusCode);
+            assertTrue(message.contains("Option [reset-offsets] takes the option: [execute] or [dry-run]"));
+            exited.set(true);
+        }));
+        try {
+            getStreamsGroupService(args);
+        } finally {
+            assertTrue(exited.get());
+            Exit.resetExitProcedure();
+        }
+    }
+
+    @Test
     public void testResetOffsetsWithDeleteInternalTopicsOption() {
         final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--dry-run", "--all-groups", "--all-input-topics", "--to-offset", "5", "--delete-all-internal-topics"};
         AtomicBoolean exited = new AtomicBoolean(false);
