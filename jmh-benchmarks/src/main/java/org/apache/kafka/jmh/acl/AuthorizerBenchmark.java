@@ -23,6 +23,8 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.internals.PluginMetricsImpl;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -200,6 +202,11 @@ public class AuthorizerBenchmark {
     @TearDown(Level.Trial)
     public void tearDown() throws IOException {
         authorizer.close();
+    }
+
+    @Setup(Level.Iteration)
+    public void setupIteration() {
+        authorizer.withPluginMetrics(new PluginMetricsImpl(new Metrics(), new HashMap<>(1000000)));
     }
 
     @Benchmark
