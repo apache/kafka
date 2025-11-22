@@ -316,9 +316,9 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                     logger.debug("{} responded successfully: {}", heartbeatRequestName(), response);
                 else
                     logger.error("{} failed because of {}: {}", heartbeatRequestName(), error, response);
-            } else if (exception instanceof TimeoutException || exception instanceof DisconnectException){
+            } else if (exception instanceof TimeoutException || exception instanceof DisconnectException) {
                 logger.warn("{} heartbeat failed due to transient network issue: {}", heartbeatRequestName(), exception.getMessage());
-            } else{
+            } else {
                 logger.error("{} heartbeat failed due to unexpected exception.", heartbeatRequestName(), exception);
             }
         });
