@@ -273,6 +273,8 @@ org.apache.kafka.streams.integration.StandbyTaskEOSMultiRebalanceIntegrationTest
 org.apache.kafka.streams.integration.StateDirectoryIntegrationTest:
 - testCleanUpStateDirIfEmpty
 - testNotCleanUpStateDirIfNotEmpty
+org.apache.kafka.streams.integration.StateUpdaterFailureIntegrationTest:
+- correctlyHandleFlushErrorsDuringRebalance
 org.apache.kafka.streams.integration.StoreQueryIntegrationTest:
 - shouldFailWithIllegalArgumentExceptionWhenIQPartitionerReturnsMultiplePartitions
 - shouldQueryAllStalePartitionStores

@@ -1,3 +1,5 @@
+org.apache.kafka.connect.cli.AbstractConnectCliTest:
+- testStartConnectEnforcesCorrectOrder
 org.apache.kafka.connect.cli.ConnectStandaloneTest:
 - testParseJavaPropertiesFile
 - testParseJsonFileWithConnectorConfiguration
