@@ -337,8 +337,7 @@ public class Sender implements Runnable {
 
         long currentTimeMs = time.milliseconds();
         long pollTimeout = sendProducerData(currentTimeMs);
-        if (!forceClose)
-            client.poll(pollTimeout, currentTimeMs);
+        client.poll(pollTimeout, currentTimeMs);
     }
 
     // We handle {@code TransactionalIdAuthorizationException} and {@code ClusterAuthorizationException} by first
