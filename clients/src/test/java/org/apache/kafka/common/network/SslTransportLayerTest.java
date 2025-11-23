@@ -55,6 +55,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -1370,20 +1371,11 @@ public class SslTransportLayerTest {
             SSLParameters params = context.getDefaultSSLParameters();
             String[] cipherSuites = params.getCipherSuites();
 
-            // Check if any cipher suite supports DSA/DSS
-            // DSA-related cipher suites typically contain "DSS" or "DSA" in their names
-            for (String cipherSuite : cipherSuites) {
-                // Common DSA cipher suite patterns:
-                // - TLS_DHE_DSS_* (Diffie-Hellman Ephemeral with DSS)
-                // - TLS_DH_DSS_* (Diffie-Hellman with DSS)
-                // - SSL_DHE_DSS_* (legacy SSL with DSS)
-                // - SSL_DH_DSS_* (legacy SSL with DSS)
-                if (cipherSuite.contains("_DSS_") || cipherSuite.contains("_DSA_")) {
-                    return true;
-                }
-            }
-            // No DSA-compatible cipher suites found
-            return false;
+            // Check if any cipher suite supports DSA
+            // In TLS standards and JVM implementations, DSA signature cipher suites use "_DSS_" naming
+            // Common patterns: TLS_DHE_DSS_*, TLS_DH_DSS_*, SSL_DHE_DSS_*, SSL_DH_DSS_*
+            return Arrays.stream(cipherSuites)
+                    .anyMatch(suite -> suite.contains("_DSS_"));
         } catch (Exception e) {
             // If we can't check cipher suites, assume DSA is not fully supported
             return false;
