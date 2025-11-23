@@ -152,8 +152,8 @@ get_kafka 3.9.1 2.12
 chmod a+rw /opt/kafka-3.9.1
 get_kafka 4.0.0 2.13
 chmod a+rw /opt/kafka-4.0.0
-get_kafka 4.1.0 2.13
-chmod a+rw /opt/kafka-4.1.0
+get_kafka 4.1.1 2.13
+chmod a+rw /opt/kafka-4.1.1
 
 # To ensure the Kafka cluster starts successfully under JDK 17, we need to update the Zookeeper
 # client from version 3.4.x to 3.5.7 in Kafka versions 2.1.1, 2.2.2, and 2.3.1, as the older Zookeeper

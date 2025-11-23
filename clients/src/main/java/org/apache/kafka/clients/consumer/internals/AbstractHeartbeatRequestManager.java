@@ -53,7 +53,7 @@ import static org.apache.kafka.clients.consumer.internals.RequestState.RETRY_BAC
  * <p>If the member got kicked out of a group, it will try to give up the current assignment by invoking {@code
  * OnPartitionsLost} before attempting to join again with a zero epoch.
  *
- * <p>If the coordinator not is not found, we will skip sending the heartbeat and try to find a coordinator first.
+ * <p>If the coordinator is not found, we will skip sending the heartbeat and try to find a coordinator first.
  *
  * <p>When the member completes the assignment reconciliation, the {@link HeartbeatRequestState} will be reset so
  * that a heartbeat will be sent in the next event loop.

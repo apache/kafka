@@ -394,7 +394,11 @@ public class CurrentAssignmentBuilder {
             Set<Integer> partitionsPendingAssignment = new HashSet<>(target);
             partitionsPendingAssignment.removeAll(assignedPartitions);
             hasUnreleasedPartitions = partitionsPendingAssignment.removeIf(partitionId ->
-                currentPartitionEpoch.apply(topicId, partitionId) != -1
+                currentPartitionEpoch.apply(topicId, partitionId) != -1 &&
+                // Don't consider a partition unreleased if it is owned by the current member
+                // because it is pending revocation. This is safe to do since only a single member
+                // can own a partition at a time.
+                !member.partitionsPendingRevocation().getOrDefault(topicId, Set.of()).contains(partitionId)
             ) || hasUnreleasedPartitions;
 
             if (!assignedPartitions.isEmpty()) {

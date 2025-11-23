@@ -74,6 +74,7 @@ public class ShareFetchCollectorTest {
 
     private static final int DEFAULT_RECORD_COUNT = 10;
     private static final int DEFAULT_MAX_POLL_RECORDS = ConsumerConfig.DEFAULT_MAX_POLL_RECORDS;
+    private static final Optional<Integer> DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS = Optional.of(30000);
     private final TopicIdPartition topicAPartition0 = new TopicIdPartition(Uuid.randomUuid(), 0, "topic-a");
     private LogContext logContext;
 
@@ -155,6 +156,7 @@ public class ShareFetchCollectorTest {
         ShareFetch<String, String> fetch = fetchCollector.collect(fetchBuffer);
         assertFalse(fetch.isEmpty());
         assertEquals(recordCount, fetch.numRecords());
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, fetch.acquisitionLockTimeoutMs());
 
         // When we collected the data from the buffer, this will cause the completed fetch to get initialized.
         assertTrue(completedFetch.isInitialized());
@@ -182,11 +184,12 @@ public class ShareFetchCollectorTest {
 
         Acknowledgements acks = acknowledgementsMap.get(topicAPartition0).acknowledgements();
         acks.complete(null);
-        fetch.renew(Map.of(topicAPartition0, acks));
+        fetch.renew(Map.of(topicAPartition0, acks), Optional.of(20000));
         assertTrue(fetch.hasRenewals());
         fetch.takeRenewedRecords();
         assertFalse(fetch.hasRenewals());
         assertEquals(DEFAULT_MAX_POLL_RECORDS, fetch.numRecords());
+        assertEquals(Optional.of(20000), fetch.acquisitionLockTimeoutMs());
 
         // Now attempt to collect more records from the fetch buffer.
         fetch = fetchCollector.collect(fetchBuffer);
@@ -417,6 +420,7 @@ public class ShareFetchCollectorTest {
                     0,
                     topicAPartition0,
                     partitionData,
+                    DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS,
                     shareFetchMetricsAggregator,
                     ApiKeys.SHARE_FETCH.latestVersion());
         }
