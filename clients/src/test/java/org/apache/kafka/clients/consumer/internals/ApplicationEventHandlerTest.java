@@ -22,23 +22,31 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.AsyncPollEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.function.Supplier;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
 public class ApplicationEventHandlerTest {
     private final Time time = new MockTime();
+    private final int initializationTimeoutMs = 50;
     private final BlockingQueue<ApplicationEvent> applicationEventsQueue =  new LinkedBlockingQueue<>();
     private final ApplicationEventProcessor applicationEventProcessor = mock(ApplicationEventProcessor.class);
     private final NetworkClientDelegate networkClientDelegate = mock(NetworkClientDelegate.class);
@@ -53,6 +61,7 @@ public class ApplicationEventHandlerTest {
              ApplicationEventHandler applicationEventHandler = new ApplicationEventHandler(
                      new LogContext(),
                      time,
+                     initializationTimeoutMs,
                      applicationEventsQueue,
                      applicationEventReaper,
                      () -> applicationEventProcessor,
@@ -63,6 +72,54 @@ public class ApplicationEventHandlerTest {
             // add event
             applicationEventHandler.add(new AsyncPollEvent(time.milliseconds() + 10, time.milliseconds()));
             verify(asyncConsumerMetrics).recordApplicationEventQueueSize(1);
+        }
+    }
+
+    @Test
+    public void testFailOnInitializeResources() {
+        RuntimeException rootFailure = new RuntimeException("root failure");
+        KafkaException error = assertInitializeResourcesError(
+            KafkaException.class,
+            () -> {
+                throw rootFailure;
+            }
+        );
+        assertEquals(rootFailure, error.getCause());
+    }
+
+    @Test
+    public void testDelayInInitializeResources() {
+        assertInitializeResourcesError(
+            TimeoutException.class,
+            () -> {
+                long delayMs = initializationTimeoutMs * 2;
+                org.apache.kafka.common.utils.Utils.sleep(delayMs);
+                return networkClientDelegate;
+            }
+        );
+    }
+
+    @Test
+    public void testInterruptInInitializeResources() {
+        Thread.currentThread().interrupt();
+        assertInitializeResourcesError(InterruptException.class, () -> networkClientDelegate);
+    }
+
+    private <T extends Throwable> T assertInitializeResourcesError(Class<T> exceptionClass,
+                                                                   Supplier<NetworkClientDelegate> networkClientDelegateSupplier) {
+        try (Metrics metrics = new Metrics();
+             AsyncConsumerMetrics asyncConsumerMetrics = spy(new AsyncConsumerMetrics(metrics, "test-group"))) {
+            return assertThrows(exceptionClass, () -> new ApplicationEventHandler(
+                new LogContext(),
+                time,
+                initializationTimeoutMs,
+                applicationEventsQueue,
+                applicationEventReaper,
+                () -> applicationEventProcessor,
+                networkClientDelegateSupplier,
+                () -> requestManagers,
+                asyncConsumerMetrics
+            ));
         }
     }
 }

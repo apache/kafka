@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.protocol.Errors;
 
 import java.util.Map;
 import java.util.Set;
@@ -32,7 +33,15 @@ public interface PartitionMetadataClient extends AutoCloseable {
      * @param topicPartitions A set of topic partitions.
      * @return A map of topic partitions to the completableFuture of their latest offsets
      */
-    Map<TopicPartition, CompletableFuture<Long>> listLatestOffsets(
+    Map<TopicPartition, CompletableFuture<OffsetResponse>> listLatestOffsets(
         Set<TopicPartition> topicPartitions
     );
+
+    /**
+     * A record to hold the offset and any associated error.
+     */
+    record OffsetResponse(
+        long offset,
+        Errors error
+    ) { }
 }

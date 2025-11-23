@@ -36,12 +36,12 @@ import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.common.runtime.{CoordinatorLoaderImpl, CoordinatorRecord}
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
-import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService, PartitionMetadataClient}
+import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService, NetworkPartitionMetadataClient, PartitionMetadataClient}
 import org.apache.kafka.coordinator.share.metrics.{ShareCoordinatorMetrics, ShareCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRecordSerde, ShareCoordinatorService}
 import org.apache.kafka.coordinator.transaction.ProducerIdManager
 import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
-import org.apache.kafka.metadata.{BrokerState, ListenerInfo, MetadataVersionConfigValidator}
+import org.apache.kafka.metadata.{BrokerState, ListenerInfo, MetadataCache, MetadataVersionConfigValidator}
 import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, ScramPublisher}
 import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
 import org.apache.kafka.server.authorizer.Authorizer
@@ -96,6 +96,8 @@ class BrokerServer(
 
   private var assignmentsManager: AssignmentsManager = _
 
+  private var partitionMetadataClient: PartitionMetadataClient = _
+
   val lock: ReentrantLock = new ReentrantLock()
   val awaitShutdownCond: Condition = lock.newCondition()
   var status: ProcessStatus = SHUTDOWN
@@ -118,8 +120,6 @@ class BrokerServer(
 
   var credentialProvider: CredentialProvider = _
   var tokenCache: DelegationTokenCache = _
-
-  var partitionMetadataClient: PartitionMetadataClient = _
 
   @volatile var groupCoordinator: GroupCoordinator = _
 
@@ -373,7 +373,7 @@ class BrokerServer(
       /* create persister */
       persister = createShareStatePersister()
 
-      partitionMetadataClient = createPartitionMetadataClient()
+      partitionMetadataClient = createPartitionMetadataClient(metadataCache)
 
       groupCoordinator = createGroupCoordinator()
 
@@ -624,23 +624,19 @@ class BrokerServer(
     }
   }
 
-  private def createPartitionMetadataClient(): PartitionMetadataClient = {
-    // This is a no-op implementation of PartitionMetadataClient. It always returns -1 as the latest offset for any
-    // requested topic partition.
-    // TODO: KAFKA-19800: Implement a real PartitionMetadataClient that can fetch latest offsets via InterBrokerSendThread.
-    new PartitionMetadataClient {
-      override def listLatestOffsets(topicPartitions: util.Set[TopicPartition]
-                                    ): util.Map[TopicPartition, util.concurrent.CompletableFuture[java.lang.Long]] = {
-        topicPartitions.asScala
-          .map { tp =>
-            tp -> CompletableFuture.completedFuture(java.lang.Long.valueOf(-1L))
-          }
-          .toMap
-          .asJava
-      }
-
-      override def close(): Unit = {}
-    }
+  private def createPartitionMetadataClient(metadataCache: MetadataCache): PartitionMetadataClient = {
+    new NetworkPartitionMetadataClient(
+      metadataCache,
+      () => NetworkUtils.buildNetworkClient(
+        "NetworkPartitionMetadataClient",
+        config,
+        metrics,
+        Time.SYSTEM,
+        new LogContext(s"[NetworkPartitionMetadataClient broker=${config.brokerId}]")
+      ),
+      Time.SYSTEM,
+      config.interBrokerListenerName()
+    )
   }
 
   private def createGroupCoordinator(): GroupCoordinator = {
@@ -823,8 +819,13 @@ class BrokerServer(
 
       if (groupConfigManager != null)
         CoreUtils.swallow(groupConfigManager.close(), this)
+
       if (groupCoordinator != null)
         CoreUtils.swallow(groupCoordinator.shutdown(), this)
+
+      if (partitionMetadataClient != null)
+        CoreUtils.swallow(partitionMetadataClient.close(), this)
+
       if (shareCoordinator != null)
         CoreUtils.swallow(shareCoordinator.shutdown(), this)
 
