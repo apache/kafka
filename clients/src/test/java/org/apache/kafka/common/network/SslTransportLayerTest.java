@@ -1349,14 +1349,43 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * Check if DSA algorithm is supported by the JVM.
-     * @return true if DSA KeyPairGenerator is available, false otherwise
+     * Check if DSA algorithm is supported by the JVM and if there are compatible cipher suites
+     * available for TLSv1.2. This is important because even if DSA KeyPairGenerator is available,
+     * the SSL handshake may fail if no DSA-compatible cipher suites are available.
+     * @return true if DSA KeyPairGenerator is available and DSA-compatible cipher suites exist, false otherwise
      */
     private static boolean isDsaSupported() {
+        // First check if DSA KeyPairGenerator is available
         try {
             java.security.KeyPairGenerator.getInstance("DSA");
-            return true;
         } catch (java.security.NoSuchAlgorithmException e) {
+            return false;
+        }
+
+        // Check if there are DSA-compatible cipher suites available for TLSv1.2
+        // DSA algorithms are not supported for TLSv1.3, so we only check TLSv1.2
+        try {
+            SSLContext context = SSLContext.getInstance("TLSv1.2");
+            context.init(null, null, null);
+            SSLParameters params = context.getDefaultSSLParameters();
+            String[] cipherSuites = params.getCipherSuites();
+
+            // Check if any cipher suite supports DSA/DSS
+            // DSA-related cipher suites typically contain "DSS" or "DSA" in their names
+            for (String cipherSuite : cipherSuites) {
+                // Common DSA cipher suite patterns:
+                // - TLS_DHE_DSS_* (Diffie-Hellman Ephemeral with DSS)
+                // - TLS_DH_DSS_* (Diffie-Hellman with DSS)
+                // - SSL_DHE_DSS_* (legacy SSL with DSS)
+                // - SSL_DH_DSS_* (legacy SSL with DSS)
+                if (cipherSuite.contains("_DSS_") || cipherSuite.contains("_DSA_")) {
+                    return true;
+                }
+            }
+            // No DSA-compatible cipher suites found
+            return false;
+        } catch (Exception e) {
+            // If we can't check cipher suites, assume DSA is not fully supported
             return false;
         }
     }
