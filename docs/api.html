@@ -15,16 +15,17 @@
  limitations under the License.
 -->
 <script id="api-template" type="text/x-handlebars-template">
-	Kafka includes five core apis:
+	Kafka includes six core apis:
 	<ol>
 	<li>The <a href="#producerapi">Producer</a> API allows applications to send streams of data to topics in the Kafka cluster.
 	<li>The <a href="#consumerapi">Consumer</a> API allows applications to read streams of data from topics in the Kafka cluster.
+	<li>The <a href="#shareconsumerapi">Share consumer</a> API allows applications in a share group to cooperatively consume and process data from Kafka topics.
 	<li>The <a href="#streamsapi">Streams</a> API allows transforming streams of data from input topics to output topics.
 	<li>The <a href="#connectapi">Connect</a> API allows implementing connectors that continually pull from some source system or application into Kafka or push from Kafka into some sink system or application.
 	<li>The <a href="#adminapi">Admin</a> API allows managing and inspecting topics, brokers, and other Kafka objects.
 	</ol>
 
-	Kafka exposes all its functionality over a language independent protocol which has clients available in many programming languages. However only the Java clients are maintained as part of the main Kafka project, the others are available as independent open source projects. A list of non-Java clients is available <a href="https://cwiki.apache.org/confluence/x/3gDVAQ">here</a>.
+	Kafka exposes all its functionality over a language-independent protocol which has clients available in many programming languages. However only the Java clients are maintained as part of the main Kafka project, the others are available as independent open source projects. A list of non-Java clients is available <a href="https://cwiki.apache.org/confluence/x/3gDVAQ">here</a>.
 
 	<h3 class="anchor-heading"><a id="producerapi" class="anchor-link"></a><a href="#producerapi">2.1 Producer API</a></h3>
 
@@ -57,7 +58,7 @@
 
 	<h3 class="anchor-heading"><a id="shareconsumerapi" class="anchor-link"></a><a href="#shareconsumerapi">2.3 Share Consumer API</a></h3>
 
-	The Share Consumer API enables applications within a share group to cooperatively consume and process data from Kafka topics.
+	The Share Consumer API enables applications in a share group to cooperatively consume and process data from Kafka topics.
 	<p>
 	Examples of using the share consumer are shown in the
 	<a href="/{{version}}/javadoc/index.html?org/apache/kafka/clients/consumer/KafkaShareConsumer.html" title="Kafka {{dotVersion}} Javadoc">javadocs</a>.

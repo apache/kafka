@@ -38,17 +38,20 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
         private final int coordinatorEpoch;
         private final TransactionResult result;
         private final List<TopicPartition> partitions;
+        private final short transactionVersion;
 
         public TxnMarkerEntry(long producerId,
                               short producerEpoch,
                               int coordinatorEpoch,
                               TransactionResult result,
-                              List<TopicPartition> partitions) {
+                              List<TopicPartition> partitions,
+                              short transactionVersion) {
             this.producerId = producerId;
             this.producerEpoch = producerEpoch;
             this.coordinatorEpoch = coordinatorEpoch;
             this.result = result;
             this.partitions = partitions;
+            this.transactionVersion = transactionVersion;
         }
 
         public long producerId() {
@@ -71,6 +74,10 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
             return partitions;
         }
 
+        public short transactionVersion() {
+            return transactionVersion;
+        }
+
         @Override
         public String toString() {
             return "TxnMarkerEntry{" +
@@ -79,6 +86,7 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
                        ", coordinatorEpoch=" + coordinatorEpoch +
                        ", result=" + result +
                        ", partitions=" + partitions +
+                       ", transactionVersion=" + transactionVersion +
                        '}';
         }
 
@@ -91,12 +99,13 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
                        producerEpoch == that.producerEpoch &&
                        coordinatorEpoch == that.coordinatorEpoch &&
                        result == that.result &&
+                       transactionVersion == that.transactionVersion &&
                        Objects.equals(partitions, that.partitions);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(producerId, producerEpoch, coordinatorEpoch, result, partitions);
+            return Objects.hash(producerId, producerEpoch, coordinatorEpoch, result, partitions, transactionVersion);
         }
     }
 
@@ -109,6 +118,11 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
             this.data = data;
         }
 
+        /**
+         * Creates a builder with the given markers. Transaction versions are read from each marker entry.
+         *
+         * @param markers the list of transaction marker entries
+         */
         public Builder(final List<TxnMarkerEntry> markers) {
             // version will be determined at build time based on broker capabilities
             super(ApiKeys.WRITE_TXN_MARKERS);
@@ -123,12 +137,18 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
                     topicMap.put(topicPartition.topic(), topic);
                 }
 
-                dataMarkers.add(new WritableTxnMarker()
-                                    .setProducerId(marker.producerId)
-                                    .setProducerEpoch(marker.producerEpoch)
-                                    .setCoordinatorEpoch(marker.coordinatorEpoch)
-                                    .setTransactionResult(marker.transactionResult().id)
-                                    .setTopics(new ArrayList<>(topicMap.values())));
+                WritableTxnMarker writableMarker = new WritableTxnMarker()
+                    .setProducerId(marker.producerId)
+                    .setProducerEpoch(marker.producerEpoch)
+                    .setCoordinatorEpoch(marker.coordinatorEpoch)
+                    .setTransactionResult(marker.transactionResult().id)
+                    .setTopics(new ArrayList<>(topicMap.values()));
+
+                // Set transaction version from the marker entry (KIP-1228).
+                // Serialization will automatically omit TransactionVersion field in version 1 since it's ignorable.
+                writableMarker.setTransactionVersion((byte) marker.transactionVersion);
+
+                dataMarkers.add(writableMarker);
             }
             this.data = new WriteTxnMarkersRequestData().setMarkers(dataMarkers);
         }
@@ -178,12 +198,17 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
                     topicPartitions.add(new TopicPartition(topic.name(), partitionIdx));
                 }
             }
+            // Read transactionVersion from raw marker data.
+            // For request version 1, this field is set to 0 during deserialization since it's ignorable.
+            short transactionVersion = markerEntry.transactionVersion();
+
             markers.add(new TxnMarkerEntry(
                 markerEntry.producerId(),
                 markerEntry.producerEpoch(),
                 markerEntry.coordinatorEpoch(),
                 TransactionResult.forId(markerEntry.transactionResult()),
-                topicPartitions)
+                topicPartitions,
+                transactionVersion)
             );
         }
         return markers;

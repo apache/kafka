@@ -42,6 +42,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -76,6 +77,14 @@ public class NoOpProcessorContext extends AbstractProcessorContext<Object, Objec
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
+        return null;
+    }
+
+    @Override
+    public Cancellable schedule(final Instant startTime,
+                                final Duration interval,
+                                final PunctuationType type,
+                                final Punctuator callback) {
         return null;
     }
 

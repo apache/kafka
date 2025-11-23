@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -36,16 +37,18 @@ public class ShareInFlightBatch<K, V> {
     private Map<Long, ConsumerRecord<K, V>> renewedRecords;
     private final Set<Long> acknowledgedRecords;
     private Acknowledgements acknowledgements;
+    private final Optional<Integer> acquisitionLockTimeoutMs;
     private ShareInFlightBatchException exception;
     private boolean hasCachedException = false;
     private boolean checkForRenewAcknowledgements = false;
 
-    public ShareInFlightBatch(int nodeId, TopicIdPartition partition) {
+    public ShareInFlightBatch(int nodeId, TopicIdPartition partition, Optional<Integer> acquisitionLockTimeoutMs) {
         this.nodeId = nodeId;
         this.partition = partition;
         this.inFlightRecords = new TreeMap<>();
         this.acknowledgedRecords = new TreeSet<>();
         this.acknowledgements = Acknowledgements.empty();
+        this.acquisitionLockTimeoutMs = acquisitionLockTimeoutMs;
     }
 
     public void addAcknowledgement(long offset, AcknowledgeType type) {
@@ -180,6 +183,10 @@ public class ShareInFlightBatch<K, V> {
 
     Acknowledgements getAcknowledgements() {
         return acknowledgements;
+    }
+
+    Optional<Integer> getAcquisitionLockTimeoutMs() {
+        return acquisitionLockTimeoutMs;
     }
 
     public boolean isEmpty() {
