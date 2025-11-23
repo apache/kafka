@@ -78,6 +78,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -476,6 +477,8 @@ public class SslTransportLayerTest {
     @ArgumentsSource(SslTransportLayerArgumentsForTLS2Provider.class)
     public void testDsaKeyPair(Args args) throws Exception {
         // DSA algorithms are not supported for TLSv1.3.
+        // Skip test if DSA is not supported by the JVM
+        assumeTrue(isDsaSupported(), "DSA algorithm is not supported by this JVM");
         args.serverCertStores = certBuilder(true, "server", args.useInlinePem).keyAlgorithm("DSA").build();
         args.clientCertStores = certBuilder(false, "client", args.useInlinePem).keyAlgorithm("DSA").build();
         args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);
@@ -1343,6 +1346,19 @@ public class SslTransportLayerTest {
         return new CertStores.Builder(isServer)
                 .cn(cn)
                 .usePem(useInlinePem);
+    }
+
+    /**
+     * Check if DSA algorithm is supported by the JVM.
+     * @return true if DSA KeyPairGenerator is available, false otherwise
+     */
+    private static boolean isDsaSupported() {
+        try {
+            java.security.KeyPairGenerator.getInstance("DSA");
+            return true;
+        } catch (java.security.NoSuchAlgorithmException e) {
+            return false;
+        }
     }
 
     @FunctionalInterface
