@@ -156,8 +156,10 @@ public class FeatureCommandTest {
             "SupportedMaxVersion: 4.1-IV1\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(featuresWithoutUnstable.get(3)));
         assertEquals("Feature: share.version\tSupportedMinVersion: 0\t" +
             "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(4)));
+        assertEquals("Feature: streams.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(5)));
         assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(5)));
+            "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(6)));
     }
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV3)
