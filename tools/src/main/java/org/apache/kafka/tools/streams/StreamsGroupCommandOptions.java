@@ -51,11 +51,12 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     private static final String OFFSETS_DOC = "Describe the group and list all topic partitions in the group along with their offset information." +
         "This is the default sub-action and may be used with the '--describe' option only.";
     private static final String RESET_OFFSETS_DOC = "Reset offsets of streams group. The instances should be inactive." + NL +
-        "Has 2 execution options: --dry-run (the default) to plan which offsets to reset, and --execute to update the offsets." + NL +
+        "Has 2 execution options: --dry-run to plan which offsets to reset, and --execute to update the offsets." + NL +
         "If you use --execute, all internal topics linked to the group will also be deleted." + NL +
         "You must choose one of the following reset specifications: --to-datetime, --by-duration, --to-earliest, " +
         "--to-latest, --shift-by, --from-file, --to-current, --to-offset." + NL +
-        "To define the scope use --all-input-topics or --input-topic. One scope must be specified unless you use '--from-file'.";
+        "To define the scope use --all-input-topics or --input-topic. One scope must be specified unless you use '--from-file'." + NL +
+        "Fails if neither '--dry-run' nor '–execute' is specified.";
     private static final String DRY_RUN_DOC = "Only show results without executing changes on streams group. Supported operations: reset-offsets.";
     private static final String EXECUTE_DOC = "Execute operation. Supported operations: reset-offsets.";
     private static final String EXPORT_DOC = "Export operation execution to a CSV file. Supported operations: reset-offsets.";
@@ -269,12 +270,8 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         if (options.has(dryRunOpt) && options.has(executeOpt))
             CommandLineUtils.printUsageAndExit(parser, "Option " + resetOffsetsOpt + " only accepts one of " + executeOpt + " and " + dryRunOpt);
 
-        if (!options.has(dryRunOpt) && !options.has(executeOpt)) {
-            System.err.println("WARN: No action will be performed as the --execute option is missing. " +
-                "In a future major release, the default behavior of this command will be to prompt the user before " +
-                "executing the reset rather than doing a dry run. You should add the --dry-run option explicitly " +
-                "if you are scripting this command and want to keep the current default behavior without prompting.");
-        }
+        if (!options.has(dryRunOpt) && !options.has(executeOpt))
+            CommandLineUtils.printUsageAndExit(parser, "Option " + resetOffsetsOpt + " takes the option: " + executeOpt + " or " + dryRunOpt);
 
         if (!options.has(groupOpt) && !options.has(allGroupsOpt))
             CommandLineUtils.printUsageAndExit(parser,
