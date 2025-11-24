@@ -27,9 +27,9 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{Disabled, Timeout}
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.MethodSource
+import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
 
 import java.util
 import java.util.Properties
@@ -181,9 +181,8 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     }
   }
 
-  @Disabled
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  @ValueSource(strings = Array("classic"))
   def testRackAwareRangeAssignor(groupProtocol: String): Unit = {
     val partitionList = brokers.indices.toList
 
@@ -235,6 +234,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
         val records = future.get(30, TimeUnit.SECONDS)
         assertEquals(assignments(i), records.map(r => new TopicPartition(r.topic, r.partition)).toSet)
       }
+      consumers.foreach{ consumer => consumer.commitSync() }
     }
 
 
