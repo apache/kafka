@@ -607,7 +607,7 @@ public class Sender implements Runnable {
                             p.errorMessage(),
                             p.currentLeader());
 
-                    // Version 13 drop topic name and add support to topic id.
+                    // Version 13 drops topic name, and supports topic id.
                     // We need to find batch based on topic id and partition index only as
                     // topic name in the response will be empty.
                     // For older versions, topic id is zero, and we will find the batch based on the topic name.

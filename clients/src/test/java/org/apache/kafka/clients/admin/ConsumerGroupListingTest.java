@@ -25,6 +25,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ConsumerGroupListingTest {
+    @SuppressWarnings({"deprecation", "removal"})
     @Test
     public void testState() {
         for (ConsumerGroupState consumerGroupState : ConsumerGroupState.values()) {

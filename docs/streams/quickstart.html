@@ -148,7 +148,7 @@ Created topic "streams-wordcount-output".</code></pre>
 
 The created topic can be described with the same <b>kafka-topics</b> tool:
 
-<pre><code class="language-bash">$ bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe
+<pre><code class="language-bash">$ bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --exclude-internal
 Topic:streams-wordcount-output	PartitionCount:1	ReplicationFactor:1	Configs:cleanup.policy=compact,segment.bytes=1073741824
 	Topic: streams-wordcount-output	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
 Topic:streams-plaintext-input	PartitionCount:1	ReplicationFactor:1	Configs:segment.bytes=1073741824
