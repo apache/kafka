@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer;
+package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -29,7 +29,7 @@ public enum ShareAcquireMode {
 
     public final String name;
 
-    public final byte id;
+    final byte id;
 
     ShareAcquireMode(final String name, final byte id) {
         this.name = name;

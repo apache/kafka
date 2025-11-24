@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.consumer.ShareAcquireMode;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementEvent;
