@@ -2018,7 +2018,14 @@ public class SharePartition {
      */
     private boolean shouldThrottleRecordsDelivery(InFlightBatch inFlightBatch, long requestFirstOffset, long requestLastOffset) {
         if (inFlightBatch.offsetState() == null) {
-            return inFlightBatch.batchDeliveryCount() >= throttleRecordsDeliveryLimit;
+            // If offsetState is null, it means the batch is not split and represents a single batch.
+            // Check if the batch is in AVAILABLE state and has no ongoing transition.
+            // The requested batch shall always be within the request first and last offset as the sub
+            // map batches are only fetched to consider.
+            if (inFlightBatch.batchState() == RecordState.AVAILABLE && !inFlightBatch.batchHasOngoingStateTransition()) {
+                return inFlightBatch.batchDeliveryCount() >= throttleRecordsDeliveryLimit;
+            }
+            return false;
         }
 
         return inFlightBatch.offsetState().entrySet().stream().filter(entry -> {
@@ -2028,10 +2035,7 @@ public class SharePartition {
             if (entry.getKey() > requestLastOffset) {
                 return false;
             }
-            if (entry.getValue().state() != RecordState.AVAILABLE) {
-                return false;
-            }
-            return true;
+            return entry.getValue().state() == RecordState.AVAILABLE && !entry.getValue().hasOngoingStateTransition();
         }).mapToInt(entry -> entry.getValue().deliveryCount()).max().orElse(0) >= throttleRecordsDeliveryLimit;
     }
 
