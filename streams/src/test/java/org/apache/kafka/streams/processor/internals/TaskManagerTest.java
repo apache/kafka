@@ -123,6 +123,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -3339,7 +3340,7 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         verify(activeTaskCreator).close();
-        verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        verify(stateUpdater).shutdown(Duration.ofMinutes(1L));
     }
 
     @Test
@@ -3369,7 +3370,29 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         verify(activeTaskCreator).close();
-        verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        verify(stateUpdater).shutdown(Duration.ofMinutes(1L));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldCloseTasksIfStateUpdaterTimesOutOnRemove() throws Exception {
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, null, false);
+        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
+                mkEntry(taskId00, taskId00Partitions)
+        );
+        final Task task00 = spy(new StateMachineTask(taskId00, taskId00Partitions, true, stateManager));
+
+        when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(singletonList(task00));
+        taskManager.handleAssignment(assignment, emptyMap());
+
+        when(stateUpdater.tasks()).thenReturn(singleton(task00));
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = mock(CompletableFuture.class);
+        when(stateUpdater.remove(eq(taskId00))).thenReturn(future);
+        when(future.get(anyLong(), any())).thenThrow(new java.util.concurrent.TimeoutException());
+
+        taskManager.shutdown(true);
+
+        verify(task00).closeDirty();
     }
 
     @Test
@@ -3513,7 +3536,7 @@ public class TaskManagerTest {
             .withInputPartitions(taskId00Partitions)
             .build();
 
-        when(stateUpdater.tasks()).thenReturn(Set.of(standbyTask00));
+        when(stateUpdater.tasks()).thenReturn(Set.of(standbyTask00)).thenReturn(Set.of());
         when(stateUpdater.standbyTasks()).thenReturn(Set.of(standbyTask00));
 
         final CompletableFuture<StateUpdater.RemovedTaskResult> futureForStandbyTask = new CompletableFuture<>();
@@ -3525,7 +3548,7 @@ public class TaskManagerTest {
 
         taskManager.shutdown(true);
 
-        verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        verify(stateUpdater).shutdown(Duration.ofMinutes(1L));
 
         verify(tasks).addTask(standbyTask00);
 
@@ -3550,13 +3573,14 @@ public class TaskManagerTest {
             .thenReturn(Arrays.asList(
                 new ExceptionAndTask(new RuntimeException(), failedStatefulTask),
                 new ExceptionAndTask(new RuntimeException(), failedStandbyTask))
-            );
+            )
+            .thenReturn(Collections.emptyList());
         final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
 
         taskManager.shutdown(true);
 
         verify(activeTaskCreator).close();
-        verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        verify(stateUpdater).shutdown(Duration.ofMinutes(1L));
         verify(failedStatefulTask).prepareCommit(false);
         verify(failedStatefulTask).suspend();
         verify(failedStatefulTask).closeDirty();
@@ -3569,7 +3593,7 @@ public class TaskManagerTest {
 
         taskManager.shutdown(true);
 
-        verify(schedulingTaskManager).shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        verify(schedulingTaskManager).shutdown(Duration.ofMinutes(5L));
     }
 
     @Test
@@ -3594,8 +3618,8 @@ public class TaskManagerTest {
                 removedFailedStatefulTask,
                 removedFailedStandbyTask,
                 removedFailedStatefulTaskDuringRemoval,
-                removedFailedStandbyTaskDuringRemoval
-            ));
+                removedFailedStandbyTaskDuringRemoval)
+            ).thenReturn(Collections.emptySet());
         final CompletableFuture<StateUpdater.RemovedTaskResult> futureForRemovedStatefulTask = new CompletableFuture<>();
         final CompletableFuture<StateUpdater.RemovedTaskResult> futureForRemovedStandbyTask = new CompletableFuture<>();
         final CompletableFuture<StateUpdater.RemovedTaskResult> futureForRemovedFailedStatefulTask = new CompletableFuture<>();
@@ -3610,10 +3634,11 @@ public class TaskManagerTest {
             .thenReturn(futureForRemovedFailedStatefulTaskDuringRemoval);
         when(stateUpdater.remove(removedFailedStandbyTaskDuringRemoval.id()))
             .thenReturn(futureForRemovedFailedStandbyTaskDuringRemoval);
-        when(stateUpdater.drainExceptionsAndFailedTasks()).thenReturn(Arrays.asList(
-            new ExceptionAndTask(new StreamsException("KABOOM!"), removedFailedStatefulTaskDuringRemoval),
-            new ExceptionAndTask(new StreamsException("KABOOM!"), removedFailedStandbyTaskDuringRemoval)
-        ));
+        when(stateUpdater.drainExceptionsAndFailedTasks())
+                .thenReturn(Arrays.asList(
+                    new ExceptionAndTask(new StreamsException("KABOOM!"), removedFailedStatefulTaskDuringRemoval),
+                    new ExceptionAndTask(new StreamsException("KABOOM!"), removedFailedStandbyTaskDuringRemoval))
+                ).thenReturn(Collections.emptyList());
         final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks);
         futureForRemovedStatefulTask.complete(new StateUpdater.RemovedTaskResult(removedStatefulTask));
         futureForRemovedStandbyTask.complete(new StateUpdater.RemovedTaskResult(removedStandbyTask));
@@ -3628,7 +3653,7 @@ public class TaskManagerTest {
 
         taskManager.shutdown(true);
 
-        verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        verify(stateUpdater).shutdown(Duration.ofMinutes(1L));
         verify(tasks).addTask(removedStatefulTask);
         verify(tasks).addTask(removedStandbyTask);
         verify(removedFailedStatefulTask).prepareCommit(false);

@@ -137,11 +137,14 @@
             <li>
                 LIST-type configurations now enforce stricter validation:
                 <ul>
-                    <li>Null values are no longer accepted for most LIST-type configurations, except those that explicitly
-                        allow a null default value or where a null value has a well-defined semantic meaning.</li>
-                    <li>Duplicate entries within the same list are no longer permitted.</li>
-                    <li>Empty lists are no longer allowed, except in configurations where an empty list has a well-defined
-                        semantic meaning.</li>
+                    <li>Null values are no longer accepted for most LIST-type configurations. Exceptions apply only to
+                        configurations that have null as their default value, as users cannot explicitly assign null values
+                        in configuration files.</li>
+                    <li>Most LIST-type configurations no longer accept duplicate entries, except in cases where duplicates
+                        are explicitly supported. For backward compatibility, if users configure duplicate entries when they
+                        are not accepted, duplicate entries will be ignored and a warning will be logged.</li>
+                    <li>For certain configurations, an empty list causes the system to malfunction. Therefore, empty
+                        lists are no longer allowed for those configurations.</li>
                 </ul>
             </li>
             <li>
