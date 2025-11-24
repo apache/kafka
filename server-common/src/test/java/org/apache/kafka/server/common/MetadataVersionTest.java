@@ -90,16 +90,15 @@ class MetadataVersionTest {
         assertEquals(IBP_4_1_IV0, MetadataVersion.fromVersionString("4.1-IV0", true));
         assertEquals(IBP_4_1_IV1, MetadataVersion.fromVersionString("4.1-IV1", true));
 
+        // 4.2-IV1 is the latest production version in the 4.2 line
+        assertEquals(IBP_4_2_IV1, MetadataVersion.fromVersionString("4.2", true));
         assertEquals(IBP_4_2_IV0, MetadataVersion.fromVersionString("4.2-IV0", true));
         assertEquals(IBP_4_2_IV1, MetadataVersion.fromVersionString("4.2-IV1", true));
 
         // Throws exception when unstableFeatureVersionsEnabled is false
-        assertEquals("Unknown metadata.version '4.2-IV0'. Supported metadata.version are: 3.3-IV3, 3.4-IV0, 3.5-IV0, 3.5-IV1, 3.5-IV2, "
-            + "3.6-IV0, 3.6-IV1, 3.6-IV2, 3.7-IV0, 3.7-IV1, 3.7-IV2, 3.7-IV3, 3.7-IV4, 3.8-IV0, 3.9-IV0, 4.0-IV0, 4.0-IV1, 4.0-IV2, 4.0-IV3, 4.1-IV0, 4.1-IV1",
-            assertThrows(IllegalArgumentException.class, () -> fromVersionString("4.2-IV0", false)).getMessage());
-        assertEquals("Unknown metadata.version '4.2-IV1'. Supported metadata.version are: 3.3-IV3, 3.4-IV0, 3.5-IV0, 3.5-IV1, 3.5-IV2, "
-                + "3.6-IV0, 3.6-IV1, 3.6-IV2, 3.7-IV0, 3.7-IV1, 3.7-IV2, 3.7-IV3, 3.7-IV4, 3.8-IV0, 3.9-IV0, 4.0-IV0, 4.0-IV1, 4.0-IV2, 4.0-IV3, 4.1-IV0, 4.1-IV1",
-            assertThrows(IllegalArgumentException.class, () -> fromVersionString("4.2-IV1", false)).getMessage());
+        assertEquals("Unknown metadata.version '4.3-IV0'. Supported metadata.version are: 3.3-IV3, 3.4-IV0, 3.5-IV0, 3.5-IV1, 3.5-IV2, "
+            + "3.6-IV0, 3.6-IV1, 3.6-IV2, 3.7-IV0, 3.7-IV1, 3.7-IV2, 3.7-IV3, 3.7-IV4, 3.8-IV0, 3.9-IV0, 4.0-IV0, 4.0-IV1, 4.0-IV2, 4.0-IV3, 4.1-IV0, 4.1-IV1, 4.2-IV0, 4.2-IV1",
+            assertThrows(IllegalArgumentException.class, () -> fromVersionString("4.3-IV0", false)).getMessage());
     }
 
     @Test
