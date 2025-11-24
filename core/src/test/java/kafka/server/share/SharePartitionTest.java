@@ -11591,7 +11591,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testAcquisitionThrottlingWithOnGoingStateTransition() {
+    public void testAcquisitionThrottlingWithOngoingStateTransition() {
         Persister persister = Mockito.mock(Persister.class);
         ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
         Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(List.of(
@@ -11661,7 +11661,6 @@ public class SharePartitionTest {
         // Acquire batches and batch 15-19, 25-29 will be acquired as batch 20-24 has pending state transition.
         // Without pending transition, the acquisition would have happened only for 20-24 batch as the batch
         // 20-24 would have marked to be throttled but eventually couldn't be acquired because of state transition.
-        // However, due to throttle check being incorrectly true the further batch of 25-29 would have been skipped.
         fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
                 ShareAcquireMode.BATCH_OPTIMIZED,

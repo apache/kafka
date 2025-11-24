@@ -2025,7 +2025,7 @@ public class SharePartition {
             if (inFlightBatch.batchState() == RecordState.AVAILABLE && !inFlightBatch.batchHasOngoingStateTransition()) {
                 return inFlightBatch.batchDeliveryCount() >= throttleRecordsDeliveryLimit;
             }
-            return  false;
+            return false;
         }
 
         return inFlightBatch.offsetState().entrySet().stream().filter(entry -> {
