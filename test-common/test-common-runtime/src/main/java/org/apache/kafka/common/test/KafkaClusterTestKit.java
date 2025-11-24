@@ -45,6 +45,9 @@ import org.apache.kafka.raft.DynamicVoters;
 import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.Feature;
+import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.fault.FaultHandler;
@@ -482,6 +485,17 @@ public class KafkaClusterTestKit implements AutoCloseable {
             formatter.setUnstableFeatureVersionsEnabled(true);
             formatter.setIgnoreFormatted(false);
             formatter.setControllerListenerName(controllerListenerName);
+
+            for (Feature feature : Feature.PRODUCTION_FEATURES) {
+                String featureName = feature.featureName();
+                if (featureName.equals(MetadataVersion.FEATURE_NAME) ||
+                    featureName.equals(KRaftVersion.FEATURE_NAME)) {
+                    continue;
+                }
+                short level = nodes.bootstrapMetadata().featureLevel(featureName);
+                formatter.setFeatureLevel(featureName, level);
+            }
+            
             if (writeMetadataDirectory) {
                 formatter.setMetadataLogDirectory(ensemble.metadataLogDir().get());
             } else {
@@ -489,7 +503,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             StringBuilder dynamicVotersBuilder = new StringBuilder();
             String prefix = "";
-            boolean writeBootstrapSnapshot = false;
             if (standalone) {
                 if (nodeId == TestKitDefaults.BROKER_ID_OFFSET + TestKitDefaults.CONTROLLER_ID_OFFSET) {
                     final var controllerNode = nodes.controllerNodes().get(nodeId);
@@ -507,7 +520,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 // when the nodeId != TestKitDefaults.CONTROLLER_ID_OFFSET, the node is formatting with
                 // the --no-initial-controllers flag
                 formatter.setHasDynamicQuorum(true);
-                writeBootstrapSnapshot = true;
             } else if (initialVoterSet.isPresent()) {
                 for (final var controllerNode : initialVoterSet.get().entrySet()) {
                     final var voterId = controllerNode.getKey();
@@ -526,9 +538,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 }
                 formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
                 formatter.setHasDynamicQuorum(true);
-                writeBootstrapSnapshot = true;
             }
-            formatter.setWriteBootstrapSnapshot(writeBootstrapSnapshot);
             formatter.run();
         } catch (Exception e) {
             throw new RuntimeException("Failed to format node " + ensemble.nodeId(), e);

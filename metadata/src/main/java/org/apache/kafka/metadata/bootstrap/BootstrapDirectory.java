@@ -70,7 +70,7 @@ public class BootstrapDirectory {
         }
         Path binaryBootstrapPath = Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME);
         if (!Files.exists(binaryBootstrapPath)) {
-            return null;
+            return readFromConfiguration();
         } else {
             return readFromBinaryFile(binaryBootstrapPath.toString());
         }
