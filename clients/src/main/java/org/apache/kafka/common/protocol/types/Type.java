@@ -80,14 +80,14 @@ public abstract class Type {
     }
 
     /**
-     * Start flag for special data structure
+     * For annotation in the generated html protocol doc.
      */
     public String leftBracket() {
         return "";
     }
 
     /**
-     * End flag for special data structure
+     * For annotation in the generated html protocol doc.
      */
     public String rightBracket() {
         return "";

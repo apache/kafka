@@ -37,16 +37,16 @@ public final class NullableSchema extends Schema {
 
     /**
      * Write a struct to the buffer with special handling for null values
-     * If the input object is null, writes a short value of -1 to the buffer as a null indicator.
+     * If the input object is null, writes a byte value of -1 to the buffer as a null indicator.
      */
     @Override
     public void write(ByteBuffer buffer, Object o) {
         if (o == null) {
-            buffer.putShort((short) -1);
+            buffer.put((byte) -1);
             return;
         }
 
-        buffer.putShort((short) 1);
+        buffer.put((byte) 1);
         super.write(buffer, o);
     }
 
@@ -62,9 +62,17 @@ public final class NullableSchema extends Schema {
     @Override
     public int sizeOf(Object o) {
         if (o == null)
-            return 2;
+            return 1;
 
-        return 2 + super.sizeOf(o);
+        return 1 + super.sizeOf(o);
+    }
+
+    @Override
+    public Struct validate(Object item) {
+        if (item == null)
+            return null;
+
+        return super.validate(item);
     }
 
     @Override
@@ -84,10 +92,10 @@ public final class NullableSchema extends Schema {
     
     @Override
     public String documentation() {
-        return "A struct is named by a string with a capitalized first letter and consists of one or more fields. " +
+        return "A nullable struct is named by a string with a capitalized first letter and consists of one or more fields. " +
             "It represents a composite object or null. " +
-            "For non-null values, the first byte is an INT8 with value 1, " +
+            "For non-null values, the first byte has value 1, " +
             "followed by the serialization of each field in the order they are defined. " +
-            "A null value is encoded as an INT8 with value -1 and there are no following bytes.";
+            "A null value is encoded as a byte with value -1 and there are no following bytes.";
     }
 }
