@@ -234,7 +234,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
         val records = future.get(30, TimeUnit.SECONDS)
         assertEquals(assignments(i), records.map(r => new TopicPartition(r.topic, r.partition)).toSet)
       }
-      consumers.foreach{ consumer => consumer.commitSync() }
+      consumers.foreach{ _.commitSync() }
     }
 
 
