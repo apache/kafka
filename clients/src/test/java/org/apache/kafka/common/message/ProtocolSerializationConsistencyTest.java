@@ -33,7 +33,7 @@ import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class MessageSerializationConsistencyTest {
+public class ProtocolSerializationConsistencyTest {
 
     private Struct nonFlexibleStruct;
 
