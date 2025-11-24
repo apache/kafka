@@ -330,13 +330,9 @@ class OffsetValidationTest(VerifiableConsumerTest):
                        timeout_sec=10,
                        err_msg="Timed out waiting for the fenced consumers to stop")
             else:
-                self.logger.debug("Members status - Joined [%d/%d]: %s, Not joined: %s",
-                                  len(consumer.joined_nodes()),
-                                  len(consumer.nodes),
-                                  " ".join(str(node.account) for node in consumer.joined_nodes()),
-                                  " ".join(
-                                      set(str(node.account) for node in consumer.nodes) - set(consumer.joined_nodes())))
-
+                # Consumer protocol: Existing members should remain active and new conflicting ones should not be able to join.
+                self.await_consumed_messages(consumer)
+                assert num_rebalances == consumer.num_rebalances(), "Static consumers attempt to join with instance id in use should not cause a rebalance"
                 try:
                     assert len(consumer.joined_nodes()) == len(consumer.nodes)
                 except AssertionError:
