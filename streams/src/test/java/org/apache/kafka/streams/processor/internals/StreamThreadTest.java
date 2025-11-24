@@ -1196,7 +1196,6 @@ public class StreamThreadTest {
             new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
-        stateDirectory = new StateDirectory(config, mockTime, true, false);
 
         final TaskManager taskManager = new TaskManager(
             new MockTime(),
@@ -1208,7 +1207,7 @@ public class StreamThreadTest {
             new Tasks(new LogContext()),
             topologyMetadata,
             null,
-            stateDirectory,
+            null,
             stateUpdater,
             schedulingTaskManager
         ) {
