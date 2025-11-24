@@ -118,7 +118,7 @@ public enum MetadataVersion {
     IBP_4_2_IV0(28, "4.2", "IV0", false),
 
     // Enables "streams" groups by default for new clusters (KIP-1071).
-    IBP_4_2_IV1(29, "4.2", "IV1", false),
+    IBP_4_2_IV1(29, "4.2", "IV1", false);
 
     //
     // NOTE: MetadataVersions after this point are unstable and may be changed.
@@ -126,9 +126,6 @@ public enum MetadataVersion {
     // they have set the configuration unstable.feature.versions.enable=true.
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
-
-    // Placeholder testing level for 4.3.
-    IBP_4_3_IV0(30, "4.3", "IV0", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -375,7 +372,8 @@ public enum MetadataVersion {
 
     // Testing only
     public static MetadataVersion latestTesting() {
-        return VERSIONS[VERSIONS.length - 1];
+        // There is no separate testing version because all features are currently stable.
+        return LATEST_PRODUCTION;
     }
 
     public static MetadataVersion latestProduction() {

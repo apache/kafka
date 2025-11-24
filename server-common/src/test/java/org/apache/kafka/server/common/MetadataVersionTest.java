@@ -19,6 +19,7 @@ package org.apache.kafka.server.common;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -248,6 +249,8 @@ class MetadataVersionTest {
         assertEquals(expectedVersion, metadataVersion.registerBrokerRecordVersion());
     }
 
+    // This test is disabled because all features are stable in Apache Kafka 4.2.
+    @Disabled
     @Test
     public void assertLatestProductionIsLessThanLatest() {
         assertTrue(LATEST_PRODUCTION.ordinal() < MetadataVersion.latestTesting().ordinal(),
@@ -272,6 +275,8 @@ class MetadataVersionTest {
         assertTrue(LATEST_PRODUCTION.isProduction());
     }
 
+    // This test is disabled because all features are stable in Apache Kafka 4.2.
+    @Disabled
     @Test
     public void assertLatestIsNotProduction() {
         assertFalse(MetadataVersion.latestTesting().isProduction());

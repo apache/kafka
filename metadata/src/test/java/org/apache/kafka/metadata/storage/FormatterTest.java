@@ -40,6 +40,7 @@ import org.apache.kafka.server.common.TestFeatureVersion;
 import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -273,6 +274,8 @@ public class FormatterTest {
         }
     }
 
+    // This test is disabled because all features are stable in Apache Kafka 4.2.
+    @Disabled
     @Test
     public void testFormatWithUnstableReleaseVersionFailsWithoutEnableUnstable() throws Exception {
         try (TestEnv testEnv = new TestEnv(1)) {
