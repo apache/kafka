@@ -490,6 +490,15 @@ public class SharePartition {
                         throwable = new IllegalStateException(String.format("Failed to initialize the share partition %s-%s", groupId, topicIdPartition));
                         return;
                     }
+
+                    if (stateBatch.lastOffset() < stateBatch.firstOffset()) {
+                        log.error("Invalid state batch found for the share partition: {}-{}. The first offset: {}"
+                                + " is less than the last offset of the batch: {}.", groupId, topicIdPartition,
+                            stateBatch.firstOffset(), stateBatch.lastOffset());
+                        throwable = new IllegalStateException(String.format("Failed to initialize the share partition %s-%s", groupId, topicIdPartition));
+                        return;
+                    }
+
                     if (gapStartOffset == -1 && stateBatch.firstOffset() > previousBatchLastOffset + 1) {
                         gapStartOffset = previousBatchLastOffset + 1;
                     }
