@@ -146,6 +146,11 @@
         More details can be found in <a href="https://cwiki.apache.org/confluence/x/ywnxFg">KIP-1216</a>.
     </p>
 
+    <p>
+        The <code>application-id</code> tag is now available for the Kafka Streams client state metric (<code>client-state</code>).
+        More details can be found in <a href="https://cwiki.apache.org/confluence/x/jQobFw">KIP-1221</a>.
+    </p>
+
     <h3><a id="streams_api_changes_410" href="#streams_api_changes_410">Streams API changes in 4.1.0</a></h3>
 
     <p><b>Note:</b> Kafka Streams 4.1.0 contains a critical memory leak bug (<a href="https://issues.apache.org/jira/browse/KAFKA-19748">KAFKA-19748</a>) that affects users of range scans and certain DSL operators (session windows, sliding windows, stream-stream joins, foreign-key joins). Users running Kafka Streams should consider upgrading directly to 4.1.1, which includes the fix for it.</p>
