@@ -161,6 +161,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     // it'll set to rebalance timeout so that the member can join the group successfully
     // even though offset commit failed.
     private Timer joinPrepareTimer = null;
+    private final CommittedOffsetCache committedOffsetCache;
 
     /**
      * Initialize the coordination manager.
@@ -178,7 +179,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                int autoCommitIntervalMs,
                                ConsumerInterceptors<?, ?> interceptors,
                                boolean throwOnFetchStableOffsetsUnsupported,
-                               Optional<ClientTelemetryReporter> clientTelemetryReporter) {
+                               Optional<ClientTelemetryReporter> clientTelemetryReporter,
+                               CommittedOffsetCache committedOffsetCache) {
         this(rebalanceConfig,
             logContext,
             client,
@@ -193,7 +195,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             interceptors,
             throwOnFetchStableOffsetsUnsupported,
             clientTelemetryReporter,
-            Optional.empty());
+            Optional.empty(),
+            committedOffsetCache);
     }
 
     /**
@@ -214,7 +217,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                ConsumerInterceptors<?, ?> interceptors,
                                boolean throwOnFetchStableOffsetsUnsupported,
                                Optional<ClientTelemetryReporter> clientTelemetryReporter,
-                               Optional<Supplier<BaseHeartbeatThread>> heartbeatThreadSupplier) {
+                               Optional<Supplier<BaseHeartbeatThread>> heartbeatThreadSupplier,
+                               CommittedOffsetCache committedOffsetCache) {
         super(rebalanceConfig,
               logContext,
               client,
@@ -276,9 +280,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             logContext,
             subscriptions,
             time,
-            new RebalanceCallbackMetricsManager(metrics, metricGrpPrefix)
+            new RebalanceCallbackMetricsManager(metrics, metricGrpPrefix),
+            committedOffsetCache
         );
         this.metadata.requestUpdate(true);
+        this.committedOffsetCache = committedOffsetCache;
     }
 
     // package private for testing
@@ -1046,12 +1052,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     public RequestFuture<Void> commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
+        return commitOffsetsAsync(offsets, callback, false);
+    }
+
+    private RequestFuture<Void> commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback, boolean autoCommit) {
         invokeCompletedOffsetCommitCallbacks();
 
         RequestFuture<Void> future = null;
         if (offsets.isEmpty()) {
             // No need to check coordinator if offsets is empty since commit of empty offsets is completed locally.
-            future = doCommitOffsetsAsync(offsets, callback);
+            future = doCommitOffsetsAsync(offsets, callback, autoCommit);
         } else if (!coordinatorUnknownAndUnreadyAsync()) {
             // we need to make sure coordinator is ready before committing, since
             // this is for async committing we do not try to block, but just try once to
@@ -1063,7 +1073,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // it's not known or ready, since this is the only place we can send such request
             // under manual assignment (there we would not have heartbeat thread trying to auto-rediscover
             // the coordinator).
-            future = doCommitOffsetsAsync(offsets, callback);
+            future = doCommitOffsetsAsync(offsets, callback, autoCommit);
         } else {
             // we don't know the current coordinator, so try to find it and then send the commit
             // or fail (we don't want recursive retries which can cause offset commits to arrive
@@ -1076,7 +1086,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 @Override
                 public void onSuccess(Void value) {
                     pendingAsyncCommits.decrementAndGet();
-                    doCommitOffsetsAsync(offsets, callback);
+                    doCommitOffsetsAsync(offsets, callback, autoCommit);
                     client.pollNoWakeup();
                 }
 
@@ -1096,8 +1106,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return future;
     }
 
-    private RequestFuture<Void> doCommitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
-        RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
+    private RequestFuture<Void> doCommitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                                     final OffsetCommitCallback callback, final boolean autoCommit) {
+        RequestFuture<Void> future;
+        // the async commit of classic consumer maybe parallel sending, so we should ensure that
+        // all the commits have finished, otherwise, the cache becomes invalid
+        if (autoCommit && inFlightAsyncCommits.get() == 0 && committedOffsetCache.isHitCache(offsets)) {
+            future = RequestFuture.voidSuccess();
+        } else {
+            future = sendOffsetCommitRequest(offsets);
+        }
         inFlightAsyncCommits.incrementAndGet();
         final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
         future.addListener(new RequestFutureListener<>() {
@@ -1242,7 +1260,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             } else {
                 log.debug("Completed asynchronous auto-commit of offsets {}", offsets);
             }
-        });
+        }, true);
     }
 
     private RequestFuture<Void> maybeAutoCommitOffsetsAsync() {
@@ -1367,6 +1385,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                     Errors error = Errors.forCode(partition.errorCode());
                     if (error == Errors.NONE) {
+                        committedOffsetCache.tryAddToCache(tp, offsetAndMetadata);
                         log.debug("Committed offset {} for partition {}", offset, tp);
                     } else {
                         if (error.exception() instanceof RetriableException) {

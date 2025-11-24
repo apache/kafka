@@ -154,7 +154,8 @@ public class CommitRequestManagerTest {
                 retryBackoffMaxMs,
                 OptionalDouble.of(0),
                 metrics,
-                metadata);
+                metadata,
+                new CommittedOffsetCache(subscriptionState));
 
         commitRequestManager.onMemberEpochUpdated(Optional.of(1), Uuid.randomUuid().toString());
         Set<TopicPartition> requestedPartitions = Collections.singleton(new TopicPartition("topic-1", 1));
@@ -1770,7 +1771,8 @@ public class CommitRequestManagerTest {
                 retryBackoffMaxMs,
                 OptionalDouble.of(0),
                 metrics,
-                metadata));
+                metadata,
+                new CommittedOffsetCache(subscriptionState)));
     }
 
     private ClientResponse buildOffsetFetchClientResponse(

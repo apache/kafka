@@ -152,6 +152,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
+    // cache of committed offset
+    private final CommittedOffsetCache committedOffsetCache;
 
     ClassicKafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
         try {
@@ -183,6 +185,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.interceptors = new ConsumerInterceptors<>(interceptorList, metrics);
             this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer, metrics);
             this.subscriptions = createSubscriptionState(config, logContext);
+            this.committedOffsetCache = new CommittedOffsetCache(subscriptions);
             ClusterResourceListeners clusterResourceListeners = ClientUtils.configureClusterResourceListeners(
                     metrics.reporters(),
                     interceptorList,
@@ -230,7 +233,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                         config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
                         this.interceptors,
                         config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED),
-                        clientTelemetryReporter);
+                        clientTelemetryReporter,
+                        committedOffsetCache);
             }
             this.fetcher = new Fetcher<>(
                     logContext,
@@ -302,6 +306,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.clientTelemetryReporter = Optional.empty();
+        this.committedOffsetCache = new CommittedOffsetCache(subscriptions);
 
         int sessionTimeoutMs = config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG);
         int rebalanceTimeoutMs = config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
@@ -347,7 +352,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 autoCommitIntervalMs,
                 interceptors,
                 throwOnStableOffsetNotSupported,
-                clientTelemetryReporter
+                clientTelemetryReporter,
+                committedOffsetCache
             );
         } else {
             this.coordinator = null;

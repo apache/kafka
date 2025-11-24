@@ -2224,7 +2224,8 @@ public class ConsumerMembershipManagerTest {
                 new LogContext(),
                 subscriptionState,
                 time,
-                new RebalanceCallbackMetricsManager(new Metrics(time))
+                new RebalanceCallbackMetricsManager(new Metrics(time)),
+                new CommittedOffsetCache(subscriptionState)
         );
     }
 

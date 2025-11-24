@@ -17,6 +17,8 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ClientsTestUtils;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -35,15 +37,19 @@ import org.junit.jupiter.api.BeforeEach;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.clients.ClientsTestUtils.awaitAssignment;
 import static org.apache.kafka.clients.ClientsTestUtils.consumeAndVerifyRecords;
 import static org.apache.kafka.clients.ClientsTestUtils.sendRecords;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
@@ -77,6 +83,9 @@ public class PlaintextConsumerCommitTest {
     private final String topic = "topic";
     private final TopicPartition tp = new TopicPartition(topic, 0);
     private final TopicPartition tp1 = new TopicPartition(topic, 1);
+    private final String cacheTopic = "cache-topic-test";
+    private final String cacheGroup = "cache-group-test";
+    private final TopicPartition cacheTopicPartition = new TopicPartition(cacheTopic, 0);
 
     public PlaintextConsumerCommitTest(ClusterInstance clusterInstance) {
         this.cluster = clusterInstance;
@@ -555,11 +564,15 @@ public class PlaintextConsumerCommitTest {
     }
 
     private Consumer<byte[], byte[]> createConsumer(GroupProtocol protocol, boolean enableAutoCommit) {
-        return cluster.consumer(Map.of(
-            GROUP_ID_CONFIG, "test-group",
-            GROUP_PROTOCOL_CONFIG, protocol.name().toLowerCase(Locale.ROOT),
-            ENABLE_AUTO_COMMIT_CONFIG, enableAutoCommit
-        ));
+        return createConsumer(protocol, enableAutoCommit, Map.of(GROUP_ID_CONFIG, "test-group"));
+    }
+
+    private Consumer<byte[], byte[]> createConsumer(GroupProtocol protocol, boolean enableAutoCommit, Map<String, String> properties) {
+        Map<String, Object> consumerProperties = new HashMap<>();
+        consumerProperties.put(GROUP_PROTOCOL_CONFIG, protocol.name().toLowerCase(Locale.ROOT));
+        consumerProperties.put(ENABLE_AUTO_COMMIT_CONFIG, enableAutoCommit);
+        consumerProperties.putAll(properties);
+        return cluster.consumer(consumerProperties);
     }
 
     private void sendAndAwaitAsyncCommit(
@@ -632,5 +645,277 @@ public class PlaintextConsumerCommitTest {
     ) throws InterruptedException {
         consumer.subscribe(topicsToSubscribe, rebalanceListener);
         awaitAssignment(consumer, expectedAssignment);
+    }
+
+    @ClusterTest
+    public void testAutoCommitHitOffsetCacheForClassic() throws InterruptedException {
+        testAutoCommitHitOffsetCache(GroupProtocol.CLASSIC.name);
+    }
+
+    @ClusterTest
+    public void testAutoCommitHitOffsetCacheForConsumer() throws InterruptedException {
+        testAutoCommitHitOffsetCache(GroupProtocol.CONSUMER.name);
+    }
+
+    private void testAutoCommitHitOffsetCache(String groupProtocol) throws InterruptedException {
+        var consumerProperties = Map.of(GROUP_ID_CONFIG, cacheGroup, AUTO_COMMIT_INTERVAL_MS_CONFIG, "100");
+        try (Producer<byte[], byte[]> producer = cluster.producer();
+             var consumer = createConsumer(GroupProtocol.of(groupProtocol), true, consumerProperties);
+             var admin = cluster.admin()) {
+
+            int sendRecordNum = 5;
+            cluster.createTopic(cacheTopic, 1, (short) BROKER_COUNT);
+            sendRecords(producer, cacheTopicPartition, sendRecordNum, System.currentTimeMillis());
+
+            consumer.subscribe(Collections.singleton(cacheTopic));
+            consumeTargetRecordsAndCommitOffset(consumer, sendRecordNum);
+
+            final long consumerOffsetLEO = queryLatestOffsetOfGroupInConsumerOffsetsPartition(admin);
+            assertTrue(consumerOffsetLEO > 0L);
+
+            // case 1: cache NOT hit. Because the records are continuously growing, so the cache will not be hit
+            for (int i = 0; i < 5; i++) {
+                sendRecords(producer, cacheTopicPartition, 1, System.currentTimeMillis());
+                final long expectOffset = consumerOffsetLEO + i + 1;
+                TestUtils.waitForCondition(() -> {
+                    consumer.poll(Duration.ofMillis(500));
+                    long consumerOffsetTmpLEO = queryLatestOffsetOfGroupInConsumerOffsetsPartition(admin);
+                    return consumerOffsetTmpLEO == expectOffset;
+                }, "The offset in `__consumer_offsets` does not match");
+            }
+
+            // case 2: cache hit. The records no longer grow, so all of them hit the cache, and the LEO of __consumer_offsets did not increase
+            consumer.commitSync();
+            long consumerOffsetLEO2 = queryLatestOffsetOfGroupInConsumerOffsetsPartition(admin);
+            for (int i = 0; i < 5; i++) {
+                consumer.poll(Duration.ofMillis(500));
+            }
+            long consumerOffsetLatestLEO = queryLatestOffsetOfGroupInConsumerOffsetsPartition(admin);
+            assertEquals(consumerOffsetLEO2, consumerOffsetLatestLEO);
+        }
+    }
+
+    private void consumeTargetRecordsAndCommitOffset(Consumer<byte[], byte[]> consumer, int recordNum) {
+        // consume to the target record number
+        int consumedRecords = 0;
+        while (consumedRecords < recordNum) {
+            ConsumerRecords<byte[], byte[]> consumerRecords = consumer.poll(Duration.ofMillis(100));
+            consumedRecords += consumerRecords.count();
+        }
+
+        // ensure all the partition offsets have committed to broker
+        consumer.poll(Duration.ofMillis(100));
+        consumer.commitSync();
+    }
+
+    private long queryLatestOffsetOfGroupInConsumerOffsetsPartition(Admin admin) {
+        try {
+            TopicPartition topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0);
+            return admin.listOffsets(Map.of(topicPartition, OffsetSpec.latest())).all().get().get(topicPartition).offset();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @ClusterTest
+    public void testManualCommitAndCacheDoesNotTakeEffectForClassic() throws InterruptedException {
+        testManualCommitAndCacheDoesNotTakeEffect(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testManualCommitAndCacheDoesNotTakeEffectForConsumer() throws InterruptedException {
+        testManualCommitAndCacheDoesNotTakeEffect(GroupProtocol.CONSUMER);
+    }
+
+    private void testManualCommitAndCacheDoesNotTakeEffect(GroupProtocol groupProtocol) throws InterruptedException {
+        var consumerProperties = Map.of(
+                GROUP_ID_CONFIG, cacheGroup,
+                AUTO_COMMIT_INTERVAL_MS_CONFIG, "100",
+                INTERCEPTOR_CLASSES_CONFIG, OffsetCommitConsumerInterceptor.class.getName());
+        OffsetCommitConsumerInterceptor.clear();
+
+        try (Producer<byte[], byte[]> producer = cluster.producer();
+             var consumer = createConsumer(groupProtocol, false, consumerProperties);
+             var admin = cluster.admin()) {
+
+            int sendRecordNum = 20;
+            cluster.createTopic(cacheTopic, 1, (short) BROKER_COUNT);
+            sendRecords(producer, cacheTopicPartition, sendRecordNum, System.currentTimeMillis());
+
+            consumer.subscribe(Collections.singleton(cacheTopic));
+            consumeTargetRecordsAndCommitOffset(consumer, sendRecordNum);
+
+            // test the sync and async mode
+            testCacheWillNotTakeEffectWhenManualCommit(consumer, admin);
+        }
+    }
+
+    public static class OffsetCommitConsumerInterceptor implements ConsumerInterceptor<byte[], byte[]> {
+        private static final AtomicInteger COMMIT_COUNTER = new AtomicInteger(0);
+
+        @Override
+        public ConsumerRecords<byte[], byte[]> onConsume(ConsumerRecords<byte[], byte[]> records) {
+            return records;
+        }
+
+        @Override
+        public void onCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+            COMMIT_COUNTER.incrementAndGet();
+        }
+
+        @Override
+        public void close() {
+
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+        }
+
+        public static void clear() {
+            COMMIT_COUNTER.set(0);
+        }
+
+        public static int commitCount() {
+            return COMMIT_COUNTER.get();
+        }
+    }
+
+    @ClusterTest
+    public void testAssignModeAndCacheDoesNotTakeEffectForClassic() throws InterruptedException {
+        testAssignModeAndCacheDoesNotTakeEffect(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAssignModeAndCacheDoesNotTakeEffectForConsumer() throws InterruptedException {
+        testAssignModeAndCacheDoesNotTakeEffect(GroupProtocol.CONSUMER);
+    }
+
+    private void testAssignModeAndCacheDoesNotTakeEffect(GroupProtocol protocol) throws InterruptedException {
+        var consumerProperties = Map.of(
+                GROUP_ID_CONFIG, cacheGroup,
+                AUTO_COMMIT_INTERVAL_MS_CONFIG, "100",
+                INTERCEPTOR_CLASSES_CONFIG, OffsetCommitConsumerInterceptor.class.getName());
+        OffsetCommitConsumerInterceptor.clear();
+
+        try (Producer<byte[], byte[]> producer = cluster.producer();
+             var consumer = createConsumer(protocol, false, consumerProperties);
+             var autoCommitConsumer = createConsumer(protocol, true, consumerProperties);
+             var admin = cluster.admin()) {
+
+            // send some records
+            int sendRecordNum = 20;
+            cluster.createTopic(cacheTopic, 1, (short) BROKER_COUNT);
+            sendRecords(producer, cacheTopicPartition, sendRecordNum, System.currentTimeMillis());
+
+            // take assign mode
+            consumer.assign(Collections.singleton(cacheTopicPartition));
+
+            // test the sync and async mode
+            testCacheWillNotTakeEffectWhenManualCommit(consumer, admin);
+
+            // test the AUTO commit mode, the cache will not take effect
+            autoCommitConsumer.assign(Collections.singleton(cacheTopicPartition));
+            for (int i = 0; i < 10; i++) {
+                long consumerOffsetLEO = queryLatestOffsetOfGroupInConsumerOffsetsPartition(admin);
+                int commitCount = OffsetCommitConsumerInterceptor.commitCount();
+                while (OffsetCommitConsumerInterceptor.commitCount() != commitCount + 1) {
+                    autoCommitConsumer.poll(Duration.ofMillis(10));
+                }
+                long newConsumerOffsetLEO = queryLatestOffsetOfGroupInConsumerOffsetsPartition(admin);
+                assertEquals(consumerOffsetLEO + 1, newConsumerOffsetLEO);
+            }
+        }
+    }
+
+    private void testCacheWillNotTakeEffectWhenManualCommit(Consumer<byte[], byte[]> consumer, Admin admin) {
+        // first commit the offset
+        consumer.commitSync(Map.of(cacheTopicPartition, new OffsetAndMetadata(1L)));
+        assertTrue(queryLatestOffsetOfGroupInConsumerOffsetsPartition(admin) > 0L);
+
+        // test the SYNC commit mode, the cache will not take effect
+        for (int i = 0; i < 10; i++) {
+            long consumerOffsetLEO = queryLatestOffsetOfGroupInConsumerOffsetsPartition(admin);
+            consumer.commitSync(Map.of(cacheTopicPartition, new OffsetAndMetadata(1L)));
+            long newConsumerOffsetLEO = queryLatestOffsetOfGroupInConsumerOffsetsPartition(admin);
+            assertEquals(consumerOffsetLEO + 1, newConsumerOffsetLEO);
+        }
+
+        // test the ASYNC commit mode, the cache will not take effect
+        for (int i = 0; i < 10; i++) {
+            long consumerOffsetLEO = queryLatestOffsetOfGroupInConsumerOffsetsPartition(admin);
+            int commitCount = OffsetCommitConsumerInterceptor.commitCount();
+            consumer.commitAsync(Map.of(cacheTopicPartition, new OffsetAndMetadata(1L)), null);
+            while (OffsetCommitConsumerInterceptor.commitCount() != commitCount + 1) {
+                consumer.poll(Duration.ofMillis(100));
+            }
+            long newConsumerOffsetLEO = queryLatestOffsetOfGroupInConsumerOffsetsPartition(admin);
+            assertEquals(consumerOffsetLEO + 1, newConsumerOffsetLEO);
+        }
+    }
+
+    @ClusterTest
+    public void testCacheWillClearWhenRebalanceForClassic() throws InterruptedException {
+        testCacheWillClearWhenRebalance(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testCacheWillClearWhenRebalanceForConsumer() throws InterruptedException {
+        testCacheWillClearWhenRebalance(GroupProtocol.CONSUMER);
+    }
+
+    private void testCacheWillClearWhenRebalance(GroupProtocol groupProtocol) throws InterruptedException {
+        AtomicInteger rebalanceTimes = new AtomicInteger();
+        Semaphore revokedSemaphore = new Semaphore(0);
+        var rebalanceListener = new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                rebalanceTimes.incrementAndGet();
+            }
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                revokedSemaphore.release();
+            }
+        };
+
+        var consumerProperties = Map.of(GROUP_ID_CONFIG, cacheGroup, AUTO_COMMIT_INTERVAL_MS_CONFIG, "5000");
+        try (Producer<byte[], byte[]> producer = cluster.producer();
+             var consumer = createConsumer(GroupProtocol.of(groupProtocol.name), true, consumerProperties);
+             var admin = cluster.admin()) {
+
+            // Send some records, then start a consumer, followed by consuming all the records and committing the offsets
+            int sendRecordNum = 5;
+            sendRecords(producer, tp, sendRecordNum, System.currentTimeMillis());
+            sendRecords(producer, tp1, sendRecordNum, System.currentTimeMillis());
+            consumer.subscribe(Collections.singleton(topic), rebalanceListener);
+            consumeTargetRecordsAndCommitOffset(consumer, sendRecordNum * 2);
+
+            // Start another consumer, then ensure that after a rebalance occurs, shut down this consumer
+            var otherConsumer = createConsumer(GroupProtocol.of(groupProtocol.name), false, consumerProperties);
+            otherConsumer.subscribe(Collections.singleton(topic));
+            while (!revokedSemaphore.tryAcquire()) {
+                consumer.poll(Duration.ofMillis(100));
+                otherConsumer.poll(Duration.ofMillis(100));
+            }
+            otherConsumer.unsubscribe();
+            otherConsumer.close();
+
+            // Ensure that a total of 3 rebalances occur:
+            // 1. The first consumer starts
+            // 2. The second consumer starts
+            // 3. The second consumer shuts down
+            while (rebalanceTimes.get() != 3) {
+                consumer.poll(Duration.ofMillis(100));
+            }
+
+            // The cache has already become invalid; therefore, the subsequent consumption logic will cause the
+            // offset in `__consumer_offsets` to increase by 2 (for 2 partitions).
+            long consumerOffsetLEO = queryLatestOffsetOfGroupInConsumerOffsetsPartition(admin);
+            TestUtils.waitForCondition(() -> {
+                consumer.poll(Duration.ofMillis(500));
+                long consumerOffsetTmpLEO = queryLatestOffsetOfGroupInConsumerOffsetsPartition(admin);
+                return consumerOffsetTmpLEO == consumerOffsetLEO + 2;
+            }, "The offset in `__consumer_offsets` does not match");
+        }
     }
 }
