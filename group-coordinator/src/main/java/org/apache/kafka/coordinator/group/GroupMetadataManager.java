@@ -8271,7 +8271,7 @@ public class GroupMetadataManager {
         List<CoordinatorRecord> records
     ) {
         group.createGroupTombstoneRecords(records);
-        timer.cancel(streamsInitialRebalanceKey(group.groupId()));
+        group.cancelTimers(timer);
     }
 
     /**
