@@ -57,7 +57,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -97,7 +96,7 @@ public abstract class RestServer {
     private final Server jettyServer;
     private final RequestTimeout requestTimeout;
 
-    private List<Plugin<ConnectRestExtension>> connectRestExtensionPlugins = Collections.emptyList();
+    private List<Plugin<ConnectRestExtension>> connectRestExtensionPlugins = List.of();
 
     /**
      * Create a REST server for this herder using the specified configs.

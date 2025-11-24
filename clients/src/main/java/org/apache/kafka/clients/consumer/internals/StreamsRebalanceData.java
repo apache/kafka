@@ -30,6 +30,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -329,6 +330,8 @@ public class StreamsRebalanceData {
 
     private final AtomicReference<List<StreamsGroupHeartbeatResponseData.Status>> statuses = new AtomicReference<>(List.of());
 
+    private final AtomicInteger heartbeatIntervalMs = new AtomicInteger(-1);
+
     public StreamsRebalanceData(final UUID processId,
                                 final Optional<HostInfo> endpoint,
                                 final Map<String, Subtopology> subtopologies,
@@ -393,6 +396,16 @@ public class StreamsRebalanceData {
     /** For communicating the current status of the group to the stream thread */
     public List<StreamsGroupHeartbeatResponseData.Status> statuses() {
         return statuses.get();
+    }
+
+    /** Updated whenever a heartbeat response is received from the broker. */
+    public void setHeartbeatIntervalMs(final int heartbeatIntervalMs) {
+        this.heartbeatIntervalMs.set(heartbeatIntervalMs);
+    }
+
+    /** Returns the heartbeat interval in milliseconds, or -1 if not yet set. */
+    public int heartbeatIntervalMs() {
+        return heartbeatIntervalMs.get();
     }
 
 }

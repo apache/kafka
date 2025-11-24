@@ -2563,7 +2563,7 @@ public class DistributedHerderTest {
 
     @Test
     public void testKeyRotationWhenWorkerBecomesLeader() {
-        long rotationTtlDelay = DistributedConfig.INTER_WORKER_KEY_TTL_MS_MS_DEFAULT;
+        long rotationTtlDelay = DistributedConfig.INTER_WORKER_KEY_TTL_MS_DEFAULT;
         when(member.memberId()).thenReturn("member");
         when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V2);
 
@@ -2616,7 +2616,7 @@ public class DistributedHerderTest {
 
     @Test
     public void testKeyRotationDisabledWhenWorkerBecomesFollower() {
-        long rotationTtlDelay = DistributedConfig.INTER_WORKER_KEY_TTL_MS_MS_DEFAULT;
+        long rotationTtlDelay = DistributedConfig.INTER_WORKER_KEY_TTL_MS_DEFAULT;
         when(member.memberId()).thenReturn("member");
         when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V2);
 

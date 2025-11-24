@@ -20,7 +20,6 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TopicCreationConfig;
 
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +63,7 @@ public class TopicCreationGroup {
      */
     public static Map<String, TopicCreationGroup> configuredGroups(SourceConnectorConfig config) {
         if (!config.usesTopicCreation()) {
-            return Collections.emptyMap();
+            return Map.of();
         }
         List<String> groupNames = config.getList(TOPIC_CREATION_GROUPS_CONFIG);
         Map<String, TopicCreationGroup> groups = new LinkedHashMap<>();

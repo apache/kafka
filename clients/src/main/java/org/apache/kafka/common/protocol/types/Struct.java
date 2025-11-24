@@ -16,15 +16,9 @@
  */
 package org.apache.kafka.common.protocol.types;
 
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.record.BaseRecords;
-
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
-
-import static org.apache.kafka.common.protocol.MessageUtil.UNSIGNED_INT_MAX;
-import static org.apache.kafka.common.protocol.MessageUtil.UNSIGNED_SHORT_MAX;
 
 /**
  * A record that can be serialized and deserialized according to a pre-defined schema
@@ -80,124 +74,6 @@ public class Struct {
         return getFieldOrDefault(field);
     }
 
-    public Byte get(Field.Int8 field) {
-        return getByte(field.name);
-    }
-
-    public Integer get(Field.Int32 field) {
-        return getInt(field.name);
-    }
-
-    public Long get(Field.Int64 field) {
-        return getLong(field.name);
-    }
-
-    public Uuid get(Field.UUID field) {
-        return getUuid(field.name);
-    }
-
-    public Integer get(Field.Uint16 field) {
-        return getInt(field.name);
-    }
-
-    public Long get(Field.Uint32 field) {
-        return getLong(field.name);
-    }
-
-    public Short get(Field.Int16 field) {
-        return getShort(field.name);
-    }
-
-    public Double get(Field.Float64 field) {
-        return getDouble(field.name);
-    }
-
-    public String get(Field.Str field) {
-        return getString(field.name);
-    }
-
-    public String get(Field.NullableStr field) {
-        return getString(field.name);
-    }
-
-    public Boolean get(Field.Bool field) {
-        return getBoolean(field.name);
-    }
-
-    public Object[] get(Field.Array field) {
-        return getArray(field.name);
-    }
-
-    public Object[] get(Field.ComplexArray field) {
-        return getArray(field.name);
-    }
-
-    public Long getOrElse(Field.Int64 field, long alternative) {
-        if (hasField(field.name))
-            return getLong(field.name);
-        return alternative;
-    }
-
-    public Uuid getOrElse(Field.UUID field, Uuid alternative) {
-        if (hasField(field.name))
-            return getUuid(field.name);
-        return alternative;
-    }
-
-    public Short getOrElse(Field.Int16 field, short alternative) {
-        if (hasField(field.name))
-            return getShort(field.name);
-        return alternative;
-    }
-
-    public Byte getOrElse(Field.Int8 field, byte alternative) {
-        if (hasField(field.name))
-            return getByte(field.name);
-        return alternative;
-    }
-
-    public Integer getOrElse(Field.Int32 field, int alternative) {
-        if (hasField(field.name))
-            return getInt(field.name);
-        return alternative;
-    }
-
-    public Double getOrElse(Field.Float64 field, double alternative) {
-        if (hasField(field.name))
-            return getDouble(field.name);
-        return alternative;
-    }
-
-    public String getOrElse(Field.NullableStr field, String alternative) {
-        if (hasField(field.name))
-            return getString(field.name);
-        return alternative;
-    }
-
-    public String getOrElse(Field.Str field, String alternative) {
-        if (hasField(field.name))
-            return getString(field.name);
-        return alternative;
-    }
-
-    public boolean getOrElse(Field.Bool field, boolean alternative) {
-        if (hasField(field.name))
-            return getBoolean(field.name);
-        return alternative;
-    }
-
-    public Object[] getOrEmpty(Field.Array field) {
-        if (hasField(field.name))
-            return getArray(field.name);
-        return new Object[0];
-    }
-
-    public Object[] getOrEmpty(Field.ComplexArray field) {
-        if (hasField(field.name))
-            return getArray(field.name);
-        return new Object[0];
-    }
-
     /**
      * Get the record value for the field with the given name by doing a hash table lookup (slower!)
      *
@@ -221,119 +97,24 @@ public class Struct {
         return schema.get(name) != null;
     }
 
-    public boolean hasField(Field def) {
-        return schema.get(def.name) != null;
-    }
-
-    public boolean hasField(Field.ComplexArray def) {
-        return schema.get(def.name) != null;
-    }
-
-    public Struct getStruct(BoundField field) {
-        return (Struct) get(field);
-    }
-
-    public Struct getStruct(String name) {
-        return (Struct) get(name);
-    }
-
-    public Byte getByte(BoundField field) {
-        return (Byte) get(field);
-    }
-
-    public byte getByte(String name) {
-        return (Byte) get(name);
-    }
-
-    public BaseRecords getRecords(String name) {
-        return (BaseRecords) get(name);
-    }
-
-    public Short getShort(BoundField field) {
-        return (Short) get(field);
-    }
-
     public Short getShort(String name) {
         return (Short) get(name);
-    }
-
-    public Integer getUnsignedShort(BoundField field) {
-        return (Integer) get(field);
-    }
-
-    public Integer getUnsignedShort(String name) {
-        return (Integer) get(name);
-    }
-
-    public Integer getInt(BoundField field) {
-        return (Integer) get(field);
     }
 
     public Integer getInt(String name) {
         return (Integer) get(name);
     }
 
-    public Long getUnsignedInt(String name) {
-        return (Long) get(name);
-    }
-
-    public Long getUnsignedInt(BoundField field) {
-        return (Long) get(field);
-    }
-
-    public Long getLong(BoundField field) {
-        return (Long) get(field);
-    }
-
     public Long getLong(String name) {
         return (Long) get(name);
-    }
-
-    public Uuid getUuid(BoundField field) {
-        return (Uuid) get(field);
-    }
-
-    public Uuid getUuid(String name) {
-        return (Uuid) get(name);
-    }
-
-    public Double getDouble(BoundField field) {
-        return (Double) get(field);
-    }
-
-    public Double getDouble(String name) {
-        return (Double) get(name);
-    }
-
-    public Object[] getArray(BoundField field) {
-        return (Object[]) get(field);
     }
 
     public Object[] getArray(String name) {
         return (Object[]) get(name);
     }
 
-    public String getString(BoundField field) {
-        return (String) get(field);
-    }
-
     public String getString(String name) {
         return (String) get(name);
-    }
-
-    public Boolean getBoolean(BoundField field) {
-        return (Boolean) get(field);
-    }
-
-    public Boolean getBoolean(String name) {
-        return (Boolean) get(name);
-    }
-
-    public ByteBuffer getBytes(BoundField field) {
-        Object result = get(field);
-        if (result instanceof byte[])
-            return ByteBuffer.wrap((byte[]) result);
-        return (ByteBuffer) result;
     }
 
     public ByteBuffer getBytes(String name) {
@@ -341,17 +122,6 @@ public class Struct {
         if (result instanceof byte[])
             return ByteBuffer.wrap((byte[]) result);
         return (ByteBuffer) result;
-    }
-
-    public byte[] getByteArray(String name) {
-        Object result = get(name);
-        if (result instanceof byte[])
-            return (byte[]) result;
-        ByteBuffer buf = (ByteBuffer) result;
-        byte[] arr = new byte[buf.remaining()];
-        buf.get(arr);
-        buf.flip();
-        return arr;
     }
 
     /**
@@ -379,90 +149,6 @@ public class Struct {
         if (field == null)
             throw new SchemaException("Unknown field: " + name);
         this.values[field.index] = value;
-        return this;
-    }
-
-    public Struct set(Field.Str def, String value) {
-        return set(def.name, value);
-    }
-
-    public Struct set(Field.NullableStr def, String value) {
-        return set(def.name, value);
-    }
-
-    public Struct set(Field.Int8 def, byte value) {
-        return set(def.name, value);
-    }
-
-    public Struct set(Field.Int32 def, int value) {
-        return set(def.name, value);
-    }
-
-    public Struct set(Field.Int64 def, long value) {
-        return set(def.name, value);
-    }
-
-    public Struct set(Field.UUID def, Uuid value) {
-        return set(def.name, value);
-    }
-
-    public Struct set(Field.Int16 def, short value) {
-        return set(def.name, value);
-    }
-
-    public Struct set(Field.Uint16 def, int value) {
-        if (value < 0 || value > UNSIGNED_SHORT_MAX) {
-            throw new RuntimeException("Invalid value for unsigned short for " +
-                    def.name + ": " + value);
-        }
-        return set(def.name, value);
-    }
-
-    public Struct set(Field.Uint32 def, long value) {
-        if (value < 0 || value > UNSIGNED_INT_MAX) {
-            throw new RuntimeException("Invalid value for unsigned int for " +
-                    def.name + ": " + value);
-        }
-        return set(def.name, value);
-    }
-
-    public Struct set(Field.Float64 def, double value) {
-        return set(def.name, value);
-    }
-
-    public Struct set(Field.Bool def, boolean value) {
-        return set(def.name, value);
-    }
-
-    public Struct set(Field.Array def, Object[] value) {
-        return set(def.name, value);
-    }
-
-    public Struct set(Field.ComplexArray def, Object[] value) {
-        return set(def.name, value);
-    }
-
-    public Struct setByteArray(String name, byte[] value) {
-        ByteBuffer buf = value == null ? null : ByteBuffer.wrap(value);
-        return set(name, buf);
-    }
-
-    public Struct setIfExists(Field.Array def, Object[] value) {
-        return setIfExists(def.name, value);
-    }
-
-    public Struct setIfExists(Field.ComplexArray def, Object[] value) {
-        return setIfExists(def.name, value);
-    }
-
-    public Struct setIfExists(Field def, Object value) {
-        return setIfExists(def.name, value);
-    }
-
-    public Struct setIfExists(String fieldName, Object value) {
-        BoundField field = this.schema.get(fieldName);
-        if (field != null)
-            this.values[field.index] = value;
         return this;
     }
 
@@ -498,10 +184,6 @@ public class Struct {
     }
 
     public Struct instance(Field field) {
-        return instance(schema.get(field.name));
-    }
-
-    public Struct instance(Field.ComplexArray field) {
         return instance(schema.get(field.name));
     }
 

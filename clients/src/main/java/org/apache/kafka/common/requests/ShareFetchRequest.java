@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.consumer.ShareAcquireMode;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ShareFetchRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -43,7 +45,8 @@ public class ShareFetchRequest extends AbstractRequest {
 
         public static Builder forConsumer(String groupId, ShareRequestMetadata metadata,
                                           int maxWait, int minBytes, int maxBytes, int maxRecords,
-                                          int batchSize, List<TopicIdPartition> send, List<TopicIdPartition> forget,
+                                          int batchSize, byte shareAcquireMode, boolean isRenewAck,
+                                          List<TopicIdPartition> send, List<TopicIdPartition> forget,
                                           Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementsMap) {
             ShareFetchRequestData data = new ShareFetchRequestData();
             data.setGroupId(groupId);
@@ -60,6 +63,8 @@ public class ShareFetchRequest extends AbstractRequest {
             data.setMaxBytes(maxBytes);
             data.setMaxRecords(maxRecords);
             data.setBatchSize(batchSize);
+            data.setShareAcquireMode(shareAcquireMode);
+            data.setIsRenewAck(isRenewAck);
 
             // Build a map of topics to fetch keyed by topic ID, and within each a map of partitions keyed by index
             ShareFetchRequestData.FetchTopicCollection fetchTopics = new ShareFetchRequestData.FetchTopicCollection();
@@ -137,6 +142,16 @@ public class ShareFetchRequest extends AbstractRequest {
 
         @Override
         public ShareFetchRequest build(short version) {
+            if (version < 2) {
+                // The v1 does not support AcknowledgeType RENEW.
+                if (data.isRenewAck()) {
+                    throw new UnsupportedVersionException("The v1 ShareFetch does not support AcknowledgeType.RENEW");
+                }
+                // The v1 only supports ShareAcquireMode.BATCH_OPTIMIZED.
+                if (data.shareAcquireMode() != ShareAcquireMode.BATCH_OPTIMIZED.id()) {
+                    throw new UnsupportedVersionException("The v1 ShareFetch only supports ShareAcquireMode.BATCH_OPTIMIZED");
+                }
+            }
             return new ShareFetchRequest(data, version);
         }
 

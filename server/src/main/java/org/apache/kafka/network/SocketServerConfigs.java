@@ -21,12 +21,9 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.server.util.Csv;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -39,6 +36,7 @@ import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
+import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 
@@ -154,9 +152,9 @@ public class SocketServerConfigs {
     public static final int NUM_NETWORK_THREADS_DEFAULT = 3;
     public static final String NUM_NETWORK_THREADS_DOC = "The number of threads that the server uses for receiving requests from the network and sending responses to the network. Noted: each listener (except for controller listener) creates its own thread pool.";
 
-    public static final ConfigDef CONFIG_DEF =  new ConfigDef()
-            .define(LISTENERS_CONFIG, STRING, LISTENERS_DEFAULT, HIGH, LISTENERS_DOC)
-            .define(ADVERTISED_LISTENERS_CONFIG, STRING, null, HIGH, ADVERTISED_LISTENERS_DOC)
+    public static final ConfigDef CONFIG_DEF = new ConfigDef()
+            .define(LISTENERS_CONFIG, LIST, LISTENERS_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(false, false), HIGH, LISTENERS_DOC)
+            .define(ADVERTISED_LISTENERS_CONFIG, LIST, null, ConfigDef.ValidList.anyNonDuplicateValues(false, true), HIGH, ADVERTISED_LISTENERS_DOC)
             .define(LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, STRING, LISTENER_SECURITY_PROTOCOL_MAP_DEFAULT, LOW, LISTENER_SECURITY_PROTOCOL_MAP_DOC)
             .define(SOCKET_SEND_BUFFER_BYTES_CONFIG, INT, SOCKET_SEND_BUFFER_BYTES_DEFAULT, HIGH, SOCKET_SEND_BUFFER_BYTES_DOC)
             .define(SOCKET_RECEIVE_BUFFER_BYTES_CONFIG, INT, SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT, HIGH, SOCKET_RECEIVE_BUFFER_BYTES_DOC)
@@ -175,18 +173,15 @@ public class SocketServerConfigs {
     private static final Pattern URI_PARSE_REGEXP = Pattern.compile(
         "^(.*)://\\[?([0-9a-zA-Z\\-%._:]*)\\]?:(-?[0-9]+)");
 
-    public static final Map<ListenerName, SecurityProtocol> DEFAULT_NAME_TO_SECURITY_PROTO;
-
-    static {
-        HashMap<ListenerName, SecurityProtocol> nameToSecurityProtocol = new HashMap<>();
-        for (SecurityProtocol securityProtocol : SecurityProtocol.values()) {
-            nameToSecurityProtocol.put(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol);
-        }
-        DEFAULT_NAME_TO_SECURITY_PROTO = Collections.unmodifiableMap(nameToSecurityProtocol);
-    }
+    public static final Map<ListenerName, SecurityProtocol> DEFAULT_NAME_TO_SECURITY_PROTO =
+        Arrays.stream(SecurityProtocol.values())
+            .collect(Collectors.toUnmodifiableMap(
+                ListenerName::forSecurityProtocol,
+                Function.identity()
+            ));
 
     public static List<Endpoint> listenerListToEndPoints(
-        String input,
+        List<String> input,
         Map<ListenerName, SecurityProtocol> nameToSecurityProto
     ) {
         return listenerListToEndPoints(input, n -> {
@@ -199,11 +194,11 @@ public class SocketServerConfigs {
     }
 
     public static List<Endpoint> listenerListToEndPoints(
-        String input,
+        List<String> input,
         Function<ListenerName, SecurityProtocol> nameToSecurityProto
     ) {
         List<Endpoint> results = new ArrayList<>();
-        for (String entry : Csv.parseCsvList(input.trim())) {
+        for (String entry : input) {
             Matcher matcher = URI_PARSE_REGEXP.matcher(entry);
             if (!matcher.matches()) {
                 throw new KafkaException("Unable to parse " + entry + " to a broker endpoint");

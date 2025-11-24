@@ -61,6 +61,13 @@ public interface CoordinatorRuntimeMetrics extends AutoCloseable {
     void recordEventPurgatoryTime(long durationMs);
 
     /**
+     * Record the effective batch linger time.
+     *
+     * @param durationMs The linger time in milliseconds.
+     */
+    void recordLingerTime(long durationMs);
+
+    /**
      * Record the flush time.
      *
      * @param durationMs The flush time in milliseconds.

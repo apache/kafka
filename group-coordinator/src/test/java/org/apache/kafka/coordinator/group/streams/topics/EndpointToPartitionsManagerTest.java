@@ -23,7 +23,7 @@ import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
-import org.apache.kafka.coordinator.group.streams.TasksTuple;
+import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
 import org.apache.kafka.image.MetadataImage;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +44,9 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopology;
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopologyWithCommonEpoch;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.Mockito.mock;
@@ -56,9 +59,6 @@ class EndpointToPartitionsManagerTest {
     private ConfiguredTopology configuredTopology;
     private ConfiguredSubtopology configuredSubtopologyOne;
     private ConfiguredSubtopology configuredSubtopologyTwo;
-    private final Map<String, Set<Integer>> activeTasks = new HashMap<>();
-    private final Map<String, Set<Integer>> standbyTasks = new HashMap<>();
-    private TasksTuple tasksTuple;
     private final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
 
     @BeforeEach
@@ -86,11 +86,13 @@ class EndpointToPartitionsManagerTest {
             .addTopic(Uuid.randomUuid(), "Topic-B", 3)
             .build();
 
-        activeTasks.put("0", Set.of(0, 1, 2));
-        standbyTasks.put("1", Set.of(0, 1, 2));
-        tasksTuple = new TasksTuple(activeTasks, standbyTasks, Collections.emptyMap());
-        when(streamsGroupMember.assignedTasks()).thenReturn(tasksTuple);
-        //when(streamsGroupMember.assignedTasks().standbyTasks()).thenReturn(tasksTuple.standbyTasks());
+        when(streamsGroupMember.assignedTasks()).thenReturn(
+            new TasksTupleWithEpochs(
+                mkTasksPerSubtopologyWithCommonEpoch(0, mkEntry("0", Set.of(0, 1, 2))),
+                mkTasksPerSubtopology(mkEntry("1", Set.of(0, 1, 2))),
+                Map.of()
+            )
+        );
         when(streamsGroup.configuredTopology()).thenReturn(Optional.of(configuredTopology));
         SortedMap<String, ConfiguredSubtopology> configuredSubtopologyMap = new TreeMap<>();
         configuredSubtopologyMap.put("0", configuredSubtopologyOne);
@@ -131,8 +133,13 @@ class EndpointToPartitionsManagerTest {
             .build();
         configuredSubtopologyOne = new ConfiguredSubtopology(Math.max(topicAPartitions, topicBPartitions), Set.of("Topic-A", "Topic-B"), new HashMap<>(), new HashSet<>(), new HashMap<>());
 
-        activeTasks.put("0", Set.of(0, 1, 2, 3, 4));
-        when(streamsGroupMember.assignedTasks()).thenReturn(new TasksTuple(activeTasks, Collections.emptyMap(), Collections.emptyMap()));
+        when(streamsGroupMember.assignedTasks()).thenReturn(
+            new TasksTupleWithEpochs(
+                mkTasksPerSubtopologyWithCommonEpoch(0, mkEntry("0", Set.of(0, 1, 2, 3, 4))),
+                Map.of(),
+                Map.of()
+            )
+        );
         when(streamsGroup.configuredTopology()).thenReturn(Optional.of(configuredTopology));
         SortedMap<String, ConfiguredSubtopology> configuredSubtopologyOneMap = new TreeMap<>();
         configuredSubtopologyOneMap.put("0", configuredSubtopologyOne);
