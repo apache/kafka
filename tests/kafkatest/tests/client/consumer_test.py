@@ -356,7 +356,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 # We use the 60-second timeout because the consumer session timeout is 45 seconds adding some time for latency.
                 wait_until(lambda: self.group_id in self.kafka.list_consumer_groups(state="empty"),
                            timeout_sec=60,
-                           err_msg="Timed out waiting for the consumers to be removed from the group Describe output is %s." % " ".join(self.kafka.describe_consumer_group_members(self.group_id)))
+                           err_msg="Timed out waiting for the consumers to be removed from the group. Describe output is %s." % " ".join(self.kafka.describe_consumer_group_members(self.group_id)))
 
                 conflict_consumer.start()
                 try:
