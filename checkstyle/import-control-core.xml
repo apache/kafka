@@ -32,9 +32,7 @@
   <allow pkg="javax.net.ssl" />
   <allow pkg="javax.security" />
 
-  <allow pkg="kafka.common" />
   <allow pkg="kafka.utils" />
-  <allow pkg="kafka.serializer" />
   <allow pkg="org.apache.kafka.clients"/>
   <allow pkg="org.apache.kafka.common" exact-match="true" />
   <allow pkg="org.apache.kafka.common.utils" />
@@ -73,7 +71,6 @@
     <allow pkg="kafka.admin"/>
     <allow pkg="kafka.cluster"/>
     <allow pkg="kafka.log"/>
-    <allow pkg="kafka.security.authorizer"/>
     <allow pkg="kafka.server"/>
     <allow pkg="kafka.zk"/>
     <allow pkg="org.apache.kafka.coordinator.group"/>
