@@ -243,7 +243,7 @@ public class KafkaStreams implements AutoCloseable {
      *   <li>
      *     PENDING_SHUTDOWN and PENDING_ERROR are transitory states where the Streams application gracefully closes
      *     its existing resources before transitioning into their corresponding terminal states. These states are
-     *     not recoverable, and only a restart would get this application back to the RUNNING state.
+     *     not recoverable, and only a restart would get an application back to the RUNNING state.
      *   </li>
      *   <li>
      *     Of special importance: If the global stream thread dies, or all stream threads die (or both) then
