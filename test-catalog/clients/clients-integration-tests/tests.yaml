@@ -346,6 +346,11 @@ org.apache.kafka.clients.consumer.ShareConsumerTest:
 - testExplicitAcknowledgementCommitAsyncPartialBatch
 - testExplicitOverrideAcknowledgeCorruptedMessage
 - testFetchRecordLargerThanMaxPartitionFetchBytes
+- testFetchWithThrottledDelivery
+- testFetchWithThrottledDeliveryBatchesMultipleConsumers
+- testFetchWithThrottledDeliveryBatchesWithDecreasedDeliveryLimit
+- testFetchWithThrottledDeliveryBatchesWithIncreasedDeliveryLimit
+- testFetchWithThrottledDeliveryValidateDeliveryCount
 - testHeaders
 - testHeadersSerializerDeserializer
 - testImplicitAcknowledgeCommitSync
