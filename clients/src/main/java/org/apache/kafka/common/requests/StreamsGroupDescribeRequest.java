@@ -32,11 +32,7 @@ public class StreamsGroupDescribeRequest extends AbstractRequest {
         private final StreamsGroupDescribeRequestData data;
 
         public Builder(StreamsGroupDescribeRequestData data) {
-            this(data, false);
-        }
-
-        public Builder(StreamsGroupDescribeRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.STREAMS_GROUP_DESCRIBE, enableUnstableLastVersion);
+            super(ApiKeys.STREAMS_GROUP_DESCRIBE);
             this.data = data;
         }
 

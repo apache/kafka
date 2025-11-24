@@ -226,8 +226,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
                 .setPartitionIndex(partition)
                 .setCommittedOffset(offset)
             ).asJava)
-        ).asJava),
-      isUnstableApiEnabled
+        ).asJava)
     ).build(version)
 
     val expectedResponse = new OffsetCommitResponseData()
@@ -396,8 +395,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       new OffsetFetchRequestData()
         .setRequireStable(requireStable)
         .setGroups(groups.asJava),
-      false,
-      true
+      false
     ).build(version)
 
     val response = connectAndReceive[OffsetFetchResponse](request)
@@ -417,8 +415,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       new OffsetFetchRequestData()
         .setRequireStable(requireStable)
         .setGroups(List(group).asJava),
-      false,
-      true
+      false
     ).build(version)
 
     val response = connectAndReceive[OffsetFetchResponse](request)
