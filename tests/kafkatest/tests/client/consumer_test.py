@@ -350,9 +350,8 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 wait_until(lambda: len(consumer.dead_nodes()) == len(consumer.nodes),
                            timeout_sec=60,
                            err_msg="Timed out waiting for the consumer to shutdown. Describe output is %s" % " ".join(self.kafka.describe_consumer_group_members(self.group_id)))
+
                 # Wait until the group becomes empty to ensure the instance ID is released.
-
-
                 # We use the 60-second timeout because the consumer session timeout is 45 seconds adding some time for latency.
                 wait_until(lambda: self.group_id in self.kafka.list_consumer_groups(state="empty"),
                            timeout_sec=60,
@@ -364,7 +363,6 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 except TimeoutError:
                     self.logger.debug("All conflict members not in group %s. Describe output is %s", self.group_id, " ".join(self.kafka.describe_consumer_group_members(self.group_id)))
                     raise
-
 
         else:
             consumer.start()
