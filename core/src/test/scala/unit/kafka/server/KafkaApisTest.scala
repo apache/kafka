@@ -4246,9 +4246,6 @@ class KafkaApisTest extends Logging {
     testConsumerListOffsetWithUnsupportedVersion(-6, 1)
   }
 
-  // TODO: FIXME - This test is currently failing because topic ID resolution from metadata cache is not working correctly
-  // The issue is that metadataCache.getTopicName(topicId) returns None even after addTopicToMetadataCache is called
-  // This needs further investigation into how KRaftMetadataCache handles topic ID to name resolution
    @Test
   def testHandleListOffsetRequestWithTopicId(): Unit = {
     val tp = new TopicPartition("foo", 0)
@@ -4300,8 +4297,9 @@ class KafkaApisTest extends Logging {
     kafkaApis.handleListOffsetRequest(request)
 
     val response = verifyNoThrottling[ListOffsetsResponse](request)
-    assertTrue(response.topics.asScala.exists(_.name == tp.topic), s"Topic ${tp.topic} not found in response. Found: ${response.topics.asScala.map(_.name).mkString(", ")}")
-    val topicResponse = response.topics.asScala.find(_.name == tp.topic).get
+    // v12 does not return topic name, return topic id instead
+    assertTrue(response.topics.asScala.exists(_.name == ""), s"Topic ${tp.topic} not found in response. Found: ${response.topics.asScala.map(_.name).mkString(", ")}")
+    val topicResponse = response.topics.asScala.find(_.name == "").get
     assertEquals(topicId, topicResponse.topicId)
     val partitionData = topicResponse.partitions.asScala.find(_.partitionIndex == tp.partition).get
     assertEquals(Errors.NONE.code, partitionData.errorCode)
@@ -10472,9 +10470,7 @@ class KafkaApisTest extends Logging {
 
   private def addTopicToMetadataCache(topic: String, numPartitions: Int, numBrokers: Int = 1, topicId: Uuid = Uuid.ZERO_UUID): Unit = {
     val updateMetadata = createBasicMetadata(topic, numPartitions, 0, numBrokers, topicId)
-    System.err.println("kkk updateMetadata" + updateMetadata)
     MetadataCacheTest.updateCache(metadataCache, updateMetadata)
-    System.err.println("kkk metadataCache" + metadataCache)
   }
 
   private def createMetadataBroker(brokerId: Int,
