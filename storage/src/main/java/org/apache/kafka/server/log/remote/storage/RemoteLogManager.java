@@ -426,7 +426,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         return Plugin.wrapInstance(rlmm, metrics, RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP);
     }
 
-    RemoteLogMetadataManager remoteLogMetadataManager() {
+    public RemoteLogMetadataManager remoteLogMetadataManager() {
         return remoteLogMetadataManagerPlugin.get();
     }
 

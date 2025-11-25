@@ -2063,7 +2063,7 @@ public class StreamsPartitionAssignorTest {
 
     private void shouldReturnLowestAssignmentVersionForDifferentSubscriptionVersions(final int smallestVersion,
                                                                                      final int otherVersion,
-                                                                                     final Map<String, Object> paramterizedObject) {
+                                                                                     final Map<String, Object> parameterizedObject) {
         subscriptions.put("consumer1",
                           new Subscription(
                               Collections.singletonList("topic1"),
@@ -2083,7 +2083,7 @@ public class StreamsPartitionAssignorTest {
                           )
         );
 
-        configureDefault(paramterizedObject);
+        configureDefault(parameterizedObject);
 
         final Map<String, Assignment> assignment = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
 

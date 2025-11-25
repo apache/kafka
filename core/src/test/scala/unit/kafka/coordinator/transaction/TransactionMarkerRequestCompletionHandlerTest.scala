@@ -46,7 +46,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
   private val pendingCompleteTxnAndMarkers = util.List.of(
     PendingCompleteTxnAndMarkerEntry(
       PendingCompleteTxn(transactionalId, coordinatorEpoch, txnMetadata, txnMetadata.prepareComplete(42)),
-      new WriteTxnMarkersRequest.TxnMarkerEntry(producerId, producerEpoch, coordinatorEpoch, txnResult, util.List.of(topicPartition))))
+      new WriteTxnMarkersRequest.TxnMarkerEntry(producerId, producerEpoch, coordinatorEpoch, txnResult, util.List.of(topicPartition), 0)))
 
   private val markerChannelManager: TransactionMarkerChannelManager =
     mock(classOf[TransactionMarkerChannelManager])

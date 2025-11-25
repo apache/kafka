@@ -46,6 +46,12 @@ public class StickyTaskAssignorTest {
     private final StickyTaskAssignor assignor = new StickyTaskAssignor();
 
     @Test
+    public void testToStringReturnsName() {
+        assertEquals("sticky", assignor.name());
+        assertEquals(assignor.name(), assignor.toString());
+    }
+
+    @Test
     public void shouldAssignOneActiveTaskToEachProcessWhenTaskCountSameAsProcessCount() {
         final AssignmentMemberSpec memberSpec1 = createAssignmentMemberSpec("process1");
         final AssignmentMemberSpec memberSpec2 = createAssignmentMemberSpec("process2");

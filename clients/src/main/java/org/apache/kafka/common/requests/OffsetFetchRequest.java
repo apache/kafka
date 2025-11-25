@@ -55,14 +55,13 @@ public class OffsetFetchRequest extends AbstractRequest {
 
         public static Builder forTopicIdsOrNames(
             OffsetFetchRequestData data,
-            boolean throwOnFetchStableOffsetsUnsupported,
-            boolean enableUnstableLastVersion
+            boolean throwOnFetchStableOffsetsUnsupported
         ) {
             return new Builder(
                 data,
                 throwOnFetchStableOffsetsUnsupported,
                 ApiKeys.OFFSET_FETCH.oldestVersion(),
-                ApiKeys.OFFSET_FETCH.latestVersion(enableUnstableLastVersion)
+                ApiKeys.OFFSET_FETCH.latestVersion()
             );
         }
 
