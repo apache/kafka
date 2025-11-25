@@ -3351,14 +3351,14 @@ public class TaskManagerTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldCloseTasksIfStateUpdaterTimesOutOnRemove() throws Exception {
-        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, null, false);
-        final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
-                mkEntry(taskId00, taskId00Partitions)
-        );
-        final Task task00 = spy(new StateMachineTask(taskId00, taskId00Partitions, true, stateManager));
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions)
+            .build();
 
-        when(activeTaskCreator.createTasks(any(), eq(assignment))).thenReturn(singletonList(task00));
-        taskManager.handleAssignment(assignment, emptyMap());
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+
+        final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.AT_LEAST_ONCE, tasks, false);
 
         when(stateUpdater.tasks()).thenReturn(singleton(task00));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = mock(CompletableFuture.class);
