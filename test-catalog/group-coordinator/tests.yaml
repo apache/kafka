@@ -1136,6 +1136,7 @@ org.apache.kafka.coordinator.group.streams.StreamsGroupTest:
 - testAsDescribedGroupPrefersConfiguredTopologyOverStreamsTopology
 - testAsDescribedGroupWithStreamsTopologyHavingSubtopologies
 - testAsListedGroup
+- testCancelTimers
 - testComputeMetadataHash
 - testCreateGroupTombstoneRecords
 - testDeletingMemberRemovesProcessId
