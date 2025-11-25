@@ -42,7 +42,6 @@
   // Version 10 adds support for topic ids and removes support for topic names (KIP-848).
   "validVersions": "1-10",
   "flexibleVersions": "6+",
-  "latestVersionUnstable": true,
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0-7", "entityType": "groupId",
       "about": "The group to fetch offsets for." },

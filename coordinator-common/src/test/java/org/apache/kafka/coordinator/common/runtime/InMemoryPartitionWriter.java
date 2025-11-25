@@ -96,7 +96,8 @@ public class InMemoryPartitionWriter implements PartitionWriter {
     public long append(
         TopicPartition tp,
         VerificationGuard verificationGuard,
-        MemoryRecords batch
+        MemoryRecords batch,
+        short transactionVersion
     ) {
         PartitionState state = partitionState(tp);
         state.lock.lock();
