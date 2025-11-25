@@ -42,7 +42,6 @@ import org.apache.kafka.deferred.DeferredEventQueue;
 import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
-import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -490,11 +489,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         final long appendTimeMs;
 
         /**
-         * The max batch size.
-         */
-        final int maxBatchSize;
-
-        /**
          * The verification guard associated to the batch if it is
          * transactional.
          */
@@ -531,7 +525,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             Logger log,
             long baseOffset,
             long appendTimeMs,
-            int maxBatchSize,
             VerificationGuard verificationGuard,
             ByteBuffer buffer,
             MemoryRecordsBuilder builder,
@@ -540,7 +533,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.baseOffset = baseOffset;
             this.nextOffset = baseOffset;
             this.appendTimeMs = appendTimeMs;
-            this.maxBatchSize = maxBatchSize;
             this.verificationGuard = verificationGuard;
             this.buffer = buffer;
             this.builder = builder;
@@ -785,10 +777,13 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             // Release the buffer only if it is not larger than the max buffer size.
             int maxBufferSize = appendMaxBufferSizeSupplier.get();
 
+            var before = bufferSupplier.size();
             if (currentBatch.builder.buffer().capacity() <= maxBufferSize) {
                 bufferSupplier.release(currentBatch.builder.buffer());
+                runtimeMetrics.recordAppendBufferSize(bufferSupplier.size() - before);
             } else if (currentBatch.buffer.capacity() <= maxBufferSize) {
                 bufferSupplier.release(currentBatch.buffer);
+                runtimeMetrics.recordAppendBufferSize(bufferSupplier.size() - before);
             } else {
                 runtimeMetrics.recordAppendBufferDiscarded();
             }
@@ -913,10 +908,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             long currentTimeMs
         ) {
             if (currentBatch == null) {
-                LogConfig logConfig = partitionWriter.config(tp);
-                int maxBatchSize = logConfig.maxMessageSize();
+                int maxBatchSize = partitionWriter.config(tp).maxMessageSize();
                 long prevLastWrittenOffset = coordinator.lastWrittenOffset();
-                ByteBuffer buffer = bufferSupplier.get(min(INITIAL_BUFFER_SIZE, maxBatchSize));
+                ByteBuffer buffer = bufferSupplier.get(min(INITIAL_BUFFER_SIZE, appendMaxBufferSizeSupplier.get()));
 
                 MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
                     buffer,
@@ -965,7 +959,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     log,
                     prevLastWrittenOffset,
                     currentTimeMs,
-                    maxBatchSize,
                     verificationGuard,
                     buffer,
                     builder,
@@ -2147,9 +2140,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.appendLingerMs = appendLingerMs;
         this.executorService = executorService;
         this.appendMaxBufferSizeSupplier = appendMaxBufferSizeSupplier;
-        this.runtimeMetrics.registerAppendBufferSizeGauge(
-            () -> coordinators.values().stream().mapToLong(c -> c.bufferSupplier.size()).sum()
-        );
     }
 
     /**

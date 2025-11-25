@@ -106,6 +106,7 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
      * Metric to count the size of the coordinator append buffer.
      */
     private final MetricName appendBufferSize;
+    private final AtomicLong appendBufferSizeCounter = new AtomicLong(0);
 
     /**
      * Metric to count the number of over-sized append buffers that were discarded.
@@ -187,6 +188,7 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
             "The count of over-sized append buffers that were discarded instead of being cached upon release."
         );
 
+        metrics.addMetric(appendBufferSize, (Gauge<Long>) (config, now) -> appendBufferSizeCounter.get());
         metrics.addMetric(appendBufferSkipCacheCount, (Gauge<Long>) (config, now) -> appendBufferSkipCacheCounter.get());
         metrics.addMetric(numPartitionsLoading, (Gauge<Long>) (config, now) -> numPartitionsLoadingCounter.get());
         metrics.addMetric(numPartitionsActive, (Gauge<Long>) (config, now) -> numPartitionsActiveCounter.get());
@@ -376,8 +378,8 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     }
 
     @Override
-    public void registerAppendBufferSizeGauge(Supplier<Long> sizeSupplier) {
-        metrics.addMetric(appendBufferSize, (Gauge<Long>) (config, now) -> sizeSupplier.get());
+    public void recordAppendBufferSize(long bufferSize) {
+        appendBufferSizeCounter.addAndGet(bufferSize);
     }
 
     @Override
