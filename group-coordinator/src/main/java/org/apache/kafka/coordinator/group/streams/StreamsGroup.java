@@ -824,9 +824,19 @@ public class StreamsGroup implements Group {
         records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone(groupId()));
     }
 
+    /**
+     * Generate an initial rebalance key for the timer.
+     *
+     * @param groupId The group id.
+     * @return The initial rebalance key.
+     */
+    public static String initialRebalanceTimeoutKey(String groupId) {
+        return "initial-rebalance-timeout-" + groupId;
+    }
+
     @Override
     public void cancelTimers(CoordinatorTimer<Void, CoordinatorRecord> timer) {
-        timer.cancel("initial-rebalance-timeout-" + groupId);
+        timer.cancel(initialRebalanceTimeoutKey(groupId));
     }
 
     @Override

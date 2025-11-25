@@ -8666,7 +8666,7 @@ public class GroupMetadataManager {
     public void maybeDeleteGroup(String groupId, List<CoordinatorRecord> records) {
         Group group = groups.get(groupId);
         if (group != null && group.isEmpty()) {
-            createGroupTombstoneRecordsAndCancelTimers(groupId, records);
+            createGroupTombstoneRecordsAndCancelTimers(group, records);
         }
     }
 
@@ -8908,7 +8908,7 @@ public class GroupMetadataManager {
      * @return the initial rebalance key.
      */
     static String streamsInitialRebalanceKey(String groupId) {
-        return "initial-rebalance-timeout-" + groupId;
+        return StreamsGroup.initialRebalanceTimeoutKey(groupId);
     }
 
     /**
