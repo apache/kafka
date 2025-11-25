@@ -839,9 +839,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       null
     }
 
-    if (knownTopics.isEmpty) {
-      sendResponseCallback(util.List.of)
-    } else if (authorizedRequestInfo.isEmpty) {
+    if (authorizedRequestInfo.isEmpty || knownTopics.isEmpty) {
       sendResponseCallback(util.List.of)
     } else {
       replicaManager.fetchOffset(authorizedRequestInfo, offsetRequest.duplicatePartitions().asScala,

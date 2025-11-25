@@ -150,8 +150,6 @@ public class ListOffsetsRequest extends AbstractRequest {
                 });
             }
 
-            System.err.println("ZZZ ListOffsetBuilder=" + data + " version=" + version);
-
             return new ListOffsetsRequest(data, version);
         }
 
