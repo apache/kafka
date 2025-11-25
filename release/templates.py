@@ -25,7 +25,7 @@ def requirements_instructions(prefs_file, prefs):
     return f"""
 Requirements:
 1. Updated docs to reference the new release version where appropriate.
-2. JDK8 and JDK17 compilers and libraries
+2. JDK25 compiler and libraries
 3. Your Apache ID, already configured with SSH keys on id.apache.org and SSH keys available in this shell session
 4. All issues in the target release resolved with valid resolutions (if not, this script will report the problematic JIRAs)
 5. A GPG key used for signing the release. This key should have been added to public Apache servers and the KEYS file on the Kafka site

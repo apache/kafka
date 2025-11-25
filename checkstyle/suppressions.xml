@@ -279,7 +279,7 @@
     <suppress checks="BooleanExpressionComplexity"
               files="(StreamsResetter|DefaultMessageFormatter).java"/>
     <suppress checks="NPathComplexity"
-              files="(AclCommand|DefaultMessageFormatter|ProducerPerformance|StreamsResetter|Agent|TransactionalMessageCopier|ReplicaVerificationTool|LineMessageReader).java"/>
+              files="(AclCommand|DefaultMessageFormatter|ProducerPerformance|StreamsResetter|Agent|TransactionalMessageCopier|ReplicaVerificationTool|LineMessageReader|ConsoleProducer).java"/>
     <suppress checks="ImportControl"
               files="SignalLogger.java"/>
     <suppress checks="IllegalImport"
@@ -340,6 +340,8 @@
               files="(GroupMetadataManager|GroupMetadataManagerTest).java"/>
 
     <!-- coordinator-common -->
+    <suppress checks="JavaNCSS"
+              files="CoordinatorRuntimeTest.java"/>
     <suppress checks="NPathComplexity"
               files="CoordinatorRuntime.java"/>
 

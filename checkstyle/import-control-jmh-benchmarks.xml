@@ -32,7 +32,6 @@
     <allow pkg="com.yammer.metrics.core"/>
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.commons"/>
-    <allow pkg="org.apache.kafka.clients.producer"/>
     <allow pkg="kafka.cluster"/>
     <allow pkg="kafka.log"/>
     <allow pkg="kafka.server"/>
@@ -42,8 +41,6 @@
     <allow pkg="kafka.network"/>
     <allow pkg="kafka.utils"/>
     <allow pkg="kafka.zk"/>
-    <allow class="kafka.utils.KafkaScheduler"/>
-    <allow class="org.apache.kafka.clients.FetchSessionHandler"/>
     <allow pkg="kafka.common"/>
     <allow pkg="kafka.message"/>
     <allow pkg="org.mockito"/>
@@ -63,6 +60,4 @@
     <allow class="org.apache.kafka.raft.QuorumConfig"/>
     <allow pkg="joptsimple"/>
 
-    <subpackage name="cache">
-    </subpackage>
 </import-control>
