@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.purgatory;
 
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
@@ -53,13 +54,13 @@ public class DelayedRemoteListOffsets extends DelayedOperation {
     static final Map<TopicPartition, Meter> PARTITION_EXPIRATION_METERS = new ConcurrentHashMap<>();
 
     private final int version;
-    private final Map<TopicPartition, ListOffsetsPartitionStatus> statusByPartition;
+    private final Map<TopicIdPartition, ListOffsetsPartitionStatus> statusByPartition;
     private final Consumer<TopicPartition> partitionOrException;
     private final Consumer<Collection<ListOffsetsResponseData.ListOffsetsTopicResponse>> responseCallback;
 
     public DelayedRemoteListOffsets(long delayMs,
                                     int version,
-                                    Map<TopicPartition, ListOffsetsPartitionStatus> statusByPartition,
+                                    Map<TopicIdPartition, ListOffsetsPartitionStatus> statusByPartition,
                                     Consumer<TopicPartition> partitionOrException,
                                     Consumer<Collection<ListOffsetsResponseData.ListOffsetsTopicResponse>> responseCallback) {
         super(delayMs);
@@ -83,11 +84,11 @@ public class DelayedRemoteListOffsets extends DelayedOperation {
      */
     @Override
     public void onExpiration() {
-        statusByPartition.forEach((topicPartition, status) -> {
+        statusByPartition.forEach((topicIdPartition, status) -> {
             if (!status.completed()) {
-                LOG.debug("Expiring list offset request for partition {} with status {}", topicPartition, status);
+                LOG.debug("Expiring list offset request for partition {} with status {}", topicIdPartition.topicPartition(), status);
                 status.futureHolderOpt().ifPresent(futureHolder -> futureHolder.jobFuture().cancel(true));
-                recordExpiration(topicPartition);
+                recordExpiration(topicIdPartition.topicPartition());
             }
         });
     }
@@ -118,7 +119,7 @@ public class DelayedRemoteListOffsets extends DelayedOperation {
         statusByPartition.forEach((partition, status) -> {
             if (!status.completed()) {
                 try {
-                    partitionOrException.accept(partition);
+                    partitionOrException.accept(partition.topicPartition());
                 } catch (ApiException e) {
                     status.futureHolderOpt().ifPresent(futureHolder -> {
                         futureHolder.jobFuture().cancel(false);

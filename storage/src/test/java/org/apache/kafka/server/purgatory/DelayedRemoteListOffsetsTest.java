@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.server.purgatory;
 
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -82,10 +84,10 @@ public class DelayedRemoteListOffsetsTest {
             return true;
         });
 
-        Map<TopicPartition, ListOffsetsPartitionStatus> statusByPartition = Map.of(
-            new TopicPartition("test", 0), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
-            new TopicPartition("test", 1), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
-            new TopicPartition("test1", 0), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build()
+        Map<TopicIdPartition, ListOffsetsPartitionStatus> statusByPartition = Map.of(
+            new TopicIdPartition(Uuid.randomUuid(), 0, "test"), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
+            new TopicIdPartition(Uuid.randomUuid(), 1, "test"), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
+            new TopicIdPartition(Uuid.randomUuid(), 0, "test1"), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build()
         );
 
         DelayedRemoteListOffsets delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, 5, statusByPartition, partitionOrException, responseCallback);
@@ -133,10 +135,10 @@ public class DelayedRemoteListOffsetsTest {
             return true;
         });
 
-        Map<TopicPartition, ListOffsetsPartitionStatus> statusByPartition = Map.of(
-            new TopicPartition("test", 0), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
-            new TopicPartition("test", 1), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
-            new TopicPartition("test1", 0), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build()
+        Map<TopicIdPartition, ListOffsetsPartitionStatus> statusByPartition = Map.of(
+            new TopicIdPartition(Uuid.randomUuid(), 0, "test"), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
+            new TopicIdPartition(Uuid.randomUuid(), 1, "test"), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
+            new TopicIdPartition(Uuid.randomUuid(), 0, "test1"), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build()
         );
 
         DelayedRemoteListOffsets delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, 5, statusByPartition, partitionOrException, responseCallback);
@@ -188,10 +190,10 @@ public class DelayedRemoteListOffsetsTest {
         when(errorFutureHolder.taskFuture()).thenAnswer(f -> errorTaskFuture);
         when(errorFutureHolder.jobFuture()).thenReturn(jobFuture);
 
-        Map<TopicPartition, ListOffsetsPartitionStatus> statusByPartition = Map.of(
-            new TopicPartition("test", 0), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
-            new TopicPartition("test", 1), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
-            new TopicPartition("test1", 0), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(errorFutureHolder)).build()
+        Map<TopicIdPartition, ListOffsetsPartitionStatus> statusByPartition = Map.of(
+            new TopicIdPartition(Uuid.randomUuid(), 0, "test"), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
+            new TopicIdPartition(Uuid.randomUuid(), 1, "test"), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
+            new TopicIdPartition(Uuid.randomUuid(), 0, "test1"), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build()
         );
 
         DelayedRemoteListOffsets delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, 5, statusByPartition, partitionOrException, responseCallback);
@@ -244,11 +246,11 @@ public class DelayedRemoteListOffsetsTest {
         when(errorFutureHolder.taskFuture()).thenAnswer(f -> errorTaskFuture);
         when(errorFutureHolder.jobFuture()).thenReturn(jobFuture);
 
-        Map<TopicPartition, ListOffsetsPartitionStatus> statusByPartition = Map.of(
-            new TopicPartition("test", 0), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
-            new TopicPartition("test", 1), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
-            new TopicPartition("test1", 0), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(errorFutureHolder)).build(),
-            new TopicPartition("test1", 1), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build()
+        Map<TopicIdPartition, ListOffsetsPartitionStatus> statusByPartition = Map.of(
+            new TopicIdPartition(Uuid.randomUuid(), 0, "test"), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
+            new TopicIdPartition(Uuid.randomUuid(), 1, "test"), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
+            new TopicIdPartition(Uuid.randomUuid(), 0, "test1"), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(errorFutureHolder)).build(),
+            new TopicIdPartition(Uuid.randomUuid(), 1, "test1"), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build()
         );
 
         DelayedRemoteListOffsets delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, 5, statusByPartition, partitionOrException, responseCallback);

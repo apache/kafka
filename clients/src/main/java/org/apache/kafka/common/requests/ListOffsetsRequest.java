@@ -18,6 +18,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ListOffsetsRequestData;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsTopic;
@@ -60,7 +62,13 @@ public class ListOffsetsRequest extends AbstractRequest {
 
         public static Builder forConsumer(boolean requireTimestamp,
                                           IsolationLevel isolationLevel) {
-            return forConsumer(requireTimestamp, isolationLevel, false, false, false, false);
+            return forConsumer(requireTimestamp, isolationLevel, false, false, false, false, false);
+        }
+
+        public static Builder forConsumer(boolean requireTimestamp,
+                                          IsolationLevel isolationLevel,
+                                          boolean canUseTopicIds) {
+            return forConsumer(requireTimestamp, isolationLevel, false, false, false, false, canUseTopicIds);
         }
 
         public static Builder forConsumer(boolean requireTimestamp,
@@ -69,6 +77,18 @@ public class ListOffsetsRequest extends AbstractRequest {
                                           boolean requireEarliestLocalTimestamp,
                                           boolean requireTieredStorageTimestamp,
                                           boolean requireEarliestPendingUploadTimestamp) {
+            return forConsumer(requireTimestamp, isolationLevel, requireMaxTimestamp,
+                    requireEarliestLocalTimestamp, requireTieredStorageTimestamp,
+                    requireEarliestPendingUploadTimestamp, false);
+        }
+
+        public static Builder forConsumer(boolean requireTimestamp,
+                                          IsolationLevel isolationLevel,
+                                          boolean requireMaxTimestamp,
+                                          boolean requireEarliestLocalTimestamp,
+                                          boolean requireTieredStorageTimestamp,
+                                          boolean requireEarliestPendingUploadTimestamp,
+                                          boolean canUseTopicIds) {
             short minVersion = ApiKeys.LIST_OFFSETS.oldestVersion();
             if (requireEarliestPendingUploadTimestamp)
                 minVersion = 11;
@@ -82,7 +102,10 @@ public class ListOffsetsRequest extends AbstractRequest {
                 minVersion = 2;
             else if (requireTimestamp)
                 minVersion = 1;
-            return new Builder(minVersion, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, isolationLevel);
+
+            // When canUseTopicIds is false, limit maxVersion to 11 to use name-based protocol
+            short maxVersion = canUseTopicIds ? ApiKeys.LIST_OFFSETS.latestVersion() : (short) 11;
+            return new Builder(minVersion, maxVersion, CONSUMER_REPLICA_ID, isolationLevel);
         }
 
         public static Builder forReplica(short allowedVersion, int replicaId) {
@@ -111,6 +134,24 @@ public class ListOffsetsRequest extends AbstractRequest {
 
         @Override
         public ListOffsetsRequest build(short version) {
+            if (version >= 12) {
+                data.topics().forEach(topic -> {
+                    if (topic.topicId() == null || topic.topicId().equals(Uuid.ZERO_UUID)) {
+                        throw new UnsupportedVersionException("The broker offset commit api version " +
+                                version + " does require usage of topic ids.");
+                    }
+                });
+            } else {
+                data.topics().forEach(topic -> {
+                    if (topic.name() == null || topic.name().isEmpty()) {
+                        throw new UnsupportedVersionException("The broker offset commit api version " +
+                                version + " does require usage of topic names.");
+                    }
+                });
+            }
+
+            System.err.println("ZZZ ListOffsetBuilder=" + data + " version=" + version);
+
             return new ListOffsetsRequest(data, version);
         }
 
@@ -144,14 +185,16 @@ public class ListOffsetsRequest extends AbstractRequest {
 
         List<ListOffsetsTopicResponse> responses = new ArrayList<>();
         for (ListOffsetsTopic topic : data.topics()) {
-            ListOffsetsTopicResponse topicResponse = new ListOffsetsTopicResponse().setName(topic.name());
+            ListOffsetsTopicResponse topicResponse = new ListOffsetsTopicResponse()
+                    .setName(topic.name())
+                    .setTopicId(topic.topicId());
             List<ListOffsetsPartitionResponse> partitions = new ArrayList<>();
             for (ListOffsetsPartition partition : topic.partitions()) {
                 ListOffsetsPartitionResponse partitionResponse = new ListOffsetsPartitionResponse()
                         .setErrorCode(errorCode)
                         .setPartitionIndex(partition.partitionIndex());
                 partitionResponse.setOffset(ListOffsetsResponse.UNKNOWN_OFFSET)
-                         .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP);
+                        .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP);
                 partitions.add(partitionResponse);
             }
             topicResponse.setPartitions(partitions);
