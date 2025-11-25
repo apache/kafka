@@ -3372,7 +3372,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldOnlyCommitRevokedStandbyTaskAndPropagatePrepareCommitException() {
+    public void shouldPropagateSuspendExceptionWhenRevokingStandbyTask() {
         final StandbyTask task00 = standbyTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId00Partitions)
