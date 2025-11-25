@@ -243,6 +243,9 @@ my-share-group</code></pre>
 GROUP           TOPIC           PARTITION  START-OFFSET  LAG
 my-share-group  topic1          0          4             0</code></pre>
 
+  The start-offset represents the offset available for shared consumers. However, records already past the start-offset
+  may be consumed (in-flight) and are pending the start offset's next update.
+
   NOTE: The admin client needs DESCRIBE access to all the topics used in the group.
 
   There are many --describe options that provide more detailed information about a share group:
