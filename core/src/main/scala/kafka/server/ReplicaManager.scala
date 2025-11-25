@@ -219,7 +219,7 @@ class ReplicaManager(val config: KafkaConfig,
                      addPartitionsToTxnManager: Option[AddPartitionsToTxnManager] = None,
                      val directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP,
                      val defaultActionQueue: ActionQueue = new DelayedActionQueue
-                    ) extends Logging {
+                     ) extends Logging {
   // Changing the package or class name may cause incompatibility with existing code and metrics configuration
   private val metricsPackage = "kafka.server"
   private val metricsClassName = "ReplicaManager"
@@ -673,6 +673,9 @@ class ReplicaManager(val config: KafkaConfig,
    * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
    *                                      thread calling this method
    * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
+   * @param transactionVersion            the transaction version for the records (1 = TV1, 2 = TV2).
+   *                                      Defaults to TV_UNKNOWN (-1) to force explicit specification.
+   *                                      Used for epoch validation of transaction markers (KIP-1228).
    */
   def appendRecords(timeout: Long,
                     requiredAcks: Short,
@@ -1424,7 +1427,7 @@ class ReplicaManager(val config: KafkaConfig,
         try {
           val partition = getPartitionOrException(topicIdPartition)
           val info = partition.appendRecordsToLeader(records, origin, requiredAcks, requestLocal,
-            verificationGuards.getOrElse(topicIdPartition.topicPartition(), VerificationGuard.SENTINEL))
+            verificationGuards.getOrElse(topicIdPartition.topicPartition(), VerificationGuard.SENTINEL), transactionVersion)
           val numAppendedMessages = info.numMessages
 
           // update stats for successfully appended bytes and messages as bytesInRate and messageInRate
