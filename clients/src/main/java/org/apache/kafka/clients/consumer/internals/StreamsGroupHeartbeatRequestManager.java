@@ -495,8 +495,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             } else {
                 if (isClosed) {
                     logger.debug("StreamsGroupHeartbeatRequest failed because of exception during close: ", exception);
-                }
-                else
+                } else
                     logger.error("StreamsGroupHeartbeatRequest failed because of unexpected exception: ", exception);
             }
         });

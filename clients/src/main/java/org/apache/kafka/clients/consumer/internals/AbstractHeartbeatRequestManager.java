@@ -324,8 +324,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
             } else {
                 if (isClosed) {
                     logger.debug("{} failed because of exception during close: {}", heartbeatRequestName(), exception);
-                }
-                else
+                } else
                     logger.error("{} failed because of unexpected exception: {}", heartbeatRequestName(), exception);
             }
         });
