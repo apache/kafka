@@ -58,7 +58,7 @@
             <p>A <strong>Streams group</strong> is a broker‑coordinated group type for Kafka Streams that uses Streams‑specific RPCs and metadata, distinct from classic consumer groups. The CLI surfaces Streams‑specific states, assignments, and input‑topic offsets to simplify visibility and administration.</p>
 
             <div class="admonition warning">
-                <strong>Use with care:</strong> Mutating operations (offset resets/deletes, group deletion) affect how applications will reprocess data when restarted. Always preview with <span class="kbd">--dry-run</span> before executing and ensure application instances are stopped/inactive.
+                <strong>Use with care:</strong> Mutating operations (offset resets/deletes, group deletion) affect how applications will reprocess data when restarted. Always preview with <span class="kbd">--dry-run</span> before executing and ensure application instances are stopped/inactive and the group is empty before executing the command.
             </div>
         </div>
 
@@ -80,14 +80,14 @@
 
                 <li><strong>Delete offsets</strong> for input topics to force re‑consumption on next start.</li>
 
-                <li><strong>Delete a Streams group</strong> to clean up broker‑side Streams metadata (offsets, topology, assignments). Optionally delete a subset of <strong>internal topics</strong> at the same time using <code>--internal-topics</code>.</li>
+                <li><strong>Delete a Streams group</strong> to clean up broker‑side Streams metadata (offsets, topology, assignments). Optionally delete all, or a subset of, <strong>internal topics</strong> at the same time using <code>--internal-topics</code>.</li>
             </ul>
         </div>
 
         <div id="usage">
             <span class="anchor" aria-hidden="true"></span>
             <h2>Usage</h2>
-            <p>The script is typically located in <code>bin/kafka-streams-groups.sh</code> and connects to your cluster via <code>--bootstrap-server</code>. For secured clusters, pass AdminClient properties using <code>--command-config</code>.</p>
+            <p>The script is located in <code>bin/kafka-streams-groups.sh</code> and connects to your cluster via <code>--bootstrap-server</code>. For secured clusters, pass AdminClient properties using <code>--command-config</code>.</p>
 
             <pre><code>$ kafka-streams-groups.sh --bootstrap-server &lt;host:port&gt; [COMMAND] [OPTIONS]</code></pre>
 
@@ -111,8 +111,7 @@ kafka-streams-groups.sh --bootstrap-server localhost:9092 --list
             <div id="describe">
                 <h3>Describe Streams groups</h3>
                 <p>Inspecting group's state, members, and lag</p>
-                <pre><code>
-# Describe a group: state + epochs
+                <pre><code># Describe a group: state + epochs
 kafka-streams-groups.sh --bootstrap-server localhost:9092 \
   --describe --group my-streams-app --state --verbose
 
@@ -183,7 +182,7 @@ kafka-streams-groups.sh --bootstrap-server localhost:9092 \
                     <li><code>--list</code>: List Streams groups. Use <code>--state</code> to display/filter by state.</li>
                     <li><code>--describe</code>: Describe a group selected by <code>--group</code>. Combine with:
                         <ul>
-                            <li><code>--state</code> (group state and epochs), <code>--members</code> (members and assignments), <code>--offsets</code> (input-topic offsets/lag).</li>
+                            <li><code>--state</code> (group state and epochs), <code>--members</code> (members and assignments), <code>--offsets</code> (input and repartition topics offsets/lag).</li>
                             <li><code>--verbose</code> for additional details (e.g., leader epochs where applicable).</li>
                         </ul>
                     </li>
@@ -225,7 +224,6 @@ kafka-streams-groups.sh --bootstrap-server localhost:9092 \
             <span class="anchor" aria-hidden="true"></span>
             <h2>Best practices and safety</h2>
             <ul>
-                <li>Stop all application instances before resetting or deleting offsets to prevent immediate re‑joins with stale positions.</li>
                 <li>Preview changes with <code>--dry-run</code> to verify topic scope and impact before <code>--execute</code>.</li>
                 <li>Use <code>--internal-topics</code> carefully: deleting internal topics removes state backing topics; only do this when you intend to rebuild state from input topics.</li>
             </ul>
