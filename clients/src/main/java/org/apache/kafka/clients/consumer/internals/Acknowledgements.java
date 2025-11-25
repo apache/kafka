@@ -144,6 +144,15 @@ public class Acknowledgements {
     }
 
     /**
+     * Whether an acknowledgement error code was received in the response from the broker.
+     *
+     * @return Whether an acknowledgement error code was received in the response from the broker.
+     */
+    public boolean isCompletedExceptionally() {
+        return acknowledgeException != null;
+    }
+
+    /**
      * Merges two sets of acknowledgements. If there are overlapping acknowledgements, the
      * merged set wins.
      *

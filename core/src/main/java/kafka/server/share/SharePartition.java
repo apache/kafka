@@ -107,9 +107,14 @@ public class SharePartition {
     private static final Logger log = LoggerFactory.getLogger(SharePartition.class);
 
     /**
+     * Minimum number of records to deliver when throttling
+     */
+    private static final int MINIMUM_THROTTLE_RECORDS_DELIVERY_LIMIT = 2;
+
+    /**
      * empty member id used to indicate when a record is not acquired by any member.
      */
-    static final String EMPTY_MEMBER_ID = Uuid.ZERO_UUID.toString();
+    static final String EMPTY_MEMBER_ID = "";
 
     /**
      * The SharePartitionState is used to track the state of the share partition. The state of the
@@ -201,6 +206,11 @@ public class SharePartition {
      */
     private final int maxDeliveryCount;
 
+    /**
+     * Records whose delivery count exceeds this are deemed abnormal and the batching of these records
+     * should be reduced. The limit is set to half of maxDeliveryCount rounded up, with a minimum of 2.
+     */
+    private final int throttleRecordsDeliveryLimit;
     /**
      * The group config manager is used to retrieve the values for dynamic group configurations
      */
@@ -362,6 +372,7 @@ public class SharePartition {
         this.leaderEpoch = leaderEpoch;
         this.maxInFlightRecords = maxInFlightRecords;
         this.maxDeliveryCount = maxDeliveryCount;
+        this.throttleRecordsDeliveryLimit = Math.max(MINIMUM_THROTTLE_RECORDS_DELIVERY_LIMIT, (int) Math.ceil((double) maxDeliveryCount / 2));
         this.cachedState = new ConcurrentSkipListMap<>();
         this.lock = new ReentrantReadWriteLock();
         this.findNextFetchOffset = false;
@@ -479,6 +490,15 @@ public class SharePartition {
                         throwable = new IllegalStateException(String.format("Failed to initialize the share partition %s-%s", groupId, topicIdPartition));
                         return;
                     }
+
+                    if (stateBatch.lastOffset() < stateBatch.firstOffset()) {
+                        log.error("Invalid state batch found for the share partition: {}-{}. The first offset: {}"
+                                + " is less than the last offset of the batch: {}.", groupId, topicIdPartition,
+                            stateBatch.firstOffset(), stateBatch.lastOffset());
+                        throwable = new IllegalStateException(String.format("Failed to initialize the share partition %s-%s", groupId, topicIdPartition));
+                        return;
+                    }
+
                     if (gapStartOffset == -1 && stateBatch.firstOffset() > previousBatchLastOffset + 1) {
                         gapStartOffset = previousBatchLastOffset + 1;
                     }
@@ -834,7 +854,16 @@ public class SharePartition {
                 boolean fullMatch = checkForFullMatch(inFlightBatch, firstBatch.baseOffset(), lastOffsetToAcquire);
                 int numRecordsRemaining = maxRecordsToAcquire - acquiredCount;
                 boolean recordLimitSubsetMatch = isRecordLimitMode && checkForRecordLimitSubsetMatch(inFlightBatch, maxRecordsToAcquire, acquiredCount);
-                if (!fullMatch || inFlightBatch.offsetState() != null || recordLimitSubsetMatch) {
+                boolean throttleRecordsDelivery = shouldThrottleRecordsDelivery(inFlightBatch, firstBatch.baseOffset(), lastOffsetToAcquire);
+                // Stop acquiring more records if records delivery has to be throttled. The throttling prevents
+                // complete batch to be archived in case of a single record being corrupt.
+                // Below check isolates the current batch/offsets to be delivered individually in subsequent fetches.
+                if (throttleRecordsDelivery && acquiredCount > 0) {
+                    // Set the max records to acquire as 0 to prevent further acquisition of records.
+                    maxRecordsToAcquire = 0;
+                    break;
+                }
+                if (!fullMatch || inFlightBatch.offsetState() != null || recordLimitSubsetMatch || throttleRecordsDelivery) {
                     log.trace("Subset or offset tracked batch record found for share partition,"
                             + " batch: {} request offsets - first: {}, last: {} for the share"
                             + " partition: {}-{}", inFlightBatch, firstBatch.baseOffset(),
@@ -859,7 +888,14 @@ public class SharePartition {
                     // maxRecordsToAcquire. Hence, pass the remaining number of records that can
                     // be acquired.
                     int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, isRecordLimitMode, numRecordsRemaining, firstBatch.baseOffset(), lastOffsetToAcquire, inFlightBatch, result);
+
                     acquiredCount += acquiredSubsetCount;
+                    // If records are throttled, return immediately and set `maxRecordsToAcquire = 0`
+                    // to prevent acquiring any new records afterwards.
+                    if (throttleRecordsDelivery && acquiredSubsetCount > 0) {
+                        maxRecordsToAcquire = 0;
+                        break;
+                    }
                     continue;
                 }
 
@@ -1866,6 +1902,8 @@ public class SharePartition {
     ) {
         lock.writeLock().lock();
         int acquiredCount = 0;
+        long maxFetchRecordsWhileThrottledRecords = -1;
+        boolean hasThrottledRecord = false;
         try {
             for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState().entrySet()) {
                 // For the first batch which might have offsets prior to the request base
@@ -1885,7 +1923,36 @@ public class SharePartition {
                     continue;
                 }
 
-                InFlightState updateResult =  offsetState.getValue().tryUpdateState(RecordState.ACQUIRED, DeliveryCountOps.INCREASE,
+                int recordDeliveryCount = offsetState.getValue().deliveryCount();
+                // If the record is on last delivery attempt then isolate that record to be delivered alone.
+                // If the respective record is corrupt then it prevents increasing delivery count of multiple
+                // records in a single response batch. Condition below checks if the current record has reached
+                // the delivery limit and already have some records to return in response then skip processing
+                // the current record, which shall be delivered alone in next fetch.
+                if (maxDeliveryCount > 2 && recordDeliveryCount == maxDeliveryCount - 1 && acquiredCount > 0) {
+                    break;
+                }
+
+                // When record delivery count reach the throttle threshold, progressively reduce batch size to isolate records.
+                // The `maxFetchRecordsWhileThrottledRecords` is halved with each additional delivery attempt beyond the throttle limit.
+                // Example:
+                //   - maxDeliveryCount = 6, throttleRecordsDeliveryLimit = 3, batch size = 500
+                //   - deliveryCount = 3: maxFetchRecords = 500 >> (3 - 3 + 1) = 250
+                //   - deliveryCount = 4: maxFetchRecords = 500 >> (4 - 3 + 1) = 125
+                // The `maxFetchRecordsWhileThrottledRecords` is calculated based on the first acquirable
+                // record that meets the throttling criteria in the batch. Generally, when complete
+                // batch is erroring out and increases delivery count then the front offset can have
+                // higher delivery count then the later offsets, for example for a batch of 500 records
+                // and delivery limit of 10 the division will happen as 250, 125, 62, 31, 1 which means
+                // offset 124 will be at higher delivery count than offset 125. The calculation below
+                // deliver 124 once alone and then proceed with 125 onwards. The code ensures that
+                // the records at higher delivery count are isolated first.
+                if (recordDeliveryCount >= throttleRecordsDeliveryLimit && maxFetchRecordsWhileThrottledRecords < 0) {
+                    maxFetchRecordsWhileThrottledRecords = Math.max(1, (long) inFlightBatch.offsetState().size() >> (recordDeliveryCount - throttleRecordsDeliveryLimit + 1));
+                    hasThrottledRecord = true;
+                }
+
+                InFlightState updateResult = offsetState.getValue().tryUpdateState(RecordState.ACQUIRED, DeliveryCountOps.INCREASE,
                     maxDeliveryCount, memberId);
                 if (updateResult == null || updateResult.state() != RecordState.ACQUIRED) {
                     log.trace("Unable to acquire records for the offset: {} in batch: {}"
@@ -1904,8 +1971,16 @@ public class SharePartition {
                     .setLastOffset(offsetState.getKey())
                     .setDeliveryCount((short) offsetState.getValue().deliveryCount()));
                 acquiredCount++;
+
+                // Delivered alone.
+                if (offsetState.getValue().deliveryCount() == maxDeliveryCount && maxDeliveryCount > 2) {
+                    break;
+                }
                 if (isRecordLimitMode && acquiredCount == maxFetchRecords) {
                     // In record_limit mode, acquire only the requested number of records.
+                    break;
+                }
+                if (hasThrottledRecord && acquiredCount == maxFetchRecordsWhileThrottledRecords) {
                     break;
                 }
             }
@@ -1940,6 +2015,37 @@ public class SharePartition {
     private boolean checkForStartOffsetWithinBatch(long batchFirstOffset, long batchLastOffset) {
         long localStartOffset = startOffset();
         return batchFirstOffset < localStartOffset && batchLastOffset >= localStartOffset;
+    }
+
+    /**
+     * Check if the in-flight batch should be throttled based on delivery count.
+     *
+     * @param inFlightBatch       The in-flight batch to check for throttling.
+     * @param requestFirstOffset  The first offset to acquire.
+     * @param requestLastOffset   The last offset to acquire.
+     * @return True if the batch should be throttled (delivery count >= threshold), false otherwise.
+     */
+    private boolean shouldThrottleRecordsDelivery(InFlightBatch inFlightBatch, long requestFirstOffset, long requestLastOffset) {
+        if (inFlightBatch.offsetState() == null) {
+            // If offsetState is null, it means the batch is not split and represents a single batch.
+            // Check if the batch is in AVAILABLE state and has no ongoing transition.
+            // The requested batch shall always be within the request first and last offset as the sub
+            // map batches are only fetched to consider.
+            if (inFlightBatch.batchState() == RecordState.AVAILABLE && !inFlightBatch.batchHasOngoingStateTransition()) {
+                return inFlightBatch.batchDeliveryCount() >= throttleRecordsDeliveryLimit;
+            }
+            return false;
+        }
+
+        return inFlightBatch.offsetState().entrySet().stream().filter(entry -> {
+            if (entry.getKey() < requestFirstOffset) {
+                return false;
+            }
+            if (entry.getKey() > requestLastOffset) {
+                return false;
+            }
+            return entry.getValue().state() == RecordState.AVAILABLE && !entry.getValue().hasOngoingStateTransition();
+        }).mapToInt(entry -> entry.getValue().deliveryCount()).max().orElse(0) >= throttleRecordsDeliveryLimit;
     }
 
     // Visibility for test
@@ -2680,6 +2786,8 @@ public class SharePartition {
                 new UnknownTopicOrPartitionException(errorMessage);
             case FENCED_LEADER_EPOCH, FENCED_STATE_EPOCH ->
                 new NotLeaderOrFollowerException(errorMessage);
+            case SASL_AUTHENTICATION_FAILED, UNSUPPORTED_VERSION ->
+                new UnknownServerException("Unable to complete operation due to server error.");
             default ->
                 new UnknownServerException(errorMessage);
         };

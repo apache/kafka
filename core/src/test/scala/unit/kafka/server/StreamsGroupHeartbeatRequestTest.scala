@@ -36,7 +36,8 @@ import scala.jdk.CollectionConverters._
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
     new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
-    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,streams")
+    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,streams"),
+    new ClusterConfigProperty(key = "group.streams.initial.rebalance.delay.ms", value = "0")
   )
 )
 class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
@@ -171,7 +172,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       // Verify the response
       assertNotNull(streamsGroupHeartbeatResponse, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId, streamsGroupHeartbeatResponse.memberId())
-      assertEquals(1, streamsGroupHeartbeatResponse.memberEpoch())
+      assertEquals(2, streamsGroupHeartbeatResponse.memberEpoch())
       val expectedStatus = new StreamsGroupHeartbeatResponseData.Status()
         .setStatusCode(1)
         .setStatusDetail(s"Source topics $topicName are missing.")
@@ -207,7 +208,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       // Active task assignment should be available
       assertNotNull(streamsGroupHeartbeatResponse, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId, streamsGroupHeartbeatResponse.memberId())
-      assertEquals(2, streamsGroupHeartbeatResponse.memberEpoch())
+      assertEquals(3, streamsGroupHeartbeatResponse.memberEpoch())
       assertEquals(null, streamsGroupHeartbeatResponse.status())
       val expectedActiveTasks = List(
         new StreamsGroupHeartbeatResponseData.TaskIds()
@@ -275,7 +276,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       // Verify first member gets all tasks initially
       assertNotNull(streamsGroupHeartbeatResponse1, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId1, streamsGroupHeartbeatResponse1.memberId())
-      assertEquals(1, streamsGroupHeartbeatResponse1.memberEpoch())
+      assertEquals(2, streamsGroupHeartbeatResponse1.memberEpoch())
       assertEquals(1, streamsGroupHeartbeatResponse1.activeTasks().size())
       assertEquals(3, streamsGroupHeartbeatResponse1.activeTasks().get(0).partitions().size())
 
@@ -303,7 +304,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       // Verify second member gets assigned
       assertNotNull(streamsGroupHeartbeatResponse2, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId2, streamsGroupHeartbeatResponse2.memberId())
-      assertEquals(2, streamsGroupHeartbeatResponse2.memberEpoch())
+      assertEquals(3, streamsGroupHeartbeatResponse2.memberEpoch())
 
       // Wait for both members to get their task assignments by sending heartbeats
       // until they both have non-null activeTasks
@@ -431,7 +432,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       // Verify the member joined successfully
       assertNotNull(streamsGroupHeartbeatResponse, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals("test-member", streamsGroupHeartbeatResponse.memberId())
-      assertEquals(1, streamsGroupHeartbeatResponse.memberEpoch())
+      assertEquals(2, streamsGroupHeartbeatResponse.memberEpoch())
 
       // Send a leave request
       streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
@@ -508,7 +509,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       
       val expectedResponse = new StreamsGroupHeartbeatResponseData()
         .setErrorCode(Errors.FENCED_MEMBER_EPOCH.code())
-        .setErrorMessage("The streams group member has a greater member epoch (999) than the one known by the group coordinator (1). The member must abandon all its partitions and rejoin.")
+        .setErrorMessage("The streams group member has a greater member epoch (999) than the one known by the group coordinator (2). The member must abandon all its partitions and rejoin.")
       assertEquals(expectedResponse, streamsGroupHeartbeatResponse)
     } finally {
       admin.close()
@@ -571,7 +572,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       // Verify the heartbeat was successful
       assert(streamsGroupHeartbeatResponse != null, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId, streamsGroupHeartbeatResponse.memberId())
-      assertEquals(1, streamsGroupHeartbeatResponse.memberEpoch())
+      assertEquals(2, streamsGroupHeartbeatResponse.memberEpoch())
 
       // Wait for internal topics to be created
       val expectedChangelogTopic = s"$groupId-subtopology-1-changelog"
@@ -859,7 +860,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       }, "StreamsGroupHeartbeatRequest did not succeed within the timeout period.")
 
       val memberEpoch = streamsGroupHeartbeatResponse.memberEpoch()
-      assertEquals(1, memberEpoch)
+      assertEquals(2, memberEpoch)
 
       // Blocking the thread for 1 sec so that the session times out and the member needs to rejoin
       Thread.sleep(1000)
@@ -972,7 +973,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       // Verify the response for member
       assert(streamsGroupHeartbeatResponse != null, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId, streamsGroupHeartbeatResponse.memberId())
-      assertEquals(1, streamsGroupHeartbeatResponse.memberEpoch())
+      assertEquals(2, streamsGroupHeartbeatResponse.memberEpoch())
       assertNotNull(streamsGroupHeartbeatResponse.activeTasks())
 
       // Restart the only running broker
@@ -997,7 +998,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       // Verify the response. Epoch should not have changed and null assignments determine that no
       // change in old assignment
       assertEquals(memberId, streamsGroupHeartbeatResponse.memberId())
-      assertEquals(1, streamsGroupHeartbeatResponse.memberEpoch())
+      assertEquals(2, streamsGroupHeartbeatResponse.memberEpoch())
       assertNull(streamsGroupHeartbeatResponse.activeTasks())
       assertNull(streamsGroupHeartbeatResponse.standbyTasks())
       assertNull(streamsGroupHeartbeatResponse.warmupTasks())

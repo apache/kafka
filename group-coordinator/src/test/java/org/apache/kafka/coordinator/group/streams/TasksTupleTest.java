@@ -122,27 +122,6 @@ public class TasksTupleTest {
     }
 
     @Test
-    public void testMerge() {
-        TasksTuple tuple1 = new TasksTuple(
-            Map.of(SUBTOPOLOGY_1, Set.of(1, 2, 3)),
-            Map.of(SUBTOPOLOGY_2, Set.of(4, 5, 6)),
-            Map.of(SUBTOPOLOGY_3, Set.of(7, 8, 9))
-        );
-
-        TasksTuple tuple2 = new TasksTuple(
-            Map.of(SUBTOPOLOGY_1, Set.of(10, 11)),
-            Map.of(SUBTOPOLOGY_2, Set.of(12, 13)),
-            Map.of(SUBTOPOLOGY_3, Set.of(14, 15))
-        );
-
-        TasksTuple mergedTuple = tuple1.merge(tuple2);
-
-        assertEquals(Map.of(SUBTOPOLOGY_1, Set.of(1, 2, 3, 10, 11)), mergedTuple.activeTasks());
-        assertEquals(Map.of(SUBTOPOLOGY_2, Set.of(4, 5, 6, 12, 13)), mergedTuple.standbyTasks());
-        assertEquals(Map.of(SUBTOPOLOGY_3, Set.of(7, 8, 9, 14, 15)), mergedTuple.warmupTasks());
-    }
-
-    @Test
     public void testContainsAny() {
         TasksTuple tuple1 = new TasksTuple(
             Map.of(SUBTOPOLOGY_1, Set.of(1, 2, 3)),
@@ -150,21 +129,41 @@ public class TasksTupleTest {
             Map.of(SUBTOPOLOGY_3, Set.of(7, 8, 9))
         );
 
-        TasksTuple tuple2 = new TasksTuple(
-            Map.of(SUBTOPOLOGY_1, Set.of(3, 10, 11)),
+        // Test with overlapping active tasks
+        TasksTupleWithEpochs tuple2 = new TasksTupleWithEpochs(
+            Map.of(SUBTOPOLOGY_1, Map.of(3, 5, 10, 5, 11, 5)),
             Map.of(SUBTOPOLOGY_2, Set.of(12, 13)),
             Map.of(SUBTOPOLOGY_3, Set.of(14, 15))
         );
 
         assertTrue(tuple1.containsAny(tuple2));
 
-        TasksTuple tuple3 = new TasksTuple(
-            Map.of(SUBTOPOLOGY_1, Set.of(10, 11)),
+        // Test with no overlapping tasks
+        TasksTupleWithEpochs tuple3 = new TasksTupleWithEpochs(
+            Map.of(SUBTOPOLOGY_1, Map.of(10, 5, 11, 5)),
             Map.of(SUBTOPOLOGY_2, Set.of(12, 13)),
             Map.of(SUBTOPOLOGY_3, Set.of(14, 15))
         );
 
         assertFalse(tuple1.containsAny(tuple3));
+
+        // Test with overlapping standby tasks
+        TasksTupleWithEpochs tuple4 = new TasksTupleWithEpochs(
+            Map.of(SUBTOPOLOGY_1, Map.of(10, 5, 11, 5)),
+            Map.of(SUBTOPOLOGY_2, Set.of(4, 12, 13)),
+            Map.of(SUBTOPOLOGY_3, Set.of(14, 15))
+        );
+
+        assertTrue(tuple1.containsAny(tuple4));
+
+        // Test with overlapping warmup tasks
+        TasksTupleWithEpochs tuple5 = new TasksTupleWithEpochs(
+            Map.of(SUBTOPOLOGY_1, Map.of(10, 5, 11, 5)),
+            Map.of(SUBTOPOLOGY_2, Set.of(12, 13)),
+            Map.of(SUBTOPOLOGY_3, Set.of(7, 14, 15))
+        );
+
+        assertTrue(tuple1.containsAny(tuple5));
     }
 
     @Test

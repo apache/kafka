@@ -21,6 +21,7 @@ import org.apache.kafka.common.metrics.MetricConfig;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A SampledStat records a single scalar value measured over one or more samples. Each sample is recorded over a
@@ -36,6 +37,7 @@ public abstract class SampledStat implements MeasurableStat {
 
     private final double initialValue;
     private int current = 0;
+    private long timeWindowMs = -1;
     protected List<Sample> samples;
 
     public SampledStat(double initialValue) {
@@ -70,7 +72,7 @@ public abstract class SampledStat implements MeasurableStat {
     }
 
     protected Sample newSample(long timeMs) {
-        return new Sample(this.initialValue, timeMs);
+        return this.timeWindowMs > 0 ? new Sample(this.initialValue, timeMs, this.timeWindowMs) : new Sample(this.initialValue, timeMs);
     }
 
     @Override
@@ -97,6 +99,16 @@ public abstract class SampledStat implements MeasurableStat {
         return oldest;
     }
 
+    /**
+     * Allow configuring the time window for this sampled stat.
+     *
+     * @param window the time window.
+     * @param unit   the time unit for the window.
+     */
+    protected void withTimeWindow(long window, TimeUnit unit) {
+        this.timeWindowMs = TimeUnit.MILLISECONDS.convert(window, unit);
+    }
+
     @Override
     public String toString() {
         return "SampledStat(" +
@@ -112,7 +124,8 @@ public abstract class SampledStat implements MeasurableStat {
 
     // purge any samples that lack observed events within the monitored window
     protected void purgeObsoleteSamples(MetricConfig config, long now) {
-        long expireAge = config.samples() * config.timeWindowMs();
+        long windowMs = this.timeWindowMs > 0 ? this.timeWindowMs : config.timeWindowMs();
+        long expireAge = config.samples() * windowMs;
         for (Sample sample : samples) {
             // samples overlapping the monitored window are kept,
             // even if they started before it
@@ -128,6 +141,7 @@ public abstract class SampledStat implements MeasurableStat {
         public long startTimeMs;
         public long lastEventMs;
         public double value;
+        public long timeWindowMs;
 
         public Sample(double initialValue, long now) {
             this.initialValue = initialValue;
@@ -135,6 +149,16 @@ public abstract class SampledStat implements MeasurableStat {
             this.startTimeMs = now;
             this.lastEventMs = now;
             this.value = initialValue;
+            this.timeWindowMs = -1;
+        }
+
+        public Sample(double initialValue, long now, long timeWindowMs) {
+            this.initialValue = initialValue;
+            this.eventCount = 0;
+            this.startTimeMs = now;
+            this.lastEventMs = now;
+            this.value = initialValue;
+            this.timeWindowMs = timeWindowMs;
         }
 
         public void reset(long now) {
@@ -145,7 +169,8 @@ public abstract class SampledStat implements MeasurableStat {
         }
 
         public boolean isComplete(long timeMs, MetricConfig config) {
-            return timeMs - startTimeMs >= config.timeWindowMs() || eventCount >= config.eventWindow();
+            long windowMs = timeWindowMs > 0 ? timeWindowMs : config.timeWindowMs();
+            return timeMs - startTimeMs >= windowMs || eventCount >= config.eventWindow();
         }
 
         @Override
@@ -156,6 +181,7 @@ public abstract class SampledStat implements MeasurableStat {
                 ", startTimeMs=" + startTimeMs +
                 ", lastEventMs=" + lastEventMs +
                 ", initialValue=" + initialValue +
+                ", timeWindowMs=" + timeWindowMs +
                 ')';
         }
     }
