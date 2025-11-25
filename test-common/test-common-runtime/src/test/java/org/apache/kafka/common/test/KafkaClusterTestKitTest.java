@@ -130,7 +130,7 @@ public class KafkaClusterTestKitTest {
                 setNumBrokerNodes(1).
                 setCombined(true).
                 setNumControllerNodes(1).build()).build()) {
-            assertEquals(cluster.nodes().baseDirectory(), baseDirectory.toFile().getAbsolutePath());
+            assertEquals(baseDirectory.toFile().getAbsolutePath(), cluster.nodes().baseDirectory());
             cluster.nodes().controllerNodes().values().forEach(controller ->
                 assertTrue(Paths.get(controller.metadataDirectory()).startsWith(baseDirectory)));
             cluster.nodes().brokerNodes().values().forEach(broker ->
