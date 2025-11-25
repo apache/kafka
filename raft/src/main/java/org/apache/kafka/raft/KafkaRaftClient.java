@@ -222,7 +222,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private volatile RemoveVoterHandler removeVoterHandler;
     private volatile UpdateVoterHandler updateVoterHandler;
 
-    private volatile boolean canAutoJoin = true;
+    private volatile boolean hasAutoJoined = false;
 
     /**
      * Create a new instance.
@@ -504,9 +504,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         partitionState.updateState();
         logger.info("Starting voters are {}", partitionState.lastVoterSet());
         if (nodeId.isPresent()) {
-            // if the starting voters contain the node id of this node, it can't auto join to the cluster
-            // because it is already in.
-            canAutoJoin = !partitionState.lastVoterSet().voterIds().contains(nodeId.getAsInt());
+            // if the starting voters contain the node id of this node, mark it as already joined
+            // because it is already in the voter set.
+            // Check using ReplicaKey (id + directoryId) to handle KIP-853 properly
+            ReplicaKey localReplicaKey = ReplicaKey.of(nodeId.getAsInt(), nodeDirectoryId);
+            hasAutoJoined = partitionState.lastVoterSet().isVoter(localReplicaKey);
         }
 
         if (requestManager == null) {
@@ -2344,7 +2346,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
          */
         if (error == Errors.NONE) {
             quorum.followerStateOrThrow().resetUpdateVoterSetPeriod(currentTimeMs);
-            canAutoJoin = false;
+            hasAutoJoined = true;
             return true;
         } else if (error == Errors.DUPLICATE_VOTER || error == Errors.REQUEST_TIMED_OUT) {
             quorum.followerStateOrThrow().resetUpdateVoterSetPeriod(currentTimeMs);
@@ -3357,65 +3359,44 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private boolean shouldAutoJoin(FollowerState state, long currentTimeMs) {
+    private boolean shouldSendAddOrRemoveVoterRequest(FollowerState state, long currentTimeMs) {
         /* When the cluster supports reconfiguration, only replicas that can become a voter
          * and are configured to auto join should attempt to automatically join the voter
          * set for the configured topic partition.
          */
-        return partitionState.lastKraftVersion().isReconfigSupported() && canBecomeVoter &&
-            quorumConfig.autoJoin() && state.hasUpdateVoterSetPeriodExpired(currentTimeMs);
-    }
-
-    private boolean shouldSendAddVoterRequest(FollowerState state, long currentTimeMs) {
-        return canAutoJoin && shouldAutoJoin(state, currentTimeMs);
-    }
-
-    private boolean shouldSendRemoveVoterRequest(FollowerState state, long currentTimeMs) {
-        final var localReplicaKey = quorum.localReplicaKeyOrThrow();
-        final var voters = partitionState.lastVoterSet();
-
-        if (voters.voterIds().contains(localReplicaKey.id())) {
-            if (shouldAutoJoin(state, currentTimeMs)) {
-                // When the bootstrap controller needs to update directory id,
-                // it should be removed and then rejoining to cluster
-                // In such a case, we should set canAutoJoin to true, and it will
-                // be removed from the cluster, update directory id and rejoin
-                // to the cluster.
-                canAutoJoin = true;
-                return true;
-            }
+        if (!partitionState.lastKraftVersion().isReconfigSupported() || !canBecomeVoter ||
+            !quorumConfig.autoJoin() || !state.hasUpdateVoterSetPeriodExpired(currentTimeMs)) {
+            return false;
         }
-        return false;
-    }
 
+        // Only attempt auto-join if we haven't already auto-joined
+        return !hasAutoJoined;
+    }
 
     private long pollFollowerAsObserver(FollowerState state, long currentTimeMs) {
         GracefulShutdown shutdown = this.shutdown.get();
-        final RequestSendResult sendResult;
-
         if (shutdown != null) {
             // If we are an observer, then we can shutdown immediately. We want to
             // skip potentially sending any add or remove voter RPCs.
             return 0;
-        } else if (nodeId.isPresent() && shouldSendRemoveVoterRequest(state, currentTimeMs)) {
+        } else if (shouldSendAddOrRemoveVoterRequest(state, currentTimeMs)) {
             final var localReplicaKey = quorum.localReplicaKeyOrThrow();
             final var voters = partitionState.lastVoterSet();
-            /* The replica's id is in the voter set but the replica is not a voter because
-             * the directory id of the voter set entry is different. Remove the old voter.
-             * Local replica is not in the voter set because the replica is an observer.
-             */
-            final var oldVoter = voters.voterKeys()
+            final RequestSendResult sendResult;
+            if (voters.voterIds().contains(localReplicaKey.id())) {
+                /* The replica's id is in the voter set but the replica is not a voter because
+                 * the directory id of the voter set entry is different. Remove the old voter.
+                 * Local replica is not in the voter set because the replica is an observer.
+                 */
+                final var oldVoter = voters.voterKeys()
                     .stream()
                     .filter(replicaKey -> replicaKey.id() == localReplicaKey.id())
                     .findFirst()
                     .get();
-            sendResult = maybeSendRemoveVoterRequest(state, oldVoter, currentTimeMs);
-            if (sendResult.requestSent()) {
-                state.resetUpdateVoterSetPeriod(currentTimeMs);
+                sendResult = maybeSendRemoveVoterRequest(state, oldVoter, currentTimeMs);
+            } else {
+                sendResult = maybeSendAddVoterRequest(state, currentTimeMs);
             }
-            return sendResult.timeToWaitMs();
-        } else if (nodeId.isPresent() && shouldSendAddVoterRequest(state, currentTimeMs)) {
-            sendResult = maybeSendAddVoterRequest(state, currentTimeMs);
             if (sendResult.requestSent()) {
                 state.resetUpdateVoterSetPeriod(currentTimeMs);
             }
