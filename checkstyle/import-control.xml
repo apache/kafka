@@ -268,7 +268,6 @@
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.metadata"/>
-    <allow pkg="org.apache.kafka.controller.util"/>
     <allow pkg="org.apache.kafka.queue"/>
     <allow pkg="org.apache.kafka.raft"/>
     <allow pkg="org.apache.kafka.server.common" />
@@ -323,17 +322,6 @@
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.coordinator.common.runtime" />
-      <subpackage name="group">
-        <allow pkg="kafka.api"/>
-        <allow pkg="kafka.security"/>
-        <allow pkg="kafka.zk" />
-        <allow pkg="scala"/>
-        <allow pkg="com.google.re2j"/>
-        <subpackage name="share">
-          <allow pkg="org.apache.kafka.server.share" />
-          <allow pkg="org.apache.kafka.coordinator.share" />
-        </subpackage>
-      </subpackage>
     </subpackage>
 
     <subpackage name="reassign">

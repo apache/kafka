@@ -72,7 +72,6 @@
     <allow pkg="kafka.cluster"/>
     <allow pkg="kafka.log"/>
     <allow pkg="kafka.server"/>
-    <allow pkg="kafka.zk"/>
     <allow pkg="org.apache.kafka.coordinator.group"/>
     <allow pkg="org.apache.kafka.metadata"/>
     <allow pkg="org.apache.kafka.security"/>
@@ -89,13 +88,6 @@
     <allow pkg="org.apache.directory" />
     <allow pkg="org.apache.mina.core.service" />
     <allow pkg="org.apache.kafka.test" />
-  </subpackage>
-
-  <subpackage name="utils">
-    <file name="LoggingController.scala">
-      <allow pkg="org.apache.logging.log4j" />
-      <allow pkg="org.apache.logging.log4j.core.config" />
-    </file>
   </subpackage>
 
 </import-control>
