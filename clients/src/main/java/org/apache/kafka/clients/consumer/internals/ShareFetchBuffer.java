@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
@@ -32,7 +33,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Predicate;
 
 /**
  * {@code ShareFetchBuffer} buffers up {@link ShareCompletedFetch the results} from the broker responses
@@ -73,25 +73,10 @@ public class ShareFetchBuffer implements AutoCloseable {
         }
     }
 
-    /**
-     * Return whether we have any completed fetches pending return to the user. This method is thread-safe. Has
-     * visibility for testing.
-     *
-     * @return {@code true} if there are completed fetches that match the {@link Predicate}, {@code false} otherwise
-     */
-    boolean hasCompletedFetches(Predicate<ShareCompletedFetch> predicate) {
+    void add(List<ShareCompletedFetch> fetches) {
         lock.lock();
         try {
-            return completedFetches.stream().anyMatch(predicate);
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    void add(ShareCompletedFetch fetch) {
-        lock.lock();
-        try {
-            completedFetches.add(fetch);
+            completedFetches.addAll(fetches);
             notEmptyCondition.signalAll();
         } finally {
             lock.unlock();

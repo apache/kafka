@@ -759,6 +759,7 @@ class TransactionStateManagerTest {
       any(),
       any(),
       any(),
+      any(),
       any()
     )
 
@@ -803,6 +804,7 @@ class TransactionStateManagerTest {
       any(),
       any(),
       any(),
+      any(),
       any()
     )
 
@@ -842,6 +844,7 @@ class TransactionStateManagerTest {
       ArgumentMatchers.eq((-1).toShort),
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
+      any(),
       any(),
       any(),
       any(),
@@ -895,6 +898,7 @@ class TransactionStateManagerTest {
       ArgumentMatchers.eq((-1).toShort),
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
+      any(),
       any(),
       any(),
       any(),
@@ -1115,6 +1119,7 @@ class TransactionStateManagerTest {
       callbackCapture.capture(),
       any(),
       any(),
+      any(),
       any()
     )).thenAnswer(_ => callbackCapture.getValue.apply(
       recordsCapture.getValue.map { case (topicPartition, records) =>
@@ -1265,6 +1270,7 @@ class TransactionStateManagerTest {
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicIdPartition, MemoryRecords]],
       capturedArgument.capture(),
+      any(),
       any(),
       any(),
       any()

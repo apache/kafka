@@ -38,6 +38,12 @@ public class MockAssignorTest {
     private final MockAssignor assignor = new MockAssignor();
 
     @Test
+    public void testToStringReturnsName() {
+        assertEquals("mock", assignor.name());
+        assertEquals(assignor.name(), assignor.toString());
+    }
+
+    @Test
     public void testZeroMembers() {
 
         TaskAssignorException ex = assertThrows(TaskAssignorException.class, () -> assignor.assign(

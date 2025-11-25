@@ -17,8 +17,8 @@
 package kafka.server.share;
 
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.server.LogReadResult;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
+import org.apache.kafka.storage.internals.log.LogReadResult;
 import org.apache.kafka.storage.internals.log.RemoteLogReadResult;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
 
