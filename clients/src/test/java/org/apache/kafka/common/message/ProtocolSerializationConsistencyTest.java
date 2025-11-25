@@ -101,7 +101,7 @@ public class ProtocolSerializationConsistencyTest {
     }
 
     @Test
-    public void testNonFlexibleWithNotNullValue() {
+    public void testNonFlexibleWithNonNullValue() {
         messageData.setMyBytes("bytes".getBytes());
         messageData.setMyRecords(MemoryRecords.EMPTY);
         messageData.setMyNullableString("nullable string");
@@ -129,7 +129,7 @@ public class ProtocolSerializationConsistencyTest {
     }
 
     @Test
-    public void testFlexibleWithNotNullValue() {
+    public void testFlexibleWithNonNullValue() {
         messageData.setMyCompactBytes("compact bytes".getBytes());
         messageData.setMyCompactRecords(MemoryRecords.EMPTY);
         messageData.setMyCompactNullableString("compact nullable string");
