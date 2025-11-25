@@ -212,7 +212,7 @@ public class TaskManagerTest {
 
     @BeforeEach
     public void setUp() {
-        taskManager = setUpTaskManagerWithoutStateUpdater(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, null, false);
+        taskManager = setUpTaskManagerWithStateUpdater(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, null, false);
     }
 
     private TaskManager setUpTaskManagerWithStateUpdater(final ProcessingMode processingMode, final TasksRegistry tasks) {
@@ -235,28 +235,6 @@ public class TaskManagerTest {
             adminClient,
             stateDirectory,
             stateUpdater,
-            processingThreadsEnabled ? schedulingTaskManager : null
-        );
-        taskManager.setMainConsumer(consumer);
-        return taskManager;
-    }
-
-    private TaskManager setUpTaskManagerWithoutStateUpdater(final ProcessingMode processingMode,
-                                                            final TasksRegistry tasks,
-                                                            final boolean processingThreadsEnabled) {
-        topologyMetadata = new TopologyMetadata(topologyBuilder, new DummyStreamsConfig(processingMode));
-        final TaskManager taskManager = new TaskManager(
-            time,
-            changeLogReader,
-            ProcessId.randomProcessId(),
-            "taskManagerTest",
-            activeTaskCreator,
-            standbyTaskCreator,
-            tasks != null ? tasks : new Tasks(new LogContext()),
-            topologyMetadata,
-            adminClient,
-            stateDirectory,
-            null,
             processingThreadsEnabled ? schedulingTaskManager : null
         );
         taskManager.setMainConsumer(consumer);
