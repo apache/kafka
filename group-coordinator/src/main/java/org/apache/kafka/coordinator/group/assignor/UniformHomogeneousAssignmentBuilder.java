@@ -25,15 +25,12 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.server.common.TopicIdPartition;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -97,6 +94,11 @@ public class UniformHomogeneousAssignmentBuilder {
     private final boolean useRackStrategy;
 
     /**
+     * The mapping of topic partitions to their associated racks.
+     */
+    private final Map<TopicIdPartition, Set<String>> partitionRacks;
+
+    /**
      * The number of members to receive an extra partition beyond the minimum quota.
      * Example: If there are 11 partitions to be distributed among 3 members,
      *          each member gets 3 (11 / 3) [minQuota] partitions and 2 (11 % 3) members get an extra partition.
@@ -112,30 +114,24 @@ public class UniformHomogeneousAssignmentBuilder {
         this.unassignedPartitions = new LinkedList<>();
 
         this.targetAssignment = new HashMap<>();
+        this.partitionRacks = new HashMap<>();
 
-        Set<String> allMemberRacks =  groupSpec.memberIds().stream()
-            .map(memberId -> groupSpec.memberSubscription(memberId).rackId())
-            .filter(Optional::isPresent)
-            .map(Optional::get)
-            .collect(java.util.stream.Collectors.toSet());
-        Map<TopicIdPartition, Set<String>> racksPerPartition = this.subscribedTopicIds.stream()
-            .flatMap(topicId -> {
-                int partitionCount = subscribedTopicDescriber.numPartitions(topicId);
-                List<TopicIdPartition> topicPartitions = new ArrayList<>();
-                for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
-                    topicPartitions.add(new TopicIdPartition(topicId, partitionId));
-                }
-                return topicPartitions.stream();
-            })
-            .collect(java.util.stream.Collectors.toMap(
-                tip -> tip,
-                tip -> subscribedTopicDescriber.racksForPartition(tip.topicId(), tip.partitionId())
-            ));
-        Set<String> allPartitionRacks = racksPerPartition.values().stream()
-            .flatMap(Collection::stream)
-            .collect(java.util.stream.Collectors.toSet());
+        Set<String> allMemberRacks = new HashSet<>();
+        for (String memberId : groupSpec.memberIds()) {
+            groupSpec.memberSubscription(memberId).rackId().ifPresent(allMemberRacks::add);
+        }
 
-        this.useRackStrategy = AssignorHelpers.useRackAwareAssignment(allMemberRacks, allPartitionRacks, racksPerPartition);
+        Set<String> allPartitionRacks = new HashSet<>();
+        for (Uuid topicId : this.subscribedTopicIds) {
+            int partitionCount = subscribedTopicDescriber.numPartitions(topicId);
+            for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
+                Set<String> racks = subscribedTopicDescriber.racksForPartition(topicId, partitionId);
+                partitionRacks.put(new TopicIdPartition(topicId, partitionId), racks);
+                allPartitionRacks.addAll(racks);
+            }
+        }
+
+        this.useRackStrategy = AssignorHelpers.useRackAwareAssignment(allMemberRacks, allPartitionRacks, partitionRacks);
     }
 
     /**
@@ -226,7 +222,7 @@ public class UniformHomogeneousAssignmentBuilder {
                             // 2-2. Use rack strategy and the member rack matches the partition racks.
                             if (quota > 0 && (!useRackStrategy || AssignorHelpers.isRackMatch(
                                 groupSpec.memberSubscription(memberId).rackId(),
-                                subscribedTopicDescriber.racksForPartition(topicId, partition)))) {
+                                partitionRacks.getOrDefault(new TopicIdPartition(topicId, partition), Set.of())))) {
                                 quota--;
                             } else {
                                 if (newAssignment == null) {
@@ -299,7 +295,7 @@ public class UniformHomogeneousAssignmentBuilder {
 
                 String memberId = unfilledMember.memberId;
                 if (!AssignorHelpers.isRackMatch(groupSpec.memberSubscription(memberId).rackId(),
-                    subscribedTopicDescriber.racksForPartition(tip.topicId(), tip.partitionId()))) {
+                    partitionRacks.getOrDefault(tip, Set.of()))) {
                     continue;
                 }
 
