@@ -508,7 +508,6 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   def testCloseWithZeroTimeoutFromCallerThread(groupProtocol: String): Unit = {
     TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 2, 2)
     val partition = 0
-    consumer.assign(java.util.List.of(new TopicPartition(topic, partition)))
     val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, null,
       "value".getBytes(StandardCharsets.UTF_8))
 
