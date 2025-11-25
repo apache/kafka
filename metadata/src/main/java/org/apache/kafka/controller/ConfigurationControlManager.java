@@ -51,6 +51,7 @@ import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
@@ -508,6 +509,16 @@ public class ConfigurationControlManager {
      */
     public void replay(ConfigRecord record) {
         Type type = Type.forId(record.resourceType());
+        // Filter out invalid configs
+        if (type != Type.UNKNOWN) {
+            Set<String> validConfigNames = configSchema.validConfigNames(type);
+            if (!validConfigNames.isEmpty() && !validConfigNames.contains(record.name())) {
+                // Ignore the record if it's a removed/invalid config
+                log.debug("Ignoring ConfigRecord for {} with invalid/removed config name: {}",
+                        new ConfigResource(type, record.resourceName()), record.name());
+                return;
+            }
+        }
         ConfigResource configResource = new ConfigResource(type, record.resourceName());
         TimelineHashMap<String, String> configs = configData.get(configResource);
         if (configs == null) {

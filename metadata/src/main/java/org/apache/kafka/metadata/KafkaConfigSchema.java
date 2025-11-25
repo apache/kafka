@@ -28,9 +28,11 @@ import org.apache.kafka.server.config.ConfigSynonym;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 
 import static org.apache.kafka.common.config.TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG;
@@ -280,5 +282,27 @@ public class KafkaConfigSchema {
         return (int) ConfigDef.parseType(MIN_IN_SYNC_REPLICAS_CONFIG,
             minInsyncReplicasString,
             ConfigDef.Type.INT);
+    }
+
+    /**
+     * Get the set of valid dynamic configuration names for a given resource type.
+     * whitelists:
+     * - Topic: LogConfig.configDef
+     * - Broker: KafkaConfig.configDef
+     * - Group: GroupConfig.configDef
+     * - ClientMetrics: ClientMetricsConfigs.configDef
+     *
+     * @param type The resource type
+     * @return A set of valid configuration names for the given resource type
+     */
+    public Set<String> validConfigNames(ConfigResource.Type type) {
+        ConfigDef configDef = configDefs.getOrDefault(type, EMPTY_CONFIG_DEF);
+        Set<String> validNames = new HashSet<>();
+        for (ConfigDef.ConfigKey configKey : configDef.configKeys().values()) {
+            if (!configKey.internalConfig) {
+                validNames.add(configKey.name);
+            }
+        }
+        return Collections.unmodifiableSet(validNames);
     }
 }

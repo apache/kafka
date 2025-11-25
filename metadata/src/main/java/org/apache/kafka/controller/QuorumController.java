@@ -96,6 +96,7 @@ import org.apache.kafka.controller.errors.EventHandlerExceptionInfo;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.deferred.DeferredEvent;
 import org.apache.kafka.deferred.DeferredEventQueue;
+import org.apache.kafka.image.ConfigurationsDelta;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
@@ -1549,6 +1550,8 @@ public final class QuorumController implements Controller {
             setNodeId(nodeId).
             setFeatureControl(featureControl).
             build();
+        // Initialize the config schema supplier for ConfigurationsDelta to filter invalid configs
+        ConfigurationsDelta.setConfigSchemaSupplier(() -> configSchema);
         this.producerIdControlManager = new ProducerIdControlManager.Builder().
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).

@@ -29,7 +29,9 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationF
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.{ProcessRole, ServerSocketFactory}
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
+import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.{LogConfig, UnifiedLog}
 import org.slf4j.Logger
 
@@ -189,5 +191,7 @@ object KafkaRaftServer {
   val configSchema = new KafkaConfigSchema(Map(
     ConfigResource.Type.BROKER -> new ConfigDef(KafkaConfig.configDef),
     ConfigResource.Type.TOPIC -> LogConfig.configDefCopy,
+    ConfigResource.Type.GROUP -> GroupConfig.configDef(),
+    ConfigResource.Type.CLIENT_METRICS -> ClientMetricsConfigs.configDef(),
   ).asJava, ServerTopicConfigSynonyms.ALL_TOPIC_CONFIG_SYNONYMS)
 }

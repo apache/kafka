@@ -17,9 +17,11 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.image.writer.RecordListWriter;
+import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
@@ -27,14 +29,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
+import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
@@ -136,5 +143,71 @@ public class ConfigurationsImageTest {
         RecordListWriter writer = new RecordListWriter();
         image.write(writer);
         return writer.records();
+    }
+
+    @Test
+    public void testRemovedConfigFiltered() {
+        // Create a schema that doesn't include removed configs
+        Map<ConfigResource.Type, ConfigDef> configDefs = new HashMap<>();
+        ConfigDef topicConfigDef = new ConfigDef();
+        topicConfigDef.define("retention.ms", ConfigDef.Type.LONG, ConfigDef.Importance.MEDIUM, "retention ms doc");
+        configDefs.put(TOPIC, topicConfigDef);
+        KafkaConfigSchema testSchema = new KafkaConfigSchema(configDefs, Collections.emptyMap());
+        ConfigurationsDelta.setConfigSchemaSupplier(() -> testSchema);
+
+        try {
+            String testTopic = "test-topic";
+            String removedConfig = "message.format.version";
+            String validConfig = "retention.ms";
+            String validConfigValue = "604800000";
+
+            // Test 1: Filter removed configs from base image
+            Map<ConfigResource, ConfigurationImage> initialData = new HashMap<>();
+            Map<String, String> topicConfigs = new HashMap<>();
+            topicConfigs.put(removedConfig, "0.10.0");
+            topicConfigs.put(validConfig, validConfigValue);
+            initialData.put(new ConfigResource(TOPIC, testTopic),
+                new ConfigurationImage(new ConfigResource(TOPIC, testTopic), topicConfigs));
+
+            ConfigurationsImage initialImage = new ConfigurationsImage(initialData);
+            ConfigurationsDelta delta = new ConfigurationsDelta(initialImage);
+            ConfigurationsImage finalImage = delta.apply();
+
+            ConfigResource topicResource = new ConfigResource(TOPIC, testTopic);
+            ConfigurationImage topicConfig = finalImage.resourceData().get(topicResource);
+            assertNotNull(topicConfig);
+            assertFalse(topicConfig.data().containsKey(removedConfig), "Removed config should be filtered from base image");
+            assertTrue(topicConfig.data().containsKey(validConfig), "Valid config should be present");
+            assertEquals(validConfigValue, topicConfig.data().get(validConfig));
+
+            // Test 2: Filter removed configs when replaying records
+            ConfigurationsDelta delta2 = new ConfigurationsDelta(ConfigurationsImage.EMPTY);
+            List<ApiMessageAndVersion> records = new ArrayList<>();
+            records.add(new ApiMessageAndVersion(
+                new ConfigRecord()
+                    .setResourceType(TOPIC.id())
+                    .setResourceName(testTopic)
+                    .setName(removedConfig)
+                    .setValue("0.10.0"),
+                CONFIG_RECORD.highestSupportedVersion()));
+            records.add(new ApiMessageAndVersion(
+                new ConfigRecord()
+                    .setResourceType(TOPIC.id())
+                    .setResourceName(testTopic)
+                    .setName(validConfig)
+                    .setValue(validConfigValue),
+                CONFIG_RECORD.highestSupportedVersion()));
+
+            RecordTestUtils.replayAll(delta2, records);
+            ConfigurationsImage finalImage2 = delta2.apply();
+
+            ConfigurationImage topicConfig2 = finalImage2.resourceData().get(topicResource);
+            assertNotNull(topicConfig2);
+            assertFalse(topicConfig2.data().containsKey(removedConfig), "Removed config should be filtered on replay");
+            assertTrue(topicConfig2.data().containsKey(validConfig), "Valid config should be present");
+            assertEquals(1, topicConfig2.data().size(), "Only valid config should remain");
+        } finally {
+            ConfigurationsDelta.setConfigSchemaSupplier(null);
+        }
     }
 }

@@ -44,6 +44,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -151,6 +152,33 @@ public class ConfigurationControlManagerTest {
         assertEquals(toMap(entry("abc", "x,y,z"), entry("def", "blah")),
             manager.getConfigs(MYTOPIC));
         assertEquals("x,y,z", manager.getTopicConfig(MYTOPIC.name(), "abc").value());
+    }
+
+    @Test
+    public void testReplayFiltersRemovedConfigs() {
+        // Create a schema that doesn't include removed configs
+        Map<ConfigResource.Type, ConfigDef> configDefs = new HashMap<>();
+        ConfigDef topicConfigDef = new ConfigDef();
+        topicConfigDef.define("abc", ConfigDef.Type.LIST, ConfigDef.Importance.HIGH, "abc");
+        configDefs.put(TOPIC, topicConfigDef);
+        KafkaConfigSchema testSchema = new KafkaConfigSchema(configDefs, Collections.emptyMap());
+
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setKafkaConfigSchema(testSchema).
+            build();
+
+        // Replay a removed config
+        manager.replay(new ConfigRecord().
+            setResourceType(TOPIC.id()).setResourceName("mytopic").
+            setName("removed.config").setValue("value"));
+        assertEquals(Map.of(), manager.getConfigs(MYTOPIC), "Removed config should not be in configData");
+
+        // Replay a valid config
+        manager.replay(new ConfigRecord().
+            setResourceType(TOPIC.id()).setResourceName("mytopic").
+            setName("abc").setValue("x,y,z"));
+        assertEquals(toMap(entry("abc", "x,y,z")), manager.getConfigs(MYTOPIC),
+            "Valid config should be in configData");
     }
 
     @Test
