@@ -46,6 +46,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.TreeMap;
@@ -100,6 +101,11 @@ public class Formatter {
      * The bootstrap metadata used to format the cluster.
      */
     private BootstrapMetadata bootstrapMetadata;
+
+    /**
+     * Additional bootstrap records that should be appended after the defaults.
+     */
+    private List<ApiMessageAndVersion> additionalBootstrapRecords = List.of();
 
     /**
      * True if we should enable unstable feature versions.
@@ -219,6 +225,12 @@ public class Formatter {
 
     public Formatter setHasDynamicQuorum(boolean hasDynamicQuorum) {
         this.hasDynamicQuorum = hasDynamicQuorum;
+        return this;
+    }
+
+    public Formatter setAdditionalBootstrapRecords(Collection<ApiMessageAndVersion> additionalBootstrapRecords) {
+        Objects.requireNonNull(additionalBootstrapRecords);
+        this.additionalBootstrapRecords = List.copyOf(additionalBootstrapRecords);
         return this;
     }
 
@@ -381,6 +393,9 @@ public class Formatter {
         BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
             fromVersions(releaseVersion, featureLevels, "format command");
         List<ApiMessageAndVersion> bootstrapRecords = new ArrayList<>(bootstrapMetadata.records());
+        if (!additionalBootstrapRecords.isEmpty()) {
+            bootstrapRecords.addAll(additionalBootstrapRecords);
+        }
         if (!scramArguments.isEmpty()) {
             if (!releaseVersion.isScramSupported()) {
                 throw new FormatterException("SCRAM is only supported in " + MetadataVersion.FEATURE_NAME +

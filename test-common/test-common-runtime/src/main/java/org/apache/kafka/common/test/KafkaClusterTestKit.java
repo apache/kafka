@@ -29,6 +29,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -494,6 +495,12 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 }
                 short level = nodes.bootstrapMetadata().featureLevel(featureName);
                 formatter.setFeatureLevel(featureName, level);
+            }
+            List<ApiMessageAndVersion> configRecords = nodes.bootstrapMetadata().records().stream()
+                .filter(record -> record.message() instanceof ConfigRecord)
+                .collect(Collectors.toList());
+            if (!configRecords.isEmpty()) {
+                formatter.setAdditionalBootstrapRecords(configRecords);
             }
             
             if (writeMetadataDirectory) {
