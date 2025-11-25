@@ -1405,12 +1405,7 @@ class KRaftClusterTest {
       build()
     try {
       cluster.format()
-      val controllerServer = cluster.controllers().values().iterator().next()
-      val dynamicConfigProps = new Properties()
-      dynamicConfigProps.setProperty(ServerConfigs.NUM_IO_THREADS_CONFIG, "9")
-      controllerServer.config.dynamicConfig.initialize(None)
       cluster.startup()
-      controllerServer.config.dynamicConfig.updateDefaultConfig(dynamicConfigProps)
       val controller = cluster.controllers().values().iterator().next()
       TestUtils.retry(60000) {
         assertNotNull(controller.controllerApisHandlerPool)

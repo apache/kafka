@@ -48,15 +48,8 @@ import scala.jdk.CollectionConverters._
 class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
   @ClusterTest(
-    metadataVersion = MetadataVersion.IBP_4_1_IV1,
     features = Array(
       new ClusterFeature(feature = Feature.GROUP_VERSION, version = 0)
-    ),
-    serverProperties = Array(
-      new ClusterConfigProperty(
-        key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG,
-        value = "classic"
-      )
     )
   )
   def testConsumerGroupDescribeWhenFeatureFlagNotEnabled(): Unit = {
