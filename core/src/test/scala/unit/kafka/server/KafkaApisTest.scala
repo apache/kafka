@@ -4249,8 +4249,8 @@ class KafkaApisTest extends Logging {
   // TODO: FIXME - This test is currently failing because topic ID resolution from metadata cache is not working correctly
   // The issue is that metadataCache.getTopicName(topicId) returns None even after addTopicToMetadataCache is called
   // This needs further investigation into how KRaftMetadataCache handles topic ID to name resolution
-  // @Test
-  def testHandleListOffsetRequestWithTopicIdDisabled(): Unit = {
+   @Test
+  def testHandleListOffsetRequestWithTopicId(): Unit = {
     val tp = new TopicPartition("foo", 0)
     val topicId = Uuid.randomUuid()
     val isolationLevel = IsolationLevel.READ_UNCOMMITTED
@@ -10472,7 +10472,9 @@ class KafkaApisTest extends Logging {
 
   private def addTopicToMetadataCache(topic: String, numPartitions: Int, numBrokers: Int = 1, topicId: Uuid = Uuid.ZERO_UUID): Unit = {
     val updateMetadata = createBasicMetadata(topic, numPartitions, 0, numBrokers, topicId)
+    System.err.println("kkk updateMetadata" + updateMetadata)
     MetadataCacheTest.updateCache(metadataCache, updateMetadata)
+    System.err.println("kkk metadataCache" + metadataCache)
   }
 
   private def createMetadataBroker(brokerId: Int,
