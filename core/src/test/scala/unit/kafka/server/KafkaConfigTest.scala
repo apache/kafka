@@ -823,6 +823,8 @@ class KafkaConfigTest {
         case MetadataLogConfig.INTERNAL_METADATA_MAX_BATCH_SIZE_IN_BYTES_CONFIG => // no op
         case MetadataLogConfig.INTERNAL_METADATA_DELETE_DELAY_MILLIS_CONFIG => // no op
         case KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG => // ignore string
+        case KRaftConfigs.CANARY_POD_NAME => assertPropertyInvalid(baseProperties, name, " ")
+        case KRaftConfigs.CANARY_PARTITION_PERCENTAGE => assertPropertyInvalid(baseProperties, name, "not_a_number", "-0.1", "1.1")
         case MetadataLogConfig.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG  => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
         case ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG => //ignore string

@@ -94,7 +94,7 @@ public class PodReplicaPlacer implements ReplicaPlacer {
             }
         }
         if (lastCluster != null) {
-            result.add(new ClusterPlacement(lastCluster, new PlacementSpec(lastStartPartition, placement.numPartitions()  + placement.startPartition() - lastStartPartition, placement.numReplicas())));
+            result.add(new ClusterPlacement(lastCluster, new PlacementSpec(lastStartPartition, placement.numPartitions() - lastStartPartition + placement.startPartition(), placement.numReplicas())));
         }
         return result;
     }
