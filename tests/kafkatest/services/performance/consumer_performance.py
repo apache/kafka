@@ -32,7 +32,7 @@ class ConsumerPerformanceService(PerformanceService):
 
         "group", "The group id to consume on."
 
-        "fetch-size", "The amount of data to fetch in a single request."
+        "fetch-size", "The maximum amount of data to fetch from a single partition per request."
 
         "from-latest", "If the consumer does not already have an establishedoffset to consume from,
                         start with the latest message present in the log rather than the earliest message."

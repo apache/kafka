@@ -335,21 +335,21 @@ public abstract class AbstractFetch implements Closeable {
     }
 
     /**
-     * Return the set of <em>fetchable</em> partitions, which are the set of partitions to which we are subscribed,
+     * Return the list of <em>fetchable</em> partitions, which are the list of partitions to which we are subscribed,
      * but <em>excluding</em> any partitions for which we still have buffered data. The idea is that since the user
      * has yet to process the data for the partition that has already been fetched, we should not go send for more data
      * until the previously-fetched data has been processed.
      *
      * @param buffered The set of partitions we have in our buffer
-     * @return {@link Set} of {@link TopicPartition topic partitions} for which we should fetch data
+     * @return {@link List} of {@link TopicPartition topic partitions} for which we should fetch data
      */
-    private Set<TopicPartition> fetchablePartitions(Set<TopicPartition> buffered) {
+    private List<TopicPartition> fetchablePartitions(Set<TopicPartition> buffered) {
         // This is the test that returns true if the partition is *not* buffered
         Predicate<TopicPartition> isNotBuffered = tp -> !buffered.contains(tp);
 
         // Return all partitions that are in an otherwise fetchable state *and* for which we don't already have some
         // messages sitting in our buffer.
-        return new HashSet<>(subscriptions.fetchablePartitions(isNotBuffered));
+        return subscriptions.fetchablePartitions(isNotBuffered);
     }
 
     /**
@@ -429,8 +429,8 @@ public abstract class AbstractFetch implements Closeable {
         // This is the set of partitions that have buffered data
         Set<TopicPartition> buffered = Collections.unmodifiableSet(fetchBuffer.bufferedPartitions());
 
-        // This is the set of partitions that do not have buffered data
-        Set<TopicPartition> unbuffered = fetchablePartitions(buffered);
+        // This is the list of partitions that are fetchable and have no buffered data
+        List<TopicPartition> unbuffered = fetchablePartitions(buffered);
 
         if (unbuffered.isEmpty()) {
             // If there are no partitions that don't already have data locally buffered, there's no need to issue

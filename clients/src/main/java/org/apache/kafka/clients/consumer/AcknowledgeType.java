@@ -16,15 +16,12 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Locale;
 
 /**
  * The acknowledge type is used with {@link KafkaShareConsumer#acknowledge(ConsumerRecord, AcknowledgeType)} to indicate
  * whether the record was consumed successfully.
  */
-@InterfaceStability.Evolving
 public enum AcknowledgeType {
     /** The record was consumed successfully. */
     ACCEPT((byte) 1),
@@ -33,7 +30,10 @@ public enum AcknowledgeType {
     RELEASE((byte) 2),
 
     /** The record was not consumed successfully. Reject it and do not release it for another delivery attempt. */
-    REJECT((byte) 3);
+    REJECT((byte) 3),
+
+    /** The record is still being processed. Renew the acquisition lock so processing can continue. */
+    RENEW((byte) 4);
 
     public final byte id;
 
@@ -55,6 +55,8 @@ public enum AcknowledgeType {
                 return RELEASE;
             case 3:
                 return REJECT;
+            case 4:
+                return RENEW;
             default:
                 throw new IllegalArgumentException("Unknown acknowledge type id: " + id);
         }
