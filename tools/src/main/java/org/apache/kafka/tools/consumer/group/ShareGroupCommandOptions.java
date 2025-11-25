@@ -39,9 +39,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         "When resetting offsets, partitions can be specified using this format: 'topic1:0,1,2', where 0,1,2 are the partitions to be included.";
     private static final String ALL_TOPICS_DOC = "Consider all topics assigned to a share group in the 'reset-offsets' process.";
     private static final String LIST_DOC = "List all share groups.";
-    private static final String DESCRIBE_DOC = "Describe share group, members and start-offset information. Note: The start-offset represents "
-        + "the offset available for shared consumers. However, records already past the start-offset "
-        + "may be consumed (in-flight) and are pending the start offset's next update.";
+    private static final String DESCRIBE_DOC = "Describe share group, members and offset information.";
     private static final String ALL_GROUPS_DOC = "Apply to all share groups.";
     private static final String NL = System.lineSeparator();
     private static final String DELETE_DOC = "Delete share group.";
