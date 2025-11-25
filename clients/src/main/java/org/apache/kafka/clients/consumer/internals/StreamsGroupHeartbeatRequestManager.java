@@ -297,6 +297,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
      */
     private final Timer pollTimer;
 
+    private volatile boolean isClosed = false;
+
     public StreamsGroupHeartbeatRequestManager(final LogContext logContext,
                                                final Time time,
                                                final ConsumerConfig config,
@@ -417,6 +419,11 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         return EMPTY;
     }
 
+    @Override
+    public void signalClose() {
+        isClosed = true;
+    }
+
     public StreamsMembershipManager membershipManager() {
         return membershipManager;
     }
@@ -486,7 +493,11 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 else
                     logger.error("StreamsGroupHeartbeatRequest failed because of {}: {}", error, response);
             } else {
-                logger.error("StreamsGroupHeartbeatRequest failed because of unexpected exception.", exception);
+                if (isClosed) {
+                    logger.debug("StreamsGroupHeartbeatRequest failed because of exception during close: ", exception);
+                }
+                else
+                    logger.error("StreamsGroupHeartbeatRequest failed because of unexpected exception: ", exception);
             }
         });
     }

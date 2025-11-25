@@ -24,10 +24,8 @@ import org.apache.kafka.clients.consumer.internals.events.AsyncPollEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
-import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -98,6 +96,8 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
      * Holding the heartbeat sensor to measure heartbeat timing and response latency
      */
     private final HeartbeatMetricsManager metricsManager;
+
+    private volatile boolean isClosed = false;
 
     public static final String CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG = "The cluster does not support the new CONSUMER " +
         "group protocol. Set group.protocol=classic on the consumer configs to revert to the CLASSIC protocol " +
@@ -259,6 +259,11 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
     }
 
+    @Override
+    public void signalClose() {
+        isClosed = true;
+    }
+
     /**
      * Reset the poll timer, indicating that the user has called consumer.poll(). If the member
      * is in {@link MemberState#STALE} state due to expired poll timer, this will transition the
@@ -316,10 +321,12 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                     logger.debug("{} responded successfully: {}", heartbeatRequestName(), response);
                 else
                     logger.error("{} failed because of {}: {}", heartbeatRequestName(), error, response);
-            } else if (exception instanceof TimeoutException || exception instanceof DisconnectException) {
-                logger.warn("{} heartbeat failed due to transient network issue: {}", heartbeatRequestName(), exception.getMessage());
             } else {
-                logger.error("{} heartbeat failed due to unexpected exception.", heartbeatRequestName(), exception);
+                if (isClosed) {
+                    logger.debug("{} failed because of exception during close: {}", heartbeatRequestName(), exception);
+                }
+                else
+                    logger.error("{} failed because of unexpected exception: {}", heartbeatRequestName(), exception);
             }
         });
     }
