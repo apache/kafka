@@ -2387,7 +2387,6 @@ public class TaskManagerTest {
         verify(consumer, never()).commitSync(emptyMap());
     }
 
-    @SuppressWarnings("removal")
     @Test
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringHandleCorruptedWithEOS() {
         final StreamTask corruptedActive = statefulTask(taskId00, taskId00ChangelogPartitions)
@@ -2411,7 +2410,8 @@ public class TaskManagerTest {
 
         final StreamsProducer producer = mock(StreamsProducer.class);
         when(activeTaskCreator.streamsProducer()).thenReturn(producer);
-        final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
+        final ConsumerGroupMetadata groupMetadata = mock(ConsumerGroupMetadata.class);
+        
         when(consumer.groupMetadata()).thenReturn(groupMetadata);
         when(consumer.assignment()).thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
 
@@ -2627,7 +2627,6 @@ public class TaskManagerTest {
         verify(unrevokedActiveTaskWithoutCommit, never()).addPartitionsForOffsetReset(any());
     }
 
-    @SuppressWarnings("removal")
     @Test
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringRevocationWithEOS() {
         // task being revoked - needs commit
@@ -2654,7 +2653,7 @@ public class TaskManagerTest {
 
         final StreamsProducer producer = mock(StreamsProducer.class);
         when(activeTaskCreator.streamsProducer()).thenReturn(producer);
-        final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
+        final ConsumerGroupMetadata groupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(groupMetadata);
         when(consumer.assignment()).thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
 
@@ -2951,7 +2950,6 @@ public class TaskManagerTest {
         verify(task00).suspend();
     }
 
-    @SuppressWarnings("removal")
     @Test
     public void shouldCommitAllActiveTasksThatNeedCommittingOnHandleRevocationWithEosV2() {
         // task being revoked, needs commit
@@ -2984,7 +2982,7 @@ public class TaskManagerTest {
 
         final StreamsProducer producer = mock(StreamsProducer.class);
         when(activeTaskCreator.streamsProducer()).thenReturn(producer);
-        final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
+        final ConsumerGroupMetadata groupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(groupMetadata);
 
         final Map<TopicPartition, OffsetAndMetadata> offsets00 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
@@ -3858,7 +3856,6 @@ public class TaskManagerTest {
         verify(consumer).commitSync(offsets);
     }
 
-    @SuppressWarnings("removal")
     @Test
     public void shouldCommitViaProducerIfEosV2Enabled() {
         final StreamTask task01 = statefulTask(taskId01, taskId01ChangelogPartitions)
@@ -3891,13 +3888,14 @@ public class TaskManagerTest {
         when(task02.prepareCommit(true)).thenReturn(offsetsT02);
         doNothing().when(task02).postCommit(false);
 
-        when(consumer.groupMetadata()).thenReturn(new ConsumerGroupMetadata("appId"));
+        final ConsumerGroupMetadata groupMetadata = mock(ConsumerGroupMetadata.class);
+        when(consumer.groupMetadata()).thenReturn(groupMetadata);
 
         final TaskManager taskManager = setUpTaskManagerWithStateUpdater(ProcessingMode.EXACTLY_ONCE_V2, tasks);
 
         taskManager.commitAll();
 
-        verify(producer).commitTransaction(allOffsets, new ConsumerGroupMetadata("appId"));
+        verify(producer).commitTransaction(allOffsets, groupMetadata);
         verify(task01, times(2)).commitNeeded();
         verify(task01).prepareCommit(true);
         verify(task01).postCommit(false);
@@ -4640,7 +4638,6 @@ public class TaskManagerTest {
         verify(consumer, times(2)).commitSync(any(Map.class));
     }
 
-    @SuppressWarnings("removal")
     @Test
     public void shouldThrowTaskCorruptedExceptionForTimeoutExceptionOnCommitWithEosV2() {
         final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
@@ -4669,7 +4666,7 @@ public class TaskManagerTest {
 
         final StreamsProducer producer = mock(StreamsProducer.class);
         when(activeTaskCreator.streamsProducer()).thenReturn(producer);
-        final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
+        final ConsumerGroupMetadata groupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(groupMetadata);
 
         doThrow(new TimeoutException("KABOOM!")).when(producer).commitTransaction(allOffsets, groupMetadata);
