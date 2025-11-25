@@ -23,7 +23,6 @@ import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
@@ -38,14 +37,12 @@ import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
@@ -76,13 +73,10 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -123,7 +117,6 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -4500,53 +4493,6 @@ public class TaskManagerTest {
         assertThat(taskManager.producerMetrics(), is(dummyProducerMetrics));
     }
 
-    private Map<TaskId, StateMachineTask> handleAssignment(final Map<TaskId, Set<TopicPartition>> runningActiveAssignment,
-                                                           final Map<TaskId, Set<TopicPartition>> standbyAssignment,
-                                                           final Map<TaskId, Set<TopicPartition>> restoringActiveAssignment) {
-        final Set<Task> runningTasks = runningActiveAssignment.entrySet().stream()
-                                           .map(t -> new StateMachineTask(t.getKey(), t.getValue(), true, stateManager))
-                                           .collect(Collectors.toSet());
-        final Set<Task> standbyTasks = standbyAssignment.entrySet().stream()
-                                           .map(t -> new StateMachineTask(t.getKey(), t.getValue(), false, stateManager))
-                                           .collect(Collectors.toSet());
-        final Set<Task> restoringTasks = restoringActiveAssignment.entrySet().stream()
-                                           .map(t -> new StateMachineTask(t.getKey(), t.getValue(), true, stateManager))
-                                           .collect(Collectors.toSet());
-        // give the restoring tasks some uncompleted changelog partitions so they'll stay in restoring
-        restoringTasks.forEach(t -> ((StateMachineTask) t).setChangelogOffsets(singletonMap(new TopicPartition("changelog", 0), 0L)));
-
-        // Initially assign only the active tasks we want to complete restoration
-        final Map<TaskId, Set<TopicPartition>> allActiveTasksAssignment = new HashMap<>(runningActiveAssignment);
-        allActiveTasksAssignment.putAll(restoringActiveAssignment);
-        final Set<Task> allActiveTasks = new HashSet<>(runningTasks);
-        allActiveTasks.addAll(restoringTasks);
-
-        when(standbyTaskCreator.createTasks(standbyAssignment)).thenReturn(standbyTasks);
-        when(activeTaskCreator.createTasks(any(), eq(allActiveTasksAssignment))).thenReturn(allActiveTasks);
-
-        lenient().when(consumer.assignment()).thenReturn(assignment);
-
-        taskManager.handleAssignment(allActiveTasksAssignment, standbyAssignment);
-        taskManager.tryToCompleteRestoration(time.milliseconds(), null);
-
-        final Map<TaskId, StateMachineTask> allTasks = new HashMap<>();
-
-        // Just make sure all tasks ended up in the expected state
-        for (final Task task : runningTasks) {
-            assertThat(task.state(), is(Task.State.RUNNING));
-            allTasks.put(task.id(), (StateMachineTask) task);
-        }
-        for (final Task task : restoringTasks) {
-            assertThat(task.state(), is(Task.State.RESTORING));
-            allTasks.put(task.id(), (StateMachineTask) task);
-        }
-        for (final Task task : standbyTasks) {
-            assertThat(task.state(), is(Task.State.RUNNING));
-            allTasks.put(task.id(), (StateMachineTask) task);
-        }
-        return allTasks;
-    }
-
     private void expectLockObtainedFor(final TaskId... tasks) {
         for (final TaskId task : tasks) {
             when(stateDirectory.lock(task)).thenReturn(true);
@@ -4973,250 +4919,5 @@ public class TaskManagerTest {
 
     private File getCheckpointFile(final TaskId task) {
         return new File(new File(testFolder.toAbsolutePath().toString(), task.toString()), StateManagerUtil.CHECKPOINT_FILE_NAME);
-    }
-
-    private static ConsumerRecord<byte[], byte[]> getConsumerRecord(final TopicPartition topicPartition, final long offset) {
-        return new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), offset, null, null);
-    }
-
-    private static class StateMachineTask extends AbstractTask implements Task {
-        private final boolean active;
-
-        // TODO: KAFKA-12569 clean up usage of these flags and use the new commitCompleted flag where appropriate
-        private boolean commitNeeded = false;
-        private boolean commitRequested = false;
-        private boolean commitPrepared = false;
-        private boolean commitCompleted = false;
-        private Map<TopicPartition, OffsetAndMetadata> committableOffsets = Collections.emptyMap();
-        private Map<TopicPartition, Long> purgeableOffsets;
-        private Map<TopicPartition, Long> changelogOffsets = Collections.emptyMap();
-        private Set<TopicPartition> partitionsForOffsetReset = Collections.emptySet();
-        private Long timeout = null;
-
-        private final Map<TopicPartition, LinkedList<ConsumerRecord<byte[], byte[]>>> queue = new HashMap<>();
-
-        StateMachineTask(final TaskId id,
-                         final Set<TopicPartition> partitions,
-                         final boolean active,
-                         final ProcessorStateManager processorStateManager) {
-            super(id, null, null, processorStateManager, partitions, (new TopologyConfig(new DummyStreamsConfig())).getTaskConfig(), "test-task", StateMachineTask.class);
-            this.active = active;
-        }
-
-        @Override
-        public void initializeIfNeeded() {
-            if (state() == State.CREATED) {
-                transitionTo(State.RESTORING);
-                if (!active) {
-                    transitionTo(State.RUNNING);
-                }
-            }
-        }
-
-        @Override
-        public void addPartitionsForOffsetReset(final Set<TopicPartition> partitionsForOffsetReset) {
-            this.partitionsForOffsetReset = partitionsForOffsetReset;
-        }
-
-        @Override
-        public void completeRestoration(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
-            if (state() == State.RUNNING) {
-                return;
-            }
-            transitionTo(State.RUNNING);
-        }
-
-        public void setCommitNeeded() {
-            commitNeeded = true;
-        }
-
-        @Override
-        public boolean commitNeeded() {
-            return commitNeeded;
-        }
-
-        public void setCommitRequested() {
-            commitRequested = true;
-        }
-
-        @Override
-        public boolean commitRequested() {
-            return commitRequested;
-        }
-
-        @Override
-        public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
-            commitPrepared = true;
-
-            if (commitNeeded) {
-                if (!clean) {
-                    return null;
-                }
-                return committableOffsets;
-            } else {
-                return Collections.emptyMap();
-            }
-        }
-
-        @Override
-        public void postCommit(final boolean enforceCheckpoint) {
-            commitNeeded = false;
-            commitCompleted = true;
-        }
-
-        @Override
-        public void suspend() {
-            if (state() == State.CLOSED) {
-                throw new IllegalStateException("Illegal state " + state() + " while suspending active task " + id);
-            } else if (state() == State.SUSPENDED) {
-                // do nothing
-            } else {
-                transitionTo(State.SUSPENDED);
-            }
-        }
-
-        @Override
-        public void resume() {
-            if (state() == State.SUSPENDED) {
-                transitionTo(State.RUNNING);
-            }
-        }
-
-        @Override
-        public void revive() {
-            //TODO: KAFKA-12569 move clearing of commit-required statuses to closeDirty/Clean/AndRecycle methods
-            commitNeeded = false;
-            commitRequested = false;
-            super.revive();
-        }
-
-        @Override
-        public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
-                                                final Exception cause) {
-            timeout = currentWallClockMs;
-        }
-
-        @Override
-        public void clearTaskTimeout() {
-            timeout = null;
-        }
-
-        @Override
-        public void recordRestoration(final Time time, final long numRecords, final boolean initRemaining) {
-            // do nothing
-        }
-
-        @Override
-        public void closeClean() {
-            transitionTo(State.CLOSED);
-        }
-
-        @Override
-        public void closeDirty() {
-            transitionTo(State.CLOSED);
-        }
-
-        @Override
-        public void prepareRecycle() {
-            transitionTo(State.CLOSED);
-        }
-
-        @Override
-        public void resumePollingForPartitionsWithAvailableSpace() {
-            // noop
-        }
-
-        @Override
-        public void updateLags() {
-            // noop
-        }
-
-        @Override
-        public void updateInputPartitions(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics) {
-            inputPartitions = topicPartitions;
-        }
-
-        void setCommittableOffsetsAndMetadata(final Map<TopicPartition, OffsetAndMetadata> committableOffsets) {
-            if (!active) {
-                throw new IllegalStateException("Cannot set CommittableOffsetsAndMetadate for StandbyTasks");
-            }
-            this.committableOffsets = committableOffsets;
-        }
-
-        @Override
-        public StateStore store(final String name) {
-            return null;
-        }
-
-        @Override
-        public Set<TopicPartition> changelogPartitions() {
-            return changelogOffsets.keySet();
-        }
-
-        public boolean isActive() {
-            return active;
-        }
-
-        void setPurgeableOffsets(final Map<TopicPartition, Long> purgeableOffsets) {
-            this.purgeableOffsets = purgeableOffsets;
-        }
-
-        @Override
-        public Map<TopicPartition, Long> purgeableOffsets() {
-            return purgeableOffsets;
-        }
-
-        void setChangelogOffsets(final Map<TopicPartition, Long> changelogOffsets) {
-            this.changelogOffsets = changelogOffsets;
-        }
-
-        @Override
-        public Map<TopicPartition, Long> changelogOffsets() {
-            return changelogOffsets;
-        }
-
-        @Override
-        public Map<TopicPartition, Long> committedOffsets() {
-            return Collections.emptyMap();
-        }
-
-        @Override
-        public Map<TopicPartition, Long> highWaterMark() {
-            return Collections.emptyMap();
-        }
-
-        @Override
-        public Optional<Long> timeCurrentIdlingStarted() {
-            return Optional.empty();
-        }
-
-        @Override
-        public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
-            if (isActive()) {
-                final Deque<ConsumerRecord<byte[], byte[]>> partitionQueue =
-                    queue.computeIfAbsent(partition, k -> new LinkedList<>());
-
-                for (final ConsumerRecord<byte[], byte[]> record : records) {
-                    partitionQueue.add(record);
-                }
-            } else {
-                throw new IllegalStateException("Can't add records to an inactive task.");
-            }
-        }
-
-        @Override
-        public boolean process(final long wallClockTime) {
-            if (isActive() && state() == State.RUNNING) {
-                for (final LinkedList<ConsumerRecord<byte[], byte[]>> records : queue.values()) {
-                    final ConsumerRecord<byte[], byte[]> record = records.poll();
-                    if (record != null) {
-                        return true;
-                    }
-                }
-                return false;
-            } else {
-                throw new IllegalStateException("Can't process an inactive or non-running task.");
-            }
-        }
     }
 }
