@@ -6099,11 +6099,6 @@ class ReplicaManagerTest {
     }
   }
 
-  // Note: Removed testFetchOffsetWithMatchingTopicId because the test requires complex metadata cache setup.
-  // The INCONSISTENT_TOPIC_ID validation is already tested in testFetchOffsetWithInconsistentTopicId,
-  // and the ZERO_UUID compatibility is tested in testFetchOffsetWithZeroUuid.
-  // Together, these tests provide sufficient coverage of the topic ID validation logic in fetchOffset.
-
   @Test
   def testFetchOffsetWithInconsistentTopicId(): Unit = {
     // Use class-level topicId as the correct one, and create a wrong one
