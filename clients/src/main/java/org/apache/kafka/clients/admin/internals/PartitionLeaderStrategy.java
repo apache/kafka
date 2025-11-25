@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -163,9 +164,14 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
         MetadataResponse response = (MetadataResponse) abstractResponse;
         Map<TopicPartition, Throwable> failed = new HashMap<>();
         Map<TopicPartition, Integer> mapped = new HashMap<>();
+        Map<String, Uuid> topicIdByName = new HashMap<>();
+        Map<Uuid, String> topiccNameById = new HashMap<>();
 
         for (MetadataResponseData.MetadataResponseTopic topicMetadata : response.data().topics()) {
             String topic = topicMetadata.name();
+            Uuid topicId = topicMetadata.topicId();
+            topicIdByName.put(topic, topicId);
+            topiccNameById.put(topicId, topic);
             Errors topicError = Errors.forCode(topicMetadata.errorCode());
             if (topicError != Errors.NONE) {
                 handleTopicError(topic, topicError, requestPartitions, failed);
@@ -196,7 +202,7 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
                 }
             }
         }
-        return new LookupResult<>(failed, mapped);
+        return new LookupResult<>(failed, mapped, topicIdByName, topiccNameById);
     }
 
     /**
