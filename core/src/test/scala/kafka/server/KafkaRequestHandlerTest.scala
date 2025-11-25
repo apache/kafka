@@ -767,7 +767,7 @@ class KafkaRequestHandlerTest {
     val memoryPool = mock(classOf[MemoryPool])
     val buffer = ByteBuffer.allocate(1024)
 
-    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
+    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time, "broker")
 
     val request = makeRequest(time, metrics, ApiKeys.PRODUCE, 3, buffer, memoryPool)
     requestChannel.sendRequest(request)
