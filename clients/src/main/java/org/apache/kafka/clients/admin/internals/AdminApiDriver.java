@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -92,6 +93,8 @@ public class AdminApiDriver<K, V> {
     private final BiMultimap<ApiRequestScope, K> lookupMap = new BiMultimap<>();
     private final BiMultimap<FulfillmentScope, K> fulfillmentMap = new BiMultimap<>();
     private final Map<ApiRequestScope, RequestState> requestStates = new HashMap<>();
+    private final Map<String, Uuid> topicIdByName = new HashMap<>();
+    private final Map<Uuid, String> topicNameById = new HashMap<>();
 
     public AdminApiDriver(
         AdminApiHandler<K, V> handler,
@@ -243,9 +246,20 @@ public class AdminApiDriver<K, V> {
             );
 
             result.completedKeys.forEach(lookupMap::remove);
+            this.topicIdByName.putAll(result.topicIdByName);
+            this.topicNameById.putAll(result.topicNameById);
+
             completeLookup(result.mappedKeys);
             completeLookupExceptionally(result.failedKeys);
         }
+    }
+
+    public Map<String, Uuid> getTopicIdByName() {
+        return topicIdByName;
+    }
+
+    public Map<Uuid, String> getTopicNameById() {
+        return topicNameById;
     }
 
     /**

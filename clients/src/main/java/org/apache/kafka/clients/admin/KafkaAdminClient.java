@@ -410,6 +410,8 @@ public class KafkaAdminClient extends AdminClient {
     private final Map<TopicPartition, Integer> partitionLeaderCache;
     private final AdminFetchMetricsManager adminFetchMetricsManager;
     private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
+    private final Map<String, Uuid> topicIdsByNames = new HashMap<>();
+    private final Map<Uuid, String> topicNameById = new HashMap<>();
 
     /**
      * The telemetry requests client instance id.
@@ -4263,7 +4265,8 @@ public class KafkaAdminClient extends AdminClient {
             ListOffsetsHandler.newFuture(topicPartitionOffsets.keySet(), partitionLeaderCache);
         Map<TopicPartition, Long> offsetQueriesByPartition = topicPartitionOffsets.entrySet().stream()
             .collect(Collectors.toMap(Map.Entry::getKey, e -> getOffsetFromSpec(e.getValue())));
-        ListOffsetsHandler handler = new ListOffsetsHandler(offsetQueriesByPartition, options, logContext, defaultApiTimeoutMs);
+        ListOffsetsHandler handler = new ListOffsetsHandler(offsetQueriesByPartition, options, logContext, defaultApiTimeoutMs,
+                topicIdsByNames, topicNameById);
         invokeDriver(handler, future, options.timeoutMs);
         return new ListOffsetsResult(future.all());
     }
@@ -5109,6 +5112,8 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse response) {
                 long currentTimeMs = time.milliseconds();
                 driver.onResponse(currentTimeMs, spec, response, this.curNode());
+                topicIdsByNames.putAll(driver.getTopicIdByName());
+                topicNameById.putAll(driver.getTopicNameById());
                 maybeSendRequests(driver, currentTimeMs);
             }
 
