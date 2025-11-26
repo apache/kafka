@@ -104,8 +104,11 @@ public class QuorumConfig {
     public static final int DEFAULT_QUORUM_RETRY_BACKOFF_MS = 20;
 
     public static final String QUORUM_AUTO_JOIN_ENABLE_CONFIG = QUORUM_PREFIX + "auto.join.enable";
-    public static final String QUORUM_AUTO_JOIN_ENABLE_DOC = "Controls whether a KRaft controller should automatically " +
-        "join the cluster metadata partition for its cluster id when the node startup.";
+    public static final String QUORUM_AUTO_JOIN_ENABLE_DOC =
+            "Controls whether a KRaft controller (identified by a <nodeId, directoryUUID> tuple) " +
+            "should automatically join the cluster metadata partition as a voter during startup " +
+            "if it is not already part of the voter set. This property can be set to `true` only " +
+            "when `process.roles` includes `controller`.";
     public static final boolean DEFAULT_QUORUM_AUTO_JOIN_ENABLE = false;
 
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()

@@ -438,7 +438,7 @@ public class KafkaRaftClientAutoJoinTest {
         context.time.sleep(context.fetchTimeoutMs);
 
         // 4. Poll and verify that NO AddVoter request is sent
-        // Because canAutoJoin was set to false after successful AddVoter
+        // Because hasJoined was set to false after successful AddVoter
         context.time.sleep(1);
         context.pollUntilRequest();
 

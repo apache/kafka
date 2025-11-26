@@ -222,7 +222,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private volatile RemoveVoterHandler removeVoterHandler;
     private volatile UpdateVoterHandler updateVoterHandler;
 
-    private volatile boolean hasAutoJoined = false;
+    private volatile boolean hasJoined = false;
 
     /**
      * Create a new instance.
@@ -507,8 +507,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             // if the starting voters contain the node id of this node, mark it as already joined
             // because it is already in the voter set.
             // Check using ReplicaKey (id + directoryId) to handle KIP-853 properly
-            ReplicaKey localReplicaKey = ReplicaKey.of(nodeId.getAsInt(), nodeDirectoryId);
-            hasAutoJoined = partitionState.lastVoterSet().isVoter(localReplicaKey);
+            hasJoined = partitionState.lastVoterSet().isVoter(
+                ReplicaKey.of(nodeId.getAsInt(), nodeDirectoryId)
+            );
         }
 
         if (requestManager == null) {
@@ -2344,11 +2345,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         /* These error codes indicate the replica was successfully added or the leader is unable to
          * process the request. In either case, reset the update voter set timer to back off.
          */
-        if (error == Errors.NONE) {
-            quorum.followerStateOrThrow().resetUpdateVoterSetPeriod(currentTimeMs);
-            hasAutoJoined = true;
-            return true;
-        } else if (error == Errors.DUPLICATE_VOTER || error == Errors.REQUEST_TIMED_OUT) {
+        if (error == Errors.NONE || error == Errors.REQUEST_TIMED_OUT ||
+            error == Errors.DUPLICATE_VOTER) {
             quorum.followerStateOrThrow().resetUpdateVoterSetPeriod(currentTimeMs);
             return true;
         } else {
@@ -3297,6 +3295,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private long pollFollower(long currentTimeMs) {
         FollowerState state = quorum.followerStateOrThrow();
         if (quorum.isVoter()) {
+            if (quorumConfig.autoJoin()) {
+                hasJoined = true;
+            }
             return pollFollowerAsVoter(state, currentTimeMs);
         } else {
             return pollFollowerAsObserver(state, currentTimeMs);
@@ -3364,13 +3365,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
          * and are configured to auto join should attempt to automatically join the voter
          * set for the configured topic partition.
          */
-        if (!partitionState.lastKraftVersion().isReconfigSupported() || !canBecomeVoter ||
-            !quorumConfig.autoJoin() || !state.hasUpdateVoterSetPeriodExpired(currentTimeMs)) {
-            return false;
-        }
-
-        // Only attempt auto-join if we haven't already auto-joined
-        return !hasAutoJoined;
+        return !hasJoined && partitionState.lastKraftVersion().isReconfigSupported() && canBecomeVoter
+                && quorumConfig.autoJoin() && state.hasUpdateVoterSetPeriodExpired(currentTimeMs);
     }
 
     private long pollFollowerAsObserver(FollowerState state, long currentTimeMs) {
