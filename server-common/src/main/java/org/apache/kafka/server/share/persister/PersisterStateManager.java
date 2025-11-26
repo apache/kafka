@@ -432,7 +432,7 @@ public class PersisterStateManager {
             // Incrementing the number of find coordinator attempts
             findCoordBackoff.incrementAttempt();
             Errors clientResponseError = checkResponseError(response).orElse(Errors.NONE);
-            String clientResponseErrorMessage = clientResponseError.toString();
+            String clientResponseErrorMessage = clientResponseError.message();
 
             switch (clientResponseError) {
                 case NONE:
@@ -584,7 +584,7 @@ public class PersisterStateManager {
             log.debug("Initialize state response received - {}", response);
             initializeStateBackoff.incrementAttempt();
             Errors clientResponseError = checkResponseError(response).orElse(Errors.NONE);
-            String clientResponseErrorMessage = clientResponseError.toString();
+            String clientResponseErrorMessage = clientResponseError.message();
 
             switch (clientResponseError) {
                 case NONE:
