@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
 
@@ -33,7 +34,7 @@ import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class ProtocolSerializationConsistencyTest {
+public class ProtocolRoundTripConsistencyTest {
 
     private Struct nonFlexibleStruct;
 
@@ -93,11 +94,11 @@ public class ProtocolSerializationConsistencyTest {
     }
 
     @Test
-    public void testNonFlexibleWithNullValue() {
+    public void testNonFlexibleWithNullDefault() {
         messageData.setMyBytes("bytes".getBytes());
         messageData.setMyRecords(MemoryRecords.EMPTY);
 
-        checkSchemaAndMessageSerializationConsistency((short) 0, messageData, nonFlexibleStruct);
+        checkSchemaAndMessageRoundTripConsistency((short) 0, messageData, nonFlexibleStruct);
     }
 
     @Test
@@ -114,18 +115,18 @@ public class ProtocolSerializationConsistencyTest {
             .set("my_nullable_records", MemoryRecords.EMPTY)
             .set("my_nullable_int_array", new Object[] {1, 2, 3});
 
-        checkSchemaAndMessageSerializationConsistency((short) 0, messageData, nonFlexibleStruct);
+        checkSchemaAndMessageRoundTripConsistency((short) 0, messageData, nonFlexibleStruct);
     }
 
     @Test
-    public void testFlexibleWithNullValue() {
+    public void testFlexibleWithNullDefault() {
         messageData.setMyCompactBytes("compact bytes".getBytes());
         messageData.setMyCompactRecords(MemoryRecords.EMPTY);
         messageData.setMyCommonStruct(null);
 
         flexibleStruct.set("my_common_struct", null);
 
-        checkSchemaAndMessageSerializationConsistency((short) 1, messageData, flexibleStruct);
+        checkSchemaAndMessageRoundTripConsistency((short) 1, messageData, flexibleStruct);
     }
 
     @Test
@@ -142,21 +143,34 @@ public class ProtocolSerializationConsistencyTest {
             .set("my_compact_nullable_records", MemoryRecords.EMPTY)
             .set("my_nullable_int_array", new Object[] {1, 2, 3});
 
-        checkSchemaAndMessageSerializationConsistency((short) 1, messageData, flexibleStruct);
+        checkSchemaAndMessageRoundTripConsistency((short) 1, messageData, flexibleStruct);
     }
 
-    private void checkSchemaAndMessageSerializationConsistency(short version, AllTypeMessageData message, Struct struct) {
+    private void checkSchemaAndMessageRoundTripConsistency(short version, AllTypeMessageData message, Struct struct) {
         ObjectSerializationCache cache = new ObjectSerializationCache();
         ByteBuffer buf = ByteBuffer.allocate(message.size(cache, version));
-        ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
+        ByteBufferAccessor serializedMessageAccessor = new ByteBufferAccessor(buf);
         // Serialize message
-        message.write(byteBufferAccessor, cache, version);
+        message.write(serializedMessageAccessor, cache, version);
 
-        ByteBuffer buffer = ByteBuffer.allocate(struct.sizeOf());
+        ByteBuffer serializedSchemaBuffer = ByteBuffer.allocate(struct.sizeOf());
         // Serialize schema
-        struct.writeTo(buffer);
+        struct.writeTo(serializedSchemaBuffer);
 
-        assertEquals(buffer.position(), byteBufferAccessor.buffer().position());
-        assertEquals(buffer, byteBufferAccessor.buffer());
+        assertEquals(serializedSchemaBuffer.position(), serializedMessageAccessor.buffer().position(),
+            "Buffer positions should match between message and schema serialization");
+        assertEquals(serializedSchemaBuffer, serializedMessageAccessor.buffer(),
+            "Buffer contents should be identical between message and schema serialization");
+
+        serializedMessageAccessor.flip();
+        // Deserialize message
+        Schema schema = version == 0 ? AllTypeMessageData.SCHEMA_0 : AllTypeMessageData.SCHEMA_1;
+        Struct deserializedMessage = schema.read(serializedMessageAccessor.buffer());
+        assertEquals(struct, deserializedMessage, "Deserialized message struct should match original struct after round trip");
+
+        serializedSchemaBuffer.flip();
+        // Deserialize schema
+        AllTypeMessageData deserializedSchema = new AllTypeMessageData(new ByteBufferAccessor(serializedSchemaBuffer), version);
+        assertEquals(message, deserializedSchema, "Deserialized schema message should match original message after round trip");
     }
 }

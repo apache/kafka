@@ -52,7 +52,7 @@ public final class NullableSchema extends Schema {
 
     @Override
     public Struct read(ByteBuffer buffer) {
-        short nullIndicator = buffer.getShort();
+        byte nullIndicator = buffer.get();
         if (nullIndicator < 0)
             return null;
 
