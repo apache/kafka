@@ -75,7 +75,7 @@ import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.Coo
  * The CoordinatorRuntime provides a framework to implement coordinators such as the group coordinator
  * or the transaction coordinator.
  *
- * The runtime framework maps each underlying partitions (e.g. __consumer_offsets) that that broker is a
+ * The runtime framework maps each underlying partitions (e.g. __consumer_offsets) that the broker is a
  * leader of to a coordinator replicated state machine. A replicated state machine holds the hard and soft
  * state of all the objects (e.g. groups or offsets) assigned to the partition. The hard state is stored in
  * timeline datastructures backed by a SnapshotRegistry. The runtime supports two type of operations

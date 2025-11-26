@@ -46,7 +46,7 @@ default_num_nodes=14
 
 # The default JDK base image with apt-get support.
 # The openjdk image has been officially deprecated. For more information, see: https://hub.docker.com/_/openjdk
-default_jdk="sapmachine:17-jdk-ubuntu-jammy"
+default_jdk="eclipse-temurin:17-jdk-jammy"
 
 # The default ducker-ak image name.
 default_image_name="ducker-ak"
