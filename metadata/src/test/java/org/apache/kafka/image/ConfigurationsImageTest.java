@@ -150,7 +150,7 @@ public class ConfigurationsImageTest {
         // Create a schema that doesn't include removed configs
         Map<ConfigResource.Type, ConfigDef> configDefs = new HashMap<>();
         ConfigDef topicConfigDef = new ConfigDef();
-        topicConfigDef.define("retention.ms", ConfigDef.Type.LONG, ConfigDef.Importance.MEDIUM, "retention ms doc");
+        topicConfigDef.define("valid.config", ConfigDef.Type.LONG, ConfigDef.Importance.MEDIUM, "doc");
         configDefs.put(TOPIC, topicConfigDef);
         KafkaConfigSchema testSchema = new KafkaConfigSchema(configDefs, Collections.emptyMap());
         ConfigurationsDelta.setConfigSchemaSupplier(() -> testSchema);
@@ -158,7 +158,7 @@ public class ConfigurationsImageTest {
         try {
             String testTopic = "test-topic";
             String removedConfig = "message.format.version";
-            String validConfig = "retention.ms";
+            String validConfig = "valid.config";
             String validConfigValue = "604800000";
 
             // Test 1: Filter removed configs from base image
