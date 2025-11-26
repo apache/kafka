@@ -22,7 +22,7 @@ import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartit
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
-import org.apache.kafka.common.{IsolationLevel, TopicPartition}
+import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -46,6 +46,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
   @Test
   def testListOffsetsErrorCodes(): Unit = {
+    // Use version 11 which supports topic names instead of version 12 which requires topic IDs
     val targetTimes = List(new ListOffsetsTopic()
       .setName(topic)
       .setPartitions(List(new ListOffsetsPartition()
@@ -56,17 +57,17 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val consumerRequest = ListOffsetsRequest.Builder
       .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
       .setTargetTimes(targetTimes)
-      .build()
+      .build(11.toShort)
 
     val replicaRequest = ListOffsetsRequest.Builder
-      .forReplica(ApiKeys.LIST_OFFSETS.latestVersion, brokers.head.config.brokerId)
+      .forReplica(11.toShort, brokers.head.config.brokerId)
       .setTargetTimes(targetTimes)
-      .build()
+      .build(11.toShort)
 
     val debugReplicaRequest = ListOffsetsRequest.Builder
-      .forReplica(ApiKeys.LIST_OFFSETS.latestVersion, ListOffsetsRequest.DEBUGGING_REPLICA_ID)
+      .forReplica(11.toShort, ListOffsetsRequest.DEBUGGING_REPLICA_ID)
       .setTargetTimes(targetTimes)
-      .build()
+      .build(11.toShort)
 
     // Unknown topic
     val randomBrokerId = brokers.head.config.brokerId
@@ -138,11 +139,27 @@ class ListOffsetsRequestTest extends BaseRequestTest {
   private[this] def sendRequest(serverId: Int,
                                 timestamp: Long,
                                 version: Short): ListOffsetsPartitionResponse = {
-    val targetTimes = List(new ListOffsetsTopic()
-      .setName(topic)
-      .setPartitions(List(new ListOffsetsPartition()
-        .setPartitionIndex(partition.partition)
-        .setTimestamp(timestamp)).asJava)).asJava
+    // For version >= 12, we need to get the actual topic ID
+    val listOffsetsTopic = new ListOffsetsTopic()
+    if (version >= 12) {
+      try {
+        val topicDescription = createAdminClient().describeTopics(Seq(partition.topic).asJava).allTopicNames.get
+        val topicId = topicDescription.get(partition.topic).topicId()
+        listOffsetsTopic.setTopicId(topicId)
+      } catch {
+        case _: Exception =>
+          // Topic doesn't exist, use ZERO_UUID
+          listOffsetsTopic.setTopicId(Uuid.ZERO_UUID)
+      }
+    } else {
+      listOffsetsTopic.setName(topic)
+    }
+
+    listOffsetsTopic.setPartitions(List(new ListOffsetsPartition()
+      .setPartitionIndex(partition.partition)
+      .setTimestamp(timestamp)).asJava)
+
+    val targetTimes = List(listOffsetsTopic).asJava
 
     val builder = ListOffsetsRequest.Builder
       .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
@@ -150,8 +167,14 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
     val request = if (version == -1) builder.build() else builder.build(version)
 
-    sendRequest(serverId, request).topics.asScala.find(_.name == topic).get
-      .partitions.asScala.find(_.partitionIndex == partition.partition).get
+    val response = sendRequest(serverId, request)
+    // For version >= 12, response uses topic ID instead of name
+    val topicResponse = if (version >= 12) {
+      response.topics.asScala.head
+    } else {
+      response.topics.asScala.find(_.name == topic).get
+    }
+    topicResponse.partitions.asScala.find(_.partitionIndex == partition.partition).get
   }
 
   // -1 indicate "latest"
@@ -259,5 +282,124 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
   def createTopic(numPartitions: Int, replicationFactor: Int): Map[Int, Int] = {
     super.createTopic(topic, numPartitions, replicationFactor)
+  }
+
+  @Test
+  def testListOffsetsWithTopicId(): Unit = {
+    // Create topic
+    val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 2)
+    val leader = partitionToLeader(partition.partition)
+
+    // Get the actual topic ID
+    val topicDescription = createAdminClient().describeTopics(Seq(partition.topic).asJava).allTopicNames.get
+    val topicId = topicDescription.get(partition.topic).topicId()
+
+    // Produce some messages
+    TestUtils.generateAndProduceMessages(brokers, topic, 10)
+
+    // Test with correct topic ID (version 12)
+    val targetTimesWithCorrectId = List(new ListOffsetsTopic()
+      .setTopicId(topicId)
+      .setPartitions(List(new ListOffsetsPartition()
+        .setPartitionIndex(partition.partition)
+        .setTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP)).asJava)).asJava
+
+    val requestWithCorrectId = ListOffsetsRequest.Builder
+      .forReplica(12.toShort, brokers.head.config.brokerId)
+      .setTargetTimes(targetTimesWithCorrectId)
+      .build(12.toShort)
+
+    val responseWithCorrectId = sendRequest(leader, requestWithCorrectId)
+    assertEquals(1, responseWithCorrectId.topics.size)
+    val topicResponse = responseWithCorrectId.topics.asScala.head
+    assertEquals(1, topicResponse.partitions.size)
+    val partitionResponse = topicResponse.partitions.asScala.head
+    assertEquals(Errors.NONE.code, partitionResponse.errorCode)
+    assertEquals(10L, partitionResponse.offset)
+  }
+
+  @Test
+  def testListOffsetsWithIncorrectTopicId(): Unit = {
+    // Create topic
+    val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 2)
+    val leader = partitionToLeader(partition.partition)
+
+    // Produce some messages
+    TestUtils.generateAndProduceMessages(brokers, topic, 10)
+
+    // Test with incorrect topic ID (version 12)
+    val randomTopicId = Uuid.randomUuid()
+    val targetTimesWithIncorrectId = List(new ListOffsetsTopic()
+      .setTopicId(randomTopicId)
+      .setPartitions(List(new ListOffsetsPartition()
+        .setPartitionIndex(partition.partition)
+        .setTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP)).asJava)).asJava
+
+    val requestWithIncorrectId = ListOffsetsRequest.Builder
+      .forReplica(12.toShort, brokers.head.config.brokerId)
+      .setTargetTimes(targetTimesWithIncorrectId)
+      .build(12.toShort)
+
+    val responseWithIncorrectId = sendRequest(leader, requestWithIncorrectId)
+    assertEquals(1, responseWithIncorrectId.topics.size)
+    val topicResponse = responseWithIncorrectId.topics.asScala.head
+    assertEquals(1, topicResponse.partitions.size)
+    val partitionResponse = topicResponse.partitions.asScala.head
+    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, partitionResponse.errorCode)
+  }
+
+  @Test
+  def testListOffsetsVersion12RequiresTopicId(): Unit = {
+    // Create topic
+    createTopic(numPartitions = 1, replicationFactor = 2)
+
+    // Produce some messages
+    TestUtils.generateAndProduceMessages(brokers, topic, 10)
+
+    // Test version 12 with ZERO_UUID - should throw UnsupportedVersionException when building request
+    val targetTimesWithZeroUuid = List(new ListOffsetsTopic()
+      .setTopicId(Uuid.ZERO_UUID)
+      .setPartitions(List(new ListOffsetsPartition()
+        .setPartitionIndex(partition.partition)
+        .setTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP)).asJava)).asJava
+
+    // Version 12 requires non-zero topic ID, so building the request should throw exception
+    assertThrows(classOf[org.apache.kafka.common.errors.UnsupportedVersionException], () => {
+      ListOffsetsRequest.Builder
+        .forReplica(12.toShort, brokers.head.config.brokerId)
+        .setTargetTimes(targetTimesWithZeroUuid)
+        .build(12.toShort)
+    })
+  }
+
+  @Test
+  def testListOffsetsVersion11UsesTopicName(): Unit = {
+    // Create topic
+    val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 2)
+    val leader = partitionToLeader(partition.partition)
+
+    // Produce some messages
+    TestUtils.generateAndProduceMessages(brokers, topic, 10)
+
+    // Test version 11 with topic name (no topic ID needed)
+    val targetTimesWithName = List(new ListOffsetsTopic()
+      .setName(topic)
+      .setPartitions(List(new ListOffsetsPartition()
+        .setPartitionIndex(partition.partition)
+        .setTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP)).asJava)).asJava
+
+    val requestWithName = ListOffsetsRequest.Builder
+      .forReplica(11.toShort, brokers.head.config.brokerId)
+      .setTargetTimes(targetTimesWithName)
+      .build(11.toShort)
+
+    val responseWithName = sendRequest(leader, requestWithName)
+    assertEquals(1, responseWithName.topics.size)
+    val topicResponse = responseWithName.topics.asScala.head
+    assertEquals(topic, topicResponse.name)
+    assertEquals(1, topicResponse.partitions.size)
+    val partitionResponse = topicResponse.partitions.asScala.head
+    assertEquals(Errors.NONE.code, partitionResponse.errorCode)
+    assertEquals(10L, partitionResponse.offset)
   }
 }
