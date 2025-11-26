@@ -147,7 +147,7 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp</code></pre>
                     </ul>
                   </p>
                   <p>If your Kafka Streams application does crash or fail, it will first enter the <code class="docutils literal"><span class="pre">PENDING_ERROR</span></code> state 
-                    to gracefully close all of its existing resources, and then transition into the <code class="docutils literal"><span class="pre">ERROR</span></code> state.
+                    to gracefully close all of its existing resources, and then transition into the <code class="docutils literal"><span class="pre">ERROR</span></code> state. 
                     It is important to note that the <code class="docutils literal"><span class="pre">PENDING_ERROR</span></code> state is not recoverable, and only a 
                     restart will get the application back to the RUNNING state.
                   </p>
