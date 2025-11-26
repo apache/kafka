@@ -25,10 +25,9 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.server.common.TopicIdPartition;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -69,7 +68,7 @@ public class UniformHomogeneousAssignmentBuilder {
     /**
      * The members that are below their quota.
      */
-    private final LinkedList<MemberWithRemainingQuota> unfilledMembers;
+    private final List<MemberWithRemainingQuota> unfilledMembers;
 
     /**
      * The partitions that still need to be assigned.
@@ -110,8 +109,8 @@ public class UniformHomogeneousAssignmentBuilder {
         this.subscribedTopicDescriber = subscribedTopicDescriber;
         this.subscribedTopicIds = new HashSet<>(groupSpec.memberSubscription(groupSpec.memberIds().iterator().next())
             .subscribedTopicIds());
-        this.unfilledMembers = new LinkedList<>();
-        this.unassignedPartitions = new LinkedList<>();
+        this.unfilledMembers = new ArrayList<>();
+        this.unassignedPartitions = new ArrayList<>();
 
         this.targetAssignment = new HashMap<>();
         this.partitionRacks = new HashMap<>();
@@ -334,19 +333,18 @@ public class UniformHomogeneousAssignmentBuilder {
         int unassignedPartitionIndex = 0;
 
         // If member is one of the last remainingMembersToGetAnExtraPartition, it must take the extra partition.
-        for (Iterator<MemberWithRemainingQuota> it = unfilledMembers.descendingIterator(); it.hasNext(); ) {
-            MemberWithRemainingQuota unfilledMember = it.next();
-            if (remainingMembersToGetAnExtraPartition > 0) {
-                remainingMembersToGetAnExtraPartition--;
-                unfilledMember.incrementQuota();
+        for (int i = unfilledMembers.size() - 1; i >= 0; i--) {
+            if (remainingMembersToGetAnExtraPartition == 0) {
+                break;
             }
-
-            if (unfilledMember.remainingQuota() == 0) {
-                it.remove();
-            }
+            unfilledMembers.get(i).incrementQuota();
+            remainingMembersToGetAnExtraPartition--;
         }
 
         for (MemberWithRemainingQuota unfilledMember : unfilledMembers) {
+            if (unfilledMember.remainingQuota() == 0) {
+                continue;
+            }
             String memberId = unfilledMember.memberId;
             int remainingQuota = unfilledMember.remainingQuota;
 
