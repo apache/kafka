@@ -141,7 +141,7 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp</code></pre>
                 <p>It is inevitable that your application will crash or fail at some point. There are a few things you can do to reduce the likelihood of these situations.
                     <ul class="simple">
                         <li>Kafka Streams has a few configurations that can help with resilience in the face of broker failures. They can be found here: <a class="reference internal" href="config-streams.html#recommended-configuration-parameters-for-resiliency">Recommended configuration parameters for resiliency</a></li>
-                        <li>Ensure that your application is designed to be able to handle errors and failures. This includes things like 
+                        <li>Ensure that your application is able to handle errors and failures. This includes things like 
                             configuring the correct exception handlers to handle errors such as authorization and deserialization errors, 
                             and using strategies such as dead letter queues to handle "poison pill" records. </li>
                     </ul>
