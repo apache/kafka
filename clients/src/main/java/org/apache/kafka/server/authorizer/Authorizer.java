@@ -267,14 +267,11 @@ public interface Authorizer extends Configurable, Closeable {
 
             boolean hasDominatedDeny = false;
 
-            if(!denyPatternsPrefixed.isEmpty()) {
-                hasDominatedDeny = !denyPatternsPrefixed.headMap(allowStr).isEmpty() || denyPatternsPrefixed.containsKey(allowStr);
+            if (!denyPatternsPrefixed.isEmpty()) {
+                if (hasTail(denyPatternsPrefixed, allowStr) || hasHead(denyPatternsPrefixed, allowStr)) {
+                    hasDominatedDeny = true;
+                }
             }
-
-         //   String denyPrefix = denyPatternsPrefixed.selectKey(allowStr);
-         //   boolean hasDominatedDeny = (denyPrefix != null);
-
-          //  boolean hasDominatedDeny = !denyPatternsPrefixed.prefixMap(allowStr).isEmpty();
 
             if (!hasDominatedDeny)
                 return AuthorizationResult.ALLOWED;
@@ -284,14 +281,29 @@ public interface Authorizer extends Configurable, Closeable {
         for (String allowStr : allowPatternsPrefixed.keySet()) {
             boolean hasDominatedDeny = false;
 
-            if(!denyPatternsPrefixed.isEmpty()) {
-                hasDominatedDeny = !denyPatternsPrefixed.headMap(allowStr).isEmpty() || denyPatternsPrefixed.containsKey(allowStr);
+            if (!denyPatternsPrefixed.isEmpty()) {
+                if (hasTail(denyPatternsPrefixed, allowStr) || hasHead(denyPatternsPrefixed, allowStr)) {
+                    hasDominatedDeny = true;
+                }
             }
 
             if (!hasDominatedDeny)
                 return AuthorizationResult.ALLOWED;
         }
-
         return AuthorizationResult.DENIED;
+    }
+
+    private boolean hasTail(PatriciaTrie<Boolean> denyPatternsPrefixed, String allowStr) {
+        var t = denyPatternsPrefixed.tailMap(allowStr).entrySet().iterator();
+        return t.hasNext() && t.next().getKey().equals(allowStr);
+    }
+
+    private boolean hasHead(PatriciaTrie<Boolean> denyPatternsPrefixed, String allowStr) {
+        try {
+            String lastKey = denyPatternsPrefixed.headMap(allowStr).lastKey();
+            return allowStr.startsWith(lastKey);
+        } catch (NoSuchElementException e) {
+            return false;
+        }
     }
 }
