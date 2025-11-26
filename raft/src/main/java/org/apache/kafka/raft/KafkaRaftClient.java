@@ -504,8 +504,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         partitionState.updateState();
         logger.info("Starting voters are {}", partitionState.lastVoterSet());
         if (nodeId.isPresent()) {
-            // if the starting voters contain the node id of this node, mark it as already joined
-            // because it is already in the voter set.
+            // if the the VotersRecord with the highest offset contain the node id of this node,
+            // mark it as already joined because it is already in the voter set.
             // Check using ReplicaKey (id + directoryId) to handle KIP-853 properly
             hasJoined = partitionState.lastVoterSet().isVoter(
                 ReplicaKey.of(nodeId.getAsInt(), nodeDirectoryId)
