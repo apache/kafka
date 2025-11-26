@@ -42,7 +42,6 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
@@ -75,6 +74,7 @@ public class StateUpdaterFailureIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
 
     }
 
@@ -147,7 +147,7 @@ public class StateUpdaterFailureIntegrationTest {
 
         streams.removeStreamThread();
 
-        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.REBALANCING, TimeUnit.MINUTES.toMillis(2), "Streams never reached REBALANCING state");
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.REBALANCING, "Streams never reached REBALANCING state");
 
         // Before shutting down, we want the tasks to be reassigned
         TestUtils.waitForCondition(() -> numberOfStoreInits.get() == 9, "Streams never reinitialized the store enough times");
