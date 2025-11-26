@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.CommitPartitionValidator;
@@ -77,6 +78,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class StreamsGroupTest {
@@ -1227,5 +1229,15 @@ public class StreamsGroupTest {
         assertEquals(1, describedGroup.topology().subtopologies().size());
         assertEquals("sub-1", describedGroup.topology().subtopologies().get(0).subtopologyId());
         assertEquals(List.of("fallback-topic"), describedGroup.topology().subtopologies().get(0).sourceTopics());
+    }
+
+    @Test
+    public void testCancelTimers() {
+        StreamsGroup streamsGroup = createStreamsGroup("test-group");
+        CoordinatorTimer<Void, CoordinatorRecord> timer = mock(CoordinatorTimer.class);
+
+        streamsGroup.cancelTimers(timer);
+
+        verify(timer).cancel("initial-rebalance-timeout-test-group");
     }
 }
