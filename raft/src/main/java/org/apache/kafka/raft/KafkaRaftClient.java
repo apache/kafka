@@ -1683,6 +1683,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         return String.format("%s@%d", listener.getClass().getTypeName(), System.identityHashCode(listener));
     }
 
+    @SuppressWarnings("CyclomaticComplexity")
     private boolean handleFetchResponse(
         RaftResponse.Inbound responseMetadata,
         long currentTimeMs
@@ -1812,7 +1813,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 if (initHighWatermark < 0 && partitionResponse.highWatermark() >= 0) {
                     initHighWatermark = partitionResponse.highWatermark();
 
-                    state.highWatermark().ifPresent( hw -> {
+                    state.highWatermark().ifPresent(hw -> {
                             if (hw.offset() >= initHighWatermark && nodeId.isPresent()) {
                                 hasJoined = partitionState.lastVoterSet().isVoter(
                                     ReplicaKey.of(nodeId.getAsInt(), nodeDirectoryId));
