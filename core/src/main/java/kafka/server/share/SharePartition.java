@@ -1827,13 +1827,13 @@ public class SharePartition {
                         sharePartitionMetrics);
                     int delayMs = recordLockDurationMsOrDefault(groupConfigManager, groupId, defaultRecordLockDurationMs);
                     long lastOffset = acquiredRecords.firstOffset() + maxFetchRecords - 1;
+                    sharePartitionMetrics.recordInFlightBatchMessageCount(
+                        acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1);
                     acquiredRecords.setLastOffset(lastOffset);
                     inFlightBatch.maybeInitializeOffsetStateUpdate(lastOffset, delayMs);
                     updateFindNextFetchOffset(true);
 
                     cachedState.put(acquiredRecords.firstOffset(), inFlightBatch);
-                    sharePartitionMetrics.recordInFlightBatchMessageCount(
-                        acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1);
                     return List.of(acquiredRecords);
                 }
             }
