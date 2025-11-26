@@ -240,7 +240,7 @@ public class ReplicationQuotasTestRig {
                     cluster.brokers().values().stream()
                             .map(server -> String.valueOf(server.replicaManager().localBrokerId()))
                             .collect(Collectors.joining(",")),
-                    true
+                    true, "pod1", 0.0d
             ).getKey();
 
             System.out.println("Starting Reassignment");
