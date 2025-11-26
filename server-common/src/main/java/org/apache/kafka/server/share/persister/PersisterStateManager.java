@@ -438,7 +438,7 @@ public class PersisterStateManager {
                 case NONE:
                     List<FindCoordinatorResponseData.Coordinator> coordinators = ((FindCoordinatorResponse) response.responseBody()).coordinators();
                     if (coordinators.size() != 1) {
-                        log.error("Find coordinator response for {} is invalid", partitionKey());
+                        log.error("Find coordinator response for {} is invalid. Number of coordinators = {}", partitionKey(), coordinators.size());
                         findCoordinatorErrorResponse(Errors.UNKNOWN_SERVER_ERROR, new IllegalStateException("Invalid response with multiple coordinators."));
                         return;
                     }
@@ -451,7 +451,7 @@ public class PersisterStateManager {
                     }
                     switch (error) {
                         case NONE:
-                            log.debug("Find coordinator response valid. Enqueuing actual request.");
+                            log.trace("Find coordinator response valid. Enqueuing actual request.");
                             findCoordBackoff.resetAttempts();
                             coordinatorNode = new Node(coordinatorData.nodeId(), coordinatorData.host(), coordinatorData.port());
                             // now we want the actual share state RPC call to happen
@@ -477,16 +477,16 @@ public class PersisterStateManager {
                             break;
 
                         default:
-                            log.error("Unable to find coordinator for {} using key {}.", name(), partitionKey());
+                            log.error("Unable to find coordinator for {} using key {}: {}.", name(), partitionKey(), errorMessage);
                             findCoordinatorErrorResponse(error, new Exception(errorMessage));
                     }
                     return;
 
                 case NETWORK_EXCEPTION: // Retriable client response error codes.
                 case REQUEST_TIMED_OUT:
-                    log.debug("Received retriable error in find coordinator client response for {} using key {} due to {}", name(), partitionKey(), clientResponseErrorMessage);
+                    log.debug("Received retriable error in find coordinator client response for {} using key {} due to {}.", name(), partitionKey(), clientResponseErrorMessage);
                     if (!findCoordBackoff.canAttempt()) {
-                        log.error("Exhausted max retries to find coordinator on error client response for {} using key {} without success.", name(), partitionKey());
+                        log.error("Exhausted max retries to find coordinator due to error in client response for {} using key {}.", name(), partitionKey());
                         findCoordinatorErrorResponse(clientResponseError, new Exception("Exhausted max retries to find coordinator without success."));
                         break;
                     }
@@ -651,7 +651,7 @@ public class PersisterStateManager {
                 case REQUEST_TIMED_OUT:
                     log.debug("Received retriable error in initialize state RPC client response for key {}: {}", partitionKey(), clientResponseErrorMessage);
                     if (!initializeStateBackoff.canAttempt()) {
-                        log.error("Exhausted max retries for initialize state RPC with error client response for key {} without success.", partitionKey());
+                        log.error("Exhausted max retries for initialize state RPC due to error in client response for key {}.", partitionKey());
                         requestErrorResponse(clientResponseError, new Exception("Exhausted max retries to complete initialize state RPC without success."));
                         return;
                     }
@@ -841,7 +841,7 @@ public class PersisterStateManager {
                 case REQUEST_TIMED_OUT:
                     log.debug("Received retriable error in write state RPC client response for key {}: {}", partitionKey(), clientResponseErrorMessage);
                     if (!writeStateBackoff.canAttempt()) {
-                        log.error("Exhausted max retries for write state RPC with error client response for key {} without success.", partitionKey());
+                        log.error("Exhausted max retries for write state RPC due to error in client response for key {}.", partitionKey());
                         requestErrorResponse(clientResponseError, new Exception("Exhausted max retries to complete write state RPC without success."));
                         return;
                     }
@@ -1011,7 +1011,7 @@ public class PersisterStateManager {
                 case REQUEST_TIMED_OUT:
                     log.debug("Received retriable error in read state RPC client response for key {}: {}", partitionKey(), clientResponseErrorMessage);
                     if (!readStateBackoff.canAttempt()) {
-                        log.error("Exhausted max retries for read state RPC with error client response for key {} without success.", partitionKey());
+                        log.error("Exhausted max retries for read state RPC due to error in client response for key {}.", partitionKey());
                         requestErrorResponse(clientResponseError, new Exception("Exhausted max retries to complete read state RPC without success."));
                         return;
                     }
@@ -1181,7 +1181,7 @@ public class PersisterStateManager {
                 case REQUEST_TIMED_OUT:
                     log.debug("Received retriable error in read state summary RPC client response for key {}: {}", partitionKey(), clientResponseErrorMessage);
                     if (!readStateSummaryBackoff.canAttempt()) {
-                        log.error("Exhausted max retries for read state summary RPC with error client response for key {} without success.", partitionKey());
+                        log.error("Exhausted max retries for read state summary RPC due to error in client response for key {}.", partitionKey());
                         requestErrorResponse(clientResponseError, new Exception("Exhausted max retries to complete read state summary RPC without success."));
                         return;
                     }
@@ -1348,7 +1348,7 @@ public class PersisterStateManager {
                 case REQUEST_TIMED_OUT:
                     log.debug("Received retriable error in delete state RPC client response for key {}: {}", partitionKey(), clientResponseErrorMessage);
                     if (!deleteStateBackoff.canAttempt()) {
-                        log.error("Exhausted max retries for delete state RPC with error client response for key {} without success.", partitionKey());
+                        log.error("Exhausted max retries for delete state RPC due to error in client response for key {}.", partitionKey());
                         requestErrorResponse(clientResponseError, new Exception("Exhausted max retries to complete delete state RPC without success."));
                         return;
                     }
