@@ -2309,9 +2309,15 @@ public class RequestResponseTest {
                     .setTimestamp(1000000L)
                     .setCurrentLeaderEpoch(5);
 
-            ListOffsetsTopic topic = new ListOffsetsTopic()
-                    .setName("test")
-                    .setPartitions(singletonList(partition));
+            ListOffsetsTopic topic = new ListOffsetsTopic();
+            // Version 12+ requires topic ID instead of topic name
+            if (version >= 12) {
+                topic.setTopicId(Uuid.randomUuid());
+            } else {
+                topic.setName("test");
+            }
+            topic.setPartitions(singletonList(partition));
+
             return ListOffsetsRequest.Builder
                     .forConsumer(true, IsolationLevel.READ_COMMITTED)
                     .setTargetTimes(singletonList(topic))
@@ -2331,10 +2337,17 @@ public class RequestResponseTest {
             if (version >= 4) {
                 partition.setLeaderEpoch(27);
             }
+            ListOffsetsTopicResponse topicResponse = new ListOffsetsTopicResponse();
+            // Version 12+ uses topic ID instead of topic name
+            if (version >= 12) {
+                topicResponse.setTopicId(Uuid.randomUuid());
+            } else {
+                topicResponse.setName("test");
+            }
+            topicResponse.setPartitions(singletonList(partition));
+
             ListOffsetsResponseData data = new ListOffsetsResponseData()
-                    .setTopics(singletonList(new ListOffsetsTopicResponse()
-                            .setName("test")
-                            .setPartitions(singletonList(partition))));
+                    .setTopics(singletonList(topicResponse));
             return new ListOffsetsResponse(data);
         } else {
             throw new IllegalArgumentException("Illegal ListOffsetResponse version " + version);
