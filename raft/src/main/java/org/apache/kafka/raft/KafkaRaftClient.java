@@ -223,6 +223,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private volatile UpdateVoterHandler updateVoterHandler;
 
     private volatile boolean hasJoined = false;
+    private volatile long initHighWatermark = -1;
 
     /**
      * Create a new instance.
@@ -503,14 +504,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         logger.info("Reading KRaft snapshot and log as part of the initialization");
         partitionState.updateState();
         logger.info("Starting voters are {}", partitionState.lastVoterSet());
-        if (nodeId.isPresent()) {
-            // if the the VotersRecord with the highest offset contain the node id of this node,
-            // mark it as already joined because it is already in the voter set.
-            // Check using ReplicaKey (id + directoryId) to handle KIP-853 properly
-            hasJoined = partitionState.lastVoterSet().isVoter(
-                ReplicaKey.of(nodeId.getAsInt(), nodeDirectoryId)
-            );
-        }
 
         if (requestManager == null) {
             if (voterAddresses.isEmpty()) {
@@ -1815,6 +1808,19 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 OptionalLong highWatermark = partitionResponse.highWatermark() < 0 ?
                     OptionalLong.empty() : OptionalLong.of(partitionResponse.highWatermark());
                 updateFollowerHighWatermark(state, highWatermark);
+
+                if (initHighWatermark < 0 && partitionResponse.highWatermark() >= 0) {
+                    initHighWatermark = partitionResponse.highWatermark();
+
+                    state.highWatermark().ifPresent( hw -> {
+                            if (hw.offset() >= initHighWatermark && nodeId.isPresent()) {
+                                hasJoined = partitionState.lastVoterSet().isVoter(
+                                    ReplicaKey.of(nodeId.getAsInt(), nodeDirectoryId));
+                            }
+                        }
+                    );
+                }
+
             }
 
             state.resetFetchTimeoutForSuccessfulFetch(currentTimeMs);
