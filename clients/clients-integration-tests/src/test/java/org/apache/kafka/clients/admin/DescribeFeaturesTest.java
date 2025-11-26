@@ -21,6 +21,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.GroupVersion;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -54,32 +55,79 @@ public class DescribeFeaturesTest {
                 )
         }
     )
-    public void testUnstableApiVersions(ClusterInstance clusterInstance) {
+    public void testUnstableApiVersionsOnController(ClusterInstance clusterInstance) {
         try (Admin admin = clusterInstance.admin(Map.of(), true)) {
             // unstable.api.versions.enable is true on node 3000
             FeatureMetadata featureMetadata = assertDoesNotThrow(
                 () -> admin.describeFeatures(new DescribeFeaturesOptions().nodeId(3000)).featureMetadata().get());
             assertEquals(Map.of(
-                GroupVersion.FEATURE_NAME, new SupportedVersionRange((short) 0, (short) 1),
-                KRaftVersion.FEATURE_NAME, new SupportedVersionRange((short) 0, (short) 1),
-                MetadataVersion.FEATURE_NAME, new SupportedVersionRange(MetadataVersion.IBP_3_3_IV3.featureLevel(), MetadataVersion.IBP_4_2_IV1.featureLevel()),
-                ShareVersion.FEATURE_NAME, new SupportedVersionRange((short) 0, (short) 1),
-                StreamsVersion.FEATURE_NAME, new SupportedVersionRange((short) 0, (short) 1),
-                TransactionVersion.FEATURE_NAME, new SupportedVersionRange((short) 0, (short) 2),
-                EligibleLeaderReplicasVersion.FEATURE_NAME, new SupportedVersionRange((short) 0, (short) 1)
+                GroupVersion.FEATURE_NAME, new SupportedVersionRange(Feature.GROUP_VERSION.minimumProduction(), Feature.GROUP_VERSION.latestTesting()),
+                KRaftVersion.FEATURE_NAME, new SupportedVersionRange(Feature.KRAFT_VERSION.minimumProduction(), Feature.KRAFT_VERSION.latestTesting()),
+                MetadataVersion.FEATURE_NAME, new SupportedVersionRange(MetadataVersion.MINIMUM_VERSION.featureLevel(), MetadataVersion.latestTesting().featureLevel()),
+                ShareVersion.FEATURE_NAME, new SupportedVersionRange(Feature.SHARE_VERSION.minimumProduction(), Feature.SHARE_VERSION.latestTesting()),
+                StreamsVersion.FEATURE_NAME, new SupportedVersionRange(Feature.STREAMS_VERSION.minimumProduction(), Feature.STREAMS_VERSION.latestTesting()),
+                TransactionVersion.FEATURE_NAME, new SupportedVersionRange(Feature.TRANSACTION_VERSION.minimumProduction(), Feature.TRANSACTION_VERSION.latestTesting()),
+                EligibleLeaderReplicasVersion.FEATURE_NAME, new SupportedVersionRange(Feature.ELIGIBLE_LEADER_REPLICAS_VERSION.minimumProduction(), Feature.ELIGIBLE_LEADER_REPLICAS_VERSION.latestTesting())
             ), featureMetadata.supportedFeatures());
 
             // unstable.api.versions.enable is false on node 3001
             featureMetadata = assertDoesNotThrow(
                 () -> admin.describeFeatures(new DescribeFeaturesOptions().nodeId(3001)).featureMetadata().get());
             assertEquals(Map.of(
-                GroupVersion.FEATURE_NAME, new SupportedVersionRange((short) 0, (short) 1),
-                KRaftVersion.FEATURE_NAME, new SupportedVersionRange((short) 0, (short) 1),
-                MetadataVersion.FEATURE_NAME, new SupportedVersionRange(MetadataVersion.IBP_3_3_IV3.featureLevel(), MetadataVersion.IBP_4_1_IV1.featureLevel()),
-                ShareVersion.FEATURE_NAME, new SupportedVersionRange((short) 0, (short) 1),
-                StreamsVersion.FEATURE_NAME, new SupportedVersionRange((short) 0, (short) 1),
-                TransactionVersion.FEATURE_NAME, new SupportedVersionRange((short) 0, (short) 2),
-                EligibleLeaderReplicasVersion.FEATURE_NAME, new SupportedVersionRange((short) 0, (short) 1)
+                GroupVersion.FEATURE_NAME, new SupportedVersionRange(Feature.GROUP_VERSION.minimumProduction(), Feature.GROUP_VERSION.latestProduction()),
+                KRaftVersion.FEATURE_NAME, new SupportedVersionRange(Feature.KRAFT_VERSION.minimumProduction(), Feature.KRAFT_VERSION.latestProduction()),
+                MetadataVersion.FEATURE_NAME, new SupportedVersionRange(MetadataVersion.MINIMUM_VERSION.featureLevel(), MetadataVersion.latestProduction().featureLevel()),
+                ShareVersion.FEATURE_NAME, new SupportedVersionRange(Feature.SHARE_VERSION.minimumProduction(), Feature.SHARE_VERSION.latestProduction()),
+                StreamsVersion.FEATURE_NAME, new SupportedVersionRange(Feature.STREAMS_VERSION.minimumProduction(), Feature.STREAMS_VERSION.latestProduction()),
+                TransactionVersion.FEATURE_NAME, new SupportedVersionRange(Feature.TRANSACTION_VERSION.minimumProduction(), Feature.TRANSACTION_VERSION.latestProduction()),
+                EligibleLeaderReplicasVersion.FEATURE_NAME, new SupportedVersionRange(Feature.ELIGIBLE_LEADER_REPLICAS_VERSION.minimumProduction(), Feature.ELIGIBLE_LEADER_REPLICAS_VERSION.latestProduction())
+            ), featureMetadata.supportedFeatures());
+        }
+    }
+
+    @ClusterTest(
+        types = {Type.KRAFT},
+        metadataVersion = MetadataVersion.IBP_3_7_IV0,
+        brokers = 2,
+        serverProperties = {
+            @ClusterConfigProperty(
+                id = 0,
+                key = "unstable.feature.versions.enable",
+                value = "true"
+                    ),
+            @ClusterConfigProperty(
+                id = 1,
+                key = "unstable.feature.versions.enable",
+                value = "false"
+                    )
+        }
+    )
+    public void testUnstableFeatureVersionsOnBroker(ClusterInstance clusterInstance) {
+        try (Admin admin = clusterInstance.admin()) {
+            // unstable.feature.versions.enable is true on node 0
+            FeatureMetadata featureMetadata = assertDoesNotThrow(
+                () -> admin.describeFeatures(new DescribeFeaturesOptions().nodeId(0)).featureMetadata().get());
+            assertEquals(Map.of(
+                GroupVersion.FEATURE_NAME, new SupportedVersionRange(Feature.GROUP_VERSION.minimumProduction(), Feature.GROUP_VERSION.latestTesting()),
+                KRaftVersion.FEATURE_NAME, new SupportedVersionRange(Feature.KRAFT_VERSION.minimumProduction(), Feature.KRAFT_VERSION.latestTesting()),
+                MetadataVersion.FEATURE_NAME, new SupportedVersionRange(MetadataVersion.MINIMUM_VERSION.featureLevel(), MetadataVersion.latestTesting().featureLevel()),
+                ShareVersion.FEATURE_NAME, new SupportedVersionRange(Feature.SHARE_VERSION.minimumProduction(), Feature.SHARE_VERSION.latestTesting()),
+                StreamsVersion.FEATURE_NAME, new SupportedVersionRange(Feature.STREAMS_VERSION.minimumProduction(), Feature.STREAMS_VERSION.latestTesting()),
+                TransactionVersion.FEATURE_NAME, new SupportedVersionRange(Feature.TRANSACTION_VERSION.minimumProduction(), Feature.TRANSACTION_VERSION.latestTesting()),
+                EligibleLeaderReplicasVersion.FEATURE_NAME, new SupportedVersionRange(Feature.ELIGIBLE_LEADER_REPLICAS_VERSION.minimumProduction(), Feature.ELIGIBLE_LEADER_REPLICAS_VERSION.latestTesting())
+            ), featureMetadata.supportedFeatures());
+
+            // unstable.feature.versions.enable is false on node 1
+            featureMetadata = assertDoesNotThrow(
+                () -> admin.describeFeatures(new DescribeFeaturesOptions().nodeId(1)).featureMetadata().get());
+            assertEquals(Map.of(
+                GroupVersion.FEATURE_NAME, new SupportedVersionRange(Feature.GROUP_VERSION.minimumProduction(), Feature.GROUP_VERSION.latestProduction()),
+                KRaftVersion.FEATURE_NAME, new SupportedVersionRange(Feature.KRAFT_VERSION.minimumProduction(), Feature.KRAFT_VERSION.latestProduction()),
+                MetadataVersion.FEATURE_NAME, new SupportedVersionRange(MetadataVersion.MINIMUM_VERSION.featureLevel(), MetadataVersion.latestProduction().featureLevel()),
+                ShareVersion.FEATURE_NAME, new SupportedVersionRange(Feature.SHARE_VERSION.minimumProduction(), Feature.SHARE_VERSION.latestProduction()),
+                StreamsVersion.FEATURE_NAME, new SupportedVersionRange(Feature.STREAMS_VERSION.minimumProduction(), Feature.STREAMS_VERSION.latestProduction()),
+                TransactionVersion.FEATURE_NAME, new SupportedVersionRange(Feature.TRANSACTION_VERSION.minimumProduction(), Feature.TRANSACTION_VERSION.latestProduction()),
+                EligibleLeaderReplicasVersion.FEATURE_NAME, new SupportedVersionRange(Feature.ELIGIBLE_LEADER_REPLICAS_VERSION.minimumProduction(), Feature.ELIGIBLE_LEADER_REPLICAS_VERSION.latestProduction())
             ), featureMetadata.supportedFeatures());
         }
     }
