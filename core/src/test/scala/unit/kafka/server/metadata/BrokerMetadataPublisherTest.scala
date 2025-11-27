@@ -292,7 +292,7 @@ class BrokerMetadataPublisherTest {
         .numBytes(42)
         .build())
 
-    verify(groupCoordinator).onMetadataUpdate(new KRaftCoordinatorMetadataImage(image), new KRaftCoordinatorMetadataDelta(delta))
+    verify(groupCoordinator).onMetadataUpdate(delta, image)
   }
 
   @Test
