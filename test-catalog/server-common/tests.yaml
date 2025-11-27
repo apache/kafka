@@ -263,6 +263,7 @@ org.apache.kafka.server.share.persister.DefaultStatePersisterTest:
 - testWriteStateSuccess
 - testWriteStateValidate
 org.apache.kafka.server.share.persister.PersisterStateManagerTest:
+- testDeleteStateClientResponseErrorRetriesExhausted
 - testDeleteStateRequestBatchingWithCoordinatorNodeLookup
 - testDeleteStateRequestCoordinatorFoundOnRetry
 - testDeleteStateRequestCoordinatorFoundSuccessfully
@@ -275,6 +276,7 @@ org.apache.kafka.server.share.persister.PersisterStateManagerTest:
 - testFindCoordinatorFatalError
 - testFindCoordinatorNullResponse
 - testFindCoordinatorSuccess
+- testInitializeStateClientResponseErrorRetriesExhausted
 - testInitializeStateRequestBatchingWithCoordinatorNodeLookup
 - testInitializeStateRequestCoordinatorFoundOnRetry
 - testInitializeStateRequestCoordinatorFoundSuccessfully
@@ -283,6 +285,7 @@ org.apache.kafka.server.share.persister.PersisterStateManagerTest:
 - testInitializeStateRequestWithCoordinatorNodeLookup
 - testInitializeStateRequestWithRetryAndCoordinatorNodeLookup
 - testPersisterStateManagerClose
+- testReadStateClientResponseErrorRetriesExhausted
 - testReadStateRequestCoordinatorFoundOnRetry
 - testReadStateRequestCoordinatorFoundSuccessfully
 - testReadStateRequestFailureMaxRetriesExhausted
@@ -290,6 +293,7 @@ org.apache.kafka.server.share.persister.PersisterStateManagerTest:
 - testReadStateRequestRetryWithCoordinatorNodeLookup
 - testReadStateRequestRetryWithNotCoordinatorSuccessfulOnRetry
 - testReadStateRequestWithCoordinatorNodeLookup
+- testReadStateSummaryClientResponseErrorRetriesExhausted
 - testReadStateSummaryRequestCoordinatorFoundOnRetry
 - testReadStateSummaryRequestCoordinatorFoundSuccessfully
 - testReadStateSummaryRequestFailureMaxRetriesExhausted
@@ -298,6 +302,7 @@ org.apache.kafka.server.share.persister.PersisterStateManagerTest:
 - testReadStateSummaryRequestRetryWithNotCoordinatorSuccessfulOnRetry
 - testReadStateSummaryRequestWithCoordinatorNodeLookup
 - testResponseErrorHandling
+- testWriteStateClientResponseErrorRetriesExhausted
 - testWriteStateRequestBatchingWithCoordinatorNodeLookup
 - testWriteStateRequestCoordinatorFoundOnRetry
 - testWriteStateRequestCoordinatorFoundSuccessfully
