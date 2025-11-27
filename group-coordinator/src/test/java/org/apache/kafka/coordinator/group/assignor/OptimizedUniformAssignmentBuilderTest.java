@@ -680,13 +680,13 @@ public class OptimizedUniformAssignmentBuilderTest {
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
         expectedAssignment.put(memberA, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0, 3)
+            mkTopicAssignment(topic1Uuid, 3, 4)
         ));
         expectedAssignment.put(memberB, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 1, 4)
+            mkTopicAssignment(topic1Uuid, 1, 5)
         ));
         expectedAssignment.put(memberC, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 2, 5)
+            mkTopicAssignment(topic1Uuid, 0, 2)
         ));
 
         assertAssignment(expectedAssignment, computedAssignment);
@@ -847,15 +847,15 @@ public class OptimizedUniformAssignmentBuilderTest {
         );
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
         expectedAssignment.put(memberA, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 3, 4, 5)
+            mkTopicAssignment(topic1Uuid, 0, 3),
+            mkTopicAssignment(topic2Uuid, 0)
         ));
         expectedAssignment.put(memberB, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0),
-            mkTopicAssignment(topic2Uuid, 0, 1)
+            mkTopicAssignment(topic1Uuid, 1, 4, 5)
         ));
         expectedAssignment.put(memberC, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 1, 2),
-            mkTopicAssignment(topic2Uuid, 2)
+            mkTopicAssignment(topic1Uuid, 2),
+            mkTopicAssignment(topic2Uuid, 1, 2)
         ));
 
         assertAssignment(expectedAssignment, computedAssignment);

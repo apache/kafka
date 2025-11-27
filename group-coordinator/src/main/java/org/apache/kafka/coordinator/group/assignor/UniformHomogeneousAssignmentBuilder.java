@@ -74,7 +74,7 @@ public class UniformHomogeneousAssignmentBuilder {
      * The partitions that still need to be assigned.
      * Initially this contains all the subscribed topics' partitions.
      */
-    private final List<TopicIdPartition> unassignedPartitions;
+    private List<TopicIdPartition> unassignedPartitions;
 
     /**
      * The target assignment.
@@ -281,8 +281,9 @@ public class UniformHomogeneousAssignmentBuilder {
      * Assign the unassigned partitions to the unfilled members if member and partition racks are matched.
      */
     private void assignRackAwarenessRemainingPartitions() {
-        for (var unassignedPartitionsIter = unassignedPartitions.iterator(); unassignedPartitionsIter.hasNext(); ) {
-            TopicIdPartition tip = unassignedPartitionsIter.next();
+        // Assign partitions to members with descending order. This avoids the cost of shifting elements.
+        for (int i = unassignedPartitions.size() - 1; i >= 0; i--) {
+            TopicIdPartition tip = unassignedPartitions.get(i);
             boolean isPartitionAssigned = false;
 
             for (var unfilledMembersIter = unfilledMembers.iterator(); unfilledMembersIter.hasNext(); ) {
@@ -321,7 +322,7 @@ public class UniformHomogeneousAssignmentBuilder {
             }
 
             if (isPartitionAssigned) {
-                unassignedPartitionsIter.remove();
+                unassignedPartitions.remove(i);
             }
         }
     }
