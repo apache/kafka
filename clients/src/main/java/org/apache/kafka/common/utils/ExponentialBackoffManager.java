@@ -31,8 +31,7 @@ public class ExponentialBackoffManager {
             initialInterval,
             multiplier,
             maxInterval,
-            jitter
-        );
+            jitter);
     }
 
     public void incrementAttempt() {

@@ -369,8 +369,7 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
                     time.hiResClockMs(),
                     current.node,
                     requestBuilder,
-                    response -> handleResponse(current, response)
-                );
+                    response -> handleResponse(current, response));
 
                 requests.add(requestHandler);
             }

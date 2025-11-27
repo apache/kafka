@@ -33,8 +33,7 @@ class ExponentialBackoffManagerTest {
     @Test
     public void testInitialState() {
         ExponentialBackoffManager manager = new ExponentialBackoffManager(
-                5, 100, 2, 1000, 0.0
-        );
+            5, 100, 2, 1000, 0.0);
         assertEquals(0, manager.attempts());
         assertTrue(manager.canAttempt());
     }
@@ -42,8 +41,7 @@ class ExponentialBackoffManagerTest {
     @Test
     public void testIncrementAttempt() {
         ExponentialBackoffManager manager = new ExponentialBackoffManager(
-                5, 100, 2, 1000, 0.0
-        );
+                5, 100, 2, 1000, 0.0);
         assertEquals(0, manager.attempts());
         manager.incrementAttempt();
         assertEquals(1, manager.attempts());
@@ -52,8 +50,7 @@ class ExponentialBackoffManagerTest {
     @Test
     public void testResetAttempts() {
         ExponentialBackoffManager manager = new ExponentialBackoffManager(
-                5, 100, 2, 1000, 0.0
-        );
+                5, 100, 2, 1000, 0.0);
         manager.incrementAttempt();
         manager.incrementAttempt();
         manager.incrementAttempt();
@@ -67,8 +64,7 @@ class ExponentialBackoffManagerTest {
     @Test
     public void testCanAttempt() {
         ExponentialBackoffManager manager = new ExponentialBackoffManager(
-                3, 100, 2, 1000, 0.0
-        );
+                3, 100, 2, 1000, 0.0);
         // Initially can attempt
         assertTrue(manager.canAttempt());
         assertEquals(0, manager.attempts());
@@ -84,8 +80,7 @@ class ExponentialBackoffManagerTest {
     @Test
     public void testBackOffWithoutJitter() {
         ExponentialBackoffManager manager = new ExponentialBackoffManager(
-                5, 100, 2, 1000, 0.0
-        );
+                5, 100, 2, 1000, 0.0);
         for (int i = 0; i < 5; i++) {
             long backoff = manager.backOff();
             // without jitter, the backoff values should be exact multiples.
@@ -97,8 +92,7 @@ class ExponentialBackoffManagerTest {
     @Test
     public void testBackOffWithJitter() {
         ExponentialBackoffManager manager = new ExponentialBackoffManager(
-                5, 100, 2, 1000, 0.2
-        );
+                5, 100, 2, 1000, 0.2);
         for (int i = 0; i < 5; i++) {
             long backoff = manager.backOff();
             // with jitter, the backoff values should be within 20% of the expected value.

@@ -297,16 +297,14 @@ class NetworkPartitionMetadataClientTest {
         CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
         Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
             tp,
-            partitionFuture
-        );
+            partitionFuture);
         networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder().build();
         Node node = mock(Node.class);
         ListOffsetsRequest.Builder builder = mock(ListOffsetsRequest.Builder.class);
         NetworkPartitionMetadataClient.PendingRequest pendingReqeust = new NetworkPartitionMetadataClient.PendingRequest(
             node,
             futures,
-            builder
-        );
+            builder);
         // Pass null as clientResponse.
         networkPartitionMetadataClient.handleResponse(pendingReqeust, null);
         assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
@@ -321,8 +319,7 @@ class NetworkPartitionMetadataClientTest {
         CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
         Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
             tp,
-            partitionFuture
-        );
+            partitionFuture);
         AuthenticationException authenticationException = new AuthenticationException("Test authentication exception");
         ClientResponse clientResponse = mock(ClientResponse.class);
         // Mock authentication exception in client response.
@@ -333,8 +330,7 @@ class NetworkPartitionMetadataClientTest {
         NetworkPartitionMetadataClient.PendingRequest pendingReqeust = new NetworkPartitionMetadataClient.PendingRequest(
             node,
             futures,
-            builder
-        );
+            builder);
         networkPartitionMetadataClient.handleResponse(pendingReqeust, clientResponse);
         assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
         PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
@@ -348,8 +344,7 @@ class NetworkPartitionMetadataClientTest {
         CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
         Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
             tp,
-            partitionFuture
-        );
+            partitionFuture);
         UnsupportedVersionException unsupportedVersionException = new UnsupportedVersionException("Test unsupportedVersionException exception");
         ClientResponse clientResponse = mock(ClientResponse.class);
         when(clientResponse.authenticationException()).thenReturn(null);
@@ -361,8 +356,7 @@ class NetworkPartitionMetadataClientTest {
         NetworkPartitionMetadataClient.PendingRequest pendingReqeust = new NetworkPartitionMetadataClient.PendingRequest(
             node,
             futures,
-            builder
-        );
+            builder);
         networkPartitionMetadataClient.handleResponse(pendingReqeust, clientResponse);
         assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
         PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
@@ -978,8 +972,7 @@ class NetworkPartitionMetadataClientTest {
         CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
         Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
             tp,
-            partitionFuture
-        );
+            partitionFuture);
         MockTimer timer = new MockTimer(MOCK_TIME);
         ClientResponse clientResponse = mock(ClientResponse.class);
         when(clientResponse.authenticationException()).thenReturn(null);
@@ -1002,8 +995,7 @@ class NetworkPartitionMetadataClientTest {
             node,
             futures,
             builder,
-            exponentialBackoffManager
-        );
+            exponentialBackoffManager);
 
         // Initially, timer should be empty
         assertEquals(0, timer.size());
@@ -1025,8 +1017,7 @@ class NetworkPartitionMetadataClientTest {
         CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
         Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
             tp,
-            partitionFuture
-        );
+            partitionFuture);
         MockTimer timer = new MockTimer(MOCK_TIME);
         ClientResponse clientResponse = mock(ClientResponse.class);
         when(clientResponse.authenticationException()).thenReturn(null);
@@ -1050,8 +1041,7 @@ class NetworkPartitionMetadataClientTest {
             node,
             futures,
             builder,
-            exponentialBackoffManager
-        );
+            exponentialBackoffManager);
 
         // Initially, timer should be empty
         assertEquals(0, timer.size());
@@ -1073,8 +1063,7 @@ class NetworkPartitionMetadataClientTest {
         CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
         Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
             tp,
-            partitionFuture
-        );
+            partitionFuture);
         MockTimer timer = new MockTimer(MOCK_TIME);
         ClientResponse clientResponse = mock(ClientResponse.class);
         when(clientResponse.authenticationException()).thenReturn(null);
@@ -1098,8 +1087,7 @@ class NetworkPartitionMetadataClientTest {
             node,
             futures,
             builder,
-            exponentialBackoffManager
-        );
+            exponentialBackoffManager);
 
         // Initially, timer should be empty
         assertEquals(0, timer.size());
@@ -1130,8 +1118,7 @@ class NetworkPartitionMetadataClientTest {
         CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
         Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
             tp,
-            partitionFuture
-        );
+            partitionFuture);
         MockTimer timer = new MockTimer(MOCK_TIME);
         ClientResponse clientResponse = mock(ClientResponse.class);
         when(clientResponse.authenticationException()).thenReturn(null);
@@ -1156,8 +1143,7 @@ class NetworkPartitionMetadataClientTest {
             node,
             futures,
             builder,
-            exponentialBackoffManager
-        );
+            exponentialBackoffManager);
 
         // Initially, timer should be empty
         assertEquals(0, timer.size());
