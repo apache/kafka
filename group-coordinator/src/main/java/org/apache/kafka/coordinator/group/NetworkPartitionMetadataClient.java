@@ -312,7 +312,12 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
         PendingRequest(Node node,
                       Map<TopicPartition, CompletableFuture<OffsetResponse>> futures,
                       ListOffsetsRequest.Builder requestBuilder) {
-            this(node, futures, requestBuilder, new ExponentialBackoffManager(MAX_RETRY_ATTEMPTS, REQUEST_BACKOFF_MS, REQUEST_BACKOFF_MAX_MS));
+            this(node, futures, requestBuilder, new ExponentialBackoffManager(
+                MAX_RETRY_ATTEMPTS,
+                REQUEST_BACKOFF_MS,
+                CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
+                REQUEST_BACKOFF_MAX_MS,
+                CommonClientConfigs.RETRY_BACKOFF_JITTER));
         }
     }
 

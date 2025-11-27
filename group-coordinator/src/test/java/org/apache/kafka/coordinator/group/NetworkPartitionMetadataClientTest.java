@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.common.Node;
@@ -77,6 +78,8 @@ class NetworkPartitionMetadataClientTest {
     private static final int MAX_RETRY_ATTEMPTS = 2;
     private static final long REQUEST_BACKOFF_MS = 1_000L;
     private static final long REQUEST_BACKOFF_MAX_MS = 30_000L;
+    private static final int RETRY_BACKOFF_EXP_BASE = CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
+    private static final double RETRY_BACKOFF_JITTER = CommonClientConfigs.RETRY_BACKOFF_JITTER;
 
 
     private NetworkPartitionMetadataClient networkPartitionMetadataClient;
@@ -990,8 +993,9 @@ class NetworkPartitionMetadataClientTest {
         ExponentialBackoffManager exponentialBackoffManager = new ExponentialBackoffManager(
             MAX_RETRY_ATTEMPTS,
             REQUEST_BACKOFF_MS,
-            REQUEST_BACKOFF_MAX_MS
-        );
+            RETRY_BACKOFF_EXP_BASE,
+            REQUEST_BACKOFF_MAX_MS,
+            RETRY_BACKOFF_JITTER);
         Node node = mock(Node.class);
         ListOffsetsRequest.Builder builder = mock(ListOffsetsRequest.Builder.class);
         NetworkPartitionMetadataClient.PendingRequest pendingRequest = new NetworkPartitionMetadataClient.PendingRequest(
@@ -1037,8 +1041,9 @@ class NetworkPartitionMetadataClientTest {
         ExponentialBackoffManager exponentialBackoffManager = new ExponentialBackoffManager(
             MAX_RETRY_ATTEMPTS,
             REQUEST_BACKOFF_MS,
-            REQUEST_BACKOFF_MAX_MS
-        );
+            RETRY_BACKOFF_EXP_BASE,
+            REQUEST_BACKOFF_MAX_MS,
+            RETRY_BACKOFF_JITTER);
         Node node = mock(Node.class);
         ListOffsetsRequest.Builder builder = mock(ListOffsetsRequest.Builder.class);
         NetworkPartitionMetadataClient.PendingRequest pendingRequest = new NetworkPartitionMetadataClient.PendingRequest(
@@ -1083,8 +1088,9 @@ class NetworkPartitionMetadataClientTest {
         ExponentialBackoffManager exponentialBackoffManager = new ExponentialBackoffManager(
             MAX_RETRY_ATTEMPTS,
             REQUEST_BACKOFF_MS,
-            REQUEST_BACKOFF_MAX_MS
-        );
+            RETRY_BACKOFF_EXP_BASE,
+            REQUEST_BACKOFF_MAX_MS,
+            RETRY_BACKOFF_JITTER);
         Node node = mock(Node.class);
         ListOffsetsRequest.Builder builder = mock(ListOffsetsRequest.Builder.class);
 
@@ -1140,8 +1146,9 @@ class NetworkPartitionMetadataClientTest {
         ExponentialBackoffManager exponentialBackoffManager = new ExponentialBackoffManager(
             MAX_RETRY_ATTEMPTS,
             REQUEST_BACKOFF_MS,
-            REQUEST_BACKOFF_MAX_MS
-        );
+            RETRY_BACKOFF_EXP_BASE,
+            REQUEST_BACKOFF_MAX_MS,
+            RETRY_BACKOFF_JITTER);
         Node node = mock(Node.class);
         ListOffsetsRequest.Builder builder = mock(ListOffsetsRequest.Builder.class);
 

@@ -17,8 +17,6 @@
 
 package org.apache.kafka.common.utils;
 
-import org.apache.kafka.clients.CommonClientConfigs;
-
 /**
  * Manages retry attempts and exponential backoff for requests.
  */
@@ -27,13 +25,13 @@ public class ExponentialBackoffManager {
     private int attempts;
     private final ExponentialBackoff backoff;
 
-    public ExponentialBackoffManager(int maxAttempts, long initialBackoffMs, long maxBackoffMs) {
+    public ExponentialBackoffManager(int maxAttempts, long initialInterval, int multiplier, long maxInterval, double jitter) {
         this.maxAttempts = maxAttempts;
         this.backoff = new ExponentialBackoff(
-            initialBackoffMs,
-            CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
-            maxBackoffMs,
-            CommonClientConfigs.RETRY_BACKOFF_JITTER
+            initialInterval,
+            multiplier,
+            maxInterval,
+            jitter
         );
     }
 
