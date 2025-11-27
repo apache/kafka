@@ -151,6 +151,7 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
     public void close() {
         // Only close sendThread if it was initialized. Note, close is called only during broker shutdown, so need
         // for further synchronization here.
+        Utils.closeQuietly(timer, "NetworkPartitionMetadataClient timer");
         if (!initialized.get()) {
             return;
         }
@@ -162,7 +163,6 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
                 log.error("Interrupted while shutting down NetworkPartitionMetadataClient", e);
             }
         }
-        Utils.closeQuietly(timer, "NetworkPartitionMetadataClient timer");
     }
 
     /**
@@ -265,11 +265,11 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
             log.error("Version mismatch exception", clientResponse.versionMismatch());
             error = Errors.UNKNOWN_SERVER_ERROR;
         } else if (clientResponse.wasDisconnected()) {
-            log.warn("Response for ListOffsets for TopicPartitions: {} was disconnected - {}.", partitionFutures.keySet(), clientResponse);
+            log.debug("Response for ListOffsets for TopicPartitions: {} was disconnected - {}.", partitionFutures.keySet(), clientResponse);
             error = Errors.NETWORK_EXCEPTION;
             shouldRetry = true;
         } else if (clientResponse.wasTimedOut()) {
-            log.warn("Response for ListOffsets for TopicPartitions: {} timed out - {}.", partitionFutures.keySet(), clientResponse);
+            log.debug("Response for ListOffsets for TopicPartitions: {} timed out - {}.", partitionFutures.keySet(), clientResponse);
             error = Errors.REQUEST_TIMED_OUT;
             shouldRetry = true;
         } else if (!clientResponse.hasResponse()) {
