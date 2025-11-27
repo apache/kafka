@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.common.MetricNameTemplate;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 public class ShareFetchMetricsRegistry {
@@ -97,5 +98,28 @@ public class ShareFetchMetricsRegistry {
                 "The average throttle time in ms", tags);
         this.fetchThrottleTimeMax = new MetricNameTemplate("fetch-throttle-time-max", groupName,
                 "The maximum throttle time in ms", tags);
+    }
+
+    public List<MetricNameTemplate> getAllTemplates() {
+        return List.of(
+            fetchSizeAvg,
+            fetchSizeMax,
+            bytesFetchedRate,
+            bytesFetchedTotal,
+            recordsPerRequestAvg,
+            recordsPerRequestMax,
+            recordsFetchedRate,
+            recordsFetchedTotal,
+            acknowledgementSendRate,
+            acknowledgementSendTotal,
+            acknowledgementErrorRate,
+            acknowledgementErrorTotal,
+            fetchLatencyAvg,
+            fetchLatencyMax,
+            fetchRequestRate,
+            fetchRequestTotal,
+            fetchThrottleTimeAvg,
+            fetchThrottleTimeMax
+        );
     }
 }

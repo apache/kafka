@@ -17,13 +17,17 @@
 package org.apache.kafka.server.share.metrics;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
+import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 
 import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.Meter;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -61,6 +65,8 @@ public class ShareGroupMetrics implements AutoCloseable {
     private final KafkaMetricsGroup metricsGroup;
     private final Time time;
 
+    private final ShareGroupMetricsRegistry shareGroupMetricsRegistry;
+
     public ShareGroupMetrics(Time time) {
         this.time = time;
         this.metricsGroup = new KafkaMetricsGroup("kafka.server", "ShareGroupMetrics");
@@ -78,6 +84,7 @@ public class ShareGroupMetrics implements AutoCloseable {
         this.partitionLoadTimeMs = metricsGroup.newHistogram(PARTITION_LOAD_TIME_MS);
         this.topicPartitionsFetchRatio = new ConcurrentHashMap<>();
         this.topicPartitionsAcquireTimeMs = new ConcurrentHashMap<>();
+        this.shareGroupMetricsRegistry = new ShareGroupMetricsRegistry();
     }
 
     public void recordAcknowledgement(byte ackType) {
@@ -141,5 +148,14 @@ public class ShareGroupMetrics implements AutoCloseable {
             return string;
         }
         return string.substring(0, 1).toUpperCase(Locale.ROOT) + string.substring(1);
+    }
+
+    private List<MetricNameTemplate> getAllTemplates() {
+        return new ArrayList<>(this.shareGroupMetricsRegistry.getAllTemplates());
+    }
+
+    public static void main(String[] args) {
+        ShareGroupMetrics metrics = new ShareGroupMetrics(null);
+        System.out.println(Metrics.toHtmlTable("kafka.server", metrics.getAllTemplates()));
     }
 }
