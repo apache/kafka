@@ -69,7 +69,6 @@
         <allow pkg="org.apache.kafka.common.feature" />
         <allow pkg="org.apache.kafka.common.internals" />
         <allow pkg="org.apache.kafka.common.message" />
-        <allow pkg="org.apache.kafka.common.metadata" />
         <allow pkg="org.apache.kafka.common.network" />
         <allow pkg="org.apache.kafka.common.protocol" />
         <allow pkg="org.apache.kafka.common.quota" />
@@ -145,7 +144,6 @@
         <allow pkg="org.apache.kafka.common.config" />
         <allow pkg="org.apache.kafka.common.internals" />
         <allow pkg="org.apache.kafka.common.message" />
-        <allow pkg="org.apache.kafka.common.metadata" />
         <allow pkg="org.apache.kafka.common.network" />
         <allow pkg="org.apache.kafka.common.protocol" />
         <allow pkg="org.apache.kafka.common.quota" />
