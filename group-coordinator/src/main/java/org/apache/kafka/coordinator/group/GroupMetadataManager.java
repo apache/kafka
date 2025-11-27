@@ -2154,9 +2154,7 @@ public class GroupMetadataManager {
                 )
         ));
 
-        if (!returnedStatus.isEmpty()) {
-            response.setStatus(returnedStatus);
-        }
+        response.setStatus(returnedStatus);
         return new CoordinatorResult<>(records, new StreamsGroupHeartbeatResult(response, internalTopicsToBeCreated));
     }
 
