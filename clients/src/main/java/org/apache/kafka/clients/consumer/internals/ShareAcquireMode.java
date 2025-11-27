@@ -40,6 +40,9 @@ public enum ShareAcquireMode {
      * Case-insensitive acquire mode lookup by string name.
      */
     public static ShareAcquireMode of(final String name) {
+        if (name == null) {
+            throw new IllegalArgumentException("ShareAcquireMode is null");
+        }
         try {
             return ShareAcquireMode.valueOf(name.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
