@@ -75,6 +75,20 @@ public final class KRaftControlRecordStateMachine {
     private final KafkaRaftMetrics kafkaRaftMetrics;
     private final ExternalKRaftMetrics externalKRaftMetrics;
     private final VoterSet staticVoterSet;
+    private volatile VoterSetChangeListener voterSetChangeListener;
+
+    /**
+     * Listener interface for voter set changes.
+     */
+    public interface VoterSetChangeListener {
+        /**
+         * Called when a voter set change is detected after startTracking() has been called.
+         *
+         * @param offset the offset at which the voter set changed
+         * @param newVoterSet the new voter set
+         */
+        void onVoterSetChange(long offset, VoterSet newVoterSet);
+    }
 
     /**
      * Constructs an internal log listener
@@ -116,6 +130,15 @@ public final class KRaftControlRecordStateMachine {
     public void updateState() {
         maybeLoadSnapshot();
         maybeLoadLog();
+    }
+
+    /**
+     * Set the listener for voter set changes.
+     *
+     * @param listener the listener to notify when voter set changes occur
+     */
+    public void setVoterSetChangeListener(VoterSetChangeListener listener) {
+        this.voterSetChangeListener = listener;
     }
 
     /**
@@ -308,6 +331,10 @@ public final class KRaftControlRecordStateMachine {
                     logger.info("Latest set of voters is {} at offset {}", voters, currentOffset);
                     synchronized (voterSetHistory) {
                         voterSetHistory.addAt(currentOffset, voters);
+                    }
+
+                    if (voterSetChangeListener != null) {
+                        voterSetChangeListener.onVoterSetChange(currentOffset, voters);
                     }
                     break;
 
