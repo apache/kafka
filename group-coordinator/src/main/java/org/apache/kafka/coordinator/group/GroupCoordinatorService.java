@@ -2365,8 +2365,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         MetadataImage newImage
     ) {
         throwIfNotActive();
-        metadataImage = newImage == null ? null : new KRaftCoordinatorMetadataImage(newImage);
-        runtime.onNewMetadataImage(metadataImage, new KRaftCoordinatorMetadataDelta(delta));
+        var wrappedImage = newImage == null ? null : new KRaftCoordinatorMetadataImage(newImage);
+        var wrappedDelta = delta == null ? null : new KRaftCoordinatorMetadataDelta(delta);
+        metadataImage = wrappedImage;
+        runtime.onNewMetadataImage(wrappedImage, wrappedDelta);
     }
 
     /**
