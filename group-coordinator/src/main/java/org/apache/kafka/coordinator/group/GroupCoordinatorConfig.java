@@ -112,7 +112,9 @@ public class GroupCoordinatorConfig {
 
     public static final String APPEND_MAX_BUFFER_SIZE_CONFIG = "group.coordinator.append.max.buffer.size";
     public static final int APPEND_MAX_BUFFER_SIZE_DEFAULT = 1024 * 1024 + Records.LOG_OVERHEAD;
-    public static final String APPEND_MAX_BUFFER_SIZE_DOC = "The largest buffer size allowed by GroupCoordinator (It is recommended not to exceed the maximum allowed message size).";
+    public static final String APPEND_MAX_BUFFER_SIZE_DOC = "The maximum buffer size that the GroupCoordinator will retain for reuse. " +
+        "Note: Setting this larger than the maximum message size is not recommended. In this case, every write buffer will be eligible " +
+        "for recycling, which renders this configuration ineffective as a size limit.";
 
     ///
     /// Offset configs

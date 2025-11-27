@@ -85,7 +85,9 @@ public class ShareCoordinatorConfig {
 
     public static final String APPEND_MAX_BUFFER_SIZE_CONFIG = "share.coordinator.append.max.buffer.size";
     public static final int APPEND_MAX_BUFFER_SIZE_DEFAULT = 1024 * 1024 + Records.LOG_OVERHEAD;
-    public static final String APPEND_MAX_BUFFER_SIZE_DOC = "The largest buffer size allowed by ShareCoordinator (It is recommended not to exceed the maximum allowed message size).";
+    public static final String APPEND_MAX_BUFFER_SIZE_DOC = "The maximum buffer size that the ShareCoordinator will retain for reuse. " +
+        "Note: Setting this larger than the maximum message size is not recommended. In this case, every write buffer will be eligible " +
+        "for recycling, which renders this configuration ineffective as a size limit.";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(STATE_TOPIC_NUM_PARTITIONS_CONFIG, INT, STATE_TOPIC_NUM_PARTITIONS_DEFAULT, atLeast(1), HIGH, STATE_TOPIC_NUM_PARTITIONS_DOC)
