@@ -343,7 +343,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
     /**
      * The metadata image to extract topic id to names map.
-     * This is initialised when the {@link GroupCoordinator#onNewMetadataImage(CoordinatorMetadataImage, CoordinatorMetadataDelta)} is called
+     * This is initialised when the {@link GroupCoordinator#onMetadataUpdate(CoordinatorMetadataImage, CoordinatorMetadataDelta)} is called
      */
     private CoordinatorMetadataImage metadataImage = null;
 
@@ -2354,10 +2354,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#onNewMetadataImage(CoordinatorMetadataImage, CoordinatorMetadataDelta)}.
+     * See {@link GroupCoordinator#onMetadataUpdate(CoordinatorMetadataImage, CoordinatorMetadataDelta)}.
      */
     @Override
-    public void onNewMetadataImage(
+    public void onMetadataUpdate(
         CoordinatorMetadataImage newImage,
         CoordinatorMetadataDelta delta
     ) {

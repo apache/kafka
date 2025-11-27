@@ -470,7 +470,7 @@ public interface GroupCoordinator {
      * @param newImage  The new metadata image.
      * @param delta     The metadata delta.
      */
-    void onNewMetadataImage(
+    void onMetadataUpdate(
         CoordinatorMetadataImage newImage,
         CoordinatorMetadataDelta delta
     );

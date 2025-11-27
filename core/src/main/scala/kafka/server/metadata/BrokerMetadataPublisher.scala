@@ -234,7 +234,7 @@ class BrokerMetadataPublisher(
 
       try {
         // Propagate the new image to the group coordinator.
-        groupCoordinator.onNewMetadataImage(new KRaftCoordinatorMetadataImage(newImage), new KRaftCoordinatorMetadataDelta(delta))
+        groupCoordinator.onMetadataUpdate(new KRaftCoordinatorMetadataImage(newImage), new KRaftCoordinatorMetadataDelta(delta))
       } catch {
         case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating group " +
           s"coordinator with local changes in $deltaName", t)
@@ -242,7 +242,7 @@ class BrokerMetadataPublisher(
 
       try {
         // Propagate the new image to the share coordinator.
-        shareCoordinator.onNewMetadataImage(new KRaftCoordinatorMetadataImage(newImage), newImage.features(), new KRaftCoordinatorMetadataDelta(delta))
+        shareCoordinator.onMetadataUpdate(new KRaftCoordinatorMetadataImage(newImage), newImage.features(), new KRaftCoordinatorMetadataDelta(delta))
       } catch {
         case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share " +
           s"coordinator with local changes in $deltaName", t)
