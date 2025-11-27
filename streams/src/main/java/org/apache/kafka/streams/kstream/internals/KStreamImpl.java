@@ -1327,6 +1327,33 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    public <VOut> KStream<K, VOut> process(
+        final FixedKeyProcessorSupplier<? super K, ? super V, ? extends VOut> processorSupplier,
+        final String... stateStoreNames
+    ) {
+        return process(
+            processorSupplier,
+            Named.as(builder.newProcessorName(PROCESSVALUES_NAME)),
+            stateStoreNames
+        );
+    }
+
+    @Override
+    public <VOut> KStream<K, VOut> process(
+        final FixedKeyProcessorSupplier<? super K, ? super V, ? extends VOut> processorSupplier,
+        final Named named,
+        final String... stateStoreNames
+    ) {
+        return processValuesInternal(
+            true,
+            processorSupplier,
+            named,
+            stateStoreNames
+        );
+    }
+
+    @Deprecated
+    @Override
     public <VOut> KStream<K, VOut> processValues(
         final FixedKeyProcessorSupplier<? super K, ? super V, ? extends VOut> processorSupplier,
         final String... stateStoreNames
@@ -1338,8 +1365,23 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         );
     }
 
+    @Deprecated
     @Override
     public <VOut> KStream<K, VOut> processValues(
+        final FixedKeyProcessorSupplier<? super K, ? super V, ? extends VOut> processorSupplier,
+        final Named named,
+        final String... stateStoreNames
+    ) {
+        return processValuesInternal(
+            builder.processProcessValueFixEnabled(),
+            processorSupplier,
+            named,
+            stateStoreNames
+        );
+    }
+
+    private <VOut> KStream<K, VOut> processValuesInternal(
+        final boolean enableProcessProcessValueFix,
         final FixedKeyProcessorSupplier<? super K, ? super V, ? extends VOut> processorSupplier,
         final Named named,
         final String... stateStoreNames
@@ -1357,7 +1399,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             new ProcessorParameters<>(processorSupplier, name),
             stateStoreNames
         );
-        if (builder.processProcessValueFixEnabled()) {
+        if (enableProcessProcessValueFix) {
             processNode.setValueChangingOperation(true);
         }
 

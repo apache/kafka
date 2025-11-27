@@ -52,8 +52,7 @@ import java.time.Duration;
  * {@link GlobalKTable}, or can be aggregated into a {@link KTable}.
  * A {@link KStream} can also be directly {@link KStream#toTable() converted} into a {@code KTable}.
  * Kafka Streams DSL can be mixed-and-matched with the Processor API (PAPI) (cf. {@link Topology}) via
- * {@link #process(ProcessorSupplier, String...) process(...)} and {@link #processValues(FixedKeyProcessorSupplier,
- * String...) processValues(...)}.
+ * {@link #process(ProcessorSupplier, String...) process(...)}.
  *
  * @param <K> the key type of this stream
  * @param <V> the value type of this stream
@@ -63,7 +62,7 @@ public interface KStream<K, V> {
     /**
      * Create a new {@code KStream} that consists of all records of this stream which satisfy the given predicate.
      * All records that do not satisfy the predicate are dropped.
-     * This is a stateless record-by-record operation (cf. {@link #processValues(FixedKeyProcessorSupplier, String...)}
+     * This is a stateless record-by-record operation (cf. {@link #process(FixedKeyProcessorSupplier, String...)}
      * for stateful record processing or if you need access to the record's timestamp, headers, or other metadata).
      *
      * @param predicate
@@ -86,7 +85,7 @@ public interface KStream<K, V> {
      * Create a new {@code KStream} that consists all records of this stream which do <em>not</em> satisfy the given
      * predicate.
      * All records that <em>do</em> satisfy the predicate are dropped.
-     * This is a stateless record-by-record operation (cf. {@link #processValues(FixedKeyProcessorSupplier, String...)}
+     * This is a stateless record-by-record operation (cf. {@link #process(FixedKeyProcessorSupplier, String...)}
      * for stateful record processing or if you need access to the record's timestamp, headers, or other metadata).
      *
      * @param predicate
@@ -156,7 +155,7 @@ public interface KStream<K, V> {
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * If you need read access to the input record key, use {@link #mapValues(ValueMapperWithKey)}.
      * This is a stateless record-by-record operation (cf.
-     * {@link #processValues(FixedKeyProcessorSupplier, String...)} for stateful value processing or if you need access
+     * {@link #process(FixedKeyProcessorSupplier, String...)} for stateful value processing or if you need access
      * to the record's timestamp, headers, or other metadata).
      *
      * <p>The example below counts the number of token of the value string.
@@ -320,7 +319,7 @@ public interface KStream<K, V> {
      * (possibly of a different type) for it.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V'>, ...}.
      * If you need read access to the input record key, use {@link #flatMapValues(ValueMapperWithKey)}.
-     * This is a stateless record-by-record operation (cf. {@link #processValues(FixedKeyProcessorSupplier, String...)}
+     * This is a stateless record-by-record operation (cf. {@link #process(FixedKeyProcessorSupplier, String...)}
      * for stateful record processing or if you need access to the record's timestamp, headers, or other metadata).
      *
      * <p>The example below splits input records {@code <null:String>} containing sentences as values into their words.
@@ -1540,7 +1539,7 @@ public interface KStream<K, V> {
      * If repartitioning is required, a call to {@link #repartition()} should be performed before {@code process()}.
      * At the same time, this method is considered a key changing operation by itself, and might result in an internal
      * data redistribution if a key-based operator (like an aggregation or join) is applied to the result
-     * {@code KStream} (cf. {@link #processValues(FixedKeyProcessorSupplier, String...)}).
+     * {@code KStream} (cf. {@link #process(FixedKeyProcessorSupplier, String...)}).
      *
      * @param processorSupplier
      *        the supplier used to obtain {@link Processor} instances
@@ -1577,6 +1576,41 @@ public interface KStream<K, V> {
      * <p>However, because the key cannot be modified, some restrictions apply to a {@link FixedKeyProcessor} compared
      * to a {@link Processor}: for example, forwarding result records from a {@link Punctuator} is not possible.
      */
+    <VOut> KStream<K, VOut> process(
+        final FixedKeyProcessorSupplier<? super K, ? super V, ? extends VOut> processorSupplier,
+        final String... stateStoreNames
+    );
+
+    /**
+     * See {@link #process(FixedKeyProcessorSupplier, String...)}.
+     *
+     * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
+     */
+    <VOut> KStream<K, VOut> process(
+        final FixedKeyProcessorSupplier<? super K, ? super V, ? extends VOut> processorSupplier,
+        final Named named,
+        final String... stateStoreNames
+    );
+
+    /**
+     * Process all records in this stream, one record at a time, by applying a {@link FixedKeyProcessor} (provided by
+     * the given {@link FixedKeyProcessorSupplier}) to each input record.
+     * This method is similar to {@link #process(ProcessorSupplier, String...)}, however the key of the input
+     * {@link Record} cannot be modified.
+     *
+     * <p>Because the key cannot be modified, this method is <em>not</em> a key changing operation and preserves data
+     * co-location with respect to the key (cf. {@link #flatMapValues(ValueMapper)}).
+     * Thus, <em>no</em> internal data redistribution is required if a key-based operator (like an aggregation or join)
+     * is applied to the result {@code KStream}.
+     *
+     * <p>However, because the key cannot be modified, some restrictions apply to a {@link FixedKeyProcessor} compared
+     * to a {@link Processor}: for example, forwarding result records from a {@link Punctuator} is not possible.
+     *
+     * @deprecated Since 4.3. Use {@link #process(FixedKeyProcessorSupplier, String...)} instead.
+     * Note, that upgrading from {@code processValues()} to {@code process()} is not always backward compatibly.
+     * Please consult the Kafka Streams upgrade documentation for more details.
+     */
+    @Deprecated
     <VOut> KStream<K, VOut> processValues(
         final FixedKeyProcessorSupplier<? super K, ? super V, ? extends VOut> processorSupplier,
         final String... stateStoreNames
@@ -1586,7 +1620,12 @@ public interface KStream<K, V> {
      * See {@link #processValues(FixedKeyProcessorSupplier, String...)}.
      *
      * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
+     *
+     * @deprecated Since 4.3. Use {@link #process(FixedKeyProcessorSupplier, Named, String...)} instead.
+     * Note, that upgrading from {@code processValues()} to {@code process()} is not always backward compatibly.
+     * Please consult the Kafka Streams upgrade documentation for more details.
      */
+    @Deprecated
     <VOut> KStream<K, VOut> processValues(
         final FixedKeyProcessorSupplier<? super K, ? super V, ? extends VOut> processorSupplier,
         final Named named,
