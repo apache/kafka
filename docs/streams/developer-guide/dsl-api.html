@@ -3462,7 +3462,8 @@ grouped
                 <p>The Processor API now serves as a unified replacement for all these methods. It simplifies the API surface
                     while maintaining support for both stateless and stateful operations.</p>
 
-                <p><b>CAUTION:</b> If you are using <code>KStream.transformValues()</code> and you have the "merge repartition topics"
+                <p><b>CAUTION:</b> If you are using <code>KStream.transformValues()</code> or <code>KStream.flatTransformValues()</code>
+                    and you have the "merge repartition topics"
                     optimization enabled, rewriting your program to <code>KStream.processValues()</code> might not be safe due to
                     <a href="https://issues.apache.org/jira/browse/KAFKA-19668">KAFKA-19668</a>. For this case, you should not upgrade
                     to Kafka Streams 4.0.0 or 4.1.0, but use Kafka Streams 4.0.1 instead, which contains a fix.
