@@ -2065,7 +2065,7 @@ public class GroupMetadataManager {
             boolean initialDelayActive = timer.isScheduled(streamsInitialRebalanceKey(groupId));
             if (initialDelayActive) {
                 // During initial rebalance delay, return empty assignment to first joining members.
-                targetAssignmentEpoch = 1;
+                targetAssignmentEpoch = Math.max(1, group.assignmentEpoch());
                 targetAssignment = TasksTuple.EMPTY;
             } else {
                 targetAssignment = updateStreamsTargetAssignment(
