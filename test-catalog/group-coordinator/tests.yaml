@@ -198,6 +198,7 @@ org.apache.kafka.coordinator.group.GroupCoordinatorShardTest:
 - testConsumerGroupHeartbeat
 - testDeleteGroups
 - testDeleteGroupsInvalidGroupId
+- testFetchOffsets
 - testInitiateDeleteShareGroupOffsetsEmptyResult
 - testInitiateDeleteShareGroupOffsetsGroupNotFound
 - testInitiateDeleteShareGroupOffsetsNonEmptyShareGroup
