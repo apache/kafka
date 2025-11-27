@@ -622,6 +622,13 @@ class ControllerApisTest {
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("consumer.session.timeout.ms").
             setValue("50000").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("null-value-resource").
+          setResourceType(ConfigResource.Type.TOPIC.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("my.custom.config").
+            setValue(null).
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator()))
         ).iterator()))
     val request = buildRequest(new IncrementalAlterConfigsRequest.Builder(requestData).build(0))
@@ -675,7 +682,12 @@ class ControllerApisTest {
         setErrorCode(INVALID_REQUEST.code()).
         setErrorMessage("Duplicate resource.").
         setResourceName("group-foo1").
-        setResourceType(ConfigResource.Type.GROUP.id())),
+        setResourceType(ConfigResource.Type.GROUP.id()),
+      new AlterConfigsResourceResponse().
+        setErrorCode(INVALID_REQUEST.code()).
+        setErrorMessage("Null value not supported for : my.custom.config").
+        setResourceName("null-value-resource").
+        setResourceType(ConfigResource.Type.TOPIC.id())),
       response.data().responses().asScala.toSet)
   }
 

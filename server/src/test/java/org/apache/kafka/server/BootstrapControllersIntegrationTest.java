@@ -357,4 +357,39 @@ public class BootstrapControllersIntegrationTest {
             assertEquals("2", configEntry.value());
         }
     }
+
+    @ClusterTest
+    public void testIncrementalAlterNullValueConfigsByControllers(ClusterInstance clusterInstance) throws Exception {
+        testIncrementalAlterNullValueConfigs(clusterInstance, true);
+    }
+
+    @ClusterTest
+    public void testIncrementalAlterNullValueConfigs(ClusterInstance clusterInstance) throws Exception {
+        testIncrementalAlterNullValueConfigs(clusterInstance, false);
+    }
+
+    private void testIncrementalAlterNullValueConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
+            int nodeId = usingBootstrapControllers ?
+                    clusterInstance.controllers().values().iterator().next().config().nodeId() :
+                    clusterInstance.brokers().values().iterator().next().config().nodeId();
+            ConfigResource nodeResource = new ConfigResource(BROKER, "" + nodeId);
+            Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(
+                nodeResource,
+                List.of(
+                    new AlterConfigOp(new ConfigEntry("my.custom.config", null), AlterConfigOp.OpType.SET),
+                    new AlterConfigOp(new ConfigEntry("my.custom.config1", null), AlterConfigOp.OpType.SET)
+                )
+            );
+            ExecutionException exception = assertThrows(
+                ExecutionException.class,
+                () -> admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES)
+            );
+            assertEquals(
+                "org.apache.kafka.common.errors.InvalidRequestException: " +
+                    "Null value not supported for : my.custom.config, my.custom.config1",
+                exception.getMessage()
+            );
+        }
+    }
 }
