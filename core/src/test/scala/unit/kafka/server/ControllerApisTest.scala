@@ -682,12 +682,39 @@ class ControllerApisTest {
         setErrorCode(INVALID_REQUEST.code()).
         setErrorMessage("Duplicate resource.").
         setResourceName("group-foo1").
-        setResourceType(ConfigResource.Type.GROUP.id()),
+        setResourceType(ConfigResource.Type.GROUP.id())),
+      response.data().responses().asScala.toSet)
+  }
+
+  @Test
+  def testInvalidIncrementalAlterConfigsWithNullResources(): Unit = {
+    val requestData = new IncrementalAlterConfigsRequestData().setResources(
+      new AlterConfigsResourceCollection(util.Arrays.asList(
+        new AlterConfigsResource().
+          setResourceName("3").
+          setResourceType(ConfigResource.Type.BROKER.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("my.custom.config").
+            setValue(null).
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator()))
+      ).iterator()))
+    val request = buildRequest(new IncrementalAlterConfigsRequest.Builder(requestData).build(0))
+    controllerApis = createControllerApis(None, new MockController.Builder().build())
+    controllerApis.handleIncrementalAlterConfigs(request)
+    val capturedResponse: ArgumentCaptor[AbstractResponse] =
+      ArgumentCaptor.forClass(classOf[AbstractResponse])
+    verify(requestChannel).sendResponse(
+      ArgumentMatchers.eq(request),
+      capturedResponse.capture(),
+      ArgumentMatchers.eq(None))
+    assertNotNull(capturedResponse.getValue)
+    val response = capturedResponse.getValue.asInstanceOf[IncrementalAlterConfigsResponse]
+    assertEquals(Set(
       new AlterConfigsResourceResponse().
         setErrorCode(INVALID_REQUEST.code()).
         setErrorMessage("Null value not supported for : my.custom.config").
-        setResourceName("null-value-resource").
-        setResourceType(ConfigResource.Type.TOPIC.id())),
+        setResourceName("3").
+        setResourceType(ConfigResource.Type.BROKER.id())),
       response.data().responses().asScala.toSet)
   }
 
