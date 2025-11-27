@@ -157,20 +157,24 @@ public class ProtocolRoundTripConsistencyTest {
         // Serialize schema
         struct.writeTo(serializedSchemaBuffer);
 
+        assertEquals(message.size(cache, version), serializedMessageAccessor.buffer().position(),
+            "Buffer should be completely filled to message size.");
+        assertEquals(struct.sizeOf(), serializedSchemaBuffer.position(),
+            "Buffer should be completely filled to struct size.");
         assertEquals(serializedSchemaBuffer.position(), serializedMessageAccessor.buffer().position(),
-            "Buffer positions should match between message and schema serialization");
+            "Generated and non-generated schema serializer should serialize to the same length.");
         assertEquals(serializedSchemaBuffer, serializedMessageAccessor.buffer(),
-            "Buffer contents should be identical between message and schema serialization");
+            "Generated and non-generated schema serializer should serialize to the same content.");
 
         serializedMessageAccessor.flip();
         // Deserialize message
         Schema schema = version == 0 ? AllTypeMessageData.SCHEMA_0 : AllTypeMessageData.SCHEMA_1;
-        Struct deserializedMessage = schema.read(serializedMessageAccessor.buffer());
-        assertEquals(struct, deserializedMessage, "Deserialized message struct should match original struct after round trip");
+        Struct deserializedStruct = schema.read(serializedMessageAccessor.buffer());
+        assertEquals(struct, deserializedStruct, "Deserialized struct should match original struct after round trip");
 
         serializedSchemaBuffer.flip();
         // Deserialize schema
-        AllTypeMessageData deserializedSchema = new AllTypeMessageData(new ByteBufferAccessor(serializedSchemaBuffer), version);
-        assertEquals(message, deserializedSchema, "Deserialized schema message should match original message after round trip");
+        AllTypeMessageData deserializedMessage = new AllTypeMessageData(new ByteBufferAccessor(serializedSchemaBuffer), version);
+        assertEquals(message, deserializedMessage, "Deserialized message should match original message after round trip");
     }
 }
