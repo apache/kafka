@@ -3466,7 +3466,7 @@ grouped
                     and you have the "merge repartition topics"
                     optimization enabled, rewriting your program to <code>KStream.processValues()</code> might not be safe due to
                     <a href="https://issues.apache.org/jira/browse/KAFKA-19668">KAFKA-19668</a>. For this case, you should not upgrade
-                    to Kafka Streams 4.0.0 or 4.1.0, but use Kafka Streams 4.0.1 instead, which contains a fix.
+                    to Kafka Streams 4.0.0 or 4.1.0, but use Kafka Streams 4.0.1 or 4.1.1 instead, which contain a fix.
                     Note, that the fix is not enabled by default for backward compatibility reasons, and you would need to
                     enable the fix by setting config <code>__enable.process.processValue.fix__ = true</code> and pass it
                     into <code>StreamsBuilder()</code> constructor.</p>
