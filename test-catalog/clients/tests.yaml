@@ -2152,6 +2152,10 @@ org.apache.kafka.clients.consumer.internals.ShareAcknowledgementModeTest:
 - testEqualsAndHashCode
 - testFromString
 - testValidator
+org.apache.kafka.clients.consumer.internals.ShareAcquireModeTest:
+- testFromString
+- testValidator
+- testValidatorToString
 org.apache.kafka.clients.consumer.internals.ShareCompletedFetchTest:
 - testAcquireOddRecords
 - testAcquiredRecords
