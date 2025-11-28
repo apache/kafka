@@ -3308,9 +3308,6 @@ public class GroupMetadataManager {
                     throwIfRegularExpressionIsInvalid(updatedMember.subscribedTopicRegex());
                     requireRefresh = true;
 
-                    if (isNotEmpty(oldSubscribedTopicRegex) && group.numSubscribedMembers(oldSubscribedTopicRegex) != 0) {
-                        updateRegularExpressionsResult = UpdateRegularExpressionsResult.REGEX_UPDATED_AND_RESOLVED;
-                    }
                 } else {
                     // If the new regex is already resolved, we trigger a rebalance
                     // by bumping the group epoch.
@@ -3318,7 +3315,8 @@ public class GroupMetadataManager {
                         updateRegularExpressionsResult = UpdateRegularExpressionsResult.REGEX_UPDATED_AND_RESOLVED;
                     }
                 }
-            }
+            } else
+                updateRegularExpressionsResult = UpdateRegularExpressionsResult.REGEX_UPDATED_AND_RESOLVED;
         }
 
         // Conditions to trigger a refresh:
