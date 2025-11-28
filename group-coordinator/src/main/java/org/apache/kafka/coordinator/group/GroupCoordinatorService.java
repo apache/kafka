@@ -345,7 +345,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * The metadata image to extract topic id to names map.
      * This is initialised when the {@link GroupCoordinator#onNewMetadataImage(CoordinatorMetadataImage, CoordinatorMetadataDelta)} is called
      */
-    private CoordinatorMetadataImage metadataImage = null;
+    private volatile CoordinatorMetadataImage metadataImage = null;
 
     /**
      *
