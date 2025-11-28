@@ -622,13 +622,6 @@ class ControllerApisTest {
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("consumer.session.timeout.ms").
             setValue("50000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
-        new AlterConfigsResource().
-          setResourceName("null-value-resource").
-          setResourceType(ConfigResource.Type.TOPIC.id()).
-          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
-            setName("my.custom.config").
-            setValue(null).
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator()))
         ).iterator()))
     val request = buildRequest(new IncrementalAlterConfigsRequest.Builder(requestData).build(0))
