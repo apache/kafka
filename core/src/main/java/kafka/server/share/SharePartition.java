@@ -20,7 +20,7 @@ import kafka.server.ReplicaManager;
 import kafka.server.share.SharePartitionManager.SharePartitionListener;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
-import org.apache.kafka.clients.consumer.ShareAcquireMode;
+import org.apache.kafka.clients.consumer.internals.ShareAcquireMode;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
@@ -1836,13 +1836,13 @@ public class SharePartition {
                         sharePartitionMetrics);
                     int delayMs = recordLockDurationMsOrDefault(groupConfigManager, groupId, defaultRecordLockDurationMs);
                     long lastOffset = acquiredRecords.firstOffset() + maxFetchRecords - 1;
-                    acquiredRecords.setLastOffset(lastOffset);
                     inFlightBatch.maybeInitializeOffsetStateUpdate(lastOffset, delayMs);
                     updateFindNextFetchOffset(true);
 
                     cachedState.put(acquiredRecords.firstOffset(), inFlightBatch);
                     sharePartitionMetrics.recordInFlightBatchMessageCount(
                         acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1);
+                    acquiredRecords.setLastOffset(lastOffset);
                     return List.of(acquiredRecords);
                 }
             }

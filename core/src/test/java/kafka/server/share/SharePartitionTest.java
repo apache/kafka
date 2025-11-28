@@ -22,7 +22,7 @@ import kafka.server.share.SharePartition.SharePartitionState;
 import kafka.server.share.SharePartitionManager.SharePartitionListener;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
-import org.apache.kafka.clients.consumer.ShareAcquireMode;
+import org.apache.kafka.clients.consumer.internals.ShareAcquireMode;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -10293,13 +10293,14 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testAcquireSingleBatchInRecordLimitMode() {
+    public void testAcquireSingleBatchInRecordLimitMode() throws InterruptedException {
         Persister persister = Mockito.mock(Persister.class);
-        SharePartition sharePartition = Mockito.spy(SharePartitionBuilder.builder()
+        SharePartition sharePartition = SharePartitionBuilder.builder()
             .withState(SharePartitionState.ACTIVE)
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withPersister(persister)
-            .build());
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
 
         // Member-1 attempts to acquire records in strict mode with a maximum fetch limit of 5 records.
         MemoryRecords records = memoryRecords(10);
@@ -10359,16 +10360,26 @@ public class SharePartitionTest {
         assertEquals("member-2", sharePartition.cachedState().get(0L).offsetState().get(5L).memberId());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).offsetState().get(9L).state());
         assertEquals("member-2", sharePartition.cachedState().get(0L).offsetState().get(5L).memberId());
+
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
+            "In-flight batch count should be 1.");
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 10,
+            "In-flight message count should be 10.");
+        assertEquals(10, sharePartitionMetrics.inFlightBatchMessageCount().sum());
+        assertEquals(1, sharePartitionMetrics.inFlightBatchMessageCount().count());
+        assertEquals(10, sharePartitionMetrics.inFlightBatchMessageCount().min());
+        assertEquals(10, sharePartitionMetrics.inFlightBatchMessageCount().max());
     }
 
     @Test
     public void testAcquireMultipleBatchesInRecordLimitMode() throws InterruptedException {
         Persister persister = Mockito.mock(Persister.class);
-        SharePartition sharePartition = Mockito.spy(SharePartitionBuilder.builder()
+        SharePartition sharePartition = SharePartitionBuilder.builder()
             .withState(SharePartitionState.ACTIVE)
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withPersister(persister)
-            .build());
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
 
         // Create 3 batches of records.
         ByteBuffer buffer = ByteBuffer.allocate(4096);
@@ -10402,16 +10413,26 @@ public class SharePartitionTest {
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).offsetState().get(19L).state());
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(10L).offsetState().get(19L).memberId());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(10L).offsetState().get(20L).state());
+
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
+            "In-flight batch count should be 1.");
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 20,
+            "In-flight message count should be 20.");
+        assertEquals(20, sharePartitionMetrics.inFlightBatchMessageCount().sum());
+        assertEquals(1, sharePartitionMetrics.inFlightBatchMessageCount().count());
+        assertEquals(20, sharePartitionMetrics.inFlightBatchMessageCount().min());
+        assertEquals(20, sharePartitionMetrics.inFlightBatchMessageCount().max());
     }
 
     @Test
-    public void testAcquireWhenInsufficientRecordsInRecordLimitMode() {
+    public void testAcquireWhenInsufficientRecordsInRecordLimitMode() throws InterruptedException {
         Persister persister = Mockito.mock(Persister.class);
-        SharePartition sharePartition = Mockito.spy(SharePartitionBuilder.builder()
+        SharePartition sharePartition = SharePartitionBuilder.builder()
             .withState(SharePartitionState.ACTIVE)
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withPersister(persister)
-            .build());
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
 
         // Create 3 batches of records.
         ByteBuffer buffer = ByteBuffer.allocate(4096);
@@ -10442,12 +10463,22 @@ public class SharePartitionTest {
         assertNull(sharePartition.cachedState().get(10L).offsetState());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
         assertEquals(1, sharePartition.timer().size());
+
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
+            "In-flight batch count should be 1.");
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 15,
+            "In-flight message count should be 15.");
+        assertEquals(15, sharePartitionMetrics.inFlightBatchMessageCount().sum());
+        assertEquals(1, sharePartitionMetrics.inFlightBatchMessageCount().count());
+        assertEquals(15, sharePartitionMetrics.inFlightBatchMessageCount().min());
+        assertEquals(15, sharePartitionMetrics.inFlightBatchMessageCount().max());
     }
 
     @Test
-    public void testAcquireAndAcknowledgeMultipleSubsetRecordInRecordLimitMode() {
+    public void testAcquireAndAcknowledgeMultipleSubsetRecordInRecordLimitMode() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withState(SharePartitionState.ACTIVE)
+            .withSharePartitionMetrics(sharePartitionMetrics)
             .build();
 
         ByteBuffer buffer = ByteBuffer.allocate(4096);
@@ -10531,11 +10562,25 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(20L, new InFlightState(RecordState.ACQUIRED, (short) 1, "member-2"));
 
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(5L).offsetState());
+
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
+            "In-flight batch count should be 1.");
+        // End offset(20) - Start offset(10) + 1 = 11
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 11,
+            "In-flight message count should be 11.");
+        // 16 messages(5-20)
+        assertEquals(16, sharePartitionMetrics.inFlightBatchMessageCount().sum());
+        assertEquals(1, sharePartitionMetrics.inFlightBatchMessageCount().count());
+        assertEquals(16, sharePartitionMetrics.inFlightBatchMessageCount().min());
+        assertEquals(16, sharePartitionMetrics.inFlightBatchMessageCount().max());
     }
 
     @Test
-    public void testAcquireMultipleRecordsWithOverlapAndNewBatchInRecordLimitMode() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+    public void testAcquireMultipleRecordsWithOverlapAndNewBatchInRecordLimitMode() throws InterruptedException {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
         MemoryRecords records = memoryRecords(5);
 
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
@@ -10579,6 +10624,15 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(3L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
         expectedOffsetStateMap.put(4L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(0L).offsetState());
+
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 2,
+            "In-flight batch count should be 2.");
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 10,
+            "In-flight message count should be 10.");
+        assertEquals(10, sharePartitionMetrics.inFlightBatchMessageCount().sum());
+        assertEquals(2, sharePartitionMetrics.inFlightBatchMessageCount().count());
+        assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().min());
+        assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().max());
     }
 
     @Test
@@ -10659,6 +10713,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withState(SharePartitionState.ACTIVE)
+            .withSharePartitionMetrics(sharePartitionMetrics)
             .build();
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
 
@@ -10671,6 +10726,7 @@ public class SharePartitionTest {
             DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
             () -> assertionFailedMessage(sharePartition, Map.of(10L, List.of())));
 
+        assertEquals(5, sharePartitionMetrics.acquisitionLockTimeoutPerSec().count());
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
             MEMBER_ID,
             ShareAcquireMode.RECORD_LIMIT,
@@ -10694,16 +10750,26 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(13L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(14L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
+
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
+            "In-flight batch count should be 1.");
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 5,
+            "In-flight message count should be 5.");
+        assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().sum());
+        assertEquals(1, sharePartitionMetrics.inFlightBatchMessageCount().count());
+        assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().min());
+        assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().max());
     }
 
     @Test
     public void testAcquisitionLockTimeoutMultipleRecordBatchInRecordLimitMode() throws InterruptedException {
         Persister persister = Mockito.mock(Persister.class);
-        SharePartition sharePartition = Mockito.spy(SharePartitionBuilder.builder()
+        SharePartition sharePartition = SharePartitionBuilder.builder()
             .withState(SharePartitionState.ACTIVE)
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withPersister(persister)
-            .build());
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
 
         // Create 3 batches of records.
         ByteBuffer buffer = ByteBuffer.allocate(4096);
@@ -10749,6 +10815,12 @@ public class SharePartitionTest {
                 sharePartition.timer().size() == 0,
             DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
             () -> assertionFailedMessage(sharePartition, Map.of(0L, List.of(0L, 1L))));
+
+        assertEquals(2, sharePartitionMetrics.acquisitionLockTimeoutPerSec().count());
+        assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().sum());
+        assertEquals(1, sharePartitionMetrics.inFlightBatchMessageCount().count());
+        assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().min());
+        assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().max());
         // Acquisition lock timeout task has run already and next fetch offset is moved to 0.
         assertEquals(0, sharePartition.nextFetchOffset());
         assertEquals(1, sharePartition.cachedState().get(0L).offsetState().get(0L).deliveryCount());
@@ -10783,11 +10855,20 @@ public class SharePartitionTest {
             DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
             () -> assertionFailedMessage(sharePartition, Map.of(0L, List.of(0L, 1L))));
 
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
+            "In-flight batch count should be 1.");
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 5,
+            "In-flight message count should be 5.");
+        assertEquals(3, sharePartitionMetrics.acquisitionLockTimeoutPerSec().count());
+        assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().sum());
+        assertEquals(1, sharePartitionMetrics.inFlightBatchMessageCount().count());
+        assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().min());
+        assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().max());
         assertEquals(0, sharePartition.nextFetchOffset());
     }
 
     @Test
-    public void testAcquireCachedStateInitialGapOverlapsWithActualPartitionGapInRecordLimitMode() {
+    public void testAcquireCachedStateInitialGapOverlapsWithActualPartitionGapInRecordLimitMode() throws InterruptedException {
         Persister persister = Mockito.mock(Persister.class);
         ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
         Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(List.of(
@@ -10799,7 +10880,10 @@ public class SharePartitionTest {
                     ))))));
         Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
 
-        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
         sharePartition.maybeInitialize();
 
         // Creating 2 batches starting from 16, such that there is a natural gap from 11 to 15
@@ -10838,10 +10922,19 @@ public class SharePartitionTest {
 
         GapWindow persisterReadResultGapWindow = sharePartition.persisterReadResultGapWindow();
         assertNull(persisterReadResultGapWindow);
+
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 5,
+            "In-flight batch count should be 5.");
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 45,
+            "In-flight message count should be 45.");
+        assertEquals(45, sharePartitionMetrics.inFlightBatchMessageCount().sum());
+        assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().count());
+        assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().min());
+        assertEquals(10, sharePartitionMetrics.inFlightBatchMessageCount().max());
     }
 
     @Test
-    public void testAcquireCachedStateGapInBetweenOverlapsWithActualPartitionGapInRecordLimitMode() {
+    public void testAcquireCachedStateGapInBetweenOverlapsWithActualPartitionGapInRecordLimitMode() throws InterruptedException {
         Persister persister = Mockito.mock(Persister.class);
         ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
         Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(List.of(
@@ -10853,7 +10946,10 @@ public class SharePartitionTest {
                     ))))));
         Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
 
-        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
         sharePartition.maybeInitialize();
 
         // Creating 3 batches starting from 11, such that there is a natural gap from 36 to 40
@@ -10893,6 +10989,17 @@ public class SharePartitionTest {
         // Gap still exists from 36 to 40
         assertEquals(36L, persisterReadResultGapWindow.gapStartOffset());
         assertEquals(50L, persisterReadResultGapWindow.endOffset());
+
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 4,
+            "In-flight batch count should be 4.");
+        // End offset(50) - Start offset(11) + 1 = 40
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 40,
+            "In-flight message count should be 40.");
+        // 35 messages: 10 (11-20) + 10 (21-30) + 5 (31-35) + 10 (41-50)
+        assertEquals(35, sharePartitionMetrics.inFlightBatchMessageCount().sum());
+        assertEquals(4, sharePartitionMetrics.inFlightBatchMessageCount().count());
+        assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().min());
+        assertEquals(10, sharePartitionMetrics.inFlightBatchMessageCount().max());
     }
 
     @Test

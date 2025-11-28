@@ -18,7 +18,7 @@ package kafka.server.share;
 
 import kafka.server.ReplicaManager;
 
-import org.apache.kafka.clients.consumer.ShareAcquireMode;
+import org.apache.kafka.clients.consumer.internals.ShareAcquireMode;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;

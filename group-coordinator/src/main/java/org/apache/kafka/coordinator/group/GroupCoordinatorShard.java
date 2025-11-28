@@ -57,6 +57,7 @@ import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -806,23 +807,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
         long epoch
     ) throws ApiException {
-        return offsetMetadataManager.fetchOffsets(request, epoch);
-    }
-
-    /**
-     * Fetch all offsets for a given group.
-     *
-     * @param request   The OffsetFetchRequestGroup request.
-     * @param epoch     The epoch (or offset) used to read from the
-     *                  timeline data structure.
-     *
-     * @return A List of OffsetFetchResponseTopics response.
-     */
-    public OffsetFetchResponseData.OffsetFetchResponseGroup fetchAllOffsets(
-        OffsetFetchRequestData.OffsetFetchRequestGroup request,
-        long epoch
-    ) throws ApiException {
-        return offsetMetadataManager.fetchAllOffsets(request, epoch);
+        if (OffsetFetchRequest.requestAllOffsets(request)) {
+            return offsetMetadataManager.fetchAllOffsets(request, epoch);
+        } else {
+            return offsetMetadataManager.fetchOffsets(request, epoch);
+        }
     }
 
     /**

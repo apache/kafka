@@ -287,21 +287,6 @@ public interface GroupCoordinator {
     );
 
     /**
-     * Fetch all offsets for a given Group.
-     *
-     * @param context           The request context.
-     * @param request           The OffsetFetchRequestGroup request.
-     *
-     * @return  A future yielding the results.
-     *          The error codes of the results are set to indicate the errors occurred during the execution.
-     */
-    CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> fetchAllOffsets(
-        AuthorizableRequestContext context,
-        OffsetFetchRequestData.OffsetFetchRequestGroup request,
-        boolean requireStable
-    );
-
-    /**
      * Describe the Share Group Offsets for a given group.
      *
      * @param context           The request context

@@ -72,6 +72,7 @@ import org.apache.kafka.common.requests.DeleteShareGroupOffsetsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DescribeShareGroupOffsetsRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
+import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.ShareGroupDescribeRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
@@ -1629,6 +1630,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             ));
         }
 
+        var name = OffsetFetchRequest.requestAllOffsets(request) ? "fetch-all-offsets" : "fetch-offsets";
+
         // The require stable flag when set tells the broker to hold on returning unstable
         // (or uncommitted) offsets. In the previous implementation of the group coordinator,
         // the UNSTABLE_OFFSET_COMMIT error is returned when unstable offsets are present. As
@@ -1639,7 +1642,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         // the pending offsets are committed. Otherwise, we use a read operation.
         if (requireStable) {
             return runtime.scheduleWriteOperation(
-                "fetch-offsets",
+                name,
                 topicPartitionFor(request.groupId()),
                 Duration.ofMillis(config.offsetCommitTimeoutMs()),
                 coordinator -> new CoordinatorResult<>(
@@ -1647,74 +1650,16 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     coordinator.fetchOffsets(request, Long.MAX_VALUE)
                 )
             ).exceptionally(exception -> handleOffsetFetchException(
-                "fetch-offsets",
+                name,
                 context,
                 request,
                 exception
             ));
         } else {
             return runtime.scheduleReadOperation(
-                "fetch-offsets",
+                name,
                 topicPartitionFor(request.groupId()),
                 (coordinator, offset) -> coordinator.fetchOffsets(request, offset)
-            );
-        }
-    }
-
-    /**
-     * See {@link GroupCoordinator#fetchAllOffsets(AuthorizableRequestContext, OffsetFetchRequestData.OffsetFetchRequestGroup, boolean)}.
-     */
-    @Override
-    public CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> fetchAllOffsets(
-        AuthorizableRequestContext context,
-        OffsetFetchRequestData.OffsetFetchRequestGroup request,
-        boolean requireStable
-    ) {
-        if (!isActive.get()) {
-            return CompletableFuture.completedFuture(OffsetFetchResponse.groupError(
-                request,
-                Errors.COORDINATOR_NOT_AVAILABLE,
-                context.requestVersion()
-            ));
-        }
-
-        // For backwards compatibility, we support fetch commits for the empty group id.
-        if (request.groupId() == null) {
-            return CompletableFuture.completedFuture(OffsetFetchResponse.groupError(
-                request,
-                Errors.INVALID_GROUP_ID,
-                context.requestVersion()
-            ));
-        }
-
-        // The require stable flag when set tells the broker to hold on returning unstable
-        // (or uncommitted) offsets. In the previous implementation of the group coordinator,
-        // the UNSTABLE_OFFSET_COMMIT error is returned when unstable offsets are present. As
-        // the new implementation relies on timeline data structures, the coordinator does not
-        // really know whether offsets are stable or not so it is hard to return the same error.
-        // Instead, we use a write operation when the flag is set to guarantee that the fetch
-        // is based on all the available offsets and to ensure that the response waits until
-        // the pending offsets are committed. Otherwise, we use a read operation.
-        if (requireStable) {
-            return runtime.scheduleWriteOperation(
-                "fetch-all-offsets",
-                topicPartitionFor(request.groupId()),
-                Duration.ofMillis(config.offsetCommitTimeoutMs()),
-                coordinator -> new CoordinatorResult<>(
-                    List.of(),
-                    coordinator.fetchAllOffsets(request, Long.MAX_VALUE)
-                )
-            ).exceptionally(exception -> handleOffsetFetchException(
-                "fetch-all-offsets",
-                context,
-                request,
-                exception
-            ));
-        } else {
-            return runtime.scheduleReadOperation(
-                "fetch-all-offsets",
-                topicPartitionFor(request.groupId()),
-                (coordinator, offset) -> coordinator.fetchAllOffsets(request, offset)
             );
         }
     }
