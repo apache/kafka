@@ -56,7 +56,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         "You must choose one of the following reset specifications: --to-datetime, --by-duration, --to-earliest, " +
         "--to-latest, --shift-by, --from-file, --to-current, --to-offset." + NL +
         "To define the scope use --all-input-topics or --input-topic. One scope must be specified unless you use '--from-file'." + NL +
-        "Fails if neither '--dry-run' nor '–execute' is specified.";
+        "Fails if neither '--dry-run' nor '--execute' is specified.";
     private static final String DRY_RUN_DOC = "Only show results without executing changes on streams group. Supported operations: reset-offsets.";
     private static final String EXECUTE_DOC = "Execute operation. Supported operations: reset-offsets.";
     private static final String EXPORT_DOC = "Export operation execution to a CSV file. Supported operations: reset-offsets.";

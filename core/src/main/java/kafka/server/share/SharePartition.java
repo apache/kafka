@@ -490,6 +490,15 @@ public class SharePartition {
                         throwable = new IllegalStateException(String.format("Failed to initialize the share partition %s-%s", groupId, topicIdPartition));
                         return;
                     }
+
+                    if (stateBatch.lastOffset() < stateBatch.firstOffset()) {
+                        log.error("Invalid state batch found for the share partition: {}-{}. The first offset: {}"
+                                + " is less than the last offset of the batch: {}.", groupId, topicIdPartition,
+                            stateBatch.firstOffset(), stateBatch.lastOffset());
+                        throwable = new IllegalStateException(String.format("Failed to initialize the share partition %s-%s", groupId, topicIdPartition));
+                        return;
+                    }
+
                     if (gapStartOffset == -1 && stateBatch.firstOffset() > previousBatchLastOffset + 1) {
                         gapStartOffset = previousBatchLastOffset + 1;
                     }
@@ -1930,7 +1939,14 @@ public class SharePartition {
                 //   - maxDeliveryCount = 6, throttleRecordsDeliveryLimit = 3, batch size = 500
                 //   - deliveryCount = 3: maxFetchRecords = 500 >> (3 - 3 + 1) = 250
                 //   - deliveryCount = 4: maxFetchRecords = 500 >> (4 - 3 + 1) = 125
-                // The `maxFetchRecordsWhileThrottledRecords` is calculated based on the first acquirable record that meets the throttling criteria in the batch.
+                // The `maxFetchRecordsWhileThrottledRecords` is calculated based on the first acquirable
+                // record that meets the throttling criteria in the batch. Generally, when complete
+                // batch is erroring out and increases delivery count then the front offset can have
+                // higher delivery count then the later offsets, for example for a batch of 500 records
+                // and delivery limit of 10 the division will happen as 250, 125, 62, 31, 1 which means
+                // offset 124 will be at higher delivery count than offset 125. The calculation below
+                // deliver 124 once alone and then proceed with 125 onwards. The code ensures that
+                // the records at higher delivery count are isolated first.
                 if (recordDeliveryCount >= throttleRecordsDeliveryLimit && maxFetchRecordsWhileThrottledRecords < 0) {
                     maxFetchRecordsWhileThrottledRecords = Math.max(1, (long) inFlightBatch.offsetState().size() >> (recordDeliveryCount - throttleRecordsDeliveryLimit + 1));
                     hasThrottledRecord = true;
@@ -2006,12 +2022,19 @@ public class SharePartition {
      *
      * @param inFlightBatch       The in-flight batch to check for throttling.
      * @param requestFirstOffset  The first offset to acquire.
-     * @param requestLastOffset   THe last offset to acquire.
+     * @param requestLastOffset   The last offset to acquire.
      * @return True if the batch should be throttled (delivery count >= threshold), false otherwise.
      */
     private boolean shouldThrottleRecordsDelivery(InFlightBatch inFlightBatch, long requestFirstOffset, long requestLastOffset) {
         if (inFlightBatch.offsetState() == null) {
-            return inFlightBatch.batchDeliveryCount() >= throttleRecordsDeliveryLimit;
+            // If offsetState is null, it means the batch is not split and represents a single batch.
+            // Check if the batch is in AVAILABLE state and has no ongoing transition.
+            // The requested batch shall always be within the request first and last offset as the sub
+            // map batches are only fetched to consider.
+            if (inFlightBatch.batchState() == RecordState.AVAILABLE && !inFlightBatch.batchHasOngoingStateTransition()) {
+                return inFlightBatch.batchDeliveryCount() >= throttleRecordsDeliveryLimit;
+            }
+            return false;
         }
 
         return inFlightBatch.offsetState().entrySet().stream().filter(entry -> {
@@ -2021,10 +2044,7 @@ public class SharePartition {
             if (entry.getKey() > requestLastOffset) {
                 return false;
             }
-            if (entry.getValue().state() != RecordState.AVAILABLE) {
-                return false;
-            }
-            return true;
+            return entry.getValue().state() == RecordState.AVAILABLE && !entry.getValue().hasOngoingStateTransition();
         }).mapToInt(entry -> entry.getValue().deliveryCount()).max().orElse(0) >= throttleRecordsDeliveryLimit;
     }
 
