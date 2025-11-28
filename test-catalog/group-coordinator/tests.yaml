@@ -585,6 +585,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testStreamsOwnedTasksValidation
 - testStreamsPartitionMetadataRefreshedAfterGroupIsLoaded
 - testStreamsPartitionMetadataRefreshedAgainAfterWriteFailure
+- testStreamsRebalanceDelayWhenJoiningEmptyGroupWithNonZeroEpoch
 - testStreamsRebalanceTimeoutExpiration
 - testStreamsRebalanceTimeoutLifecycle
 - testStreamsReconciliationProcess
