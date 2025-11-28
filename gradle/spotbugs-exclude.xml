@@ -139,14 +139,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="NP_NONNULL_PARAM_VIOLATION"/>
     </Match>
 
-
-    <Match>
-        <!-- Suppression for the equals() for extension methods. -->
-        <Class name="kafka.utils.Implicits$MapExtensionMethods"/>
-        <Bug pattern="EQ_UNUSUAL"/>
-    </Match>
-
-
     <Match>
         <!-- Java's own Map#compute forces this pattern on us -->
         <Class name="org.apache.kafka.streams.query.Position"/>
@@ -219,7 +211,11 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 
     <Match>
         <!-- Suppress warnings about generated schema arrays. -->
-        <Package name="org.apache.kafka.common.message"/>
+        <Or>
+            <Package name="org.apache.kafka.common.message"/>
+            <Package name="org.apache.kafka.streams.internals.generated"/>
+            <Package name="kafka.internals.generated"/>
+        </Or>
         <Bug pattern="MS_MUTABLE_ARRAY"/>
     </Match>
 
@@ -396,15 +392,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="EQ_UNUSUAL"/>
     </Match>
 
--    <Match>
-        <Package name="org.apache.kafka.streams.scala"/>
-        <Or>
-            <Class name="org.apache.kafka.streams.scala.Serializer" />
-            <Class name="org.apache.kafka.streams.scala.Deserializer" />
-        </Or>
-        <Bug pattern="NM_SAME_SIMPLE_NAME_AS_INTERFACE"/>
-    </Match>
-
     <!-- Suppress warnings for unused members that are undetectably used by Jackson -->
     <Match>
         <Package name="org.apache.kafka.streams.examples.pageview"/>
@@ -446,6 +433,21 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Class name="org.apache.kafka.common.utils.PrimitiveRef$LongRef"/>
         <Field name="value"/>
         <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings related to jmh generated code -->
+        <Package name="org.apache.kafka.jmh.acl.generated"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings related to jmh generated code -->
+        <Package name="org.apache.kafka.jmh.metadata.generated"/>
+    </Match>
+
+    <Match>
+        <Package name="org.apache.kafka.common.security.oauthbearer.secured" />
+        <Bug pattern="NM_SAME_SIMPLE_NAME_AS_SUPERCLASS"/>
     </Match>
 
     <Match>
@@ -617,6 +619,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="kafka.server.FetchSession"/>
             <Class name="kafka.server.KafkaConfig"/>
             <Class name="kafka.server.metadata.BrokerMetadataPublisher"/>
+            <Class name="kafka.server.metadata.DelegationTokenPublisher"/>
             <Class name="org.apache.kafka.connect.mirror.MirrorSourceConnector"/>
             <Class name="org.apache.kafka.raft.LeaderState"/>
             <Class name="kafka.coordinator.transaction.TransactionCoordinator"/>
@@ -630,6 +633,34 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.streams.processor.internals.StreamThread"/>
         </Or>
         <Bug pattern="AT_STALE_THREAD_WRITE_OF_PRIMITIVE"/>
+    </Match>
+
+    <Match>
+        <!-- New warning type added when we upgraded from spotbugs 4.8.6 to 4.9.4.
+        These are possibly real bugs, and have not been evaluated, they were just bulk excluded to unblock upgrading Spotbugs.
+         -->
+        <Or>
+            <Class name="kafka.coordinator.transaction.CompleteCommit"/>
+            <Class name="kafka.coordinator.transaction.CompleteAbort"/>
+            <Class name="kafka.coordinator.transaction.Dead"/>
+            <Class name="kafka.coordinator.transaction.Empty"/>
+            <Class name="kafka.coordinator.transaction.Ongoing"/>
+            <Class name="kafka.coordinator.transaction.PrepareAbort"/>
+            <Class name="kafka.coordinator.transaction.PrepareCommit"/>
+            <Class name="kafka.coordinator.transaction.PrepareEpochFence"/>
+            <Class name="kafka.server.Fetching"/>
+            <Class name="kafka.server.Truncating"/>
+            <Class name="kafka.server.addPartition"/>
+            <Class name="kafka.server.defaultError"/>
+            <Class name="kafka.server.genericErrorSupported"/>
+            <Class name="kafka.server.metadata.DefaultClientIdEntity"/>
+            <Class name="kafka.server.metadata.DefaultIpEntity"/>
+            <Class name="kafka.server.metadata.DefaultUserDefaultClientIdEntity"/>
+            <Class name="kafka.server.metadata.DefaultUserEntity"/>
+            <Class name="org.apache.kafka.connect.runtime.SinkConnectorConfig"/>
+            <Class name="org.apache.kafka.connect.runtime.SourceConnectorConfig"/>
+        </Or>
+        <Bug pattern="HSM_HIDING_METHOD"/>
     </Match>
 
     <Match>
