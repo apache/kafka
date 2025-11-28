@@ -233,7 +233,9 @@ public class Schema extends DocumentedType {
     @Override
     public String documentation() {
         return "A struct is named by a string with a capitalized first letter and consists of one or more fields. " +
-                "It represents a composite object encoded as the serialization of each field in the order they are defined.";
+            "It represents a composite object encoded as the serialization of each field in the order they are defined." + 
+            "In protocol documentation a struct containing multiple fields is enclosed by " + 
+            leftBracket() + " and " + rightBracket() + ".";
     }
 
     public void walk(Visitor visitor) {
