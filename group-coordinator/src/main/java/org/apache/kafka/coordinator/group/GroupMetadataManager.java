@@ -3315,8 +3315,9 @@ public class GroupMetadataManager {
                         updateRegularExpressionsResult = UpdateRegularExpressionsResult.REGEX_UPDATED_AND_RESOLVED;
                     }
                 }
-            } else
+            } else if (isNotEmpty(oldSubscribedTopicRegex)) {
                 updateRegularExpressionsResult = UpdateRegularExpressionsResult.REGEX_UPDATED_AND_RESOLVED;
+            }
         }
 
         // Conditions to trigger a refresh:
