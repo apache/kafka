@@ -2538,7 +2538,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param newImage  The new metadata image.
      * @param delta     The metadata delta.
      */
-    public void onNewMetadataImage(
+    public void onMetadataUpdate(
         CoordinatorMetadataImage newImage,
         CoordinatorMetadataDelta delta
     ) {

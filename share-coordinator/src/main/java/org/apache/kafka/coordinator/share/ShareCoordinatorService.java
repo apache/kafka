@@ -1100,7 +1100,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
     @Override
     public void onNewMetadataImage(CoordinatorMetadataImage newImage, FeaturesImage newFeaturesImage, CoordinatorMetadataDelta delta) {
         throwIfNotActive();
-        this.runtime.onNewMetadataImage(newImage, delta);
+        this.runtime.onMetadataUpdate(newImage, delta);
         boolean enabled = isShareGroupsEnabled(newFeaturesImage);
         // enabled    shouldRunJob         result (XOR)
         // 0            0               no op on flag, do not call jobs

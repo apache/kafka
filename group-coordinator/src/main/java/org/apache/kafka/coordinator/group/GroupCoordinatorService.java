@@ -2368,7 +2368,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         var wrappedImage = newImage == null ? null : new KRaftCoordinatorMetadataImage(newImage);
         var wrappedDelta = delta == null ? null : new KRaftCoordinatorMetadataDelta(delta);
         metadataImage = wrappedImage;
-        runtime.onNewMetadataImage(wrappedImage, wrappedDelta);
+        runtime.onMetadataUpdate(wrappedImage, wrappedDelta);
     }
 
     /**
