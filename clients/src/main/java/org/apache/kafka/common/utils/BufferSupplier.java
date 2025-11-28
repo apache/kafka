@@ -22,7 +22,6 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Simple non-threadsafe interface for caching byte buffers. This is suitable for simple cases like ensuring that
@@ -31,7 +30,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * iterating over the records in the batch.
  */
 public abstract class BufferSupplier implements AutoCloseable {
-    protected final AtomicLong cachedSize = new AtomicLong();
+    protected long cachedSize;
 
     public static final BufferSupplier NO_CACHING = new BufferSupplier() {
         @Override
@@ -64,7 +63,7 @@ public abstract class BufferSupplier implements AutoCloseable {
      * Return total size in bytes of cached buffers.
      */
     public long size() {
-        return cachedSize.get();
+        return cachedSize;
     }
 
     /**
@@ -91,13 +90,13 @@ public abstract class BufferSupplier implements AutoCloseable {
             // We currently keep a single buffer in flight, so optimise for that case
             Deque<ByteBuffer> bufferQueue = bufferMap.computeIfAbsent(buffer.capacity(), k -> new ArrayDeque<>(1));
             bufferQueue.addLast(buffer);
-            cachedSize.addAndGet(buffer.capacity());
+            cachedSize += buffer.capacity();
         }
 
         @Override
         public void close() {
             bufferMap.clear();
-            cachedSize.set(0);
+            cachedSize = 0;
         }
     }
 
@@ -124,13 +123,13 @@ public abstract class BufferSupplier implements AutoCloseable {
         public void release(ByteBuffer buffer) {
             buffer.clear();
             cachedBuffer = buffer;
-            cachedSize.set(buffer.capacity());
+            cachedSize = buffer.capacity();
         }
 
         @Override
         public void close() {
             cachedBuffer = null;
-            cachedSize.set(0);
+            cachedSize = 0;
         }
     }
 }

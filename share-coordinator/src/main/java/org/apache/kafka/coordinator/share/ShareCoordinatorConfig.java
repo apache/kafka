@@ -193,7 +193,12 @@ public class ShareCoordinatorConfig {
     public int shareCoordinatorColdPartitionSnapshotIntervalMs() {
         return coldPartitionSnapshotIntervalMs;
     }
-
+    
+    /**
+     * The maximum buffer size that the share coordinator can cache.
+     *
+     * Note: On hot paths, frequent calls to this method may cause performance bottlenecks due to synchronization overhead.
+     */
     public int shareCoordinatorAppendMaxBufferSize() {
         return config.getInt(APPEND_MAX_BUFFER_SIZE_CONFIG);
     }

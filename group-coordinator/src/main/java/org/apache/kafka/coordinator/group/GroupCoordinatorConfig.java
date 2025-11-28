@@ -721,6 +721,8 @@ public class GroupCoordinatorConfig {
 
     /**
      * The maximum buffer size that the coordinator can cache.
+     *
+     * Note: On hot paths, frequent calls to this method may cause performance bottlenecks due to synchronization overhead.
      */
     public int appendMaxBufferSize() {
         return config.getInt(GroupCoordinatorConfig.APPEND_MAX_BUFFER_SIZE_CONFIG);
