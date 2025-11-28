@@ -51,6 +51,7 @@
             <allow pkg="org.apache.kafka.common.internals" />
             <allow pkg="org.apache.kafka.common.requests" />
             <allow pkg="org.apache.kafka.coordinator.common" />
+            <allow pkg="org.apache.kafka.coordinator.share.generated" />
             <allow pkg="org.apache.kafka.coordinator.share.metrics" />
             <allow pkg="org.apache.kafka.image" />
             <allow pkg="org.apache.kafka.metadata" />
