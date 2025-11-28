@@ -58,6 +58,7 @@
             <allow pkg="org.apache.kafka.common.compress" />
             <allow pkg="org.apache.kafka.common.internals" />
             <allow pkg="org.apache.kafka.common.message" />
+            <allow pkg="org.apache.kafka.common.metadata" />
             <allow pkg="org.apache.kafka.common.network" />
             <allow pkg="org.apache.kafka.common.protocol" />
             <allow pkg="org.apache.kafka.common.record" />
