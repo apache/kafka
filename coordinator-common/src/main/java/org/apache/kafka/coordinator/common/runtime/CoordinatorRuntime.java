@@ -2535,12 +2535,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * A new metadata image is available.
      *
-     * @param newImage  The new metadata image.
-     * @param delta     The metadata delta.
+     * @param delta    The metadata delta.
+     * @param newImage The new metadata image.
      */
     public void onMetadataUpdate(
-        CoordinatorMetadataImage newImage,
-        CoordinatorMetadataDelta delta
+        CoordinatorMetadataDelta delta,
+        CoordinatorMetadataImage newImage
     ) {
         throwIfNotRunning();
         log.debug("Scheduling applying of a new metadata image with version {}.", newImage.version());

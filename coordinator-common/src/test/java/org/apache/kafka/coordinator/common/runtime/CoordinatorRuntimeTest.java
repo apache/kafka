@@ -2029,7 +2029,7 @@ public class CoordinatorRuntimeTest {
         // Publish a new image.
         CoordinatorMetadataDelta delta = new KRaftCoordinatorMetadataDelta(new MetadataDelta(MetadataImage.EMPTY));
         CoordinatorMetadataImage newImage = CoordinatorMetadataImage.EMPTY;
-        runtime.onMetadataUpdate(newImage, delta);
+        runtime.onMetadataUpdate(delta, newImage);
 
         // Coordinator 0 should be notified about it.
         verify(coordinator0).onNewMetadataImage(newImage, delta);
