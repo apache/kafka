@@ -224,6 +224,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     // empty is present hasJoined statie is unknown and the high watermark is unknow
     private volatile Optional<Boolean> hasJoined = Optional.empty();
+    private volatile long leaderHighWatermark = -1;
 
     /**
      * Create a new instance.
@@ -503,25 +504,27 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
 
         // Set up listener to track voter set changes
-        partitionState.setVoterSetChangeListener((offset, voterSet) -> {
-            // We dont need to check high watermark here since it already check by
-            // hasJoined is not empty.
-            if (nodeId.isPresent() && hasJoined.isPresent()) {
-                ReplicaKey localReplicaKey = ReplicaKey.of(nodeId.getAsInt(), nodeDirectoryId);
-                if (voterSet.isVoter(localReplicaKey) && !hasJoined.get()) {
-                    logger.error("Detected that local node {} has been added to voter set at offset {}",
-                               localReplicaKey, offset);
-                    hasJoined = Optional.of(true);
+        if (quorumConfig.autoJoin() && canBecomeVoter) {
+            partitionState.setVoterSetChangeListener((offset, voterSet) -> {
+                // We dont need to check high watermark here since it already check by
+                // hasJoined is not empty.
+                if (nodeId.isPresent() && hasJoined.isPresent()) {
+                    ReplicaKey localReplicaKey = ReplicaKey.of(nodeId.getAsInt(), nodeDirectoryId);
+                    if (voterSet.isVoter(localReplicaKey) && !hasJoined.get()) {
+                        logger.info("Detected that local node {} has been added to voter set at offset {}",
+                                localReplicaKey, offset);
+                        hasJoined = Optional.of(true);
+                    }
                 }
-            }
-        });
+            });
+        }
 
         // Read the entire log
         logger.info("Reading KRaft snapshot and log as part of the initialization");
         partitionState.updateState();
         logger.info("Starting voters are {}", partitionState.lastVoterSet());
 
-        if (nodeId.isPresent() && canBecomeVoter && quorumConfig.autoJoin()
+        if (nodeId.isPresent() && canBecomeVoter && quorumConfig.autoJoin() && partitionState.lastVoterSet().size() == 1
                 && isVoter(ReplicaKey.of(nodeId.getAsInt(), nodeDirectoryId))) {
             hasJoined = Optional.of(true);
         }
@@ -688,7 +691,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         state.appendStartOfEpochControlRecords(currentTimeMs);
 
         // Mark as joined when we become leader
-        if (hasJoined.isEmpty()) {
+        if (quorumConfig.autoJoin() && hasJoined.isEmpty()) {
             hasJoined = Optional.of(true);
         }
 
@@ -1836,13 +1839,13 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     OptionalLong.empty() : OptionalLong.of(partitionResponse.highWatermark());
                 updateFollowerHighWatermark(state, highWatermark);
 
-                if (nodeId.isPresent() && logEndOffset() >= partitionResponse.highWatermark()) {
+                if (canBecomeVoter && quorumConfig.autoJoin() && nodeId.isPresent()
+                        && logEndOffset() >= partitionResponse.highWatermark()) {
+                    leaderHighWatermark = partitionResponse.highWatermark();
                     ReplicaKey localReplicaKey = ReplicaKey.of(nodeId.getAsInt(), nodeDirectoryId);
-                    if (hasJoined.isEmpty() && canBecomeVoter && !isVoter(localReplicaKey)) {
-                        logger.error("kkk set hasJoin as false line 1841");
+                    if (hasJoined.isEmpty() && !isVoter(localReplicaKey)) {
                         hasJoined = Optional.of(false);
-                    } else if (canBecomeVoter && hasJoined.isPresent() && isVoter(localReplicaKey)) {
-                        logger.error("kkk set hasJoin as true line 1844");
+                    } else if (hasJoined.isPresent() && isVoter(localReplicaKey)) {
                         hasJoined = Optional.of(true);
                     }
                 }
@@ -3393,6 +3396,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
          * and are configured to auto join should attempt to automatically join the voter
          * set for the configured topic partition.
          */
+        if (state.hasFetchTimeoutExpired(currentTimeMs) || logEndOffset() < leaderHighWatermark) {
+            return false;
+        }
+
         return hasJoined.isPresent() && !hasJoined.get() && partitionState.lastKraftVersion().isReconfigSupported()
                 && canBecomeVoter && quorumConfig.autoJoin() && state.hasUpdateVoterSetPeriodExpired(currentTimeMs);
     }
