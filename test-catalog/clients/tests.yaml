@@ -3643,6 +3643,11 @@ org.apache.kafka.common.message.NullableStructMessageTest:
 - testRoundTrip
 - testTaggedStructSize
 - testToStringWithNullStructs
+org.apache.kafka.common.message.ProtocolRoundTripConsistencyTest:
+- testFlexibleWithNonNullValue
+- testFlexibleWithNullDefault
+- testNonFlexibleWithNonNullValue
+- testNonFlexibleWithNullDefault
 org.apache.kafka.common.message.RecordsSerdeTest:
 - testSerdeEmptyRecords
 - testSerdeNullRecords
