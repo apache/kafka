@@ -1234,7 +1234,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldRethrowRuntimeExceptionInInitTaskWithStateUpdater() {
+    public void shouldRethrowRuntimeExceptionInInitTask() {
         final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .withInputPartitions(taskId00Partitions)
             .inState(State.CREATED).build();
@@ -1599,7 +1599,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldReturnCorrectBooleanWhenTryingToCompleteRestorationWithStateUpdater() {
+    public void shouldReturnCorrectBooleanWhenTryingToCompleteRestoration() {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, null, false);
         when(stateUpdater.restoresActiveTasks()).thenReturn(false);
         assertTrue(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
