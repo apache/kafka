@@ -63,7 +63,6 @@ import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
 
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -230,17 +229,14 @@ public class PersisterStateManager {
             int partition,
             long backoffMs,
             long backoffMaxMs,
-            int maxRPCRetryAttempts
+            int maxRPCRetryAttempts,
+            Logger log
         ) {
             this.findCoordBackoff = new BackoffManager(maxRPCRetryAttempts, backoffMs, backoffMaxMs);
             this.onCompleteCallback = response -> {
             }; // noop
             partitionKey = SharePartitionKey.getInstance(groupId, topicId, partition);
-            String canonicalName = getClass().getCanonicalName();
-            if (canonicalName == null) {
-                canonicalName = getClass().getName();
-            }
-            log = LoggerFactory.getLogger(canonicalName);
+            this.log = log;
         }
 
         /**
@@ -533,9 +529,10 @@ public class PersisterStateManager {
             CompletableFuture<InitializeShareGroupStateResponse> result,
             long backoffMs,
             long backoffMaxMs,
-            int maxRPCRetryAttempts
+            int maxRPCRetryAttempts,
+            Logger log
         ) {
-            super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxRPCRetryAttempts);
+            super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxRPCRetryAttempts, log);
             this.stateEpoch = stateEpoch;
             this.startOffset = startOffset;
             this.result = result;
@@ -549,7 +546,8 @@ public class PersisterStateManager {
             int stateEpoch,
             long startOffset,
             CompletableFuture<InitializeShareGroupStateResponse> result,
-            Consumer<ClientResponse> onCompleteCallback
+            Consumer<ClientResponse> onCompleteCallback,
+            Logger log
         ) {
             this(
                 groupId,
@@ -560,7 +558,8 @@ public class PersisterStateManager {
                 result,
                 REQUEST_BACKOFF_MS,
                 REQUEST_BACKOFF_MAX_MS,
-                MAX_FIND_COORD_ATTEMPTS
+                MAX_FIND_COORD_ATTEMPTS,
+                log
             );
         }
 
@@ -715,9 +714,10 @@ public class PersisterStateManager {
             CompletableFuture<WriteShareGroupStateResponse> result,
             long backoffMs,
             long backoffMaxMs,
-            int maxRPCRetryAttempts
+            int maxRPCRetryAttempts,
+            Logger log
         ) {
-            super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxRPCRetryAttempts);
+            super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxRPCRetryAttempts, log);
             this.stateEpoch = stateEpoch;
             this.leaderEpoch = leaderEpoch;
             this.startOffset = startOffset;
@@ -737,7 +737,8 @@ public class PersisterStateManager {
             int deliveryCompleteCount,
             List<PersisterStateBatch> batches,
             CompletableFuture<WriteShareGroupStateResponse> result,
-            Consumer<ClientResponse> onCompleteCallback
+            Consumer<ClientResponse> onCompleteCallback,
+            Logger log
         ) {
             this(
                 groupId,
@@ -751,7 +752,8 @@ public class PersisterStateManager {
                 result,
                 REQUEST_BACKOFF_MS,
                 REQUEST_BACKOFF_MAX_MS,
-                MAX_FIND_COORD_ATTEMPTS
+                MAX_FIND_COORD_ATTEMPTS,
+                log
             );
         }
 
@@ -898,9 +900,10 @@ public class PersisterStateManager {
             long backoffMs,
             long backoffMaxMs,
             int maxRPCRetryAttempts,
-            Consumer<ClientResponse> onCompleteCallback
+            Consumer<ClientResponse> onCompleteCallback,
+            Logger log
         ) {
-            super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxRPCRetryAttempts);
+            super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxRPCRetryAttempts, log);
             this.leaderEpoch = leaderEpoch;
             this.result = result;
             this.readStateBackoff = new BackoffManager(maxRPCRetryAttempts, backoffMs, backoffMaxMs);
@@ -912,7 +915,8 @@ public class PersisterStateManager {
             int partition,
             int leaderEpoch,
             CompletableFuture<ReadShareGroupStateResponse> result,
-            Consumer<ClientResponse> onCompleteCallback
+            Consumer<ClientResponse> onCompleteCallback,
+            Logger log
         ) {
             this(
                 groupId,
@@ -923,7 +927,8 @@ public class PersisterStateManager {
                 REQUEST_BACKOFF_MS,
                 REQUEST_BACKOFF_MAX_MS,
                 MAX_FIND_COORD_ATTEMPTS,
-                onCompleteCallback
+                onCompleteCallback,
+                log
             );
         }
 
@@ -1068,9 +1073,10 @@ public class PersisterStateManager {
             long backoffMs,
             long backoffMaxMs,
             int maxRPCRetryAttempts,
-            Consumer<ClientResponse> onCompleteCallback
+            Consumer<ClientResponse> onCompleteCallback,
+            Logger log
         ) {
-            super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxRPCRetryAttempts);
+            super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxRPCRetryAttempts, log);
             this.leaderEpoch = leaderEpoch;
             this.result = result;
             this.readStateSummaryBackoff = new BackoffManager(maxRPCRetryAttempts, backoffMs, backoffMaxMs);
@@ -1082,7 +1088,8 @@ public class PersisterStateManager {
             int partition,
             int leaderEpoch,
             CompletableFuture<ReadShareGroupStateSummaryResponse> result,
-            Consumer<ClientResponse> onCompleteCallback
+            Consumer<ClientResponse> onCompleteCallback,
+            Logger log
         ) {
             this(
                 groupId,
@@ -1093,7 +1100,8 @@ public class PersisterStateManager {
                 REQUEST_BACKOFF_MS,
                 REQUEST_BACKOFF_MAX_MS,
                 MAX_FIND_COORD_ATTEMPTS,
-                onCompleteCallback
+                onCompleteCallback,
+                log
             );
         }
 
@@ -1235,9 +1243,10 @@ public class PersisterStateManager {
             CompletableFuture<DeleteShareGroupStateResponse> result,
             long backoffMs,
             long backoffMaxMs,
-            int maxRPCRetryAttempts
+            int maxRPCRetryAttempts,
+            Logger log
         ) {
-            super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxRPCRetryAttempts);
+            super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxRPCRetryAttempts, log);
             this.result = result;
             this.deleteStateBackoff = new BackoffManager(maxRPCRetryAttempts, backoffMs, backoffMaxMs);
         }
@@ -1247,7 +1256,8 @@ public class PersisterStateManager {
             Uuid topicId,
             int partition,
             CompletableFuture<DeleteShareGroupStateResponse> result,
-            Consumer<ClientResponse> onCompleteCallback
+            Consumer<ClientResponse> onCompleteCallback,
+            Logger log
         ) {
             this(
                 groupId,
@@ -1256,7 +1266,8 @@ public class PersisterStateManager {
                 result,
                 REQUEST_BACKOFF_MS,
                 REQUEST_BACKOFF_MAX_MS,
-                MAX_FIND_COORD_ATTEMPTS
+                MAX_FIND_COORD_ATTEMPTS,
+                log
             );
         }
 

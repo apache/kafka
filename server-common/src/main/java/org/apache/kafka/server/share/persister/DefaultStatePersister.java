@@ -44,6 +44,21 @@ public class DefaultStatePersister implements Persister {
     private final PersisterStateManager stateManager;
 
     private static final Logger log = LoggerFactory.getLogger(DefaultStatePersister.class);
+    private static final Logger INITIALIZE_HANDLER_LOG = LoggerFactory.getLogger(
+        PersisterStateManager.InitializeStateHandler.class
+    );
+    private static final Logger WRITE_HANDLER_LOG = LoggerFactory.getLogger(
+        PersisterStateManager.WriteStateHandler.class
+    );
+    private static final Logger READ_HANDLER_LOG = LoggerFactory.getLogger(
+        PersisterStateManager.ReadStateHandler.class
+    );
+    private static final Logger READ_SUMMARY_HANDLER_LOG = LoggerFactory.getLogger(
+        PersisterStateManager.ReadStateSummaryHandler.class
+    );
+    private static final Logger DELETE_HANDLER_LOG = LoggerFactory.getLogger(
+        PersisterStateManager.DeleteStateHandler.class
+    );
 
     public DefaultStatePersister(PersisterStateManager stateManager) {
         this.stateManager = stateManager;
@@ -95,7 +110,8 @@ public class DefaultStatePersister implements Persister {
                         partitionData.stateEpoch(),
                         partitionData.startOffset(),
                         future,
-                        null
+                        null,
+                        INITIALIZE_HANDLER_LOG
                     )
                 );
             });
@@ -152,7 +168,10 @@ public class DefaultStatePersister implements Persister {
                         partitionData.startOffset(),
                         partitionData.deliveryCompleteCount(),
                         partitionData.stateBatches(),
-                        future, null)
+                        future,
+                        null,
+                        WRITE_HANDLER_LOG
+                    )
                 );
             });
         });
@@ -291,7 +310,9 @@ public class DefaultStatePersister implements Persister {
                         partitionData.partition(),
                         partitionData.leaderEpoch(),
                         future,
-                        null)
+                        null,
+                        READ_HANDLER_LOG
+                    )
                 );
             });
         });
@@ -394,7 +415,8 @@ public class DefaultStatePersister implements Persister {
                         topicData.topicId(),
                         partitionData.partition(),
                         future,
-                        null
+                        null,
+                        DELETE_HANDLER_LOG
                     )
                 );
             });
@@ -445,7 +467,8 @@ public class DefaultStatePersister implements Persister {
                         partitionData.partition(),
                         partitionData.leaderEpoch(),
                         future,
-                        null
+                        null,
+                        READ_SUMMARY_HANDLER_LOG
                     )
                 );
             });
@@ -577,7 +600,7 @@ public class DefaultStatePersister implements Persister {
 
         validateGroupTopicPartitionData(prefix, params.groupTopicPartitionData());
     }
-    
+
     private static void validate(WriteShareGroupStateParameters params) {
         String prefix = "Write share group parameters";
         if (params == null) {
