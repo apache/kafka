@@ -325,6 +325,10 @@ public class OffsetFetchRequest extends AbstractRequest {
         return version >= TOPIC_ID_MIN_VERSION;
     }
 
+    public static boolean requestAllOffsets(OffsetFetchRequestData.OffsetFetchRequestGroup request) {
+        return request.topics() == null;
+    }
+
     @Override
     public OffsetFetchRequestData data() {
         return data;

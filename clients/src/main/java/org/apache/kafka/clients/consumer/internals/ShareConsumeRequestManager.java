@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.consumer.ShareAcquireMode;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementEvent;
@@ -767,15 +766,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             return false;
         }
         return false;
-    }
-
-    @Override
-    public long maximumTimeToWait(long currentTimeMs) {
-        // When fetching records and there is no chosen node for fetching, we do not want to wait for the next poll in record_limit mode.
-        if (isShareAcquireModeRecordLimit() && fetchMoreRecords && subscriptions.numAssignedPartitions() > 0 && fetchRecordsNodeId.get() == -1) {
-            return 0L;
-        }
-        return Long.MAX_VALUE;
     }
 
     private void handleShareFetchSuccess(Node fetchTarget,

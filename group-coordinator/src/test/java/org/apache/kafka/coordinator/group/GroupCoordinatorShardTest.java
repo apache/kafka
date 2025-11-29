@@ -28,6 +28,8 @@ import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
+import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
@@ -99,6 +101,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
@@ -2383,5 +2386,50 @@ public class GroupCoordinatorShardTest {
 
         assertEquals(expectedResult, coordinator.completeDeleteShareGroupOffsets(groupId, topics, errorTopicResponseList));
         verify(groupMetadataManager, times(1)).completeDeleteShareGroupOffsets(any(), any(), any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testFetchOffsets(boolean fetchAllOffsets) {
+        var offsetMetadataManager = mock(OffsetMetadataManager.class);
+        var coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            mock(GroupMetadataManager.class),
+            offsetMetadataManager,
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
+        );
+
+        var request = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId("foo");
+
+        if (fetchAllOffsets) {
+            request.setTopics(null);
+        } else {
+            request.setTopics(List.of(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(List.of(0))
+            ));
+        }
+
+        var result = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+            .setGroupId("foo");
+
+        if (fetchAllOffsets) {
+            when(offsetMetadataManager.fetchAllOffsets(
+                request,
+                Long.MAX_VALUE
+            )).thenReturn(result);
+        } else {
+            when(offsetMetadataManager.fetchOffsets(
+                request,
+                Long.MAX_VALUE
+            )).thenReturn(result);
+        }
+
+        assertEquals(result, coordinator.fetchOffsets(request, Long.MAX_VALUE));
     }
 }

@@ -30,7 +30,7 @@ import kafka.server.share.{DelayedShareFetch, SharePartition}
 import kafka.utils.TestUtils.waitUntilTrue
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.FetchSessionHandler
-import org.apache.kafka.clients.consumer.ShareAcquireMode
+import org.apache.kafka.clients.consumer.internals.ShareAcquireMode
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig

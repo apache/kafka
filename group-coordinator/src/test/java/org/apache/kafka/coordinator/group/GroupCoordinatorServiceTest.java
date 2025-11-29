@@ -1722,11 +1722,14 @@ public class GroupCoordinatorServiceTest {
         OffsetFetchRequestData.OffsetFetchRequestGroup request =
             new OffsetFetchRequestData.OffsetFetchRequestGroup()
                 .setGroupId("group");
-        if (!fetchAllOffsets) {
-            request
-                .setTopics(List.of(new OffsetFetchRequestData.OffsetFetchRequestTopics()
-                    .setName("foo")
-                    .setPartitionIndexes(List.of(0))));
+
+        if (fetchAllOffsets) {
+            request.setTopics(null);
+        } else {
+            request.setTopics(List.of(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(List.of(0))
+            ));
         }
 
         OffsetFetchResponseData.OffsetFetchResponseGroup response =
@@ -1753,9 +1756,7 @@ public class GroupCoordinatorServiceTest {
             )).thenReturn(CompletableFuture.completedFuture(response));
         }
 
-        TriFunction<RequestContext, OffsetFetchRequestData.OffsetFetchRequestGroup, Boolean, CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup>> fetchOffsets =
-            fetchAllOffsets ? service::fetchAllOffsets : service::fetchOffsets;
-        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = fetchOffsets.apply(
+        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = service.fetchOffsets(
             requestContext(ApiKeys.OFFSET_FETCH),
             request,
             requireStable
@@ -1784,16 +1785,17 @@ public class GroupCoordinatorServiceTest {
         OffsetFetchRequestData.OffsetFetchRequestGroup request =
             new OffsetFetchRequestData.OffsetFetchRequestGroup()
                 .setGroupId("group");
-        if (!fetchAllOffsets) {
-            request
-                .setTopics(List.of(new OffsetFetchRequestData.OffsetFetchRequestTopics()
-                    .setName("foo")
-                    .setPartitionIndexes(List.of(0))));
+
+        if (fetchAllOffsets) {
+            request.setTopics(null);
+        } else {
+            request.setTopics(List.of(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(List.of(0))
+            ));
         }
 
-        TriFunction<RequestContext, OffsetFetchRequestData.OffsetFetchRequestGroup, Boolean, CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup>> fetchOffsets =
-            fetchAllOffsets ? service::fetchAllOffsets : service::fetchOffsets;
-        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = fetchOffsets.apply(
+        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = service.fetchOffsets(
             requestContext(ApiKeys.OFFSET_FETCH),
             request,
             requireStable
@@ -1834,11 +1836,14 @@ public class GroupCoordinatorServiceTest {
         OffsetFetchRequestData.OffsetFetchRequestGroup request =
             new OffsetFetchRequestData.OffsetFetchRequestGroup()
                 .setGroupId("group");
-        if (!fetchAllOffsets) {
-            request
-                .setTopics(List.of(new OffsetFetchRequestData.OffsetFetchRequestTopics()
-                    .setName("foo")
-                    .setPartitionIndexes(List.of(0))));
+
+        if (fetchAllOffsets) {
+            request.setTopics(null);
+        } else {
+            request.setTopics(List.of(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(List.of(0))
+            ));
         }
 
         when(runtime.scheduleWriteOperation(
@@ -1848,9 +1853,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(new CompletionException(error.exception())));
 
-        TriFunction<RequestContext, OffsetFetchRequestData.OffsetFetchRequestGroup, Boolean, CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup>> fetchOffsets =
-            fetchAllOffsets ? service::fetchAllOffsets : service::fetchOffsets;
-        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = fetchOffsets.apply(
+        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = service.fetchOffsets(
             requestContext(ApiKeys.OFFSET_FETCH),
             request,
             true
