@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
@@ -89,6 +90,10 @@ public class ShareCoordinatorConfig {
         "Note: Setting this larger than the maximum message size is not recommended. In this case, every write buffer will be eligible " +
         "for recycling, which renders this configuration ineffective as a size limit.";
 
+    public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
+        APPEND_MAX_BUFFER_SIZE_CONFIG
+    );
+    
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(STATE_TOPIC_NUM_PARTITIONS_CONFIG, INT, STATE_TOPIC_NUM_PARTITIONS_DEFAULT, atLeast(1), HIGH, STATE_TOPIC_NUM_PARTITIONS_DOC)
         .define(STATE_TOPIC_REPLICATION_FACTOR_CONFIG, SHORT, STATE_TOPIC_REPLICATION_FACTOR_DEFAULT, atLeast(1), HIGH, STATE_TOPIC_REPLICATION_FACTOR_DOC)

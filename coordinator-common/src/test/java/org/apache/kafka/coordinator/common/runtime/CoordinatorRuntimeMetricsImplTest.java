@@ -94,6 +94,7 @@ public class CoordinatorRuntimeMetricsImplTest {
 
         try (CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP)) {
             runtimeMetrics.registerEventQueueSizeGauge(() -> 0);
+            runtimeMetrics.registerAppendBufferSizeGauge(() -> 0L);
             expectedMetrics.forEach(metricName -> assertTrue(metrics.metrics().containsKey(metricName)));
         }
 
@@ -247,7 +248,7 @@ public class CoordinatorRuntimeMetricsImplTest {
         Metrics metrics = new Metrics();
 
         try (CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP)) {
-            runtimeMetrics.recordAppendBufferSize(5L);
+            runtimeMetrics.registerAppendBufferSizeGauge(() -> 5L);
             assertMetricGauge(metrics, kafkaMetricName(metrics, APPEND_BUFFER_SIZE_METRIC_NAME), 5);
         }
     }
@@ -259,8 +260,8 @@ public class CoordinatorRuntimeMetricsImplTest {
 
         try (CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP);
             CoordinatorRuntimeMetricsImpl otherRuntimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, OTHER_METRICS_GROUP)) {
-            runtimeMetrics.recordAppendBufferSize(5L);
-            otherRuntimeMetrics.recordAppendBufferSize(1L);
+            runtimeMetrics.registerAppendBufferSizeGauge(() -> 5L);
+            otherRuntimeMetrics.registerAppendBufferSizeGauge(() -> 1L);
 
             assertMetricGauge(metrics, kafkaMetricName(metrics, APPEND_BUFFER_SIZE_METRIC_NAME), 5);
             assertMetricGauge(metrics, otherGroupKafkaMetricName(metrics, APPEND_BUFFER_SIZE_METRIC_NAME), 1);

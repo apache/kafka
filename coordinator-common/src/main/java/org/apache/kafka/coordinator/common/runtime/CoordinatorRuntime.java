@@ -617,6 +617,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         int batchEpoch;
 
         /**
+         * The cached buffer size.
+         */
+        long cachedBufferSize;
+
+        /**
          * Constructor.
          *
          * @param tp The topic partition of the coordinator.
@@ -777,13 +782,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             // Release the buffer only if it is not larger than the max buffer size.
             int maxBufferSize = appendMaxBufferSizeSupplier.get();
 
-            var before = bufferSupplier.size();
             if (currentBatch.builder.buffer().capacity() <= maxBufferSize) {
                 bufferSupplier.release(currentBatch.builder.buffer());
-                runtimeMetrics.recordAppendBufferSize(bufferSupplier.size() - before);
+                cachedBufferSize = currentBatch.builder.buffer().capacity();
             } else if (currentBatch.buffer.capacity() <= maxBufferSize) {
                 bufferSupplier.release(currentBatch.buffer);
-                runtimeMetrics.recordAppendBufferSize(bufferSupplier.size() - before);
+                cachedBufferSize = currentBatch.buffer.capacity();
             } else {
                 runtimeMetrics.recordAppendBufferDiscarded();
             }
@@ -2140,6 +2144,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.appendLingerMs = appendLingerMs;
         this.executorService = executorService;
         this.appendMaxBufferSizeSupplier = appendMaxBufferSizeSupplier;
+        this.runtimeMetrics.registerAppendBufferSizeGauge(
+            () -> coordinators.values().stream().mapToLong(c -> c.cachedBufferSize).sum()
+        );
     }
 
     /**

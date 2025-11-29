@@ -38,6 +38,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -307,6 +308,10 @@ public class GroupCoordinatorConfig {
     public static final int SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DEFAULT = 30_000;
     public static final String SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DOC = "Time elapsed before retrying initialize share group state request. If below offsets.commit.timeout.ms, then value of offsets.commit.timeout.ms is used.";
 
+    public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
+        APPEND_MAX_BUFFER_SIZE_CONFIG
+    );
+    
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
         // Group coordinator configs
         .define(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, LIST, GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT, 

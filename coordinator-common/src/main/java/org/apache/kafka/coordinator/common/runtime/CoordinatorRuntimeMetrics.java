@@ -88,10 +88,11 @@ public interface CoordinatorRuntimeMetrics extends AutoCloseable {
     void registerEventQueueSizeGauge(Supplier<Integer> sizeSupplier);
 
     /**
-     * Update the coordinator append buffer size.
-     * @param bufferSize The buffer size.
+     * Register the coordinator append buffer size gauge.
+     *
+     * @param sizeSupplier The buffer size supplier.
      */
-    void recordAppendBufferSize(long bufferSize);
+    void registerAppendBufferSizeGauge(Supplier<Long> sizeSupplier);
 
     /**
      * Called when a buffer is discarded upon release instead of being cached.

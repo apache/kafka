@@ -30,7 +30,6 @@ import java.util.Map;
  * iterating over the records in the batch.
  */
 public abstract class BufferSupplier implements AutoCloseable {
-    protected long cachedSize;
 
     public static final BufferSupplier NO_CACHING = new BufferSupplier() {
         @Override
@@ -58,14 +57,7 @@ public abstract class BufferSupplier implements AutoCloseable {
      * Return the provided buffer to be reused by a subsequent call to `get`.
      */
     public abstract void release(ByteBuffer buffer);
-
-    /**
-     * Return total size in bytes of cached buffers.
-     */
-    public long size() {
-        return cachedSize;
-    }
-
+    
     /**
      * Release all resources associated with this supplier.
      */
@@ -90,13 +82,11 @@ public abstract class BufferSupplier implements AutoCloseable {
             // We currently keep a single buffer in flight, so optimise for that case
             Deque<ByteBuffer> bufferQueue = bufferMap.computeIfAbsent(buffer.capacity(), k -> new ArrayDeque<>(1));
             bufferQueue.addLast(buffer);
-            cachedSize += buffer.capacity();
         }
 
         @Override
         public void close() {
             bufferMap.clear();
-            cachedSize = 0;
         }
     }
 
@@ -123,13 +113,11 @@ public abstract class BufferSupplier implements AutoCloseable {
         public void release(ByteBuffer buffer) {
             buffer.clear();
             cachedBuffer = buffer;
-            cachedSize = buffer.capacity();
         }
 
         @Override
         public void close() {
             cachedBuffer = null;
-            cachedSize = 0;
         }
     }
 }
