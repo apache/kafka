@@ -21011,7 +21011,7 @@ public class GroupMetadataManagerTest {
     }
     
     @Test
-    public void testConsumerGroupMemberJoinsWithEmptyRegex() {
+    public void testConsumerGroupMemberJoinsWithNonEmptyRegexToEmptyRegex() {
         String groupId = "fooup";
         String memberId1 = Uuid.randomUuid().toString();
 
