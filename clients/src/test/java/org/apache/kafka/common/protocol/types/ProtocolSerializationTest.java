@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import org.apache.kafka.common.protocol.types.nullable.CompactNullableArrayOf;
+import org.apache.kafka.common.protocol.types.nullable.NullableArrayOf;
 import org.apache.kafka.common.utils.ByteUtils;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -58,8 +60,8 @@ public class ProtocolSerializationTest {
                                  new Field("compact_nullable_bytes", Type.COMPACT_NULLABLE_BYTES),
                                  new Field("array", new ArrayOf(Type.INT32)),
                                  new Field("compact_array", new CompactArrayOf(Type.INT32)),
-                                 new Field("null_array", ArrayOf.nullable(Type.INT32)),
-                                 new Field("compact_null_array", CompactArrayOf.nullable(Type.INT32)),
+                                 new Field("null_array", new NullableArrayOf(Type.INT32)),
+                                 new Field("compact_null_array", new CompactNullableArrayOf(Type.INT32)),
                                  new Field("struct", new Schema(new Field("field", new ArrayOf(Type.INT32)))));
         this.struct = new Struct(this.schema).set("boolean", true)
                                              .set("int8", (byte) 1)
@@ -140,8 +142,8 @@ public class ProtocolSerializationTest {
         check(new CompactArrayOf(Type.COMPACT_STRING),
                 new Object[] {"hello", "there", "beautiful"},
                 "COMPACT_ARRAY(COMPACT_STRING)");
-        check(ArrayOf.nullable(Type.STRING), null, "NULLABLE_ARRAY(STRING)");
-        check(CompactArrayOf.nullable(Type.COMPACT_STRING), null,
+        check(new ArrayOf(Type.STRING), null, "NULLABLE_ARRAY(STRING)");
+        check(new CompactNullableArrayOf(Type.COMPACT_STRING), null,
                 "COMPACT_NULLABLE_ARRAY(COMPACT_STRING)");
     }
 

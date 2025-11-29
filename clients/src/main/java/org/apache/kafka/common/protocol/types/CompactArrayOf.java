@@ -29,37 +29,20 @@ import java.util.Optional;
  */
 public class CompactArrayOf extends DocumentedType {
     private static final String COMPACT_ARRAY_TYPE_NAME = "COMPACT_ARRAY";
-
-    private static final String COMPACT_NULLABLE_ARRAY_TYPE_NAME = "COMPACT_NULLABLE_ARRAY";
-
+    
     private final Type type;
-    private final boolean nullable;
-
 
     public CompactArrayOf(Type type) {
-        this(type, false);
-    }
-
-    public static CompactArrayOf nullable(Type type) {
-        return new CompactArrayOf(type, true);
-    }
-
-    private CompactArrayOf(Type type, boolean nullable) {
         this.type = type;
-        this.nullable = nullable;
     }
 
     @Override
     public boolean isNullable() {
-        return nullable;
+        return false;
     }
 
     @Override
     public void write(ByteBuffer buffer, Object o) {
-        if (o == null) {
-            ByteUtils.writeUnsignedVarint(0, buffer);
-            return;
-        }
         Object[] objs = (Object[]) o;
         int size = objs.length;
         ByteUtils.writeUnsignedVarint(size + 1, buffer);
@@ -71,14 +54,13 @@ public class CompactArrayOf extends DocumentedType {
     @Override
     public Object read(ByteBuffer buffer) {
         int n = ByteUtils.readUnsignedVarint(buffer);
-        if (n == 0) {
-            if (isNullable()) {
-                return null;
-            } else {
-                throw new SchemaException("This array is not nullable.");
-            }
-        }
-        int size = n - 1;
+        if (n == 0) 
+            throw new SchemaException("This array is not nullable.");
+        
+        return read(buffer, n - 1);
+    }
+    
+    protected Object read(ByteBuffer buffer, int size) {
         if (size > buffer.remaining())
             throw new SchemaException("Error reading array of size " + size + ", only " + buffer.remaining() + " bytes available");
         Object[] objs = new Object[size];
@@ -89,9 +71,6 @@ public class CompactArrayOf extends DocumentedType {
 
     @Override
     public int sizeOf(Object o) {
-        if (o == null) {
-            return 1;
-        }
         Object[] objs = (Object[]) o;
         int size = ByteUtils.sizeOfUnsignedVarint(objs.length + 1);
         for (Object obj : objs) {
@@ -107,7 +86,7 @@ public class CompactArrayOf extends DocumentedType {
 
     @Override
     public String leftBracket() {
-        return nullable ? "?(" : "(";
+        return "(";
     }
 
     @Override
@@ -117,16 +96,12 @@ public class CompactArrayOf extends DocumentedType {
 
     @Override
     public String toString() {
-        String name = nullable ? COMPACT_NULLABLE_ARRAY_TYPE_NAME : COMPACT_ARRAY_TYPE_NAME;
-        return name + "(" + type + ")";
+        return COMPACT_ARRAY_TYPE_NAME + "(" + type + ")";
     }
 
     @Override
     public Object[] validate(Object item) {
         try {
-            if (isNullable() && item == null)
-                return null;
-
             Object[] array = (Object[]) item;
             for (Object obj : array)
                 type.validate(obj);
@@ -138,26 +113,19 @@ public class CompactArrayOf extends DocumentedType {
 
     @Override
     public String typeName() {
-        return nullable ? COMPACT_NULLABLE_ARRAY_TYPE_NAME : COMPACT_ARRAY_TYPE_NAME;
+        return COMPACT_ARRAY_TYPE_NAME;
     }
 
     @Override
     public String documentation() {
-        String doc;
-        if (nullable) {
-            doc = "Represents a sequence of objects of a given type T. " +
-                "Type T can be either a primitive type (e.g. " + STRING + ") or a structure. " +
-                "First, the length N + 1 is given as an UNSIGNED_VARINT. Then N instances of type T follow. " +
-                "A null array is represented with a length of 0. " +
-                "In protocol documentation a compact nullable array of T instances is referred to as " +
-                leftBracket() + "T" + rightBracket() + ".";
-        } else {
-            doc = "Represents a sequence of objects of a given type T. " +
-                "Type T can be either a primitive type (e.g. " + STRING + ") or a structure. " +
-                "First, the length N + 1 is given as an UNSIGNED_VARINT. Then N instances of type T follow. " +
-                "In protocol documentation a compact array of T instances is referred to as " +
-                leftBracket() + "T" + rightBracket() + ".";
-        }
-        return doc;
+        return "Represents a sequence of objects of a given type T. " +
+            "Type T can be either a primitive type (e.g. " + STRING + ") or a structure. " +
+            "First, the length N + 1 is given as an UNSIGNED_VARINT. Then N instances of type T follow. " +
+            "In protocol documentation a compact array of T instances is referred to as " +
+            leftBracket() + "T" + rightBracket() + ".";
+    }
+
+    protected Type type() {
+        return type;
     }
 }

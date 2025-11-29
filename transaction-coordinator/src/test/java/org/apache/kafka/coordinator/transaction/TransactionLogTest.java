@@ -28,6 +28,7 @@ import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
+import org.apache.kafka.common.protocol.types.nullable.CompactNullableArrayOf;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
@@ -215,7 +216,7 @@ class TransactionLogTest {
             new Field("producer_epoch", Type.INT16, ""),
             new Field("transaction_timeout_ms", Type.INT32, ""),
             new Field("transaction_status", Type.INT8, ""),
-            new Field("transaction_partitions", CompactArrayOf.nullable(futurePartitionsSchema), ""),
+            new Field("transaction_partitions", new CompactNullableArrayOf(futurePartitionsSchema), ""),
             new Field("transaction_last_update_timestamp_ms", Type.INT64, ""),
             new Field("transaction_start_timestamp_ms", Type.INT64, ""),
             TaggedFieldsSection.of(

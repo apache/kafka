@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
-import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
+import org.apache.kafka.common.protocol.types.nullable.NullableArrayOf;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -134,8 +134,8 @@ public class IncrementalCooperativeConnectProtocol {
             new Field(LEADER_KEY_NAME, Type.STRING),
             new Field(LEADER_URL_KEY_NAME, Type.STRING),
             new Field(CONFIG_OFFSET_KEY_NAME, Type.INT64),
-            new Field(ASSIGNMENT_KEY_NAME, ArrayOf.nullable(CONNECTOR_ASSIGNMENT_V1), null, true, null),
-            new Field(REVOKED_KEY_NAME, ArrayOf.nullable(CONNECTOR_ASSIGNMENT_V1), null, true, null),
+            new Field(ASSIGNMENT_KEY_NAME, new NullableArrayOf(CONNECTOR_ASSIGNMENT_V1), null, true, null),
+            new Field(REVOKED_KEY_NAME, new NullableArrayOf(CONNECTOR_ASSIGNMENT_V1), null, true, null),
             new Field(SCHEDULED_DELAY_KEY_NAME, Type.INT32, null, 0));
 
     /**

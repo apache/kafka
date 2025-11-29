@@ -14,7 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.protocol.types;
+package org.apache.kafka.common.protocol.types.nullable;
+
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -23,8 +27,6 @@ import java.util.Arrays;
  * The nullable schema for a compound record definition
  */
 public final class NullableSchema extends Schema {
-
-    private static final String NULLABLE_STRUCT_TYPE_NAME = "NULLABLE_STRUCT";
 
     public NullableSchema(Schema schema) {
         super(schema.tolerateMissingFieldsWithDefaults(), Arrays.stream(schema.fields()).map(field -> field.def).toArray(Field[]::new));
@@ -77,7 +79,7 @@ public final class NullableSchema extends Schema {
 
     @Override
     public String typeName() {
-        return NULLABLE_STRUCT_TYPE_NAME;
+        return "NULLABLE_STRUCT";
     }
 
     @Override
