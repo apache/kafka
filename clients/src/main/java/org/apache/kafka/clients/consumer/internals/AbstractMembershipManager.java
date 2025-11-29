@@ -636,8 +636,8 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
     /**
      * Reset the member epoch to the value required for the leave-group heartbeat and transition to
-     * {@link MemberState#LEAVING} so the next heartbeat notifies the coordinator that the member is
-     * leaving the group.
+     * {@link MemberState#LEAVING} so the next heartbeat notifies the coordinator that the member
+     * is leaving the group.
      *
      * @param dueToExpiredPollTimer True if the leave group is due to an expired poll timer. This
      *                              will indicate that the member must remain STALE after leaving,
