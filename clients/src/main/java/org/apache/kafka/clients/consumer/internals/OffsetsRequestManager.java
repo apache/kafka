@@ -31,6 +31,7 @@ import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.ListOffsetsRequestData;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -615,9 +616,14 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition> targetTimes,
             boolean requireTimestamps,
             List<NetworkClientDelegate.UnsentRequest> unsentRequests) {
+
+        boolean canUseTopicIds = !targetTimes.isEmpty() && targetTimes.keySet().stream()
+                .map(tp -> metadata.getTopicIdByName(tp.topic()))
+                .allMatch(topicId -> topicId != null && !topicId.equals(Uuid.ZERO_UUID));
+
         ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
-                .forConsumer(requireTimestamps, isolationLevel)
-                .setTargetTimes(ListOffsetsRequest.toListOffsetsTopics(targetTimes))
+                .forConsumer(requireTimestamps, isolationLevel, canUseTopicIds)
+                .setTargetTimes(ListOffsetsRequest.toListOffsetsTopics(targetTimes, metadata))
                 .setTimeoutMs(requestTimeoutMs);
 
         log.debug("Creating ListOffset request {} for broker {} to reset positions", builder,

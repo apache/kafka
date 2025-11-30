@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.internals.SubscriptionState.FetchPositi
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
@@ -53,6 +54,7 @@ import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.bui
 import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.hasUsableOffsetForLeaderEpochVersion;
 import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.regroupFetchPositionsByLeader;
 import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.topicsForPartitions;
+
 
 /**
  * {@link OffsetFetcher} is responsible for fetching the {@link OffsetAndTimestamp offsets} for
@@ -393,9 +395,14 @@ public class OffsetFetcher {
     private RequestFuture<ListOffsetResult> sendListOffsetRequest(final Node node,
                                                                   final Map<TopicPartition, ListOffsetsPartition> timestampsToSearch,
                                                                   boolean requireTimestamp) {
+        boolean canUseTopicIds = !timestampsToSearch.isEmpty() && timestampsToSearch.keySet().stream()
+                .map(tp -> metadata.getTopicIdByName(tp.topic()))
+                .allMatch(topicId -> topicId != null && !topicId.equals(Uuid.ZERO_UUID));
+
+
         ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
-                .forConsumer(requireTimestamp, isolationLevel)
-                .setTargetTimes(ListOffsetsRequest.toListOffsetsTopics(timestampsToSearch))
+                .forConsumer(requireTimestamp, isolationLevel, canUseTopicIds)
+                .setTargetTimes(ListOffsetsRequest.toListOffsetsTopics(timestampsToSearch, metadata))
                 .setTimeoutMs(requestTimeoutMs);
 
         log.debug("Sending ListOffsetRequest {} to broker {}", builder, node);

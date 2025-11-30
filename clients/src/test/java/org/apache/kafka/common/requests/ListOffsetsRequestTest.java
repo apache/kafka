@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -41,6 +42,8 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class ListOffsetsRequestTest {
 
@@ -103,6 +106,10 @@ public class ListOffsetsRequestTest {
 
     @Test
     public void testToListOffsetsTopics() {
+        Uuid topicId = Uuid.randomUuid();
+        ConsumerMetadata metadata = mock(ConsumerMetadata.class);
+        when(metadata.getTopicIdByName("topic")).thenReturn(topicId);
+
         ListOffsetsPartition lop0 = new ListOffsetsPartition()
                 .setPartitionIndex(0)
                 .setCurrentLeaderEpoch(1)
@@ -114,10 +121,11 @@ public class ListOffsetsRequestTest {
         Map<TopicPartition, ListOffsetsPartition> timestampsToSearch = new HashMap<>();
         timestampsToSearch.put(new TopicPartition("topic", 0), lop0);
         timestampsToSearch.put(new TopicPartition("topic", 1), lop1);
-        List<ListOffsetsTopic> listOffsetTopics = ListOffsetsRequest.toListOffsetsTopics(timestampsToSearch);
+        List<ListOffsetsTopic> listOffsetTopics = ListOffsetsRequest.toListOffsetsTopics(timestampsToSearch, metadata);
         assertEquals(1, listOffsetTopics.size());
         ListOffsetsTopic topic = listOffsetTopics.get(0);
         assertEquals("topic", topic.name());
+        assertEquals(topicId, topic.topicId());
         assertEquals(2, topic.partitions().size());
         assertTrue(topic.partitions().contains(lop0));
         assertTrue(topic.partitions().contains(lop1));

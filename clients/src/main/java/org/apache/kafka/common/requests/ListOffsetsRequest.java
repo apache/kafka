@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -233,11 +234,15 @@ public class ListOffsetsRequest extends AbstractRequest {
         return new ListOffsetsRequest(new ListOffsetsRequestData(readable, version), version);
     }
 
-    public static List<ListOffsetsTopic> toListOffsetsTopics(Map<TopicPartition, ListOffsetsPartition> timestampsToSearch) {
+    public static List<ListOffsetsTopic> toListOffsetsTopics(
+            Map<TopicPartition, ListOffsetsPartition> timestampsToSearch,
+            ConsumerMetadata metadata
+    ) {
         Map<String, ListOffsetsTopic> topics = new HashMap<>();
         for (Map.Entry<TopicPartition, ListOffsetsPartition> entry : timestampsToSearch.entrySet()) {
             TopicPartition tp = entry.getKey();
-            ListOffsetsTopic topic = topics.computeIfAbsent(tp.topic(), k -> new ListOffsetsTopic().setName(tp.topic()));
+            ListOffsetsTopic topic = topics.computeIfAbsent(tp.topic(), k -> new ListOffsetsTopic()
+                    .setName(tp.topic()).setTopicId(metadata.getTopicIdByName(tp.topic())));
             topic.partitions().add(entry.getValue());
         }
         return new ArrayList<>(topics.values());

@@ -292,6 +292,14 @@ public class Metadata implements Closeable {
         return metadataSnapshot.topicIds();
     }
 
+    public Uuid getTopicIdByName(String topic) {
+        return metadataSnapshot.topicIds().getOrDefault(topic, Uuid.ZERO_UUID);
+    }
+
+    public String getTopicNameById(Uuid topicid) {
+        return metadataSnapshot.topicNames().get(topicid);
+    }
+
     public synchronized LeaderAndEpoch currentLeader(TopicPartition topicPartition) {
         Optional<MetadataResponse.PartitionMetadata> maybeMetadata = partitionMetadataIfCurrent(topicPartition);
         if (maybeMetadata.isEmpty())
