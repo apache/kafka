@@ -322,7 +322,7 @@ public class ShareGroupCommandTest {
 
                     String expectedValue = "Share group '" + firstGroup + "' has no offset information.";
                     return expectedValue.equals(lines[0]);
-                }, "Expected a data row and no error in describe results with describe type " + String.join(" ", describeType) + ".");
+                }, "Expected just an informational message with describe type " + String.join(" ", describeType) + ".");
             }
         }
     }
